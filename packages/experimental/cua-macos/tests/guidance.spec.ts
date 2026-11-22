@@ -1,15 +1,16 @@
 /** Model-facing guidance lists the object API with platform availability and input constraints. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
-import { COMMON_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
+import { COMMON_GUIDANCE, withHeldInputGuidance, withSystemInputGuidance } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
 const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
-  'getAccessibilityTree', 'listActions', 'invoke', 'performAction', 'setValue', 'selectText',
+  'getAccessibilityTree', 'listActions', 'getActionSchema', 'invoke', 'performAction', 'setValue', 'selectText',
 ]
 const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
 const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'toggleMouse', 'click', 'scroll', 'drag']
+const getActionSchemaLine = '- getActionSchema(action: string) -> JSON Schema — query the parameter schema for an action.'
 
 it('keeps file-tool instructions in PTC and limits the program guidance to available bindings', () => {
   for (const name of ['tools.write', 'tools.grep', 'tools.read']) {
@@ -35,14 +36,15 @@ it('prefixes concise platform guidance before the shared catalog', () => {
 })
 
 it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a system-pointer prompt', (catalog) => {
-  const instructions = withSystemPointerGuidance(catalog)
-  expect(catalog.split('- mouseMove(')[0]).toContain('Leave useSystemPointer unset')
-  expect(instructions).toContain('Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible.')
-  expect(instructions).toContain('The question interrupts the user.')
-  expect(instructions).toContain('Omitting the option or passing false uses the default hover route without prompting.')
-  const drag = catalog.split('\n').find(line => line.startsWith('- drag('))
-  expect(drag).toContain('useSystemPointer?: boolean')
-  expect(drag).toContain('Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control.')
+  const instructions = withSystemInputGuidance(catalog)
+  expect(catalog.split('- mouseMove(')[0]).toContain('Leave useSystemInput unset')
+  expect(instructions).toContain('When approval is enabled, the first explicit system input requests permission;')
+  expect(instructions).toContain('Omitting the option or passing false uses the provider default.')
+  expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemInput?: boolean }")
+  expect(instructions).toContain('pass useSystemInput: true on down')
+  const drag = instructions.split('\n').find(line => line.startsWith('- drag('))
+  expect(drag).toContain('useSystemInput?: boolean')
+  expect(drag).toContain('Omitting useSystemInput or passing false directs the drag to the window without asking for mouse control.')
   expect(COMMON_GUIDANCE).not.toContain('window-directed drag')
 })
 
@@ -52,11 +54,13 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
   expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
-  expect(GUIDANCE).toContain('returns, throws, or the user pauses')
+  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(withHeldInputGuidance(COMMON_GUIDANCE)).toContain('sendKeyEvent and toggleMouse remain held across programs and turns')
+  expect(withHeldInputGuidance(COMMON_GUIDANCE)).toContain('a system reminder lists any remaining keys and mouse buttons')
   const sharedKeyEvent = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))
   expect(sharedKeyEvent).toBeDefined()
   expect(GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))).toContain(sharedKeyEvent)
-  expect(pressKey).toBe(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- pressKey(')))
+  expect(pressKey).toContain(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- pressKey(')))
   expect(GUIDANCE).toContain('W down, D down, D up, W up')
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
   for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE']) expect(hover).toContain(term)
@@ -73,16 +77,15 @@ it('documents explicit mouse-button events immediately after mouseMove', () => {
   const lines = COMMON_GUIDANCE.split('\n')
   const index = lines.findIndex(line => line.startsWith('- toggleMouse('))
   expect(lines[index - 1]).toMatch(/^- mouseMove\(/)
-  expect(lines[index]).toBe("- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Release held buttons explicitly with 'up'; the opposite event is not sent automatically.")
+  expect(lines[index]).toBe("- toggleMouse(mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up') -> ActionResult — press or release the specified mouse button at the current pointer position without moving it. No coordinates are accepted. Send 'up' to release a held button immediately.")
   expect(index).toBeGreaterThan(lines.indexOf('## Simulated mouse'))
   expect(index).toBeLessThan(lines.indexOf('## Simulated keyboard'))
 })
 
-it.each([GUIDANCE, PROGRAM_GUIDANCE])('marks toggleMouse as unavailable in the macOS method entry', (catalog) => {
-  const shared = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- toggleMouse('))
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('documents the default window release and the optional system hold', (catalog) => {
   const entry = catalog.split('\n').find(line => line.startsWith('- toggleMouse('))
-  expect(entry).toBe(`${shared} Not implemented on macOS.`)
-  expect(PLATFORM_GUIDANCE).not.toContain('toggleMouse')
+  expect(entry).toContain('By default the window receives the events, even a release outside it, and the system button stays up.')
+  expect(entry).toContain('pass useSystemInput: true on down')
 })
 
 it('enumerates every public method once in its catalog entry', () => {
@@ -97,10 +100,24 @@ it('enumerates every public method once in its catalog entry', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(26)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(25)
+  expect(signatures).toHaveLength(27)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(26)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
+})
+
+it('documents getActionSchema beside listActions with only an action argument', () => {
+  const lines = COMMON_GUIDANCE.split('\n')
+  const listActions = lines.findIndex(line => line.startsWith('- listActions('))
+  expect(lines[listActions + 1]).toBe(getActionSchemaLine)
+  expect(getActionSchemaLine.split(' — ')[0]).toBe('- getActionSchema(action: string) -> JSON Schema')
+  expect(COMMON_GUIDANCE).not.toMatch(/\bAX\b/)
+})
+
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('keeps action schema guidance focused on its purpose', (catalog) => {
+  const entry = catalog.split('\n').find(line => line.startsWith('- getActionSchema('))
+  expect(entry).toBe(getActionSchemaLine)
+  expect(COMMON_GUIDANCE).not.toContain('Role.Attribute.Set')
 })
 
 it('documents option fields and return fields', () => {
@@ -113,7 +130,7 @@ it('inlines discovery, restoration, and mouse-move return records', () => {
   for (const name of ['cua.getCapabilities', 'cua.listApps', 'cua.findApps', 'cua.getState', 'app.getWindows', 'app.show', 'window.show', 'mouseMove']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toMatch(/ -> \(?\{ /)
   }
-  expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
+  expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemInput: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
   expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: boolean, pid?: number }[]')
   expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[]')
   expect(COMMON_GUIDANCE).toContain('getScreenshot() -> Image')
@@ -123,7 +140,7 @@ it('inlines discovery, restoration, and mouse-move return records', () => {
 it('documents shared types while leaving Modifier members platform-defined', () => {
   const signatures = COMMON_GUIDANCE.split('\n').filter(line => line.startsWith('- ')).map(line => line.split(' — ')[0]).join('\n')
   const names = signatures.replace(/'[^']*'/g, '').match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? []
-  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JsonValue', 'Modifier', 'Window'])
+  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JSON', 'JsonValue', 'Modifier', 'Schema', 'Window'])
   expect(COMMON_GUIDANCE).toContain('ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }')
   expect(COMMON_GUIDANCE).toContain('JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }')
   expect(COMMON_GUIDANCE).toContain('App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level')
@@ -163,7 +180,6 @@ it('guides complex input combinations through platform-supported primitive opera
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     expect(catalog).toContain(advice)
     expect(catalog.indexOf(advice)).toBeGreaterThan(catalog.indexOf('- sendKeyEvent('))
-    expect(catalog.indexOf(advice)).toBeLessThan(catalog.indexOf('Raw tools use { method, params }'))
   }
 })
 
@@ -173,7 +189,13 @@ it('keeps consent, lock, observation, and no-replay rules', () => {
   expect(COMMON_GUIDANCE).toContain('Never replay uncertain input')
   expect(COMMON_GUIDANCE).toContain('Read fresh state after actions')
   expect(COMMON_GUIDANCE).toMatch(/element ids are opaque strings/i)
-  expect(COMMON_GUIDANCE).toContain('snapshotId')
+})
+
+it('omits raw protocol details from operation guidance', () => {
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
+    expect(catalog).not.toContain('Raw tools use { method, params }')
+    expect(catalog).not.toContain('snapshotId')
+  }
 })
 
 it('prioritizes reported API availability over instruction text in the prologue', () => {
@@ -189,4 +211,15 @@ it('documents explicit inspection and separate key arguments', () => {
 
 it('omits stale names and unrelated operations', () => {
   for (const stale of ['getAXState', 'emit', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs']) expect(GUIDANCE).not.toContain(stale)
+})
+
+it('adds system-input selection to exactly the six supported methods', () => {
+  const catalog = withSystemInputGuidance(PROGRAM_GUIDANCE)
+  const selected = catalog.split('\n').filter(line => line.startsWith('- ') && line.split(' -> ')[0]?.includes('useSystemInput'))
+    .map(line => line.slice(2, line.indexOf('(')))
+  expect(selected).toEqual(['mouseMove', 'toggleMouse', 'click', 'drag', 'pressKey', 'sendKeyEvent'])
+})
+
+it('rejects malformed provider input signatures instead of truncating their text', () => {
+  expect(() => withSystemInputGuidance('- click(target)')).toThrow('missing the result separator for click')
 })

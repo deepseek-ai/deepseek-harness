@@ -23,6 +23,12 @@
 - id: tool-executor-ptc
   disabled: false
 
+- id: ptc-runtime
+  config:
+    # Recorded programs are async function bodies.
+    executionMode: per-call
+    maxOutputBytes: 4096
+
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:

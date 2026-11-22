@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-session-projection/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Recorded current directory for Session observations, or null when none is recorded. */
+    /** Recorded directory of the Session for observations, or null when none is recorded. */
     workingDirectory: string | null
   }
 }

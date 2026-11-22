@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件通过 `executionMode` 选择执行模式。默认的 `per-call` 模式按配置的文件策略启动新进程。显式启用的 `persistent-in-memory` 模式为每个以对象身份标识的状态所有者保留一个 Node REPL 进程。两种模式都提供同一个 `ctx.ptcRuntime` 服务。PTC 使用存活的 Agent 作为所有者，在其上下文销毁时等待释放。修改配置会重载提供方并释放其进程。[Node 沙箱决策](2026-09-11-sandboxed-node-ptc-runtime.zh.md)负责逐次执行的文件约束，[PTC 基础决策](../feature/2026-06-15-ptc.zh.md)负责工具分派与模型请求日志。
+现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件通过 `executionMode` 选择执行模式。`per-call` 模式按配置的文件策略启动新进程。默认的 `persistent-in-memory` 模式为每个以对象身份标识的状态所有者保留一个 Node REPL 进程。两种模式都提供同一个 `ctx.ptcRuntime` 服务。PTC 使用存活的 Agent 作为所有者，在其上下文销毁时等待释放。修改配置会重载提供方并释放其进程。[Node 沙箱决策](2026-09-11-sandboxed-node-ptc-runtime.zh.md)负责逐次执行的文件约束，[PTC 基础决策](../feature/2026-06-15-ptc.zh.md)负责工具分派与模型请求日志。
 
 `per-call` 和 `persistent-in-memory` 名称描述各自固定的状态保留策略：只保留一次调用，或跨调用保留至进程或所有者结束。[Script 求值决策](2026-10-20-ptc-script-evaluation-and-retention.zh.md)在这两种模式之外增加独立配置的语法与保留方式。`durable` 用于命名未来跨重启保存与恢复执行状态的能力。它不是可接受的配置值：实现必须先明确恢复点、可恢复的值以及外部资源的处理方式，才能公开这个模式。[常驻进程权限决策](2026-10-08-persistent-ptc-sandbox.zh.md)负责文件约束、权限切换与临时提权。
 
@@ -18,7 +18,7 @@ Status: implemented
 
 Session 记录提交的程序、嵌套工具调用和返回输出。它不序列化 REPL 堆，也不在重启、恢复或派生后重新执行旧程序，因为重放自动化可能重复外部操作。缺失变量产生普通程序错误，模型指引要求重新创建变量并获取资源。提供方没有引入日志之外的模型输入，因此不需要环境标识或新的持久 Session 事件。
 
-协议失败、输出超限、所有者销毁和进程退出都会丢弃环境。[中断决策](2026-10-29-retained-ptc-interruption.zh.md)负责保留状态的超时和取消恢复。普通异常保留此前发生的修改。保留的函数使用当前执行的宿主绑定；较早执行中的异步任务不能获取后续执行的工具权限或向其输出。
+协议失败、所有者销毁和进程退出都会丢弃环境。[输出截断](2026-11-13-ptc-output-truncation.zh.md)负责限制输出而不丢弃状态。[中断决策](2026-10-29-retained-ptc-interruption.zh.md)负责保留状态的超时和取消恢复。普通异常保留此前发生的修改。保留的函数使用当前执行的宿主绑定；较早执行中的异步任务不能获取后续执行的工具权限或向其输出。
 
 ## 考虑过的替代方案
 

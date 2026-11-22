@@ -504,7 +504,7 @@ describe('agent tools in the production loop', () => {
     }
   })
   it('updates the fixed language rule in the next prompt assembly', async () => {
-    const f = await setup()
+    const f = await setup({ language: 'en' })
     try {
       const prompt = () => f.ctx.systemPrompt.assemble({ scope: f.agent })
       expect(
@@ -521,6 +521,17 @@ describe('agent tools in the production loop', () => {
       expect(text).toContain('Group work by deliverable and split large steps into checkable child tasks.')
       expect(text).not.toContain('weight')
       expect(text).not.toContain('timeline_reply')
+    } finally {
+      await f.close()
+    }
+  })
+  it('adds no language rule to the planning guidance when following the chat', async () => {
+    const f = await setup({ language: 'chat' })
+    try {
+      const prompt = await f.ctx.systemPrompt.assemble({ scope: f.agent })
+      const text = prompt.sections.find(section => section.name === 'timeline:planning')?.text
+      expect(text).toContain("reuse the goal's tree")
+      expect(text?.endsWith("Keep replies focused on the user's work.")).toBe(true)
     } finally {
       await f.close()
     }

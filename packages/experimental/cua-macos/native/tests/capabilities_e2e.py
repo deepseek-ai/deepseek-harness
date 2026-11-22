@@ -12,7 +12,7 @@ import tempfile
 import time
 import uuid
 
-from native_test_support import ROOT, NativeHelper, run_cleanup
+from native_test_support import ROOT, NativeHelper, run_cleanup, stop
 from shared_helper_e2e import Connection
 
 
@@ -46,12 +46,140 @@ def stop_application(pid):
     raise AssertionError("fixture did not exit after SIGTERM")
 
 
+def check_toggle_mouse(helper, owner, state_file, executable):
+    call = helper.call
+    source_pid = call("permissionStatus", {})["helper"]["pid"]
+
+    def observed(value):
+        return {**value, "events": [event for event in value["events"] if event.get("sourcePid") == source_pid]}
+
+    def read_owned():
+        return observed(json.loads(state_file.read_text()))
+
+    def wait_owned(predicate):
+        return observed(wait_for_state(state_file, lambda value: predicate(observed(value))))
+
+    def cursor(*position):
+        return json.loads(subprocess.check_output([executable, "--cursor", *map(str, position)], text=True))
+
+    state = read_owned()
+    window = {**owner, "windowId": state["windowId"]}
+    def toggle(button, direction, error=None):
+        result = call("toggleMouse", {**window, "mouseButton": button, "direction": direction}, error)
+        if not error:
+            assert result == {"dispatched": True}, result
+
+    toggle("left", "down", "FOREGROUND_REQUIRED")
+    assert read_owned()["events"] == state["events"]
+    call("activate", owner)
+    state = wait_owned(lambda s: s["active"] and s["keyWindow"])
+    bounds = next(w["bounds"] for w in call("listWindows", owner) if w["windowId"] == window["windowId"])
+    inside = [bounds["x"] + state["pad"][0] + 80, bounds["y"] + state["pad"][1] + 70]
+    outside = [bounds["x"] - 8, inside[1]]
+    other = None
+    original = cursor()
+    try:
+        assert cursor(*outside) == outside
+        toggle("left", "down", "FOREGROUND_REQUIRED")
+        assert read_owned()["events"] == state["events"]
+        for index, (button, down, up) in enumerate([("left", 1, 2), ("right", 3, 4), ("middle", 25, 26)]):
+            assert cursor(*inside) == inside
+            call("activate", owner)
+            wait_owned(lambda s: s["active"] and s["keyWindow"])
+            count = len(state["events"])
+            toggle(button, "down")
+            try:
+                state = wait_owned(lambda s: len(s["events"]) > count)
+                assert [(e["type"], e["button"]) for e in state["events"][count:]] == [(down, index)], state
+                assert cursor() == inside
+                assert not state["events"][-1]["pressedButtons"] & (1 << index), state
+                assert cursor(*outside) == outside
+                if button == "right":
+                    os.kill(state["pid"], signal.SIGUSR1)
+                    wait_owned(lambda s: s["windowX"] == bounds["x"] + 40)
+                if button == "middle":
+                    other_state = state_file.with_name("other.json")
+                    other = subprocess.Popen([executable, other_state])
+                    wait_for_state(other_state, lambda s: bool(s["windowId"]))
+                    other_app = call("getApp", {"selector": str(other.pid)})
+                    call("activate", {"appHandle": other_app["appHandle"]})
+                    wait_owned(lambda s: not s["active"])
+            finally:
+                assert cursor(*outside) == outside
+                toggle(button, "up")
+            state = wait_owned(lambda s: len(s["events"]) >= count + 2)
+            events = state["events"][count:]
+            assert [(e["type"], e["button"]) for e in events] == [(down, index), (up, index)], events
+            assert events[1]["point"][0] < 0, events
+            if button == "right":
+                assert events[1]["point"][0] == outside[0] - bounds["x"] - 40, events
+                os.kill(state["pid"], signal.SIGUSR1)
+                wait_owned(lambda s: s["windowX"] == bounds["x"])
+            if button != "middle":
+                assert cursor() == outside
+        call("activate", owner)
+        wait_owned(lambda s: s["active"] and s["keyWindow"])
+        call("getState", {**window, "maxElements": 300, "maxDepth": 20})
+        key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
+        socket = Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock")
+        for index, (button, down, moved, up) in enumerate([("left", 1, 6, 2), ("right", 3, 7, 4), ("middle", 25, 27, 26)]):
+            assert cursor(*inside) == inside
+            params = {**window, "mouseButton": button, "useSystemInput": True}
+            count = len(read_owned()["events"])
+            call("toggleMouse", {**params, "direction": "down"})
+            try:
+                state = wait_owned(lambda s: len(s["events"]) > count)
+                assert state["events"][-1]["pressedButtons"] & (1 << index), state
+                call("toggleMouse", {**params, "direction": "down"}, "INPUT_BUSY")
+                call("mouseMove", {**window, "x": inside[0] - bounds["x"] + 15, "y": inside[1] - bounds["y"],
+                                   "useSystemInput": True})
+                state = wait_owned(lambda s: len(s["events"]) >= count + 2)
+                assert state["events"][-1]["type"] == moved, state
+                assert cursor() == [inside[0] + 15, inside[1]]
+            finally:
+                call("toggleMouse", {**params, "direction": "up"})
+            events = wait_owned(lambda s: len(s["events"]) >= count + 3)["events"][count:]
+            assert [e["type"] for e in events] == [down, moved, up], events
+            assert len({e["eventNumber"] for e in events}) == 1 and not events[-1]["pressedButtons"] & (1 << index), events
+        def wait_button(pressed):
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                buttons = json.loads(subprocess.check_output([executable, "--buttons"], text=True))
+                if buttons[0] == pressed:
+                    return
+                time.sleep(0.025)
+            raise AssertionError(f"System left button did not become {pressed}")
+
+        for ending in ("releaseHeldInputs", "disconnect"):
+            call("activate", owner)
+            wait_owned(lambda s: s["active"] and s["keyWindow"])
+            assert cursor(*inside) == inside
+            connection = Connection(socket, key)
+            try:
+                app = connection.call("getApp", {"selector": str(state["pid"])})
+                params = {**window, "mouseButton": "left", "useSystemInput": True}
+                connection.call("toggleMouse", {**params, "appHandle": app["appHandle"], "direction": "down"})
+                wait_button(True)
+                call("toggleMouse", {**params, "direction": "up"}, "INVALID_ARGUMENT")
+                wait_button(True)
+                call("activate", {"appHandle": other_app["appHandle"]})
+                wait_owned(lambda s: not s["active"])
+                if ending != "disconnect":
+                    connection.call(ending, {})
+            finally:
+                connection.close()
+            wait_button(False)
+
+    finally:
+        run_cleanup(lambda: cursor(*original), *([lambda: stop(other)] if other else []))
+
+
 def check_system_drag(helper, owner, window, point, state_file):
     call = helper.call
     call("getState", {**window, "maxElements": 300, "maxDepth": 20})
     count = len(json.loads(state_file.read_text())["events"])
     params = {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
-              "toY": point["y"] + 20, "durationMs": 400, "steps": 1, "modifiers": ["shift"], "useSystemPointer": True}
+              "toY": point["y"] + 20, "durationMs": 400, "steps": 1, "modifiers": ["shift"], "useSystemInput": True}
     call("drag", params, "FOREGROUND_REQUIRED")
     assert len(json.loads(state_file.read_text())["events"]) == count
     call("activate", owner)
@@ -94,6 +222,14 @@ def check_clicks(helper, window, point, state_file):
     count = len(state["events"])
     presses, menus = state["axPresses"], state["axMenus"]
     assert {"AXPress", "AXShowMenu"}.issubset(helper.call("listActions", target))
+    plain = helper.call("getActionSchema", {"action": "AXShowMenu"})
+    assert plain["type"] == "object" and plain["required"] == [] and plain["additionalProperties"] is False, plain
+    assert "description" not in plain and "description" in plain["properties"]["argument"], plain
+    setter = helper.call("getActionSchema", {"action": f"{pad['role']}.AXValue.Set"})
+    argument = setter["properties"]["argument"]
+    assert setter["required"] == ["argument"] and len(argument["oneOf"]) == 6, setter
+    assert "description" in argument and "description" not in setter, setter
+    helper.call("getActionSchema", {"action": ""}, "INVALID_ARGUMENT")
     helper.call("invoke", target)
     state = wait_for_state(state_file, lambda value: value["axPresses"] == presses + 1)
     helper.call("performAction", {**target, "action": "AXShowMenu"})
@@ -163,6 +299,37 @@ def check_clicks(helper, window, point, state_file):
     return state
 
 
+def check_mixed_input(call, owner, state_file, executable):
+    def cursor(*position):
+        return json.loads(subprocess.check_output([executable, "--cursor", *map(str, position)], text=True))
+    source_pid = call("permissionStatus", {})["helper"]["pid"]
+    call("activate", owner)
+    state = wait_for_state(state_file, lambda s: s["active"] and s["keyWindow"])
+    window = {**owner, "windowId": state["windowId"]}
+    bounds = next(w["bounds"] for w in call("listWindows", owner) if w["windowId"] == window["windowId"])
+    original = cursor()
+    try:
+        cursor(bounds["x"] + state["pad"][0] + 80, bounds["y"] + state["pad"][1] + 70)
+        for system, system_key in ((False, False), (True, False), (False, True), (True, True)):
+            count = len(json.loads(state_file.read_text())["events"])
+            call("sendKeyEvent", {**owner, "key": "a", "direction": "down"})
+            call("toggleMouse", {**window, "mouseButton": "left", "direction": "down", "useSystemInput": system})
+            call("sendKeyEvent", {**owner, "key": "w", "direction": "down", "useSystemInput": system_key})
+            assert call("getHeldInputs", {}) == [
+                {"kind": "key", "key": "a", "appHandle": owner["appHandle"], "mode": "application"},
+                {"kind": "mouse", "button": "left", "appHandle": owner["appHandle"],
+                 "windowId": window["windowId"], "mode": "system" if system else "window"},
+                {"kind": "key", "key": "w", "appHandle": owner["appHandle"], "mode": "system" if system_key else "application"},
+            ]
+            call("releaseHeldInputs", {})
+            assert call("getHeldInputs", {}) == []
+            state = wait_for_state(state_file, lambda s: sum(e.get("sourcePid") == source_pid for e in s["events"][count:]) >= 6)
+            events = [(e["type"], e.get("keyCode")) for e in state["events"][count:] if e.get("sourcePid") == source_pid]
+            assert events == [(10, 0), (1, None), (10, 13), (11, 13), (2, None), (11, 0)], events
+    finally:
+        run_cleanup(lambda: call("releaseHeldInputs", {}), lambda: cursor(*original))
+
+
 def check_keyboard(call, owner, state_file, state):
     count = len(state["events"])
     call("pressKey", {**owner, "key": ["w", "d"]}, "INVALID_ARGUMENT")
@@ -174,7 +341,7 @@ def check_keyboard(call, owner, state_file, state):
     count = len(state["events"])
 
     def key(name, direction):
-        call("sendKeyEvent", {**owner, "runId": "held-input", "key": name, "direction": direction})
+        call("sendKeyEvent", {**owner, "key": name, "direction": direction})
 
     key("w", "down")
     key("d", "down")
@@ -186,7 +353,7 @@ def check_keyboard(call, owner, state_file, state):
     held = state["events"][count:]
     assert [(event["type"], event["keyCode"]) for event in held] == [(10, 13), (10, 2), (11, 2)], held
     assert held[2]["timestamp"] - held[1]["timestamp"] >= 2, held
-    call("releaseHeldKeys", {"runId": "held-input"})
+    call("releaseHeldInputs", {})
     state = wait_for_state(state_file, lambda value: len(value["events"]) >= count + 4)
     assert [(e["type"], e["keyCode"]) for e in state["events"][count:]] == [(10, 13), (10, 2), (11, 2), (11, 13)]
 
@@ -196,13 +363,90 @@ def check_keyboard(call, owner, state_file, state):
         key("w", "down")
         if explicit_up:
             key("w", "up")
-        call("releaseHeldKeys", {"runId": "held-input"})
+        call("releaseHeldInputs", {})
         state = wait_for_state(state_file, lambda value: any(
             e["type"] == 11 and e.get("keyCode") == 13 for e in value["events"][count:]))
         view_events = [(e["type"], e["keyCode"], e["repeat"]) for e in state["events"][count:]]
         # AppKit can filter a synthetic repeat before NSView.keyDown receives it.
         down, repeat, up = (10, 13, False), (10, 13, True), (11, 13, False)
         assert view_events in ([down, up], [down, repeat, up]), view_events
+
+
+def check_system_input(helper, owner, state_file, executable):
+    call = helper.call
+    state = json.loads(state_file.read_text())
+    window = {**owner, "windowId": state["windowId"]}
+    point = {"x": state["pad"][0] + 80, "y": state["pad"][1] + 70}
+    def keys():
+        return json.loads(subprocess.check_output([executable, "--key-state"], text=True))
+    assert not any(keys().values()), "Release keyboard keys before the system-input check"
+    call("pressKey", {**owner, "key": "w", "useSystemInput": True}, "FOREGROUND_REQUIRED")
+    call("activate", owner)
+    wait_for_state(state_file, lambda value: value["active"] and value["keyWindow"])
+    call("getState", {**window, "maxElements": 300, "maxDepth": 20})
+    call("mouseMove", {**window, **point, "useSystemInput": True})
+    call("click", {**window, **point, "useSystemInput": True})
+    state = wait_for_state(state_file, lambda value: any(event["type"] == 2 for event in value["events"]))
+    count = len(state["events"])
+    call("pressKey", {**owner, "key": "d", "modifiers": ["shift"], "useSystemInput": True})
+    events = wait_for_state(state_file, lambda value: any(event["type"] == 11 for event in value["events"][count:]))["events"][count:]
+    assert [(event["type"], event.get("keyCode")) for event in events] == [(10, 2), (11, 2)], events
+    assert all(event["shift"] for event in events) and not any(keys().values()), events
+    held = {**owner, "key": "w", "useSystemInput": True}
+    for cleanup in (False, True):
+        count = len(json.loads(state_file.read_text())["events"])
+        call("sendKeyEvent", {**held, "direction": "down"})
+        try:
+            state = wait_for_state(state_file, lambda value: any(
+                event["type"] == 10 and event.get("keyCode") == 13 for event in value["events"][count:]))
+            down = next(event for event in state["events"][count:] if event["type"] == 10 and event.get("keyCode") == 13)
+            assert down["systemW"], down
+        finally:
+            if cleanup:
+                call("releaseHeldInputs", {})
+            else:
+                call("sendKeyEvent", {**held, "direction": "up"})
+        state = wait_for_state(state_file, lambda value: any(
+            event["type"] == 11 and event.get("keyCode") == 13 for event in value["events"][count:]))
+        up = next(event for event in state["events"][count:] if event["type"] == 11 and event.get("keyCode") == 13)
+        assert not up["systemW"], up
+    shift = {**held, "key": "shift"}
+    mouse = {**window, "mouseButton": "left", "useSystemInput": True}
+    count = len(state["events"])
+    call("sendKeyEvent", {**shift, "direction": "down"})
+    try:
+        call("toggleMouse", {**mouse, "direction": "down"})
+        state = wait_for_state(state_file, lambda value: any(event["type"] == 1 for event in value["events"][count:]))
+        assert next(event for event in state["events"][count:] if event["type"] == 1)["shift"]
+    finally:
+        call("sendKeyEvent", {**shift, "direction": "up"})
+        call("toggleMouse", {**mouse, "direction": "up"})
+    state = wait_for_state(state_file, lambda value: any(event["type"] == 2 for event in value["events"][count:]))
+    assert not next(event for event in state["events"][count:] if event["type"] == 2)["shift"], state
+    key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
+    connection = Connection(Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock"), key)
+    try:
+        selected = connection.call("getApp", {"selector": str(state["pid"])})
+        target = {**window, "appHandle": selected["appHandle"]}
+        connection.call("getState", {**target, "maxElements": 300, "maxDepth": 20})
+        for method, arguments in [
+            ("click", {**point, "holdMs": 5000}),
+            ("drag", {"fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 60,
+                      "toY": point["y"] + 20, "durationMs": 5000, "steps": 2}),
+        ]:
+            count = len(json.loads(state_file.read_text())["events"])
+            request_id = "system-" + method
+            connection.send({"id": request_id, "method": method, "params": {
+                **target, **arguments, "modifiers": ["shift"], "useSystemInput": True}})
+            state = wait_for_state(state_file, lambda value: any(event["type"] == 1 for event in value["events"][count:]))
+            down = next(event for event in state["events"][count:] if event["type"] == 1)
+            assert down["systemShift"] and down["shift"] and down["pressedButtons"] & 1, down
+            connection.send({"type": "cancel", "id": request_id})
+            assert connection.read()["error"]["code"] == "NATIVE_CANCELLED"
+            state = wait_for_state(state_file, lambda value: any(event["type"] == 2 for event in value["events"][count:]))
+            assert not state["events"][-1]["pressedButtons"] & 1 and not any(keys().values()), state
+    finally:
+        connection.close()
 
 
 def main():
@@ -213,6 +457,9 @@ def main():
     only.add_argument("--click-only", action="store_true")
     only.add_argument("--keyboard-only", action="store_true")
     only.add_argument("--drag-only", action="store_true")
+    only.add_argument("--toggle-only", action="store_true")
+    only.add_argument("--mixed-only", action="store_true")
+    only.add_argument("--system-input-only", action="store_true")
     args = parser.parse_args()
     transcript = []
     helper = None
@@ -226,8 +473,8 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only or args.drag_only,
-                "DSHFixtureKeyboard": args.keyboard_only}
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only or args.drag_only or args.toggle_only or args.mixed_only or args.system_input_only,
+                "DSHFixtureKeyboard": args.keyboard_only or args.mixed_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)
         try:
@@ -244,6 +491,18 @@ def main():
             app = call("launchApp", owner)
             assert app["running"] is True, app
             pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
+            if args.mixed_only:
+                check_mixed_input(call, owner, state_file, executable)
+                print("PASS: receiver observes mixed keyboard/window and keyboard/system input in reverse release order")
+                return
+            if args.system_input_only:
+                check_system_input(helper, owner, state_file, executable)
+                print("PASS: system clicks, keyboard chords, held-key state and cancellation release of mouse and modifiers")
+                return
+            if args.toggle_only:
+                check_toggle_mouse(helper, owner, state_file, executable)
+                print("PASS: window-directed and HID events for three buttons, held moves, explicit release, cleanup and disconnect")
+                return
             if args.drag_only:
                 state = json.loads(state_file.read_text())
                 pad = state["pad"]

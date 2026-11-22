@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 
+import { scrubWindowsSigningEnvironment } from './windows-sign.mjs'
+
 const run = promisify(execFile)
 
 /** One tool the packaging run requires, and what went wrong with it. */
@@ -45,6 +47,14 @@ async function probeTar(): Promise<string | undefined> {
 
 async function probeWindowsInstallerToolchain(environment: NodeJS.ProcessEnv): Promise<DesktopToolchainProbeFailure[]> {
   const failures: DesktopToolchainProbeFailure[] = []
+  try {
+    await run('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
+      '$ErrorActionPreference="Stop"; if ($PSVersionTable.PSVersion.Major -lt 7) { throw "PowerShell 7 or newer is required" }; Import-Module "$PSHOME/Modules/Microsoft.PowerShell.Security/Microsoft.PowerShell.Security.psd1" -ErrorAction Stop; Get-Command Get-AuthenticodeSignature -ErrorAction Stop | Out-Null'],
+    { env: scrubWindowsSigningEnvironment(environment), windowsHide: true, timeout: 20_000 })
+  }
+  catch (error) {
+    failures.push({ tool: 'pwsh', detail: `PowerShell 7 with Authenticode support must be available on PATH: ${error instanceof Error ? error.message : String(error)}` })
+  }
   const programFiles = environment['ProgramFiles(x86)']
   const vswhere = programFiles === undefined
     ? undefined

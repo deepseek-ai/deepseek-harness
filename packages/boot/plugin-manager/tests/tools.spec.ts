@@ -38,10 +38,10 @@ async function fixture(mode: 'read-only' | 'workspace-write' | 'danger-full-acce
     setVersionExemption: vi.fn(async () => ({ changed: true, application: 'applied' })),
   }
   ctx.provide('pluginManager', manager as unknown as PluginManager)
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode })
   if (approval !== undefined) await ctx.plugin(ApprovalService, { policy: approval })
   const fiber = await ctx.plugin(tool)

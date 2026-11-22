@@ -42,7 +42,7 @@ import type { DockIntents, DockMode, DockSurfaceProps, FloatRect, TabId, TabReco
 import { canSplit, dockPaneIds, DockLayout, findPaneContentTab } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { HalvesFit, LayoutState, PaneId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { GUIDE_KIND, pageAddress } from '../contract/seed.ts'
+import { GUIDE_KIND, isContentTab, pageAddress } from '../contract/seed.ts'
 import { dockLabels } from '../labels.ts'
 import type { SidebarRightFlash, SidebarRightOpenTabOptions } from '../service.ts'
 import type { SidebarRightTabDefinition } from '../tab-registry.ts'
@@ -190,6 +190,10 @@ export function intentsFor(sessionId: SessionId, actions: Store['actions'], open
   }
 }
 
+function retainsBody(tab: TabRecord, definition: SidebarRightTabDefinition | undefined): boolean {
+  return definition !== undefined && (definition.keepMounted === true || isContentTab(tab))
+}
+
 /** One tab's slot dispatch: which seat, and what to render when no type registered. */
 interface TabSlotProps extends Pick<PanelProps, 'renderSlot' | 'occurrence' | 'useTabTypes' | 'useTabNavigation' | 'useStore' | 'fullscreen' | 'active' | 'retainTab' | 'shortcuts'> {
   readonly tab: TabRecord
@@ -205,7 +209,7 @@ function TabSlot({
 }: TabSlotProps): ReactNode {
   const { id, signal, tabActions } = occurrence(tab)
   const definition = useTabTypes(types => types.find(definition => definition.kind === tab.kind))
-  const retained = seat === 'sidebar.right.pane.tab' && definition?.keepMounted === true
+  const retained = seat === 'sidebar.right.pane.tab' && retainsBody(tab, definition)
   useLayoutEffect(() => retained ? retainTab(tab.id, signal) : undefined, [retained, retainTab, tab.id, signal])
   const hookContext = useMemo((): TabHookContext => ({
     tabId: tab.id,
@@ -342,8 +346,7 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
       // Fullscreen is 1px wider than the viewport: the first column's divider,
       // which separates the panel from the conversation, sits past the window's
       // left edge where the frame clips it, and slides into view with the panel.
-      style={{ width: fullscreen ? 'calc(100vw + 1px)' : width,
-        '--dsh-sidebar-width': fullscreen ? 'calc(100vw + 1px)' : `${width}px` } as CSSProperties}
+      style={{ '--dsh-sidebar-right-panel-width': fullscreen ? 'calc(100vw + 1px)' : `${width}px` } as CSSProperties}
       data-sidebar-right-session={sessionId}
       data-sidebar-right-panel={fullscreen ? 'fullscreen' : 'push'}
       data-sidebar-right-open={expanded || undefined}
@@ -365,7 +368,7 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
           renderTab={bodiesFor(panel)}
           renderTabTitle={titlesFor(panel)}
           active={panel.active}
-          keepMounted={tab => types.find(type => type.kind === tab.kind)?.keepMounted === true}
+          keepMounted={tab => retainsBody(tab, types.find(type => type.kind === tab.kind))}
           getTabTriggerProps={panel.getTabTriggerProps} tabMenuOpen={panel.tabMenuOpen}
           chrome={<PanelChrome
             sessionId={sessionId} fullscreen={fullscreen} actions={actions} t={t}

@@ -28,7 +28,14 @@
   display: none;
 }
 
+@property --dsh-sidebar-right-panel-width {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
 .panel {
+  width: var(--dsh-sidebar-right-panel-width);
   --dsh-dockkit-dock-layer: 10;
   --dsh-dockkit-float-layer: 60;
   position: absolute;
@@ -45,6 +52,18 @@
      not clip fixed floating children, whose containing block is the viewport. */
   overflow: clip;
   pointer-events: none;
+}
+
+/* A split pane slides the full panel width, not its own width. An open panel
+   needs this inherited distance only for items mounting during an animated opening. */
+.panel:not([data-sidebar-right-open]) {
+  --dsh-sidebar-width: var(--dsh-sidebar-right-panel-width);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .panel[data-sidebar-right-opening] {
+    --dsh-sidebar-width: var(--dsh-sidebar-right-panel-width);
+  }
 }
 
 /* Only docked Grid items slide. Their common ancestor remains untransformed

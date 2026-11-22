@@ -1,4 +1,4 @@
-/** Generated from satori@662c3daff128b4b610ebbc393bac388679e60010 by scripts/gen-vendor-im-types.ts; do not edit. */
+/** Retained Feishu OpenAPI declarations from satori@662c3daff128b4b610ebbc393bac388679e60010. */
 import { type BaseResponse, Internal } from '../internal.ts'
 
 declare module '../internal.ts' {

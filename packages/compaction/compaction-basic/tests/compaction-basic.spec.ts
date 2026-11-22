@@ -1101,16 +1101,44 @@ describe('compaction region transaction', () => {
     expect(compact.calls[1]!.input.messages[0]).toMatchObject({ role: 'user' })
   })
 
-  it('surfaces the session rejection of a range that covers the system head', async () => {
+  it('rejects a range covering the initial system node before recording compaction', async () => {
     const compact = service()
     const session = conversation(3, undefined, 'PROTECTED SYSTEM')
-    const nodes = [...session.surface.nodes]
+    const nodes = session.surface.nodes
+    const before = session.snapshotEvents()
     await expect(compact.compactRegion(nodes[0]!, nodes[3]!, agent(session, MODEL), SIGNAL))
-      .rejects.toThrow(/node 0 holds the system prompt/)
+      .rejects.toThrow('protected initial system message')
+    expect(session.snapshotEvents()).toEqual(before)
+    expect(compact.calls).toEqual([])
+  })
 
-    expect(session.surface.nodes).toEqual(nodes)
-    const end = session.snapshotEvents().findLast(event => event.type === 'compaction/end')
-    expect(end?.type === 'compaction/end' && end.data.error).toBeDefined()
+  it('compacts a balanced middle range without changing retained system messages', async () => {
+    const compact = service()
+    const session = conversation(3, undefined, 'INITIAL SYSTEM')
+    const update = session.append('system/message', {
+      turn: 4, step: 1, message: createSystemMessage('LATER SYSTEM'),
+    }, { surfaceOp: 'append' })
+    const nodes = [...session.surface.nodes]
+    const systems = session.deriveMessages().filter(message => message.role === 'system')
+    const result = await compact.compactRegion(nodes[3]!, nodes[4]!, agent(session, MODEL), SIGNAL)
+    expect(session.surface.nodes).toEqual([...nodes.slice(0, 3), result.summarySeq + 1, ...nodes.slice(5)])
+    expect(session.deriveMessages().filter(message => message.role === 'system')).toEqual(systems)
+    expect(session.surface.nodes.at(-1)).toBe(update.seq)
+    expect(session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(2)
+  })
+
+  it('omits empty system records from the summary input without rebuilding the head', async () => {
+    const compact = service()
+    const session = conversation(2, undefined, 'INITIAL SYSTEM')
+    const head = session.surface.nodes[0]!
+    const empty = session.append('system/message', {
+      turn: 3, step: 1, message: createSystemMessage(''),
+    }, { surfaceOp: 'append' })
+    const visible = session.deriveMessages()
+    await compact.compactRegion(session.surface.nodes[1]!, empty.seq, agent(session, MODEL), SIGNAL)
+    expect(compact.calls[0]?.input.messages).toEqual(visible)
+    expect(session.surface.nodes[0]).toBe(head)
+    expect(session.deriveMessages()[0]).toEqual(visible[0])
   })
 
   it.each([

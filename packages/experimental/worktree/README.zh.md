@@ -1,5 +1,5 @@
 ---
-description: "按照调用 Session 的文件策略创建并进入保留的 Git 工作树。"
+description: "按照调用 Session 的文件策略创建、进入并离开保留的 Git 工作树。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-从本地提交创建隔离的检出目录，并在其中继续同一个 Session。每次操作创建新的具名分支，源检出目录保持不变。所有写入均受现有沙箱约束。离开检出目录会保留文件与分支。
+从本地提交创建隔离的检出目录，并在其中继续同一个 Session。每次操作创建新的具名分支，源检出目录保持不变。除归档清理外，所有写入均受现有沙箱约束。离开检出目录会保留文件与分支。
 
 ## 目录
 
@@ -32,13 +32,17 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-`ctx.worktrees.create(agent, { name?, from? }, signal?, onPhase?)` 创建新分支与检出目录，再通过 `ctx.workingDirectory.set` 进入规范化的检出目录。`from` 在创建前解析为本地提交，默认是 `HEAD`；暂存、未暂存、未跟踪以及被忽略的源文件均不复制。`baseCommit` 报告解析出的提交对象名称；仓库本地的替换引用仍作用于检出的内容。检出操作禁用已配置的 Git clean、smudge 和 process 过滤器，不修改仓库配置。分支或检出路径已存在时会报错。返回记录包含 `path`、`branch`、`baseCommit` 和 `repositoryRoot`。可选的第四个参数 `onPhase` 在校验、分配目录与创建分支之前收到 `prepare`，在写入文件并进入检出之前收到 `checkout`；它不得抛出异常。
+`ctx.worktrees.create(agent, { name?, from?, fetch? }, signal?, onPhase?)` 创建新分支与检出目录，再通过 `ctx.workingDirectory.set` 进入规范化的检出目录。`from` 在创建前解析为本地提交，默认是 `HEAD`。`fetch: true` 时，`from` 必须是某个已配置远程的远程跟踪分支完整引用名 `refs/remotes/<remote>/<branch>`，远程名相互嵌套时取最长的；创建前先运行 `git fetch --no-tags --no-recurse-submodules --no-write-fetch-head --no-auto-maintenance <remote> +refs/heads/<branch>:<from>`，只获取这一个分支，再解析获取到的提交。获取在 Session 的沙箱策略与命令期限下运行，不会提示输入，获取失败时不创建任何东西；暂存、未暂存、未跟踪以及被忽略的源文件均不复制。`baseCommit` 报告解析出的提交对象名称；仓库本地的替换引用仍作用于检出的内容。检出操作禁用已配置的 Git clean、smudge 和 process 过滤器，不修改仓库配置。分支或检出路径已存在时会报错。返回记录包含 `path`、`branch`、`baseCommit` 和 `repositoryRoot`。可选的第四个参数 `onPhase` 在请求要求获取时先收到 `fetch`，在校验、分配目录与创建分支之前收到 `prepare`，在写入文件并进入检出之前收到 `checkout`；它不得抛出异常。
 
-`ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
+`ctx.worktrees.enter(agent, { name }, signal?)` 通过 `ctx.workingDirectory.set` 把 Session 移入它所在检出的池中已有的工作树。`name` 是相对该池的目录，即 `create` 给工作树的名称。该目录必须解析到池内，并且是仓库已登记的工作树；否则调用以 `WORKTREE_NOT_FOUND` 拒绝，Session 留在原处。进入不执行任何会写入的 Git 命令，返回检出目录的 `path`、HEAD 未分离时的 `branch`，以及 Session 进入前所在的 `repositoryRoot`。
 
-每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——或创建者的沙箱策略为只读，目录就保留。符合条件的目录在路径锁内再做一次使用检查后，用创建者的策略执行不带 force 的 `git worktree remove`；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
+`ctx.worktrees.exit(agent, signal?)` 找到包含 Session 当前目录的已记录工作树，通过 `ctx.workingDirectory.set` 把 Session 送回该工作树的 `repositoryRoot`，并返回所离开工作树的记录：日志中有创建记录时返回创建记录，否则返回进入记录。记录可以是 Session 自己的，也可以是 fork 继承的；嵌套的工作树每次调用退出一层。检出目录与分支保留。没有已记录的工作树包含当前目录时，调用以 `WORKTREE_NOT_ENTERED` 拒绝；源检出已不存在时，以工作目录服务的错误拒绝。
 
-预期失败抛出 `WorktreeError`，其 `code` 为：名称被 Git 或池规则拒绝、起始修订为空或恢复记录违反文档约束时为 `WORKTREE_INVALID_ARGUMENT`，Git 无法解析的起始修订或基础提交则以 `WORKTREE_COMMAND_FAILED` 失败；分支或路径已存在时为 `WORKTREE_ALREADY_EXISTS`；登记被锁定时为 `WORKTREE_LOCKED`；命令以失败状态退出、超过 `maxOutputBytes` 或超过 `timeoutMs` 时分别为 `WORKTREE_COMMAND_FAILED`、`WORKTREE_OUTPUT_TOO_LARGE` 和 `WORKTREE_TIMEOUT`；服务释放后为 `WORKTREE_UNAVAILABLE`。目录分配之后的失败会在消息中加入保留产物的说明，并保留原错误的 `name` 与 `code`；调用方取消仍是 `AbortError`。
+`ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。其命令在 Session 的策略下运行，边界是记录中的源检出目录，它包含目标目录，因此自身根就是被删除 worktree 的 Session 也能恢复它。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
+
+每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。每次进入都会追加一条 `plugin:worktree/entered` 记录，只有 `exit` 读取它：归档 Session 从不移除它只是进入过的检出目录，进入记录也不会让 Session 已离开的检出目录保留下来。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——目录就保留。冷创建者经 `sessionQuery.observeSession` 观察，不会被挂载或恢复运行。归档即用户授权删除该目录，因此清理不读取任何沙箱策略，其 Git 命令不经沙箱执行；只有下述检查约束它。符合条件的目录在路径锁内再做一次使用检查后，在记录中的源检出目录（它包含目标目录）执行不带 force 的 `git worktree remove`；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
+
+预期失败抛出 `WorktreeError`，其 `code` 为：名称被 Git 或池规则拒绝、起始修订为空或恢复记录违反文档约束时为 `WORKTREE_INVALID_ARGUMENT`，Git 无法解析的起始修订或基础提交则以 `WORKTREE_COMMAND_FAILED` 失败；分支或路径已存在时为 `WORKTREE_ALREADY_EXISTS`；登记被锁定时为 `WORKTREE_LOCKED`；进入时名称在池中选不到已登记的工作树为 `WORKTREE_NOT_FOUND`；Session 的目录不在任何已记录工作树内却调用退出时为 `WORKTREE_NOT_ENTERED`；命令以失败状态退出、超过 `maxOutputBytes` 或超过 `timeoutMs` 时分别为 `WORKTREE_COMMAND_FAILED`、`WORKTREE_OUTPUT_TOO_LARGE` 和 `WORKTREE_TIMEOUT`；服务释放后为 `WORKTREE_UNAVAILABLE`。目录分配之后的失败会在消息中加入保留产物的说明，并保留原错误的 `name` 与 `code`；调用方取消仍是 `AbortError`。
 
 默认检出目录是 `<current checkout root>/.agents/worktrees/<name>`。返回的 `repositoryRoot` 是调用方当前检出目录的顶层目录；如果它是链接检出目录，工作树父目录就嵌套在其中。省略名称时，名称由前缀 `dsh-`、Session id 中 UUID 的前 8 位十六进制数、一个连字符和 4 位随机十六进制数组成，例如 `dsh-6b1f02c4-9a3e`；Session id 不含 UUID 时，前缀后接 8 位随机十六进制数。`generatedWorktreeName` 导出同一规则，供在创建前确定名称的调用方使用。仅当服务的分配操作创建了父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`；已有文件与忽略规则保持不变。每条 Git 和 Node 命令各自受 `timeoutMs` 时限约束，默认 5 分钟，使大仓库在较慢的文件系统上也能完成检出；取消仍会终止正在运行的命令。相对路径 `directory`、生成名称使用的 `namePrefix`、可执行程序、进程限制与 `retainOnArchive` 可在[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-worktree)中查阅。
 
@@ -50,7 +54,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
+Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略；归档清理不经沙箱执行。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|
@@ -88,10 +92,12 @@ Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调�
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- **按池内名称进入**——`enter` 只能到达 Session 所在检出的配置池中已登记的工作树。位于另一个检出的池中的工作树要从那个检出进入，位于所有池之外的工作树无法到达。
 - **保留的产物**——离开工作树时保留其分支和文件，归档清理也从不删除分支。安装失败同样可能保留部分产物；删除失败可能留下部分目录，可在保留的分支上恢复覆盖。
-- **仅限本地提交**——创建操作不会获取远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
+- **默认仅限本地提交**——创建操作只获取请求指定的那一个远程分支，不会获取其他远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
 - **过滤器处理前的内容**——检出时跳过已配置的过滤器，以避免执行仓库配置的程序或隐式下载。Git LFS 指针与加密 blob 保持存储时的形式；拉取实体内容或解密由用户另行执行。
 - **执行要求**——子进程提供方必须在与文件系统提供方相同的执行环境中提供 Git 与 Node。Git 必须识别 `GIT_NO_LAZY_FETCH`：Git 2.45 及 2.39.4、2.40.2、2.41.1、2.42.2、2.43.4、2.44.1 维护版本均支持；更早的版本会忽略该变量并继续执行而不报错，因此创建操作可能从 promisor 远程获取缺失的部分克隆对象。`git --no-lazy-fetch` 选项会拒绝这些版本，但它仅在 Git 2.45 及以后存在，也会拒绝上述已修补的维护版本。现有沙箱必须允许写入检出目录与共享 Git 元数据。
+- **在工作树内提交**——仓库的 Git 目录位于链接工作树之外，因此在 `workspace-write` 下，在其中工作的 Session 不能运行 `git add` 或 `git commit`，也不能从中再创建工作树，直到[沙箱策略](../../sandbox/sandbox-policy/README.zh.md#use-this-package)通过 `additionalWritableRoots` 或 `registerWritableRoot` 授权该目录。本服务不注册任何授权，Windows 的进程忽略这类授权。
 
 <a id="dev-note"></a>
 ### 开发备注

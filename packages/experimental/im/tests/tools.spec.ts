@@ -255,7 +255,7 @@ async function mount(options: { config?: Partial<ImConfig>; fs?: ReturnType<type
   await ctx.plugin(NativeToolExecutor)
   const fs = options.fs ?? fakeFs()
   ctx.provide('fs', fs as never)
-  ctx.provide('workingDirectory', { ensure: async () => '/work' } as never)
+  ctx.provide('workingDirectory', { get: () => '/work', ensure: async () => '/work' } as never)
   const im = new FakeIm()
   const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }], ...options.config })
   applyTools(ctx, im, config)
@@ -834,7 +834,7 @@ describe('im_read_file', () => {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
-      ctx.provide('workingDirectory', { ensure: async () => workspace } as never)
+      ctx.provide('workingDirectory', { get: () => workspace, ensure: async () => workspace } as never)
       const im = new FakeIm()
       const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
       applyTools(ctx, im, config)
@@ -870,7 +870,6 @@ describe('im_read_file', () => {
       const sessionDir = join(root, 'session-ws')
       await mkdir(fallbackDir)
       await mkdir(sessionDir)
-      let currentCwd = sessionDir
 
       const ctx = new Context()
       contexts.push(ctx)
@@ -881,7 +880,7 @@ describe('im_read_file', () => {
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(NativeToolExecutor)
-      ctx.provide('workingDirectory', { ensure: async () => currentCwd } as never)
+      ctx.provide('workingDirectory', { get: () => sessionDir, ensure: async () => sessionDir } as never)
       const im = new FakeIm()
       const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
       applyTools(ctx, im, config)
@@ -907,7 +906,7 @@ describe('im_read_file', () => {
       expect(new Uint8Array(await readFile(stagedPath))).toEqual(data)
 
       // Staging outside the session's workspace (even under the deployment fallback) is refused by the session policy.
-      currentCwd = fallbackDir
+      config.tools.fileDir = '../fallback/.dsh/im'
       const escaped = await executeToolFixture(ctx, {
         name: 'im_read_file',
         arguments: { id: '1.2' },
@@ -929,7 +928,7 @@ describe('im_read_file', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     ctx.provide('fs', { ...fakeFs(), sandboxMode: 'workspace-write' } as never)
-    ctx.provide('workingDirectory', { ensure: async () => '/work' } as never)
+    ctx.provide('workingDirectory', { get: () => '/work', ensure: async () => '/work' } as never)
     const im = new FakeIm()
     const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
     applyTools(ctx, im, config)

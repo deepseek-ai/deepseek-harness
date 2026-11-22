@@ -1,4 +1,5 @@
 /** Real Loader composition exercises Token as an independent authentication plugin. */
+import { createHash } from 'node:crypto'
 import { request as httpRequest } from 'node:http'
 import { once } from 'node:events'
 import type { Duplex } from 'node:stream'
@@ -16,7 +17,8 @@ import { expect, it, onTestFinished } from 'vitest'
 import * as Token from '../src/index.ts'
 import { BrowserAuth } from '../src/browser-auth.ts'
 
-it('serves token exchanges through WebServer and keeps token-owned Peers outside Connection defaults', async () => {
+/** Loader-composed credentials, WebServer, Connection, and Token on an OS-assigned port. */
+async function composed(): Promise<{ ctx: Context; origin: string; auth: BrowserAuth }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-token-plugin-'))
   const ctx = new Context()
   onTestFinished(async () => {
@@ -41,7 +43,11 @@ it('serves token exchanges through WebServer and keeps token-owned Peers outside
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(path).href } })
   await ctx.loader.await()
   const origin = `http://127.0.0.1:${ctx.webServer.port}`
-  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
+  return { ctx, origin, auth: await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30) }
+}
+
+it('serves token exchanges through WebServer and keeps token-owned Peers outside Connection defaults', async () => {
+  const { ctx, origin, auth } = await composed()
   const login = new URL(auth.authenticatedUrl(origin))
   expect(login.searchParams.get('token')).toMatch(/^[A-Za-z0-9_-]{43}$/)
   const exchanged = await fetch(login, { redirect: 'manual' })
@@ -116,4 +122,26 @@ it('serves token exchanges through WebServer and keeps token-owned Peers outside
   const resumed = ctx.connection.authentication.authenticate({ headers })
   if ('rejection' in resumed) throw new Error('existing Cookie did not survive provider reload')
   expect(resumed.peer).not.toBe(admission.peer)
+})
+
+it('answers a sign-in that carries 17 other ports\' Cookies by expiring the earliest one', async () => {
+  const { ctx, origin, auth } = await composed()
+  // Counted down from the OS-assigned listener port, so none of them is the listener's own authority.
+  const listenerPort = Number(new URL(origin).port)
+  const others = Array.from({ length: 17 }, (_, index) => {
+    const name = `dsh-auth-${createHash('sha256').update(`127.0.0.1:${String(listenerPort - 1 - index)}`).digest('base64url')}`
+    const claim = Buffer.from(JSON.stringify({ issuedAt: 1_795_000_000_000 + index }), 'utf8').toString('base64url')
+    return { name, pair: `${name}=v1.${claim}.unverified` }
+  })
+  const exchanged = await fetch(auth.authenticatedUrl(origin), {
+    redirect: 'manual',
+    headers: { cookie: others.map(other => other.pair).join('; ') },
+  })
+  expect(exchanged.status).toBe(303)
+  const [minted, ...expired] = exchanged.headers.getSetCookie()
+  expect(expired).toEqual([
+    `${others[0]!.name}=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Strict`,
+  ])
+  const headers = { host: new URL(origin).host, cookie: minted?.split(';', 1)[0] }
+  if ('rejection' in ctx.connection.authentication.authenticate({ headers })) throw new Error('minted Cookie was rejected')
 })

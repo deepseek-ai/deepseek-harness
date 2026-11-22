@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-08-02-native-github-stacks-and-optional-rebases.md) | 中文
 
+下文在 merge-forward 与 rebase 之间同等选择的规定已被 [使用 rerere 的 rebase](2026-11-19-prefer-rebase-with-rerere.zh.md) 取代，后者仅在 PR 作者明确要求时保留 merge-forward。堆叠关联、落地、lease 保护和改写后的审计仍然有效。
+
 ## 问题
 
 仅以 base 分支表示的依赖 PR（Pull Request）链没有官方的堆叠身份。要让它落地，就必须逐个手动合并 PR、保留中间分支、调整每个子 PR 的 base，并重新查证这条链是否仍然完整。GitHub 原生的堆叠 PR 功能则会承载顺序，对每一层应用 trunk 规则和 CI，并负责自底向上的合并与 base 调整。

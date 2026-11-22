@@ -104,7 +104,7 @@ struct NativeRequest: Sendable {
     }
 }
 
-struct ProcessIdentity: Equatable, Sendable {
+struct ProcessIdentity: Hashable, Sendable {
     let pid: Int32
     let startedSeconds: UInt64
     let startedMicroseconds: UInt64

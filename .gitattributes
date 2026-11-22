@@ -17,9 +17,6 @@ docs/persistence-changes/historical-formats/*.schema.json linguist-generated=tru
 # Unified patch blank context lines require their leading space.
 patches/*.patch whitespace=-blank-at-eol
 
-# Committed output of the pinned Feishu API codegen (scripts/gen-vendor-im-types.ts).
-vendor/plugin-im-adapter-lark/src/types/** linguist-generated=true
-
 # Review layers of the forge changes view (dsh-review-layer), for this repository's own conventions:
 # plugin locale dictionaries and the session snapshot tree hide with test files, generated bilingual
 # pairing records join them, and a package's types-only module is part of its interface.

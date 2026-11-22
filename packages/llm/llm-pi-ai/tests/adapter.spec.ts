@@ -389,7 +389,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(readImageRequest).toHaveBeenCalledWith(ref, {
       width: 1,
       height: 1,
-      maxBytes: 1024 * 1024,
+      maxImageBytes: 786_432, imageTargetBytes: 786_432,
     }, expect.any(AbortSignal))
     expect(JSON.stringify(server.requests[0])).toContain(MODEL_IMAGE_PATH)
     expect(server.paths).toEqual(['/v1/responses'])
@@ -984,6 +984,28 @@ describe('provider profile lifecycle', () => {
     expect(server.requests).toHaveLength(0)
   })
 
+  it.each([
+    ['   ', 'is blank; set PI_CUSTOM_REF_KEY to the raw key (the web Models page writes it) or export it in the launching environment'],
+    ['sk-\u{1F600}supersecret', 'contains characters no HTTP header can carry; set PI_CUSTOM_REF_KEY to the raw key alone (the web Models page writes it)'],
+  ])('refuses the unusable key %j behind apiKeyEnv before any request, naming the reference and never the key', async (value, detail) => {
+    vi.stubEnv('PI_CUSTOM_REF_KEY', value)
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url, { apiKey: undefined, apiKeyEnv: 'PI_CUSTOM_REF_KEY' })
+    const result = await assemble(ctx, { model: 'deepseek-flash', messages: [] })
+    expect(result.finish).toEqual({
+      kind: 'error', failure: { message: `llm-pi-ai: the API key resolved from PI_CUSTOM_REF_KEY ${detail}`, code: 'INVALID_CREDENTIAL' },
+    })
+    expect(server.requests).toHaveLength(0)
+  })
+
+  it('trims whitespace around the key behind apiKeyEnv', async () => {
+    vi.stubEnv('PI_CUSTOM_REF_KEY', '  custom-ref-key\t\n')
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = await harness(server.url, { apiKey: undefined, apiKeyEnv: 'PI_CUSTOM_REF_KEY' })
+    await assemble(ctx, { model: 'deepseek-flash', messages: [] })
+    expect(server.headers[0]?.authorization).toBe('Bearer custom-ref-key')
+  })
+
   it('validates empty, underspecified, legacy-shaped, and explicitly blank profiles', () => {
     expect(DEFAULT_MAX_REQUEST_IMAGE_BYTES).toBe(20 * 1024 * 1024)
     // Empty and omitted dicts are the dormant zero-route posture, not errors.
@@ -1235,6 +1257,49 @@ it.each([
 it('resolves the exact pi-ai image budget for screenshot coordinates', () => {
   const adapter = adapterOf({ deepseek: { apiKeyEnv: 'PI_TEST_KEY', requestImagePixelBudget: 10_000, requestImageMaxBytes: 50_000 } })
   expect(adapter.imageRequestTarget('deepseek', 'deepseek-flash', { ...IMAGE_REF, width: 1000, height: 1000 }))
-    .toEqual({ width: 100, height: 100, maxBytes: 50_000 })
+    .toEqual({ width: 100, height: 100, maxImageBytes: 50_000, imageTargetBytes: 50_000 })
   expect(() => adapter.imageRequestTarget('missing', 'deepseek-flash', IMAGE_REF)).toThrow('does not own provider')
+})
+
+
+it.each([
+  [{}, { width: 627, height: 2000, maxImageBytes: 786_432, imageTargetBytes: 786_432 }],
+  [{
+    requestImageMaxDimension: 3000, requestImageMaxBytes: 500_000,
+  }, {
+    width: 940, height: 3000, maxImageBytes: 500_000, imageTargetBytes: 500_000,
+  }],
+])('uses the same catalog and override image target for coordinates and the wire request: %j', async (overrides, expected) => {
+  const server = await mockServer([{ events: anthropicTextEvents }])
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(RequestImageStore)
+  const store = ctx.attachments
+  const read = vi.spyOn(store, 'readImageRequest').mockImplementation(async (ref, target) => ({
+    variantId: brandString<ImageVariantId>(`sha256:${'c'.repeat(64)}`), attachment: ref,
+    data: Uint8Array.of(1), mediaType: ref.mediaType, bytes: 1,
+    width: target.width, height: target.height, depth: 'uchar', space: 'srgb', hasAlpha: false,
+  }))
+  let providers: Record<string, LlmPiAi.PiAiProviderProfile> = {
+    anthropic: { apiKeyEnv: 'PI_TEST_KEY', baseURL: server.url, ...overrides },
+  }
+  const adapter = new PiAiAdapter({
+    profiles: () => resolveProfiles(providers),
+    resolveApiKey: () => Promise.resolve('test-key'), resolveAttachments: () => store, auth: memoryAuth(),
+  })
+  const ref = { ...IMAGE_REF, width: 1146, height: 3657 }
+  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toEqual(expected)
+  const prepared = await adapter.prepareCall('anthropic', 'claude-sonnet-4-5')
+  providers = { anthropic: { ...providers['anthropic'], requestImageMaxDimension: 777, requestImageMaxBytes: 333 } }
+  expect(adapter.imageRequestTarget('anthropic', 'claude-sonnet-4-5', ref)).toMatchObject({
+    height: 777, maxImageBytes: 333, imageTargetBytes: 333,
+  })
+  const messages = Array.from({ length: 22 }, () => createUserMessage({ content: [{ type: 'image', attachment: ref }], source: { kind: 'user' } }))
+  const chunks: unknown[] = []
+  for await (const chunk of prepared.stream({ provider: 'anthropic', model: 'claude-sonnet-4-5', messages })) chunks.push(chunk)
+  expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'stop' } })
+  expect(read).toHaveBeenCalledTimes(1)
+  expect(read.mock.calls[0]?.[1]).toEqual(expected)
+  expect(JSON.stringify(server.requests[0])).toContain(`${expected.width}x${expected.height}`)
+  expect(ref).toMatchObject({ width: 1146, height: 3657 })
 })

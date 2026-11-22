@@ -8,6 +8,9 @@
     "src"
   ],
   "references": [
+    { "path": "../../credentials/authorization" },
+    { "path": "../../host/webserver" },
+    { "path": "../../util/brand" },
     {
       "path": "../../../vendor/cosmokit"
     },
@@ -49,6 +52,12 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../core/agent"
+    },
+    {
+      "path": "../../util/output-retention"
     }
   ]
 }

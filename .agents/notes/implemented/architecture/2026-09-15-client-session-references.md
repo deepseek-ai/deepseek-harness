@@ -52,7 +52,9 @@ The [blank Session decision](2026-09-17-process-local-blank-sessions.md) owns cr
 | `sessions.sessionOf(ctx)` | Returns the matching live Session face or `undefined`; an ended Context cannot resolve to a same-id replacement |
 | `sessions.create(...)` / `sessions.fork(...)` | Existing Host operations returning a Session identity; retaining and displaying it remain explicit |
 
-`SessionRetainOptions` contains required `source: SessionReferenceSource` and optional `signal: AbortSignal`. Both acquisition methods accept `target: SessionTarget` and these options. Source keys are consumer-defined and declaration-merge extensible; there is no runtime source-registration protocol or default main-view source. A source is a usage label, not another Session address or a permission to act on it.
+`SessionRetainOptions` contains required `source: SessionReferenceSource`, optional `facets`, and optional `signal: AbortSignal`. Both acquisition methods accept `target: SessionTarget` and these options. Source keys are consumer-defined and declaration-merge extensible; there is no runtime source-registration protocol or default main-view source. A source is a usage label, not another Session address or a permission to act on it.
+
+[Session retain facets and recent views](2026-11-15-session-retain-facets-and-recent-views.md) owns `facets`, the independently counted parts a reference keeps beyond its history stream, and the `recentViews` source.
 
 ### Acquisition, failure, and release
 

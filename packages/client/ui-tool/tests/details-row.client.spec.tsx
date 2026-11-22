@@ -153,6 +153,22 @@ describe('todosDetail', () => {
 })
 
 describe('DetailsRow', () => {
+  it('expands a Session message acceptance receipt and retains Inspect', () => {
+    const inspect = vi.fn()
+    const args = JSON.stringify({ session_id: 'session-recipient', message: 'Please review the result.' })
+    const block = result('session_send_message', { message_id: 'accepted-message' }, args)
+    render(<DetailsRow {...{ useDisclosure, toolName: 'session_send_message', block, inspect, t } as Parameters<typeof DetailsRow>[0]} />)
+    const header = screen.getByRole('button', { expanded: false })
+    expect(header.textContent).toContain('Send message')
+    expect(header.textContent).toContain('session-recipient · Accepted')
+    expect(screen.queryByText('accepted-message')).toBeNull()
+    fireEvent.keyDown(header, { key: 'Enter' })
+    expect(screen.getByText('accepted-message')).toBeTruthy()
+    expect(screen.getByText('Please review the result.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
+    expect(inspect).toHaveBeenCalledOnce()
+  })
+
   it('shows the full agent description above its name without a disclosure', () => {
     const description = 'Verify every construction bound. '.repeat(20)
     const block = { ...result('list_agents', null), content: [{ type: 'text' as const, text: `reviewer/checker [running] — ${description}` }] }
@@ -182,6 +198,7 @@ describe('DetailsRow', () => {
     ['subagent', 'Create subagent'],
     ['subagent_fork', 'Fork subagent'],
     ['list_subagent_models', 'List models'],
+    ['session_send_message', 'Send message'],
   ])('%s uses the two-person icon and its own title', (name, title) => {
     const inspect = vi.fn()
     const expectedIcon = render(<IconUsersOutlineRegular size={14} />).container.querySelector('svg')!.outerHTML
@@ -233,9 +250,10 @@ describe('DetailsRow', () => {
       for (const dispose of callback()) dispose()
     })
     detailsToolview.apply({ slots: { inject, register } } as never)
-    expect(register.mock.calls).toHaveLength(41)
+    expect(register.mock.calls).toHaveLength(42)
     const specs = register.mock.calls.map(([spec]) => spec)
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'subagent_fork', locale: 'conversation' })
+    expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'session_send_message', locale: 'conversation' })
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect', locale: 'conversation' })
     expect(specs).toContainEqual({ name: 'tool.call.toolview', key: 'cordis_inspect_query', locale: 'conversation' })
     for (const key of ['schedule_create', 'schedule_list', 'schedule_view', 'schedule_edit', 'schedule_update', 'schedule_delete']) {

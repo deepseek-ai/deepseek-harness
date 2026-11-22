@@ -42,7 +42,14 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-async function mountRuntime(ctx: Context, config: NodeRuntimeConfig = {}): Promise<void> {
+/** Node runtime program formats each `run_code` case runs under; `complete` renders a statement producing the program value. */
+const PTC_MODES = [
+  { mode: 'per-call', config: { executionMode: 'per-call' }, complete: (expression: string) => `return ${expression}` },
+  { mode: 'scoped REPL', config: { executionMode: 'persistent-in-memory', replScoped: true }, complete: (expression: string) => expression },
+] as const satisfies readonly { mode: string; config: NodeRuntimeConfig; complete: (expression: string) => string }[]
+type PtcMode = typeof PTC_MODES[number]
+
+async function mountRuntime(ctx: Context, mode: PtcMode, config: NodeRuntimeConfig = {}): Promise<void> {
   onTestFinished(async () => { await ctx.fiber.dispose() })
   if (!ctx.get('sessions')) await ctx.plugin(SessionStore)
   provideWorkingDirectoryFixture(ctx)
@@ -51,7 +58,7 @@ async function mountRuntime(ctx: Context, config: NodeRuntimeConfig = {}): Promi
   if (!ctx.get('sandbox')) await ctx.plugin(Sandbox, {})
   if (!ctx.get('sessionProjections')) await ctx.plugin(SessionProjections)
   if (!ctx.get('sandboxPolicy')) await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
-  await ctx.plugin(NodeRuntime, config)
+  await ctx.plugin(NodeRuntime, { ...mode.config, ...config })
 }
 
 function observedAgent(ctx: Context, id: string, observe: (type: string, data: unknown) => void) {
@@ -108,6 +115,7 @@ async function setup(
   beforePolicy?: (ctx: Context) => void,
 ): Promise<{ ctx: Context; spill?: StubStore; fiber: Awaited<ReturnType<Context['plugin']>> }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -224,25 +232,26 @@ describe('oversized plain-text replacement', () => {
   })
 })
 
-describe('outer PTC mode failure capture', () => {
-  it('spills the bounded output-limit diagnostic through the ordinary outer-result policy', async () => {
+describe.each(PTC_MODES)('outer PTC mode failure capture ($mode)', (mode) => {
+  it('spills a failure after output truncation through the ordinary outer-result policy', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 64 })
-    await mountRuntime(ctx, { maxOutputBytes: 500 })
+    await mountRuntime(ctx, mode, { maxOutputBytes: 500 })
     const events: unknown[] = []
     const agent = observedAgent(ctx, 'code-spill', (_type: string, data: unknown) => { events.push(data) })
 
     const result = await executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: brandString<ToolCallId>('code-output-limit'),
+      callId: brandString<ToolCallId>('code-truncated-failure'),
       name: 'run_code',
       arguments: {
-        code: 'inspect("HEAD-" + "x".repeat(300)); inspect("TAIL-" + "y".repeat(300)); return "unreachable";',
-        description: 'Print oversized head and tail lines',
+        code: 'inspect("HEAD-" + "x".repeat(300)); inspect("TAIL-" + "y".repeat(300)); throw "after output";',
+        description: 'Print oversized output before throwing',
       },
       agent: agent as never,
     })
@@ -251,7 +260,8 @@ describe('outer PTC mode failure capture', () => {
     const saved = (ctx.spillStore as StubStore).saves
     expect(saved).toHaveLength(1)
     expect(saved[0]?.source).toMatchObject({ toolName: 'run_code' })
-    expect(saved[0]?.content).toContain('code run failed (output-limit)')
+    expect(saved[0]?.content).toContain('code run failed (exception): after output')
+    expect(saved[0]?.content).toContain('Output was truncated.')
     expect(saved[0]?.content).toContain('HEAD-')
     expect(textOf(result.content)).toContain('Full formatted result stored at: /spill/run_code.txt')
     expect(events).toEqual([])
@@ -268,16 +278,17 @@ describe('read skip', () => {
   })
 })
 
-describe('the durable dispatch-log arm', () => {
+describe.each(PTC_MODES)('the durable dispatch-log arm ($mode)', (mode) => {
   /** Boot code mode + the policy + the Node runtime; run one program via the real bridge. */
   async function runCodeWith(program: string, maxInlineTokens: number, extraTools: ToolDefinition[] = []) {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens })
-    await mountRuntime(ctx, {})
+    await mountRuntime(ctx, mode)
     const events: { type: string; data: unknown }[] = []
     const agent = observedAgent(ctx, 'dispatch-spill', (type: string, data: unknown) => { events.push({ type, data }) })
     ctx.tools.register(textTool('huge_read', 'H'.repeat(2_000)))
@@ -317,8 +328,8 @@ describe('the durable dispatch-log arm', () => {
   })
 
   it('leaves a non-text sub-result log unchanged (flatten declines)', async () => {
-    const { events, spill } = await runCodeWith(
-      'return await tools.mixed_read({})', 5, [defineContentToolFixture({
+    const { result, events, spill } = await runCodeWith(
+      mode.complete('await tools.mixed_read({})'), 5, [defineContentToolFixture({
         name: 'mixed_read',
         description: 'mixed_read',
         parameters: {},
@@ -326,14 +337,16 @@ describe('the durable dispatch-log arm', () => {
           return [{ type: 'text', text: 'x'.repeat(100) }, { type: 'reasoning', text: 'why' }]
         },
       })])
+    expect(result.isError).toBe(false)
     const settle = events.find(event => event.type === 'tool/ptc-dispatch')
     expect((settle!.data as { content: unknown[] }).content).toHaveLength(2)
     expect(spill.saves.filter(entry => entry.source.label === 'dispatch')).toHaveLength(0)
   })
 
   it('leaves a within-cap sub-result log untouched and saves nothing for it', async () => {
-    const { events, spill } = await runCodeWith(
-      'return await tools.small_read({})', 200)
+    const { result, events, spill } = await runCodeWith(
+      mode.complete('await tools.small_read({})'), 200)
+    expect(result.isError).toBe(false)
     const settle = events.find(event => event.type === 'tool/ptc-dispatch')
     expect((settle!.data as { content: { type: string; text: string }[] }).content)
       .toEqual([{ type: 'text', text: 'tiny' }])
@@ -342,12 +355,13 @@ describe('the durable dispatch-log arm', () => {
 
   it('a slow spill backend never delays the program value or a later dispatch slot', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 40 })
-    await mountRuntime(ctx, {})
+    await mountRuntime(ctx, mode)
     const saveStarted = Promise.withResolvers<undefined>()
     const saveGate = Promise.withResolvers<undefined>()
     const smallStarted = Promise.withResolvers<undefined>()
@@ -396,12 +410,13 @@ describe('the durable dispatch-log arm', () => {
 
   it('a sustained slow backend backpressures the run instead of accumulating unbounded log tasks', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor, { maxParallelSubCalls: 1 })
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 40 })
-    await mountRuntime(ctx, {})
+    await mountRuntime(ctx, mode)
     const secondSaveStarted = Promise.withResolvers<undefined>()
     const thirdStarted = Promise.withResolvers<undefined>()
     const store = ctx.spillStore as StubStore
@@ -434,7 +449,7 @@ describe('the durable dispatch-log arm', () => {
       name: 'run_code',
       arguments: {
         // Queue all requests before waiting so the third is available to the bounded lane.
-        code: 'await Promise.all([tools.huge_read({}), tools.huge_read({}), tools.huge_read({})]); return "done"',
+        code: 'await Promise.all([tools.huge_read({}), tools.huge_read({}), tools.huge_read({})]);\n' + mode.complete('"done"'),
         description: 'Three oversized reads against a hung backend',
       },
       agent: agent as never,
@@ -464,12 +479,13 @@ describe('the durable dispatch-log arm', () => {
 
   it('a saveText failure keeps the complete content in the durable log (best-effort)', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(PtcToolExecutor)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 40 })
-    await mountRuntime(ctx, {})
+    await mountRuntime(ctx, mode)
     ;(ctx.spillStore as StubStore).fail = true
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const events: { type: string; data: unknown }[] = []
@@ -479,7 +495,7 @@ describe('the durable dispatch-log arm', () => {
       signal: testToolSignal,
       callId: brandString<ToolCallId>('parent-2'),
       name: 'run_code',
-      arguments: { code: 'return (await tools.huge_read({}))[0].text.length', description: 'Fail the spill backend' },
+      arguments: { code: mode.complete('(await tools.huge_read({}))[0].text.length'), description: 'Fail the spill backend' },
       agent: agent as never,
     })
     expect(result.isError).toBe(false)

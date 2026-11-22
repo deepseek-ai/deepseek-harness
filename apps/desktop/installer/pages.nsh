@@ -16,7 +16,6 @@ Var InstallerChoose
 Var InstallerEdit
 Var InstallerEditFrame
 Var InstallerBrowse
-Var InstallerLaunch
 Var InstallerExpanded
 Var InstallerMinimizeButton
 Var InstallerCloseButton
@@ -137,30 +136,6 @@ Function InstallerCreate
     !insertmacro InstallerPlace $InstallerBrowse 456 434 80 34
     ${NSD_OnClick} $InstallerBrowse InstallerBrowsePath
     ${NSD_OnNotify} $InstallerBrowse InstallerPaintButton
-    ${NSD_CreateCheckbox} 0 0 0 0 "$(INSTALLER_LAUNCH)"
-    Pop $InstallerLaunch
-    SendMessage $InstallerLaunch ${WM_SETFONT} $InstallerSmallFont 1
-    System::Call 'user32::GetDC(p $InstallerLaunch) p.r4'
-    System::Call 'gdi32::SelectObject(p r4, p $InstallerSmallFont) p.r5'
-    StrLen $0 "$(INSTALLER_LAUNCH)"
-    System::Alloc 8
-    Pop $6
-    System::Call 'gdi32::GetTextExtentPoint32W(p r4, w "$(INSTALLER_LAUNCH)", i r0, p r6)'
-    System::Call '*$6(i .r7)'
-    System::Free $6
-    System::Call 'gdi32::SelectObject(p r4, p r5)'
-    System::Call 'user32::ReleaseDC(p $InstallerLaunch, p r4)'
-    System::Call 'kernel32::MulDiv(i 42, i $InstallerDpi, i 96) i.r2'
-    IntOp $2 $2 + $7
-    IntOp $0 $InstallerSize - $2
-    IntOp $0 $0 / 2
-    System::Call 'kernel32::MulDiv(i 438, i $InstallerDpi, i 96) i.r1'
-    System::Call 'kernel32::MulDiv(i 32, i $InstallerDpi, i 96) i.r3'
-    System::Call 'user32::MoveWindow(p $InstallerLaunch, i r0, i r1, i r2, i r3, i 1)'
-    !insertmacro InstallerControlColors $InstallerLaunch
-    ${NSD_OnNotify} $InstallerLaunch InstallerPaintCheckbox
-    ${NSD_Check} $InstallerLaunch
-
     ${NSD_CreateButton} 0 0 0 0 "$(INSTALLER_INSTALL)"
     Pop $InstallerButton
     !insertmacro InstallerPlace $InstallerButton ${INSTALLER_BUTTON_X} ${INSTALLER_BUTTON_Y} ${INSTALLER_BUTTON_WIDTH} ${INSTALLER_BUTTON_HEIGHT}
@@ -188,20 +163,13 @@ Function InstallerRender
     ShowWindow $InstallerEdit 0
     ShowWindow $InstallerEditFrame 0
     ShowWindow $InstallerBrowse 0
-    ShowWindow $InstallerLaunch 0
     ShowWindow $InstallerStatus 0
-    ${If} $InstallerPhase == "success"
-        ${NSD_SetText} $InstallerButton "$(INSTALLER_FINISH)"
-        ShowWindow $InstallerLaunch 5
+    ${If} $InstallerExpanded == 1
+        ShowWindow $InstallerEditFrame 5
+        ShowWindow $InstallerEdit 5
+        ShowWindow $InstallerBrowse 5
     ${Else}
-        ${NSD_SetText} $InstallerButton "$(INSTALLER_INSTALL)"
-        ${If} $InstallerExpanded == 1
-            ShowWindow $InstallerEditFrame 5
-            ShowWindow $InstallerEdit 5
-            ShowWindow $InstallerBrowse 5
-        ${Else}
-            ShowWindow $InstallerChoose 5
-        ${EndIf}
+        ShowWindow $InstallerChoose 5
     ${EndIf}
 FunctionEnd
 
@@ -220,8 +188,8 @@ Function InstallerWelcomeLeave
     ${EndIf}
 FunctionEnd
 
+; The completed page requests exit with the user's launch choice in $0.
 Function InstallerFinishLeave
-    ${NSD_GetState} $InstallerLaunch $0
     HideWindow
     ${If} $0 == ${BST_CHECKED}
         StrCpy $0 ""

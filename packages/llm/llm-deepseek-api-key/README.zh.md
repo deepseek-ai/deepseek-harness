@@ -11,7 +11,7 @@ kind: "package-reference"
 
 为 `deepseek-official` 注册鉴权、模型发现和官方模型列表。通过 [llm-deepseek](../llm-deepseek/README.zh.md) 共用 Messages 请求实现；本包拥有凭据解析、目录可用性判断和模型准入。
 
-鉴权解析将验证后的 API key 放入 `x-api-key`，供 Messages 和 Files 请求共同使用。
+鉴权解析向 [`ctx.deepseekAuth`](../../account/deepseek-auth/README.zh.md) 索取验证后的 API key，放入 `x-api-key`，供 Messages、Files 和列表请求使用。路由把自己的路由 id、基础地址和 `apiKeyEnv` 引用登记到该服务，使 DeepSeek Web 提供方以 Bearer 令牌把同一密钥发往同一部署。密钥只对该基础地址所在 origin 下的目的地释放。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-`apiKeyEnv` 默认为 `DEEPSEEK_API_KEY`，在每次请求和模型发现时解析凭据。已组合 credentials 服务时，按其优先级解析；只有未组合该服务时才直接读取启动环境。请求时凭据缺失以 `MISSING_CREDENTIAL` 失败；格式错误以 `INVALID_CREDENTIAL` 失败。模型发现在凭据缺失时返回空目录，在模型选择器中隐藏该路由，但保留其设置入口。凭据格式错误和其他读取失败继续上报。添加或删除密钥会影响下一次模型发现。
+`apiKeyEnv` 默认为 `DEEPSEEK_API_KEY`，在每次请求和模型发现时解析凭据。密钥由 `ctx.deepseekAuth` 通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数读取：已组合 credentials 服务时，按其优先级解析；只有未组合该服务时才直接读取启动环境。请求时凭据缺失以 `MISSING_CREDENTIAL` 失败；格式错误以 `INVALID_CREDENTIAL` 失败，其诊断点名本插件的设置命名空间与凭据引用。模型发现在凭据缺失时返回空目录，在模型选择器中隐藏该路由，但保留其设置入口。凭据格式错误和其他读取失败继续上报。添加或删除密钥会影响下一次模型发现。本插件只在挂载了 `@deepseek-ai/dsh-deepseek-auth` 的组合中启动；`base` 与 `sdk-minimal` 两个组合包挂载它。
 
 ```yaml
 - id: llm-deepseek
@@ -35,7 +35,7 @@ kind: "package-reference"
     apiKeyEnv: DEEPSEEK_API_KEY
 ```
 
-端点和凭据引用来自同一次配置解析；进行中的请求保留该快照，后续配置更新仅影响后续请求。账号登录态不影响该路由使用的凭据。
+端点和凭据引用来自同一次配置解析；进行中的请求保留该快照，后续配置更新仅影响后续请求。账号登录态不影响该路由使用的凭据。对其他 origin 的目的地或内嵌凭据的 URL，`ctx.deepseekAuth` 不释放密钥，也不读取凭据存储。
 
 `models` 是该 provider 独立的可配置目录；默认值和协议能力来自共享传输包。当 `models` 等于内置目录、且 Messages 的 origin 是官方 API `https://api.deepseek.com` 时，路由改为提供官方 `GET https://api.deepseek.com/models` 列表。列表请求用 `x-api-key` 携带 API key，带上 harness 的 `User-Agent`，并拒绝重定向；没有 API key 时不发任何请求。其他端点，包括由 `baseURL` 或 `$DEEPSEEK_BASE_URL` 指定的端点，提供 `models`，不请求列表。目录判断不探测推理端点。
 
@@ -55,7 +55,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-API key 读取调用[共享凭据模块](../llm-deepseek/src/credential.ts)的 `resolveDeepSeekApiKey`。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
+API key 的读取经由 `ctx.deepseekAuth`：它按路由的 `apiKeyEnv` 引用读取密钥，并检查密钥能否放进 HTTP 请求头；本插件把不可用的密钥报告为 `INVALID_CREDENTIAL`，共享传输层不读取任何凭据。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
 
 <a id="further-exploration"></a>
 ## 进一步探索

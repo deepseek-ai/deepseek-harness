@@ -1,4 +1,5 @@
 /** Real SDK probe ownership, failed negotiation recovery, and subprocess quiescence. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { once } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -28,6 +29,7 @@ const fixture = fileURLToPath(new URL('./fixtures/negotiation-lifecycle.mjs', im
 async function connection(factory: () => Transport, retry: boolean) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

@@ -27,20 +27,20 @@ id: 2026-10-28-im-message-source
 baseline: false
 changes:
   - root: "event:agent/inbox/spliced"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "d6d06328af1c9b5a8a763de75c8f95b3bdf15a67f9f5ae2c18401c80572f4ddf"
+    previous: "2026-11-19-cua-input-notices"
+    after: "7b3076b2edd39cbc65d59ccdbdbdf586cd543e9aa894b70fb6cfdbc172aed01d"
     decision: same-version
   - root: "event:developer/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "ee21b73a2ccee9a6a23640ead31553551776d82ad5c47679b7f468bf9889d3f9"
+    previous: "2026-11-19-cua-input-notices"
+    after: "02cfeb91a193ce6642c8dfbf892b2bfce40999842fc8c8d1a8c34852f95dd833"
     decision: same-version
   - root: "event:session/title-llm-request"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "265c4bb3701a47b57cc9cede8a66e7056522b7546a5c9cb97938e44a6b1898df"
+    previous: "2026-11-19-cua-input-notices"
+    after: "5c7929f7efc45376cf32cfdb8414f89bd5db63003cafb901c54271cca8eb6dc1"
     decision: same-version
   - root: "event:user/message"
-    previous: "2026-11-05-timeline-priority-notice"
-    after: "c68fa14948985fdc23004a95480ba96eab26cb08b82736425f9f9cd053e3ba2f"
+    previous: "2026-11-19-cua-input-notices"
+    after: "7995e48c2ead64c21ad85aee5dc56a248529229b33a7b4b29649b9c68c2cba36"
     decision: same-version
 ```
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { formatAgo, formatDuration } from '../src/client/format.ts'
+import { formatAgo, formatDuration, formatShortAgo } from '../src/client/format.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 const t = makeTranslate(en)
@@ -44,5 +44,28 @@ describe('formatAgo', () => {
 
   it('dates nothing when the time does not parse', () => {
     expect(formatAgo('not a time', now, t)).toBeUndefined()
+  })
+})
+
+describe('formatShortAgo', () => {
+  const now = Date.parse('2026-10-09T12:00:00Z')
+
+  it.each([
+    ['2026-10-09T11:59:30Z', 'now'],
+    ['2026-10-09T11:55:00Z', '5min'],
+    ['2026-10-09T09:00:00Z', '3h'],
+    ['2026-10-07T12:00:00Z', '2d'],
+    ['2026-06-01T12:00:00Z', '4mo'],
+    ['2024-10-09T12:00:00Z', '2y'],
+  ])('dates %s relative to noon in the one-line form', (iso, text) => {
+    expect(formatShortAgo(iso, now, t)).toBe(text)
+  })
+
+  it('uses the dictionary of the current language', () => {
+    expect(formatShortAgo('2026-10-09T11:55:00Z', now, makeTranslate(zh))).toBe('5分钟')
+  })
+
+  it('dates nothing when the time does not parse', () => {
+    expect(formatShortAgo('not a time', now, t)).toBeUndefined()
   })
 })

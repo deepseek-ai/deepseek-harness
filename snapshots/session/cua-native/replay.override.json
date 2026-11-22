@@ -1433,7 +1433,7 @@
           "type": "tool-call",
           "id": "cua-explicit-pointer-move",
           "name": "cua",
-          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":\"7\",\"x\":100,\"y\":200,\"relative\":true,\"useSystemPointer\":true}}"
+          "arguments": "{\"method\":\"mouseMove\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":\"7\",\"x\":100,\"y\":200,\"relative\":true,\"useSystemInput\":true}}"
         }
       },
       {
@@ -2126,7 +2126,7 @@
           "type": "tool-call",
           "id": "cua-system-drag",
           "name": "cua",
-          "arguments": "{\"method\":\"drag\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":\"7\",\"fromX\":150,\"fromY\":200,\"toX\":600,\"toY\":650,\"relative\":true,\"useSystemPointer\":true}}"
+          "arguments": "{\"method\":\"drag\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":\"7\",\"fromX\":150,\"fromY\":200,\"toX\":600,\"toY\":650,\"relative\":true,\"useSystemInput\":true}}"
         }
       },
       {

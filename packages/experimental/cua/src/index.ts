@@ -13,13 +13,14 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
-import { MouseControl } from './mouse-control.ts'
-import { withSystemPointerGuidance } from './guidance.ts'
+import { SystemInputControl } from './system-input.ts'
+import { CuaHeldInputs } from './held-inputs.ts'
+import { withHeldInputGuidance, withSystemInputGuidance } from './guidance.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
-import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult } from './protocol.ts'
+import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemInputRequest, ScreenshotResult } from './protocol.ts'
 import { CuaConfigFields, type CuaScreenshotTargetConfig, type CuaStandaloneRunCodeConfig } from './config.ts'
 import { fixedScreenshotTarget, installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
@@ -37,8 +38,8 @@ export type { CuaPrograms } from './tool-registration.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
-  /** Ask once per live Session before explicitly requested system-pointer moves or drags. */
-  requireSystemPointerApproval: boolean
+  /** Ask once per live Session before explicitly requested system keyboard or mouse input. */
+  requireSystemInputApproval: boolean
   /**
    * Preset receiving raw cua; every other Agent, with or without a preset, receives cua_run_code while its
    * program services are available. False registers raw cua globally.
@@ -72,9 +73,9 @@ export interface CuaConfig {
   maxResponseBytes: number
   /** Maximum installed application matches returned for one discovery query. */
   maxAppMatches: number
-  /** Maximum bytes preserved from the system clipboard during one paste. */
+  /** Provider-specific clipboard byte limit for paste. */
   maxClipboardBytes: number
-  /** Maximum wait for clipboard data consumption after the Paste command returns. */
+  /** Provider-specific paste wait budget in milliseconds. */
   pasteReadTimeoutMs: number
   /** Maximum UTF-8 bytes admitted for one helper request frame. */
   maxRequestBytes: number
@@ -138,7 +139,6 @@ interface CuaExecution extends ToolExecution {
   coordinates: CuaCoordinates
 }
 
-
 const nativeDiscoveryRows = z.array(z.record(z.string(), z.json()))
 
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
@@ -173,10 +173,24 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }
 
+/** Window read on a session's authorized native connection. */
+export interface CuaWindowRead {
+  agent: Agent
+  client: NativeClient
+  access: Pick<ReturnType<typeof installCuaAccess>, 'readCached'>
+  appHandle: CuaAppHandle
+  windowId: string
+}
+
 /** Prepared platform executable, transport, platform-specific instructions and startup capabilities. */
 export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
+  /**
+   * Stop the provider's shared transport after every Agent and permission connection has closed.
+   * @returns Transport shutdown completion.
+   */
+  disposeNative?(): Promise<void>
   /**
    * Select platform operation instructions for the exposed tool form.
    * @param kind Raw cua calls or standalone cua_run_code programs.
@@ -186,9 +200,10 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
-  sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
-    execution: Readonly<ToolExecution>) => Promise<JsonValue>
+  /** Opt in to connection-scoped getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
+  heldInputState?: boolean
+  /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */
+  windowRead?: (read: CuaWindowRead) => (reply: JsonValue) => void
   /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
@@ -207,11 +222,13 @@ export interface CuaBackend {
  */
 export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend): void {
   const { helperPath } = backend
-  const systemPointer = backend.capabilities.systemPointer === true
-  const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
-  const requestSchema = systemPointer ? SystemPointerRequest : Request
+  const heldInputs = backend.heldInputState ? new CuaHeldInputs(ctx) : undefined
+  const systemInput = backend.capabilities.systemInput === true
+  const systemInputControl = systemInput ? new SystemInputControl(ctx, config.requireSystemInputApproval) : undefined
+  const requestSchema = systemInput ? SystemInputRequest : Request
   const formatGuidance = (text: string): string => {
-    const instructions = systemPointer ? withSystemPointerGuidance(text) : text
+    const inputGuidance = heldInputs ? withHeldInputGuidance(text) : text
+    const instructions = systemInput ? withSystemInputGuidance(inputGuidance) : inputGuidance
     return `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   }
   const guidance = formatGuidance(backend.getGuidance('raw'))
@@ -263,6 +280,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     return owner
   }
   ctx.effect(function* () {
+    if (heldInputs) yield* heldInputs.install()
     yield ctx.computerUse.register(brandString<ComputerUseProviderName>('dsh-cua'))
     yield async () => {
       lifetime.abort()
@@ -273,19 +291,23 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const releases = await Promise.allSettled(owners.map(owner => owner.release()))
       const errors: unknown[] = []
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
-      if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
+      try { await backend.disposeNative?.() } catch (error) { errors.push(error) }
+      if (errors.length > 0) ctx.logger.error(new AggregateError(errors, 'dsh-cua helper cleanup failed'))
     }
-    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, useSystemPointer?: boolean) => {
+    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, useSystemInput?: boolean) => {
       const { method, params: parsedParams } = request
       const params = execution.coordinates.parameters(request)
       const agent = execution.agent
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
-      // Released macOS helpers accept an explicit false for mouseMove but reject the new drag field.
-      if (method === 'drag' && !useSystemPointer) delete params.useSystemPointer
-      else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
-      if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
+      // Earlier helpers accept an explicit false only for mouseMove.
+      if (method !== 'mouseMove' && !useSystemInput) delete params.useSystemInput
+      else if (useSystemInput !== undefined) params.useSystemInput = useSystemInput
+      if (heldInputs && (method === 'sendKeyEvent' || method === 'toggleMouse') && params.direction === 'down') {
+        const owner = await heldInputs.ready(agent)
+        owner.track(client, ctx.agents.turnBoundaryOf(agent.session).openTurnStartSeq !== null)
+      }
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
         : method === 'paste'
@@ -296,9 +318,14 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
+      const confirmRead = (request.method === 'getState' || request.method === 'screenshot') && request.params.windowId
+        ? backend.windowRead?.({ agent, client, access, appHandle: request.params.appHandle as CuaAppHandle,
+          windowId: request.params.windowId })
+        : undefined
       if (method === 'screenshot') {
         const { attachments, target } = await screenshotStore(ctx, execution, config.screenshotTarget)
-        const screenshot = NativeScreenshotResult.parse(await requestNative())
+        const reply = await requestNative()
+        const screenshot = NativeScreenshotResult.parse(reply)
         if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()
         const stage = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
@@ -326,6 +353,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           signal.throwIfAborted()
         }
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
+        confirmRead?.(reply)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
           pixelWidth: image.width, pixelHeight: image.height, coordinateSpace: 'screenshot-pixels', attachment }
       }
@@ -355,7 +383,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         const capabilities = backend.capabilities
         return {
           ...runtime,
-          platform: capabilities.platform, systemPointer,
+          platform: capabilities.platform, systemInput,
           methods: [...capabilities.methods],
           appLevelAccessibility: capabilities.appLevelAccessibility,
           keyboard: [...capabilities.keyboard],
@@ -364,7 +392,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       }
       if (request.method === 'getState' || request.method === 'listWindows') {
-        return observeNativeWindows(request, result, execution.coordinates)
+        const observation = observeNativeWindows(request, result, execution.coordinates)
+        confirmRead?.(result)
+        return observation
       }
       return result
     }
@@ -379,7 +409,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
         const owner = ownerFor(agent)
-        const signal = AbortSignal.any([execution.signal, lifetime.signal, owner.signal])
+        const inputOwner = await heldInputs?.ready(agent)
+        const signal = AbortSignal.any([
+          execution.signal, lifetime.signal, owner.signal, ...inputOwner ? [inputOwner.controller.signal] : [],
+        ])
         signal.throwIfAborted()
         const operation = (async () => {
           const previous = clients.get(agent)
@@ -407,13 +440,12 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
-          const route = request.method === 'mouseMove' || request.method === 'drag'
-            ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
-            : undefined
+          const route = heldInputs && request.method === 'toggleMouse' && request.params.direction === 'up'
+            ? undefined : systemInputControl?.resolve(agent, 'useSystemInput' in request.params && request.params.useSystemInput === true)
           if (route?.prepare) owner.coordinates.parameters(request)
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(request, scoped, route?.useSystemPointer)
+            const result = await callNative(request, scoped, route?.useSystemInput)
             signal.throwIfAborted()
             return result
           }
@@ -432,7 +464,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       },
     }
-    yield installCuaTools(ctx, config, tool, guidance, programGuidance)
+    yield installCuaTools(ctx, config, tool, guidance, programGuidance, agent => heldInputs?.release(agent) ?? Promise.resolve())
   }, 'dsh-cua.runtime')
 }
 

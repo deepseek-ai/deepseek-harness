@@ -10,13 +10,15 @@ Switching to another Session and back emptied the composer's attachment rail whi
 
 ## Decision
 
-**The Conversation service keeps every draft attachment across a switch.** `ConversationController` records which Session owns each draft attachment. A message the Host accepts leaves that ownership at once, while the registry keeps its attachments until the echo settles them. A retiring composer releases its attachments only when its Session was removed or a message or command was already submitted, because the Client cannot tell whether a submitted command consumed them; an aborted slash-line adjudication keeps them. Otherwise they stay registered, an active upload keeps running, a failed upload keeps its in-place retry, and the Session's next composer re-adopts them in rail order. A Session removed while no composer is mounted releases its attachments through the hub's catalog watch. Picked and dropped files hold only a browser file handle; a pasted image keeps its bytes in memory until it is sent or removed or its Session is removed.
+**A draft with attachments holds its Session's scope.** While a composer draft has attachments and its Session is not removed, the input hub holds the Session with a `draft` reference that keeps no event connection, as [Session retain facets and recently viewed Sessions](../architecture/2026-11-15-session-retain-facets-and-recent-views.md) defines. Switching away and evicting the Session from the recent views therefore keep the same composer shell and its attachments: an active upload keeps running, a failed upload keeps its in-place retry, and a pasted image keeps its bytes in memory. Removing the last attachment, sending it, or removing the Session releases the hold; scope teardown then releases every attachment the draft still holds.
 
-**A reload reports discarded attachments instead of restoring them.** On `pagehide`, the input hub marks each Session that still owns draft attachments in browser storage; a back-forward cache restore clears the marks. A composer mounted with a mark and no registered attachments shows the "add them again" notice.
+**A reload reports discarded attachments instead of restoring them.** On `pagehide`, the input hub marks each Session whose draft holds attachments in browser storage; a back-forward cache restore clears the marks. A composer mounted with a mark shows the "add them again" notice.
 
 ## Alternatives considered
 
 **Restoring attachments after a reload from durable browser references and a Host `restore` Remote.** It would bring uploaded files and images back after a page reload, but it needs a Host Remote with its Liveshare and catalog classifications, a persisted browser format, a send gate during restoration, and an image byte payload. Desktop, where most users work, gains little: its Host binds a new port on every launch, so its storage origin, and with it every saved reference, does not survive an application restart.
+
+**Recording draft-attachment owners in the Conversation service and re-adopting them in the next composer.** It keeps attachments without holding the scope, but it tracks Session lifetime a second time through a catalog watch and splits submission release across composer phases; holding the scope keeps the composer itself.
 
 **Releasing settled attachments on a switch and restoring them from the Host on return.** It would save the memory of pasted images while a Session is not shown, but every return needs a Host round trip, fails on a weak network, and allocates the same bytes again.
 

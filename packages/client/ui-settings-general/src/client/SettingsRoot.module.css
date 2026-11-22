@@ -8,6 +8,20 @@
   margin: 4px 0;
 }
 
+/* The notice row takes no height: its content floats above the sidebar list at
+   the row's full width, so status indicators in the trigger row do not narrow it. */
+.noticeRow {
+  position: relative;
+  height: 0;
+}
+
+.notice {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
 .triggerRow.railRow {
   width: 36px;
   margin: 8px 0 10px;
@@ -81,7 +95,7 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-/* Settings uses a shared 800×800 panel; longer sections scroll
+/* Settings uses a shared 824×800 panel; longer sections scroll
    inside the options column; the navigation scrolls independently. One height for
    every section, taken from the viewport rather than the content, because a
    content-sized panel would resize under the pointer on every nav click.
@@ -96,12 +110,12 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
+  grid-template-columns: 212px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     'title header'
     'nav options';
-  width: 800px;
+  width: 824px;
   height: min(800px, calc(100vh - 2 * max(24px, var(--dsh-frame-overlay-top, 24px))));
   max-width: calc(100vw - 48px);
   border-radius: var(--dsw-radius-panel);
@@ -121,7 +135,7 @@
   outline: none;
 }
 
-/* Nav rail (figma .Setting-nav 501:29958): the 188px track's cells, pad
+/* Nav rail (figma .Setting-nav 501:29958): the track's cells, pad
    (12,0), no own fill — the panel white shows through. */
 .nav {
   grid-area: nav;
@@ -154,7 +168,7 @@
   overflow-y: auto;
 }
 
-/* Nav cell (figma .Setting-nav-cell 501:29962): 164x40, r12, pad
+/* Nav cell (figma .Setting-nav-cell 501:29962): 40px high, r12, pad
    (12,9,16,9), gap 8; label 14/400 lh22; selected fill #EBEEF2. */
 .navCell {
   display: flex;

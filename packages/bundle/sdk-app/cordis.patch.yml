@@ -26,6 +26,16 @@
 - id: tool-plugin-manager
   disabled: false
 
+# SDK clients receive recommendation blocks in the final response. Training profiles can
+# omit both skills with an action-cards patch setting config.enabled to false.
+- insert:
+    - id: action-cards
+      name: '@deepseek-ai/dsh-action-cards'
+    - id: creation-recommendations
+      name: '@deepseek-ai/dsh-creation-recommendations'
+    - id: plugin-recommendations
+      name: '@deepseek-ai/dsh-plugin-recommendations'
+
 # DSH_PRIMARY_RUNTIME names the primary runtime; the packaged launcher fills it
 # from its download cache when unset, and an empty value opts out. Each row can
 # be patched independently. Office skills and the Office tools always load, and
@@ -52,6 +62,15 @@
       name: '@deepseek-ai/dsh-skill-office'
       config:
         pythonEnvironment: !!js "process.env.DSH_PRIMARY_RUNTIME ? 'workspace-dependencies' : 'user'"
+
+# The skill catalog lists dsh-doc, as the Desktop standard, PTC, and Creator
+# presets do; its instructions load only when the model calls `skill`. The
+# path resolves through this package's `@deepseek-ai/dsh-agent-preset`
+# dependency, which no plugin row names.
+- id: skill-filesystem
+  config:
+    customSkillDirs:
+      - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')), 'skills')
 
 # Share native desktop tools and model context without starting a Web server.
 - insert:

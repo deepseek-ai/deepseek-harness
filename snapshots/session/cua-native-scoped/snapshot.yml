@@ -1,0 +1,11 @@
+version: 1
+scenario: cua-native-scoped
+profile: headless
+composition: cua-native
+recording: authored
+header:
+  class: cua-native-scoped
+  pin: true
+  toolSchemasSource: cua-native
+platform: posix
+permission: danger-full-access

@@ -36,11 +36,11 @@ it('rejects relative overrides before installing a native provider', async () =>
   await expect(apply(owner(), Config({ helperPath: 'relative.exe' }))).rejects.toThrow('must be absolute')
   expect(native.install).not.toHaveBeenCalled()
 })
-it('uses an absolute fixture without compiling and disposes the Host runtime', async () => {
+it('provides the Host runtime cleanup to CUA when using an absolute helper override', async () => {
   const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13 })
   await apply(ctx, config)
   expect(native.prepare).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 1000, 'pipe')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 60_000, 'pipe')
   const backend = native.install.mock.calls[0]![2]
   expect(backend.helperPath).toBe(config.helperPath)
   expect(native.architecture).not.toHaveBeenCalled()
@@ -48,15 +48,17 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   expect(backend.getGuidance('standalone')).toBe(GUIDANCE)
   expect(backend.permissionParameters('requestPermission', 'accessibility', 'en')).toEqual({ permission: 'accessibility' })
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
+  expect(backend.capabilities.methods).toContain('getActionSchema')
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
-  expect(backend.sendKeyEvent).toBeUndefined()
+  expect(backend.heldInputState).toBe(true)
+  expect(GUIDANCE).toContain('Key and mouse holds use desktop input.')
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
   const options = { ...config, helperPath: backend.helperPath, cwd: process.cwd() }
   expect(backend.createChannel(ctx, options)).toBe(channel)
   expect(native.connect).toHaveBeenCalledWith(options)
-  await ctx.fiber.dispose()
+  await backend.disposeNative?.()
   expect(native.dispose).toHaveBeenCalledOnce()
 })
 it('prepares before installation and aborts the completed preparation scope on unload', async () => {
@@ -106,7 +108,7 @@ it('prepares the Windows architecture and stdio transport for WSL', async () => 
   await apply(ctx, Config({}))
   expect(native.prepare.mock.calls[0]![0].architecture).toBe('arm64')
   expect(native.architecture).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 25, 1000, 'stdio')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 25, 60_000, 'stdio')
   expect(native.install.mock.calls[0]![2].helperPath).toBe('/mnt/c/cache/helper.exe')
 })
 

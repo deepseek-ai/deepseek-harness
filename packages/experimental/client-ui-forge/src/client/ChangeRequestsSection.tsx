@@ -1,22 +1,22 @@
 /** Session panel section listing the Session's change requests, and its title control. */
 
-import { useRef, type ReactNode } from 'react'
+import { useCallback, useRef, type ReactNode } from 'react'
 import {
-  Button, IconWarningTriangleOutlineRegular, MarqueeText, useHoverMarquee,
+  Button, HoverCardGroup, IconWarningTriangleOutlineRegular, MarqueeText, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore,
+  HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
-import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
-import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
+import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
+import type { ForgePanelState } from '../types.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import type { NS } from './locales.ts'
 import { ReasonButton } from './ReasonButton.tsx'
 import type {} from './slots.ts'
 import type { PanelSnapshot } from './source.ts'
-import { defaultExpanded } from './status.ts'
+import { defaultExpanded, type ChangeRequestEntry } from './status.ts'
 import css from './Forge.module.css'
 
 /** Business face of the change requests section. */
@@ -32,11 +32,11 @@ export interface ChangeRequestsSectionInjected {
    */
   readonly refresh: () => Promise<void>
   /** Remove a change request from the Session, offering to undo it. */
-  readonly remove: (entry: ForgePanelChangeRequest) => void
+  readonly remove: (entry: ChangeRequestEntry) => void
   /** Mark a draft ready for review; settles once the outcome is reported. */
-  readonly markReady: (entry: ForgePanelChangeRequest) => Promise<void>
+  readonly markReady: (entry: ChangeRequestEntry) => Promise<void>
   /** Merge a change request as `request` describes; settles once the outcome is reported. */
-  readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
+  readonly merge: (entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>
   /** Read the complete checks of an opened change request. */
   readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
   /** Rerun the failed checks or one check; settles once the outcome is reported. */
@@ -52,13 +52,14 @@ export interface ChangeRequestsSectionInjected {
   /** Copy text to the clipboard and report the outcome. */
   readonly copyText: (text: string) => void
   /** Open the changes view of a bound change request in the right sidebar. */
-  readonly viewChanges: (entry: ForgePanelChangeRequest) => void
+  readonly viewChanges: (entry: ChangeRequestEntry) => void
 }
 
 /** Full props of the change requests section. */
 export type ChangeRequestsSectionProps =
   PropsRuntime<'conversation.session.panel.section'>
   & Pick<PropsRenderSlots<'forge.change-request.card.actions'>, 'renderSlot'>
+  & PropsRenderFactories
   & InjectFace<ChangeRequestsSectionInjected>
   & PropsStore<ReturnType<typeof createChangeRequestsSectionStore>>
   & PropsLocale<typeof NS>
@@ -76,6 +77,9 @@ export type ChangeRequestsActionsProps =
   & PropsLocale<typeof NS>
 
 type Translate = ChangeRequestsSectionProps['t']
+
+/** Cards the list shows before its fold control holds the rest back. */
+const FOLD_LIMIT = 3
 
 /** Sign-in the repository's host still needs before its change requests show. */
 interface SignInNeed {
@@ -144,20 +148,27 @@ function SignInRow({ need, copyText, t }: {
  * Render the Session's change request cards. The section shows while the
  * Session binds a change request or the repository's host needs sign-in, which
  * a status row above the cards says; a lost stream shows in the Environment
- * section instead. A card starts expanded when the Session binds
- * exactly one change request; a card the user expands or collapses keeps that
- * choice in the Session's store, across updates and while the panel is hidden.
- * Viewing changes closes the panel's overlay.
- * @param props - panel snapshot hooks, card actions, panel owner values, and copy.
+ * section instead. The list shows three cards and then the panel's fold
+ * control, which shows the rest; the choice is kept per Session. A card starts
+ * expanded when the Session binds exactly one change request; a card the user
+ * expands or collapses keeps that choice in the Session's store, across
+ * updates and while the panel is hidden. Viewing changes closes the panel's
+ * overlay.
+ * @param props - panel snapshot hooks, card actions, panel owner values, the store, and copy.
  * @returns the cards, or null with neither bound change requests nor a sign-in to complete.
  */
 export function ChangeRequestsSection({
   usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, readChecks,
-  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot, t,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot,
+  renderFactorySlot, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
   const chosen = useStore(current => current.expanded)
+  const unfolded = useStore(current => current.unfolded)
+  const renderDetails = useCallback(
+    (details: PanelDetailsProps) => renderFactorySlot('conversation.session.panel.details', details), [renderFactorySlot],
+  )
   const state = snapshot.state
   if (state === null) return null
   const signIn = signInNeedOf(state)
@@ -170,30 +181,43 @@ export function ChangeRequestsSection({
       dismissOverlay()
     },
     renderActions: owner => renderSlot('forge.change-request.card.actions', owner),
+    renderDetails,
   }
   const defaults = defaultExpanded(state.changeRequests)
   const expanded = (url: string): boolean => chosen[url] ?? defaults.has(url)
   const toggle = (url: string): void => { store.toggled(url, !expanded(url)) }
   const now = Date.now()
+  const foldable = state.changeRequests.length > FOLD_LIMIT
+  const shown = foldable && !unfolded ? state.changeRequests.slice(0, FOLD_LIMIT) : state.changeRequests
+  const label = unfolded ? t('fold.less') : t('fold.more', { count: state.changeRequests.length - FOLD_LIMIT })
   return (
     <div className={css.cards} data-forge-panel="">
       {signIn !== null && <SignInRow need={signIn} copyText={copyText} t={t} />}
-      {state.changeRequests.length > 0 && (
-        <ul className={css.list}>
-          {state.changeRequests.map(entry => (
-            <ChangeRequestCard
-              key={entry.url}
-              entry={entry}
-              expanded={expanded(entry.url)}
-              onToggle={() => { toggle(entry.url) }}
-              now={now}
-              actions={actions}
-              locale={locale}
-              t={t}
-            />
-          ))}
-        </ul>
+      {shown.length > 0 && (
+        // Moving between cards swaps their hover cards without another dwell.
+        <HoverCardGroup>
+          <ul className={css.list}>
+            {shown.map(entry => (
+              <ChangeRequestCard
+                key={entry.url}
+                entry={entry}
+                expanded={expanded(entry.url)}
+                onToggle={() => { toggle(entry.url) }}
+                now={now}
+                actions={actions}
+                locale={locale}
+                t={t}
+              />
+            ))}
+          </ul>
+        </HoverCardGroup>
       )}
+      {foldable && renderFactorySlot('conversation.session.panel.fold', {
+        expanded: unfolded,
+        label,
+        name: t('fold.name', { label }),
+        onToggle: () => { store.unfoldedSet(!unfolded) },
+      })}
     </div>
   )
 }

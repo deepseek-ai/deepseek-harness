@@ -39,8 +39,8 @@ export function apply(ctx, config = {}) {
     if (!rejected || !signal.aborted) throw new Error('expected queue-clear rejection and activity cancellation')
     agent.inbox.remove(pending.id)
     for (const message of messages) {
-      const ordinary = message.source.kind === 'user'
-      agent.send(message, ordinary ? 'next-turn' : 'next-step', ordinary)
+      const waking = message.source.kind === 'user' || message.source.kind === 'agent-message'
+      agent.send(message, waking ? 'next-turn' : 'next-step', waking)
     }
     return next()
   })

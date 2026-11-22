@@ -42,6 +42,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'llm/listProviders': 'reader-global-read', // the page lists providers
   'session/canOpenWorkspacePath': 'reader-global-read', // the page asks whether a path can be opened
   'session/modelCatalog': 'reader-global-read', // the page reads the model catalog
+  'pluginEvents/follow': 'reader-global-read', // the page follows the plugin graph; the Host sends a non-owner schema defaults, never configured values
   'productAnalytics/enabled': 'reader-global-read', // the page asks whether this host accepts analytics
   'productAnalytics/report': 'reader-global-read', // the page reports its own product events
   'productAnalytics/watchPolicy': 'reader-global-read', // the page follows the analytics policy
@@ -181,6 +182,8 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'pluginMarket/search': 'owner-only', // owner plugin market
   'pluginMarket/setIndexes': 'owner-only', // owner plugin market
   'pluginRegistryProbe/fastest': 'owner-only', // owner plugin registry probe
+  'actionCards/act': 'owner-only', // owner action on a card below an answer
+  'pluginRecommendations/describe': 'owner-only', // owner plugin card text
   'connectorAccounts/cancel': 'owner-only', // owner connector accounts on the Plugins page
   'connectorAccounts/start': 'owner-only', // owner connector accounts on the Plugins page
   'connectorAccounts/watch': 'owner-only', // owner connector accounts on the Plugins page

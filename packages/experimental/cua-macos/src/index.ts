@@ -8,17 +8,18 @@ import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
-import { installHeldKeys } from './held-keys.ts'
+import type { NativeChannelFactory } from '@deepseek-ai/dsh-cua/native-client'
+import { watchWindowActivity } from './recent-activity.ts'
 import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
-import { GUIDANCE, PROGRAM_GUIDANCE } from './guidance.ts'
+import { macosGuidance } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
 const CAPABILITIES: CuaStartupCapabilities = {
-  platform: 'macos', systemPointer: true,
+  platform: 'macos', systemInput: true,
   methods: [
-    'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
+    'activate', 'click', 'drag', 'findApps', 'getActionSchema', 'getApp', 'getCapabilities', 'getState', 'invoke',
     'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
-    'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
+    'selectText', 'sendKeyEvent', 'setValue', 'show', 'toggleMouse', 'typeText',
   ],
   appLevelAccessibility: true,
   keyboard: ['app'],
@@ -32,6 +33,8 @@ export const name = 'cua-macos'
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
 export interface Config extends CuaConfig {
+  /** Activity lookback in milliseconds. The literal "off" disables tracking and notices for this connection. */
+  recentActivityWindowMs: number | 'off'
   /** Interval in milliseconds between permission and position checks while the native guide is open. */
   permissionPollIntervalMs: number
   /**
@@ -44,6 +47,7 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  recentActivityWindowMs: Schema.union([Schema.const('off'), Schema.number().step(1).min(1).max(2 ** 31 - 1)]).default(60_000),
   maxElements: CuaConfigFields.maxElements.max(AX_TRAVERSAL_MAX.maxElements).default(5000),
   maxDepth: CuaConfigFields.maxDepth.max(AX_TRAVERSAL_MAX.maxDepth).default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
@@ -64,8 +68,10 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
-    getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
+  const createChannel: NativeChannelFactory = (owner, native) => createSharedNativeChannel(owner, native, config.recentActivityWindowMs)
+  const backend = { createChannel, ...config.recentActivityWindowMs === 'off' ? {} : { windowRead: watchWindowActivity(ctx) },
+    heldInputState: true,
+    getGuidance: (kind: 'raw' | 'standalone') => macosGuidance(kind, config.recentActivityWindowMs !== 'off'), capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('macOS CUA helperPath must be absolute')

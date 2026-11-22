@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-im",
   "description": "Platform-neutral IM host: intake, message store, im/message waterfall, hosted sessions, send funnel and output renderers",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.4",
   "publishConfig": {
     "access": "public"
   },

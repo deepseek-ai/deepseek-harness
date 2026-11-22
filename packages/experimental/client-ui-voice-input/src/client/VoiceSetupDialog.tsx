@@ -21,12 +21,11 @@ type VoiceSetupDialogProps = PropsLocale<typeof NS>
 export function VoiceSetupDialog({ open, needsInstallation, onDismiss, onOpenDetails, t }: VoiceSetupDialogProps) {
   return <Modal open={open} title={t(needsInstallation ? 'setupPrompt.title' : 'setupPrompt.unavailableTitle')}
     closeLabel={t('cancel')} onClose={onDismiss}
+    description={t(needsInstallation ? 'setupPrompt.body' : 'setupPrompt.unavailableBody')}
     footer={<>
       <Button variant="ghost" onClick={onDismiss}>{t('setupPrompt.later')}</Button>
       {onOpenDetails !== undefined && <Button variant="primary" data-modal-autofocus onClick={onOpenDetails}>
         {t(needsInstallation ? 'setupPrompt.open' : 'setupPrompt.details')}
       </Button>}
-    </>}>
-    <p>{t(needsInstallation ? 'setupPrompt.body' : 'setupPrompt.unavailableBody')}</p>
-  </Modal>
+    </>} />
 }

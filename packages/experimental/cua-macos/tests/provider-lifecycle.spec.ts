@@ -1,4 +1,5 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
+import { randomUUID } from 'node:crypto'
 import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -23,11 +24,11 @@ import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-sche
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
-import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import NodeRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
 import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { LlmAdapter, LlmError, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, LlmError, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
@@ -87,7 +88,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000, requireSystemPointerApproval: true,
+  permissionPollIntervalMs: 1000, recentActivityWindowMs: 60_000, requireSystemInputApproval: true,
   agentPreset: false,
   standaloneRunCode: CuaConfig({}).standaloneRunCode,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
@@ -96,9 +97,18 @@ const config = {
 
 const { helperPath: _helperPath, ...automaticConfig } = config
 
+it('keeps the activity lookback macOS-owned and validates integer milliseconds', () => {
+  expect(NativeProvider.Config({}).recentActivityWindowMs).toBe(60_000)
+  expect(NativeProvider.Config({ recentActivityWindowMs: 1001 }).recentActivityWindowMs).toBe(1001)
+  expect(CuaConfig({})).not.toHaveProperty('recentActivityWindowMs')
+  for (const recentActivityWindowMs of [0, -1, 0.5, 2 ** 31]) {
+    expect(() => NativeProvider.Config({ recentActivityWindowMs })).toThrow()
+  }
+})
+
 it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
-  expect(NativeProvider.Config({}).requireSystemPointerApproval).toBe(true)
+  expect(NativeProvider.Config({}).requireSystemInputApproval).toBe(true)
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
@@ -143,11 +153,18 @@ class ImageAdapter extends LlmAdapter {
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: '7' }
 
+/** Node runtime program formats each PTC case runs under; `complete` renders a statement producing the program value. */
+const PTC_MODES = [
+  { mode: 'per-call', config: { executionMode: 'per-call' }, complete: (expression: string) => `return ${expression};` },
+  { mode: 'scoped REPL', config: { executionMode: 'persistent-in-memory', replScoped: true }, complete: (expression: string) => `${expression};` },
+] as const satisfies readonly { mode: string; config: NodeRuntimeConfig; complete: (expression: string) => string }[]
+type PtcMode = typeof PTC_MODES[number]
+
 async function setup(
-  model?: { provider: string; model: string }, ptc = false, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
+  model?: { provider: string; model: string }, ptc?: PtcMode, overrides: Parameters<typeof NativeProvider.Config>[0] = {},
 ) {
   native.connect.mockClear()
-  native.cleanup.mockReset().mockResolvedValue({ dispatched: true })
+  native.cleanup.mockReset().mockResolvedValue([])
   native.request.mockReset().mockResolvedValue([])
   native.dispose.mockReset()
   native.instances.length = 0
@@ -160,7 +177,7 @@ async function setup(
     await ctx.plugin(SubprocessLocal)
     await ctx.plugin(Sandbox)
     await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
-    await ctx.plugin(NodeRuntime)
+    await ctx.plugin(NodeRuntime, ptc.config)
   } else await ctx.plugin(Subprocess, [])
   const provider = await ctx.plugin(NativeProvider, { ...config, ...overrides })
   await mountAgentLoopTestHarness(ctx)
@@ -170,6 +187,26 @@ async function setup(
     agent: handle.agent, signal, callId: brandString<ToolCallId>(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
   })
   return { ctx, provider, handle, execute }
+}
+
+async function thinkingTurn(f: Awaited<ReturnType<typeof setup>>) {
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  class WaitingModel extends LlmAdapter {
+    async * stream(options: import('@deepseek-ai/dsh-llm').GenerateOptions): AsyncIterable<StreamChunk> {
+      entered.resolve()
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) resolve()
+        else options.signal?.addEventListener('abort', () => { resolve() }, { once: true })
+      })
+      yield { type: 'finish', reason: { kind: 'aborted', failure: { code: 'ABORTED', message: 'Fixture cancelled' } } }
+    }
+  }
+  const provider = `thinking-${randomUUID()}`
+  f.ctx.llm.registerAdapter([provider], new WaitingModel())
+  Object.assign(f.handle.agent.options, { provider, model: 'fixture' })
+  f.handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Wait for input' }], source: { kind: 'user' } }))
+  onTestFinished(async () => { f.handle.agent.cancel({ kind: 'user' }); await f.handle.agent.whenIdle() })
+  await entered.promise
 }
 
 async function executeProgram(
@@ -183,7 +220,7 @@ async function executeProgram(
     }))
   }
   const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
-  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>('keyboard-run'), name,
+  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>(`keyboard-${name}`), name,
     arguments: { code, description }, signal })
 }
 
@@ -195,171 +232,82 @@ async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
   expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
 }
 
-it('requires an enclosing run_code before sending a directional key', async () => {
+it('delivers window activity at the next accepted step and clears it at turn end', async () => {
   const f = await setup()
   await selectApplication(f)
+  const agent = f.handle.agent
+  const step = (signal = new AbortController().signal) => f.ctx.waterfall('agent/pre-step', {
+    agent, messages: [], turn: 1, step: 2, modelSelection: { provider: 'test', model: 'test' }, signal,
+  }, async () => ({ kind: 'enter' as const, messages: [] }))
+  const read = async (windowId: string | null, receipt = '100') => {
+    native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId, activityObservedAt: receipt, snapshotId: 's', tree: '', windows: [], truncated: false })
+    return f.execute('getState', { appHandle: 'app-one', ...windowId && { windowId } })
+  }
+  await read(null)
+  expect(await step()).toMatchObject({ messages: [] })
+  await read('7')
+  expect((await read('7', '101')).additionalContexts ?? []).toEqual([])
+  await read('7', '99')
+  native.request.mockResolvedValueOnce([
+    { windowId: '7', source: 'agent', ageSeconds: 1 },
+    { windowId: '7', source: 'external-input', ageSeconds: 0 },
+  ])
+  expect(await step()).toMatchObject({ messages: [{ source: { kind: 'cua-activity' }, content: [{ type: 'text',
+    text: '<system-reminder>\nActivity from another agent was last detected on window 7, 1 second ago.\nActivity from a user or an automated program was last detected on window 7, less than a second ago.\nYour actions may have been influenced.\n</system-reminder>',
+  }] }] })
+  expect(native.request).toHaveBeenLastCalledWith('takeWindowActivity', { appHandle: 'app-one', observations: { '7': '101' } }, expect.any(AbortSignal))
+  expect(await step()).toMatchObject({ messages: [] })
+  native.request.mockRejectedValueOnce(new NativeError('NATIVE_BUSY', 'Another request is in flight'))
+  expect(await step()).toMatchObject({ messages: [] })
+  native.request.mockResolvedValueOnce([{ windowId: '7', source: 'agent', ageSeconds: 5 }])
+  expect(JSON.stringify(await step())).toContain('5 seconds ago')
+  const controller = new AbortController()
+  native.request.mockImplementationOnce(() => { controller.abort(); return Promise.reject(new Error('cancelled')) })
+  expect(await step(controller.signal)).toMatchObject({ messages: [] })
+  native.request.mockResolvedValueOnce([{ windowId: '8', source: 'agent', ageSeconds: 5 }])
+  expect(await step()).toMatchObject({ messages: [] })
+  native.cleanup.mockRejectedValueOnce(new Error('fixture connection lost'))
+  agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  expect(native.cleanup).toHaveBeenCalledWith('clearWindowActivity', {})
   native.request.mockClear()
-  const result = await f.execute('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' })
-  expect(result.isError).toBe(true)
-  expect(JSON.stringify(result.content)).toContain('active run_code')
+  expect(await step()).toMatchObject({ messages: [] })
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it.each(['run_code', 'cua_run_code'] as const)('finishes a shortcut-only %s without requesting held-key cleanup', async (name) => {
-  const f = await setup(undefined, true)
+it('accepts directional input on the Agent connection outside a turn', async () => {
+  const f = await setup()
   await selectApplication(f)
-  native.request.mockClear().mockResolvedValue({ dispatched: true })
-  const result = await executeProgram(f, name,
-    "return await tools.cua({ method: 'pressKey', params: { appHandle: 'app-one', key: 'a', modifiers: ['command'] } });",
-    'Press Command+A')
+  native.request.mockResolvedValueOnce({ dispatched: true })
+  const result = await f.execute('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' })
   expect(result.isError).toBe(false)
-  expect(native.request.mock.calls.map(([method]) => method)).toEqual(['pressKey'])
-  expect(native.cleanup).not.toHaveBeenCalled()
+  expect(native.request).toHaveBeenLastCalledWith('sendKeyEvent', { appHandle: 'app-one', key: 'w', direction: 'down' }, expect.any(AbortSignal), expect.any(String))
 })
 
-it.each((['run_code', 'cua_run_code'] as const).flatMap(name =>
-  ['return', 'throw', 'pause', 'pause with cleanup error'].map(ending => ({ name, ending })),
-))('cleans up only the held W when $name ends by $ending', async ({ name, ending }) => {
-  const f = await setup(undefined, true)
+it.each(PTC_MODES)('holds a key across $mode programs in the same turn', async (mode) => {
+  const f = await setup(undefined, mode)
+  await thinkingTurn(f)
   await selectApplication(f)
   const held = new Set<string>()
-  const events: string[] = []
-  const controller = new AbortController()
-  const runIds = new Set<unknown>()
-  native.request.mockImplementation(async (method, params) => {
+  native.request.mockClear().mockImplementation(async (method, params) => {
+    if (method === 'getHeldInputs') return [...held].map(key => ({ kind: 'key', key, appHandle: 'app-one', mode: 'application' }))
     expect(method).toBe('sendKeyEvent')
-    runIds.add(params.runId)
-    const { key, direction } = params
-    if (typeof key !== 'string' || (direction !== 'down' && direction !== 'up')) throw new Error('Invalid directional event')
-    if (direction === 'down') held.add(key)
-    else held.delete(key)
-    events.push(`${key}:${direction}`)
+    const key = params.key
+    if (typeof key !== 'string') throw new Error('The native fixture requires a key name')
+    if (params.direction === 'down') held.add(key)
+    else { expect(held.has(key)).toBe(true); held.delete(key) }
     return { dispatched: true }
   })
-  native.cleanup.mockImplementation(async (method, params) => {
-    expect(method).toBe('releaseHeldKeys')
-    expect(runIds).toEqual(new Set([params.runId]))
-    if (ending === 'pause with cleanup error') throw new Error('release acknowledgement failed')
-    for (const key of held) events.push(`${key}:up`)
-    held.clear()
-    return { dispatched: true }
-  })
-  f.ctx.tools.register({
-    name: 'check_held_keys', description: 'Observe the keys held by the test receiver.',
-    parameters: { type: 'object', properties: {} },
-    output: { schema: {}, render: () => [] },
-    async execute() {
-      const keys = [...held]
-      if (ending.startsWith('pause') && keys.length === 1) {
-        controller.abort()
-        await setImmediate()
-        expect(held.size).toBe(ending === 'pause' ? 0 : 1)
-      }
-      return keys
-    },
-  })
-  const code = [
-    "const key = (key, direction) => tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key, direction } });",
-    "await key('w', 'down'); await key('d', 'down');",
-    "if ((await tools.check_held_keys({})).join(',') !== 'w,d') throw Error('lost held keys');",
-    "await key('d', 'up');",
-    "if ((await tools.check_held_keys({})).join(',') !== 'w') throw Error('lost W');",
-    ending === 'throw' ? "throw Error('program failed');" : "return 'done';",
-  ].join('\n')
-  const result = await executeProgram(f, name, code, 'Exercise held keys', controller.signal)
-  expect(events, JSON.stringify(result.content)).toEqual(['w:down', 'd:down', 'd:up', ...ending === 'pause with cleanup error' ? [] : ['w:up']])
-  expect(native.cleanup).toHaveBeenCalledTimes(1)
-  expect(result.isError).toBe(ending !== 'return')
-  if (ending === 'throw') expect(JSON.stringify(result.content)).toContain('program failed')
-})
-
-it.each(['running', 'settling'] as const)('awaits held-key cleanup before unloading native resources while the raw program is %s', async (phase) => {
-  const f = await setup(undefined, true)
-  await selectApplication(f)
-  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const programRelease: PromiseWithResolvers<void> = Promise.withResolvers()
-  const cleanupEntered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const cleanupRelease: PromiseWithResolvers<void> = Promise.withResolvers()
-  const events: string[] = []
-  native.request.mockClear().mockImplementation(async () => { events.push('key down'); return { dispatched: true } })
-  native.cleanup.mockImplementation(async () => {
-    events.push('release entered')
-    cleanupEntered.resolve()
-    await cleanupRelease.promise
-    expect(native.dispose).not.toHaveBeenCalled()
-    events.push('release finished')
-    return { dispatched: true }
-  })
-  native.dispose.mockImplementation(async () => { events.push('native closed') })
-  f.ctx.tools.register({ name: 'hold_program', description: 'Wait for the test program release.',
-    parameters: { type: 'object', properties: {} }, output: { schema: {}, render: () => [] },
-    async execute() { entered.resolve(); await programRelease.promise; return null },
-  })
-  const controller = new AbortController()
-  let settled = false
-  const running = executeProgram(f, 'run_code',
-    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } }); await tools.hold_program({}); return 'finished';",
-    'Hold a key during provider unload', controller.signal).then((result) => { settled = true; return result })
-  let closing: Promise<void> | undefined
-  try {
-    await entered.promise
-    if (phase === 'settling') {
-      programRelease.resolve()
-      await cleanupEntered.promise
-    }
-    closing = f.provider.dispose()
-    expect(await Promise.race([cleanupEntered.promise.then(() => 'cleanup'), closing.then(() => 'closed')])).toBe('cleanup')
-    expect(native.dispose).not.toHaveBeenCalled()
-    expect(events).toEqual(['key down', 'release entered'])
-    cleanupRelease.resolve()
-    await closing
-    expect(events).toEqual(['key down', 'release entered', 'release finished', 'native closed'])
-    if (phase === 'running') expect(settled).toBe(false)
-    programRelease.resolve()
-    expect((await running).isError).toBe(false)
-    expect(native.cleanup).toHaveBeenCalledTimes(1)
-    expect(native.dispose).toHaveBeenCalledTimes(1)
-  } finally {
-    controller.abort()
-    programRelease.resolve()
-    cleanupRelease.resolve()
-    await running
-    await closing
-  }
-})
-
-it('closes the native connection after a held-key cleanup failure and reuses that failure at program settlement', async () => {
-  const f = await setup(undefined, true)
-  await selectApplication(f)
-  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
-  const programRelease: PromiseWithResolvers<void> = Promise.withResolvers()
-  native.request.mockClear().mockResolvedValue({ dispatched: true })
-  const failure = new Error('Held-key release was not acknowledged')
-  native.cleanup.mockRejectedValue(failure)
-  const reported: unknown[] = []
-  const log = vi.spyOn(f.provider.ctx.logger, 'error').mockImplementation((error) => { reported.push(error) })
-  onTestFinished(() => { log.mockRestore() })
-  f.ctx.tools.register({ name: 'hold_program', description: 'Wait for the test program release.',
-    parameters: { type: 'object', properties: {} }, output: { schema: {}, render: () => [] },
-    async execute() { entered.resolve(); await programRelease.promise; return null },
-  })
-  const controller = new AbortController()
-  const running = executeProgram(f, 'run_code',
-    "await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } }); await tools.hold_program({});",
-    'Hold a key before cleanup fails', controller.signal)
-  try {
-    await entered.promise
-    await f.provider.dispose()
-    expect(native.dispose).toHaveBeenCalledTimes(1)
-    expect(native.cleanup).toHaveBeenCalledTimes(1)
-    const aggregate = reported.find(error => error instanceof AggregateError)
-    expect(aggregate?.errors).toContain(failure)
-    programRelease.resolve()
-    const result = await running
-    expect(result.isError).toBe(true)
-    expect(JSON.stringify(result.content)).toContain(failure.message)
-    expect(native.cleanup).toHaveBeenCalledTimes(1)
-  } finally { controller.abort(); programRelease.resolve(); await running }
+  expect((await executeProgram(f, 'run_code',
+    mode.complete("await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'down' } })"), 'Hold W')).isError).toBe(false)
+  expect(held).toEqual(new Set(['w']))
+  expect(native.cleanup).not.toHaveBeenCalled()
+  expect((await executeProgram(f, 'cua_run_code',
+    mode.complete("await tools.cua({ method: 'sendKeyEvent', params: { appHandle: 'app-one', key: 'w', direction: 'up' } })"), 'Release W')).isError).toBe(false)
+  expect(held.size).toBe(0)
+  expect(native.cleanup).not.toHaveBeenCalled()
+  f.handle.agent.cancel({ kind: 'user' })
+  await f.handle.agent.whenIdle()
+  expect(native.cleanup).not.toHaveBeenCalled()
 })
 
 it('rejects a relative helper path before publishing computer-use operations', async () => {
@@ -433,17 +381,17 @@ it('correlates a native request with its logged tool invocation', async () => {
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })
 
-it('merges startup capabilities into runtime native fields', async () => {
+it('reports declared methods outside a turn while merging runtime native fields', async () => {
   const f = await setup()
   const runtime = { permissions: { accessibility: true, screenRecording: false }, sessionLocked: false }
   native.request.mockResolvedValueOnce(runtime)
   const result = await f.execute('getCapabilities')
   expect(result.isError).toBe(false)
-  expect(result.value).toEqual({ ...runtime, platform: 'macos', systemPointer: true, appLevelAccessibility: true, keyboard: ['app'], browser: false,
+  expect(result.value).toEqual({ ...runtime, platform: 'macos', systemInput: true, appLevelAccessibility: true, keyboard: ['app'], browser: false,
     coordinateSpace: 'screenshot-pixels', methods: [
-      'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
+      'activate', 'click', 'drag', 'findApps', 'getActionSchema', 'getApp', 'getCapabilities', 'getState', 'invoke',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
-      'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
+      'selectText', 'sendKeyEvent', 'setValue', 'show', 'toggleMouse', 'typeText',
     ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })
@@ -611,6 +559,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
     expect(native.dispose).toHaveBeenCalledTimes(2)
     const aggregate = reported.find(error => error instanceof AggregateError)
     expect(aggregate?.errors).toContain(failure)
+    expect(f.ctx.computerUse.providerName).toBeUndefined()
     const errorsBeforeAgentDisposal = errors.mock.calls.length
     await Promise.all([f.handle.dispose(), other.dispose()])
     expect(native.dispose).toHaveBeenCalledTimes(2)
@@ -748,12 +697,12 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it('maps the actual model-request image pixels back to native points without storing the screenshot twice', async () => {
+it.each([100_000, 300])('maps final request-image pixels to native points under a %s-byte hard limit', async (maxImageBytes) => {
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)
   class ResizingAdapter extends ImageAdapter {
     override imageRequestTarget(_provider: string, _model: string, _image: ImageAttachmentRef) {
-      return { width: 10, height: 5, maxBytes: 100_000 }
+      return { width: 20, height: 10, maxImageBytes, imageTargetBytes: maxImageBytes }
     }
   }
   f.ctx.llm.registerAdapter(['image-fixture'], new ResizingAdapter())
@@ -761,17 +710,29 @@ it('maps the actual model-request image pixels back to native points without sto
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
   const save = vi.spyOn(f.ctx.attachments, 'saveImages')
-  const image = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#4488cc' } }).png().toBuffer()
+  const pixels = Buffer.alloc(40 * 20 * 3)
+  let state = 0x2545f491
+  for (let index = 0; index < pixels.length; index++) {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    pixels[index] = state & 255
+  }
+  const image = await sharp(pixels, { raw: { width: 40, height: 20, channels: 3 } }).png().toBuffer()
   native.request.mockResolvedValue({ ...imageMetadata, bounds: { x: 10, y: 20, width: 400, height: 200 },
     pixelWidth: 40, pixelHeight: 20, mimeType: 'image/png', data: image.toString('base64') })
   const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError, JSON.stringify(result.content)).toBe(false)
-  expect(result.value).toMatchObject({ pixelWidth: 10, pixelHeight: 5, coordinateSpace: 'screenshot-pixels' })
-  const value = result.value as { data: string }
-  expect(await sharp(Buffer.from(value.data, 'base64')).metadata()).toMatchObject({ width: 10, height: 5 })
+  expect(result.value).toMatchObject({ coordinateSpace: 'screenshot-pixels' })
+  const value = result.value as { data: string; pixelWidth: number; pixelHeight: number }
+  const encoded = Buffer.from(value.data, 'base64')
+  expect(encoded.byteLength).toBeLessThanOrEqual(maxImageBytes)
+  expect(await sharp(encoded).metadata()).toMatchObject({ width: value.pixelWidth, height: value.pixelHeight })
+  if (maxImageBytes === 300) expect(value.pixelWidth).toBeLessThan(20)
+  else expect(value).toMatchObject({ pixelWidth: 20, pixelHeight: 10 })
   expect(save).toHaveBeenCalledTimes(1)
   native.request.mockResolvedValue({ dispatched: true })
-  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 5, y: 2.5 })).isError).toBe(false)
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: value.pixelWidth / 2, y: value.pixelHeight / 2 })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: '7', x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 999, y: 999, relative: true })).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: '7', x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))
@@ -831,7 +792,7 @@ it('refuses screenshot capture when no attachment store is mounted', async () =>
 })
 
 it('captures screenshots through a configured target without resolving a model route', async () => {
-  const f = await setup(undefined, false, { screenshotTarget: { longEdge: 10, maxBytes: 100_000 } })
+  const f = await setup(undefined, undefined, { screenshotTarget: { longEdge: 10, maxBytes: 100_000 } })
   await selectApplication(f)
   const root = await mkdtemp(join(tmpdir(), 'dsh-cua-fixed-target-'))
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
@@ -1204,16 +1165,17 @@ it('routes permission actions through the macOS provider with the Client languag
 })
 
 const hoverTarget = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
-const physicalHover = { ...hoverTarget, useSystemPointer: true }
+const physicalHover = { ...hoverTarget, useSystemInput: true }
 
 async function hoverFixture(requireApproval = true) {
   const f = await setup()
   if (!requireApproval) {
     await f.provider.dispose()
-    await f.ctx.plugin(NativeProvider, { ...config, requireSystemPointerApproval: false })
+    await f.ctx.plugin(NativeProvider, { ...config, requireSystemInputApproval: false })
   }
+  await thinkingTurn(f)
   const questions = await f.ctx.plugin(UserQuestions)
-  const questionId = 'cua-mouse-control'
+  const questionId = 'cua-system-input'
   const approved = { answers: [{ id: questionId, selected: ['Allow for this session'] }] }
   const ask = vi.fn(async () => approved)
   f.ctx.on('user-questions/request', async ({ questions }) => questions[0]!.id === questionId ? ask()
@@ -1244,17 +1206,52 @@ it('requires an explicit system-pointer request on every move and asks only once
   const pending = f.execute('mouseMove', physicalHover)
   await entered.promise
   expect(native.request).toHaveBeenCalledTimes(1)
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_PENDING')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_PENDING')
   answer.resolve(f.approved)
   expect((await pending).isError).toBe(false)
   for (const [params, physical] of [
-    [hoverTarget, false], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
+    [hoverTarget, false], [{ ...hoverTarget, useSystemInput: false }, false], [physicalHover, true],
   ] as const) {
     expect((await f.execute('mouseMove', params)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: physical }, expect.any(AbortSignal), expect.any(String))
   }
   expect(native.request.mock.calls[1]?.[1]).toEqual(physicalHover)
   expect(f.ask).toHaveBeenCalledTimes(1)
+})
+
+it.each([true, false])('shares the system input decision for a system button with pointer movement (allow=%s)', async (allow) => {
+  const f = await hoverFixture()
+  const target = { appHandle: 'app-one', windowId: '7', mouseButton: 'left', direction: 'down' }
+  for (const params of [target, { ...target, useSystemInput: false }]) {
+    expect((await f.execute('toggleMouse', params)).isError).toBe(false)
+    expect(native.request.mock.lastCall?.[1]).toEqual(target)
+  }
+  expect(f.ask).not.toHaveBeenCalled()
+  const answer = Promise.withResolvers<typeof f.approved>()
+  f.ask.mockImplementationOnce(() => answer.promise)
+  native.request.mockClear()
+  const pending = f.execute('toggleMouse', { ...target, useSystemInput: true })
+  try {
+    await vi.waitFor(() => { expect(f.ask).toHaveBeenCalledOnce() })
+    expect(native.request).not.toHaveBeenCalled()
+  } finally {
+    answer.resolve(allow ? f.approved : { answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
+  }
+  const results = [await pending, await f.execute('mouseMove', physicalHover),
+    await f.execute('toggleMouse', { ...target, direction: 'up', useSystemInput: true })]
+  if (allow) {
+    expect(results.every(result => !result.isError)).toBe(true)
+    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemInput]))
+      .toEqual([['toggleMouse', true], ['mouseMove', true], ['toggleMouse', undefined]])
+    f.handle.agent.cancel({ kind: 'user' })
+    await f.handle.agent.whenIdle()
+    expect(native.cleanup).toHaveBeenCalledWith('releaseHeldInputs', {})
+  } else {
+    for (const result of results.slice(0, 2)) expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
+    expect(results[2]?.isError).toBe(false)
+    expect(native.request.mock.calls.map(([method]) => method)).toEqual(['toggleMouse'])
+  }
+  expect(f.ask).toHaveBeenCalledOnce()
 })
 
 it.each([true, false])('asks before a system drag and shares the session decision with hover (allow=%s)', async (allow) => {
@@ -1263,22 +1260,22 @@ it.each([true, false])('asks before a system drag and shares the session decisio
   native.request.mockResolvedValueOnce({ appHandle: target.appHandle, windowId: null, snapshotId: 's', tree: '', truncated: false,
     windows: [{ windowId: '7', appName: 'Fixture', title: '', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
   await f.execute('getState', { appHandle: target.appHandle })
-  if (!allow) f.ask.mockResolvedValue({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  if (!allow) f.ask.mockResolvedValue({ answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
   native.request.mockClear()
-  const drag = await f.execute('drag', { ...target, useSystemPointer: true })
+  const drag = await f.execute('drag', { ...target, useSystemInput: true })
   const hover = await f.execute('mouseMove', physicalHover)
   expect(f.ask).toHaveBeenCalledTimes(1)
   if (allow) {
     expect(drag.isError).toBe(false)
     expect(hover.isError).toBe(false)
-    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemPointer])).toEqual([['drag', true], ['mouseMove', true]])
+    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemInput])).toEqual([['drag', true], ['mouseMove', true]])
   } else {
-    for (const result of [drag, hover]) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
+    for (const result of [drag, hover]) expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
     expect(native.request).not.toHaveBeenCalled()
   }
-  for (const params of [target, { ...target, useSystemPointer: false }]) {
+  for (const params of [target, { ...target, useSystemInput: false }]) {
     expect((await f.execute('drag', params)).isError).toBe(false)
-    expect(native.request.mock.lastCall?.[1]).not.toHaveProperty('useSystemPointer')
+    expect(native.request.mock.lastCall?.[1]).not.toHaveProperty('useSystemInput')
   }
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
@@ -1289,20 +1286,21 @@ it('keeps refusals and grants separate and forgets a closed session on reopen', 
   const { agent } = await f.ctx.agents.create({ sessionId: brandString<SessionId>('other-mouse-session') })
   expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('APP_ACCESS_REQUIRED')
   await f.select(agent)
-  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
   native.request.mockClear()
-  for (let i = 0; i < 2; i++) expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_DENIED')
+  for (let i = 0; i < 2; i++) expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_DENIED')
   expect(native.request).not.toHaveBeenCalled()
   expect((await f.call(agent, 'mouseMove', hoverTarget)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: false }, expect.any(AbortSignal), expect.any(String))
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
   expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
   const sessionId = f.handle.agent.id
   await f.handle.dispose()
   const reopened = await f.ctx.agents.create({ sessionId })
+  await thinkingTurn({ ...f, handle: reopened })
   await f.select(reopened.agent)
   expect((await f.call(reopened.agent, 'mouseMove', hoverTarget)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: false }, expect.any(AbortSignal), expect.any(String))
   expect((await f.call(reopened.agent, 'mouseMove', physicalHover)).isError).toBe(false)
   expect(f.ask).toHaveBeenCalledTimes(3)
 })
@@ -1327,7 +1325,7 @@ it('revalidates window coordinates after the user answers', async () => {
     await f.execute('listWindows', { appHandle: 'app-one' })
     return f.approved
   })
-  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: '7', x: 500, y: 500, relative: true, useSystemPointer: true })
+  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: '7', x: 500, y: 500, relative: true, useSystemInput: true })
   expect(JSON.stringify(result.content)).toContain('STALE_SNAPSHOT')
   expect(native.request.mock.calls.map(([name]) => name)).toEqual(['listWindows', 'listWindows'])
 })
@@ -1335,7 +1333,7 @@ it('revalidates window coordinates after the user answers', async () => {
 it('drops dismissal, aborted answers and missing human answerers without allowing input', async () => {
   const f = await hoverFixture()
   f.ask.mockRejectedValueOnce(new UserQuestionError('dismissed', 'ASK_CANCELLED'))
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_APPROVAL_CANCELLED')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_APPROVAL_CANCELLED')
   f.ask.mockRejectedValueOnce(new UserQuestionError('The answer channel disconnected', 'ASK_ABORTED'))
   expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('The answer channel disconnected')
   const controller = new AbortController()
@@ -1348,14 +1346,14 @@ it('drops dismissal, aborted answers and missing human answerers without allowin
   await f.ctx.plugin(NativeProvider, config)
   await f.select()
   await f.questions.dispose()
-  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_APPROVAL_UNAVAILABLE')
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('SYSTEM_INPUT_APPROVAL_UNAVAILABLE')
 })
 
 it('allows only the explicitly requested physical move when approval is disabled', async () => {
   const f = await hoverFixture(false)
   for (const [target, expected] of [[hoverTarget, false], [physicalHover, true], [hoverTarget, false]] as const) {
     expect((await f.execute('mouseMove', target)).isError).toBe(false)
-    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected }, expect.any(AbortSignal), expect.any(String))
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemInput: expected }, expect.any(AbortSignal), expect.any(String))
   }
   expect(f.ask).not.toHaveBeenCalled()
 })
@@ -1371,48 +1369,75 @@ it.each([true, false])('rejects a delegated pointer move before asking or dispat
   selectAnswer.mockClear()
   native.request.mockClear()
   const refused = await f.call(agent, 'mouseMove', physicalHover)
-  expect(JSON.stringify(refused.content)).toContain('MOUSE_CONTROL_UNAVAILABLE')
+  expect(JSON.stringify(refused.content)).toContain('SYSTEM_INPUT_UNAVAILABLE')
   expect(selectAnswer).not.toHaveBeenCalled()
   expect(f.ask).not.toHaveBeenCalled()
   expect(native.request).not.toHaveBeenCalled()
 })
 
-it.each([true, false])('uses the declared systemPointer capability for a non-macOS provider (%s)', async (systemPointer) => {
+it.each([true, false])('uses the declared systemInput capability for a non-macOS provider (%s)', async (systemInput) => {
   const f = await setup()
   await f.provider.dispose()
   await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
     installCua(ctx, CuaConfig(config), {
-      helperPath: config.helperPath, createChannel: native.connect, getGuidance: () => COMMON_GUIDANCE,
+      helperPath: config.helperPath,
+      createChannel: (owner, nativeConfig) => native.connect(owner, nativeConfig, config.recentActivityWindowMs),
+      getGuidance: () => COMMON_GUIDANCE,
       permissionParameters: () => ({}),
-      capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemPointer,
+      capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemInput,
         appLevelAccessibility: true, keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
     })
   } })
-  native.request.mockResolvedValueOnce({ systemPointer: !systemPointer })
-  expect((await f.execute('getCapabilities')).value).toMatchObject({ platform: 'fixture', systemPointer })
+  native.request.mockResolvedValueOnce({ systemInput: !systemInput })
+  expect((await f.execute('getCapabilities')).value).toMatchObject({ platform: 'fixture', systemInput })
   const sections = (await f.ctx.systemPrompt.assemble({ scope: f.handle.agent })).sections
   const guidance = sections.find(section => section.name === 'computer-use:dsh-cua')!.text
-  expect(guidance.includes('relative?: boolean, useSystemPointer?: boolean')).toBe(systemPointer)
-  expect(guidance.includes('The question interrupts the user')).toBe(systemPointer)
-  expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemPointer')).toBe(systemPointer)
+  expect(guidance.includes('relative?: boolean, useSystemInput?: boolean')).toBe(systemInput)
+  expect(guidance.includes('When approval is enabled, the first explicit system input requests permission;')).toBe(systemInput)
+  expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemInput')).toBe(systemInput)
   await selectApplication(f)
   native.request.mockClear()
   const answer = vi.spyOn(f.ctx.userQuestions, 'ask').mockResolvedValue({
-    answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }],
+    answers: [{ id: 'cua-system-input', selected: ['Allow for this session'] }],
   })
-  if (!systemPointer) {
-    const denied = await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 1, toX: 2, toY: 2, useSystemPointer: true })
+  if (!systemInput) {
+    const denied = await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 1, toX: 2, toY: 2, useSystemInput: true })
     expect(denied.isError).toBe(true)
-    expect(JSON.stringify(denied.content)).toContain('useSystemPointer')
+    expect(JSON.stringify(denied.content)).toContain('useSystemInput')
     expect(native.request).not.toHaveBeenCalled()
     expect(answer).not.toHaveBeenCalled()
   }
   const physical = await f.execute('mouseMove', physicalHover)
-  expect(physical.isError).toBe(!systemPointer)
-  expect(answer).toHaveBeenCalledTimes(systemPointer ? 1 : 0)
-  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  expect(physical.isError).toBe(!systemInput)
+  expect(answer).toHaveBeenCalledTimes(systemInput ? 1 : 0)
+  if (systemInput) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
   else expect(native.request).not.toHaveBeenCalled()
   expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemPointer ? { ...hoverTarget, useSystemPointer: false } : hoverTarget,
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemInput ? { ...hoverTarget, useSystemInput: false } : hoverTarget,
     expect.any(AbortSignal), expect.any(String))
+})
+
+it('keeps complete system moves available outside a turn without registering a persistent hold', async () => {
+  const f = await setup(undefined, undefined, { requireSystemInputApproval: false })
+  await selectApplication(f)
+  native.request.mockClear()
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  await f.handle.dispose()
+  expect(native.cleanup).not.toHaveBeenCalled()
+})
+
+it.each([true, false])('shares approval between system clicks and keyboard chords (allow=%s)', async (allow) => {
+  const f = await hoverFixture()
+  f.ask.mockResolvedValue(allow ? f.approved : { answers: [{ id: 'cua-system-input', selected: ['Deny'] }] })
+  const click = { ...hoverTarget, modifiers: ['shift'], useSystemInput: true }
+  const chord = { appHandle: 'app-one', key: 's', modifiers: ['command'], useSystemInput: true }
+  for (const [method, params] of [['click', click], ['pressKey', chord]] as const) {
+    const result = await f.execute(method, params)
+    expect(result.isError).toBe(!allow)
+    if (allow) expect(native.request).toHaveBeenLastCalledWith(method, params, expect.any(AbortSignal), expect.any(String))
+    else expect(JSON.stringify(result.content)).toContain('SYSTEM_INPUT_DENIED')
+  }
+  expect(f.ask).toHaveBeenCalledTimes(1)
+  if (!allow) expect(native.request).not.toHaveBeenCalled()
 })

@@ -80,8 +80,9 @@ import {
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-// Empty type imports carry the webServer/agents/sessionPersistence Context merges.
-import type {} from '@deepseek-ai/dsh-host-webserver'
+import type { WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
+// Empty type imports carry the webApp/agents Context merges.
+import type {} from '@deepseek-ai/dsh-web-app'
 import type {} from '@deepseek-ai/dsh-agent'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { startPrefixProxy, type PrefixProxy } from './prefix-proxy.ts'
@@ -310,6 +311,8 @@ export interface LaunchOptions {
   developerTools?: boolean
   /** Enable the real Open In rows with deterministic launch-environment facts. */
   openInAppEnvironment?: LaunchEnvironmentSnapshot
+  /** Keep the shipped personalized recommendation rows, whose two card skills enter the model-visible skill catalog. */
+  actionCards?: true
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
   /** Fixed JSON-quoted workspace path length for compaction estimates; omitted values use the ordinary prefix. */
@@ -416,6 +419,8 @@ export interface LaunchOptions {
     /** Credential reference of both sections. */
     apiKeyEnv: string
   }
+  /** Node PTC execution mode for recordings whose programs use another syntax than the provider default. */
+  ptcExecutionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Preset selection default and additional declarative definitions for this scenario. */
   agentPresets?: {
     default: string
@@ -653,11 +658,11 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       },
     },
     // The bundle's web-runtime row resolves the same built dist under test
-    // (apps/web IS @deepseek-ai/dsh-web-frontend). The scaffold captures the real
-    // WebApp-published login URL; Playwright owns browser opening.
+    // (apps/web IS @deepseek-ai/dsh-web-frontend). Collect Token entries through
+    // WebApp's event without printing credentials; Playwright owns browser opening.
     // Preserve the composed surface-context choice because a patch replaces
     // the row's complete config.
-    { id: 'web-runtime', config: { surfaceContext, openBrowser: false, printUrl: true } },
+    { id: 'web-runtime', config: { surfaceContext, openBrowser: false, printUrl: false } },
     ...publicHost === undefined && options.remoteAuthority === undefined
       ? []
       : [{
@@ -685,6 +690,10 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     // Open In scenario supplies launch facts that suppress every native probe.
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
+    ...options.ptcExecutionMode === undefined ? [] : [{ id: 'ptc-runtime', config: { executionMode: options.ptcExecutionMode } }],
+    // Ordinary scenarios exclude the card skills, so their requests omit two catalog entries that shipped Standard requests carry.
+    ...['action-cards', 'client-ui-action-cards', 'creation-recommendations', 'client-ui-creation-recommendations',
+      'plugin-recommendations', 'client-ui-plugin-recommendations'].map(id => ({ id, disabled: options.actionCards !== true })),
     ...options.agentPresets === undefined ? [] : [
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },
@@ -843,42 +852,30 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         throw new Error(`web e2e scaffold: the web app requested exit ${String(code)} with no arguments to reject`)
       },
     })
-    const resolution = await createRuntimeResolution(resolutionOptions)
+    // Like the launcher, resolve the dependencies of every selected bundle, not only the extra install anchors.
+    const selectedLayers = loadProfileDirectory('dsh', profileDir, INSTALL_ANCHOR).layers
+    const resolution = await createRuntimeResolution({
+      ...resolutionOptions, profile: { ...profile, layers: [...profile.layers, ...selectedLayers] },
+    })
     await ctx.plugin(PluginPackages, {
       resolution,
     })
     await ctx.plugin(Loader)
-    // Scaffold boots already own process.cwd() exclusively within their test worker.
-    // Capture only this listener's login line, and restore console on failed boot too.
-    const startupLogin = Promise.withResolvers<URL>()
-    let startupLoginUrl: URL
-    const originalLog = console.log
-    console.log = (...args: unknown[]) => {
-      const line = args.length === 1 && typeof args[0] === 'string' ? args[0] : ''
-      const match = /^dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+)$/u.exec(line)
-      if (match !== null) {
-        const url = new URL(match[1]!)
-        const boundPort = ctx.get('webServer')?.port
-        if (boundPort !== undefined && url.port === String(boundPort)) {
-          startupLogin.resolve(url)
-          return
-        }
-      }
-      originalLog(...args)
+    await mountRootInclude(ctx, rootConfig, readProfilePatches('dsh', profileContext))
+    await ctx.loader.await()
+    await auditStartupEntries(ctx, 'web e2e scaffold')
+    const advertised = new URL(ctx.webApp.getAdvertisedUrl())
+    const entries: WebEntryUrl[] = []
+    ctx.emit(ctx.webServer, 'webserver/entry-url', advertised.href, entries)
+    const tokenEntries = entries.filter((entry) => {
+      const url = new URL(entry.url)
+      return url.origin === advertised.origin && url.pathname === advertised.pathname
+        && url.searchParams.getAll('token').length === 1 && Boolean(url.searchParams.get('token'))
+    })
+    if (tokenEntries.length !== 1) {
+      throw new Error('web e2e scaffold: expected one Token provider login URL for this application')
     }
-    let startupTimer: ReturnType<typeof setTimeout> | undefined
-    try {
-      await mountRootInclude(ctx, rootConfig, readProfilePatches('dsh', profileContext))
-      await ctx.loader.await()
-      await auditStartupEntries(ctx, 'web e2e scaffold')
-      startupTimer = setTimeout(() => {
-        startupLogin.reject(new Error('web e2e scaffold: token plugin did not publish its login URL'))
-      }, 10_000)
-      startupLoginUrl = await startupLogin.promise
-    } finally {
-      clearTimeout(startupTimer)
-      console.log = originalLog
-    }
+    const startupLoginUrl = new URL(tokenEntries[0]!.url)
     if (options.developerTools !== undefined) {
       await ctx.settings.update('ui-settings', { enabled: options.developerTools })
     }
@@ -1187,14 +1184,22 @@ function replaceWebCwd(value: string, cwd: string): string {
 /**
  * Normalize Web-only volatile strings while preserving JSON structure and row framing.
  * @param log - raw Session JSONL.
- * @param workspaceCwd - optional scaffold parent used before a live Session selects its cwd.
+ * @param workspaceCwd - non-empty `{{cwd}}` root required in `workspace` mode; optional fallback
+ *   before a live Session selects its cwd in `session` mode.
+ * @param cwdToken - `workspace` keeps a Session directory below `workspaceCwd` relative to `{{cwd}}`;
+ *   `session` tokenizes the Session's own cwd.
  * @returns compact JSONL with run-local strings tokenized.
+ * @throws Error when `workspace` mode has no non-empty `workspaceCwd`.
  */
-export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string): string {
+export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string, cwdToken: 'session' | 'workspace' = 'session'): string {
+  if (cwdToken === 'workspace' && (workspaceCwd === undefined || workspaceCwd.length === 0)) {
+    throw new Error('workspace cwd normalization requires a non-empty workspaceCwd')
+  }
   const headerLine = log.split(/\r?\n/).find(line => line.trim().length > 0)
   const header = headerLine === undefined ? undefined : JSON.parse(headerLine) as { cwd?: unknown }
   const sessionCwd = typeof header?.cwd === 'string' && header.cwd.length > 0 ? header.cwd : undefined
-  const cwdSpellings = [...new Set([sessionCwd ?? workspaceCwd]
+  const tokenizedCwd = cwdToken === 'workspace' ? workspaceCwd : sessionCwd ?? workspaceCwd
+  const cwdSpellings = [...new Set([tokenizedCwd]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .flatMap((value) => {
       const forward = value.replaceAll('\\', '/')

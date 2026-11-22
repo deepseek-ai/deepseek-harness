@@ -29,7 +29,7 @@ export interface ReadWindow {
 export interface FileTextLine {
   /** 1-based line number in the file. */
   number: number
-  /** Line text without its trailing newline. */
+  /** Line text without its trailing newline; from {@link buildWindow}, it references no string larger than one input chunk. */
   text: string
 }
 
@@ -74,9 +74,14 @@ function lineByteSize(line: string, currentLineCount: number): number {
   return Buffer.byteLength(line, 'utf8') + (currentLineCount > 0 ? 1 : 0)
 }
 
+function wantsNextLine(acc: WindowAccumulator, request: ReadWindow): boolean {
+  return !acc.truncatedByBytes && acc.totalLines + 1 >= request.offset && acc.lines.length < request.limit
+}
+
 function consumeLine(acc: WindowAccumulator, rawLine: string, request: ReadWindow): void {
+  const wanted = wantsNextLine(acc, request)
   acc.totalLines += 1
-  if (acc.truncatedByBytes || acc.totalLines < request.offset || acc.lines.length >= request.limit) return
+  if (!wanted) return
 
   const text = truncateLine(rawLine, request.maxLineLength)
   const bytes = lineByteSize(text, acc.lines.length)
@@ -103,7 +108,8 @@ function finish(acc: WindowAccumulator, request: ReadWindow, displayPath: string
  * Build one window from streamed or whole-file chunks, enforcing line and byte caps while still
  * scanning to an exact total line count, and throwing `FS_NOT_FOUND` when the requested offset is
  * past EOF.
- * @param chunks - decoded text chunks in file order; chunk boundaries carry no meaning.
+ * @param chunks - decoded text chunks in file order; chunk boundaries carry no meaning. A kept line
+ *   that is a whole chunk is returned as that chunk, so a chunk must not be a substring of a larger string.
  * @param request - the resolved window; the caller has already applied its defaults and caps.
  * @param displayPath - the caller-facing path used in the offset-out-of-range error.
  * @returns the numbered window lines, the total line count seen, and the byte-cap truncation flag.
@@ -114,32 +120,46 @@ export async function buildWindow(
   displayPath: string,
 ): Promise<WindowResult> {
   const acc = newAccumulator()
-  // One char past the truncation point is enough to prove a line overflows.
-  const lineBufferCap = request.maxLineLength + 1
+  // Two chars past the truncation point still prove a line overflows after a trailing `\r` is stripped.
+  const lineBufferCap = request.maxLineLength + 2
   let lineBuffer = ''
+  let lineHasText = false
+  let lineHasSlice = false
 
-  function appendToLineBuffer(segment: string): void {
-    if (lineBuffer.length >= lineBufferCap) return
-    lineBuffer += segment
-    if (lineBuffer.length > lineBufferCap) lineBuffer = lineBuffer.slice(0, lineBufferCap)
+  // Only lines the window still wants are collected, up to the truncation point.
+  function appendToLineBuffer(chunk: string, start: number, end: number): void {
+    const stop = Math.min(end, start + lineBufferCap - lineBuffer.length)
+    if (stop <= start || !wantsNextLine(acc, request)) return
+    if (start === 0 && stop === chunk.length) {
+      lineBuffer += chunk
+    } else {
+      lineBuffer += chunk.slice(start, stop)
+      lineHasSlice = true
+    }
   }
 
   function flushLine(): void {
-    consumeLine(acc, stripCarriageReturn(lineBuffer), request)
+    // A slice keeps its whole chunk alive, and kept lines outlive the read, so a line built from a
+    // slice is copied once; a UTF-16LE round trip keeps lone surrogates.
+    const line = lineHasSlice ? Buffer.from(lineBuffer, 'utf16le').toString('utf16le') : lineBuffer
+    consumeLine(acc, stripCarriageReturn(line), request)
     lineBuffer = ''
+    lineHasSlice = false
   }
 
   for await (const chunk of chunks) {
     let startPos = 0
     let newlinePos: number
     while ((newlinePos = chunk.indexOf('\n', startPos)) !== -1) {
-      appendToLineBuffer(chunk.slice(startPos, newlinePos))
+      appendToLineBuffer(chunk, startPos, newlinePos)
       flushLine()
+      lineHasText = false
       startPos = newlinePos + 1
     }
-    appendToLineBuffer(chunk.slice(startPos))
+    appendToLineBuffer(chunk, startPos, chunk.length)
+    if (startPos < chunk.length) lineHasText = true
   }
-  if (lineBuffer.length > 0) flushLine()
+  if (lineHasText) flushLine()
   return finish(acc, request, displayPath)
 }
 

@@ -8,6 +8,7 @@ namespace DeepSeek.Cua.Windows;
 
 internal sealed class ClientState
 {
+    internal Guid Connection { get; } = Guid.NewGuid();
     internal Dictionary<string, AppState> Apps { get; } = new(StringComparer.Ordinal);
     internal AppState App(string handle) => Apps.GetValueOrDefault(handle)
         ?? throw new NativeFailure("STALE_APP", "Select the application again on this connection");
@@ -16,11 +17,12 @@ internal sealed class ClientState
 
 internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IAsyncDisposable
 {
+    private readonly HeldInputs inputs = new(input => Input.Send(input));
     private readonly WindowCapture capture = new();
     private readonly ClipboardPaste clipboard = new();
     private readonly SemaphoreSlim queue = new(1);
 
-    private static object ActionResult(nint before, bool dispatched = true) => new
+    private static object ActionResult(nint before = 0, bool dispatched = true) => new
     {
         dispatched,
         foregroundChanged = before == 0 || Win32.GetForegroundWindow() == 0 ? (bool?)null : before != Win32.GetForegroundWindow(),
@@ -48,16 +50,18 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         return (window, parameters.GetProperty("x").GetDouble(), parameters.GetProperty("y").GetDouble());
     }
 
-    internal async Task<object> Execute(NativeRequest request, ClientState state, NativeConfig config, CancellationToken cancellation)
+    internal async Task<object> Execute(NativeRequest request, ClientState state, NativeConfig config, CancellationToken cancellation,
+        Action<NativeFailure> reportFailure)
     {
+        var context = new RequestContext(config, cancellation, mta, sta, reportFailure, inputs);
         if (request.Method == "screenshot")
         {
-            var context = new RequestContext(config, cancellation, mta, sta);
             AppState app;
             WindowState window;
             await queue.WaitAsync(cancellation);
             try
             {
+                context.Check();
                 DesktopSession.RequireInteractive();
                 app = state.App(String(request.Params, "appHandle"));
                 window = Selected(app, request.Params, context);
@@ -68,7 +72,6 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         await queue.WaitAsync(cancellation);
         try
         {
-            var context = new RequestContext(config, cancellation, mta, sta);
             context.Check();
             var parameters = request.Params;
             if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
@@ -80,8 +83,31 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     screenRecording = locked == false && WindowCapture.IsSupported },
                     sessionLocked = locked };
             }
+            if (request.Method == "getActionSchema") return PatternActions.Schema(String(parameters, "action"));
             if (request.Method is "requestPermission" or "openPermissionSettings")
                 throw new NativeFailure("UNSUPPORTED", "Windows desktop access has no macOS permission switches; inspect the Windows session status");
+            if (request.Method == "getHeldInputs") return inputs.Get(state.Connection);
+            if (request.Method == "releaseHeldInputs")
+                return inputs.Release(state.Connection, cancellation);
+
+            if (request.Method is "sendKeyEvent" or "toggleMouse")
+            {
+                var handle = String(parameters, "appHandle");
+                var keyboard = request.Method == "sendKeyEvent";
+                var name = keyboard ? Input.HoldKeyName(String(parameters, "key")) : String(parameters, "mouseButton");
+                if (String(parameters, "direction") == "up")
+                {
+                    inputs.Up(state.Connection, handle, WindowId(parameters), name, keyboard);
+                    return ActionResult();
+                }
+                var recipient = state.App(handle);
+                var before = Win32.GetForegroundWindow();
+                var target = Selected(recipient, parameters, context);
+                var dispatched = keyboard
+                    ? Input.KeyDown(state.Connection, recipient, target, name, context)
+                    : Input.ButtonDown(state.Connection, recipient, target, name, context);
+                return ActionResult(before, dispatched);
+            }
             DesktopSession.RequireInteractive();
             if (request.Method == "listApps") return await DesktopWindows.ListApps(context);
             if (request.Method == "findApps")
@@ -138,17 +164,11 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     Input.Press(app, target, String(parameters, "key"), Modifiers(parameters), context);
                     return ActionResult(foreground);
                 }
-                case "sendKeyEvent":
-                {
-                    var target = Selected(app, parameters, context);
-                    var dispatched = Input.KeyEvent(app, target, String(parameters, "key"), String(parameters, "direction"), context);
-                    return ActionResult(foreground, dispatched);
-                }
                 case "paste":
                 {
                     var target = Selected(app, parameters, context);
                     await clipboard.Paste(app, target, String(parameters, "text"), OptionalString(parameters, "format") ?? "text",
-                        parameters.GetProperty("maxClipboardBytes").GetInt32(), parameters.GetProperty("pasteReadTimeoutMs").GetInt32(), context);
+                        parameters.GetProperty("maxClipboardBytes").GetInt32(), context);
                     return ActionResult(foreground);
                 }
                 case "mouseMove":
@@ -168,12 +188,6 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     }
                     var pointed = Coordinate(app, parameters, context);
                     return Input.MouseMove(app, pointed.Window, pointed.X, pointed.Y, context);
-                }
-                case "toggleMouse":
-                {
-                    var target = Selected(app, parameters, context);
-                    Input.ToggleMouse(app, target, String(parameters, "mouseButton"), String(parameters, "direction"), context);
-                    return ActionResult(foreground);
                 }
                 case "scroll":
                 {
@@ -277,9 +291,12 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         finally { queue.Release(); }
     }
 
+    internal Task ReleaseConnection(ClientState state, int graceMs) =>
+        inputs.ReleaseOnDisconnect(state.Connection, queue, graceMs);
+
     public ValueTask DisposeAsync()
     {
         queue.Dispose();
-        return default;
+        return ValueTask.CompletedTask;
     }
 }

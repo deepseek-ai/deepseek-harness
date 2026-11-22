@@ -115,7 +115,7 @@
   border-radius: 12px;
   background: var(--dsw-alias-markdown-code-block);
 }
-.searchIcon { flex: none; color: var(--dsw-alias-label-caption); }
+.searchIcon { flex: none; color: var(--dsw-alias-label-tertiary); }
 .search {
   width: 100%;
   min-width: 0;

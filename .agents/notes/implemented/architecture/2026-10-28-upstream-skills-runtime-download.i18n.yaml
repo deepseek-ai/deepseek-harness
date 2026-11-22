@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-28-upstream-skills-runtime-download.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-28-upstream-skills-runtime-download.md
+/agent-note-runtime-download-of-upstream-skills:
+  en: aa22dd6b2e4a7dd5
+  zh: 19e36747a2ae6310
+/agent-note-runtime-download-of-upstream-skills/problem:
+  en: 755fe8a192cfebe1
+  zh: 855ad2920b33e364
+/agent-note-runtime-download-of-upstream-skills/decision:
+  en: 98f6d4a4c6b7849f
+  zh: a361378d5020c954
+/agent-note-runtime-download-of-upstream-skills/alternatives-considered:
+  en: 250ab524fc33cd94
+  zh: bc4d8008af1f9d61
+/agent-note-runtime-download-of-upstream-skills/consequences:
+  en: 5df2a8d5d5b9fbb6
+  zh: b827f6539833ee87

@@ -74,7 +74,7 @@ for line in sys.stdin:
     elif method == "session/query":
         serial += 1
         params = frame["params"]
-        assert set(params) == {"sessionId", "contentBlocks"}
+        assert set(params) - {"timeZone"} == {"sessionId", "contentBlocks"}
         text = input_text(frame)
         if text == "/plan hold":
             identity = "plan-" + str(serial)
@@ -452,3 +452,30 @@ def test_low_level_prompt_keeps_slash_text_as_an_ordinary_prompt(sdk: DeepSeekHa
     sent = [json.loads(line) for line in (tmp_path / "requests.jsonl").read_text(encoding="utf-8").splitlines()]
     assert sent[-1]["method"] == "session/prompt"
     assert sent[-1]["params"] == {"sessionId": "main", "contentBlocks": blocks}
+
+
+@pytest.mark.parametrize("entry", ["session", "harness"])
+def test_run_sends_its_prompt_time_zone_as_the_time_zone_wire_field(
+    sdk: DeepSeekHarness, tmp_path: Path, entry: str,
+) -> None:
+    result = (sdk.run("ordinary", session_id="main", time_zone="Asia/Shanghai")
+              if entry == "harness" else sdk.start_session("main").run("ordinary", time_zone="Asia/Shanghai"))
+    assert isinstance(result, RunResult)
+    sdk.start_session("main").run("ordinary")
+    sent = [json.loads(line) for line in (tmp_path / "requests.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [frame["params"] for frame in sent if frame["method"] == "session/query"] == [
+        {"sessionId": "main", "contentBlocks": [{"type": "text", "text": "ordinary"}], "timeZone": "Asia/Shanghai"},
+        {"sessionId": "main", "contentBlocks": [{"type": "text", "text": "ordinary"}]},
+    ]
+    assert_released(sdk)
+
+
+def test_low_level_prompt_sends_its_time_zone_as_the_time_zone_wire_field(sdk: DeepSeekHarness, tmp_path: Path) -> None:
+    blocks = [{"type": "text", "text": "when is noon?"}]
+    sdk.client.session_prompt("main", blocks, time_zone="UTC")
+    sdk.client.session_prompt("main", blocks)
+    sent = [json.loads(line) for line in (tmp_path / "requests.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [frame["params"] for frame in sent if frame["method"] == "session/prompt"] == [
+        {"sessionId": "main", "contentBlocks": blocks, "timeZone": "UTC"},
+        {"sessionId": "main", "contentBlocks": blocks},
+    ]

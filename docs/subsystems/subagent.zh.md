@@ -8,7 +8,17 @@
 
 所有后端都使用 startActivation。能力标记校验请求选项；prepareContinuable 选择本地 Agent 创建，start 选择一次外部执行。面向模型的工具采用 parent 回传。Workflow 与 code mode 消费者可以等待 caller 结果，不额外向父代理注入消息。历史子会话的 descriptor 不可用时，以 `mode: 'unknown'` 保持可发现性，但不授予继续执行能力；[包 README](../../packages/subagent/subagent/README.zh.md) 定义目录持久化语义。
 
-可选的 `cwd` 指定子级的初始目录；相对路径以父级当前有效目录为基准解析。省略时，在准入阶段捕获该目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
+由 Host 选定的可选 `cwd` 指定子级的初始目录；相对路径以父级的当前目录为基准解析。省略时，在准入阶段捕获该目录。面向模型的委派工具不传目录。本地子 Session 保留父级的原始项目，冷恢复保留其日志中的目录状态。
+
+```ts type-equiv
+/** Current concurrency capacity of one subagent tree; observing it reserves no slots. */
+interface SubagentCapacity {
+  /** Occupied slots, including starting, resident, and stopping children; excludes the root. */
+  readonly running: number
+  /** Configured maximum; running may exceed it after the limit is lowered. */
+  readonly limit: number
+}
+```
 
 ```ts type-equiv
 /**
@@ -86,7 +96,7 @@ interface SubagentStartRequest {
   readonly agentPreset?: string
   /** Optional short display label persisted with a session-backed child. */
   readonly label?: string
-  /** Content delivered as the child's user message. */
+  /** Initial task; local continuable children record it as a message from the parent agent. */
   readonly prompt: ContentBlock[]
   /**
    * The spawning agent. Its effective directory supplies the default cwd;
@@ -171,9 +181,10 @@ interface ContinuableCreateRequest {
  */
 interface ContinuableCreateSpec {
   /**
-   * Completed-turn prefix of the parent's log to seed the child session with,
-   * or absent for a fresh child. Same durable contract as
-   * `CreateAgentOptions.seed`: contiguous from seq 0, lossless JSON, balanced.
+   * Unmodified completed-turn prefix of the parent's log, contiguous from seq
+   * 0 with lossless JSON and balanced steps and turns; absent for a fresh child.
+   * The manager uses its length as the fork cut and stores the prefix as
+   * supplied, so a transformed prefix would diverge from the parent history.
    */
   readonly seed?: readonly SessionEvent[]
 }
@@ -432,7 +443,18 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.subagentModelSelection` — `SubagentModelSelectionConfig`
 
-Host settings owner that records Session authorization before the first model request.
+Host settings owner whose current value authorizes explicit child routes in every Session.
+
+```ts cordis-catalog
+/**
+ * Read the routes the setting currently authorizes. Each call samples the
+ * live setting, so an edit applies to the next delegation in every Session.
+ * @returns a detached route list, or undefined when the setting is disabled.
+ * @throws {SubagentError} `INVALID_MODEL_SELECTION_SETTINGS` when the enabled setting has no route,
+ *   or its routes are malformed or repeated. Disabled settings do not read or validate routes.
+ */
+allowedRoutes(): AllowedModelRoute[] | undefined
+```
 
 Source: [`packages/subagent/tool-subagent/src/model-selection-settings.ts`](../../packages/subagent/tool-subagent/src/model-selection-settings.ts)
 
@@ -471,6 +493,13 @@ startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>
  * @throws when the caller or its runtime owner is unavailable.
  */
 rootOf(caller: Agent): Agent
+
+/**
+ * Observe the shared concurrency capacity of the caller's subagent tree.
+ * @param caller - exact live root or resident tree member.
+ * @returns occupied slots and the current limit; this observation reserves no capacity.
+ */
+capacityOf(caller: Agent): SubagentCapacity
 
 /**
  * Report the model-facing names of a live tree member and its direct creator.

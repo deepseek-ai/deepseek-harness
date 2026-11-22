@@ -76,10 +76,13 @@ describe('delegation depth context', () => {
     const { agent } = await ctx.agents.create({
       sessionId: brandString<SessionId>('scoped-depth-policy'),
       meta: { delegationDepth: 1 },
-      setup: async (agentCtx) => { await agentCtx.plugin(tool, { provider: 'mock', maxDepth: 1 }) },
+      setup: async (agentCtx) => {
+        agentCtx.tools.restrict({ deny: ['subagent'] })
+        await agentCtx.plugin(tool, { provider: 'mock', toolName: 'scoped_subagent', maxDepth: 1 })
+      },
     })
     expect(await depthContext(ctx, agent)).toEqual([
-      'Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.',
+      'Delegation depth for `scoped_subagent`: current 1, maximum 1, remaining levels 0. Do not call `scoped_subagent` at this depth; carry out the work directly.',
     ])
     const restore = root.ctx.tools.restrict({ deny: ['subagent'] })
     expect(await depthContext(ctx, root)).toEqual([])

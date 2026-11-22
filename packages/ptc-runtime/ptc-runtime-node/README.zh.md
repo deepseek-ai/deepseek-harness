@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。显式启用的 `persistent-in-memory` 为每个 Agent 保留 REPL。所有模式都在进程启动时应用文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。未确认的停止请求与单次执行完成后清理受管进程范围；约束不可用时执行失败。
+执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `persistent-in-memory` 模式为每个 Agent 保留 scoped REPL；`per-call` 在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。所有模式都在进程启动时应用文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。未确认的停止请求与单次执行完成后清理受管进程范围；约束不可用时执行失败。
 
 ## 目录
 
@@ -36,7 +36,7 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
-    executionMode: per-call
+    executionMode: persistent-in-memory
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `executionMode` | `per-call` | `per-call` 在全新进程中运行异步函数体；`vm-script` 求值 Script；`persistent-in-memory` 为每个所有者保留受限 REPL |
+| `executionMode` | `persistent-in-memory` | `persistent-in-memory` 为每个所有者保留受限 REPL；`per-call` 在全新进程中运行异步函数体；`vm-script` 求值 Script |
 | `scriptPersistence` | `false` | 在 `executionMode: vm-script` 下，为每个所有者复用进程与 context；其他模式下设为 `true` 会在加载时拒绝 |
 | `replScoped` | `persistent-in-memory` 下为 `true`，其他模式下为 `false` | 在 `executionMode: persistent-in-memory` 下，按 scoped REPL 语句执行，每次调用拿到之前顶层绑定的拷贝；设为 `false` 时使用 Node 的 REPL 求值器，其他模式下设为 `true` 会在加载时拒绝 |
 | `timeoutMs` | `120,000` | 默认经过时间截止，包括嵌套工具与审批等待 |
@@ -82,6 +82,8 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 模型指引还要求：raw 模板字面量（`String.raw`）只用于反斜杠必须原样保留的短文本，例如正则表达式。其他文本，包括文件内容和命令，用普通字符串书写；文件内容写成逐行引号字符串组成的数组，再用换行符拼接。
 
+捕获输出达到 `maxOutputBytes` 后，运行时保留有序的图文前缀，丢弃后续输出，并设置 `outputTruncated: true`。程序和等待中的工具调用继续执行，初始化期间也一样；原有截止时间、取消、内存和控制消息限制继续生效。完成值和失败诊断在组合预算内优先，因此最终结算可能缩短已保留的输出前缀。要求返回的完成值保持无损，无法容纳时以 `output-limit` 失败；过大的诊断会截断，但不改变失败类型。截断本身不会使执行失败或清空保留变量。
+
 `run_code` 设置 `discardCompletion: true`：函数返回值和末尾表达式的值不经过 JSON 序列化，也不出现在结果中，显式 inspect 的输出仍然可见。直接调用运行时的消费方在未设置此选项时，仍可取得原有的无损 JSON 完成值。
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
@@ -100,12 +102,12 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 <a id="persistent-repl"></a>
 ### 内存保留模式
 
-`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。要保留 REPL，在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory`；默认运行 scoped REPL，设置 `replScoped: false` 时使用 Node 的 REPL 求值器。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并在进程启动时应用文件沙箱策略。通过配置档补丁显式启用：
+`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。`persistent-in-memory` 是 `executionMode` 的默认值，运行 scoped REPL，设置 `replScoped: false` 时使用 Node 的 REPL 求值器。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并在进程启动时应用文件沙箱策略。如果要改为在全新进程中运行函数体，通过配置档补丁选择 `per-call`：
 
 ```yaml
 - id: ptc-runtime
   config:
-    executionMode: persistent-in-memory
+    executionMode: per-call
 ```
 
 保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。`per-call` 模式和 `scriptPersistence: false` 的 Script 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主默认使用内嵌载体；宿主在每次执行中发送所选的程序格式和保留标志，因此内嵌的 `process.js` bootstrap 同时服务单次执行和保留执行。远端脚本部署使用 `node-script` 启动方式，并将 `launch.bootstrapPath` 指向本包构建出的 `persistent-process.js`。
@@ -114,11 +116,11 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 在 `persistent-in-memory` 模式下，于运行时首次接纳运行前调用 `registerEnvironmentInitializer(program)`，注册在每个新环境中只执行一次的 REPL 源码。运行时先安装本次绑定，再独立于用户程序求值初始化；二者共享首次调用的截止时间、取消和输出上限。初始化的完成值会被丢弃，打印输出加入结果。新所有者、无所有者执行，以及释放或进程丢失后的运行会创建新环境并再次执行初始化；普通调用复用已初始化的状态。给已初始化的全局变量赋值不会触发初始化。初始化行不会偏移用户程序的位置。其他模式会拒绝注册。
 
-初始化期间的错误、取消、超时或捕获输出超限会阻止用户程序启动，并在返回前终止该环境。此前的外部效果仍然保留。Host 确认初始化完成后，用户程序失败遵循下方的普通状态保留规则。[运行时服务](../ptc-runtime/README.zh.md#choose-a-backend)定义注册和异步注销行为。
+初始化期间的错误、取消或超时会阻止用户程序启动，并在返回前终止该环境。此前的外部效果仍然保留。Host 确认初始化完成后，用户程序失败遵循下方的普通状态保留规则。[运行时服务](../ptc-runtime/README.zh.md#choose-a-backend)定义注册和异步注销行为。
 
 省略 `replScoped` 或设为 `true` 时，`persistent-in-memory` 报告程序格式 `scoped-repl`，每次调用编译成同一个保留 context 里独立的 strict VM Script。每次调用开始时拿到之前调用留下的顶层绑定的拷贝，可以用任意关键字再次声明这些名字；之前调用里的函数和仍在运行的代码保留各自的绑定，调用开始后之前的代码再赋的值不会拷进来。不声明、直接给之前的名字赋值，包括用 `const` 声明的名字，只改这次及之后调用看到的拷贝。最后一条顶层表达式语句是完成值，Promise 完成值不会被等待；顶层 `return` 会被拒绝。程序环境里的 `eval`、`new Function` 和 WebAssembly 编译会被拒绝。程序只能用动态 `import()` 加载模块，相对路径按这个环境第一次调用时的工作目录解析；不提供 `require`、`module` 和内置模块全局变量。块里声明的 `var` 算作这次调用的顶层名字，和其他 `var` 一样带到之后的调用。用 `var` 重新声明之前的名字时，这次的 `var` 从旧值开始，所以没执行到的声明（抛错之后或在没走到的分支里）保留旧值。未捕获的回调异常和未处理的 rejection，在创建回调的那次执行仍在运行时让它失败，否则被丢弃，不会结束进程；回调里抛出冻结或不可扩展的对象时，进程仍会结束，与 Node REPL 相同。[scoped REPL 决策](../../../.agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.zh.md)记录完整行为及其与 Node REPL 的对比。
 
-内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、协议失败、输出超限或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。当前执行中的异常只结算一次，并保留此前发生的修改。在 REPL 模式下，已完成执行的回调抛出的异常不会在后续结果中报告。在 Script 模式下，未捕获的回调异常可能终止保留进程；结束执行前应等待异步工作完成。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。每次执行都会将进程工作目录重置为本次解析的 cwd；程序中的 `process.chdir()` 不跨执行保留。直接 Node 访问遵循进程启动时的文件策略。保留状态的所有者必须先释放环境，才能更改权限模式、工作区根目录或 Session 身份。额外可写目录在进程启动时固定：之后的授权和撤销仅在释放并重新创建环境后生效。
+内存按尽力保留处理，不保存到磁盘。重启、Agent 销毁、提供方卸载、协议失败或进程退出都会清除内存。缺失变量产生普通引用错误，模型需要重新获取句柄和创建声明。当前执行中的异常只结算一次，并保留此前发生的修改。在 REPL 模式下，已完成执行的回调抛出的异常不会在后续结果中报告。在 Script 模式下，未捕获的回调异常可能终止保留进程；结束执行前应等待异步工作完成。Session 仍记录程序、工具分派和可见结果；恢复 Session 或派生 Agent 时从空内存开始。每次执行都会将进程工作目录重置为本次解析的 cwd；程序中的 `process.chdir()` 不跨执行保留。直接 Node 访问遵循进程启动时的文件策略。保留状态的所有者必须先释放环境，才能更改权限模式、工作区根目录或 Session 身份。额外可写目录在进程启动时固定：之后的授权和撤销仅在释放并重新创建环境后生效。
 
 服务消费者通过 `stateOwner` 对象复用环境，并在结束时等待 `release(owner)`。没有所有者的请求在临时进程中执行。此类执行失败不影响其他所有者保留的变量，也不报告清空了这些变量。权限设置同步记录新模式。Session 模式变化时，运行时立即禁止复用受影响的进程并开始取消，包括空闲环境。下一次程序执行前等待这些进程清理；清理失败会阻止本次程序启动，并允许重试。权限设置成功时，旧进程可能仍在停止过程中。单次获准的提权使用独立环境，返回前等待清理；该次执行无法访问原环境的变量，也不会保留新声明。执行及必要清理完成之前，同一所有者的并发调用会被拒绝；不同所有者可以并发。空闲环境没有过期计时器，进程保留到释放或失败为止。原始 stdout/stderr 不携带执行标识：执行期间收到的字节计入本次输出预算，包括较早启动的子进程此时写出的内容；空闲期间丢弃 stdout，只保留限额内的 stderr 诊断尾部。结束本次执行前，应等待子进程完成。进程退出诊断包含退出码和保留的 stderr 尾部；空闲期间的失败写入宿主日志。清理期间无法观测进程范围时，释放所有者会重试终止；清理成功前拒绝新执行。确认进程退出后仍未排空的管道会产生诊断，但不阻止释放环境。
 
@@ -132,7 +134,7 @@ PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.
 
 ### 失败
 
-程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。进程提供方保留与执行基底无关的失败名 `worker-exit`。捕获完成值时，有损值为 `invalid-output`，外层结果超限为 `output-limit`，并在诊断之外保留预算内有序的图文前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
+程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。若求值和控制通道仍然有效，发送输出抑制通知被拒绝会使本次运行以 `protocol` 失败。终止期间排空的输出仍在本地受预算限制，不再发送输出抑制通知。进程提供方保留与执行基底无关的失败名 `worker-exit`。捕获完成值时，有损值为 `invalid-output`，即使不保留捕获输出也无法容纳的完成值为 `output-limit`。这两种失败都不会清空保留变量。诊断截断保留原来的失败类型。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
 
 -----
 
@@ -162,7 +164,7 @@ Host 通过有序控制管道上的 birpc 调用子进程的 `run()`。同一时
 
 源代码执行加载仅含可擦除语法的 bootstrap 依赖，不依赖同级包的构建后导出；执行世界中必须提供求值器模块和已安装的 Acorn 与 birpc 依赖。构建后脚本对所有模式使用 `process.js`；`persistent-process.js` 委托同一个循环，并为未指定程序语法的宿主提供 REPL 默认值。内嵌载体通过 `launch.executable` 启动私有 worker，并在每次执行中携带程序格式和保留标志。远端脚本部署提供对应的 `launch.bootstrapPath`。`resolveLaunch()` 在构造时选择本地默认值；显式的远端调用不依赖客户端自身是否打包。不会假设 Host 路径对应同一个远程文件。
 
-自定义 `launch.bootstrapPath` 部署必须使用 bootstrap 协议 4。`HostMethods.invoke` 的回复包含 `{ value: flatWire, inspection?: string }`；可选文本与解码后的对象或数组关联，供直接展示使用。请与宿主一起部署匹配的 bootstrap；[升级指南](../../../docs/upgrade-guide/v0.2.2-rc.3/ptc-tool-result-inspection/guide.zh.md)说明了从协议 3 迁移的步骤。
+自定义 `launch.bootstrapPath` 部署必须使用 bootstrap 协议 5。`HostMethods.invoke` 的回复包含 `{ value: flatWire, inspection?: string }`；可选文本与解码后的对象或数组关联，供直接展示使用。请与宿主一起部署匹配的 bootstrap；[展示指南](../../../docs/upgrade-guide/v0.2.2-rc.3/ptc-tool-result-inspection/guide.zh.md)说明绑定回复，[输出截断指南](../../../docs/upgrade-guide/v0.2.2-rc.3/ptc-output-limit/guide.zh.md)说明输出抑制。声明协议 3 或 4 的 bootstrap 会在程序分发前被拒绝。
 
 包含 `await` 的源码会在原生编译前检查顶层 await，否则原生编译可能将 `await` 当作标识符。Acorn 解析包住源码的异步函数，acorn-walk 沿用 Node REPL 的 visitor、声明提升和按字符位置修改源码的方式进行遍历。类方法的计算属性名参与遍历，方法体仍独立求值。转换包装末尾表达式，求值器解包并等待其值。无需转换的源码使用原生编译；不含 `await` 的提交保留原生语法诊断。语法错误保留解析器消息、可用的源码位置与光标，不包含编译器或转换器的调用帧。动态 `import()` 表达式保持原生形式，使用编译该 Script 时的 `importModuleDynamically` 选项。两个私有进程 bundle 都包含 Acorn、acorn-walk 和 birpc；源码执行导入已安装的包。
 
@@ -245,7 +247,7 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **约束继承所选后端的限制**——完整与部分强制能力分开报告；沙箱策略与受管进程约束是不同保证。
 - **堆上限不是进程树内存限制**——原生分配与后代进程内存不属于 V8 老生代上限。不提供进程树 CPU 计量器。
 - **清理继承子进程的可观测范围**——使用 fallback 的平台上，逃逸的后代可能仍在受管范围之外；参见子进程提供方声明的限制。
-- **默认执行是一次性的**：保留状态需要设置 `persistent-in-memory` 模式，或在 Script 模式下启用 `scriptPersistence: true`；所有模式都不提供 yield/wait API。
+- **`per-call` 执行是一次性的**：保留状态需要使用默认的 `persistent-in-memory` 模式，或在 Script 模式下启用 `scriptPersistence: true`；所有模式都不提供 yield/wait API。
 - **await 转换放宽声明语义**——转换后程序的顶层 `let`、`const` 和 `class` 绑定可修改，且在执行前初始化为 `undefined`，不再具有原生暂时性死区。执行到函数声明时才会为其设置保留的全局变量；没有初始化器的 `var` 声明会将其绑定重置为 `undefined`。直接 eval 中的声明仅在本次求值内有效。不接受顶层 `using` 声明；可释放绑定需放在块内。运行时堆栈位置指向转换后的源码。无需转换即可编译的脚本保持原生语义。
 - **原生词法初始化失败可能占用名称**——顶层 `let`、`const` 或 `class` 的初始化器在完成绑定初始化前抛错时，该名称会在保留的 Script context 中持续处于未初始化状态。读取、赋值和重新声明都会失败；应使用新名称，或释放并重新创建环境。
 - **scoped REPL 在调用开始时拷贝值**——省略 `replScoped` 或设为 `true` 时，之前的代码之后再赋的值，后面的调用看不到；`let`、`const` 或 `class` 重新声明的初始化表达式读不到同名旧值；`var` 重新声明从旧值开始，所以 `var count = count + 1` 在旧值上加 1，之前是同名的 `let` 或 `const` 时也是这样。之后的调用换了目录，相对的 `import()` 仍按这个环境第一次的工作目录解析；读写文件的相对路径跟随当前目录。`codeGeneration` 限制只拒绝程序环境自己的 `eval`、`Function` 和 WebAssembly 编译，不构成隔离：复制进程序环境的主环境函数，例如 `setTimeout.constructor`，仍能编译代码。最后一条表达式所在行，插入完成值之后的列号右移 17；以 `#!` 开头或任何位置含 `__$binding_` 的程序会被拒绝；包含此前缀的 binding-global 和 error-class 名称会在启动进程前失败；存活的函数会留住它那次调用拷贝进来的所有值。[scoped REPL 决策](../../../.agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.zh.md)列出完整行为。

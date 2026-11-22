@@ -13,7 +13,7 @@ const IMAGE = Object.freeze({ attachmentId: 'sha256:screenshot', path: '/images/
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', isRunning: true, running: true }
 const delivered = { dispatched: true }
-const capabilities: CuaCapabilities = { platform: 'macos', systemPointer: true, sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
+const capabilities: CuaCapabilities = { platform: 'macos', systemInput: true, sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
 function windowInfo(windowId: string) {
   return { windowId, appName: 'Editor', title: `Document ${windowId}`, bounds, isOnScreen: true, onCurrentSpace: null }
@@ -230,10 +230,10 @@ describe('pointer buttons and modifiers', () => {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', x: 10, y: 20,
       mouseButton: 'left', clickCount: 1, modifiers: ['command'],
     } })
-    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'], useSystemPointer: true })
+    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'], useSystemInput: true })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'drag', params: {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', fromX: 10, fromY: 20, toX: 30, toY: 40,
-      useSystemPointer: true, mouseButton: 'middle', modifiers: ['shift', 'option'],
+      useSystemInput: true, mouseButton: 'middle', modifiers: ['shift', 'option'],
     } })
     const count = f.dispatch.mock.calls.length
     await expect(window.click(element('0'), { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
@@ -262,6 +262,47 @@ describe('text selections', () => {
 })
 
 describe('element action queries', () => {
+  const schema = { type: 'object', properties: { argument: { type: 'null' } }, required: [], additionalProperties: false }
+
+  it.each([true, false])('queries action schemas on apps and windows without an observation (app AX: %s)', async (appLevelAccessibility) => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, appLevelAccessibility })
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow('23')
+    f.dispatch.mockClear()
+    for (const surface of [app, window]) {
+      f.dispatch.mockResolvedValueOnce(schema)
+      expect(await surface.getActionSchema('AXPress')).toEqual(schema)
+    }
+    expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
+      { method: 'getActionSchema', params: { action: 'AXPress' } },
+      { method: 'getActionSchema', params: { action: 'AXPress' } },
+    ])
+  })
+
+  it('rejects an empty schema action name before dispatch', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    f.dispatch.mockClear()
+    await expect(app.getActionSchema('')).rejects.toThrow('getActionSchema action')
+    expect(f.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('preserves parameter types, descriptions and native schema lookup failures', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    const valueSchema = { ...schema, properties: { argument: {
+      type: 'string', description: 'One of: Normal, Maximized, Minimized. Names are case-sensitive.',
+    } }, required: ['argument'] }
+    f.dispatch.mockResolvedValueOnce(valueSchema)
+    expect(await app.getActionSchema('Window.SetWindowVisualState')).toEqual(valueSchema)
+    const failure = new NativeError('UNSUPPORTED', 'Unknown action')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.getActionSchema('Window.Unknown')).rejects.toBe(failure)
+    f.dispatch.mockResolvedValueOnce({ dispatched: true })
+    await expect(app.getActionSchema('AXPress')).rejects.toThrow()
+  })
+
   it('returns raw provider action names including attribute-setting operations without reading new state', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
@@ -959,14 +1000,15 @@ describe('input actions', () => {
     const window = await app.getWindow('23')
     expect(app).not.toHaveProperty('toggleMouse')
     expectTypeOf<CuaApp>().not.toHaveProperty('toggleMouse')
-    expectTypeOf<CuaWindow['toggleMouse']>().parameters.toEqualTypeOf<[
-      mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up',
-    ]>()
     for (const direction of ['down', 'up'] as const) {
       f.dispatch.mockClear()
       await expect(window.toggleMouse(mouseButton, direction)).resolves.toEqual(delivered)
       expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'toggleMouse', params: {
         appHandle: 'app-17', windowId: '23', mouseButton, direction,
+      } })
+      await window.toggleMouse(mouseButton, direction, { useSystemInput: true })
+      expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'toggleMouse', params: {
+        appHandle: 'app-17', windowId: '23', mouseButton, direction, useSystemInput: true,
       } })
     }
   })
@@ -1068,10 +1110,10 @@ it('forwards provider options while retaining the selected target and coordinate
     appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', elementId: '0', trackingMode: 'precise',
   } })
   await win.getScreenshot()
-  const pixelOptions = { relative: false, useSystemPointer: true, trackingMode: 'precise', x: 222 }
+  const pixelOptions = { relative: false, useSystemInput: true, trackingMode: 'precise', x: 222 }
   await win.mouseMove([30, 40], pixelOptions)
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
-    appHandle: 'app-17', snapshotId: 'snapshot-1', windowId: '23', x: 30, y: 40, relative: false, useSystemPointer: true, trackingMode: 'precise',
+    appHandle: 'app-17', snapshotId: 'snapshot-1', windowId: '23', x: 30, y: 40, relative: false, useSystemInput: true, trackingMode: 'precise',
   } })
   const relativeOptions = { relative: true, trackingMode: 'coarse' }
   await win.mouseMove([250, 750], relativeOptions)
@@ -1082,12 +1124,13 @@ it('forwards provider options while retaining the selected target and coordinate
 
 it('keeps ordinary Windows drags portable and rejects explicit system-pointer options before dispatch', async () => {
   const f = fixture()
-  f.setCapabilities({ ...capabilities, platform: 'windows', systemPointer: false, appLevelAccessibility: false, keyboard: ['window'] })
+  f.setCapabilities({ ...capabilities, platform: 'windows', systemInput: false, appLevelAccessibility: false, keyboard: ['window'] })
   const win = await (await f.api.getApp('Editor')).getWindow('23')
   await win.getAccessibilityTree()
   f.dispatch.mockClear()
-  for (const useSystemPointer of [true, false]) {
-    await expect(win.drag([10, 20], [30, 40], { useSystemPointer })).rejects.toThrow('drag useSystemPointer: not accepted')
+  for (const useSystemInput of [true, false]) {
+    await expect(win.toggleMouse('left', 'down', { useSystemInput })).rejects.toThrow('toggleMouse useSystemInput: not accepted')
+    await expect(win.drag([10, 20], [30, 40], { useSystemInput })).rejects.toThrow('drag useSystemInput: not accepted')
   }
   expect(f.dispatch).not.toHaveBeenCalled()
   await win.drag([10, 20], [30, 40], { mouseButton: 'right', modifiers: ['win'] })
@@ -1110,4 +1153,23 @@ it('forwards bounded traversal limits on a window-only provider', async () => {
   expect(f.dispatch).toHaveBeenLastCalledWith({
     method: 'getState', params: { appHandle: app.appHandle, windowId: '23', maxDepth: 1, maxElements: 1 },
   })
+})
+
+it('forwards explicit system input for clicks and both keyboard operations', async () => {
+  const f = fixture()
+  const app = await f.api.getApp('Editor')
+  const win = await app.getWindow('23')
+  await win.getAccessibilityTree()
+  await win.click(element('0'), { modifiers: ['shift'], useSystemInput: true })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'click', params: {
+    appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', elementId: '0', modifiers: ['shift'], useSystemInput: true,
+  } })
+  await app.pressKey('s', ['command'], { useSystemInput: true })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'pressKey', params: {
+    appHandle: 'app-17', key: 's', modifiers: ['command'], useSystemInput: true,
+  } })
+  await app.sendKeyEvent('shift', 'down', { useSystemInput: true })
+  expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'sendKeyEvent', params: {
+    appHandle: 'app-17', key: 'shift', direction: 'down', useSystemInput: true,
+  } })
 })

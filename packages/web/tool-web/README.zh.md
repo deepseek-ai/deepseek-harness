@@ -33,10 +33,11 @@ kind: "package-reference"
 
 ### 最小配置
 
-加载 web 服务、至少一个后端与本包；两个工具默认都会注册。
+加载 web 服务、至少一个后端与本包；两个工具默认都会注册。下面的 DeepSeek 后端要求挂载 [`dsh-deepseek-auth`](../../account/deepseek-auth/README.zh.md) 以取得凭据。
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
+- name: '@deepseek-ai/dsh-deepseek-auth'
 - name: '@deepseek-ai/dsh-web-deepseek-api'
 - name: '@deepseek-ai/dsh-tool-web'
 ```
@@ -112,7 +113,7 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段、非�
 
 ### 搜索流程
 
-`web_search` 校验参数（非空数组、数量上限、非空白字符串），把完全相同的重复查询折叠为首现位置，然后通过 `ctx.web` 并发执行 1 至 `searchMaxQueries` 个不同搜索。失败通过融合信号中止批次；调用会等待每个已启动搜索结算后才返回首次失败。成功结果按排名轮询合并、按 URL 去重、在 `searchMaxResults` 处截断，并格式化为面向模型的文本。
+`web_search` 校验参数（非空数组、数量上限、非空白字符串），把完全相同的重复查询折叠为首现位置，然后通过 `ctx.web` 并发执行 1 至 `searchMaxQueries` 个不同搜索。每个搜索请求都在 `llmProvider` 中携带发起调用的 Session 最近一次模型请求（即调用该工具的请求）的提供方路由，因此 `ctx.web` 选中的就是该步骤就绪判断所询问的提供方。失败通过融合信号中止批次；调用会等待每个已启动搜索结算后才返回首次失败。成功结果按排名轮询合并、按 URL 去重、在 `searchMaxResults` 处截断，并格式化为面向模型的文本。
 
 ### 就绪流程
 

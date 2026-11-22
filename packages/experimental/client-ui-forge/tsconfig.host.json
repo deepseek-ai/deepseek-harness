@@ -7,6 +7,7 @@
   },
   "files": [
     "src/index.ts",
+    "src/branch-name.ts",
     "src/commit-range.ts",
     "src/diff.ts",
     "src/git.ts",
@@ -20,6 +21,7 @@
     "src/review-cache.ts",
     "src/states.ts",
     "src/types.ts",
+    "src/viewer-lists.ts",
     "src/wildmatch.ts",
     "src/worktree.ts"
   ],

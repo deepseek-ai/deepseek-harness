@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-session-controller",
   "description": "Session Remote commands, cold reads, and live control transport",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
   },
@@ -29,6 +29,10 @@
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
+    },
+    "./client/directories": {
+      "types": "./lib/types/client/sessions/directories.d.ts",
+      "default": "./lib/types/client/sessions/directories.js"
     },
     "./typert": {
       "types": "./lib/typert.host.d.ts",

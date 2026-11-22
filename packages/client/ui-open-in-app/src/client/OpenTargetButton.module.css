@@ -1,5 +1,4 @@
-/* Sized to sit in the document header's 24px control row beside its round
-   icon buttons: a hairline pill with a 12px label and a narrow chevron half. */
+/* Compact split actions sit within the document header's 28px control row. */
 
 .menuAnchor {
   display: inline-flex;
@@ -32,12 +31,20 @@
   cursor: pointer;
 }
 
+/* Keep both compact targets at 24px without spending layout width on the frame. */
+.split[data-size='compact'] {
+  border: 0;
+  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l4);
+}
+
 .main {
   gap: 4px;
+  min-width: 24px;
   padding: 3px 5px;
 }
 
 .chevron {
+  min-width: 24px;
   padding: 3px 4px 3px 3px;
   border-left: 0.5px solid var(--dsw-alias-border-l4);
   color: var(--dsw-alias-label-secondary);

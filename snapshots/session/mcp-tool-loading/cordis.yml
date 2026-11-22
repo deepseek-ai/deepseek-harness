@@ -1,0 +1,11 @@
+- insert:
+    - id: mcp-tool-loading
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: demo
+        url: !!js process.env.DSH_MCP_DEMO_URL
+        toolLoading: on-demand
+        failOnStartupError: true
+        reconnect:
+          enabled: false

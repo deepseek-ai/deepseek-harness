@@ -41,6 +41,8 @@ kind: "package-reference"
 
 `session/query` 是高层 SDK `run()` 发送字符串和内容块数组时使用的协议入口。普通输入保留内容块，使用既有的提示词队列。完整 SDK 识别裸 `/compact`、带非空 preset 的 `/permission <preset>`、`/plan [off|message]` 和 `/goal [objective|clear|edit objective|pause|resume]`，这些命令按官方定义 ID 识别。裸 `/permission` 或 `/权限`、`/compact extra` 以及 `/model` 等其余输入仍是普通提示词。命令缺失时也保留提示词路径；选中的 handler 失败后绝不回退。未知 preset 是原生命令错误。随已识别命令提交的编码图片块经过原生附件接纳。`session/prompt` 保留为低层排队输入入口，不经过原生 slash command 路由。
 
+每条普通 prompt 在其消息来源 `{ kind: 'user', clientTimeZone }` 上记录用户时区。显式 `timeZone` 必须通过与 Web Host 相同的规范化检查；否则请求在创建 Session 或路由输入之前以 `TypeError` 失败，传输层将其应答为 JSON-RPC `-32603`。省略 `timeZone` 时，在接受这条 prompt 时采样 `Intl.DateTimeFormat().resolvedOptions().timeZone`，而不是每个进程只采样一次。采样值无法规范化时（例如 `TZ=GMT` 下的 `+00:00` 或 `Etc/Unknown`），不记录时区，也不让 prompt 失败。该来源不带 `rpcId`，因为 SDK 没有 Web 提交标识。原生命令与 Web 命令执行一样不记录时区。
+
 Host 与桌面适配器共用 `dsh-commands/builtin` 的定义身份及中英文别名解析。`/压缩`、`/权限`、`/计划` 和 `/目标` 跟随重命名后的官方定义，执行使用当前注册名。精确名称优先，但无关的同名定义不是 SDK 内置命令，仍作为普通提示词。其他内置能力仍不属于 SDK 命令集合。
 
 第一个文本块提供完整命令行；编码图片可位于它之前或之后。该行匹配到受支持命令时，它必须是唯一的文本块，其余块必须为编码图片。额外文本块、持久图片引用及其他内容类型会在执行或入队前返回 JSON-RPC 错误，不回退为普通提示词。普通提示词保留全部内容块及其顺序。空数组和只包含空白文本的数组会被拒绝；允许仅图片输入。
@@ -55,7 +57,7 @@ Host 与桌面适配器共用 `dsh-commands/builtin` 的定义身份及中英文
 
 创建和编辑接受图片，作为下一轮前的参考材料；查看、暂停、恢复和清除拒绝附件，不修改目标状态。压缩和权限命令也拒绝附件。处理器拒绝后绝不回退为普通提示词；与 Desktop 相同，图片可能在处理器拒绝前已被存储。这些 SDK 输入接受栅格图片，不接受一般文件上传或客户端提供的附件引用。
 
-`session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据与权限，并通过已记录的用户上下文告知模型。
+`session/working-directory/get` 接收 `{ sessionId }`；`session/working-directory/set` 接收 `{ sessionId, path }`。两者均返回 `{ cwd }`，并可创建未知 Session，而不启动模型轮次。读取通过工作目录服务恢复缺失目录；修改保留起始目录元数据，把 `workspace-write` 边界移到新目录，并通过已记录的用户上下文告知模型。
 
 ### 组装
 
@@ -88,6 +90,19 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 插件应答 `shutdown`，刷新响应并 dispose 根上下文，使 SDK 持有的 agent、订阅与持久化达到完全停稳，然后以 0 退出。EOF 与信号退出归 app bin 负责，后者也会 dispose 根上下文。仅卸载此插件会停止服务，但不会退出进程。
 
+### 针对已销毁 agent 的请求
+
+当会话的 agent 已离开 agent 注册表时，针对该会话的请求以 `session agent was disposed outside the server: <sessionId>; <context>` 失败。其中 context 说明服务端观察到的情况：
+
+| Context | 含义 |
+|---|---|
+| `the runtime is shutting down; last process event before teardown: <event> at <time>` | 整个运行时正在被 dispose。`<event>` 为 `SIGTERM`、`SIGINT`、`uncaught exception: <首行>`、`unhandled rejection: <首行>` 或 `stdin closed`。它是 dispose 开始前最后观察到的此类事件，不是已确认的原因。 |
+| `the runtime is shutting down; no process event was observed before teardown` | 整个运行时正在被 dispose，且此前没有出现上述事件。 |
+| `the SDK server is shutting down` | 此插件正在卸载，或正在应答 `shutdown`。 |
+| `the agent loop was unloaded at <time> while the runtime keeps running; first plugin unloading at that time: "<name>"` | 只有 agent loop 被卸载，进程仍在运行。`<name>` 是当时正在进行的卸载中最先开始的插件，通常是 agent loop 或它依赖的某个服务；多个卸载重叠时可能是无关插件。服务端未观察到移除过程时，省略时间和插件名。 |
+
+只有当某个信号或未处理的 Promise 拒绝已有其他监听者处理时，才会记录该事件，因此挂载此插件不会改变进程是否终止。失败文本取消息首行，最多 200 个字符；没有字符串形式的值记为 `<unprintable>`；完整报告仍在 stderr。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -107,6 +122,7 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、stdio 接线、请求分发、共享关闭与退出任务 |
+| [`src/process-events.ts`](src/process-events.ts) | 记录运行时拆除前最后出现的信号、致命失败或输入结束 |
 | [`src/user-questions.ts`](src/user-questions.ts) | 原生问答适配器：宿主转发、答案校验、取消 |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`：协议方法、逐会话 agent 创建、生命周期订阅、清理 |
 
@@ -142,7 +158,7 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 
 #### 模型看到什么
 
-普通 `session/query` 输入和已接受的 `session/prompt` 内容按原始内容块顺序进入用户消息。普通输入进入提示队列，不会重新应用权限默认值。内联 `SdkEncodedImageBlock` 会先通过组合中的附件存储完成校验与提交，因此会话日志保留内容寻址的图片引用而不是 base64 字节。此包不会添加系统提示词文本或工具 schema；这些内容来自组合中的其他插件。
+普通 `session/query` 输入和已接受的 `session/prompt` 内容按原始内容块顺序进入用户消息。普通输入进入提示队列，不会重新应用权限默认值。内联 `SdkEncodedImageBlock` 会先通过组合中的附件存储完成校验与提交，因此会话日志保留内容寻址的图片引用而不是 base64 字节。此包不会添加系统提示词文本或工具 schema；这些内容来自组合中的其他插件。挂载的 [`time-context`](../../context/time-context/README.zh.md#model-experience) 读取记录的时区，因此时区为 `UTC` 的 prompt 产生 `Browser time zone for this request: UTC. Interpret otherwise-unqualified dates and times in this zone.`，没有时区的 prompt 产生 `unavailable` 策略。
 
 #### Token 影响
 

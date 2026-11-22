@@ -25,9 +25,9 @@ export const CuaStandaloneRunCodeConfig: Schema<Partial<CuaStandaloneRunCodeConf
 
 /** Fixed request-image target for screenshots when no model route selects one. */
 export interface CuaScreenshotTargetConfig {
-  /** Exact long-edge pixel target; a source at or below it keeps its size. */
+  /** Maximum long edge in pixels; byte-limit enforcement may reduce it further. */
   longEdge: number
-  /** Encoded-byte target before Base64 expansion; the smallest quality-ladder output is kept when no quality fits. */
+  /** Hard encoded-byte limit before Base64 expansion; oversized screenshots are reduced further. */
   maxBytes: number
 }
 
@@ -39,7 +39,7 @@ export const CuaScreenshotTargetConfig: Schema<CuaScreenshotTargetConfig> = Sche
 
 /** Shared configuration fields extended by native platform providers. */
 export const CuaConfigFields = {
-  requireSystemPointerApproval: Schema.boolean().default(true),
+  requireSystemInputApproval: Schema.boolean().default(true),
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   standaloneRunCode: CuaStandaloneRunCodeConfig.default({}),
   screenshotTarget: Schema.union([CuaScreenshotTargetConfig, Schema.const(undefined)]),

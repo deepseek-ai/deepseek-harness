@@ -1,48 +1,47 @@
-/** Stand-in model and loader services that expose DeepSeek model routes the way the provider directory does. */
-import { FiberState, type Context } from '@deepseek-ai/cordis'
+/**
+ * Connect DeepSeek model route settings to `ctx.deepseekAuth` the way the route plugins do. It reimplements their
+ * connection over the plugins' config resolvers, so `composition.spec.ts`, which boots the real route plugins through
+ * the Loader, is what covers the production path.
+ */
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-deepseek-auth'
+import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { Config as AccountConfig } from '@deepseek-ai/dsh-llm-deepseek-account'
+import { plainAccountOptions, resolveAccountOptions } from '@deepseek-ai/dsh-llm-deepseek-account/src/config.ts'
 import { Config as OfficialConfig } from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import { plainOptions, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek-api-key/src/config.ts'
 
 /** One model route row. */
 export interface RouteRow {
   /** Provider id the route registers. */
   provider: 'deepseek-official' | 'deepseek-account'
-  /** Route plugin config, parsed by the route package's own schema. */
+  /** Route plugin config; the route package's own resolver turns it into the connected base URL and key reference. */
   config?: Record<string, unknown>
-  /** Loader package name; defaults to the package that registers the provider. */
-  name?: string
-  /** Loader fiber state; defaults to active. */
-  state?: FiberState
-  /** Provider directory settings path; defaults to the entry root. */
-  settingsPath?: string[]
+  /** Connect no deployment, as an adapter another package registers under this id does. Defaults to false. */
+  withoutConnection?: boolean
+  /** Value the route's settings throw instead of resolving. */
+  throws?: unknown
+  /** Base URL connected in place of the resolved one, as route settings naming an unparsable base would. */
+  connectedBaseURL?: string
 }
 
-const PACKAGES = {
-  'deepseek-official': '@deepseek-ai/dsh-llm-deepseek-api-key',
-  'deepseek-account': '@deepseek-ai/dsh-llm-deepseek-account',
-} as const
-
 /**
- * Provide `llm` and `loader` stand-ins whose rows describe `routes`.
- * @param ctx - the root context.
- * @param routes - route rows; each gets its own loader entry.
+ * Connect `routes` to the mounted `ctx.deepseekAuth`, each resolving its config per request as the route plugin does.
+ * @param ctx - the root context, with the authentication service mounted.
+ * @param routes - route rows, one per provider id.
  */
 export function provideRoutes(ctx: Context, routes: readonly RouteRow[]): void {
-  const rows = routes.map((route, index) => ({
-    route,
-    entry: {
-      options: { id: `route-${String(index)}`, name: route.name ?? PACKAGES[route.provider] },
-      fiber: {
-        state: route.state ?? FiberState.ACTIVE,
-        effectiveConfig: route.provider === 'deepseek-official' ? OfficialConfig(route.config ?? {}) : AccountConfig(route.config ?? {}),
-      },
-    },
-  }))
-  ctx.provide('llm', {
-    listProviders: () => rows.map(({ route }) => ({ id: route.provider })),
-    listConfigurableProviders: () => rows.map(({ route, entry }) => ({
-      provider: route.provider, settingsNs: entry.options.id, settingsPath: route.settingsPath ?? [],
-    })),
-  } as never)
-  ctx.provide('loader', { entries: () => rows.map(({ entry }) => entry).values() } as never)
+  for (const route of routes) {
+    if (route.withoutConnection === true) continue
+    ctx.effect(() => ctx.deepseekAuth.connect(route.provider === 'deepseek-official' ? 'api-key' : 'account', route.provider, () => {
+      if (route.throws !== undefined) throw route.throws
+      const environment = launchEnvironmentOf(ctx)
+      if (route.provider === 'deepseek-official') {
+        const resolved = resolveAdapterOptions(plainOptions(OfficialConfig(route.config ?? {})), environment)
+        return { baseURL: route.connectedBaseURL ?? resolved.baseURL, reference: resolved.apiKeyEnv, owner: 'llm-deepseek' }
+      }
+      const resolved = resolveAccountOptions(plainAccountOptions(AccountConfig(route.config ?? {})), environment)
+      return { baseURL: route.connectedBaseURL ?? resolved.protocol.baseURL }
+    }))
+  }
 }

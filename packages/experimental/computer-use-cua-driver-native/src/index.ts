@@ -144,6 +144,7 @@ export async function apply(ctx: Context): Promise<void> {
       name: 'computer-use:cua-driver-native',
       order: inner.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE'),
       text: GUIDANCE,
+      retirement: 'The instructions for computer-use:cua-driver-native no longer apply.',
     })
   }
 }

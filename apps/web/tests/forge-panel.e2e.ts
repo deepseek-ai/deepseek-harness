@@ -18,7 +18,8 @@ import {
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspaceZh, hideSessionPanel, saveFailureShot, sessionPanelToggle, showSessionPanel, writeComposerDraft, ZH_BROWSER_LOCALE,
+  connectFreshWorkspaceZh, dismissSessionPanel, hideSessionPanel, saveFailureShot, sessionPanelToggle, showSessionPanel,
+  writeComposerDraft, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 declare global {
@@ -776,7 +777,7 @@ async function expectNumberedReference({ scaffold, page, project, tripwire }: Pa
   await page.getByRole('button', { name: TOGGLE_ATTENTION, exact: true }).waitFor({ timeout: 20_000 })
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${PULL}"]`)
-  await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await change.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' }).waitFor({ timeout: 20_000 })
   await change.getByText('等待评审', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
@@ -800,7 +801,7 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   const sessionId = await settled
   const events = await readPersistedEvents(launch.scaffold, sessionId)
   const request = events.find(event => event.type === 'request/header')
-  expect(request?.data.header.tools?.filter(tool => tool.name === 'create_worktree')).toHaveLength(1)
+  expect(request?.data.header.tools?.filter(tool => tool.name === 'enter_worktree')).toHaveLength(1)
   const toolOutput = events.flatMap(event => event.type === 'tool/result'
     ? event.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []) : []).join('\n')
   expect(toolOutput).toContain('Add the pull request panel')
@@ -839,8 +840,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(await git(directory, 'rev-parse', 'HEAD')).toBe(baseCommit)
   const events = await readPersistedEvents(scaffold, sessionId)
   expect(worktreeRecords(events)).toEqual([
-    { action: 'request', from: 'main' },
-    { action: 'request', from: 'release' },
+    { action: 'request', from: 'refs/heads/main' },
+    { action: 'request', from: 'refs/heads/release' },
     { created: { path: directory, branch, baseCommit, repositoryRoot: project } },
   ])
   // The worktree existed before the turn, so the first model request carried its directory notice.
@@ -855,6 +856,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(notice).toBeLessThan(events.findIndex(event => event.type === 'assistant/message'))
 
   // A change request bound the way a `gh pr create` result binds one.
+  // The panel docked beside the conversation above; the toggle's attention mark is read with it hidden.
+  await dismissSessionPanel(page)
   scaffold.ctx.forgeSession.track(session, PULL)
   await page.getByRole('button', { name: TOGGLE_ATTENTION, exact: true }).waitFor({ timeout: 20_000 })
   expect(await sessionPanelToggle(page).getAttribute('aria-expanded')).toBe('false')
@@ -875,6 +878,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     await captureStableAria(page, '[data-forge-session-hover]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
   await page.mouse.move(0, 0)
   await rowHover.waitFor({ state: 'detached' })
+  // The Host's sign-in probe has answered once the panel state names a readiness, so a later probe would come from showing the panel.
+  for await (const state of scaffold.ctx.forgePanel.follow(session, AbortSignal.timeout(20_000))) if (state.readiness !== null) break
+  const probes = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.startsWith('["auth"')).length
   const panel = await showSessionPanel(page)
   const checkout = panel.locator('[data-forge-checkout]')
   const checkoutName = checkout.getByText(branch, { exact: true })
@@ -884,7 +890,7 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   await page.getByRole('tooltip').filter({ hasText: `工作树（基于 release）：${abbreviateHomePath(directory, homedir())}` }).waitFor()
   await page.mouse.move(0, 0)
   const change = panel.locator(`[data-forge-change="${PULL}"]`)
-  const title = change.getByRole('link', { name: 'Add the pull request panel', exact: true })
+  const title = change.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' })
   await title.waitFor({ timeout: 20_000 })
   // The only open change request starts expanded.
   await change.getByText('等待评审', { exact: true }).waitFor()
@@ -895,6 +901,8 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
     }), MODE)
   const beforeChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(beforeChecks.some(args => args.includes('id=rollup-7'))).toBe(false)
+  // Showing the panel revisited it on the Host, which probes sign-in again only while the host is not ready.
+  expect(beforeChecks.filter(args => args[0] === 'auth')).toHaveLength(probes)
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')
@@ -954,6 +962,42 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   expect(tripwire.warnings).toEqual([])
 })
 
+it.skipIf(MODE === 'record')('creates the requested worktree for the first message, not for the notice an access mode change queues before it', async () => {
+  const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel-access-mode')
+  await page.locator('button[aria-label^="访问模式"]').first().click()
+  await page.getByRole('menuitem', { name: '完全权限', exact: true }).click()
+  const confirmation = page.getByRole('dialog', { name: '确认启用完全权限？' })
+  await confirmation.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }).check()
+  await confirmation.getByRole('button', { name: '启用完全权限' }).click()
+  await page.locator('button[aria-label="访问模式，当前：完全权限"]').waitFor()
+  // The switch queues its approval notice for the next step, which opens no turn. A hold would run as maintenance of
+  // the Agent until the worktree exists, and the Session would then work in it.
+  const noticed = () => scaffold.ctx.agents.list()
+    .find(candidate => candidate.inbox.nextStep.some(message => message.source.kind === 'user-approval'))
+  await expect.poll(() => noticed() !== undefined).toBe(true)
+  const agent = noticed()
+  if (agent === undefined) throw new Error('The access mode change must queue its notice')
+  await agent.runMaintenance(() => Promise.resolve())
+  expect(scaffold.ctx.workingDirectory.get(agent.session)).toBe(project)
+
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+  expect(sessionId).toBe(agent.session.id)
+
+  // The prompt opens the first turn, and its hold creates the worktree.
+  const events = await readPersistedEvents(scaffold, sessionId)
+  const queued = (target: 'next-step' | 'next-turn', kind: string): number => events.findIndex(event => event.type === 'agent/inbox/spliced'
+    && event.data.target === target && event.data.inserted.some(message => message.source.kind === kind))
+  const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
+  expect(queued('next-step', 'user-approval')).toBeGreaterThan(-1)
+  expect(queued('next-turn', 'user')).toBeGreaterThan(queued('next-step', 'user-approval'))
+  expect(created).toBeGreaterThan(queued('next-turn', 'user'))
+  expect(created).toBeLessThan(events.findIndex(event => event.type === 'turn/start'))
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
 it.skipIf(MODE === 'record')('keeps the first message waiting when the worktree cannot be created, tries again, and sends it without the worktree', async () => {
   const { scaffold, page, project, tripwire } = await requestReleaseWorktree('web-e2e-forge-panel-failure')
   await git(project, 'branch', '--quiet', '-D', 'release')
@@ -978,7 +1022,9 @@ it.skipIf(MODE === 'record')('keeps the first message waiting when the worktree 
   if (session === undefined) throw new Error('The Session must stay loaded')
   expect(scaffold.ctx.workingDirectory.get(session)).toBe(project)
   const events = await readPersistedEvents(scaffold, sessionId)
-  expect(worktreeRecords(events)).toEqual([{ action: 'request', from: 'main' }, { action: 'request', from: 'release' }, { action: 'cancel' }])
+  expect(worktreeRecords(events)).toEqual([
+    { action: 'request', from: 'refs/heads/main' }, { action: 'request', from: 'refs/heads/release' }, { action: 'cancel' },
+  ])
   expect(events.filter(event => event.type === 'turn/start')).toHaveLength(1)
   expect(events.some(event => event.type === 'user/message' && event.data.source.kind === 'working-directory')).toBe(false)
   const checkout = (await showSessionPanel(page)).locator('[data-forge-checkout]')
@@ -1002,7 +1048,7 @@ it.skipIf(MODE === 'record')('marks a draft change request ready for review and 
   scaffold.ctx.forgeSession.track(session, DRAFT)
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${DRAFT}"]`)
-  await change.getByRole('link', { name: 'Add the merge button', exact: true }).waitFor({ timeout: 20_000 })
+  await change.locator('[data-forge-opens]').filter({ hasText: 'Add the merge button' }).waitFor({ timeout: 20_000 })
 
   // The only open change request starts expanded, so its Merge action shows once it is ready.
   await chooseCardAction(page, change, '#9', '标记为可评审')
@@ -1104,6 +1150,14 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     await captureStableAria(page, '[data-composer-input]', scaffold.workspaceCwd), MODE)
   expect((await readPersistedEvents(scaffold, sessionId)).some(event => event.type === 'user/message'
     && event.data.content.some(block => block.type === 'text' && block.text.includes('## User Comment')))).toBe(false)
+  // Removing a reference card leaves its quote in the composer, and the notice's Undo puts the card back at its line.
+  const extra = local.locator('[data-forge-diff-file="src/extra.ts"]')
+  await extra.getByRole('button', { name: '评论 R1 的操作', exact: true }).click()
+  await page.getByRole('menuitem', { name: '移除', exact: true }).click()
+  await expect.poll(() => extra.locator('[data-forge-review-thread]').count()).toBe(0)
+  expect(await page.locator('[data-composer-input]').first().innerText()).toContain('请检查这项修改')
+  await page.getByRole('alert').filter({ hasText: '已移除' }).getByRole('button', { name: '撤销', exact: true }).click()
+  await extra.locator('[data-forge-review-thread="agent"]').getByText('请检查这项修改', { exact: true }).waitFor()
   const reviewed = scaffold.whenTurnSettled()
   await page.locator('[data-composer-input]').first().press('Enter')
   await reviewed
@@ -1118,9 +1172,9 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   const bases = page.locator('[data-forge-base-menu]')
   await bases.getByRole('menuitem', { name: 'topic', exact: true }).waitFor({ timeout: 20_000 })
   await compareOrRefreshGolden(join(EXPECTED, 'base-menu.expected.md'), await captureStableAria(page, '[data-forge-base-menu]', scaffold.workspaceCwd), MODE)
-  await bases.getByRole('textbox', { name: '搜索分支' }).fill('TOP')
+  await page.getByRole('searchbox', { name: '搜索分支' }).fill('TOP')
   await expect.poll(() => bases.getByRole('menuitem').allTextContents()).toEqual(['topic'])
-  await bases.getByRole('textbox', { name: '搜索分支' }).press('Enter')
+  await page.getByRole('searchbox', { name: '搜索分支' }).press('Enter')
   await local.getByRole('button', { name: '基准分支：topic', exact: true }).waitFor()
   await expect.poll(() => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file'))), { timeout: 20_000 })
     .toEqual(['src/extra.ts', 'README.md', 'notes.md'])
@@ -1135,7 +1189,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   scaffold.ctx.forgeSession.track(session, PULL)
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${PULL}"]`)
-  await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await change.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' }).waitFor({ timeout: 20_000 })
   await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).waitFor()
   // The open change request of the checked-out branch replaces the offer to create one.
   await card.getByRole('button', { name: '本地变更操作', exact: true }).click()
@@ -1148,7 +1202,8 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).click()
   await local.getByText('暂存区与 HEAD 比较', { exact: true }).waitFor()
   await showSessionPanel(page)
-  await change.getByRole('button', { name: '查看 #7 的变更：新增 128 行，删除 14 行', exact: true }).click()
+  // A press on the card's line opens the changes, as its Changes row and its View changes item do.
+  await change.locator('[data-forge-opens="changes"]').click()
   const view = page.locator('[data-forge-changes="change"]')
   const panelFile = view.locator('[data-forge-diff-file="src/panel.ts"]')
   const title = await view.getByText('Add the pull request panel', { exact: true }).boundingBox()
@@ -1581,6 +1636,9 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
     return { start: { x, y: start.y + start.height / 2 }, end: { x, y: end.y + end.height / 2 } }
   }
   await number('R3').waitFor()
+  // The strip after README.md's last hunk leaves once the file's text was read for highlighting, which moves the rows
+  // of notes.txt below it up; the positions this test measures for a drag hold only after that.
+  await file.locator('[data-forge-diff-gap]').waitFor({ state: 'detached', timeout: 20_000 })
 
   // The plus appears only on the hovered side of the hovered row, for the code as for the line number.
   expect(await plus('R3').isVisible()).toBe(false)
@@ -1669,9 +1727,11 @@ it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned w
   await base.click()
   const menu = page.getByRole('menu')
   await menu.getByRole('menuitem', { name: 'worktree/long-menu-regression-44', exact: true }).waitFor()
+  // The searchable menu puts its `menu` role on the rows below the search field, inside the card.
+  const baseCard = page.locator('[data-menu-popup]')
   await expect.poll(async () => {
     const trigger = await base.boundingBox()
-    const card = await menu.boundingBox()
+    const card = await baseCard.boundingBox()
     return trigger === null || card === null ? Infinity : Math.abs(trigger.x + trigger.width - card.x - card.width)
   }).toBeLessThan(1)
   await page.keyboard.press('Escape')
@@ -1772,9 +1832,9 @@ it.skipIf(MODE === 'record')('aligns localized status rows by their glyphs in th
             width: document.documentElement.clientWidth,
           }
         })
+        // The glyph starts 30px into the card, where the card's title starts.
         expect(geometry.iconInset).toBe(8)
-        expect(geometry.rowInset).toBeGreaterThanOrEqual(6)
-        expect(geometry.rowInset).toBeLessThanOrEqual(7)
+        expect(geometry.rowInset).toBe(22)
         offsets.add(geometry.valueOffset)
         expect(geometry.gap).toBeGreaterThanOrEqual(8)
         expect(geometry.right).toBeLessThanOrEqual(geometry.width)
@@ -2406,6 +2466,17 @@ it.skipIf(MODE === 'record')('reads and saves the viewed files of a change reque
   await expect.poll(() => panel.getAttribute('data-viewed')).toBe('changed')
   await panel.getByText('有新改动', { exact: true }).waitFor()
   await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 1 / 6')
+  /** How many times the viewed marks and the review threads were read from the code host so far. */
+  const reviewReads = async (): Promise<{ readonly marks: number; readonly threads: number }> => {
+    const queries = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0)
+      .map(line => (JSON.parse(line) as string[]).find(arg => arg.startsWith('query=')) ?? '')
+    return {
+      marks: queries.filter(query => query.includes('files(first: $first')).length,
+      threads: queries.filter(query => query.includes('reviewThreads(first: $first')).length,
+    }
+  }
+  await expect.poll(reviewReads, { timeout: 20_000 }).toEqual({ marks: 1, threads: 1 })
+  const readsBefore = await reviewReads()
 
   await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).check()
   await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
@@ -2415,6 +2486,9 @@ it.skipIf(MODE === 'record')('reads and saves the viewed files of a change reque
   await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
   await expect.poll(async () => (JSON.parse(await readFile(join(root, 'state.json'), 'utf8')) as { readonly viewed?: Record<string, string> }).viewed)
     .toEqual({ 'package.json': 'VIEWED', 'docs/panel.md': 'UNVIEWED' })
+  // The Host applies each saved mark to the marks it keeps and keeps the threads, so neither is read again.
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+  expect(await reviewReads()).toEqual(readsBefore)
 
   // A refused mark returns to what GitHub keeps and says why.
   await writeFile(join(root, 'viewed.refused'), 'Resource not accessible by integration')
@@ -2505,7 +2579,7 @@ it.skipIf(MODE === 'record')('summarizes checks, reviewers, and the merge state 
   await showSessionPanel(page)
   const card = page.locator(`[data-forge-change="${PULL}"]`)
   // The card chooses its default expansion once its first status arrives, which names the title.
-  await card.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  await card.locator('[data-forge-opens]').filter({ hasText: 'Add the pull request panel' }).waitFor({ timeout: 20_000 })
   if (await card.getAttribute('data-expanded') === null) await card.getByRole('button', { name: '展开 #7', exact: true }).click()
   const checks = card.locator('[data-forge-checks]')
   await expect.poll(() => checks.textContent(), { timeout: 20_000 }).toBe('检查3 项失败 · 1 项进行中')

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-19-prefer-rebase-with-rerere.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-11-19-prefer-rebase-with-rerere.md
+/agent-note-prefer-rebase-with-rerere-for-pr-refreshes:
+  en: bee37c92f02c4b62
+  zh: da3f086fc09072b3
+/agent-note-prefer-rebase-with-rerere-for-pr-refreshes/problem:
+  en: 3c585b97c13a98b1
+  zh: 040d30dcaadfbdf2
+/agent-note-prefer-rebase-with-rerere-for-pr-refreshes/decision:
+  en: 8c6753ecfaf6b246
+  zh: d6850cd7ee0afb2a
+/agent-note-prefer-rebase-with-rerere-for-pr-refreshes/alternatives-considered:
+  en: 35d2f27bc5712a11
+  zh: 5bd1eaaaa200666f
+/agent-note-prefer-rebase-with-rerere-for-pr-refreshes/consequences:
+  en: c29ffb478f78ddfe
+  zh: 4d11a569f2e1c5d7

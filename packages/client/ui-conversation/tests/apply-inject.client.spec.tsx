@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyMenus, inject as injectMenus } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { render, cleanup } from '@testing-library/react'
 import { $getRoot, $isTextNode, PASTE_COMMAND } from 'lexical'
@@ -17,7 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import {
-  apply, inject, type ComposerBarInjected, type ConversationInjected,
+  apply, inject, type ComposerBarInjected, type ConversationInjected, type ConversationShellInjected,
   type ConversationSessionHeaderInjected, type ConversationSessionInjected, type ViewTab,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -79,7 +80,7 @@ async function bench(renderQuote = false) {
   const opened = vi.fn<(id: SessionId) => void>()
   let mainReference: SessionReference | undefined
   const replaceMain = (id: SessionId, beforeOpen?: (id: SessionId) => void): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     try {
       beforeOpen?.(id)
     } catch (error: unknown) {
@@ -110,7 +111,7 @@ async function bench(renderQuote = false) {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) })
-  await runtime.mount({ inject: [...injectMenus], apply: applyMenus })
+  await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
     'quote-probe': { kind: 'single', scope: 'session' },
@@ -120,7 +121,7 @@ async function bench(renderQuote = false) {
     </SessionProvider>
   ) : null)
 
-  const feature = await runtime.mount({ inject: [...inject], apply })
+  const feature = await runtime.mount({ inject: [...inject], apply }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   if (renderQuote) await runtime.mount(messageQuotes)
   runtime.renderRoot()
   const entryOf = (key: 'main.conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
@@ -139,6 +140,11 @@ async function bench(renderQuote = false) {
     return (definition.inject as unknown as (
       sessionId: SessionId | undefined,
     ) => ConversationInjected)(id)
+  }
+  /** Pick a Workspace as the main occurrence does: the shell opens it and adopts the draft of the Session shown. */
+  const selectWorkspace = (id: SessionId | undefined, workspaceId: WorkspaceId): Promise<void> => {
+    const shell = runtime.slots.spec('main.conversation') as { inject: ConversationShellInjected }
+    return shell.inject.openWorkspace(workspaceId, residentApi(id).moveDraft)
   }
   const headerApi = (id: SessionId) => {
     const entry = entryOf('conversation.session.header')
@@ -160,7 +166,7 @@ async function bench(renderQuote = false) {
   const viewSource = (id: SessionId): ObservableSnapshot<readonly ViewTab[]> =>
     conversationApi(id).injected.hooks.conversationViews
   return {
-    runtime, feature, slots: runtime.slots, entryOf, conversationApi, headerApi, residentApi, composerApi,
+    runtime, feature, slots: runtime.slots, entryOf, conversationApi, headerApi, residentApi, composerApi, selectWorkspace,
     inputApi, viewSource, sessionFake, connectWorkspace, rootUpload, uploads, rootReference, references, opened,
   }
 }
@@ -475,7 +481,7 @@ describe('Conversation inject API', () => {
       expect(activate).toHaveBeenLastCalledWith('custom')
       activate.mockClear()
 
-      using mainReference = b.runtime.sessions.retain(ROOT, { source: 'mainView' })
+      using mainReference = b.runtime.sessions.retain(ROOT, { source: 'mainView', facets: { conversation: true } })
       await b.runtime.flush()
       expect(mainReference.sessionId).toBe(ROOT)
       expect(activate).not.toHaveBeenCalled()
@@ -604,7 +610,7 @@ describe('Conversation inject API', () => {
       text.select(0, 2)
     }, { discrete: true })
     const off = registerComposerKeymap(editor, {
-      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {},
+      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, recallHistory: () => false,
       canSubmit: () => true, submit: () => {}, pasteText: (text) => { composer.keyboard!.paste(text) },
       intakeFiles: (files, directories) => { expect(composer.addFiles?.(files, directories)).toBeNull() },
     })
@@ -618,11 +624,12 @@ describe('Conversation inject API', () => {
       })), getData: () => '',
     } })
     editor.update(() => { editor.dispatchCommand(PASTE_COMMAND, event) }, { discrete: true })
-    expect(state.getSnapshot().draft).toBe('读取 @a.txt @"my project/" @b.txt ')
+    // The Session works in `/proj`; each path still stays absolute, so it names the same file after the Session moves.
+    expect(state.getSnapshot().draft).toBe('读取 @/proj/a.txt @"/proj/my project/" @/proj/b.txt ')
     const renderText = createUserTextFixture()
     const view = render(<div>{renderText({ text: state.getSnapshot().draft, facts: {} })}</div>)
     expect(view.container.querySelector('[data-ref-chip="folder"]')?.textContent).toBe('my project')
-    expect(view.container.querySelector('[data-ref-chip="folder"]')?.getAttribute('title')).toBe('@"my project/"')
+    expect(view.container.querySelector('[data-ref-chip="folder"]')?.getAttribute('title')).toBe('@"/proj/my project/"')
   })
 
   it('rejects the whole file batch before changing the draft when a later path is unrepresentable', async () => {
@@ -665,7 +672,6 @@ describe('Conversation inject API', () => {
 
   it('moves a draft only when Workspace navigation changes Session', async () => {
     const b = await bench()
-    const resident = b.residentApi(ROOT)
     const { state, actions } = b.inputApi(ROOT)
     actions.setDraft('carry me')
     expect(b.composerApi(ROOT).addFiles?.([
@@ -674,7 +680,7 @@ describe('Conversation inject API', () => {
     await vi.waitFor(() => { expect(b.rootUpload).toHaveBeenCalledOnce() })
 
     b.connectWorkspace.mockResolvedValueOnce(ROOT)
-    await resident.selectWorkspace('workspace-1' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-1' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(ROOT)
     expect(state.getSnapshot().draft).toBe('carry me')
 
@@ -689,7 +695,7 @@ describe('Conversation inject API', () => {
     b.uploads.set(other, targetUpload)
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
-    await resident.selectWorkspace('workspace-2' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-2' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(other)
     expect(state.getSnapshot().draft).toBe('')
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('carry me')
@@ -710,7 +716,7 @@ describe('Conversation inject API', () => {
     const other = 'sending-target' as SessionId
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
-    await b.residentApi(ROOT).selectWorkspace('workspace-sending' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-sending' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(other)
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('')
     expect(state.getSnapshot().draft).toBe('in flight')
@@ -731,7 +737,7 @@ describe('Conversation inject API', () => {
     const other = 'structured-target' as SessionId
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
-    await b.residentApi(ROOT).selectWorkspace('workspace-structured' as WorkspaceId)
+    await b.selectWorkspace(ROOT, 'workspace-structured' as WorkspaceId)
     expect(b.inputApi(other).state.getSnapshot().draft).toBe(draft.text)
     expect(b.inputApi(other).state.getSnapshot().occurrences).toMatchObject(draft.references)
     expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
@@ -742,12 +748,12 @@ describe('Conversation inject API', () => {
   it('supports no-Session navigation and propagates Workspace connection failure', async () => {
     const b = await bench()
     b.connectWorkspace.mockResolvedValueOnce(ROOT)
-    await b.residentApi(undefined).selectWorkspace('workspace-0' as WorkspaceId)
+    await b.selectWorkspace(undefined, 'workspace-0' as WorkspaceId)
     expect(b.opened).toHaveBeenCalledWith(ROOT)
 
     const opens = b.opened.mock.calls.length
     b.connectWorkspace.mockRejectedValueOnce(new Error('offline'))
-    await expect(b.residentApi(ROOT).selectWorkspace('workspace-4' as WorkspaceId))
+    await expect(b.selectWorkspace(ROOT, 'workspace-4' as WorkspaceId))
       .rejects.toThrow('offline')
     expect(b.opened).toHaveBeenCalledTimes(opens)
     await b.runtime.dispose()

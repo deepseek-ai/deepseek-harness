@@ -7,9 +7,10 @@ import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { SubprocessCollectedOutputs } from '@deepseek-ai/dsh-subprocess'
 import { deadline } from '@deepseek-ai/dsh-timeout'
-import { baseBranches, parseName, parseRemotes, parseTopLevel } from './parse.ts'
+import { LOCAL_REF_PREFIX } from './branch-name.ts'
+import { parseName, parseRemotes, parseTopLevel } from './parse.ts'
 import type { GitRemote } from './parse.ts'
-import type { ForgeBranches, ForgeCheckout } from './types.ts'
+import type { ForgeCheckout } from './types.ts'
 
 /** Resolved Git executable and process limits. */
 export interface GitConfig {
@@ -128,36 +129,6 @@ export async function inspectCheckout(
   }
 }
 
-/**
- * List the local branches that can start a worktree of the checkout containing
- * `directory`, using the Session's permissions as in {@link inspectCheckout}.
- * @param ctx - context that provides `subprocess`, `sandbox`, and `sandboxPolicy`.
- * @param config - executable and process limits.
- * @param session - Session whose sandbox policy and execution world apply.
- * @param directory - absolute directory inside the checkout.
- * @param limit - most branch names to return.
- * @param signal - cancellation of every command.
- * @returns the checked-out branch and local branches, the checked-out one first and then most recently committed first.
- * @throws when `directory` is not inside a checkout, or Git cannot run, fails, times out, or prints more than `maxOutputBytes`.
- */
-export async function listBranches(
-  ctx: Context,
-  config: GitConfig,
-  session: Session,
-  directory: string,
-  limit: number,
-  signal: AbortSignal,
-): Promise<ForgeBranches> {
-  const [current, refs] = await together(signal, (signal) => {
-    const git = gitIn(ctx, config, session, directory, signal)
-    return [
-      currentBranch(git),
-      git('for-each-ref', ['for-each-ref', '--sort=-committerdate', `--count=${limit}`, '--format=%(refname:lstrip=2)', 'refs/heads/']),
-    ] as const
-  })
-  return { current, branches: baseBranches(current, refs.stdout, limit) }
-}
-
 /** A failed read cancels its siblings and returns only after every read has finished cleanup. */
 async function together<T extends readonly Promise<unknown>[]>(
   signal: AbortSignal,
@@ -193,7 +164,7 @@ export async function hasBranch(
   branch: string,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const git = gitIn(ctx, config, session, repositoryRoot, signal)
+  const git = gitIn(ctx, config, session, repositoryRoot, signal, repositoryRoot)
   const ref = await git('show-ref', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], [0, 1])
   return ref.exitCode === 0
 }
@@ -207,18 +178,25 @@ export async function hasBranch(
  * @param session - Session whose sandbox policy and execution world apply.
  * @param directory - working directory of every command.
  * @param signal - cancellation of every command.
+ * @param root - checkout that bounds the commands in place of the Session's workspace root: the source
+ * repository of the Session's worktree, which is read while the worktree directory may be gone.
  * @returns the runner.
  */
-export function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal): Git {
-  const policy = ctx.sandboxPolicy.resolve({ session })
+export function gitIn(ctx: Context, config: GitConfig, session: Session, directory: string, signal: AbortSignal, root?: string): Git {
+  const resolved = ctx.sandboxPolicy.resolve({ session })
+  const policy = root === undefined ? resolved : { ...resolved, workspaceRoot: root }
   return (name, args, allowedExitCodes = [0], configOverrides = {}) =>
     runGit(ctx, config, policy, directory, name, args, signal, allowedExitCodes, configOverrides)
 }
 
-/** Read the checked-out branch, including an unborn one; null when HEAD is detached. */
+/**
+ * Read the checked-out local branch, including an unborn one; null when HEAD is detached or names a ref outside
+ * `refs/heads/`. The full ref is read because the short form turns `main` into `heads/main` while a tag shares the name.
+ */
 async function currentBranch(git: Git): Promise<string | null> {
-  const head = await git('symbolic-ref', ['symbolic-ref', '--quiet', '--short', 'HEAD'], [0, 1])
-  return head.exitCode === 0 ? parseName(head.stdout) : null
+  const head = await git('symbolic-ref', ['symbolic-ref', '--quiet', 'HEAD'], [0, 1])
+  const ref = head.exitCode === 0 ? parseName(head.stdout) : null
+  return ref !== null && ref.startsWith(LOCAL_REF_PREFIX) ? ref.slice(LOCAL_REF_PREFIX.length) : null
 }
 
 /** Read the abbreviated commit HEAD names; null while the checked-out branch has no commit. */

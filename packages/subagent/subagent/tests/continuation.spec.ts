@@ -147,7 +147,8 @@ function hasAssistantText(events: readonly SessionEvent[], text: string): boolea
 /** Caller-supplied user message texts in log order (runtime-context snapshots excluded). */
 function userTexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'runtime-context'
-    ? event.data.content.flatMap(block => block.type === 'text'
+    ? event.data.content.flatMap((block, index) => block.type === 'text'
+      && !(event.data.source.kind === 'agent-message' && index === 0)
       && !block.text.startsWith('Your final answer is delivered automatically ')
       ? [block.text]
       : [])
@@ -301,18 +302,24 @@ describe('continuable activation capacity', () => {
     const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     try {
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 1 })
       const first = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 1, limit: 1 })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })).rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 2 })
       const second = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 2, limit: 2 })
       await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 1 })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 2, limit: 1 })
       expect(ctx.agents.get(first.childId)).toBeDefined()
       expect(ctx.agents.get(second.childId)).toBeDefined()
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })).rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 3 })
       const third = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 3, limit: 3 })
       release.resolve(undefined)
       await Promise.all([first, second, third].map(child => waitNoActivation(ctx, child.childId)))
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 3 })
     } finally {
       release.resolve(undefined)
       await ctx.fiber.dispose()
@@ -357,15 +364,21 @@ describe('continuable activation capacity', () => {
       await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
       const nested = await ctx.subagents.startActivation({ ...startSpec(child, 'fork'), delivery: 'parent' })
       const sibling = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      for (const caller of [parent, child, ctx.agents.get(nested.childId)!]) {
+        expect(ctx.subagents.capacityOf(caller)).toEqual({ running: 3, limit: 3 })
+      }
+      expect(ctx.subagents.capacityOf(other)).toEqual({ running: 0, limit: 3 })
       await expect(ctx.subagents.startActivation({ ...startSpec(ctx.agents.get(nested.childId)!), delivery: 'parent' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       const independent = await ctx.subagents.startActivation({ ...startSpec(other), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(other)).toEqual({ running: 1, limit: 3 })
       parkParent(ctx, child)
       releaseParent.resolve(undefined)
       await child.whenIdle()
       expect(managerState(ctx).resident.get(first.childId)).toBeDefined()
+      expect(ctx.subagents.capacityOf(child)).toEqual({ running: 3, limit: 3 })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       release.resolve(undefined)
@@ -392,10 +405,12 @@ describe('continuable activation capacity', () => {
     const rejected = expect(starting).rejects.toThrow('creation failed')
     try {
       await entered.promise
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 1, limit: 1 })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })).rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       expect(createSpy).toHaveBeenCalledTimes(1)
       release.resolve(undefined)
       await rejected
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 1 })
       createSpy.mockRestore()
       const replacement = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
       await waitNoActivation(ctx, replacement.childId)
@@ -1256,6 +1271,53 @@ describe('target-only Queue residency routing', () => {
 })
 
 describe('continuable human steering delivery', () => {
+  it.each(['queue', 'steer'] as const)('distinguishes delegated tasks from cold %s input without RPC metadata', async (delivery) => {
+    const { ctx, parent, adapter } = await setup([
+      textResponse('root answer'), textResponse('child answer'), textResponse('human answer'), textResponse('agent answer'),
+    ])
+    try {
+      parent.followup(createUserMessage({ content: message('root question'), source: { kind: 'user' } }))
+      await parent.whenIdle()
+      parkParent(ctx, parent)
+      const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      await expect(started.result).resolves.toMatchObject({ stopReason: 'completed' })
+      let ended = Promise.withResolvers<undefined>()
+      ctx.on('subagent/end', (info) => { if (info.id === started.childId) ended.resolve(undefined) })
+      const id = await subagentManager(ctx).deliverPrompt(started.childId, message('human question'), {
+        delivery, source: { kind: 'user' }, signal: testSignal,
+      })
+      await ended.promise
+      ended = Promise.withResolvers<undefined>()
+      await ctx.subagents.sendMessage(parent, started.childId, message('agent question'), { signal: testSignal })
+      await ended.promise
+
+      expect(adapter.requests).toHaveLength(4)
+      expect(adapter.requests[0]!.messages.find(item => item.source?.kind === 'user')?.content)
+        .toEqual(message('root question'))
+      const task = adapter.requests[1]!.messages.find(item => item.source?.kind === 'agent-message')!
+      expect(task.source).toEqual({
+        kind: 'agent-message', form: 'relay', senderSessionId: parent.id,
+      })
+      expect(task.content).toHaveLength(3)
+      expect(task.content.slice(0, 2)).toEqual([
+        { type: 'text', text: 'Agent lead sent a message: ' },
+        { type: 'text', text: 'child task' },
+      ])
+      const guidance = task.content[2]!
+      expect(guidance.type === 'text' && guidance.text).toMatch(/^Your final answer is delivered automatically /)
+      const received = adapter.requests[2]!.messages.find(item => item.id === id)
+      expect(received).toMatchObject({
+        role: 'user', source: { kind: 'user' }, content: message('human question'),
+      })
+      expect(adapter.requests[3]!.messages.findLast(item => item.source?.kind === 'agent-message')?.content)
+        .toEqual([{ type: 'text', text: 'Agent lead sent a message: ' }, ...message('agent question')])
+      const stored = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(stored.events.find(event => event.type === 'user/message' && event.data.id === id)?.data).toEqual(received)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('places resident steering in nextStep with its durable identity and source', async () => {
     const release = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -2369,6 +2431,7 @@ describe('continuable review regressions', () => {
     turn.resolve(undefined)
     try {
       await cleaning.promise
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 1, limit: 8 })
       expect(observed).not.toHaveBeenCalled()
       expect(ended).not.toHaveBeenCalled()
       expect(followup).not.toHaveBeenCalled()
@@ -2378,6 +2441,7 @@ describe('continuable review regressions', () => {
       await started.dispose()
     }
     await expect(started.result).resolves.toMatchObject({ stopReason: 'completed' })
+    expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 8 })
     expect(ended).toHaveBeenCalledTimes(1)
     expect(followup.mock.calls.length + steer.mock.calls.length).toBe(1)
     expect(managerState(ctx).resident.get(started.childId)).toBeUndefined()

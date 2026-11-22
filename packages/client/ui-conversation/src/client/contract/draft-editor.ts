@@ -101,6 +101,18 @@ export interface ComposerKeyboard {
   /** Dismiss the popupSelect shell (any interaction outside the box). */
   dismissPopup(): void
   /**
+   * Replace the draft with the text of an adjacent human prompt in the loaded
+   * Session history; the caller passes only arrows with the caret at the
+   * draft end. Browsing starts from an empty draft and continues only while
+   * the draft is the unedited prompt it last showed, so typed or edited text
+   * is never replaced; moving past the newest prompt returns to the empty
+   * draft. Each step is an ordinary undoable edit.
+   * @param direction - history direction.
+   * @returns whether an adjacent prompt exists and the replacement is scheduled;
+   * inside a key command it runs after that update, and the caller consumes the key.
+   */
+  recallHistory(direction: 'older' | 'newer'): boolean
+  /**
    * Bind the mounted composer's file action and live intake availability.
    * @param picker - availability query and native file-dialog opener.
    * @returns the unbind disposer.

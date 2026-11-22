@@ -9,4 +9,4 @@ header:
   pin: true
   toolSchemasSource: compaction-recovery
   changes: 1
-  promptChanges: 1
+  promptChanges: 2

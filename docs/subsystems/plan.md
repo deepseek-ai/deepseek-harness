@@ -70,6 +70,7 @@ get(agent: Agent): { active: boolean; pending?: boolean }
  * further in-turn pre-step runs. During an open turn the selection remains
  * pending until the next accepted in-turn pre-step. Repeated selection of
  * the current or already-pending state is a no-op.
+ * Each committed user selection contributes a user-switch notice.
  *
  * @param agent The agent to switch.
  * @param active Whether plan mode should be active.

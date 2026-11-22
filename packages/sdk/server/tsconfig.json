@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../fs/fs"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -55,6 +58,12 @@
     },
     {
       "path": "../../interaction/permission-presets"
+    },
+    {
+      "path": "../../account/deepseek-auth"
+    },
+    {
+      "path": "../../util/time"
     }
   ]
 }

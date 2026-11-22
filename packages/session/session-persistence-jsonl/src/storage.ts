@@ -109,6 +109,9 @@ export class JsonlSessionHandle implements SessionHandle {
     return this.state.inheritedEventCount
   }
 
+  /** Completion of an already-started close, including its final durability drain. */
+  get closeCompletion(): Promise<void> | undefined { return this.closing }
+
   /**
    * Read a slice of the valid contiguous logical log; see the seam contract.
    * @param offset - first logical seq to include (default 0).
@@ -456,6 +459,15 @@ export class JsonlBackendTracker {
    */
   hasPending(id: SessionId): boolean {
     return this.pending.has(id)
+  }
+
+  /**
+   * Join an already-started writer close before reading its stored history.
+   * @param id - Session whose writer may still be draining.
+   * @returns completion of that writer's close, or undefined when no close is active.
+   */
+  closeCompletion(id: SessionId): Promise<void> | undefined {
+    return this.writers.get(id)?.closeCompletion
   }
 
   /**

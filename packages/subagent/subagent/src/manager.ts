@@ -38,7 +38,7 @@ import type { SiblingNameReservation } from './names.ts'
 import type { SubagentCatalogEntry, SubagentIdentityProjection } from './projection-types.ts'
 import type { SubagentRunId } from './types.ts'
 import type {
-  ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
+  ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority, SubagentCapacity,
   SubagentActivationSpec, SubagentActivation, SubagentMemberNames, SubagentStartRequest, SubagentRun,
   SubagentSendMessageOptions, SubagentResult, SubagentRunInfo, ResolvedSubagentStartRequest,
 } from './types.ts'
@@ -403,12 +403,13 @@ export class SubagentManager {
         established = activation
         const child = requireLocalActivation(activation).handle.agent
         const childHeader = child.session.header
+        const task = createAgentMessage(parent, agentAddress(this.pathOf(parent, ancestry.root), parent.id), spec.prompt)
         return await this.submitMaterialized(
           activation,
           spec.delivery !== 'caller'
-            ? withResultDeliveryGuidance(spec.prompt)
-            : spec.prompt,
-          { source: { kind: 'user' }, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
+            ? withResultDeliveryGuidance([...task.content])
+            : [...task.content],
+          { source: task.source, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
           ancestry.root,
           () => {
             this.assertAdmitting(parent)
@@ -787,6 +788,18 @@ export class SubagentManager {
     return this.closingRoots.has(root) ? root : undefined
   }
 
+  /**
+   * Observe the shared capacity of a live tree member.
+   * @param caller - exact live root or resident child selecting the tree.
+   * @returns occupied slots and the current configured limit, without reserving capacity.
+   */
+  capacityOf(caller: Agent): SubagentCapacity {
+    return {
+      running: this.rootPools.get(this.rootOf(caller))?.size ?? 0,
+      limit: this.maxActiveSubagents(),
+    }
+  }
+
   /** Share one capacity pool across every instance in a subagent tree. */
   private rootPool(parent: Agent): ActivationPool {
     let pool = this.rootPools.get(parent)
@@ -859,7 +872,9 @@ export class SubagentManager {
         : await this.ownerCtx.agents.create({
           sessionId: childId,
           meta: create.meta,
-          ...(create.seed === undefined ? {} : { seed: create.seed }),
+          ...(create.seed === undefined ? {} : {
+            seed: create.seed, parentSource: { sessionId: create.parent.id, endSeq: SessionLogOffset(create.seed.length) },
+          }),
           inheritedEventCount: create.inheritedEventCount,
           agentOptions: inputs.agentOptions,
           signal: inputs.signal,

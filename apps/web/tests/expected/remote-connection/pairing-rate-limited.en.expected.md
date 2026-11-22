@@ -1,0 +1,6 @@
+- region "Pair this device":
+  - heading "Pair this device" [level=2]
+  - paragraph: After requesting, open Settings → Remote connection on another signed-in device. Match the pairing code and approve to sign in here automatically.
+  - button "Requesting approval…" [disabled]
+  - button "Cancel request"
+  - status: Too many requests. Retrying shortly…

@@ -5,6 +5,7 @@
  * nothing bypasses the tool registry. Fetch verifies world effects against loopback HTTP; search uses the real
  * DeepSeek Search API provider with only its network boundary stubbed.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -15,6 +16,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -37,7 +39,7 @@ let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
 // web_search and web_fetch are conditional registrations, so calls run inside an agent's step admission.
-const agent = { id: brandString<SessionId>('tool-web-integration') } as Agent
+const agent = { id: brandString<SessionId>('tool-web-integration'), session: { requestContext: () => undefined } } as Agent
 
 beforeEach(async () => {
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<h1>Hello</h1><p>World</p>') }
@@ -46,6 +48,7 @@ beforeEach(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 
   ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -55,6 +58,7 @@ beforeEach(async () => {
   })
   await ctx.plugin(WebFetchLocal, {})
   ctx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot([{ source: 'process', values: { DEEPSEEK_API_KEY: 'search-key' } }]))
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(WebDeepSeekApi, { searchBaseURL: SEARCH_API_BASE, sendOriginalQuestion: false })
   // The shipped deployment shape: the tool-call budget is declared by tool-web
   // config (default 30s, attached as ToolDefinition.timeoutMs) and enforced by
@@ -160,6 +164,7 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
     slowBase = `http://127.0.0.1:${(slowServer.address() as AddressInfo).port}`
 
     tctx = new Context()
+    await tctx.plugin(SessionProjectionRegistry)
     await tctx.plugin(SystemPrompt)
     await tctx.plugin(ToolRuntime)
     await tctx.plugin(NativeToolExecutor)

@@ -8,6 +8,7 @@
  * The owner's own turns keep the deployment's tools until the layer is released.
  */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -115,6 +116,7 @@ beforeEach(async () => {
 
   ctx = new Context()
   provideWorkingDirectoryFixture(ctx, root)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

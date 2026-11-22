@@ -9,7 +9,6 @@ import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-j
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import LocalFileReference from '@deepseek-ai/dsh-file-reference-local'
-import Selection from '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -84,24 +83,15 @@ describe('serial creation listener integrations', () => {
       await expect(ctx.agents.create({
         sessionId: brandString<SessionId>('review-file-reference'),
         setup(agentCtx) {
-          agentCtx.systemPrompt.section({ name: 'context:file-reference', order: 0, text: 'occupied' })
+          let rejected = false
+          agentCtx.on('system-prompt/change', () => {
+            if (rejected) return
+            rejected = true
+            throw new Error('context:file-reference activation failed')
+          })
         },
       })).rejects.toThrow('context:file-reference')
       expect(errors.some(error => error.includes('context:file-reference'))).toBe(true)
-      expect(ctx.agents.list()).toEqual([])
-      expect(ctx.sessions.list()).toEqual([])
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('rolls back creation when the Host settings service cannot capture model-selection policy', async () => {
-    const ctx = await core()
-    await ctx.plugin(Selection, { enabled: true, allowedModels: [] })
-    try {
-      await expect(ctx.agents.create({
-        sessionId: brandString<SessionId>('review-tool'),
-      })).rejects.toThrow('subagent model selection requires at least one allowed model')
       expect(ctx.agents.list()).toEqual([])
       expect(ctx.sessions.list()).toEqual([])
     } finally {

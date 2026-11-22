@@ -21,6 +21,12 @@ const snapshotMaxConcurrency = positiveIntFromEnv(
   Math.min(DEFAULT_SNAPSHOT_MAX_CONCURRENCY, availableParallelism()),
 )
 
+const skipWebAdaptersRaw = process.env.DSH_SNAPSHOT_SKIP_WEB_ADAPTERS
+if (skipWebAdaptersRaw !== undefined && skipWebAdaptersRaw !== '' && skipWebAdaptersRaw !== '1') {
+  throw new Error(`DSH_SNAPSHOT_SKIP_WEB_ADAPTERS must be 1 when set, got ${JSON.stringify(skipWebAdaptersRaw)}`)
+}
+const skipWebAdapters = skipWebAdaptersRaw === '1'
+
 const snapshotMaxWorkers = process.env.DSH_SNAPSHOT_MAX_WORKERS
   ? positiveIntFromEnv('DSH_SNAPSHOT_MAX_WORKERS', availableParallelism())
   : undefined
@@ -52,7 +58,9 @@ export default defineConfig({
       'scripts/session-snapshot-corpus.corpus.ts',
       // The assembled Web snapshot executes generated client bundles; source
       // mode remains the zero-build path, while lib mode requires a prior build.
-      ...(process.env.DSH_EXAMPLE_MODE === 'lib' ? ['apps/web/tests/**/*.snapshot.ts'] : []),
+      // DSH_SNAPSHOT_SKIP_WEB_ADAPTERS=1 (only unset or 1) drops them for a CI
+      // lane whose web snapshot shards already run these files.
+      ...(process.env.DSH_EXAMPLE_MODE === 'lib' && !skipWebAdapters ? ['apps/web/tests/**/*.snapshot.ts'] : []),
       'snapshots/**/*.snapshot.ts',
     ],
     // Replay never writes committed outputs and every scenario owns its

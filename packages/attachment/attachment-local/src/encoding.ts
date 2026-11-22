@@ -50,20 +50,20 @@ export interface ExhaustedEncoding<T extends EncodedCandidate> {
 /**
  * Execute encoding candidates in preference order and stop after the first fitting output.
  * @param attempts - lazy encoders ordered from preferred to fallback representation.
- * @param maxBytes - positive encoded-byte target.
+ * @param imageTargetBytes - positive encoded-byte target.
  * @returns the first fitting candidate, otherwise the smallest completed fallback.
  */
 export async function encodeFirstWithinLimit<T extends EncodedCandidate>(
   attempts: readonly (() => Promise<T>)[],
-  maxBytes: number,
+  imageTargetBytes: number,
 ): Promise<T | ExhaustedEncoding<T>> {
   const [first, ...remaining] = attempts
   if (first === undefined) throw new Error('image encoding requires at least one candidate')
   let smallest = await first()
-  if (smallest.data.byteLength <= maxBytes) return smallest
+  if (smallest.data.byteLength <= imageTargetBytes) return smallest
   for (const attempt of remaining) {
     const candidate = await attempt()
-    if (candidate.data.byteLength <= maxBytes) return candidate
+    if (candidate.data.byteLength <= imageTargetBytes) return candidate
     if (candidate.data.byteLength < smallest.data.byteLength) {
       smallest = candidate
     }

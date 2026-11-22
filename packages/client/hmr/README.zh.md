@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-hmr` 让已打开的 Web 页面与 Host 插件图保持同步，并重载重建后的浏览器 bundle。普通插件的启停无需刷新页面或重启 Host 即可生效。代码重建会替换受影响插件并重置其组件状态。模型不会收到新的输入或输出。
+`dsh-client-hmr` 让已打开的 Web 页面与 Host 插件图及同步的插件配置保持一致，并重载重建后的浏览器 bundle。普通插件的启停与同步配置的变化无需刷新页面或重启 Host 即可生效。代码重建会替换受影响插件并重置其组件状态。模型不会收到新的输入或输出。
 
 ## 目录
 
@@ -59,7 +59,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-Host 半侧监听每个包带完成标记的入口产物，并提供 `/plugins/events`。它转发现有的图变化与重建通知；每个新连接都会收到当前完整图。图描述浏览器的目标条目，不保证 Host 清理已经完成。Host 的激活与清理仍由 Host 生命周期管理。入口的 mtime、ctime 和大小共同标识 revision，无需对其内容求哈希；元数据未变时无需读取内容。Host 重启时若产物未变，revision 保持不变，因此图流重连不会替换浏览器插件。浏览器半侧将两种帧都交给 Client Modules，由它串行处理条目变更并等待浏览器资源清理。
+Host 半侧监听每个包带完成标记的入口产物，并提供经过鉴权的 `pluginEvents/follow` Remote 流。每一代流先发一个 `baseline` 帧，包含当前完整图，图的每一行携带该插件的[同步配置](../modules/README.zh.md#synced-plugin-configuration)，之后发送 `graph` 与 `rebuilt` 增量。图描述浏览器的目标条目，不保证 Host 清理已经完成。Host 的激活与清理仍由 Host 生命周期管理。入口的 mtime、ctime 和大小共同标识 revision，无需对其内容求哈希；元数据未变时无需读取内容。Host 重启时若产物未变，revision 保持不变，因此图流重连不会替换浏览器插件。浏览器半侧自行挂载 `pluginEvents` 命名空间，因此这条流不依赖 api-remotes 组装；在 Remote access 允许 `pluginEvents/follow` 时通过 `RemoteSnapshotStream` 消费。它把图帧与重建帧交给 Client Modules，由它应用同步配置、串行处理条目变更并等待浏览器资源清理。连接丢失或 Host 侧流结束会重连，新的 baseline 覆盖期间遗漏的帧。
 
 ### 浏览器侧替换
 
@@ -77,9 +77,10 @@ fiber 的激活 epoch 会串联其服务提供方的 uid，因此替换提供方
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | node 半侧：bundle stat 轮询、`rebuilt` 上报、`/plugins/events` SSE 通道 |
-| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：页面有外壳提供的 `__DSH_TRANSPORT__.fetch`（worker preview 的隧道）时经它订阅 SSE，否则用 `EventSource`；并调用共享条目控制器 |
-| [`src/events.ts`](src/events.ts) | 共享帧类型（`graph` / `rebuilt`）与端点常量 |
+| [`src/index.ts`](src/index.ts) | node 半侧：bundle stat 轮询与 `rebuilt` 上报；挂载 Remote 服务 |
+| [`src/plugin-events.ts`](src/plugin-events.ts) | Host `pluginEvents` Remote 服务：每一代流的 baseline 与有序增量 |
+| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：挂载 `pluginEvents` 命名空间、跟随该流，并把帧交给条目控制器 |
+| [`src/types.ts`](src/types.ts) | 共享帧类型（`baseline` / `graph` / `rebuilt`） |
 
 </details>
 
@@ -115,7 +116,7 @@ fiber 的激活 epoch 会串联其服务提供方的 uid，因此替换提供方
 
 - **重载有意保持粗粒度**——全新 fiber 与全新组件；被重载插件内的 React 状态会丢失，而数据层（连接 fiber、运行时 fiber、Session 对象）不受影响。react-refresh 级状态保留与重新执行 bundle 冲突，因此有意排除。
 - **失败时不回滚**——旧 fiber 被卸载后，替换失败不会恢复先前的 bundle。
-- **仅负责 Web 传输**——Electron 的安装和后端重启流程不使用此 SSE 路径。条目对账本身不依赖传输。
+- **流依赖其承载链路**——它运行在 Connection 与 API Gateway Client 面之上。替换二者之一时若导入或激活失败，本插件无法激活，页面在刷新前收不到插件变化。Electron 的安装不使用这条流；条目对账本身不依赖传输。
 
 <a id="dev-note"></a>
 ### 开发备注

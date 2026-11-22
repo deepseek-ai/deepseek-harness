@@ -17,6 +17,7 @@ import {
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import PermissionPresetService, { AUTO_PRESET } from '@deepseek-ai/dsh-permission-presets'
 import SandboxProvider, { type ConfinedArgv, type SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
@@ -135,6 +136,7 @@ async function mount(ctx: Context, workspace: string, dshHome: string): Promise<
     systemPrompt: {}, tools: { mode: 'native' },
   })
   // No reasoning or output-budget override: use each shipped model's defaults.
+  await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(LlmDeepSeek, { retryPolicy: { mode: 'normal', maxRetries: 0 } })
   await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: workspace })
   await ctx.plugin(UnusedSandbox)
@@ -154,7 +156,7 @@ async function mount(ctx: Context, workspace: string, dshHome: string): Promise<
   })
   await ctx.plugin(ToolFs)
   await ctx.plugin(ToolBash)
-  await ctx.plugin(NodePtcRuntime, {})
+  await ctx.plugin(NodePtcRuntime, { executionMode: 'per-call' })
   await ctx.plugin(AutoReview)
   await ctx.plugin(AgentLoop, { agents: [] })
 }
@@ -205,7 +207,7 @@ function orchestrate(ctx: Context, real: boolean) {
       const callId = `certification-${String(before)}`
       script = [
         callChunks(callId, offeredTool, path === 'native' ? args : {
-          code: `return await tools.${name}(${JSON.stringify(args)});`,
+          code: `await tools.${name}(${JSON.stringify(args)});`,
           description: 'Execute one tool action.',
         }),
         textChunks('The action has settled.'),
