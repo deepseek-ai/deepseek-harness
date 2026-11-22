@@ -19,6 +19,9 @@
     },
     {
       "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../llm/llm"
     }
   ]
 }

@@ -26,6 +26,16 @@
 - id: tool-plugin-manager
   disabled: false
 
+# SDK clients receive recommendation blocks in the final response. Training profiles can
+# omit both skills with an action-cards patch setting config.enabled to false.
+- insert:
+    - id: action-cards
+      name: '@deepseek-ai/dsh-action-cards'
+    - id: creation-recommendations
+      name: '@deepseek-ai/dsh-creation-recommendations'
+    - id: plugin-recommendations
+      name: '@deepseek-ai/dsh-plugin-recommendations'
+
 # DSH_PRIMARY_RUNTIME names the primary runtime; the packaged launcher fills it
 # from its download cache when unset, and an empty value opts out. Each row can
 # be patched independently. Office skills and the Office tools always load, and

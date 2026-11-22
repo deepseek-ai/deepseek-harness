@@ -7,8 +7,11 @@
  * make a stale or undocumented contract fail loudly instead of shipping.
  */
 
+import { resolve } from 'node:path'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { collectSlotEntries, oversizedSlotReports, resolveSlotEntries, validateSlotContracts } from './gen-client-catalog.ts'
+import { slotRegistrations } from './slot-walk.ts'
 import type { SlotDeclaration, SlotRegistration, TypeDeclaration } from './slot-walk.ts'
 
 /** A declaration with every field the catalog needs, overridable per case. */
@@ -46,6 +49,24 @@ const OWNER_TYPES = new Map<string, TypeDeclaration>([
 ])
 
 describe('client slot contract validation', () => {
+  it('resolves shorthand child tables in the scope of each registration', () => {
+    const source = `
+      const children = { 'outer.action': {} }
+      slots.register({ name: 'outer', children }, Outer)
+      function registerInner() {
+        const children = { 'inner.action': {} }
+        slots.register({ name: 'inner', children }, Inner)
+      }
+      function registerDynamic(children) {
+        slots.register({ name: 'dynamic', children }, Dynamic)
+      }`
+    const registrations = slotRegistrations({
+      rel: 'fixture.ts', package: 'demo',
+      sf: ts.createSourceFile(resolve('fixture.ts'), source, ts.ScriptTarget.Latest, true),
+    })
+    expect(registrations.map(({ children }) => children)).toEqual([['outer.action'], ['inner.action'], []])
+  })
+
   it('accepts a documented slot whose owner props resolve', () => {
     expect(validateSlotContracts(
       [declaration({ ownerType: 'DemoOwnerProps' })],
@@ -255,6 +276,10 @@ describe('the real workspace surface', () => {
     expect(root?.occupants.join(' ')).toContain('AppFrame')
     expect(entries.find(entry => entry.key === 'conversation.session')?.declaredBy)
       .toContain("factory 'conversation.content' (client-ui-conversation)")
+    for (const key of ['conversation.input.attachments', 'conversation.input.placeholder']) {
+      expect(entries.find(entry => entry.key === key)?.declaredBy)
+        .toContain("an entry in 'conversation.composer.bar' (client-ui-conversation)")
+    }
     const tool = entries.find(entry => entry.key === 'tool.call.toolview')!
     const owner = tool.ownerProps.join('\n')
     for (const field of ['callId', 'toolName', 'useDisclosure', 'cwd', 'home', 'openFile', 'loadImage', 'inspect']) {

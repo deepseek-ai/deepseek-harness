@@ -32,19 +32,21 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export const inject = ['slots', 'locale', 'remote', 'remoteAccess', 'resources']
 
 /**
- * Register the section and own its polling until plugin disposal.
+ * Mount the Remote and register the browser settings section and polling.
  * @param ctx - Browser context providing the settings slot and authenticated Remote.
- * @returns After the generated service and section are registered.
+ * @returns After the generated service and any browser settings registrations are ready.
  */
 export async function apply(ctx: Context): Promise<void> {
   await ctx.remote.$mount(remoteConnectionRemote)
+  if ('dshDesktop' in globalThis) return
   ctx.effect(() => ctx.locale.register('remoteConnection', { en, zh, ja, es, fr, de, ru, pt }), 'remote-connection: dictionaries')
   const t = ctx.locale.bind('remoteConnection')
   ctx.inject(['remote.remoteConnection'], (scope) => {
     const controller = new RemoteConnectionController(scope.remote.remoteConnection)
+    let loginAddress: string | null = null
     const link = new LoginLinkController(scope.remote.remoteConnection, writeClipboard,
       () => controller.store.getSnapshot().deployment?.url ?? null,
-      () => controller.store.getSnapshot().deployment?.availability === 'available')
+      () => loginAddress !== null)
     const pairing = requestsResource(scope.remote.remoteConnection)
     const approval = new PairingApproval(scope.remote.remoteConnection, id => pairing.confirmed(id))
     const pairingFace = (): PairingInjected => ({
@@ -61,17 +63,15 @@ export async function apply(ctx: Context): Promise<void> {
     }
     scope.effect(() => () => controller.dispose(), 'remote-connection: invitation lifetime')
     scope.effect(() => () => link.dispose(), 'remote-connection: login link')
-    let linkAvailable = false
     scope.effect(() => controller.store.subscribe(() => {
-      const available = controller.store.getSnapshot().deployment?.availability === 'available'
-      if (available === linkAvailable) return
-      linkAvailable = available
-      if (available) void link.refresh()
-    }), 'remote-connection: link availability')
-    scope.on('connection/reset', () => {
-      if (linkAvailable) void link.refresh()
-      void controller.load()
-    })
+      const deployment = controller.store.getSnapshot().deployment
+      const address = deployment?.loginUrlAllowed ? deployment.url : null
+      if (address === loginAddress) return
+      loginAddress = address
+      link.invalidate()
+      if (address !== null) void link.load()
+    }), 'remote-connection: login address')
+    scope.on('connection/reset', () => { void controller.reconnect() })
     scope.slots.inject('settings.section', () => scope.slots.register({
       name: 'settings.section', id: 'remote-connection', order: 25,
       label: () => t('title'),

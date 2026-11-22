@@ -20,7 +20,7 @@ export default createTypertRemoteInfo({
       parameters: [{ name: 'id', source: 'json', codec: nullableId, strictCodec: nullableId }],
       result: codec(() => z.object({
         url: z.string(), availability: z.enum(['available', 'unreachable-host', 'untrusted-host']),
-        ticket: invitationState(), pollIntervalMs: z.number(),
+        loginUrlAllowed: z.boolean(), ticket: invitationState(), pollIntervalMs: z.number(),
       })),
     },
     'remoteConnection/create': {

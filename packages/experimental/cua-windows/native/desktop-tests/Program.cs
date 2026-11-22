@@ -11,6 +11,8 @@ internal sealed class FixtureForm : Form
     internal readonly TextBox Editor = new() { Name = "editor", AccessibleName = "CUA test text", Multiline = true, Bounds = new(20, 20, 440, 100) };
     private readonly Button button = new() { Name = "submit", Text = "Record click", Bounds = new(20, 140, 180, 40) };
     private int clicks;
+    private readonly List<string> inputEvents = [];
+    private MouseButtons receivedButtons;
     private int leftDowns, leftUps, rightDowns, rightUps, middleDowns, middleUps;
     private readonly ToolTip tooltip = new();
 
@@ -20,6 +22,9 @@ internal sealed class FixtureForm : Form
         StartPosition = FormStartPosition.Manual;
         Location = new(100, 100);
         ClientSize = new(500, 300);
+        KeyPreview = true;
+        KeyDown += (_, e) => WatchKey(e.KeyCode, "down");
+        KeyUp += (_, e) => WatchKey(e.KeyCode, "up");
         Controls.Add(Editor);
         Controls.Add(button);
         button.Click += (_, _) => clicks++;
@@ -30,8 +35,15 @@ internal sealed class FixtureForm : Form
         tooltip.SetToolTip(button, "CUA hover is retained");
     }
 
+    private void WatchKey(Keys key, string direction)
+    {
+        if (key is Keys.W or Keys.ShiftKey) inputEvents.Add($"{key}:{direction}");
+    }
+
     private void Count(MouseButtons pressed, bool down)
     {
+        receivedButtons = down ? receivedButtons | pressed : receivedButtons & ~pressed;
+        inputEvents.Add($"{pressed}:{(down ? "down" : "up")}");
         switch (pressed)
         {
             case MouseButtons.Left: if (down) leftDowns++; else leftUps++; break;
@@ -74,7 +86,8 @@ internal sealed class FixtureForm : Form
         ups = new { left = leftUps, right = rightUps, middle = middleUps },
         button = new { x = button.Left + button.Width / 2, y = button.Top + button.Height / 2 },
         selection = new { start = Editor.SelectionStart, length = Editor.SelectionLength },
-        buttons = MouseButtons.ToString(), minimized = WindowState == FormWindowState.Minimized, visible = Visible,
+        inputEvents = inputEvents.ToArray(),
+        buttons = receivedButtons.ToString(), minimized = WindowState == FormWindowState.Minimized, visible = Visible,
     };
 
     protected override void Dispose(bool disposing)
@@ -92,13 +105,12 @@ internal static class Program
 {
     private static void Write(object value) { Console.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); }
 
-    private static void ReleaseButtons()
+    private static void SendMouse(params uint[] flags)
     {
-        var inputs = new[] { 0x0004u, 0x0010u, 0x0040u }
-            .Select(flags => new Input { Type = 0, Data = new MouseInput { Flags = flags } }).ToArray();
+        var inputs = flags.Select(flag => new Input { Type = 0, Data = new MouseInput { Flags = flag } }).ToArray();
         if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>()) != inputs.Length)
         {
-            Console.Error.WriteLine("Fixture could not release every mouse button");
+            Console.Error.WriteLine("Fixture could not dispatch all requested mouse events");
             Environment.ExitCode = 1;
         }
     }
@@ -129,12 +141,14 @@ internal static class Program
                         {
                             case "sibling": sibling.Show(); sibling.Activate(); sibling.Editor.Focus(); Write(sibling.Inspect()); break;
                             case "inspect": Write(form.Inspect()); break;
+                            case "inspect-sibling": Write(sibling.Inspect()); break;
                             case "focus": form.Activate(); form.Editor.Focus(); Write(form.Inspect()); break;
                             case "pointer": form.PointAtButton(); Write(form.Inspect()); break;
                             case "pointer-outside": form.PointOutside(); Write(form.Inspect()); break;
                             case "cover": form.Cover(sibling); Write(new { form = form.Inspect(), sibling = sibling.Inspect() }); break;
                             case "uncover": form.Uncover(sibling); Write(form.Inspect()); break;
-                            case "release-input": ReleaseButtons(); Write(form.Inspect()); break;
+                            case "left-up": SendMouse(0x0004); Write(form.Inspect()); break;
+                            case "release-input": SendMouse(0x0004, 0x0010, 0x0040); Write(form.Inspect()); break;
                             case "minimize": form.WindowState = FormWindowState.Minimized; Write(form.Inspect()); break;
                             case "hide": form.Hide(); Write(form.Inspect()); break;
                             case "resize": form.Width += 50; Write(form.Inspect()); break;

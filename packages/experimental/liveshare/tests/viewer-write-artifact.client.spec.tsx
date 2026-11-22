@@ -38,6 +38,18 @@ class ResizeObserverStub {
   unobserve(): void {}
 }
 
+
+/** Session rows on this page drag out only as copies, which open them in the right Sidebar; none is a reorder handle. */
+function expectNoReorderHandles(): void {
+  for (const row of document.querySelectorAll<HTMLElement>('[role="treeitem"][draggable="true"]')) {
+    expect(row.dataset.rowKey).toMatch(/^session:/u)
+    const dataTransfer = { effectAllowed: '', setData: () => {}, setDragImage: () => {} }
+    fireEvent.dragStart(row, { dataTransfer })
+    fireEvent.dragEnd(row, { dataTransfer: { dropEffect: 'none' } })
+    expect(dataTransfer.effectAllowed).toBe('copy')
+  }
+}
+
 describe('Assembled liveshare viewer page on a writable share', () => {
   it('writes the shared Session, keeps the Workspace out of reach, and closes on a narrower mode', async () => {
     inputFixture = installViewerInputFixture()
@@ -131,7 +143,7 @@ describe('Assembled liveshare viewer page on a writable share', () => {
     await workspaceMenu.ready
     expect(workspaceMenu.source.getSnapshot()).toEqual([])
     workspaceMenu.dispose()
-    expect(document.querySelector('[role="treeitem"][draggable="true"]')).toBeNull()
+    expectNoReorderHandles()
     // The Session's own verbs stay the owner's — the one this page may use there is the branch the
     // mode grants — so the row's menu is not a second way into the owner's Session management: it
     // opens on the branch verb and carries neither rename nor archive.

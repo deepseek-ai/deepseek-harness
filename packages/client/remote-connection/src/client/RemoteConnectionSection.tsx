@@ -36,9 +36,15 @@ function ConnectionNotice({ t, useRemoteConnection }: Pick<RemoteConnectionSecti
   const deployment = useRemoteConnection(state => state.deployment)
   if (deployment === null) return null
   if (deployment.availability === 'available') return <p className={css.intro}>{t('addressDescription')}</p>
+  const [message, ...steps] = t(deployment.availability).split('\n')
   return <div className={css.caution} role="status">
     <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineMedium /></span>
-    <div className={css.cautionBody}><p className={css.warning}>{t(deployment.availability)}</p></div>
+    <div className={css.cautionBody}>
+      <p className={css.warning}>{message}</p>
+      {steps.length > 0 && <ol className={`${css.warning} ${css.warningList}`}>
+        {steps.map(step => <li key={step}>{step}</li>)}
+      </ol>}
+    </div>
   </div>
 }
 
@@ -94,25 +100,25 @@ function AccessAddressCard({ t, useRemoteConnection, useLoginLink, copyLink, rel
   const deployment = useRemoteConnection(state => state.deployment)
   const error = useRemoteConnection(state => state.error)
   const link = useLoginLink(state => state)
-  const available = deployment?.availability === 'available'
+  const credentialUrl = deployment?.loginUrlAllowed ? link.url : null
   const http = deployment?.url.startsWith('http:') === true
   return <section className={css.card} aria-label={t('addressTitle')}>
     <header className={css.header}>
       <h3 className={css.methodTitle}>{t('addressTitle')}</h3>
     </header>
-    {!available && error !== null && <>
+    {deployment?.availability !== 'available' && error !== null && <>
       <p className={css.error} role="alert">{t(error)}</p>
       <div className={css.actions}><Button variant="outline" size="sm" onClick={reload}>{t('retry')}</Button></div>
     </>}
     {deployment !== null && <div className={css.linkRow}>
       <div className={css.linkPreview}>
-        <code className={css.linkUrl}>{(available ? link.url : null) ?? deployment.url}</code>
+        <code className={css.linkUrl}>{credentialUrl ?? deployment.url}</code>
       </div>
       <Button variant="outline" size="sm" disabled={link.phase === 'copying'} onClick={copyLink}>
         {t('copyLink')}
       </Button>
     </div>}
-    {available && link.url !== null && link.copied && <CredentialWarning t={t} http={http} method="link" />}
+    {credentialUrl !== null && link.copied && <CredentialWarning t={t} http={http} method="link" />}
   </section>
 }
 

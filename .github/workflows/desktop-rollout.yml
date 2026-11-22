@@ -49,7 +49,7 @@ jobs:
       - uses: pnpm/action-setup@v5.0.0
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
       - name: Resolve original package and machine
         id: route
@@ -89,7 +89,7 @@ jobs:
           dest: ${{ runner.temp }}/publish-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check local publication configuration before dependency installation
         working-directory: desktop-rollout
         run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
@@ -136,7 +136,7 @@ jobs:
           dest: ${{ runner.temp }}/publish-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check local publication configuration before dependency installation
         working-directory: desktop-rollout
         run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
@@ -188,7 +188,7 @@ jobs:
           dest: ${{ runner.temp }}/website-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check local publication configuration
         working-directory: website-rollout
         run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs
@@ -241,7 +241,7 @@ jobs:
           dest: ${{ runner.temp }}/website-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check local publication configuration
         working-directory: website-rollout
         run: node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs

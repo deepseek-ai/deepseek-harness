@@ -97,6 +97,7 @@ internal static class NativeServer
         {
             var state = new ClientState();
             Task? active = null;
+            TaskCompletionSource? replying = null;
             CancellationTokenSource? cancellation = null;
             string? latestRequestId = null;
             var closeRequested = false;
@@ -136,7 +137,7 @@ internal static class NativeServer
                         continue;
                     }
                     var request = NativeRequest.Parse(value);
-                    if (active is { IsCompleted: false })
+                    if (active is { IsCompleted: false } && replying?.Task.IsCompleted != true)
                     {
                         await Write(pipe, writer, Failure(request.Id, "NATIVE_BUSY", "The previous native operation has not stopped; do not send further input until it finishes"),
                             config.MaxResponseBytes, config.GraceMs, lifetime.Token);
@@ -147,7 +148,8 @@ internal static class NativeServer
                     cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                     cancellation.CancelAfter(request.Method == "screenshot" ? Math.Min(config.TimeoutMs, config.ScreenshotTimeoutMs) : config.TimeoutMs);
                     latestRequestId = request.Id;
-                    active = Dispatch(request, state, executor, config, pipe, writer, cancellation.Token, lifetime.Token);
+                    replying = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    active = Dispatch(request, state, executor, config, pipe, writer, replying, cancellation.Token, lifetime.Token);
                 }
             }
             catch (Exception error)
@@ -164,7 +166,11 @@ internal static class NativeServer
                 }
                 catch (NativeFailure error) when (error.Code == "NATIVE_CLEANUP") { throw; }
                 catch (Exception error) { Report("NATIVE_CONNECTION", error); }
-                finally { cancellation?.Dispose(); }
+                finally
+                {
+                    cancellation?.Dispose();
+                    await executor.ReleaseConnection(state, cleanupTimeoutMs);
+                }
                 state.Clear();
                 if (closeRequested)
                     await Write(pipe, writer, new { type = "closed" }, 8192, cleanupTimeoutMs, CancellationToken.None);
@@ -173,16 +179,16 @@ internal static class NativeServer
     }
 
     private static async Task Dispatch(NativeRequest request, ClientState state, DesktopExecutor executor, NativeConfig config,
-        Stream pipe, SemaphoreSlim writer, CancellationToken cancellation, CancellationToken connection)
+        Stream pipe, SemaphoreSlim writer, TaskCompletionSource replying, CancellationToken cancellation, CancellationToken connection)
     {
         var operationStop = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         var failure = new TaskCompletionSource<NativeFailure>(TaskCreationOptions.RunContinuationsAsynchronously);
         // A synchronous native call must not block the pipe reader or its timeout response.
         var operation = Task.Run(() => executor.Execute(request, state, config, operationStop.Token,
             error => { failure.TrySetResult(error); }));
+        object response;
         try
         {
-            object response;
             try { response = new { id = request.Id, result = await WatchOperation(operation, failure.Task, operationStop.Token, config.GraceMs) }; }
             catch (OperationCanceledException) { response = Failure(request.Id, "NATIVE_CANCELLED", "Native operation cancelled; observe before deciding on further input"); }
             catch (NativeFailure error)
@@ -195,9 +201,6 @@ internal static class NativeServer
             catch (ElementNotEnabledException) { response = Failure(request.Id, "ELEMENT_DISABLED", "The selected control is disabled"); }
             catch (UnauthorizedAccessException) { response = Failure(request.Id, "PERMISSION_DENIED", "Windows refused access to the selected application"); }
             catch (Exception error) { response = Failure(request.Id, "NATIVE_OPERATION", $"Windows operation failed (0x{error.HResult:X8}); observe before retrying"); }
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(response, WireJson.Options);
-            if (bytes.Length + 1 > config.MaxResponseBytes) response = Failure(request.Id, "NATIVE_RESPONSE_LIMIT", "Native response exceeded its configured byte limit");
-            await Write(pipe, writer, response, config.MaxResponseBytes, config.GraceMs, connection);
         }
         finally
         {
@@ -217,6 +220,10 @@ internal static class NativeServer
                 }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
         }
+        replying.SetResult();
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(response, WireJson.Options);
+        if (bytes.Length + 1 > config.MaxResponseBytes) response = Failure(request.Id, "NATIVE_RESPONSE_LIMIT", "Native response exceeded its configured byte limit");
+        await Write(pipe, writer, response, config.MaxResponseBytes, config.GraceMs, connection);
     }
 
     private static object Failure(string id, string code, string message) => new { id, error = new { code, message } };

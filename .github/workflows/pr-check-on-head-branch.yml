@@ -30,7 +30,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
           package-manager-cache: false
 
       - id: check
@@ -115,7 +115,7 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         if: steps.merge.outputs.merged == 'true'
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
           package-manager-cache: false
 
       - name: Run the tree's pre-merge check

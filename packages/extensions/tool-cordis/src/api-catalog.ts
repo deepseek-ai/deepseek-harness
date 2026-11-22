@@ -83,9 +83,15 @@ export interface TypeApiEntry {
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'actionCards',
-    summary: 'Kind registry, Session projection, user actions and status notices.',
-    description: 'Kind registry, Session projection, user actions and status notices.',
+    summary: 'Kind registry, skill switch, Session projection, user actions and status notices.',
+    description: 'Kind registry, skill switch, Session projection, user actions and status notices.',
     methods: [
+      {
+        signature: 'skillProvider(candidate: SkillCandidate, get: SkillProvider[\'get\']): (control: SkillProviderControl) => SkillProvider',
+        description: 'Build a kind\'s skill provider. It lists the skill while recommendations are enabled.',
+        parameters: [{ name: 'candidate', description: 'the skill\'s catalog entry.' }, { name: 'get', description: 'loads the skill\'s definition.' }],
+        returns: 'the factory the kind passes to `ctx.skills.registerProvider`.',
+      },
       {
         signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
         description: 'Register one action kind for the caller\'s lifetime.',
@@ -1050,10 +1056,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'release(agent: Agent): Promise<void>',
-        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
+        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. Held input is released. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
         parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
-        returns: 'Completion after the process has exited and its output has drained.',
-        throws: ['When the process cleanup fails.'],
+        returns: 'Completion after the process has exited, its output has drained, and held-input cleanup has settled.',
+        throws: ['When environment or input cleanup fails, reporting both causes if both fail.'],
+      },
+      {
+        signature: 'releaseInputs(agent: Agent): Promise<void>',
+        description: 'Release the Agent\'s tracked input while retaining its program variables and application grants. Providers without held-input state support retain their existing cancellation behavior.',
+        parameters: [{ name: 'agent', description: 'Owner of the input to release.' }],
+        returns: 'Completion after native acknowledgement, or rejection when cleanup is unconfirmed.',
       },
       {
         signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
@@ -9428,7 +9440,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteConnectionStatus',
-    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
+    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly loginUrlAllowed: boolean;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
   },
   {
     name: 'RemoteConnectionUnavailable',

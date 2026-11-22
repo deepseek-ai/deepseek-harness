@@ -182,6 +182,8 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'pluginMarket/search': 'owner-only', // owner plugin market
   'pluginMarket/setIndexes': 'owner-only', // owner plugin market
   'pluginRegistryProbe/fastest': 'owner-only', // owner plugin registry probe
+  'actionCards/act': 'owner-only', // owner action on a card below an answer
+  'pluginRecommendations/describe': 'owner-only', // owner plugin card text
   'connectorAccounts/cancel': 'owner-only', // owner connector accounts on the Plugins page
   'connectorAccounts/start': 'owner-only', // owner connector accounts on the Plugins page
   'connectorAccounts/watch': 'owner-only', // owner connector accounts on the Plugins page

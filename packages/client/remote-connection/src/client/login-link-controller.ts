@@ -35,6 +35,7 @@ export class LoginLinkController {
   private live = true
   private loading: Promise<void> | undefined
   private copying: Promise<void> | undefined
+  private readGeneration = 0
   private warningGeneration = 0
   private readonly pending = new Set<Promise<void>>()
 
@@ -71,23 +72,29 @@ export class LoginLinkController {
    * @returns after the read settles; duplicate reads share it, and a refresh waits for a clipboard write.
    */
   load(): Promise<void> {
-    if (!this.live) return Promise.resolve()
+    if (!this.live || !this.canCopyCredential()) return Promise.resolve()
     if (this.copying !== undefined) return this.track(this.copying.then(() => this.load()))
     if (this.loading !== undefined) return this.loading
     const previousUrl = this.store.getSnapshot().url
     this.store.update((state) => { state.phase = 'loading'; state.url = null; state.notice = null })
-    this.loading = this.track(this.read(previousUrl).finally(() => { this.loading = undefined }))
+    const generation = this.readGeneration
+    this.loading = this.track(this.read(previousUrl, generation).finally(() => {
+      if (this.readGeneration === generation) this.loading = undefined
+    }))
     return this.loading
   }
 
-  /**
-   * Read again after an in-flight operation so a connection reset cannot reuse its old result.
-   * @returns after the fresh read settles, or after disposal prevents the read.
-   */
-  refresh(): Promise<void> {
-    if (!this.live) return Promise.resolve()
-    const operation = this.loading ?? this.copying
-    return operation === undefined ? this.load() : this.track(operation.then(() => this.load()))
+  /** Discard the previous deployment's credential and its outstanding read when the login address changes. */
+  invalidate(): void {
+    this.readGeneration += 1
+    this.warningGeneration += 1
+    this.loading = undefined
+    this.store.update((state) => {
+      state.url = null
+      state.copied = false
+      state.notice = null
+      state.phase = this.copying === undefined ? 'ready' : 'copying'
+    })
   }
 
   /** Clear the page's credential warning without discarding clipboard outcomes or the cached URL. */
@@ -142,17 +149,17 @@ export class LoginLinkController {
     })
   }
 
-  private async read(previousUrl: string | null): Promise<void> {
+  private async read(previousUrl: string | null, generation: number): Promise<void> {
     try {
       const result = await this.remote.loginUrl()
-      if (!this.live) return
+      if (!this.live || this.readGeneration !== generation) return
       this.store.update((state) => {
         state.url = result.ok ? result.value : null
         state.phase = this.copying !== undefined ? 'copying' : result.ok ? 'ready' : 'error'
         if (state.url !== previousUrl) state.copied = false
       })
     } catch (_requestFailure) {
-      if (this.live) this.store.update((state) => {
+      if (this.live && this.readGeneration === generation) this.store.update((state) => {
         state.phase = this.copying !== undefined ? 'copying' : 'error'
         state.copied = false
       })

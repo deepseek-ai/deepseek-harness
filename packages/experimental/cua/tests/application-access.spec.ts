@@ -67,6 +67,22 @@ it('refuses raw handle dispatch until getApp obtains consent', async () => {
   expect(dispatch).not.toHaveBeenCalled()
 })
 
+it('reads cached activity outside the desktop lock and discards it if another writer revokes consent', async () => {
+  const f = await setup('Always allow')
+  const query = vi.fn(async () => 'window activity')
+  await expect(f.access.readCached(f.client, handle, signal, query)).rejects.toThrow('APP_ACCESS_REQUIRED')
+  expect(query).not.toHaveBeenCalled()
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  const lease = vi.spyOn(f.store, 'withApplication').mockImplementation(() => { throw new Error('Desktop operation holds the lock') })
+  await expect(f.access.readCached(f.client, handle, signal, query)).resolves.toBe('window activity')
+  await expect(f.access.readCached(f.client, handle, signal, async () => {
+    await f.save([])
+    return 'withheld'
+  })).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.client.disposed).toBe(true)
+  expect(lease).not.toHaveBeenCalled()
+})
+
 it('saves, reuses, and revokes a native identity without executable path metadata', async () => {
   const f = await setup('Always allow')
   const withoutPath = ApplicationAuthorizationResult.parse({ id: identity.id, name: identity.name, persistable: true })

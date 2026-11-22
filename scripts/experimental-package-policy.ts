@@ -23,13 +23,6 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/hooks-codex': '@deepseek-ai/dsh-hooks-codex',
   'packages/experimental/webhook': '@deepseek-ai/dsh-webhook',
   'packages/experimental/webhook-github': '@deepseek-ai/dsh-webhook-github',
-  'packages/experimental/action-cards': '@deepseek-ai/dsh-action-cards',
-  'packages/experimental/client-ui-action-cards': '@deepseek-ai/dsh-client-ui-action-cards',
-  'packages/experimental/creation-recommendations': '@deepseek-ai/dsh-creation-recommendations',
-  'packages/experimental/client-ui-creation-recommendations': '@deepseek-ai/dsh-client-ui-creation-recommendations',
-  'packages/experimental/plugin-recommendations': '@deepseek-ai/dsh-plugin-recommendations',
-  'packages/experimental/client-ui-plugin-recommendations': '@deepseek-ai/dsh-client-ui-plugin-recommendations',
-  'packages/experimental/personalized-recommendations': '@deepseek-ai/dsh-personalized-recommendations',
   'packages/experimental/forge-gitlab': '@deepseek-ai/dsh-forge-gitlab',
   'packages/experimental/deepseek-chat-import': '@deepseek-ai/dsh-deepseek-chat-import',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>

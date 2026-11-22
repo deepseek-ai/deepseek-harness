@@ -63,7 +63,7 @@ dsh --profile web --no-open --port 8080
 
 WebApp 拥有 `printUrl` 与 `openBrowser`。本组合启用 URL 打印，并把解析后的 `--no-open` 设置传给 runtime。就绪后，同步 `webserver/entry-url` 监听器贡献完整入口。启用打印时，WebApp 按 `label: url` 逐行打印；启用浏览器打开且不在 SSH 下时，仅打开首个 `open: true` 的入口。没有入口则不输出、不打开。
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)列出了本运行时插件接受的字段及其 JSDoc。随发行版交付的组合插入 `schedule` 服务行与 `ui-schedule` 任务页面行，时钟读数与四个提醒工具则属于 `standard`、`cordis` 与 `ptc` 三个 preset。这三个 preset 的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，因此被委派子 agent 的作用域不会列出它们。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)列出了本运行时插件接受的字段及其 JSDoc。随发行版交付的组合插入 `schedule` 服务行与 `ui-schedule` 任务页面行，时钟读数与四个提醒工具则属于 `standard`、`cordis` 与 `ptc` 三个 preset。这三个 preset 的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，因此被委派子 agent 的作用域不会列出它们。组合还插入个性化推荐的六行，从 [`action-cards`](../../interaction/action-cards/README.zh.md) 到 `client-ui-plugin-recommendations`，其 `enabled` 开关位于“设置 → 通用设置”。
 
 `standard`、`cordis` 和 `ptc` 三个 preset 在各自的 `tool-subagent-control` 行中设置 `config.interrupt: false`。如需提供 `interrupt_agent`（也适用于 Team 模式），按[迁移步骤](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.zh.md)覆盖相应 preset 声明；修改已禁用的 Host 行不会改变 preset 的工具。
 
@@ -205,15 +205,15 @@ preset 提供一条目录项。没有其他 skill 的会话还会收到目录的
 
 #### 模型看到什么
 
-所有 profile 的技能目录都列出 Office 路由和三个 Office 创作技能。加载的 Python 技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
+所有 profile 的技能目录都列出 `office` 技能；它内联了 Word、PowerPoint 和 Excel 的易错点以及 Office 工具的精简说明。加载的技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
 
 #### Token 影响
 
-每个初始目录包含四条目录摘要；仅在模型请求时加载技能正文。
+每个初始目录包含一条目录摘要；仅在模型加载时才载入技能正文。
 
 #### KV Cache 影响
 
-资源和配置不变时，内置 Office 摘要和各 Python 环境说明保持稳定；目录何时变化见 [Office 技能](../../skill/skill-office/README.zh.md#model-experience)。
+资源和配置不变时，内置 Office 摘要和 Python 环境说明保持稳定；目录何时变化见 [Office 技能](../../skill/skill-office/README.zh.md#model-experience)。
 
 ## 已知限制与延期工作
 

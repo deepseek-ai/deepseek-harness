@@ -39,6 +39,8 @@ The model can use [`plugin_manager`](../../boot/plugin-manager/README.md) in nat
 
 The Python runtime exposes explicitly downloaded authoring resources and Office sidecars to this profile. `DSH_PRIMARY_RUNTIME` overrides the authoring payload; an empty value disables its query. Office skills, the Office kit, and the [Office tools](../../document/tool-office/README.md) always load. The skills use their packaged assets; with an authoring payload they direct the model to its bundled Python environment, and without one to the user's existing Python. The tool reports an unavailable LibreOffice Kit until an Office sidecar is downloaded or selected. Profile patches can disable `skill-office` or replace its `assetRoot` independently of `workspace-dependencies`; filesystem skills with the same name take precedence. See the [runtime package](../../../python/sdk-runtime/README.md) for downloads and configuration.
 
+The standard SDK profile lists `official-plugins` and `personalized-pages` by default. A proposal reaches the caller as a fenced `action-card` block in the final response. For training, pass a YAML patch containing `- {id: action-cards, config: {enabled: false}}` to omit both skills from the catalog and prevent loading them by name.
+
 -----
 
 <a id="model-experience"></a>

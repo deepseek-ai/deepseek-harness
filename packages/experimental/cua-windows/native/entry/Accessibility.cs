@@ -67,7 +67,7 @@ internal static class Accessibility
         var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), selected, targets, elements);
         var result = new
         {
-            appHandle = app.Handle, pid = 4, windowId = selected.ToString(CultureInfo.InvariantCulture),
+            appHandle = app.Handle, windowId = selected.ToString(CultureInfo.InvariantCulture),
             focusedWindowId = Windows.Focused(app, descriptions.Windows)?.Id.ToString(CultureInfo.InvariantCulture),
             snapshotId = snapshot.Id, tree = string.Join('\n', rows), windows = descriptions.Values, truncated,
         };

@@ -607,6 +607,36 @@ describe('the shipped Web composition', () => {
     }
   })
 
+  it.each(['standard', 'cordis'] as const)('uses the recommendation skills selected by the active %s preset', async (preset) => {
+    const model = `recommendations-${preset}`
+    const unregister = ctx.llm.registerAdapter([model], new MinimalCompactionAdapter())
+    try {
+      const handle = await ctx.agents.create({
+        sessionId: brandString<SessionId>(`${model}-${randomUUID()}`), agentOptions: { provider: model, model },
+        setup: owner => ctx.agentPresets.mount(owner, preset === 'standard' ? 'cordis' : 'standard').then(() => undefined),
+      })
+      try {
+        await ctx.agentPresets.select(handle.agent, preset)
+        handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply ready.' }], source: { kind: 'user' } }))
+        await handle.agent.whenIdle()
+        const names = handle.agent.session.snapshotEvents().flatMap(event =>
+          event.type === 'user/message' && event.data.source.kind === 'skill-catalog'
+            ? event.data.source.entries.map(entry => entry.name) : [])
+        expect(names).toContain('dsh-doc')
+        for (const name of ['official-plugins', 'personalized-pages']) {
+          expect(names.includes(name)).toBe(preset === 'standard')
+          const load = await executeToolFixture(ctx, {
+            name: 'skill', arguments: { name }, agent: handle.agent,
+            signal: new AbortController().signal, callId: brandString<ToolCallId>(`${model}-${name}`),
+          })
+          expect(load.isError).toBe(preset === 'cordis')
+          const output = load.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+          expect(output).toContain(preset === 'cordis' ? `skill "${name}" is unknown or no longer available` : `<skill_content name="${name}">`)
+        }
+      } finally { await handle.dispose() }
+    } finally { unregister() }
+  })
+
   it('composes the cordis agent with its own toolset', async () => {
     const handle = await ctx.agents.create({
       sessionId: brandString<SessionId>('preset-cordis'),
@@ -781,7 +811,7 @@ describe('the shipped Web composition', () => {
       // The host (global) view carries the deployment-level providers alone:
       // local discovery moved behind the presets with `skill-filesystem`.
       expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual([
-        'dsh-badge', 'office', 'office-docx', 'office-pptx', 'office-xlsx',
+        'dsh-badge', 'office', 'official-plugins', 'personalized-pages',
       ])
 
       // The standard agent's view merges the global layer with its preset's
