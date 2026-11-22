@@ -114,9 +114,10 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
     async function listActions(id: CuaElementId, options: { details?: boolean } = {}) {
       requireAccessibility()
       const target = { ...elementParams(), elementId: id }
-      return options.details
-        ? ActionDetailsResult.parse(await scopedCall('listActions', target, { details: true }))
-        : ActionNamesResult.parse(await scopedCall('listActions', target))
+      if (options.details === undefined || options.details === false) {
+        return ActionNamesResult.parse(await scopedCall('listActions', target))
+      }
+      return ActionDetailsResult.parse(await scopedCall('listActions', target, { details: options.details }))
     }
     const surface: CuaSurface = {
       async show() { return ShowResult.parse(await scopedCall('show', {})) },

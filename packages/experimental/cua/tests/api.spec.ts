@@ -394,6 +394,8 @@ describe('element action queries', () => {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', elementId: '0', details: true,
     } })
     f.dispatch.mockResolvedValueOnce(['AXPress'])
+    expect(await win.listActions(element('0'), { details: false })).toEqual(['AXPress'])
+    f.dispatch.mockResolvedValueOnce(['AXPress'])
     await expect(win.listActions(element('0'), { details: true })).rejects.toThrow()
   })
 
