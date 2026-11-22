@@ -228,9 +228,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const systemInput = backend.capabilities.systemInput === true
   const systemInputControl = systemInput ? new SystemInputControl(ctx, config.requireSystemInputApproval) : undefined
   const baseRequest = systemInput ? SystemInputRequest : Request
+  const [getCapabilities, ...operations] = baseRequest.options
   const requestSchema = backend.detailedActions
-    ? z.discriminatedUnion('method', baseRequest.options.map(schema =>
-      schema.shape.method.value === 'listActions' ? DetailedListActionsRequest : schema))
+    ? z.discriminatedUnion('method', [getCapabilities, ...operations.map(schema =>
+      schema.shape.method.value === 'listActions' ? DetailedListActionsRequest : schema)])
     : baseRequest
   const formatGuidance = (text: string): string => {
     const inputGuidance = heldInputs ? withHeldInputGuidance(text) : text
