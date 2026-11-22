@@ -193,28 +193,52 @@ private final class WindowRestoration {
         try checkTarget()
         try shelf.join(pile, windowID: id, owner: owner, appScoped: !exact, foreground: (original.pid, originalFrontWindow), access: access)
         stageActionSent = true
-        // Let WindowManager start the move before returning focus, which can otherwise switch stages mid-animation.
-        let returnBy = min(deadline, ContinuousClock.now + .seconds(animation * 2))
-        var interruptedUntil: ContinuousClock.Instant?
+        // Some apps accept the pile action but only leave the strip after receiving activation.
+        let transition = Duration.seconds(animation * 2)
+        let activateAfter = ContinuousClock.now + transition
+        var activationTime: ContinuousClock.Instant?
+        var expandedSince: ContinuousClock.Instant?
+        var interruptedSince: ContinuousClock.Instant?
         repeat {
             try checkTarget()
+            let now = ContinuousClock.now
             let shown = try expanded()
-            if shown != nil || ContinuousClock.now >= returnBy { try await restoreFocus(on: worker) }
-            if let shown, let confirmed = try expanded(), confirmed == shown { return shown }
             if userSwitched() {
-                // Observe late stage transitions without taking focus back from a third application.
-                interruptedUntil = interruptedUntil ?? (ContinuousClock.now + .seconds(animation * 2))
-                if let interruptedUntil, ContinuousClock.now >= interruptedUntil {
+                interruptedSince = interruptedSince ?? now
+                if let start = interruptedSince, now - start >= transition {
                     throw unavailable("The active application changed while Stage Manager was adding the window.")
                 }
             } else {
-                interruptedUntil = nil
+                interruptedSince = nil
+                if shown == nil, activationTime == nil, now >= activateAfter,
+                   NativePlatform.foregroundAppWindow() == (original.pid, originalFrontWindow) {
+                    activationTime = now
+                    try await ApplicationCatalog.activateForShow(owner, whileUsing: original)
+                }
+                let handoffBy = (activationTime ?? activateAfter) + transition
+                if shown != nil || now >= handoffBy { try await restoreFocus(on: worker) }
             }
-            guard ContinuousClock.now < deadline - .seconds(animation) else {
+            if let shown, NativePlatform.frontPID() == original.pid, try originalWindowIsExpanded() {
+                expandedSince = expandedSince ?? now
+                if let start = expandedSince, now - start >= .seconds(animation), try expanded() == shown { return shown }
+            } else {
+                expandedSince = nil
+            }
+            guard now < deadline - .seconds(animation) else {
                 throw unavailable("The window was not confirmed expanded in the original stage after Add Window to Stage.")
             }
             try await Task.sleep(for: .milliseconds(16))
         } while true
+    }
+
+    private func originalWindowIsExpanded() throws -> Bool {
+        guard let id = originalFrontWindow else { return true }
+        let info = try NativePlatform.ownedWindow(original.pid, id)
+        guard info.isOnScreen else { return false }
+        if let originalAX, try access.windowID(originalAX) == id, let bounds = try access.bounds(originalAX) {
+            return StageManagerShelf.matchesWindowSize(info.bounds, bounds)
+        }
+        return NativePlatform.foregroundAppWindow() == (original.pid, id)
     }
 
     private func visibleAppWindow(on worker: isolated AXWorker, allowGrouping: Bool) async throws -> UInt32? {
