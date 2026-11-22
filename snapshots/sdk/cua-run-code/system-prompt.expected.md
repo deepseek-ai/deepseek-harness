@@ -54,8 +54,8 @@ Setup and discovery:
 - app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading the accessibility tree. Use IDs from the intended app; window validation follows platform rules.
 - app.launch() -> ActionResult — request launch of a new application instance.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
-- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null, status?: 'already_visible' | 'restored' | 'unchanged' } — request background restoration of the default window. A result of dispatched: false means no action was taken.
-- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null, status?: 'already_visible' | 'restored' | 'unchanged' } — show this window. An already_visible window stays where it is. Use app.activate() when the app should keep keyboard focus.
+- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show an application window. Use the returned windowId to select it.
+- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show the specified window.
 
 ## Accessibility tree
 Available at app or window level depending on the platform.
