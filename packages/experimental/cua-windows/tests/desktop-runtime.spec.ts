@@ -2,7 +2,11 @@
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
-import { AppsResult, NativeAppsResult } from '@deepseek-ai/dsh-cua/protocol'
+import { AppResult, AppsResult, NativeAppsResult, StateResult } from '@deepseek-ai/dsh-cua/protocol'
+import { spawn } from 'node:child_process'
+import { createInterface } from 'node:readline'
+import { once } from 'node:events'
+import { z } from 'zod'
 import { expect, it, onTestFinished } from 'vitest'
 import { Config } from '../src/index.ts'
 import { WindowsNativeRuntime } from '../src/native-runtime.ts'
@@ -24,9 +28,6 @@ async function connect(): Promise<NativeClient> {
 it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or native Windows processes', async () => {
   const client = await connect()
   const signal = new AbortController().signal
-  const read = client.request('getState', { appHandle: 'app', windowId: '1', maxElements: 20, maxDepth: 5, showDiff: true }, signal)
-  await expect(read).rejects.toMatchObject({ code: 'UNSUPPORTED' })
-  await expect(read).rejects.toThrow('not implemented on Windows')
   const capabilities = await client.request('getCapabilities', {}, signal)
   expect(capabilities).toHaveProperty('permissions.accessibility', expect.any(Boolean))
   expect(capabilities).toHaveProperty('permissions.screenRecording', expect.any(Boolean))
@@ -93,3 +94,38 @@ it.skipIf(!helperPath)('describes one action argument without an application or 
   await expect(client.request('getActionSchema', { action: 'Missing.Action' }, signal))
     .rejects.toMatchObject({ code: 'UNSUPPORTED' })
 }, 60_000)
+
+const fixturePath = process.env.DSH_CUA_DESKTOP_TEST_FIXTURE
+it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
+  'reports a UIA change from a private editor and resolves its ID in the new snapshot',
+  async ({ signal }) => {
+    const fixture = spawn(fixturePath!, [], { windowsHide: true })
+    const exited = once(fixture, 'exit')
+    const reader = createInterface({ input: fixture.stdout })
+    onTestFinished(async () => {
+      const deadline = setTimeout(() => fixture.kill(), 5000)
+      try {
+        fixture.stdin.end('close\n')
+        await exited
+      } finally { clearTimeout(deadline); reader.close() }
+    })
+    const first = await reader[Symbol.asyncIterator]().next()
+    if (first.done) throw new Error('The desktop fixture exited before reporting its window')
+    const { state: { window: windowId } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
+    const client = await connect()
+    const { appHandle } = AppResult.parse(await client.request('getApp', { selector: fixturePath! }, signal))
+    const params = { appHandle, windowId, maxElements: 200, maxDepth: 20 }
+    const read = async (showDiff: boolean) => StateResult.parse(await client.request('getState', { ...params, showDiff }, signal))
+    expect((await read(true)).tree).toContain('CUA test text')
+    fixture.stdin.write('change-text\n')
+    let target: { snapshotId: string; elementId: string } | undefined
+    await expect.poll(async () => {
+      const state = await read(true)
+      const elementId = /^(?:TextChanged|PropertyChanged) \[([\d/-]+)\] Edit\b.*CUA notification sample/m.exec(state.tree)?.[1]
+      if (elementId) target = { snapshotId: state.snapshotId, elementId }
+      return target
+    }, { timeout: 10000 }).toBeDefined()
+    expect(await client.request('listActions', { appHandle, windowId, ...target }, signal)).toEqual(expect.any(Array))
+    expect((await read(false)).tree).toContain('CUA notification sample')
+    expect((await read(true)).tree).toContain('CUA test text')
+  }, 60_000)

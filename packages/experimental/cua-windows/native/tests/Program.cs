@@ -19,6 +19,8 @@ void Refuses(Action action, string code)
     catch (NativeFailure failure) { Check(failure.Code == code, "Unexpected refusal: " + failure.Code); }
 }
 
+NotificationChecks.Run(Check);
+
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
 var fullTreeRequest = NativeRequest.Parse(WireJson.Parse("""{"id":"full","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":false}}"""));

@@ -32,7 +32,7 @@ export interface CuaAccessibilityOptions {
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
-  /** Request changes since the previous comparable tree. Omit or pass false to request the full tree. */
+  /** Request macOS tree edits or Windows UI Automation notifications. Omit or pass false for a full tree. */
   showDiff?: boolean
   /** Maximum nodes visited for this read. Omission uses the provider setting. */
   maxElements?: number
