@@ -4,7 +4,8 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionDetailsResult, ActionResult, AppsResult, CapabilitiesResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
+import type { CuaActionDetails } from './api.ts'
+import type { DetailedListActionsRequest, ActionResult, AppsResult, CapabilitiesResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -20,7 +21,7 @@ export type CuaSnapshotId = Branded<'CuaSnapshotId'>
 /** Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot. */
 export type CuaElementId = Branded<'CuaElementId'>
 /** One operation sent through an authorized and logged host dispatcher. */
-export type CuaOperation = z.output<typeof SystemInputRequest>
+export type CuaOperation = Exclude<z.output<typeof SystemInputRequest>, { method: 'listActions' }> | z.output<typeof DetailedListActionsRequest>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
@@ -64,8 +65,6 @@ export type CuaActionResult = z.output<typeof ActionResult>
  * performAction enforces the action's value constraints and element-specific requirements.
  */
 export type CuaActionSchema = ObjectJsonSchema
-/** Element enablement and exact action names. Setters describe their direct argument or report an unknown or unsupported type. */
-export type CuaActionDetails = z.output<typeof ActionDetailsResult>
 /** Hover dispatch and the effect on the user's system pointer. */
 export type CuaHoverResult = z.output<typeof HoverResult>
 /** Select screenshot pixels by default or integer thousandths when explicitly requested. */

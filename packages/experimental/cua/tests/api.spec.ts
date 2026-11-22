@@ -2,7 +2,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { createCuaApi } from '../src/api.ts'
+import { createCuaApi, type CuaActionDetails } from '@deepseek-ai/dsh-cua/api'
 import { NativeError } from '../src/native-client.ts'
 import type { CuaApi, CuaApp, CuaAppInfo, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
 
@@ -389,12 +389,16 @@ describe('element action queries', () => {
       { kind: 'setAttribute', name: 'AXTextField.AXValue.Set', attribute: 'AXValue', argument: { type: 'string' } },
     ] }
     f.dispatch.mockResolvedValueOnce(details)
-    expect(await win.listActions(element('0'), { details: true })).toEqual(details)
+    const listing = await win.listActions(element('0'), { details: true })
+    expectTypeOf(listing).toEqualTypeOf<CuaActionDetails>()
+    expect(listing).toEqual(details)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listActions', params: {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', elementId: '0', details: true,
     } })
     f.dispatch.mockResolvedValueOnce(['AXPress'])
-    expect(await win.listActions(element('0'), { details: false })).toEqual(['AXPress'])
+    const names = await win.listActions(element('0'), { details: false })
+    expectTypeOf(names).toEqualTypeOf<string[]>()
+    expect(names).toEqual(['AXPress'])
     f.dispatch.mockResolvedValueOnce(['AXPress'])
     await expect(win.listActions(element('0'), { details: true })).rejects.toThrow()
   })

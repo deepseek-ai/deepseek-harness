@@ -1,7 +1,7 @@
 /** Model-authored operation JSON cannot supply host configuration or bypass retained identities. */
 import { expect, it } from 'vitest'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { providerRequestSchema, CapabilitiesResult, NativeScreenshotResult, Request, ScreenshotResult, ShowResult, StateResult, SystemInputRequest, WindowsResult } from '../src/protocol.ts'
+import { DetailedListActionsRequest, CapabilitiesResult, NativeScreenshotResult, Request, ScreenshotResult, ShowResult, StateResult, SystemInputRequest, WindowsResult } from '../src/protocol.ts'
 
 it('preserves opaque window IDs in requests and results', () => {
   const windowId = 'window-main'
@@ -196,16 +196,12 @@ it('admits action schema queries with only a nonempty action name', () => {
   }
 })
 
-it('advertises detailed lists independently of system input and requires a boolean option', () => {
+it('keeps the detailed list option out of portable requests', () => {
   const target = { appHandle: 'app', windowId: '7', snapshotId: 'snapshot', elementId: '0' }
-  for (const systemInput of [false, true]) {
-    const portable = providerRequestSchema(systemInput, false)
-    const detailed = providerRequestSchema(systemInput, true)
-    const query = { method: 'listActions', params: { ...target, details: true } }
-    expect(portable.safeParse(query).success).toBe(false)
-    expect(detailed.parse(query)).toEqual(query)
-    expect(detailed.safeParse({ ...query, params: { ...target, details: 'true' } }).success).toBe(false)
-  }
+  const query = { method: 'listActions', params: { ...target, details: true } }
+  for (const schema of [Request, SystemInputRequest]) expect(schema.safeParse(query).success).toBe(false)
+  expect(DetailedListActionsRequest.parse(query)).toEqual(query)
+  expect(DetailedListActionsRequest.safeParse({ ...query, params: { ...target, details: 'true' } }).success).toBe(false)
 })
 
 it('admits an element action query only with a retained snapshot identity', () => {

@@ -1,9 +1,21 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
-import type { z } from 'zod'
+import { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionDetailsResult, ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, HoverResult, MouseMoveTargets, NativeAppsResult, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaActionDetails, CuaElementId, CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
+import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, HoverResult, MouseMoveTargets, NativeAppsResult, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import type { CuaElementId, CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
+
+/** Detailed action discovery from the current element, without returning its attribute values. */
+const ActionDetailsResult = z.object({
+  enabled: z.boolean().nullable(), defaultAction: z.string().nullable(), unknownWritability: z.array(z.string()),
+  actions: z.array(z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('native'), name: z.string(), description: z.string().nullable() }),
+    z.object({ kind: z.literal('setAttribute'), name: z.string(), attribute: z.string(),
+      argument: z.union([z.record(z.string(), z.json()), z.enum(['unknown', 'unsupported'])]) }),
+  ])),
+})
+/** Element enablement, exact native action names and setter argument schemas returned by detailed discovery. */
+export type CuaActionDetails = z.output<typeof ActionDetailsResult>
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
   return [...new Set(issues.map((issue) => {

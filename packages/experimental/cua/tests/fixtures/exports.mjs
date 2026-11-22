@@ -17,9 +17,12 @@ const { CuaConfigFields } = await import('@deepseek-ai/dsh-cua/config')
 assert.equal(typeof CuaConfigFields.connectTimeoutMs.default, 'function')
 const { connectCua } = await import('@deepseek-ai/dsh-cua/bridge')
 const { NativeClient } = await import('@deepseek-ai/dsh-cua/native-client')
-const { Request } = await import('@deepseek-ai/dsh-cua/protocol')
+const { DetailedListActionsRequest, Request } = await import('@deepseek-ai/dsh-cua/protocol')
 for (const callable of [host.apply, host.installCua, host.CuaAccess, createCuaApi, connectCua, NativeClient]) assert.equal(typeof callable, 'function')
 assert.equal(Request.parse({ method: 'getCapabilities', params: {} }).method, 'getCapabilities')
+const listDetails = { method: 'listActions', params: { appHandle: 'app', snapshotId: 's', elementId: '0', details: true } }
+assert.deepEqual(DetailedListActionsRequest.parse(listDetails), listDetails)
+assert.equal(Request.safeParse(listDetails).success, false)
 const schema = { type: 'object', properties: { argument: { type: 'null', description: 'Omit argument or pass null.' } }, required: [], additionalProperties: false }
 const calls = []
 const cua = createCuaApi(async operation => {
