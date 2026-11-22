@@ -69,6 +69,9 @@ def main():
                 observed = helper.call('getState', panel)
                 assert 'Increment floating panel' in observed['tree'], observed
                 assert panel_id in [window['windowId'] for window in observed['windows']], observed
+                button = next(e for e in observed['elements'] if e['title'] == 'Increment floating panel' and e['role'] == 'AXButton')
+                action_target = {**owner, 'windowId': panel_id, 'snapshotId': observed['snapshotId'], 'elementId': button['elementId']}
+                assert 'AXPress' in helper.call('listActions', action_target)
                 x, y = actual['buttonPoint']
                 target = {**owner, 'windowId': panel_id, 'snapshotId': observed['snapshotId'], 'x': x, 'y': y}
                 helper.call('click', target)
@@ -85,6 +88,7 @@ def main():
                 wait_state(lambda value: not value['panelOnScreen'] and value['panelLayer'] > 0)
                 hidden = next(w for w in helper.call('listWindows', owner) if w['windowId'] == panel_id)
                 assert hidden.get('cacheOnly') is True, hidden
+                assert 'AXPress' in helper.call('listActions', action_target)
                 app_state = helper.call('getState', params)
                 observed_hidden = next(w for w in app_state['windows'] if w['windowId'] == panel_id)
                 assert observed_hidden.get('cacheOnly') is True, observed_hidden

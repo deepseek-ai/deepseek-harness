@@ -148,10 +148,10 @@ enum NativePlatform {
         let rows = windowRows().filter { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid }
         return windowInfo(rows, includeSpaces: true)
     }
-    private static func windowRows() -> [[String: Any]] {
-        CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as? [[String: Any]] ?? []
+    private static func windowRows() -> [NSDictionary] {
+        CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as? [NSDictionary] ?? []
     }
-    private static func windowInfo(_ rows: [[String: Any]], includeSpaces: Bool) -> [WindowInfo] {
+    private static func windowInfo(_ rows: [NSDictionary], includeSpaces: Bool) -> [WindowInfo] {
         let memberships = includeSpaces
             ? WindowSpaces().memberships(windowIDs: rows.compactMap { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value }) : [:]
         return rows.compactMap { row in
@@ -173,10 +173,10 @@ enum NativePlatform {
         return NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
     }
     static func ownedWindow(_ pid: Int32, _ id: UInt32) throws -> WindowInfo {
-        try requireOwnedWindow(pid, windows(allLayers: true).first { $0.windowID == id })
-    }
-    static func requireOwnedWindow(_ pid: Int32, _ window: WindowInfo?) throws -> WindowInfo {
-        guard let window else { throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Window closed or is unavailable; refresh getWindows") }
+        guard let row = windowRows().first(where: { ($0[kCGWindowNumber] as? NSNumber)?.uint32Value == id }),
+              let window = windowInfo([row], includeSpaces: false).first else {
+            throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Window closed or is unavailable; refresh getWindows")
+        }
         guard window.pid == pid else { throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Window belongs to another application") }
         return window
     }
