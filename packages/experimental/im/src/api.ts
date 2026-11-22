@@ -581,6 +581,12 @@ export interface ImSendOptions extends SendOptions {
    * answered last in memory (falling back to the chat's main timeline when none exists or after a restart).
    */
   thread?: string | true
+  /**
+   * Adapter-opaque reply context of the interaction this publication answers (`Target.referrer`), e.g. the referrer of
+   * a QQ button click so the answer is a passive reply to that click. Replaces the referrer `quote` or `thread` would
+   * supply; grants no access of its own.
+   */
+  referrer?: unknown
   /** For grants check + attribution. */
   session?: SessionId
 }

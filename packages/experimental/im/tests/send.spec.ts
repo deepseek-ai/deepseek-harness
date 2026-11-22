@@ -911,6 +911,26 @@ describe('ImSender referrers', () => {
     expect(bot.operations).toHaveLength(1)
   })
 
+  it('an explicit referrer reaches the target unquoted, and replaces the one a quote supplies', async () => {
+    const { bot, sender, store } = await boot()
+    const CLICK = { event_id: 'evt-click', receivedAt: 2000, chatType: 'group', chatId: 'chat' }
+    await sender.send(CHAT, h.text('answer to a click'), { referrer: CLICK })
+    expect(bot.operations.at(-1)?.target?.referrer).toEqual(CLICK)
+
+    // With a quote the envelope stays, but the click is what the publication answers.
+    const quoted = await store.put(inboundDraft(ImMessageKey('fake:bot', 'm7'), REFERRER), 'none')
+    await sender.send(CHAT, h.text('quoted answer'), { quote: quoted.key, referrer: CLICK })
+    expect(bot.operations.at(-1)?.target?.referrer).toEqual(CLICK)
+    expect(bot.operations.at(-1)?.payload).toMatchObject({ quote: 'm7' })
+
+    // The referrer is not part of the request's identity: a replay with another one returns the recorded outcome.
+    const first = await sender.send(CHAT, h.text('once'), { operationId: 'op-ref', referrer: CLICK })
+    const sent = bot.operations.length
+    const again = await sender.send(CHAT, h.text('once'), { operationId: 'op-ref', referrer: { event_id: 'evt-2' } })
+    expect(again.status).toBe(first.status)
+    expect(bot.operations).toHaveLength(sent)
+  })
+
   it('leaves the target without a referrer when unquoted or quoting a message without one', async () => {
     const { bot, sender, store } = await boot()
     await sender.send(CHAT, h.text('unquoted'))

@@ -12,7 +12,10 @@
  *   `config.sources` still exists and admits it (else `ImError('access')`), and applies the caller's thread wish; `quote`
  *   becomes the content's `<quote id>` envelope element, so the platform reply rides the normal transform/fallback path,
  *   and the quoted stored message's adapter referrer becomes `Target.referrer` (passive replies, thread placement) — for
- *   a stream on every state, because the target is resolved once.
+ *   a stream on every state, because the target is resolved once. An explicit `options.referrer` (the adapter-opaque
+ *   reply context of an interaction the caller answers, such as a QQ button click's `event_id`) replaces the one the
+ *   quote or thread would supply: the caller names the event it answers, which a stored message cannot. It carries no
+ *   grant of its own and is not part of a receipt's digest.
  * - **Receipts.** A publication with `options.operationId` records `pending` *before* it reaches the platform and the
  *   observed outcome after it: `confirmed`, `failed` (the platform answered and published nothing —
  *   `PlatformError.published === 'no'`, `StrictRenderError`, or a stream whose message was never opened or was
@@ -317,12 +320,13 @@ export class ImSender {
    * current `config.sources`), the caller's thread wish and — when the publication answers a stored message or stored
    * thread of this chat — that message's adapter referrer (see {@link referrerOf}).
    * @param chat - chat key.
-   * @param options - `thread` and `quote`; a `quote` is applied to the content (see {@link send}).
+   * @param options - `thread`, `quote` and `referrer`; a `quote` is applied to the content (see {@link send}), an
+   *   explicit `referrer` replaces the quote's or thread's.
    * @returns the target handed to `bot.send` / `bot.stream`.
    * @throws ImError `access` when `chat` was never admitted or its stored `source` rule was removed or narrowed so it
    *   no longer admits `chat`.
    */
-  target(chat: ImChatKey, options: Pick<ImSendOptions, 'thread' | 'quote'> = {}): Target {
+  target(chat: ImChatKey, options: Pick<ImSendOptions, 'thread' | 'quote' | 'referrer'> = {}): Target {
     const known = this.deps.store.chat(chat)
     if (known === undefined) throw new ImError('access', `Chat ${chat} is not admitted to IM.`)
     const source = this.config.sources.find(candidate => candidate.id === known.source)
@@ -330,7 +334,8 @@ export class ImSender {
       throw new ImError('access', `Chat ${chat} is no longer admitted to IM.`)
     }
     const thread = options.thread
-    const referrer = this.referrerOf(chat, options.quote, thread)
+    // An explicit referrer names the event being answered; it wins over the one a quote or thread would supply.
+    const referrer = options.referrer !== undefined ? options.referrer : this.referrerOf(chat, options.quote, thread)
     return {
       chat: { ...known.ref },
       ...thread === undefined ? {} : { thread },
