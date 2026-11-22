@@ -57,8 +57,13 @@ interface PluginInvocation {
   args: string[]
 }
 
+/** {@link parseDshArgs} has printed the version. The caller can return and let the process exit naturally. */
+interface VersionInvocation {
+  mode: 'version'
+}
+
 /** The resolved `dsh` invocation. Help and errors exit inside {@link parseDshArgs}. */
-export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation | { mode: 'version' }
+export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation | VersionInvocation
 
 /** Launcher flags for profile boot and configuration dumps. */
 interface BootOptions {
