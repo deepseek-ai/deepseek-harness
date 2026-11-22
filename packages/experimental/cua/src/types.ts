@@ -4,8 +4,7 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { CuaActionDetails } from './api.ts'
-import type { DetailedListActionsRequest, ActionResult, AppsResult, CapabilitiesResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, AppsResult, CapabilitiesResult, HoverResult, SystemInputRequest, ShowResult, WindowsResult } from './protocol.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -21,7 +20,7 @@ export type CuaSnapshotId = Branded<'CuaSnapshotId'>
 /** Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot. */
 export type CuaElementId = Branded<'CuaElementId'>
 /** One operation sent through an authorized and logged host dispatcher. */
-export type CuaOperation = Exclude<z.output<typeof SystemInputRequest>, { method: 'listActions' }> | z.output<typeof DetailedListActionsRequest>
+export type CuaOperation = z.output<typeof SystemInputRequest>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
@@ -121,24 +120,9 @@ export interface CuaSurface {
   /**
    * List the actions currently advertised by an element, including attribute-setting operations.
    * @param elementId - Element id from the application's current snapshot.
-   * @param options - Omit or pass false for names only.
    * @returns Provider-defined action names; empty when the element advertises none.
    */
-  listActions(elementId: CuaElementId, options?: { details?: false }): Promise<string[]>
-  /**
-   * Read native action descriptions and setter argument schemas from the selected element on macOS.
-   * @param elementId - Element id from the current observation.
-   * @param options - Request detailed discovery.
-   * @returns Element enablement and actions, with null for unavailable enablement or descriptions.
-   */
-  listActions(elementId: CuaElementId, options: { details: true }): Promise<CuaActionDetails>
-  /**
-   * Select names or details at run time.
-   * @param elementId - Element id from the current observation.
-   * @param options - True requests detailed discovery on macOS.
-   * @returns Detailed discovery when requested, otherwise the names.
-   */
-  listActions(elementId: CuaElementId, options: { details?: boolean }): Promise<string[] | CuaActionDetails>
+  listActions(elementId: CuaElementId): Promise<string[]>
   /**
    * Describe an action's parameters without reading an element or requiring an accessibility snapshot.
    * The schema does not establish that an element supports the action. Attributes whose types depend on

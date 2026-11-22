@@ -72,7 +72,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = { createChannel, ...config.recentActivityWindowMs === 'off' ? {} : { windowRead: watchWindowActivity(ctx) },
     heldInputState: true,
     getGuidance: (kind: 'raw' | 'standalone') => macosGuidance(kind, config.recentActivityWindowMs !== 'off'), capabilities: CAPABILITIES,
-    detailedActions: true, acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
+    acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('macOS CUA helperPath must be absolute')
     installCua(ctx, config, { helperPath: config.helperPath, ...backend })

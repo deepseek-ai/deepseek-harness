@@ -25,14 +25,12 @@ import Testing
     }
 }
 
-@Test func keepsOnlyAttributesReportedAsWritable() {
-    let listed = AXAccess.writableAttributeNames(["AXValue", "AXFocused", "AXTitle"]) { name in
+@Test func keepsOnlyAttributesReportedAsWritable() throws {
+    #expect(try AXAccess.writableAttributeNames(["AXValue", "AXFocused", "AXTitle"]) { name in
         if name == "AXValue" { return true }
         if name == "AXFocused" { return nil }
         return false
-    }
-    #expect(listed.writable == ["AXValue"])
-    #expect(listed.unknown == ["AXFocused"])
+    } == ["AXValue"])
 }
 
 @Test func preservesDistinctNativeNamesWithTheSameDisplayLabel() throws {
@@ -40,22 +38,22 @@ import Testing
     #expect(try AXAccess.listActionNames(actions: names, role: "AXButton", writableAttributes: []) == names)
 }
 
-@Test func nativeActionDescriptionFailuresPreserveTheElementAndPermissionErrors() throws {
-    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
-    #expect(try access.actionDescription("Press" as CFString, error: .success) == "Press")
-    for code in [AXError.success, .actionUnsupported, .notImplemented, .noValue, .failure] {
-        #expect(try access.actionDescription(nil, error: code) == nil)
-    }
-    #expect(try access.actionDescription("" as CFString, error: .success) == nil)
-    for code in [AXError.apiDisabled, .invalidUIElement, .cannotComplete, .illegalArgument] {
-        #expect(throws: NativeFailure.self) { try access.actionDescription(nil, error: code) }
+@Test func setterDiscoveryUsesTheSameValueTypesAsConversion() throws {
+    #expect(try AXAccess.canEncodeSetter("AXPosition") { Issue.record("Unnecessary type probe"); return nil })
+    #expect(try AXAccess.canEncodeSetter("AXValue") { nil })
+    #expect(try AXAccess.canEncodeSetter("AXValue") { "text" as CFString })
+    #expect(try !AXAccess.canEncodeSetter("AXSections") { [] as CFArray })
+    #expect(throws: NativeFailure.self) {
+        try AXAccess.attributeValue(attribute: "AXSections", argument: .array([]), current: [] as CFArray)
     }
 }
 
-@Test func setterDetailsSeparateMissingValuesFromUnsupportedTypes() {
-    #expect(AXAccess.setterArgument("AXValue") { _ in "private text" as CFString } == .object(["type": .string("string")]))
-    #expect(AXAccess.setterArgument("AXValue") { _ in nil } == .string("unknown"))
-    #expect(AXAccess.setterArgument("AXSections") { _ in [] as CFArray } == .string("unsupported"))
-    let position = AXAccess.setterArgument("AXPosition") { _ in Issue.record("Read a name-defined attribute"); return nil }
-    #expect(position["required"] == .array([.string("x"), .string("y")]))
+@Test func aMissingTypeDoesNotHideActionsOrMaskFatalAXErrors() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    #expect(try AXAccess.canEncodeSetter("AXCustom") { throw access.failure(.failure, "read AXCustom", attribute: "AXCustom") })
+    for code in [AXError.apiDisabled, .invalidUIElement, .cannotComplete] {
+        #expect(throws: NativeFailure.self) {
+            try AXAccess.canEncodeSetter("AXCustom") { throw access.failure(code, "read AXCustom", attribute: "AXCustom") }
+        }
+    }
 }

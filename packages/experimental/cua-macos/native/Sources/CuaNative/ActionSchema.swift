@@ -10,19 +10,27 @@ enum ActionSchema {
                 "argument": SchemaBuilder.scalar("null", description: "This action accepts no argument; omit argument or pass null."),
             ], required: [])
         }
-        return SchemaBuilder.object(["argument": argument(for: target.attribute)], required: ["argument"])
+        return SchemaBuilder.object(["argument": argument(for: target)], required: ["argument"])
     }
 
-    /// Without an element, only a name-determined type is definite; other attributes accept every supported kind.
-    private static func argument(for attribute: String) -> JSONValue {
-        guard let kind = AXAccess.knownValueKind(attribute: attribute) else {
+    /// A name-only query can describe standard AX types but cannot read a control's current value or limits.
+    private static func argument(for target: AXAttributeSetTarget) -> JSONValue {
+        if let kind = AXAccess.knownValueKind(attribute: target.attribute) { return schema(for: kind) }
+        switch target.attribute {
+        case "AXFocused": return SchemaBuilder.scalar("boolean", description: "Pass true to request keyboard focus.")
+        case "AXMain", "AXMinimized", "AXExpanded", "AXSelected": return schema(for: .boolean)
+        case "AXSelectedText", "AXTitle": return schema(for: .string)
+        case "AXVisibleCharacterRange": return schema(for: .range)
+        case "AXValue" where target.role == "AXSlider" || target.role == "AXIncrementor":
+            return SchemaBuilder.oneOf([schema(for: .number), schema(for: .string)],
+                description: "Use the control's numeric or string value type. Numeric limits depend on the control.")
+        default:
             return SchemaBuilder.oneOf(AXAccess.AttributeValueKind.allCases.map { schema(for: $0) },
                 description: "The accepted value type depends on the element's live attribute value type.")
         }
-        return schema(for: kind)
     }
 
-    static func schema(for kind: AXAccess.AttributeValueKind) -> JSONValue {
+    private static func schema(for kind: AXAccess.AttributeValueKind) -> JSONValue {
         switch kind {
         case .string: return SchemaBuilder.scalar("string")
         case .boolean: return SchemaBuilder.scalar("boolean")

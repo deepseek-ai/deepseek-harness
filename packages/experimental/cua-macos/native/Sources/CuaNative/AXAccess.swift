@@ -268,61 +268,14 @@ final class AXAccess {
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }
         return result
     }
-    func listActions(_ element: AXUIElement, details: Bool) throws -> JSONValue {
-        let advertised = try actions(element, requireKnown: details)
-        let (attributes, unknownWritability) = try writableAttributes(element)
-        let role = attributes.isEmpty ? nil : try string(element, "AXRole")
-        let names = try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes)
-        guard details else { return .array(names.map(JSONValue.string)) }
-
-        let enabled = try boolean(element, "AXEnabled")
-        var records: [JSONValue] = try advertised.map { name in
-            try prepare(element)
-            var description: CFString?
-            let error = AXUIElementCopyActionDescription(element, name as CFString, &description)
-            let text = try actionDescription(description, error: error)
-            return .object(["kind": .string("native"), "name": .string(name),
-                            "description": text.map(JSONValue.string) ?? .null])
+    func listActions(_ element: AXUIElement) throws -> [String] {
+        let advertised = try actions(element)
+        let attributes = try writableAttributes(element).filter { name in
+            try Self.canEncodeSetter(name) { try attribute(element, name) }
         }
-        for (name, attributeName) in zip(names.dropFirst(advertised.count), attributes) {
-            let argument = try Self.setterArgument(attributeName) { key in
-                do { return try attribute(element, key) }
-                catch let failure as NativeFailure where failure.attribute == key && failure.accessibilityError == AXError.failure.rawValue {
-                    return nil
-                }
-            }
-            records.append(.object(["kind": .string("setAttribute"), "name": .string(name),
-                                    "attribute": .string(attributeName), "argument": argument]))
-        }
-        return .object(["enabled": enabled.map(JSONValue.bool) ?? .null, "defaultAction": Self.defaultAction(advertised).map(JSONValue.string) ?? .null,
-                        "actions": .array(records),
-                        "unknownWritability": .array(unknownWritability.map(JSONValue.string))])
-    }
-    /// Select the element's default action; Press takes precedence over Pick.
-    static func defaultAction(_ advertised: [String]) -> String? {
-        advertised.contains("AXPress") ? "AXPress" : advertised.contains("AXPick") ? "AXPick" : nil
-    }
-
-    func actionDescription(_ value: CFString?, error: AXError) throws -> String? {
-        if absent(error) || error == .actionUnsupported || error == .failure { return nil }
-        guard error == .success else { throw failure(error, "read action description") }
-        guard let value, CFStringGetLength(value) > 0 else { return nil }
-        return value as String
-    }
-    /// The converter accepts name-defined geometry even when the attribute has no readable value.
-    static func setterArgument(_ name: String, read: (String) throws -> CFTypeRef?) rethrows -> JSONValue {
-        if let kind = knownValueKind(attribute: name) { return ActionSchema.schema(for: kind) }
-        guard let value = try read(name) else { return .string("unknown") }
-        guard let kind = inferredKind(value) else { return .string("unsupported") }
-        let argument = ActionSchema.schema(for: kind)
-        guard name == "AXValue", kind == .number, case .object(var schema) = argument else { return argument }
-        for (key, attribute) in [("minimum", "AXMinValue"), ("maximum", "AXMaxValue")] {
-            if let bound = try read(attribute), CFGetTypeID(bound) == CFNumberGetTypeID(),
-               let number = (bound as? NSNumber)?.doubleValue, number.isFinite {
-                schema[key] = .number(number)
-            }
-        }
-        return .object(schema)
+        guard !attributes.isEmpty else { return advertised }
+        let role = try string(element, "AXRole")
+        return try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes)
     }
     static func listActionNames(actions: [String], role: String?, writableAttributes: [String]) throws -> [String] {
         guard !writableAttributes.isEmpty else { return actions }
@@ -331,26 +284,29 @@ final class AXAccess {
         }
         return actions + writableAttributes.map { "\(role).\($0).Set" }
     }
-    func writableAttributes(_ element: AXUIElement) throws -> (writable: [String], unknown: [String]) {
+    /// An absent value still permits the scalar arguments accepted by attributeValue.
+    static func canEncodeSetter(_ name: String, read: () throws -> CFTypeRef?) throws -> Bool {
+        if knownValueKind(attribute: name) != nil { return true }
+        do {
+            guard let value = try read() else { return true }
+            return inferredKind(value) != nil
+        } catch let error as NativeFailure where error.attribute == name && error.accessibilityError == AXError.failure.rawValue {
+            // An inconclusive type probe cannot rule out an advertised writable attribute.
+            return true
+        }
+    }
+    func writableAttributes(_ element: AXUIElement) throws -> [String] {
         try prepare(element)
         var names: CFArray?
         let error = AXUIElementCopyAttributeNames(element, &names)
-        if absent(error) { return ([], []) }
+        if absent(error) { return [] }
         guard error == .success else { throw failure(error, "read attribute names") }
-        guard let names else { return ([], []) }
+        guard let names else { return [] }
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility attributes are not strings") }
         return try Self.writableAttributeNames(result) { try writable(element, $0, forDiscovery: true) }
     }
-    static func writableAttributeNames(_ names: [String], isWritable: (String) throws -> Bool?) rethrows -> (writable: [String], unknown: [String]) {
-        var writable: [String] = [], unknown: [String] = []
-        for name in names {
-            switch try isWritable(name) {
-            case true: writable.append(name)
-            case false: break
-            case nil: unknown.append(name)
-            }
-        }
-        return (writable, unknown)
+    static func writableAttributeNames(_ names: [String], isWritable: (String) throws -> Bool?) rethrows -> [String] {
+        try names.filter { try isWritable($0) == true }
     }
     func writable(_ element: AXUIElement, _ name: String, forDiscovery: Bool = false) throws -> Bool? {
         try prepare(element)

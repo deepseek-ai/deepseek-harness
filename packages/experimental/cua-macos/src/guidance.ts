@@ -23,7 +23,6 @@ function operationGuidance(treeAdvice: string): string {
   return `${PLATFORM_GUIDANCE}
 
 ${catalog.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
-  if (method === 'listActions') return '- listActions(elementId: string, options?: { details?: boolean }) -> string[] | ActionDetails — omit options for exact names. With details: true, inspect enabled, defaultAction, native action descriptions, setter argument schemas and unknownWritability. Pass the exact name to performAction.'
   const detail = methodDetails.get(method)
   return detail ? `${entry} ${detail}` : entry
 })}`

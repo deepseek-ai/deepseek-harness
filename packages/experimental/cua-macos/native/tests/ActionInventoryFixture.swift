@@ -38,13 +38,16 @@ func inspect(_ element: AXUIElement, depth: Int, into inventory: inout [String: 
             _ = AXUIElementCopyActionDescription(element, name as CFString, &text)
             return ["name": name, "description": (text as String?).flatMap { $0.isEmpty ? nil : $0 } as Any]
         }
-        var writable: [String] = [], unknown: [String] = []
+        var writable: [String] = [], arrayAttributes: [String] = []
         for name in attributes as! [String] {
             var settable: DarwinBoolean = false
-            if AXUIElementIsAttributeSettable(element, name as CFString, &settable) != .success { unknown.append(name) }
-            else if settable.boolValue { writable.append(name) }
+            guard AXUIElementIsAttributeSettable(element, name as CFString, &settable) == .success, settable.boolValue else { continue }
+            writable.append(name)
+            if let value = read(element, name as CFString), CFGetTypeID(value) == CFArrayGetTypeID() {
+                arrayAttributes.append(name)
+            }
         }
-        inventory[id] = ["native": native, "writable": writable, "unknown": unknown]
+        inventory[id] = ["native": native, "writable": writable, "arrays": arrayAttributes]
     }
     for child in read(element, kAXChildrenAttribute as CFString) as? [AXUIElement] ?? [] {
         inspect(child, depth: depth + 1, into: &inventory)

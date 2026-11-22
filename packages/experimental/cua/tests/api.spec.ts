@@ -2,7 +2,7 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { createCuaApi, type CuaActionDetails } from '@deepseek-ai/dsh-cua/api'
+import { createCuaApi } from '../src/api.ts'
 import { NativeError } from '../src/native-client.ts'
 import type { CuaApi, CuaApp, CuaAppInfo, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
 
@@ -378,29 +378,6 @@ describe('element action queries', () => {
     await expect(app.getActionSchema('Window.Unknown')).rejects.toBe(failure)
     f.dispatch.mockResolvedValueOnce({ dispatched: true })
     await expect(app.getActionSchema('AXPress')).rejects.toThrow()
-  })
-
-  it('reads element-specific descriptions and setter schemas from the selected window', async () => {
-    const f = fixture()
-    const win = await (await f.api.getApp('Editor')).getWindow('23')
-    await win.getAccessibilityTree()
-    const details = { enabled: null, defaultAction: 'AXPress', unknownWritability: ['AXCustom'], actions: [
-      { kind: 'native', name: 'AXPress', description: 'press' },
-      { kind: 'setAttribute', name: 'AXTextField.AXValue.Set', attribute: 'AXValue', argument: { type: 'string' } },
-    ] }
-    f.dispatch.mockResolvedValueOnce(details)
-    const listing = await win.listActions(element('0'), { details: true })
-    expectTypeOf(listing).toEqualTypeOf<CuaActionDetails>()
-    expect(listing).toEqual(details)
-    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listActions', params: {
-      appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', elementId: '0', details: true,
-    } })
-    f.dispatch.mockResolvedValueOnce(['AXPress'])
-    const names = await win.listActions(element('0'), { details: false })
-    expectTypeOf(names).toEqualTypeOf<string[]>()
-    expect(names).toEqual(['AXPress'])
-    f.dispatch.mockResolvedValueOnce(['AXPress'])
-    await expect(win.listActions(element('0'), { details: true })).rejects.toThrow()
   })
 
   it('returns raw provider action names including attribute-setting operations without reading new state', async () => {

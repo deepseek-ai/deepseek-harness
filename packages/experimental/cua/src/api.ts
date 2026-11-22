@@ -1,21 +1,9 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
-import { z } from 'zod'
+import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, HoverResult, MouseMoveTargets, NativeAppsResult, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaElementId, CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
+import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
-
-/** Detailed action discovery from the current element, without returning its attribute values. */
-const ActionDetailsResult = z.object({
-  enabled: z.boolean().nullable(), defaultAction: z.string().nullable(), unknownWritability: z.array(z.string()),
-  actions: z.array(z.discriminatedUnion('kind', [
-    z.object({ kind: z.literal('native'), name: z.string(), description: z.string().nullable() }),
-    z.object({ kind: z.literal('setAttribute'), name: z.string(), attribute: z.string(),
-      argument: z.union([z.record(z.string(), z.json()), z.enum(['unknown', 'unsupported'])]) }),
-  ])),
-})
-/** Element enablement, exact native action names and setter argument schemas returned by detailed discovery. */
-export type CuaActionDetails = z.output<typeof ActionDetailsResult>
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
   return [...new Set(issues.map((issue) => {
@@ -120,17 +108,6 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
       return { useSystemInput }
     }
     const elementParams = (): Record<string, JsonValue> => ({ snapshotId: currentSnapshot(target.appHandle) })
-    function listActions(id: CuaElementId, options?: { details?: false }): Promise<string[]>
-    function listActions(id: CuaElementId, options: { details: true }): Promise<CuaActionDetails>
-    function listActions(id: CuaElementId, options: { details?: boolean }): Promise<string[] | CuaActionDetails>
-    async function listActions(id: CuaElementId, options: { details?: boolean } = {}) {
-      requireAccessibility()
-      const target = { ...elementParams(), elementId: id }
-      if (options.details === undefined || options.details === false) {
-        return ActionNamesResult.parse(await scopedCall('listActions', target))
-      }
-      return ActionDetailsResult.parse(await scopedCall('listActions', target, { details: options.details }))
-    }
     const surface: CuaSurface = {
       async show() { return ShowResult.parse(await scopedCall('show', {})) },
       async getAccessibilityTree(options) {
@@ -148,7 +125,10 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         observed.set(target.appHandle, { snapshotId: state.snapshotId, windowId: target.windowId })
         return state.tree
       },
-      listActions,
+      async listActions(elementId) {
+        requireAccessibility()
+        return ActionNamesResult.parse(await scopedCall('listActions', { ...elementParams(), elementId }))
+      },
       async getActionSchema(action) {
         return ActionSchemaResult.parse(await call('getActionSchema', { action }))
       },

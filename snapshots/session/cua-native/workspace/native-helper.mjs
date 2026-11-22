@@ -251,21 +251,13 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if ((method === 'setValue' && writableFailure === 'AXValue') || (method === 'selectText' && writableFailure === 'AXSelectedTextRange')) {
       refuse('NATIVE_ERROR', `Accessibility read writability of ${writableFailure} failed with error -25200`)
     }
-    if (method === 'click' || method === 'setValue' || method === 'mouseMove' || method === 'listActions') {
+    if (method === 'click' || method === 'setValue' || method === 'mouseMove') {
       const observed = params.snapshotId === undefined && params.elementId === undefined
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
         : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
       if (!observed && (params.snapshotId !== undefined || params.elementId !== undefined)) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
       if (params.windowId !== undefined && observed?.windowId != null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
       if (observed?.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
-      if (method === 'listActions') {
-        if (params.elementId !== '0') refuse('INVALID_ARGUMENT', 'Expected the Increment button')
-        const actions = [
-          { kind: 'native', name: 'AXPress', description: 'press' },
-          { kind: 'setAttribute', name: 'AXButton.AXFocused.Set', attribute: 'AXFocused', argument: { type: 'boolean' } },
-        ]
-        return params.details ? { enabled: true, defaultAction: 'AXPress', actions, unknownWritability: [] } : actions.map(action => action.name)
-      }
       let systemPointerMoved = false
       if (method === 'mouseMove') {
         const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)

@@ -20,7 +20,7 @@ import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
-import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemInputRequest, DetailedListActionsRequest, ScreenshotResult } from './protocol.ts'
+import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemInputRequest, ScreenshotResult } from './protocol.ts'
 import { CuaConfigFields, type CuaScreenshotTargetConfig, type CuaStandaloneRunCodeConfig } from './config.ts'
 import { fixedScreenshotTarget, installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
@@ -200,8 +200,6 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Advertise element-specific action descriptions and setter argument types. */
-  detailedActions?: boolean
   /** Opt in to connection-scoped getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
   heldInputState?: boolean
   /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */
@@ -227,12 +225,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const heldInputs = backend.heldInputState ? new CuaHeldInputs(ctx) : undefined
   const systemInput = backend.capabilities.systemInput === true
   const systemInputControl = systemInput ? new SystemInputControl(ctx, config.requireSystemInputApproval) : undefined
-  const baseRequest = systemInput ? SystemInputRequest : Request
-  const [getCapabilities, ...operations] = baseRequest.options
-  const requestSchema = backend.detailedActions
-    ? z.discriminatedUnion('method', [getCapabilities, ...operations.map(schema =>
-      schema.shape.method.value === 'listActions' ? DetailedListActionsRequest : schema)])
-    : baseRequest
+  const requestSchema = systemInput ? SystemInputRequest : Request
   const formatGuidance = (text: string): string => {
     const inputGuidance = heldInputs ? withHeldInputGuidance(text) : text
     const instructions = systemInput ? withSystemInputGuidance(inputGuidance) : inputGuidance

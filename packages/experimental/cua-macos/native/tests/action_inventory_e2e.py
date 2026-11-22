@@ -1,4 +1,4 @@
-"""Compare listActions with direct AX reads and invoke duplicate-label actions on an owned AppKit fixture."""
+"""Compare listActions with direct AX reads and use getActionSchema to operate the listed controls."""
 import argparse
 import json
 from contextlib import ExitStack
@@ -37,34 +37,34 @@ def main():
             element = next(e for e in observed['elements'] if e['identifier'] == identifier)
             target = {**scope, 'snapshotId': observed['snapshotId'], 'elementId': element['elementId']}
             names = helper.call('listActions', target)
-            details = helper.call('listActions', {**target, 'details': True})
-            rows = details['actions']
-            assert [row['name'] for row in rows] == names, (identifier, rows, names)
-            native = [row for row in rows if row['kind'] == 'native']
-            assert [{'name': r['name'], 'description': r['description']} for r in native] == expected['native'], identifier
-            setters = {r['attribute']: r for r in rows if r['kind'] == 'setAttribute'}
-            assert set(setters) == set(expected['writable']), (identifier, setters, expected)
-            assert all(row['name'] == f"{element['role']}.{key}.Set" for key, row in setters.items())
-            assert set(details['unknownWritability']) == set(expected['unknown']), identifier
+            native = [entry['name'] for entry in expected['native']]
+            setters = {attr: f"{element['role']}.{attr}.Set" for attr in expected['writable'] if attr not in expected['arrays']}
+            assert names == native + list(setters.values()), (identifier, names, expected)
+            schemas = {name: helper.call('getActionSchema', {'action': name}) for name in names}
+            for name, schema in schemas.items():
+                assert schema['required'] == ([] if name in native else ['argument']), (name, schema)
+                if name in native:
+                    assert schema['properties']['argument']['type'] == 'null', (name, schema)
             if identifier == 'audit-custom':
-                assert details['defaultAction'] == 'AXPress'
-                marked = [row['name'] for row in native if row['description'] == 'Mark']
-                assert len(set(marked)) == len(marked) == 2, native
+                marked = [entry['name'] for entry in expected['native'] if entry['description'] == 'Mark']
+                assert len(set(marked)) == len(marked) == 2, marked
                 callbacks = []
                 for name in marked:
                     assert helper.call('performAction', {**target, 'action': name})['dispatched']
                     callbacks.append(state.read_text())
                 assert set(callbacks) == {'first', 'second'}, callbacks
-            if identifier == 'audit-disabled':
-                assert details['enabled'] is False
             if identifier == 'audit-field':
-                assert setters['AXValue']['argument']['type'] == 'string'
-                assert setters['AXSelectedTextRange']['argument']['required'] == ['location', 'length']
-                assert 'fixture contents' not in json.dumps(details)
+                assert schemas[setters['AXFocused']]['properties']['argument']['type'] == 'boolean'
+                assert schemas[setters['AXSelectedText']]['properties']['argument']['type'] == 'string'
+                assert schemas[setters['AXVisibleCharacterRange']]['properties']['argument']['required'] == ['location', 'length']
             if identifier == 'audit-slider':
-                argument = setters['AXValue']['argument']
-                assert (argument['type'], argument['minimum'], argument['maximum']) == ('number', 0, 10), argument
-            print(f"{identifier}: {len(native)} native actions, {len(setters)} setters, {len(expected['unknown'])} unknown")
+                name = setters['AXValue']
+                assert {item['type'] for item in schemas[name]['properties']['argument']['oneOf']} == {'number', 'string'}
+                assert helper.call('performAction', {**target, 'action': name, 'argument': 7})['dispatched']
+            print(f"{identifier}: {len(native)} native actions, {len(setters)} setters, excluded arrays: {expected['arrays']}")
+        refreshed = helper.call('getState', {**scope, 'maxElements': 100, 'maxDepth': 12, 'details': True})
+        slider = next(item for item in refreshed['elements'] if item['identifier'] == 'audit-slider')
+        assert float(slider['value']) == 7, slider['value']
 
 
 if __name__ == '__main__':

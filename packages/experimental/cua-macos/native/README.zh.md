@@ -78,8 +78,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `launchApp` | Host 授权后，打开待启动的安装副本并将句柄绑定到已核实的进程，全程不请求激活；有歧义的待启动选择以 `AMBIGUOUS_APP` 失效。对已选定的运行应用，请求新实例并返回 `{dispatched: true}`，原句柄继续绑定原先选定的进程。 |
 | `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
-| `listActions` | 默认返回元素的完整动作名。传入 `details: true` 会返回 `{enabled, defaultAction, actions, unknownWritability}`。默认动作是 `invoke` 会选择的动作名，没有时为 null。原生动作带有应用提供的本地化说明，缺失时为 null。数值型参数会带上控件报告的最小值和最大值。可写属性带有完整动作名和直接参数的 schema。无法确定类型时标为 `unknown`，helper 无法编码实际类型时标为 `unsupported`。无法确认是否可写的属性列在 `unknownWritability` 中。 |
-| `getActionSchema` | 查询动作的参数 JSON Schema。 |
+| `listActions` | 先列出控件的完整原生动作名，再列出可写属性的 `Role.Attribute.Set`。如果已读到的属性值无法用 JSON 写入，例如窗口分区数组，就省略该项。尚无当前值的属性仍可能接受标量。 |
+| `getActionSchema` | 按完整动作名查询参数的 JSON Schema。原生动作无须参数。标准属性写入会给出布尔、文本或范围参数，滑块和步进控件的值可能是数字或字符串。只凭动作名无法确定某个控件的数值上下限。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
 | `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
@@ -128,7 +128,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回 `kAXErrorAttributeUnsupported`（`-25205`），且派发前后两次读取的同一窗口尺寸均有效且不同，helper 会报告成功。窗口仅移动位置，或在第二次读取后才改变大小时，helper 会保留原错误。如果用户或应用恰好在两次读取之间调整了窗口大小，也会被判为成功。
 
-读取树或只列名称时，如果动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。请求详情时会报告这个错误。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
+读取树或枚举动作时，某个元素的动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。枚举时跳过无法确认可写性的属性。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
 
 `selectText` 要求新近元素快照和可写 AXSelectedTextRange。它匹配唯一的字面文本，可用紧邻的 prefix/suffix 缩小范围，然后选中文本或将光标放在前后。匹配和返回范围采用 UTF-16 偏移。歧义或缺失文本会失败，helper 不改写内容，并重新核实值和选区。AX 文本包含可用的可写性、禁用状态、选中状态和选区信息；AXAccess 持有元素 ID 和原生引用，AXTextFormatter 渲染已观察的值。
 
@@ -158,7 +158,7 @@ helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回
 
 在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。 运行 `python3 packages/experimental/cua-macos/native/tests/nested_application_e2e.py`，用独立签名的测试应用验证 helper 在外层 `.app` 之外保留签名发布、并发发布和服务退出。
 
-运行 `python3 packages/experimental/cua-macos/native/tests/action_inventory_e2e.py --helper /absolute/path/to/helper`，将五个 AppKit 控件的动作详情与测试应用独立读取的 AX 结果逐项对比。
+运行 `python3 packages/experimental/cua-macos/native/tests/action_inventory_e2e.py --helper /absolute/path/to/helper`，对照五个控件的 AX 系统查询结果，逐项查询参数，并验证两个自定义回调和一次滑块写入。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/floating_windows_e2e.py --helper /absolute/path/to/helper`，验证独立浮层的发现、截图、实际点击，以及隐藏、调整大小和销毁后的行为。
 

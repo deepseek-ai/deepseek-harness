@@ -83,8 +83,25 @@ func plainActionsAcceptOnlyAnAbsentArgument(action: String) throws {
     #expect(range == rangeSchema)
 }
 
+@Test func standardSettersIdentifyTheirArgumentWithoutAControl() throws {
+    for attribute in ["AXMain", "AXMinimized", "AXSelected", "AXExpanded"] {
+        #expect(try argumentSchema("AXWindow.\(attribute).Set") == .object(["type": .string("boolean")]))
+    }
+    let focus = try argumentSchema("AXButton.AXFocused.Set")
+    #expect(focus["type"] == .string("boolean"))
+    #expect(focus["description"].string?.contains("true") == true)
+    for attribute in ["AXTitle", "AXSelectedText"] {
+        #expect(try argumentSchema("AXTextField.\(attribute).Set") == .object(["type": .string("string")]))
+    }
+    #expect(try argumentSchema("AXTextField.AXVisibleCharacterRange.Set") == rangeSchema)
+    for role in ["AXSlider", "AXIncrementor"] {
+        let argument = try argumentSchema("\(role).AXValue.Set")
+        #expect(argument["oneOf"] == .array([finiteNumber, .object(["type": .string("string")])]))
+    }
+}
+
 @Test func unknownAttributesAcceptEverySupportedKind() throws {
-    for action in ["AXTextArea.AXValue.Set", "AXButton.AXTitle.Set", "AXWindow.AXFocused.Set"] {
+    for action in ["AXTextArea.AXValue.Set", "AXGroup.AXCustomValue.Set"] {
         let argument = try argumentSchema(action)
         #expect(argument == unsupportedKinds)
     }

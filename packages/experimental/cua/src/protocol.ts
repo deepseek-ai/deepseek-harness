@@ -102,12 +102,6 @@ function requestSchema<I extends z.ZodRawShape>(input: I) {
   ])
 }
 
-/** Window or application action query for providers supporting element-specific descriptions and setter schemas. */
-export const DetailedListActionsRequest = operation('listActions', {
-  ...snapshot,
-  details: z.boolean().optional().describe('True returns element enablement, native action descriptions and setter argument types. Omit for names only.'),
-})
-
 /** Portable operations for providers without explicit system-input selection. */
 export const Request = requestSchema({})
 

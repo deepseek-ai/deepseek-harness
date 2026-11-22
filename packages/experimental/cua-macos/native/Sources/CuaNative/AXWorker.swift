@@ -202,6 +202,11 @@ actor AXWorker {
         return target
     }
     static var actionResult: JSONValue { .object(["dispatched": .bool(true)]) }
+    /// Select the element's default action; Press takes precedence over Pick.
+    static func defaultAction(_ advertised: [String]) -> String? {
+        advertised.contains("AXPress") ? "AXPress" : advertised.contains("AXPick") ? "AXPick" : nil
+    }
+
     // Only observation failures allow a fresh read. Input failures can follow
     // partial effects and keep their original classification.
     static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
@@ -370,7 +375,7 @@ actor AXWorker {
             trace?.mark("geometry.before.end")
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window, recovery: recovery))
         case "listActions":
-            return .result(try ax().listActions(element(handle, params), details: params.optionalBoolean("details") ?? false))
+            return .result(.array(try ax().listActions(element(handle, params)).map { .string($0) }))
         case "paste":
             return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),
@@ -394,7 +399,7 @@ actor AXWorker {
         case "invoke":
             let target = try element(handle, params)
             let advertised = try ax().actions(target, requireKnown: true)
-            guard let action = AXAccess.defaultAction(advertised) else {
+            guard let action = Self.defaultAction(advertised) else {
                 return .result(.object(["dispatched": .bool(false)]))
             }
             try ax().perform(target, action)

@@ -16,7 +16,7 @@ enum NativeProtocol {
         "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "windowId"],
         "invoke": ["appHandle", "elementId", "snapshotId", "windowId"],
         "launchApp": ["appHandle"],
-        "listActions": ["appHandle", "details", "elementId", "snapshotId", "windowId"],
+        "listActions": ["appHandle", "elementId", "snapshotId", "windowId"],
         "listApps": [],
         "listWindows": ["appHandle"],
         "mouseMove": ["appHandle", "elementId", "snapshotId", "useSystemInput", "windowId", "x", "y"],

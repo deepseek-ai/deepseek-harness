@@ -106,12 +106,6 @@ it('enumerates every public method once in its catalog entry', () => {
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })
 
-it.each([GUIDANCE, PROGRAM_GUIDANCE])('shows both listActions return forms on macOS', (catalog) => {
-  const entry = catalog.split('\n').find(line => line.startsWith('- listActions('))
-  expect(entry).toContain('options?: { details?: boolean }) -> string[] | ActionDetails')
-  expect(entry).toContain('unknownWritability')
-})
-
 it('documents getActionSchema beside listActions with only an action argument', () => {
   const lines = COMMON_GUIDANCE.split('\n')
   const listActions = lines.findIndex(line => line.startsWith('- listActions('))
