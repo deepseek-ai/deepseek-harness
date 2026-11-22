@@ -285,18 +285,24 @@ final class AXAccess {
                             "description": text.map(JSONValue.string) ?? .null])
         }
         for (name, attributeName) in zip(names.dropFirst(advertised.count), attributes) {
-            let argument: JSONValue
-            do {
-                argument = try Self.setterArgument(attributeName) { try attribute(element, attributeName) }
-            } catch let failure as NativeFailure where failure.attribute == attributeName && failure.accessibilityError == AXError.failure.rawValue {
-                argument = .string("unknown")
+            let argument = try Self.setterArgument(attributeName) { key in
+                do { return try attribute(element, key) }
+                catch let failure as NativeFailure where failure.attribute == key && failure.accessibilityError == AXError.failure.rawValue {
+                    return nil
+                }
             }
             records.append(.object(["kind": .string("setAttribute"), "name": .string(name),
                                     "attribute": .string(attributeName), "argument": argument]))
         }
-        return .object(["enabled": enabled.map(JSONValue.bool) ?? .null, "actions": .array(records),
+        return .object(["enabled": enabled.map(JSONValue.bool) ?? .null, "defaultAction": Self.defaultAction(advertised).map(JSONValue.string) ?? .null,
+                        "actions": .array(records),
                         "unknownWritability": .array(unknownWritability.map(JSONValue.string))])
     }
+    /// Select the element's default action; Press takes precedence over Pick.
+    static func defaultAction(_ advertised: [String]) -> String? {
+        advertised.contains("AXPress") ? "AXPress" : advertised.contains("AXPick") ? "AXPick" : nil
+    }
+
     func actionDescription(_ value: CFString?, error: AXError) throws -> String? {
         if absent(error) || error == .actionUnsupported || error == .failure { return nil }
         guard error == .success else { throw failure(error, "read action description") }
@@ -304,11 +310,19 @@ final class AXAccess {
         return value as String
     }
     /// The converter accepts name-defined geometry even when the attribute has no readable value.
-    static func setterArgument(_ name: String, current: () throws -> CFTypeRef?) rethrows -> JSONValue {
+    static func setterArgument(_ name: String, read: (String) throws -> CFTypeRef?) rethrows -> JSONValue {
         if let kind = knownValueKind(attribute: name) { return ActionSchema.schema(for: kind) }
-        guard let value = try current() else { return .string("unknown") }
+        guard let value = try read(name) else { return .string("unknown") }
         guard let kind = inferredKind(value) else { return .string("unsupported") }
-        return ActionSchema.schema(for: kind)
+        let argument = ActionSchema.schema(for: kind)
+        guard name == "AXValue", kind == .number, case .object(var schema) = argument else { return argument }
+        for (key, attribute) in [("minimum", "AXMinValue"), ("maximum", "AXMaxValue")] {
+            if let bound = try read(attribute), CFGetTypeID(bound) == CFNumberGetTypeID(),
+               let number = (bound as? NSNumber)?.doubleValue, number.isFinite {
+                schema[key] = .number(number)
+            }
+        }
+        return .object(schema)
     }
     static func listActionNames(actions: [String], role: String?, writableAttributes: [String]) throws -> [String] {
         guard !writableAttributes.isEmpty else { return actions }

@@ -264,7 +264,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
           { kind: 'native', name: 'AXPress', description: 'press' },
           { kind: 'setAttribute', name: 'AXButton.AXFocused.Set', attribute: 'AXFocused', argument: { type: 'boolean' } },
         ]
-        return params.details ? { enabled: true, actions, unknownWritability: [] } : actions.map(action => action.name)
+        return params.details ? { enabled: true, defaultAction: 'AXPress', actions, unknownWritability: [] } : actions.map(action => action.name)
       }
       let systemPointerMoved = false
       if (method === 'mouseMove') {

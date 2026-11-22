@@ -78,7 +78,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `launchApp` | Host 授权后，打开待启动的安装副本并将句柄绑定到已核实的进程，全程不请求激活；有歧义的待启动选择以 `AMBIGUOUS_APP` 失效。对已选定的运行应用，请求新实例并返回 `{dispatched: true}`，原句柄继续绑定原先选定的进程。 |
 | `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
-| `listActions` | 默认返回元素的完整动作名。传入 `details: true` 会返回 `{enabled, actions, unknownWritability}`。原生动作带有应用提供的本地化说明，缺失时为 null。可写属性带有完整动作名和直接参数的 schema。无法确定类型时标为 `unknown`，helper 无法编码实际类型时标为 `unsupported`。无法确认是否可写的属性列在 `unknownWritability` 中。 |
+| `listActions` | 默认返回元素的完整动作名。传入 `details: true` 会返回 `{enabled, defaultAction, actions, unknownWritability}`。默认动作是 `invoke` 会选择的动作名，没有时为 null。原生动作带有应用提供的本地化说明，缺失时为 null。数值型参数会带上控件报告的最小值和最大值。可写属性带有完整动作名和直接参数的 schema。无法确定类型时标为 `unknown`，helper 无法编码实际类型时标为 `unsupported`。无法确认是否可写的属性列在 `unknownWritability` 中。 |
 | `getActionSchema` | 查询动作的参数 JSON Schema。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
 | `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
@@ -157,6 +157,8 @@ helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回
 在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、授权期间启动一个或多个实例、已有句柄冲突、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
 
 在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。 运行 `python3 packages/experimental/cua-macos/native/tests/nested_application_e2e.py`，用独立签名的测试应用验证 helper 在外层 `.app` 之外保留签名发布、并发发布和服务退出。
+
+运行 `python3 packages/experimental/cua-macos/native/tests/action_inventory_e2e.py --helper /absolute/path/to/helper`，将五个 AppKit 控件的动作详情与测试应用独立读取的 AX 结果逐项对比。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/floating_windows_e2e.py --helper /absolute/path/to/helper`，验证独立浮层的发现、截图、实际点击，以及隐藏、调整大小和销毁后的行为。
 

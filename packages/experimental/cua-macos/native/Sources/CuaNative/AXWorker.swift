@@ -202,11 +202,6 @@ actor AXWorker {
         return target
     }
     static var actionResult: JSONValue { .object(["dispatched": .bool(true)]) }
-    /// Select the element's default action; Press takes precedence over Pick.
-    static func defaultAction(_ advertised: [String]) -> String? {
-        advertised.contains("AXPress") ? "AXPress" : advertised.contains("AXPick") ? "AXPick" : nil
-    }
-
     // Only observation failures allow a fresh read. Input failures can follow
     // partial effects and keep their original classification.
     static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
@@ -399,7 +394,7 @@ actor AXWorker {
         case "invoke":
             let target = try element(handle, params)
             let advertised = try ax().actions(target, requireKnown: true)
-            guard let action = Self.defaultAction(advertised) else {
+            guard let action = AXAccess.defaultAction(advertised) else {
                 return .result(.object(["dispatched": .bool(false)]))
             }
             try ax().perform(target, action)

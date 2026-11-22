@@ -25,8 +25,8 @@ import Testing
     }
 }
 
-@Test func keepsOnlyAttributesReportedAsWritable() throws {
-    let listed = try AXAccess.writableAttributeNames(["AXValue", "AXFocused", "AXTitle"]) { name in
+@Test func keepsOnlyAttributesReportedAsWritable() {
+    let listed = AXAccess.writableAttributeNames(["AXValue", "AXFocused", "AXTitle"]) { name in
         if name == "AXValue" { return true }
         if name == "AXFocused" { return nil }
         return false
@@ -52,10 +52,10 @@ import Testing
     }
 }
 
-@Test func setterDetailsSeparateMissingValuesFromUnsupportedTypes() throws {
-    #expect(AXAccess.setterArgument("AXValue") { "private text" as CFString } == .object(["type": .string("string")]))
-    #expect(AXAccess.setterArgument("AXValue") { nil } == .string("unknown"))
-    #expect(AXAccess.setterArgument("AXSections") { [] as CFArray } == .string("unsupported"))
-    let position = AXAccess.setterArgument("AXPosition") { Issue.record("Read a name-defined attribute"); return nil }
+@Test func setterDetailsSeparateMissingValuesFromUnsupportedTypes() {
+    #expect(AXAccess.setterArgument("AXValue") { _ in "private text" as CFString } == .object(["type": .string("string")]))
+    #expect(AXAccess.setterArgument("AXValue") { _ in nil } == .string("unknown"))
+    #expect(AXAccess.setterArgument("AXSections") { _ in [] as CFArray } == .string("unsupported"))
+    let position = AXAccess.setterArgument("AXPosition") { _ in Issue.record("Read a name-defined attribute"); return nil }
     #expect(position["required"] == .array([.string("x"), .string("y")]))
 }

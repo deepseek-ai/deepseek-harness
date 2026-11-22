@@ -384,7 +384,7 @@ describe('element action queries', () => {
     const f = fixture()
     const win = await (await f.api.getApp('Editor')).getWindow('23')
     await win.getAccessibilityTree()
-    const details = { enabled: null, unknownWritability: ['AXCustom'], actions: [
+    const details = { enabled: null, defaultAction: 'AXPress', unknownWritability: ['AXCustom'], actions: [
       { kind: 'native', name: 'AXPress', description: 'press' },
       { kind: 'setAttribute', name: 'AXTextField.AXValue.Set', attribute: 'AXValue', argument: { type: 'string' } },
     ] }

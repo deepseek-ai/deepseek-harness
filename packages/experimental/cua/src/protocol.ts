@@ -113,7 +113,7 @@ export const ActionDetailParameters = z.object({
  * @param detailedActions - Whether listActions can return element-specific details.
  * @returns The provider's model-visible request schema.
  */
-export function providerRequestSchema(systemInput: boolean, detailedActions: boolean) {
+export function providerRequestSchema(systemInput: boolean, detailedActions: boolean): typeof Request | typeof SystemInputRequest {
   return systemInput ? requestSchema(systemInputOption, detailedActions) : requestSchema({}, detailedActions)
 }
 
@@ -180,7 +180,7 @@ export const StateResult = z.object({
 export const ActionNamesResult = z.array(z.string())
 /** Detailed action discovery from the current element, without returning its attribute values. */
 export const ActionDetailsResult = z.object({
-  enabled: z.boolean().nullable(), unknownWritability: z.array(z.string()),
+  enabled: z.boolean().nullable(), defaultAction: z.string().nullable(), unknownWritability: z.array(z.string()),
   actions: z.array(z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('native'), name: z.string(), description: z.string().nullable() }),
     z.object({ kind: z.literal('setAttribute'), name: z.string(), attribute: z.string(),

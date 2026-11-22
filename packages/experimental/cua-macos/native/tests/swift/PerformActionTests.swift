@@ -23,10 +23,10 @@ import Testing
 }
 
 @Test func selectsPressBeforePickForDefaultInvocation() {
-    #expect(AXWorker.defaultAction(["AXPick", "AXShowMenu"]) == "AXPick")
-    #expect(AXWorker.defaultAction(["AXPick", "AXPress"]) == "AXPress")
-    #expect(AXWorker.defaultAction(["AXShowMenu"]) == nil)
-    #expect(AXWorker.defaultAction([]) == nil)
+    #expect(AXAccess.defaultAction(["AXPick", "AXShowMenu"]) == "AXPick")
+    #expect(AXAccess.defaultAction(["AXPick", "AXPress"]) == "AXPress")
+    #expect(AXAccess.defaultAction(["AXShowMenu"]) == nil)
+    #expect(AXAccess.defaultAction([]) == nil)
 }
 
 @Test func mapsScalarsToTheirDirectCoreFoundationTypes() throws {
