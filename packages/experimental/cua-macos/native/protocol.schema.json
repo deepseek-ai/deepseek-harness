@@ -277,6 +277,10 @@
               "description": "Include identifiers, global native bounds and complete action names.",
               "type": "boolean"
             },
+            "showDiff": {
+              "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
+              "type": "boolean"
+            },
             "maxElements": {
               "type": "integer",
               "minimum": 1,

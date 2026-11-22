@@ -35,6 +35,7 @@
 - button "Tool call cua · getState"
 - button "Tool call cua · click"
 - button "Tool call cua · getState"
+- button "Tool call cua · getState"
 - button "Tool call cua · toggleMouse"
 - button "Tool call cua · sendKeyEvent"
 - button "Context injection cua-held-inputs CUA inputs remain held"

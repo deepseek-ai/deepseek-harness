@@ -23,7 +23,11 @@ async function connect(): Promise<NativeClient> {
 
 it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or native Windows processes', async () => {
   const client = await connect()
-  const capabilities = await client.request('getCapabilities', {}, new AbortController().signal)
+  const signal = new AbortController().signal
+  const read = client.request('getState', { appHandle: 'app', windowId: '1', maxElements: 20, maxDepth: 5, showDiff: true }, signal)
+  await expect(read).rejects.toMatchObject({ code: 'UNSUPPORTED' })
+  await expect(read).rejects.toThrow('not implemented on Windows')
+  const capabilities = await client.request('getCapabilities', {}, signal)
   expect(capabilities).toHaveProperty('permissions.accessibility', expect.any(Boolean))
   expect(capabilities).toHaveProperty('permissions.screenRecording', expect.any(Boolean))
   const apps = NativeAppsResult.parse(await client.request('listApps', {}, new AbortController().signal))

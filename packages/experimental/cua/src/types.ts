@@ -26,12 +26,14 @@ type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { m
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Stored screenshot returned to a program for explicit inspection. */
 export type CuaProgramImage = { readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number }
-/** Full observations of the requested content; each read replaces the application's current snapshot. */
+/** Accessibility observations of the requested content; each read replaces the application's current snapshot. */
 export interface CuaAccessibilityOptions {
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
+  /** Request changes since the previous comparable tree. Omit or pass false to request the full tree. */
+  showDiff?: boolean
   /** Maximum nodes visited for this read. Omission uses the provider setting. */
   maxElements?: number
   /** Maximum traversal depth for this read. Omission uses the provider setting. */
@@ -113,8 +115,8 @@ export interface CuaSurface {
    * Read the accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
    * Providers may mark unavailable branches whose contents are unknown and have no element ids.
-   * @param options - Traversal limits, menu expansion and field detail options.
-   * @returns Accessibility tree text with element ids, up to the limits for this read.
+   * @param options - Traversal limits, menu expansion, field details and optional difference output.
+   * @returns Full tree or difference text with current element ids, up to the limits for this read.
    */
   getAccessibilityTree(options?: CuaAccessibilityOptions): Promise<string>
   /**

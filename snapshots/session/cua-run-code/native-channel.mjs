@@ -24,6 +24,7 @@ export function createNativeFixture(selectorPid) {
     let acquired = false
     let generation = 0
     let observed
+    let lastNumberedCount
     let blocked
     let heldCallId
     function dispatch(method, params) {
@@ -70,8 +71,19 @@ export function createNativeFixture(selectorPid) {
       if (method === 'listWindows') return [window]
       if (method === 'getState') {
         observed = `fixture-snapshot-${++generation}`
+        const tree = `- [0] AXButton "Increment"\n- AXStaticText "Count: ${state.count}"`
+        let output = tree
+        if (params.showDiff || lastNumberedCount !== undefined) {
+          const row = '1 AXStaticText "Count: ' + state.count + '"'
+          const target = ' for Window: "CUA fixture"'
+          output = !params.showDiff || lastNumberedCount === undefined ? '0 AXButton "Increment"\n' + row
+            : lastNumberedCount === state.count ? 'There has been no change in the accessibility tree' + target + '.'
+            : 'The following is a diff from the previous accessibility tree' + target
+              + '.\n~' + row
+          lastNumberedCount = state.count
+        }
         return { appHandle: 'fixture-app', windowId: params.windowId ?? null, snapshotId: observed,
-          tree: `- [0] AXButton "Increment"\n- AXStaticText "Count: ${state.count}"`, windows: [window], truncated: false }
+          tree: output, windows: [window], truncated: false }
       }
       if (method === 'click') {
         if (params.snapshotId !== observed || params.elementId !== '0') throw new Error('Use the latest Increment element')

@@ -26,4 +26,6 @@ ${COMMON_GUIDANCE.replace(/^CuaAppInfo = .*$/m,
     if (!detail) return entry
     if (method === 'getAccessibilityTree' || method === 'paste') return `${entry.replace(/ — .*$/, '')} — ${detail}`
     return `${entry} ${detail}`
-  })}`
+  })}
+
+showDiff: true is not implemented on Windows and returns UNSUPPORTED; omit it or pass false for the full tree.`

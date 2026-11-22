@@ -74,6 +74,8 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         {
             context.Check();
             var parameters = request.Params;
+            if (request.Method == "getState" && Flag(parameters, "showDiff"))
+                throw new NativeFailure("UNSUPPORTED", "showDiff is not implemented on Windows yet. Omit it or pass false to read the full accessibility tree.");
             if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
             if (request.Method == "applicationIcons") return await sta.Invoke(_ => Applications.Icons(parameters, context), cancellation);
             if (request.Method == "getCapabilities")

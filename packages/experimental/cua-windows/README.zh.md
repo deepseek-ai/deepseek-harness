@@ -82,6 +82,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- `getAccessibilityTree` 或原始 `getState` 的 `showDiff: true` 返回 `UNSUPPORTED`，Windows 的 AX 差分输出暂未实现。省略该选项或传 `false` 可读取完整树。
 - 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。
 - 悬停、点击、滚动和拖拽使用系统指针。`requireSystemInputApproval` 不会为 Windows 操作弹出单独的指针授权提示。
 - 拖拽只检查起点处最上层的窗口。若其他应用遮住路径或终点，即使目标仍在前台，也可能把内容拖到其他应用。

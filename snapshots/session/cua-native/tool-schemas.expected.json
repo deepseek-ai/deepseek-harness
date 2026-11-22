@@ -331,6 +331,10 @@
                     "description": "Include identifiers, global native bounds and complete action names.",
                     "type": "boolean"
                   },
+                  "showDiff": {
+                    "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
+                    "type": "boolean"
+                  },
                   "maxElements": {
                     "description": "Maximum nodes to visit on this read. Omission uses the provider setting.",
                     "type": "number",

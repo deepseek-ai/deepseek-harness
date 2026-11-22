@@ -4,6 +4,24 @@ import AppKit
 import Dispatch
 import Darwin
 
+/// A client may cancel after the worker publishes a snapshot, even while the success reply is in flight.
+struct AXReadDelivery {
+    let id: String
+    let scope: SnapshotScope
+    let control: NativeRequestControl
+    var refused = false
+
+    init?(_ request: NativeRequest?, control: NativeRequestControl) {
+        guard let request, request.method == "getState", let params = try? RequestParameters(request),
+              let app = try? params.string("appHandle") else { return nil }
+        id = request.id
+        scope = SnapshotScope(appHandle: app, windowID: try? params.optionalWindowID())
+        self.control = control
+    }
+
+    var scopeToDiscard: SnapshotScope? { refused || control.failure != nil ? scope : nil }
+}
+
 @MainActor final class RequestCoordinator {
     private let configuration: HelperConfiguration
     private let cancellation: CancellationLatch
@@ -25,6 +43,7 @@ import Darwin
     private var operation: Task<Void, Never>?
     private var stopping = false
     private var requestControl: NativeRequestControl?
+    private var lastRead: AXReadDelivery?
     private var activeRequestID: String?
     private var replying = false
     private var nextFrame: Data?
@@ -69,6 +88,7 @@ import Darwin
         guard !stopping else { return }
         if let control = try? JSONDecoder().decode(JSONValue.self, from: data).object,
            Set(control.keys) == ["type", "id"], control["type"] == .string("cancel"), let id = control["id"]?.string {
+            if lastRead?.id == id { lastRead?.refused = true }
             if id == activeRequestID { cancelRequest(NativeFailure(code: "NATIVE_CANCELLED", message: "Native operation cancelled")) }
             if let nextFrame, (try? NativeRequest(data: nextFrame).id) == id { nextCancelled = true }
             return
@@ -80,6 +100,8 @@ import Darwin
         let parsed = try? NativeRequest(data: data)
         activeRequestID = parsed?.id
         let control = NativeRequestControl()
+        let discard = lastRead?.scopeToDiscard
+        lastRead = AXReadDelivery(parsed, control: control)
         requestControl = control
         let trace: ScreenshotTrace?
         if let parsed, parsed.method == "screenshot" {
@@ -103,6 +125,7 @@ import Darwin
         operation = Task { [weak self] in
             guard let self else { return }
             defer { control.finish() }
+            if let discard { await self.worker.discardSnapshot(discard) }
             var requestID: JSONValue = .null
             let response: JSONValue
             do {
@@ -143,6 +166,7 @@ import Darwin
                 response = .object(["id": requestID, "error": .object([
                     "code": .string(failure.code), "message": .string(failure.message)])])
             }
+            if response["error"] != .null { self.lastRead?.refused = true }
             control.finishOperation()
             guard !self.stopping, self.active == token else { return }
             self.replying = true

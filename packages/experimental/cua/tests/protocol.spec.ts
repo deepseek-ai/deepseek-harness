@@ -350,3 +350,11 @@ it.each([
 ])('keeps the input route fixed for $method', ({ method, params }) => {
   expect(SystemInputRequest.safeParse({ method, params: { ...params, useSystemInput: true } }).success).toBe(false)
 })
+
+it.each([true, false])('admits showDiff=%s and rejects non-boolean values', (showDiff) => {
+  const params = { appHandle: 'app', showDiff }
+  expect(Request.parse({ method: 'getState', params })).toEqual({ method: 'getState', params })
+  for (const invalid of ['true', 1, null]) {
+    expect(Request.safeParse({ method: 'getState', params: { ...params, showDiff: invalid } }).success).toBe(false)
+  }
+})

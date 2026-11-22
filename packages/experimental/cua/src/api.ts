@@ -118,6 +118,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
           ...options?.maxDepth === undefined ? {} : { maxDepth: options.maxDepth },
           ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
           ...options?.details === undefined ? {} : { details: options.details },
+          ...options?.showDiff === undefined ? {} : { showDiff: options.showDiff },
         }))
         if (state.appHandle !== target.appHandle || state.windowId !== (target.windowId ?? null)) {
           throw new Error('Native observation belongs to another application or window')

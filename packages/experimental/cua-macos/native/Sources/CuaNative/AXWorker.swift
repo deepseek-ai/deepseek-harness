@@ -18,6 +18,7 @@ struct NativeSnapshot {
     let id: String
     let scope: SnapshotScope
     let elements: [Int: AXUIElement]
+    let tree: AXTreeBaseline?
 }
 struct CaptureTarget: Sendable {
     let appHandle: String
@@ -173,6 +174,11 @@ actor AXWorker {
         targets[id] = .running(identity, authorization)
         return id
     }
+    func discardSnapshot(_ scope: SnapshotScope) {
+        snapshots.removeValue(forKey: scope)
+        if let windowID = scope.windowID { observedWindowBounds[scope.appHandle]?.removeValue(forKey: windowID) }
+        else { observedWindowBounds.removeValue(forKey: scope.appHandle) }
+    }
     private func snapshot(_ handle: String, _ id: String) throws -> NativeSnapshot {
         guard let result = snapshots.values.first(where: { $0.scope.appHandle == handle && $0.id == id }) else {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot expired; read fresh getAccessibilityTree")
@@ -312,11 +318,12 @@ actor AXWorker {
             observedWindowBounds[handle] = observedWindowBounds[handle]?.filter { ids.contains($0.key) }
             return .result(.array(windows.map(\.json)))
         }
+        var previousTree: AXTreeBaseline?
         if method == "getState" {
             let windowID = try params.optionalWindowID()
-            snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: windowID))
-            if let windowID { observedWindowBounds[handle]?.removeValue(forKey: windowID) }
-            else { observedWindowBounds.removeValue(forKey: handle) }
+            let scope = SnapshotScope(appHandle: handle, windowID: windowID)
+            previousTree = snapshots[scope]?.tree
+            discardSnapshot(scope)
         }
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {
@@ -339,11 +346,14 @@ actor AXWorker {
         case "getState":
             let window = try params.optionalWindowID()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
-            let projection: AXProjection
+            let options = try AXTreeReadOptions(params)
+            let showDiff = try params.optionalBoolean("showDiff") ?? false
+            let numbered = showDiff || previousTree != nil
+            var projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
-                    maxElements: params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: params.integer("maxDepth", in: NativeProtocol.depthRange),
-                    includeMenus: params.optionalBoolean("includeMenus") ?? false, details: params.optionalBoolean("details") ?? false)
+                    maxElements: options.maxElements, maxDepth: options.maxDepth,
+                    includeMenus: options.includeMenus, details: options.details, numbered: numbered)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
             }
@@ -355,7 +365,10 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
+            let tree = numbered ? try AXTreeBaseline.observe(&projection, options: options, previous: showDiff ? previousTree : nil,
+                windowTitle: window.flatMap { id in observedWindows.first { $0.windowID == id }?.title }, checkCancellation: { try self.cancellation.check() }) : nil
+            try cancellation.check()
+            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed, tree: tree)
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }

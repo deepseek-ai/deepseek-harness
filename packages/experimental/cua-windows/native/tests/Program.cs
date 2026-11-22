@@ -21,6 +21,11 @@ void Refuses(Action action, string code)
 
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
+var fullTreeRequest = NativeRequest.Parse(WireJson.Parse("""{"id":"full","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":false}}"""));
+Check(!fullTreeRequest.Params.GetProperty("showDiff").GetBoolean(), "Explicit full-tree reads remain supported");
+var diffRequest = NativeRequest.Parse(WireJson.Parse("""{"id":"diff","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":true}}"""));
+Check(diffRequest.Id == "diff" && diffRequest.Params.GetProperty("showDiff").GetBoolean(), "Difference requests reach the executor with their correlation ID");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"diff","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":"true"}}""")), "INVALID_ARGUMENT");
 foreach (var (maxElements, maxDepth) in new[] { (1, 1), (7, 3), (10000, 100) })
 {
     var observation = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new

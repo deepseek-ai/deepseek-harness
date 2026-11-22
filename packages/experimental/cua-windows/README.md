@@ -82,6 +82,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- `showDiff: true` on `getAccessibilityTree` or raw `getState` returns `UNSUPPORTED` because Windows AX difference output is not implemented yet. Omit the option or pass `false` to read the full tree.
 - The npm package omits the Windows helper. Use the [standalone ZIP on x64 or a matching build on ARM64](#setup).
 - Hover, click, scroll and drag use the system pointer. `requireSystemInputApproval` does not prompt separately for Windows pointer operations.
 - Drag checks the topmost window only at its starting point. An overlay from another application along the path or at the destination can receive the drop even while the selected window stays in the foreground.

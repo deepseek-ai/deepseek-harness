@@ -33,6 +33,8 @@ provider 按当前界面语言生成引导和恢复文案，不支持的语言�
 <a id="use-this-package"></a>
 ## 使用本包
 
+首次调用 `getAccessibilityTree({ showDiff: true })` 返回带编号的应用或窗口树。按顺序应用后续差分即可复原当前可见树。`~ID` 更新行内容，`+ID` 插入节点，`>ID` 移动整棵子树并保留编号。位置紧跟节点编号，例如 `7^3` 将 7 放到父节点 3 的首位，`7>4` 将 7 放到兄弟节点 4 之后，`^root` 表示放到所有根节点的首位。连续插入共用一个起点。没有位置标记的 `+ID` 依缩进放到刚新增父节点的首位，或紧跟本段同一深度最近新增的兄弟节点。末尾的编号区间列全删除项。焦点或选中文本以本次摘要为准，没有摘要时清除上一次摘要。操作控件使用当前快照中的可操作编号。省略参数或传 `false` 返回完整树，并对已开始的编号序列重新编号。读取不完整、失败、读取选项不一致或树的附注改变时，需要重新建立基准。
+
 本包是仅限 macOS 的可选依赖。本地开发时运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin` 下生成临时签名应用及 `current.json`。正式打包需要指定 `--identity "Developer ID Application: <name> (<team>)"` 并完成公证，参见[原生构建与服务](native/README.zh.md#build-and-service)。安装版保留分发时的签名。位于 Electron `app.asar` 归档内的包从同级的 `app.asar.unpacked` 目录读取应用，该目录由 Desktop 安装包提供；已安装包缺少应用时，准备阶段报错并给出预期目录。源码准备需要 Apple Command Line Tools 提供的 Swift 和 Python 3。
 
 从仓库运行 Web 时，在插件页开启 [Computer Use](../cua-bundle/README.zh.md)。首次启用会在 macOS 14 及以上准备本机组件。现有 Web profile 保持选中时，后续构建继续检查更新。未开启的 profile 不准备原生组件。也可以显式加载源码覆盖层：
@@ -224,7 +226,7 @@ Setup and discovery:
 Available at app or window level depending on the platform.
 
 Read getAccessibilityTree explicitly before using element ids. Selection and screenshots do not read or replace the current accessibility snapshot. Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { includeMenus?: boolean, details?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need. Use element ids from the file only while that observation is current.
+- getAccessibilityTree(options?: { includeMenus?: boolean, details?: boolean, showDiff?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. Pass showDiff: true for a numbered tree, then apply edits in order: ~ updates a row, + inserts one, > moves its subtree. The position suffix ^P means first child of P (^root for the first root); >S means after sibling S. Unanchored + rows continue an insertion by indentation (first child or next sibling). Remove the listed IDs last. Use current actionable IDs for input. Omit showDiff or pass false for a full tree. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need. Use element ids from the file only while that observation is current.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - getActionSchema(action: string) -> JSON Schema — query the parameter schema for an action.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
@@ -285,7 +287,7 @@ Pass useSystemInput: true only when the task requires system keyboard or mouse i
 - 原生确认表示事件已派发，不表示应用已处理。回合清理被拒绝、超时或断连时，CUA 会报告不确定结果，并禁止该任务的全部 CUA 操作。请手动检查桌面状态后再创建新任务。
 - 最低支持 macOS 14；设置导航、拖放接收和权限刷新需要在各支持版本验收。若 macOS 要求在修改屏幕录制权限后退出并重新打开 helper，权限检查在重启前可能仍返回未授权。可以关闭引导框，不必终止其他连接。
 - 所选设置窗口离开可见窗口列表时，引导框会关闭，包括切换桌面空间或最小化导致窗口不再可见的情况。返回后再次申请权限可重新打开引导。
-- 本提供方适用于 macOS。Windows 的配置见 [Windows 提供方](../cua-windows/README.zh.md#setup)。不支持浏览器标签、AX 差分、无法确认应用归属的系统面板和仅后台辅助类型的应用。
+- 本提供方适用于 macOS。Windows 的配置见 [Windows 提供方](../cua-windows/README.zh.md#setup)。不支持浏览器标签、无法确认应用归属的系统面板和仅后台辅助类型的应用。
 - 元素 ID 只对应用当前的辅助功能快照有效；之后的读取会替换它们。截图和指针输入都要求显式的窗口对象。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。
