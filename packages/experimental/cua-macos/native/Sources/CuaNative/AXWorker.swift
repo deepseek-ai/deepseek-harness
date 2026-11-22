@@ -375,7 +375,7 @@ actor AXWorker {
             trace?.mark("geometry.before.end")
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window, recovery: recovery))
         case "listActions":
-            return .result(.array(try ax().listActions(element(handle, params)).map { .string($0) }))
+            return .result(try ax().listActions(element(handle, params), details: params.optionalBoolean("details") ?? false))
         case "paste":
             return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),

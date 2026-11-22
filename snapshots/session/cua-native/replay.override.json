@@ -2678,6 +2678,39 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-list-action-details",
+          "name": "cua",
+          "arguments": "{\"method\":\"listActions\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":\"7\",\"snapshotId\":\"fixture-snapshot-19\",\"elementId\":\"0\",\"details\":true}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {

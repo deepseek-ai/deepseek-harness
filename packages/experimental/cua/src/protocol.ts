@@ -58,7 +58,7 @@ const systemInputOption = {
 
 const toggle = z.object({ ...window, mouseButton: pointer.mouseButton.unwrap(), direction: z.enum(['down', 'up']) }).strict()
 
-function requestSchema<I extends z.ZodRawShape>(input: I) {
+function requestSchema<I extends z.ZodRawShape>(input: I, detailedActions = false) {
   return z.discriminatedUnion('method', [
     operation('getCapabilities', {}), operation('listApps', {}),
     operation('findApps', { query: z.string().nullable() }),
@@ -73,7 +73,7 @@ function requestSchema<I extends z.ZodRawShape>(input: I) {
       maxElements: traversalLimit.optional().describe('Maximum nodes to visit on this read. Omission uses the provider setting.'),
       maxDepth: traversalLimit.optional().describe('Maximum depth to traverse on this read. Omission uses the provider setting.'),
     }),
-    operation('listActions', snapshot),
+    detailedActions ? operation('listActions', { ...snapshot, ...ActionDetailParameters.shape }) : operation('listActions', snapshot),
     operation('getActionSchema', { action: z.string().min(1) }),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
     operation('invoke', snapshot),
@@ -100,6 +100,21 @@ function requestSchema<I extends z.ZodRawShape>(input: I) {
     z.object({ method: z.literal('drag'), params: z.union(dragTargets.map(target => target.extend(input))) }).strict(),
     operation('screenshot', window),
   ])
+}
+
+/** Optional per-element action metadata for providers that can describe actions and setter values. */
+export const ActionDetailParameters = z.object({
+  details: z.boolean().optional().describe('True returns element enablement, native action descriptions and setter argument types. Omit for names only.'),
+})
+
+/**
+ * Build tool admission for the options the provider implements.
+ * @param systemInput - Whether the provider accepts explicit system input.
+ * @param detailedActions - Whether listActions can return element-specific details.
+ * @returns The provider's model-visible request schema.
+ */
+export function providerRequestSchema(systemInput: boolean, detailedActions: boolean) {
+  return systemInput ? requestSchema(systemInputOption, detailedActions) : requestSchema({}, detailedActions)
 }
 
 /** Portable operations for providers without explicit system-input selection. */
@@ -163,6 +178,15 @@ export const StateResult = z.object({
 })
 /** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
 export const ActionNamesResult = z.array(z.string())
+/** Detailed action discovery from the current element, without returning its attribute values. */
+export const ActionDetailsResult = z.object({
+  enabled: z.boolean().nullable(), unknownWritability: z.array(z.string()),
+  actions: z.array(z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('native'), name: z.string(), description: z.string().nullable() }),
+    z.object({ kind: z.literal('setAttribute'), name: z.string(), attribute: z.string(),
+      argument: z.union([z.record(z.string(), jsonValue), z.enum(['unknown', 'unsupported'])]) }),
+  ])),
+})
 /** Validates CUA response fields and JSON values; native providers own the nested schema definitions. */
 export const ActionSchemaResult = z.object({
   type: z.literal('object'),

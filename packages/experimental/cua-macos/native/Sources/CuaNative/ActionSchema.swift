@@ -22,7 +22,7 @@ enum ActionSchema {
         return schema(for: kind)
     }
 
-    private static func schema(for kind: AXAccess.AttributeValueKind) -> JSONValue {
+    static func schema(for kind: AXAccess.AttributeValueKind) -> JSONValue {
         switch kind {
         case .string: return SchemaBuilder.scalar("string")
         case .boolean: return SchemaBuilder.scalar("boolean")

@@ -380,6 +380,23 @@ describe('element action queries', () => {
     await expect(app.getActionSchema('AXPress')).rejects.toThrow()
   })
 
+  it('reads element-specific descriptions and setter schemas from the selected window', async () => {
+    const f = fixture()
+    const win = await (await f.api.getApp('Editor')).getWindow('23')
+    await win.getAccessibilityTree()
+    const details = { enabled: null, unknownWritability: ['AXCustom'], actions: [
+      { kind: 'native', name: 'AXPress', description: 'press' },
+      { kind: 'setAttribute', name: 'AXTextField.AXValue.Set', attribute: 'AXValue', argument: { type: 'string' } },
+    ] }
+    f.dispatch.mockResolvedValueOnce(details)
+    expect(await win.listActions(element('0'), { details: true })).toEqual(details)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listActions', params: {
+      appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', elementId: '0', details: true,
+    } })
+    f.dispatch.mockResolvedValueOnce(['AXPress'])
+    await expect(win.listActions(element('0'), { details: true })).rejects.toThrow()
+  })
+
   it('returns raw provider action names including attribute-setting operations without reading new state', async () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')

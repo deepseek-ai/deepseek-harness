@@ -1,8 +1,8 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, HoverResult, MouseMoveTargets, NativeAppsResult, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
+import { ActionDetailsResult, ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, HoverResult, MouseMoveTargets, NativeAppsResult, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import type { CuaActionDetails, CuaElementId, CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
@@ -108,6 +108,16 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
       return { useSystemInput }
     }
     const elementParams = (): Record<string, JsonValue> => ({ snapshotId: currentSnapshot(target.appHandle) })
+    function listActions(id: CuaElementId, options?: { details?: false }): Promise<string[]>
+    function listActions(id: CuaElementId, options: { details: true }): Promise<CuaActionDetails>
+    function listActions(id: CuaElementId, options: { details?: boolean }): Promise<string[] | CuaActionDetails>
+    async function listActions(id: CuaElementId, options: { details?: boolean } = {}) {
+      requireAccessibility()
+      const target = { ...elementParams(), elementId: id }
+      return options.details
+        ? ActionDetailsResult.parse(await scopedCall('listActions', target, { details: true }))
+        : ActionNamesResult.parse(await scopedCall('listActions', target))
+    }
     const surface: CuaSurface = {
       async show() { return ShowResult.parse(await scopedCall('show', {})) },
       async getAccessibilityTree(options) {
@@ -125,10 +135,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
         observed.set(target.appHandle, { snapshotId: state.snapshotId, windowId: target.windowId })
         return state.tree
       },
-      async listActions(elementId) {
-        requireAccessibility()
-        return ActionNamesResult.parse(await scopedCall('listActions', { ...elementParams(), elementId }))
-      },
+      listActions,
       async getActionSchema(action) {
         return ActionSchemaResult.parse(await call('getActionSchema', { action }))
       },

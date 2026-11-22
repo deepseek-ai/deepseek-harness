@@ -268,12 +268,47 @@ final class AXAccess {
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility actions are not strings") }
         return result
     }
-    func listActions(_ element: AXUIElement) throws -> [String] {
-        let advertised = try actions(element)
-        let attributes = try writableAttributes(element)
-        guard !attributes.isEmpty else { return advertised }
-        let role = try string(element, "AXRole")
-        return try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes)
+    func listActions(_ element: AXUIElement, details: Bool) throws -> JSONValue {
+        let advertised = try actions(element, requireKnown: details)
+        let (attributes, unknownWritability) = try writableAttributes(element)
+        let role = attributes.isEmpty ? nil : try string(element, "AXRole")
+        let names = try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes)
+        guard details else { return .array(names.map(JSONValue.string)) }
+
+        let enabled = try boolean(element, "AXEnabled")
+        var records: [JSONValue] = try advertised.map { name in
+            try prepare(element)
+            var description: CFString?
+            let error = AXUIElementCopyActionDescription(element, name as CFString, &description)
+            let text = try actionDescription(description, error: error)
+            return .object(["kind": .string("native"), "name": .string(name),
+                            "description": text.map(JSONValue.string) ?? .null])
+        }
+        for (name, attributeName) in zip(names.dropFirst(advertised.count), attributes) {
+            let argument: JSONValue
+            do {
+                argument = try Self.setterArgument(attributeName) { try attribute(element, attributeName) }
+            } catch let failure as NativeFailure where failure.attribute == attributeName && failure.accessibilityError == AXError.failure.rawValue {
+                argument = .string("unknown")
+            }
+            records.append(.object(["kind": .string("setAttribute"), "name": .string(name),
+                                    "attribute": .string(attributeName), "argument": argument]))
+        }
+        return .object(["enabled": enabled.map(JSONValue.bool) ?? .null, "actions": .array(records),
+                        "unknownWritability": .array(unknownWritability.map(JSONValue.string))])
+    }
+    func actionDescription(_ value: CFString?, error: AXError) throws -> String? {
+        if absent(error) || error == .actionUnsupported || error == .failure { return nil }
+        guard error == .success else { throw failure(error, "read action description") }
+        guard let value, CFStringGetLength(value) > 0 else { return nil }
+        return value as String
+    }
+    /// The converter accepts name-defined geometry even when the attribute has no readable value.
+    static func setterArgument(_ name: String, current: () throws -> CFTypeRef?) rethrows -> JSONValue {
+        if let kind = knownValueKind(attribute: name) { return ActionSchema.schema(for: kind) }
+        guard let value = try current() else { return .string("unknown") }
+        guard let kind = inferredKind(value) else { return .string("unsupported") }
+        return ActionSchema.schema(for: kind)
     }
     static func listActionNames(actions: [String], role: String?, writableAttributes: [String]) throws -> [String] {
         guard !writableAttributes.isEmpty else { return actions }
@@ -282,18 +317,26 @@ final class AXAccess {
         }
         return actions + writableAttributes.map { "\(role).\($0).Set" }
     }
-    func writableAttributes(_ element: AXUIElement) throws -> [String] {
+    func writableAttributes(_ element: AXUIElement) throws -> (writable: [String], unknown: [String]) {
         try prepare(element)
         var names: CFArray?
         let error = AXUIElementCopyAttributeNames(element, &names)
-        if absent(error) { return [] }
+        if absent(error) { return ([], []) }
         guard error == .success else { throw failure(error, "read attribute names") }
-        guard let names else { return [] }
+        guard let names else { return ([], []) }
         guard let result = names as? [String] else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility attributes are not strings") }
         return try Self.writableAttributeNames(result) { try writable(element, $0, forDiscovery: true) }
     }
-    static func writableAttributeNames(_ names: [String], isWritable: (String) throws -> Bool?) rethrows -> [String] {
-        try names.filter { try isWritable($0) == true }
+    static func writableAttributeNames(_ names: [String], isWritable: (String) throws -> Bool?) rethrows -> (writable: [String], unknown: [String]) {
+        var writable: [String] = [], unknown: [String] = []
+        for name in names {
+            switch try isWritable(name) {
+            case true: writable.append(name)
+            case false: break
+            case nil: unknown.append(name)
+            }
+        }
+        return (writable, unknown)
     }
     func writable(_ element: AXUIElement, _ name: String, forDiscovery: Bool = false) throws -> Bool? {
         try prepare(element)
@@ -432,7 +475,12 @@ final class AXAccess {
     }
     private static func valueKind(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> AttributeValueKind {
         if let known = knownValueKind(attribute: attribute) { return known }
-        if let current { return try inferredKind(current, attribute: attribute) }
+        if let current {
+            guard let kind = inferredKind(current) else {
+                throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) value type is not supported for attribute-setting arguments")
+            }
+            return kind
+        }
         switch argument {
         case .string: return .string
         case .bool: return .boolean
@@ -441,7 +489,7 @@ final class AXAccess {
             throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) has no known value type for this JSON argument")
         }
     }
-    private static func inferredKind(_ value: CFTypeRef, attribute: String) throws -> AttributeValueKind {
+    private static func inferredKind(_ value: CFTypeRef) -> AttributeValueKind? {
         let type = CFGetTypeID(value)
         if type == CFStringGetTypeID() { return .string }
         if type == CFBooleanGetTypeID() { return .boolean }
@@ -454,7 +502,7 @@ final class AXAccess {
             default: break
             }
         }
-        throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) value type is not supported for attribute-setting arguments")
+        return nil
     }
     private static func fields(_ argument: JSONValue, attribute: String, keys: Set<String>) throws -> [String: JSONValue] {
         guard case .object(let values) = argument, Set(values.keys) == keys else {

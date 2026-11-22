@@ -34,7 +34,8 @@ import Testing
     let writable = try AXAccess.writableAttributeNames(["AXValue", "AXFocused"]) { name in
         try access.attributeWritability(true, error: name == "AXValue" ? .failure : .success, name: name, forDiscovery: true)
     }
-    #expect(writable == ["AXFocused"])
+    #expect(writable.writable == ["AXFocused"])
+    #expect(writable.unknown == ["AXValue"])
     #expect(throws: NativeFailure.self) { try access.attributeWritability(false, error: .failure, name: "AXValue", forDiscovery: false) }
     #expect(throws: NativeFailure.self) { try access.attributeWritability(false, error: .apiDisabled, name: "AXValue", forDiscovery: true) }
 }

@@ -2,7 +2,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
 import { AX_TRAVERSAL_MAX } from '../src/ax-limits.ts'
-import { NativeResourceParameters } from '@deepseek-ai/dsh-cua/protocol'
+import { ActionDetailParameters, NativeResourceParameters } from '@deepseek-ai/dsh-cua/protocol'
 import { nativeProtocol } from '@deepseek-ai/dsh-cua/native-schema'
 import { PermissionGuideParameters, PermissionSettingsParameters } from '../src/permission-guide.ts'
 
@@ -17,6 +17,7 @@ export function renderNativeProtocol(): { json: string; swift: string } {
   }
   const systemInput = { useSystemInput: z.boolean().optional() }
   const { fields, enums, json } = nativeProtocol({
+    listActions: ActionDetailParameters,
     getState: NativeResourceParameters.getState.extend(traversal),
     paste: NativeResourceParameters.paste.extend(traversal),
     sendKeyEvent: z.object(systemInput),
