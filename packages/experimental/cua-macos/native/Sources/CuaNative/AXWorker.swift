@@ -223,7 +223,7 @@ actor AXWorker {
                              accessibilityError: failure.accessibilityError, attribute: failure.attribute)
     }
 
-    func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
+    func execute(_ method: String, deadline: ContinuousClock.Instant, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
@@ -330,7 +330,7 @@ actor AXWorker {
         case "show":
             let shelf = try await StageManagerShelf.current()
             let result = try await showWindow(params.optionalWindowID(), owner: identity, access: ax(), cancellation: cancellation,
-                                              axTimeout: axTimeout, sessionState: sessionState, shelf: shelf)
+                                              deadline: deadline, sessionState: sessionState, shelf: shelf)
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
             return .result(result)

@@ -15,7 +15,7 @@ enum ShowTarget {
 
 extension AXWorker {
     func showWindow(_ requested: UInt32?, owner: ProcessIdentity, access: AXAccess, cancellation: CancellationLatch,
-                    axTimeout: Float, sessionState: @escaping @Sendable () -> Bool?, shelf: StageManagerShelf?) async throws -> JSONValue {
+                    deadline: ContinuousClock.Instant, sessionState: @escaping @Sendable () -> Bool?, shelf: StageManagerShelf?) async throws -> JSONValue {
         func result(_ id: UInt32, dispatched: Bool, changed: JSONValue) -> JSONValue {
             .object(["windowId": .string(String(id)), "dispatched": .bool(dispatched),
                      "foregroundChanged": changed])
@@ -35,7 +35,7 @@ extension AXWorker {
         guard let pid = initial.pid else { throw unavailable("Cannot identify the application to return focus to.") }
         let operation = try await WindowRestoration(owner: owner, access: access, previousPID: pid,
             previousWindow: initial.windowID, cancellation: cancellation, sessionState: sessionState,
-            animation: ApplicationCatalog.animationDuration, timeout: axTimeout, shelf: shelf, appScoped: requested == nil)
+            animation: ApplicationCatalog.animationDuration, deadline: deadline, shelf: shelf, appScoped: requested == nil)
         let shown = try await operation.run(target, on: self, initial: initial)
         return result(shown.id, dispatched: shown.dispatched, changed: foregroundChange())
     }
@@ -65,7 +65,7 @@ private final class WindowRestoration {
 
     init(owner: ProcessIdentity, access: AXAccess, previousPID: Int32,
          previousWindow: UInt32?, cancellation: CancellationLatch, sessionState: @escaping @Sendable () -> Bool?,
-         animation: Double, timeout: Float, shelf: StageManagerShelf?, appScoped: Bool) throws {
+         animation: Double, deadline: ContinuousClock.Instant, shelf: StageManagerShelf?, appScoped: Bool) throws {
         self.owner = owner
         self.shelf = shelf
         self.appScoped = appScoped
@@ -77,7 +77,7 @@ private final class WindowRestoration {
         self.cancellation = cancellation
         self.sessionState = sessionState
         self.animation = animation
-        deadline = ContinuousClock.now + .seconds(Double(timeout))
+        self.deadline = deadline
     }
 
     func checkTarget() throws {

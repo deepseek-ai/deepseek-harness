@@ -37,7 +37,15 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         reopened += 1
-        if closed { closed = false; makeWindow() }
+        if closed {
+            let delay = Bundle.main.object(forInfoDictionaryKey: "DSHReopenDelay") as? Double ?? 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard self.closed else { return }
+                self.closed = false
+                self.makeWindow()
+                self.persist()
+            }
+        }
         persist()
         return false
     }

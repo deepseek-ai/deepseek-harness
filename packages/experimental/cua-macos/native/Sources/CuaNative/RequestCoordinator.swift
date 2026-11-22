@@ -115,6 +115,7 @@ struct AXReadDelivery {
         let axTimeout = Double(configuration.axTimeoutSeconds)
         let onFatal = self.onFatal
         let channel = self.channel
+        let requestDeadline = ContinuousClock.now + .seconds(seconds)
         deadline = NativeDeadline(seconds: seconds) {
             trace?.mark("helper.deadline", errorCode: "NATIVE_TIMEOUT")
             control.cancel(NativeFailure(code: "NATIVE_TIMEOUT", message: "Native operation exceeded its deadline"), grace: grace, axTimeout: axTimeout,
@@ -151,7 +152,7 @@ struct AXReadDelivery {
                 } else {
                     result = try await self.scheduler.perform(cancellation: self.cancellation) {
                         control.startOperation()
-                        return try await self.execute(request, trace: trace)
+                        return try await self.execute(request, deadline: requestDeadline, trace: trace)
                     }
                 }
                 if let failure = control.failure { throw failure }
@@ -210,7 +211,7 @@ struct AXReadDelivery {
             onFatal(NativeFailure(code: "NATIVE_UNRESPONSIVE", message: "Native operation did not stop after cancellation"), grace)
         }, blockedReply: { channel.shutdown() })
     }
-    private func execute(_ request: NativeRequest, trace: ScreenshotTrace?) async throws -> JSONValue {
+    private func execute(_ request: NativeRequest, deadline: ContinuousClock.Instant, trace: ScreenshotTrace?) async throws -> JSONValue {
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "getHeldInputs" {
@@ -227,17 +228,17 @@ struct AXReadDelivery {
             inputMonitor.start()
             defer { if !activity.hasInterests { inputMonitor.stop() } }
             return try await activity.withObservation(target, handle: params.string("appHandle"), owner: connectionID) {
-                try await self.dispatch(request, params: params, trace: trace)
+                try await self.dispatch(request, params: params, deadline: deadline, trace: trace)
             }
         }
-        let result = try await dispatch(request, params: params, trace: trace)
+        let result = try await dispatch(request, params: params, deadline: deadline, trace: trace)
         if let target, result["dispatched"] == .bool(true) {
             activity.record(target, owner: connectionID)
             if activity.hasInterests { inputMonitor.start() }
         }
         return result
     }
-    private func dispatch(_ request: NativeRequest, params: RequestParameters, trace: ScreenshotTrace?) async throws -> JSONValue {
+    private func dispatch(_ request: NativeRequest, params: RequestParameters, deadline: ContinuousClock.Instant, trace: ScreenshotTrace?) async throws -> JSONValue {
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
@@ -277,7 +278,7 @@ struct AXReadDelivery {
                 }
             }
             trace?.mark("worker.begin")
-            let outcome = try await worker.execute(request.method, params: params, catalog: catalog, installed: installed, trace: trace)
+            let outcome = try await worker.execute(request.method, deadline: deadline, params: params, catalog: catalog, installed: installed, trace: trace)
             trace?.mark("worker.end")
             switch outcome {
             case .result(let value):

@@ -98,13 +98,14 @@ def main():
         with tempfile.TemporaryDirectory(prefix='dsh-cua-axless-') as directory:
             root = Path(directory)
             state_path = root / 'state.json'
-            def app_binary(name, state_file, stage_participant=False):
+            def app_binary(name, state_file, stage_participant=False, reopen_delay=0):
                 contents = root / (name + '.app') / 'Contents'
                 (contents / 'MacOS').mkdir(parents=True)
                 (contents / 'Info.plist').write_bytes(plistlib.dumps({
                     'CFBundleIdentifier': 'org.deepseek-harness.cua.' + root.name + '.' + name,
                     'CFBundleExecutable': 'fixture', 'CFBundleName': name, 'CFBundlePackageType': 'APPL',
                     'DSHFixtureStatePath': str(state_file), 'DSHStageParticipant': stage_participant,
+                    'DSHReopenDelay': reopen_delay,
                 }))
                 return contents / 'MacOS/fixture'
 
@@ -188,7 +189,7 @@ def main():
                 fixture = None
                 original_binary = binary
                 state_path = root / 'restoration.json'
-                binary = app_binary('Restoration', state_path)
+                binary = app_binary('Restoration', state_path, reopen_delay=2)
                 shutil.copy2(original_binary, binary)
                 pending = helper.call('getApp', {'selector': str(binary.parents[2])})
                 launched = helper.call('launchApp', {'appHandle': pending['appHandle']})
@@ -257,7 +258,12 @@ def main():
                 assert 'app.show()' in stale['message'], stale
                 closed = json.loads(state_path.read_text())
                 assert closed['closed'] and closed['reopened'] == before_close, closed
-                opened = helper.call('show', owner)
+                # The app responds to AX reads while it waits two seconds to create the replacement window.
+                with ExitStack() as clients:
+                    short_ax = NativeHelper([], args.helper, '--ax-timeout-ms', '1000', '--timeout-ms', '10000')
+                    clients.callback(short_ax.stop)
+                    selection = short_ax.call('getApp', {'selector': str(fixture)})
+                    opened = short_ax.call('show', {'appHandle': selection['appHandle']})
                 new = wait_state(lambda s: not s['closed'] and s.get('windowId') != window_id,
                                  'reopen did not replace the closed window')
                 assert opened == {'dispatched': True,
