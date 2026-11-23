@@ -153,9 +153,10 @@ function projectProgramTool(definition: ToolDefinition): Tool {
  */
 export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOptions): Promise<CuaMcpServer> {
   const manifest = createRequire(import.meta.url)('../package.json') as { version: string }
+  const defaultPreset = ctx.agentPresets.defaultId
   const handle = await ctx.agents.create({
     sessionId: brandString<SessionId>(`cua-mcp-${randomUUID()}`),
-    meta: { cwd: options.cwd, agentPreset: ctx.agentPresets.defaultId },
+    meta: { cwd: options.cwd, ...defaultPreset === undefined ? {} : { agentPreset: defaultPreset } },
     setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx) },
   })
   const { agent } = handle

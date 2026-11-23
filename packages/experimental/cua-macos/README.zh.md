@@ -33,6 +33,8 @@ provider 按当前界面语言生成引导和恢复文案，不支持的语言�
 <a id="use-this-package"></a>
 ## 使用本包
 
+首次调用 `getAccessibilityTree({ showDiff: true })` 返回带编号的应用或窗口树。按顺序应用后续差分即可复原当前可见树。`~ID` 更新行内容，`+ID` 插入节点，`>ID` 移动整棵子树并保留编号。位置紧跟节点编号，例如 `7^3` 将 7 放到父节点 3 的首位，`7>4` 将 7 放到兄弟节点 4 之后，`^root` 表示放到所有根节点的首位。连续插入共用一个起点。没有位置标记的 `+ID` 依缩进放到刚新增父节点的首位，或紧跟本段同一深度最近新增的兄弟节点。末尾的编号区间列全删除项。焦点或选中文本以本次摘要为准，没有摘要时清除上一次摘要。操作控件使用当前快照中的可操作编号。省略参数或传 `false` 返回完整树，并对已开始的编号序列重新编号。读取不完整、失败、读取选项不一致或树的附注改变时，需要重新建立基准。
+
 本包是仅限 macOS 的可选依赖。本地开发时运行 `pnpm --dir packages/experimental/cua-macos run build:native`，在 `native/bin` 下生成临时签名应用及 `current.json`。正式打包需要指定 `--identity "Developer ID Application: <name> (<team>)"` 并完成公证，参见[原生构建与服务](native/README.zh.md#build-and-service)。安装版保留分发时的签名。位于 Electron `app.asar` 归档内的包从同级的 `app.asar.unpacked` 目录读取应用，该目录由 Desktop 安装包提供；已安装包缺少应用时，准备阶段报错并给出预期目录。源码准备需要 Apple Command Line Tools 提供的 Swift 和 Python 3。
 
 从仓库运行 Web 时，在插件页开启 [Computer Use](../cua-bundle/README.zh.md)。首次启用会在 macOS 14 及以上准备本机组件。现有 Web profile 保持选中时，后续构建继续检查更新。未开启的 profile 不准备原生组件。也可以显式加载源码覆盖层：
@@ -41,7 +43,7 @@ provider 按当前界面语言生成引导和恢复文案，不支持的语言�
 pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.yml --dump-config
 ```
 
-配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。helper 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；通过 Computer Use 权限页打开系统设置并添加 helper。源码构建的应用包名为 `DSH Computer Use Dev.app`，Info.plist 声明名称 `DSH Computer Use Dev`；授权时选择开发版条目。`getCapabilities` 返回提供方声明的平台能力，以及实际查询的权限和锁屏状态。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。找到指定的安装包后，`getApp` 用可执行文件路径查找已有进程，进程显示名可以是其他语言。需要启动时，macOS 打开指定的安装副本，也可以复用授权期间启动的进程。helper 等待应用完成启动后返回运行状态。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回对象时不读取 AX，也不激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口声明的 `AXRaise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
+配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。helper 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；通过 Computer Use 权限页打开系统设置并添加 helper。源码构建的应用包名为 `DSH Computer Use Dev.app`，Info.plist 声明名称 `DSH Computer Use Dev`；授权时选择开发版条目。`getCapabilities` 返回提供方声明的平台能力，以及实际查询的权限和锁屏状态。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 列出运行中的应用。`cua.getState().apps` 来自 `listApps()`。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。空字符串或 null 列出全部扫描到的安装副本；使用非 null 的 `identity` 区分相同 ID 的副本。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。找到指定的安装包后，`getApp` 用可执行文件路径查找已有进程，进程显示名可以是其他语言。需要启动时，macOS 打开指定的安装副本，也可以复用授权期间启动的进程。helper 等待应用完成启动后返回运行状态。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回对象时不读取 AX，也不激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。使用 `app.show()` 显示运行中的应用。已经有窗口显示时保持原状，有可恢复的最小化窗口时将其恢复，否则请求应用重新打开一次，返回实际显示的窗口 ID。`window.show()` 只操作原窗口。如果窗口已关闭，调用 `app.show()` 后用返回的 ID 选取窗口。优先在后台显示窗口，临时切换后归还焦点。台前调度开启时，侧栏缩略图需要加入当前窗口组，归还焦点后再核实目标窗口已展开。需要应用持续接收键盘输入时，使用 `app.activate()`。
 
 源码构建默认使用 `sourceSigning: ad-hoc` 临时签名，不创建证书或钥匙串。二进制变化后可能需要重新授权。需要减少开发重建和跨 worktree 的授权次数时，在 DSH home 的 `cordis.patch.yml` 中选择已有证书及其钥匙串绝对路径；`cua-macos` 是加载 `@deepseek-ai/dsh-cua-macos` 的节点 ID：
 
@@ -74,7 +76,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxRequestBytes` / `maxResponseBytes` | `1048576` / `33554432` | UTF-8 请求与响应字节限制。 |
 | `maxClipboardBytes` | `33554432` | 粘贴时保存原剪贴板内容的字节上限；超限会在替换前拒绝。 |
 | `pasteReadTimeoutMs` | `1000` | Paste 命令返回后等待剪贴板读取的上限；到期返回 `PASTE_NOT_CONSUMED`。 |
-| `maxAppMatches` | `20` | 已安装应用搜索的结果上限；范围过大的查询会被拒绝，需要缩小名称范围。 |
+| `maxAppMatches` | `20` | 非空搜索的匹配数量上限，超限时拒绝；空字符串和 null 查询不受这一数量限制。 |
 | `maxElements` / `maxDepth` | `5000` / `50` | 读取树时的默认值。每次读取可单独调高或调低任一项。查找粘贴菜单始终使用配置值。[决策理由](../../../.agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.zh.md) |
 | `maxClickHoldMs` | `5000` | 显式点击按住时长的上限，单位为毫秒，接受非负整数。设为 0 时只允许立即松开。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
@@ -98,7 +100,7 @@ CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用�
 
 AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。子项无法读取时，树中会标出缺失部分，原始结果会返回 `hasUnreadableElements: true`。控件旁边有缺失提示时，仍可按该控件的元素 ID 操作。执行时需要重新查找目标的，macOS 会沿用读树时的分段读取方式找回可读子项。
 
-实际值与占位文字分别展示。有名称、状态或可用动作的分组和滚动区域保留独立行。同一节点中重复的名称、描述和帮助只显示一次。实际值、占位文字和 URL 即使文字相同也保留各自含义，不删除不同节点共有的正文。相关控件明确展示可写性，包括 `AXIncrementor`；`unknown` 表示系统未报告。缺少可选状态字段不代表 false。读树时，AXValue 或 AXSelectedTextRange 的可写性探测返回 -25200，会将该字段保留为未知并继续读取其他节点。实际写入仍严格校验；权限、通信和失效元素错误仍向上传播。超出当前值长度的 UTF-16 选区标为不可用。树中的动作简称可能省略 AppKit 的 target 和 selector 信息。调用 `performAction` 时使用 `listActions(elementId)` 返回的完整名称。通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
+实际值与占位文字分别展示。有名称、状态或可用动作的分组和滚动区域保留独立行。同一节点中重复的名称、描述和帮助只显示一次。实际值、占位文字和 URL 即使文字相同也保留各自含义，不删除不同节点共有的正文。相关控件明确展示可写性，包括 `AXIncrementor`；`unknown` 表示系统未报告。缺少可选状态字段不代表 false。读树时，AXValue 或 AXSelectedTextRange 的可写性探测返回 -25200，会将该字段保留为未知并继续读取其他节点。实际写入仍严格校验；权限、通信和失效元素错误仍向上传播。超出当前值长度的 UTF-16 选区标为不可用。树中的动作简称可能省略 AppKit 的 target 和 selector 信息。从 `win.listActions(elementId)` 选取完整动作名，用 `win.getActionSchema(name)` 确认是否需要参数，再用 `win.performAction(elementId, name, argument?)` 传入参数值。按名称查询可以得到参数类型，具体控件的数值上下限则需要观察该控件。
 
 调用 `inspect(await app.getAccessibilityTree())` 展示整棵树，也可以先筛选返回的文本，再将匹配项传给 `inspect`。若后续截图失败，先前已显式输出的 AX 文本仍然可见。
 
@@ -203,25 +205,28 @@ Call inspect(...values) to display selected observation results.
 
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: string and the methods listed below for window level. Window IDs are opaque provider-issued strings; preserve them verbatim.
 
+CuaAppInfo = { id: string, displayName: string, identity: string | null, isRunning: boolean, pid?: number }. Pass id unchanged to cua.getApp. For entries sharing the same id, pass identity unchanged or String(pid), when available, to select the intended entry. On macOS, identity comes from the canonical application bundle path. For installations sharing an id, pass their non-null identity unchanged to cua.getApp. To select a specific running instance, pass String(pid); instances of the same installation can share both id and identity. Running records include a pid; stopped records omit it.
+
 Supported modifier names depend on the platform and the operation; see the platform guidance.
 
 Setup and discovery:
 - cua.getCapabilities() -> { platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemInput: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false } — inspect reported permissions, sessionLocked, methods, and keyboard scopes without requesting permissions.
-- cua.listApps() -> { id: string, displayName: string, isRunning: boolean, pid?: number }[] — list applications the provider exposes for selection with their current running state; pass the returned id unchanged to cua.getApp. Each row represents one running process. To select one of several instances with the same name or bundle ID, pass String(row.pid) to cua.getApp.
-- cua.findApps(query: string) -> { id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[] — search installed applications, including stopped matches. Running installation matches include their process ID. Stopped matches have no pid.
-- cua.getState() -> { apps: { id: string, displayName: string, isRunning: boolean, pid?: number }[], browsers: [] } — summarize the same provider discovery; this is not an accessibility observation.
-- cua.getApp(selector: string) -> App — select an application by provider-issued discovery ID, name, bundle ID, or absolute path where supported, obtain consent, start a stopped application in the background only where the provider supports launch, and return without reading accessibility state or activating the app.
+- cua.listApps() -> CuaAppInfo[] — list running applications exposed by the provider. Each row represents one running process.
+- cua.findApps(query: string | null) -> CuaAppInfo[] — query is a partial-match search string for discoverable applications, including stopped apps. Discovery does not launch applications. Pass an empty string or null to list all discoverable apps without a match-count limit. Excessive matches for a nonempty query reject instead of truncating. Whitespace-only queries reject; strings are not trimmed. Response-size and operation-time limits still apply. Each row represents an installation.
+- cua.getState() -> { apps: CuaAppInfo[], browsers: [] } — return the running application list from listApps(), together with an empty browser list.
+- cua.getApp(selector: string) -> App — select an application by a returned id or non-null identity, or by an exact name, bundle ID or absolute path where supported; obtain consent, start a stopped application in the background where launch is supported, and return without reading the accessibility tree or requesting activation.
 - app.getWindows() -> { windowId: string, appName: string, title: string, bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null }[] — enumerate windows with global native bounds; null onCurrentSpace means unknown Space membership.
-- app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading accessibility state. Providers reject closed or foreign windows when operating on them.
+- app.getWindow(windowId: string) -> Window — select a window by an ID from getWindows without reading the accessibility tree. Use IDs from the intended app; window validation follows platform rules.
+- app.launch() -> ActionResult — request launch of a new application instance.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
-- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
-- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
+- app.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show an application window. Use the returned windowId to select it. If a window is already visible, no action is taken. Otherwise restore a minimized window or ask the running app to reopen once. The resulting window ID may be new. With Stage Manager, show can add a window from the strip to the active group. A thumbnail alone does not count as displayed.
+- window.show() -> { dispatched: boolean, windowId: string | null, foregroundChanged: boolean | null } — show the specified window. If the selected window was closed, call app.show() and use the returned windowId. Use app.activate() to keep the app in front.
 
 ## Accessibility tree
 Available at app or window level depending on the platform.
 
 Read getAccessibilityTree explicitly before using element ids. Selection and screenshots do not read or replace the current accessibility snapshot. Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { includeMenus?: boolean, details?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need. Use element ids from the file only while that observation is current.
+- getAccessibilityTree(options?: { includeMenus?: boolean, details?: boolean, showDiff?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. Pass showDiff: true for a numbered tree, then apply edits in order: ~ updates a row, + inserts one, > moves its subtree. The position suffix ^P means first child of P (^root for the first root); >S means after sibling S. Unanchored + rows continue an insertion by indentation (first child or next sibling). Remove the listed IDs last. Use current actionable IDs for input. Omit showDiff or pass false for a full tree. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need. Use element ids from the file only while that observation is current.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - getActionSchema(action: string) -> JSON Schema — query the parameter schema for an action.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
@@ -282,7 +287,7 @@ Pass useSystemInput: true only when the task requires system keyboard or mouse i
 - 原生确认表示事件已派发，不表示应用已处理。回合清理被拒绝、超时或断连时，CUA 会报告不确定结果，并禁止该任务的全部 CUA 操作。请手动检查桌面状态后再创建新任务。
 - 最低支持 macOS 14；设置导航、拖放接收和权限刷新需要在各支持版本验收。若 macOS 要求在修改屏幕录制权限后退出并重新打开 helper，权限检查在重启前可能仍返回未授权。可以关闭引导框，不必终止其他连接。
 - 所选设置窗口离开可见窗口列表时，引导框会关闭，包括切换桌面空间或最小化导致窗口不再可见的情况。返回后再次申请权限可重新打开引导。
-- 本提供方适用于 macOS。Windows 的配置见 [Windows 提供方](../cua-windows/README.zh.md#setup)。不支持浏览器标签、AX 差分、无法确认应用归属的系统面板和仅后台辅助类型的应用。
+- 本提供方适用于 macOS。Windows 的配置见 [Windows 提供方](../cua-windows/README.zh.md#setup)。不支持浏览器标签、无法确认应用归属的系统面板和仅后台辅助类型的应用。
 - 元素 ID 只对应用当前的辅助功能快照有效；之后的读取会替换它们。截图和指针输入都要求显式的窗口对象。
 - 坐标使用包含标题栏的返回截图像素；`relative: true` 使用 0～999 的整数，由 Host 换算原生 point。窗口移动、应用变化及其他桌面使用者的操作可能与观察和输入交错。
 - macOS 台前调度可能将后台窗口的尺寸与截图变为缩略图，当前无法保证这种状态下的完整画面与坐标输入；模型指引要求说明前台需求并避免反复抢回焦点。

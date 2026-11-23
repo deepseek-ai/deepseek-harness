@@ -111,7 +111,7 @@ internal static class Input
         if (key.Modifiers.Length != 0)
             throw new NativeFailure("UNSUPPORTED", "This key requires modifiers in the target keyboard layout; send each modifier and the base key separately");
         var flags = key.Extended ? 1u : 0;
-        return context.HeldInputs.Down(connection, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
+        return context.HeldInputs.Down(connection, new(app.Handle, window.Id),
             key.Key, name, Keyboard(key.Key, flags: flags), Keyboard(key.Key, flags: flags | 2), context.Cancellation);
     }
 
@@ -188,7 +188,7 @@ internal static class Input
         var flags = Button(button);
         if (!Win32.GetCursorPos(out var point)) throw new NativeFailure("INPUT_UNAVAILABLE", "The current pointer position is unavailable");
         Hit(app, window, point, context);
-        return context.HeldInputs.Down(connection, new(app.Handle, window.Id, window.ProcessId, window.ProcessStarted),
+        return context.HeldInputs.Down(connection, new(app.Handle, window.Id),
             flags.Control, button, Mouse(flags.Down), Mouse(flags.Up), context.Cancellation);
     }
 

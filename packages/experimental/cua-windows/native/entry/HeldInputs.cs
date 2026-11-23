@@ -6,7 +6,7 @@ namespace DeepSeek.Cua.Windows;
 
 internal sealed class HeldInputs(Action<Win32.Input> send)
 {
-    internal readonly record struct Target(string AppHandle, nint Window, int ProcessId, long ProcessStarted);
+    internal readonly record struct Target(string AppHandle, nint Window);
     private sealed record Press(Guid Connection, Target Target, ushort Control, string Name, Win32.Input Up)
     {
         internal object Describe() => new

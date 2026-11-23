@@ -37,7 +37,7 @@ it('rejects relative overrides before installing a native provider', async () =>
   expect(native.install).not.toHaveBeenCalled()
 })
 it('provides the Host runtime cleanup to CUA when using an absolute helper override', async () => {
-  const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13 })
+  const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13, maxDiffNotifications: 7 })
   await apply(ctx, config)
   expect(native.prepare).not.toHaveBeenCalled()
   expect(native.construct).toHaveBeenCalledWith(ctx, 13, 60_000, 'pipe')
@@ -51,13 +51,15 @@ it('provides the Host runtime cleanup to CUA when using an absolute helper overr
   expect(backend.capabilities.methods).toContain('getActionSchema')
   expect(backend.capabilities.methods).toContain('sendKeyEvent')
   expect(backend.capabilities.methods).toContain('toggleMouse')
+  expect(backend.capabilities.methods).toContain('findApps')
+  expect(backend.capabilities.methods).toContain('launchApp')
   expect(backend.heldInputState).toBe(true)
   expect(GUIDANCE).toContain('Key and mouse holds use desktop input.')
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
-  const options = { ...config, helperPath: backend.helperPath, cwd: process.cwd() }
+  const options = { ...Config({}), helperPath: backend.helperPath, cwd: process.cwd() }
   expect(backend.createChannel(ctx, options)).toBe(channel)
-  expect(native.connect).toHaveBeenCalledWith(options)
+  expect(native.connect).toHaveBeenCalledWith({ ...options, maxDiffNotifications: 7 })
   await backend.disposeNative?.()
   expect(native.dispose).toHaveBeenCalledOnce()
 })

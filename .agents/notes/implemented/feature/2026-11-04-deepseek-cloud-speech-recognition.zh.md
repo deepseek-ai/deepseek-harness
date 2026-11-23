@@ -22,4 +22,4 @@ Status: implemented
 
 ## 影响
 
-发布的 Bundle 启用云端这一行，[升级指南](../../../../docs/upgrade-guide/v0.2.3-alpha.1/voice-input-cloud-default/guide.zh.md)说明如何继续使用本地识别。在对话之外，Search 和 Fetch 接口先用 API Key，而语音识别先用账号登录。HTTP 401 会作废被拒绝的账号登录凭据，账号随之退出登录；服务拒绝账号登录凭据时，会在读完整段录音之前断开连接，因此这次拒绝以 `service-unavailable` 呈现给用户，登录凭据由下一个收到 401 的请求作废。验证覆盖自动路由与语言规则、通过真实 `DeepSeekAuth` 的两种凭据及其顺序、状态码分类，以及在真实组合中通过浏览器登录并对本机服务听写。
+发布的 Bundle 启用云端这一行，[升级指南](../../../../docs/upgrade-guide/v0.2.3-alpha.2/voice-input-cloud-default/guide.zh.md)说明如何继续使用本地识别。在对话之外，Search 和 Fetch 接口先用 API Key，而语音识别先用账号登录。HTTP 401 会作废被拒绝的账号登录凭据，账号随之退出登录；服务拒绝账号登录凭据时，会在读完整段录音之前断开连接，因此这次拒绝以 `service-unavailable` 呈现给用户，登录凭据由下一个收到 401 的请求作废。验证覆盖自动路由与语言规则、通过真实 `DeepSeekAuth` 的两种凭据及其顺序、状态码分类，以及在真实组合中通过浏览器登录并对本机服务听写。

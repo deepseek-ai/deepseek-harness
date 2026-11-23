@@ -24,6 +24,7 @@ export function createNativeFixture(selectorPid) {
     let acquired = false
     let generation = 0
     let observed
+    let lastNumberedCount
     let blocked
     let heldCallId
     function dispatch(method, params) {
@@ -43,7 +44,9 @@ export function createNativeFixture(selectorPid) {
         return released
       }
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
-      if (method === 'listApps') return [{ id: 'test.fixture', name: 'Fixture', isRunning: true, pid: selectorPid ?? 4 }]
+      if (method === 'listApps') return [{ id: 'test.fixture', identity: null, name: 'Fixture', isRunning: true, pid: selectorPid ?? null }]
+      if (method === 'findApps') return [{ id: 'test.fixture', identity: null, displayName: 'Fixture', isRunning: true,
+        ...(selectorPid === undefined ? {} : { pid: selectorPid }) }]
       if (method === 'getApp') {
         if (params.selector !== 'test.fixture' && (selectorPid === undefined || params.selector !== String(selectorPid))) {
           throw new Error('Unknown fixture application selector')
@@ -68,8 +71,19 @@ export function createNativeFixture(selectorPid) {
       if (method === 'listWindows') return [window]
       if (method === 'getState') {
         observed = `fixture-snapshot-${++generation}`
+        const tree = `- [0] AXButton "Increment"\n- AXStaticText "Count: ${state.count}"`
+        let output = tree
+        if (params.showDiff || lastNumberedCount !== undefined) {
+          const row = '1 AXStaticText "Count: ' + state.count + '"'
+          const target = ' for Window: "CUA fixture"'
+          output = !params.showDiff || lastNumberedCount === undefined ? '0 AXButton "Increment"\n' + row
+            : lastNumberedCount === state.count ? 'There has been no change in the accessibility tree' + target + '.'
+            : 'The following is a diff from the previous accessibility tree' + target
+              + '.\n~' + row
+          lastNumberedCount = state.count
+        }
         return { appHandle: 'fixture-app', windowId: params.windowId ?? null, snapshotId: observed,
-          tree: `- [0] AXButton "Increment"\n- AXStaticText "Count: ${state.count}"`, windows: [window], truncated: false }
+          tree: output, windows: [window], truncated: false }
       }
       if (method === 'click') {
         if (params.snapshotId !== observed || params.elementId !== '0') throw new Error('Use the latest Increment element')

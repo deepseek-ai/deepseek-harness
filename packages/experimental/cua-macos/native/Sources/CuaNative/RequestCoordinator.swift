@@ -4,6 +4,24 @@ import AppKit
 import Dispatch
 import Darwin
 
+/// A client may cancel after the worker publishes a snapshot, even while the success reply is in flight.
+struct AXReadDelivery {
+    let id: String
+    let scope: SnapshotScope
+    let control: NativeRequestControl
+    var refused = false
+
+    init?(_ request: NativeRequest?, control: NativeRequestControl) {
+        guard let request, request.method == "getState", let params = try? RequestParameters(request),
+              let app = try? params.string("appHandle") else { return nil }
+        id = request.id
+        scope = SnapshotScope(appHandle: app, windowID: try? params.optionalWindowID())
+        self.control = control
+    }
+
+    var scopeToDiscard: SnapshotScope? { refused || control.failure != nil ? scope : nil }
+}
+
 @MainActor final class RequestCoordinator {
     private let configuration: HelperConfiguration
     private let cancellation: CancellationLatch
@@ -25,6 +43,7 @@ import Darwin
     private var operation: Task<Void, Never>?
     private var stopping = false
     private var requestControl: NativeRequestControl?
+    private var lastRead: AXReadDelivery?
     private var activeRequestID: String?
     private var replying = false
     private var nextFrame: Data?
@@ -69,6 +88,7 @@ import Darwin
         guard !stopping else { return }
         if let control = try? JSONDecoder().decode(JSONValue.self, from: data).object,
            Set(control.keys) == ["type", "id"], control["type"] == .string("cancel"), let id = control["id"]?.string {
+            if lastRead?.id == id { lastRead?.refused = true }
             if id == activeRequestID { cancelRequest(NativeFailure(code: "NATIVE_CANCELLED", message: "Native operation cancelled")) }
             if let nextFrame, (try? NativeRequest(data: nextFrame).id) == id { nextCancelled = true }
             return
@@ -80,6 +100,8 @@ import Darwin
         let parsed = try? NativeRequest(data: data)
         activeRequestID = parsed?.id
         let control = NativeRequestControl()
+        let discard = lastRead?.scopeToDiscard
+        lastRead = AXReadDelivery(parsed, control: control)
         requestControl = control
         let trace: ScreenshotTrace?
         if let parsed, parsed.method == "screenshot" {
@@ -93,6 +115,7 @@ import Darwin
         let axTimeout = Double(configuration.axTimeoutSeconds)
         let onFatal = self.onFatal
         let channel = self.channel
+        let requestDeadline = ContinuousClock.now + .seconds(seconds)
         deadline = NativeDeadline(seconds: seconds) {
             trace?.mark("helper.deadline", errorCode: "NATIVE_TIMEOUT")
             control.cancel(NativeFailure(code: "NATIVE_TIMEOUT", message: "Native operation exceeded its deadline"), grace: grace, axTimeout: axTimeout,
@@ -103,6 +126,7 @@ import Darwin
         operation = Task { [weak self] in
             guard let self else { return }
             defer { control.finish() }
+            if let discard { await self.worker.discardSnapshot(discard) }
             var requestID: JSONValue = .null
             let response: JSONValue
             do {
@@ -128,7 +152,7 @@ import Darwin
                 } else {
                     result = try await self.scheduler.perform(cancellation: self.cancellation) {
                         control.startOperation()
-                        return try await self.execute(request, trace: trace)
+                        return try await self.execute(request, deadline: requestDeadline, trace: trace)
                     }
                 }
                 if let failure = control.failure { throw failure }
@@ -143,6 +167,7 @@ import Darwin
                 response = .object(["id": requestID, "error": .object([
                     "code": .string(failure.code), "message": .string(failure.message)])])
             }
+            if response["error"] != .null { self.lastRead?.refused = true }
             control.finishOperation()
             guard !self.stopping, self.active == token else { return }
             self.replying = true
@@ -186,7 +211,7 @@ import Darwin
             onFatal(NativeFailure(code: "NATIVE_UNRESPONSIVE", message: "Native operation did not stop after cancellation"), grace)
         }, blockedReply: { channel.shutdown() })
     }
-    private func execute(_ request: NativeRequest, trace: ScreenshotTrace?) async throws -> JSONValue {
+    private func execute(_ request: NativeRequest, deadline: ContinuousClock.Instant, trace: ScreenshotTrace?) async throws -> JSONValue {
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "getHeldInputs" {
@@ -203,17 +228,17 @@ import Darwin
             inputMonitor.start()
             defer { if !activity.hasInterests { inputMonitor.stop() } }
             return try await activity.withObservation(target, handle: params.string("appHandle"), owner: connectionID) {
-                try await self.dispatch(request, params: params, trace: trace)
+                try await self.dispatch(request, params: params, deadline: deadline, trace: trace)
             }
         }
-        let result = try await dispatch(request, params: params, trace: trace)
+        let result = try await dispatch(request, params: params, deadline: deadline, trace: trace)
         if let target, result["dispatched"] == .bool(true) {
             activity.record(target, owner: connectionID)
             if activity.hasInterests { inputMonitor.start() }
         }
         return result
     }
-    private func dispatch(_ request: NativeRequest, params: RequestParameters, trace: ScreenshotTrace?) async throws -> JSONValue {
+    private func dispatch(_ request: NativeRequest, params: RequestParameters, deadline: ContinuousClock.Instant, trace: ScreenshotTrace?) async throws -> JSONValue {
         let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
@@ -240,7 +265,8 @@ import Darwin
         } else if request.method == "openPermissionSettings" {
             result = try permissions.openSettings(params.string("permission"), failureMessage: params.string("settingsMessage"))
         } else if request.method == "findApps" {
-            result = .array(try ApplicationDiscovery.applications(matching: params.string("query"), exact: false,
+            let query = try (params.values["query"] == .null ? "" : params.string("query"))
+            result = .array(try ApplicationDiscovery.applications(matching: query, exact: false,
                 limit: params.integer("maxAppMatches", in: 1...1000), cancellation: cancellation).map { $0.json(catalog: catalog) })
         } else {
             var installed: InstalledApplication?
@@ -252,7 +278,7 @@ import Darwin
                 }
             }
             trace?.mark("worker.begin")
-            let outcome = try await worker.execute(request.method, params: params, catalog: catalog, installed: installed, trace: trace)
+            let outcome = try await worker.execute(request.method, deadline: deadline, params: params, catalog: catalog, installed: installed, trace: trace)
             trace?.mark("worker.end")
             switch outcome {
             case .result(let value):
@@ -281,7 +307,10 @@ import Darwin
                 }
                 result = AXWorker.actionResult
             case .launch(let plan):
-                let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: cancellation)
+                if plan.source != nil {
+                    try ApplicationAuthorization.requireLaunchSelection(plan.authorization, application: plan.application)
+                }
+                let pid = try await ApplicationDiscovery.launch(plan.application, newInstance: plan.source != nil, cancellation: cancellation)
                 result = try await worker.finishLaunch(plan, pid: pid, catalog: ApplicationCatalog.snapshot())
             }
         }

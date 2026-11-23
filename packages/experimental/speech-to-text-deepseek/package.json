@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-speech-to-text-deepseek",
   "description": "DeepSeek speech recognition through the /v1/tools/asr API, authenticated by the DeepSeek account or API key",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

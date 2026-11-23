@@ -16,6 +16,10 @@ struct ApplicationInfo: Sendable {
             || (selector.hasPrefix("/") && path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
                 == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path)
     }
+    /// Canonical installation selector when a bundle path is available.
+    var identity: String? {
+        path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+    }
     var json: JSONValue {
         var value: [String: JSONValue] = ["pid": .number(Double(pid))]
         if let name { value["name"] = .string(name) }
@@ -52,6 +56,29 @@ struct ApplicationCatalogSnapshot: Sendable {
         NSWorkspace.shared.icon(forFile: iconPath).draw(in: NSRect(x: 0, y: 0, width: 64, height: 64),
                                                    from: .zero, operation: .copy, fraction: 1)
         return bitmap.representation(using: .png, properties: [:]).map { "data:image/png;base64," + $0.base64EncodedString() }
+    }
+    /// Only return to the previous app while the application that took focus still owns it.
+    static func returnFocus(to previous: ProcessIdentity, from target: ProcessIdentity) throws -> Bool {
+        guard NativePlatform.frontPID() == target.pid else { return false }
+        try NativePlatform.verify(previous)
+        try NativePlatform.verify(target)
+        guard let app = NSRunningApplication(processIdentifier: previous.pid), !app.isHidden,
+              !app.isTerminated, app.activate(options: []) else {
+            throw NativeFailure(code: "BACKGROUND_RESTORE_UNAVAILABLE", message: "The previous application could not regain focus. Inspect the desktop before further input.")
+        }
+        return true
+    }
+    static func unhideForShow(_ owner: ProcessIdentity) throws {
+        try NativePlatform.verify(owner)
+        guard let app = NSRunningApplication(processIdentifier: owner.pid), !app.isTerminated else {
+            throw NativeFailure(code: "APP_UNAVAILABLE", message: "The application exited before it could be shown.")
+        }
+        if app.isHidden { app.unhide() }
+    }
+    static var animationDuration: Double { NSAnimationContext.current.duration }
+    static func activateForShow(_ target: ProcessIdentity, whileUsing original: ProcessIdentity) throws {
+        guard let pid = NativePlatform.frontPID(), pid == original.pid || pid == target.pid else { return }
+        try activate(target)
     }
     static func activate(_ identity: ProcessIdentity) throws {
         try NativePlatform.verify(identity)
@@ -163,6 +190,17 @@ enum NativePlatform {
         }
     }
     static func frontPID() -> Int32? { WindowSpaces().frontPID() }
+    /// A background window can be ordered above another app's windows without becoming its keyboard target.
+    static func foregroundAppWindow() -> (pid: Int32?, windowID: UInt32?) {
+        let pid = frontPID()
+        return (pid, pid.flatMap(topVisibleWindow))
+    }
+    static func topVisibleWindow(_ pid: Int32) -> UInt32? {
+        let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        let top = rows?.first { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid &&
+            ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 }
+        return (top?[kCGWindowNumber as String] as? NSNumber)?.uint32Value
+    }
     /// AppKit excludes input-transparent windows and transparent regions, including system overlays.
     @MainActor static func mouseWindow(at quartzPoint: CGPoint) -> Int {
         let point = WindowGeometry.appKitPoint(quartzPoint, mainDisplayHeight: CGDisplayBounds(CGMainDisplayID()).height)

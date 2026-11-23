@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-dingtalk",
   "description": "DingTalk plugin: the official dws CLI with its skills, and sign-in from the Plugins page",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "icon": "./icon.svg",
   "publishConfig": {
     "access": "public"

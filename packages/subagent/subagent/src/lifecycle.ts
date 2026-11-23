@@ -9,8 +9,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { ConsumedWork } from '@deepseek-ai/dsh-agent'
 import type { SubagentResult, SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 
 /**
@@ -69,17 +68,17 @@ export function createLifecycleEmitter(
  * token ceiling, or was cancelled, so deriving the reason from disposal would
  * report failed work as completed.
  *
- * {@link foldConsumedWork} supplies both halves the raw turn sequence cannot:
+ * `foldConsumedWork` supplies both halves the raw turn sequence cannot:
  * which turn accounts for the work this epoch consumed, and whether accepted
  * work was cancelled after it without any turn opening over it. A recorded
  * failure still wins over a cancellation — stopping a child that had already
  * failed does not turn its failure into a cancellation.
- * @param events - this epoch's own event suffix.
+ * @param work - the consumed-work account of this epoch's own events.
  * @returns its terminal stop reason; `completed` only for an epoch that both
  *   closed cleanly and had nothing left to run.
  */
-export function epochStopReason(events: readonly SessionEvent[]): SubagentResult['stopReason'] {
-  const { end, droppedUnrun } = foldConsumedWork(events)
+export function epochStopReason(work: ConsumedWork): SubagentResult['stopReason'] {
+  const { end, droppedUnrun } = work
   switch (end?.data.reason.kind) {
     case 'max-tokens':
       return 'max-tokens'
