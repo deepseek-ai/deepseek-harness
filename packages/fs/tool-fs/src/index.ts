@@ -33,7 +33,7 @@ export interface Config {
   write?: boolean
   /** Register `edit` and its guidance. Defaults to true. */
   edit?: boolean
-  /** Register `apply_patch` and its guidance beside `edit`. Defaults to false; shipped compositions set it on their `tool-fs` rows. */
+  /** Register `apply_patch` and its guidance. Defaults to the resolved `edit` value. */
   applyPatch?: boolean
   /** Default and maximum number of lines returned by one `read` call. */
   readLimit?: number
@@ -50,15 +50,23 @@ export const Config: z<Config> = z.object({
   readImage: z.boolean().default(true),
   write: z.boolean().default(true),
   edit: z.boolean().default(true),
-  applyPatch: z.boolean().default(false),
+  applyPatch: z.boolean(),
   readLimit: z.number().default(READ_LIMIT),
   readMaxLineLength: z.number().default(READ_MAX_LINE_LENGTH),
   readMaxBytes: z.number().default(READ_MAX_BYTES),
   readStreamMinSize: z.number().default(STREAM_MIN_SIZE),
 })
 
-/** Configuration after schemastery applied the defaults. */
+/** Configuration after schemastery applied its defaults; `applyPatch` stays unset until {@link resolveConfig}. */
+type ParsedConfig = Required<Omit<Config, 'applyPatch'>> & Pick<Config, 'applyPatch'>
+
+/** Configuration with every switch decided. */
 type ResolvedConfig = Required<Config>
+
+/** Decide `applyPatch` from `edit` when the composition leaves it unset. */
+function resolveConfig(config: ParsedConfig): ResolvedConfig {
+  return { ...config, applyPatch: config.applyPatch ?? config.edit }
+}
 
 /** Every read cap counts lines/chars/bytes — a positive integer, or windowing arithmetic misbehaves silently. */
 function assertPositiveInteger(name: string, value: number): void {
@@ -70,7 +78,7 @@ function assertPositiveInteger(name: string, value: number): void {
 /** Register the selected filesystem tools; `read_image` additionally requires a mounted attachment store. */
 export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
-  const resolved = config as ResolvedConfig
+  const resolved = resolveConfig(config as ParsedConfig)
   assertPositiveInteger('readLimit', resolved.readLimit)
   assertPositiveInteger('readMaxLineLength', resolved.readMaxLineLength)
   assertPositiveInteger('readMaxBytes', resolved.readMaxBytes)

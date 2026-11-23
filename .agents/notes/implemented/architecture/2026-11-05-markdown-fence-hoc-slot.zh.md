@@ -52,7 +52,7 @@ API 保证：
 | 嵌套 | 依次按 `order`、`priority`、注册顺序升序，`order` 最小的在最外层 |
 | children | 至多渲染一次；不渲染即替换该层内部的全部内容 |
 | 崩溃 | 出错的那一处在本次挂载内渲染 `children`，错误照常上报；层保持注册（`abdicate: false`），其他出现处保留该层；该处重新挂载时重试 |
-| 编译 | 每个 `(host, slot 声明, entryKey)` 一条层链，所有 outlet 共享；每个 ledger 版本重新选取该 key 的层，只有层变化时才重编，因此为其他 key 注册的层不会让已挂载内容重新挂载，outlet 切换 `entryKey` 则换到另一条层链 |
+| 编译 | host、spec 对象、slot 名和 `entryKey` 都相同的 outlet [共享一条编译好的层链](../../../../docs/subsystems/slots.zh.md#hoc-layers)；每个 ledger 版本重新选取该 key 的层，只有层变化时才重编，因此为其他 key 注册的层不会让已挂载内容重新挂载，outlet 切换 `entryKey` 则换到另一条层链 |
 
 这些 hoc 语义适用于所有 hoc slot，包括层全部为通配层的 `conversation.hero.frame`。本 note 部分取代 [hoc slot kind](2026-11-03-hoc-slot-kind.zh.md) 的四处决定：恰好渲染一次 `children`、不接受 `entryKey`、按 outlet `useMemo` 组合层、崩溃层 abdicate。
 
