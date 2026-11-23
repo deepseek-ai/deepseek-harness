@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closingIssuesOf, JOBS_QUERY, mergeRequestSchema, snapshotOf, statusQuery } from '../src/status.ts'
+import { closingIssuesOf, JOBS_QUERY, mergeRequestSchema, snapshotOf, statusQuery, statusViewer } from '../src/status.ts'
 import type { JobNode, MergeRequestNode, StatusParts } from '../src/status.ts'
 import { HOST, merge, sha } from './fixtures.ts'
 
@@ -13,8 +13,8 @@ export function mergeRequestNode(overrides: Partial<MergeRequestNode> = {}): Mer
     updatedAt: '2026-11-10T08:00:00Z', closedAt: null, mergedAt: null, author: { username: 'octo' },
     sourceBranch: 'feat', targetBranch: 'main', diffRefs: { baseSha: sha('b'), headSha: sha('a') },
     diffStatsSummary: { additions: 12, deletions: 3 }, detailedMergeStatus: 'MERGEABLE', mergeStatusEnum: 'CAN_BE_MERGED', conflicts: false,
-    divergedFromTargetBranch: false, rebaseInProgress: false, squash: false, squashOnMerge: false, squashReadOnly: false, approved: false,
-    resolvableDiscussionsCount: 3, resolvedDiscussionsCount: 1,
+    divergedFromTargetBranch: false, rebaseInProgress: false, autoMergeEnabled: false, availableAutoMergeStrategies: [], mergeUser: null,
+    squash: false, squashOnMerge: false, squashReadOnly: false, approved: false, resolvableDiscussionsCount: 3, resolvedDiscussionsCount: 1,
     userPermissions: { canMerge: true, pushToSourceBranch: true, updateMergeRequest: true },
     approvedBy: { pageInfo: { hasNextPage: false }, nodes: [] },
     reviewers: { pageInfo: { hasNextPage: false }, nodes: [] },
@@ -33,8 +33,8 @@ export function job(name: string, status: string | null, overrides: Partial<JobN
 
 function parts(node: MergeRequestNode, overrides: Partial<StatusParts> = {}): StatusParts {
   return {
-    ref: merge(6), fastForwardOnly: false, node, jobs: [], jobsTruncated: false, closingIssues: [], closingIssuesTruncated: false,
-    ...overrides,
+    ref: merge(6), fastForwardOnly: false, viewer: null, node, jobs: [], jobsTruncated: false, closingIssues: [],
+    closingIssuesTruncated: false, ...overrides,
   }
 }
 
@@ -49,6 +49,20 @@ describe('GitLab status query', () => {
     expect(JOBS_QUERY).toContain('retried: false')
     expect(query.indexOf('detailedMergeStatus')).toBeLessThan(query.indexOf('diffStatsSummary'))
   })
+
+  it('reads the signed-in user once and each merge request\'s automatic merge', () => {
+    const query = statusQuery(2)
+    expect(query.split('currentUser { username }')).toHaveLength(2)
+    expect(query).toContain('autoMergeEnabled availableAutoMergeStrategies mergeUser { username }')
+  })
+
+  it.each([
+    [{ currentUser: { username: 'lin' } }, 'lin'],
+    [{ currentUser: null }, null],
+    [{}, null],
+  ])('names the signed-in user of the answer %j', (data, viewer) => {
+    expect(statusViewer(data)).toBe(viewer)
+  })
 })
 
 describe('GitLab snapshots', () => {
@@ -56,8 +70,9 @@ describe('GitLab snapshots', () => {
     expect(snapshotOf(parts(mergeRequestNode(), { jobs: [job('lint', 'SUCCESS')], closingIssuesTruncated: true }))).toEqual({
       ref: merge(6), url: `https://${HOST}/group/sub/app/-/merge_requests/6`, title: 'Add it', state: 'open', draft: false, author: 'octo',
       headBranch: 'feat', headSha: sha('a'), baseBranch: 'main', baseSha: sha('b'), additions: 12, deletions: 3,
-      mergeability: 'mergeable', mergeReady: true, mergeMethods: ['merge', 'squash'], branchUpdates: [], reviewDecision: 'none',
-      reviewers: [], reviewersTruncated: false, canRequestReviews: true,
+      mergeability: 'mergeable', mergeReady: true, mergeMethods: ['merge', 'squash'],
+      autoMerge: { enabled: false, method: null, enabledBy: null, canEnable: false, canDisable: false },
+      branchUpdates: [], reviewDecision: 'none', reviewers: [], reviewersTruncated: false, canRequestReviews: true,
       checks: [{
         name: 'lint', state: 'success', url: `https://${HOST}/group/sub/app/-/jobs/lint`, workflow: 'test',
         startedAt: '2026-11-10T08:01:00Z', completedAt: '2026-11-10T08:02:00Z', rerun: PIPELINE,
@@ -113,6 +128,51 @@ describe('GitLab snapshots', () => {
     [{ divergedFromTargetBranch: false }, []],
   ])('offers a rebase for %j', (overrides, updates) => {
     expect(snapshotOf(parts(mergeRequestNode(overrides)))).toMatchObject({ branchUpdates: updates })
+  })
+
+  const waiting = { detailedMergeStatus: 'CI_STILL_RUNNING', availableAutoMergeStrategies: ['merge_when_checks_pass'] }
+  const noMerge = { canMerge: false, pushToSourceBranch: true, updateMergeRequest: true }
+
+  it.each([
+    [{}, true],
+    [{ draft: true }, false],
+    [{ state: 'closed' }, false],
+    [{ userPermissions: noMerge }, false],
+    [{ autoMergeEnabled: true }, false],
+    [{ availableAutoMergeStrategies: ['merge_train', 'add_to_merge_train_when_checks_pass'] }, false],
+    [{ availableAutoMergeStrategies: [] }, false],
+    [{ availableAutoMergeStrategies: null }, false],
+  ])('offers to turn the automatic merge on for a waiting merge request with %j: %s', (overrides, canEnable) => {
+    expect(snapshotOf(parts(mergeRequestNode({ ...waiting, ...overrides })))).toMatchObject({ autoMerge: { canEnable } })
+  })
+
+  it.each([
+    [false, {}, 'merge'],
+    [true, {}, 'rebase'],
+    [true, { squashOnMerge: true }, 'squash'],
+  ])('names the account and the method of an automatic merge for fast-forward %s and %j', (fastForwardOnly, overrides, method) => {
+    const node = mergeRequestNode({ ...waiting, autoMergeEnabled: true, mergeUser: { username: 'lin' }, ...overrides })
+    expect(snapshotOf(parts(node, { fastForwardOnly }))).toMatchObject({
+      autoMerge: { enabled: true, method, enabledBy: 'lin', canEnable: false, canDisable: true },
+    })
+  })
+
+  it('reports an automatic merge as off once the merge request is no longer open, and names no account GitLab does not', () => {
+    const on = { ...waiting, autoMergeEnabled: true }
+    expect(snapshotOf(parts(mergeRequestNode({ ...on, mergeUser: null })))).toMatchObject({ autoMerge: { enabled: true, enabledBy: null } })
+    expect(snapshotOf(parts(mergeRequestNode({ ...on, state: 'merged', mergeUser: { username: 'lin' } })))).toMatchObject({
+      autoMerge: { enabled: false, method: null, enabledBy: null, canEnable: false, canDisable: false },
+    })
+  })
+
+  it.each([
+    ['octo', { username: 'octo' }, true],
+    ['lin', { username: 'octo' }, false],
+    [null, { username: 'octo' }, false],
+    [null, null, false],
+  ])('lets %s turn off the automatic merge of a merge request by %j that they may not merge: %s', (viewer, author, canDisable) => {
+    const node = mergeRequestNode({ ...waiting, autoMergeEnabled: true, author, userPermissions: noMerge })
+    expect(snapshotOf(parts(node, { viewer }))).toMatchObject({ autoMerge: { enabled: true, canDisable } })
   })
 
   it('lets the signed-in user request reviews and rerun checks as GitLab permits', () => {

@@ -1356,10 +1356,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry of forge providers. Watchers of one change request share a single polling loop, which reads its snapshot while a snapshot watcher remains and its brief otherwise. Each forge has at most one snapshot fetch and one brief fetch in flight; each batches every due change request of that forge at its level, and those past the midpoint of the wait after a status, so change requests that became due at different times come to share one fetch. A fetch calls a provider that names a batch size once per that many change requests of a host, and settles the results of each call when it returns.',
     methods: [
       {
-        signature: 'register(provider: ForgeProvider): () => Promise<void>',
+        signature: 'register(provider: ForgeProvider): ForgeRegistrationHandle',
         description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
         parameters: [{ name: 'provider', description: 'provider to serve `provider.forge` on `provider.hosts`.' }],
-        returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
+        returns: 'the disposer that unregisters the provider and waits for its calls to finish, carrying {@link ForgeRegistrationHandle.replace}.',
         throws: ['when another provider already serves the same forge or one of the same hosts, compared without case, and when the provider names a batch size that is not a positive safe integer.'],
       },
       {
@@ -1395,11 +1395,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the repository\'s forge or the lookup fails.'],
       },
       {
-        signature: 'async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>',
-        description: 'Report whether the provider can reach the repository\'s host with current credentials.',
-        parameters: [{ name: 'repository', description: 'repository served by a registered provider.' }, { name: 'signal', description: 'cancellation for the probe.' }],
+        signature: 'async readiness(repository: Pick<ForgeRepository, \'forge\' | \'host\'>, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether a provider can reach one host with current credentials.',
+        parameters: [{ name: 'repository', description: 'forge family of a registered provider and the host to probe; a repository names both.' }, { name: 'signal', description: 'cancellation for the probe.' }],
         returns: 'the provider\'s readiness for the host.',
-        throws: ['when no provider serves the repository\'s forge.'],
+        throws: ['when no provider serves the forge.'],
       },
       {
         signature: 'async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
@@ -1441,6 +1441,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Bring the base branch\'s new commits into a change request\'s head branch while its head is still `request.headSha`, then poll it at once when it is watched.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'update method and the head commit the user confirmed.' }, { name: 'signal', description: 'cancellation of the request.' }],
         returns: 'undefined once the host accepted the update, or why it did not; a provider that updates no branches fails.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async setAutoMerge( ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>',
+        description: 'Turn the host\'s automatic merge of a change request on, while its head is still the request\'s `headSha`, or off, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
@@ -1534,6 +1541,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>',
+        description: 'Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Add a comment to a change request\'s conversation, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'body', description: 'Markdown source of the comment.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
         description: 'Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1602,9 +1623,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the Host lacks the Session query, projection cache, storage, or Session store service.'],
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>',
-        description: 'Stream the review page\'s lists of the signed-in user\'s open change requests on every host a provider lists them on: the lists read so far first, then a frame after each read settles. Readers of one repository scope share one reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.',
-        parameters: [{ name: 'repository', description: 'one repository to list in, or null for every repository the user can read.' }, { name: 'signal', description: 'ends the stream.' }],
+        signature: '@Remote({ mode: \'stream\' }) async *reviewLists( repository: ForgeReviewRepository | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>',
+        description: 'Stream the review page\'s lists of the signed-in user\'s open change requests on every host a provider lists them on: the lists read so far first, then a frame after each read settles. Readers of one repository scope share one reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.',
+        parameters: [{ name: 'repository', description: 'one repository to list in, read on its host only, or null for every repository the user can read on every host.' }, { name: 'signal', description: 'ends the stream.' }],
         returns: 'frames, each complete.',
       },
       {
@@ -1617,6 +1638,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>',
         description: 'Read every streamed review page list and the count again at once.',
         parameters: [{ name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether a provider reaches one of its hosts with the Host\'s current credentials, for the host list on the Plugins page of that provider\'s row. The read names no Session, so, like the review page reads, only callers that may use the Host\'s code host credentials reach it.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider, such as `gitlab`.' }, { name: 'host', description: 'host name as the provider\'s configuration lists it.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the provider\'s readiness for the host; `unavailable` with the reason when no provider serves the family, the probe fails, or it runs past `readinessTimeoutMs`.',
       },
       {
         signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewPoll(url: string, signal: AbortSignal): Promise<void>',
@@ -1637,6 +1664,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the description.',
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/description-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null>',
+        description: 'Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes of state.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the activity, or null when the change request\'s provider reads none.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void>',
+        description: 'Add a comment to the conversation of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'body', description: 'Markdown source of the comment.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is blank, or with the host\'s reason; `forgePanel/action-unknown` when the host\'s answer did not confirm the comment.'],
       },
       {
         signature: '@Remote async reviewChecks(url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>',
@@ -1710,6 +1750,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>',
         description: 'Merge a change request the review page shows while its head is still `headSha`.',
         parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
+        signature: '@Remote async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>',
+        description: 'Turn the code host\'s automatic merge of a change request the review page shows on, while its head is still the request\'s `headSha`, or off.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
       },
       {
@@ -1899,6 +1945,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Merge a change request of a Session while its head is still `headSha`; the change request is polled again once the host answers.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise or cannot be reached.'],
+      },
+      {
+        signature: '@Remote async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>',
+        description: 'Turn the code host\'s automatic merge of a change request of a Session on, while its head is still the request\'s `headSha`, or off; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past the request\'s `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise, cannot be reached, or sets no automatic merge; `forgePanel/action-unknown` when the host\'s answer did not confirm the change.'],
       },
       {
         signature: '@Remote async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>',
@@ -5827,8 +5879,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'forge/providers-changed',
     mode: 'parallel',
     signature: '\'forge/providers-changed\'(forge: string): void | Promise<void>',
-    summary: 'Announces a provider registration or withdrawal after the registry changes.',
-    description: 'Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
+    summary: 'Announces a provider registration, replacement, or withdrawal after the registry changes.',
+    description: 'Announces a provider registration, replacement, or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
     parameters: [{ name: 'forge', description: 'family whose provider changed.' }],
   },
   {
@@ -6700,6 +6752,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
   },
   {
+    name: 'AutoMergeRequest',
+    declaration: 'export type AutoMergeRequest = {\n    readonly enabled: true;\n    readonly method: MergeMethod;\n    readonly headSha: string;\n} | {\n    readonly enabled: false;\n};',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -6760,6 +6816,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ButtonProps {\n    readonly label: string;\n    readonly hotkey?: string | undefined;\n    readonly disabled?: boolean | undefined;\n    readonly onPress?: (() => unknown) | undefined;\n}',
   },
   {
+    name: 'ChangeRequestActivity',
+    declaration: 'export interface ChangeRequestActivity {\n    readonly items: readonly ChangeRequestActivityItem[];\n    readonly truncated: boolean;\n    readonly viewerCanComment: boolean;\n}',
+  },
+  {
+    name: 'ChangeRequestActivityItem',
+    declaration: 'export type ChangeRequestActivityItem = {\n    readonly at: string;\n    readonly actor: ForgeCommentAuthor | null;\n} & ({\n    readonly kind: \'comment\';\n    readonly body: string;\n    readonly url: string | null;\n} | {\n    readonly kind: \'review\';\n    readonly verdict: ReviewVerdict;\n    readonly body: string;\n    readonly comments: number;\n    readonly url: string | null;\n} | {\n    readonly kind: \'commit\';\n    readonly sha: string;\n    readonly title: string;\n} | {\n    readonly kind: \'merged\' | \'closed\' | \'reopened\' | \'ready-for-review\' | \'converted-to-draft\' | \'force-pushed\';\n} | {\n    readonly kind: \'auto-merge-enabled\' | \'auto-merge-disabled\';\n} | {\n    readonly kind: \'review-requested\';\n    readonly reviewer: string | null;\n} | {\n    readonly kind: \'renamed\';\n    readonly from: string;\n    readonly to: string;\n} | {\n    readonly kind: \'other\';\n    readonly text: string;\n});',
+  },
+  {
+    name: 'ChangeRequestAutoMerge',
+    declaration: 'export interface ChangeRequestAutoMerge {\n    readonly enabled: boolean;\n    readonly method: MergeMethod | null;\n    readonly enabledBy: string | null;\n    readonly canEnable: boolean;\n    readonly canDisable: boolean;\n}',
+  },
+  {
     name: 'ChangeRequestBrief',
     declaration: 'export type ChangeRequestBrief = Pick<ChangeRequestSnapshot, \'ref\' | \'url\' | \'title\' | \'state\' | \'draft\' | \'mergeability\' | \'reviewDecision\' | \'checksRollup\'>;',
   },
@@ -6813,7 +6881,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSnapshot',
-    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly branchUpdates: readonly BranchUpdateMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly reviewers: readonly ChangeRequestReviewer[];\n    readonly reviewersTruncated: boolean;\n    readonly canRequestReviews: boolean;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly canRerunChecks: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly autoMerge?: ChangeRequestAutoMerge;\n    readonly branchUpdates: readonly BranchUpdateMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly reviewers: readonly ChangeRequestReviewer[];\n    readonly reviewersTruncated: boolean;\n    readonly canRequestReviews: boolean;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly canRerunChecks: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestState',
@@ -6821,7 +6889,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSummary',
-    declaration: 'export interface ChangeRequestSummary {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly draft: boolean;\n    readonly author: ForgeCommentAuthor | null;\n    readonly headSha: string;\n    readonly checksRollup: ChecksRollup;\n    readonly reviewDecision: ReviewDecision;\n    readonly viewerReview: ChangeRequestViewerReview | null;\n    readonly viewerRequest: {\n        readonly team: string | null;\n    } | null;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface ChangeRequestSummary {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly draft: boolean;\n    readonly author: ForgeCommentAuthor | null;\n    readonly headSha: string;\n    readonly checksRollup: ChecksRollup;\n    readonly reviewDecision: ReviewDecision;\n    readonly viewerReview: ChangeRequestViewerReview | null;\n    readonly viewerRequest: {\n        readonly team: string | null;\n    } | null;\n    readonly updatedAt: string;\n}',
   },
   {
     name: 'ChangeRequestUpdate',
@@ -7761,7 +7829,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBriefs?(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>;\n    readonly snapshotBatchSize?: number;\n    readonly briefBatchSize?: number;\n    fetchCh /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>;\n    addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBrie /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
@@ -7770,6 +7838,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeRegisteredLens',
     declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
+  },
+  {
+    name: 'ForgeRegistrationHandle',
+    declaration: 'export interface ForgeRegistrationHandle {\n    (): Promise<void>;\n    replace(provider: ForgeProvider): void;\n}',
   },
   {
     name: 'ForgeRemoteBranches',
@@ -7825,7 +7897,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeReviewHost',
-    declaration: 'export interface ForgeReviewHost {\n    readonly forge: string;\n    readonly host: string;\n    readonly viewer: string | null;\n    readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>;\n}',
+    declaration: 'export interface ForgeReviewHost {\n    readonly forge: string;\n    readonly host: string;\n    readonly viewer: string | null;\n    readonly signIn: string | null;\n    readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>;\n}',
   },
   {
     name: 'ForgeReviewId',
@@ -7834,6 +7906,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeReviewList',
     declaration: 'export interface ForgeReviewList {\n    readonly items: readonly ChangeRequestSummary[] | null;\n    readonly total: number;\n    readonly fetchedAt: number | null;\n    readonly failure: ForgeFailure | null;\n}',
+  },
+  {
+    name: 'ForgeReviewRepository',
+    declaration: 'export interface ForgeReviewRepository {\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
   },
   {
     name: 'ForgeReviewRequest',

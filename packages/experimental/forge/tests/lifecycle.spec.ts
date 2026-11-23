@@ -120,6 +120,104 @@ it('does not announce provider withdrawal after its registry has stopped', async
   expect(observer).toHaveBeenCalledTimes(1)
 })
 
+it('replaces a registered provider in one step and polls its watches at once', async () => {
+  vi.useFakeTimers()
+  ctx = await forgeContext()
+  const first = new FakeProvider()
+  first.results.set(changeRequestKey(ref(1)), snapshot(ref(1)))
+  const registration = ctx.forge.register(first)
+  const titles: string[] = []
+  ctx.forge.watch(ref(1), (update) => { titles.push('snapshot' in update ? update.snapshot.title : update.failure.code) })
+  await vi.advanceTimersByTimeAsync(0)
+  const changes: string[] = []
+  ctx.on('forge/providers-changed', (forge) => { changes.push(forge) })
+  const second = new FakeProvider('fake', ['fake.test', 'second.test'])
+  second.results.set(changeRequestKey(ref(1)), snapshot(ref(1), { title: 'Read by the second provider' }))
+
+  registration.replace(second)
+
+  expect(ctx.forge.repositoryFromRemote('fake://second.test/Octo/Demo')).toEqual({ ...demo, host: 'second.test' })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(first.fetches).toEqual([[ref(1)]])
+  expect(second.fetches).toEqual([[ref(1)]])
+  expect(titles).toEqual(['Change 1', 'Read by the second provider'])
+  expect(changes).toEqual(['fake'])
+
+  await registration()
+  expect(ctx.forge.repositoryFromRemote('fake://second.test/Octo/Demo')).toBeUndefined()
+})
+
+it('cancels the calls of a replaced provider and waits for them when the registration ends', async () => {
+  ctx = await forgeContext()
+  const first: ForgeProvider = new FakeProvider()
+  const result = Promise.withResolvers<Awaited<ReturnType<ForgeProvider['findByHead']>>>()
+  const aborted = Promise.withResolvers<undefined>()
+  vi.spyOn(first, 'findByHead').mockImplementation((_repository, _branch, signal) => {
+    signal.addEventListener('abort', () => { aborted.resolve(undefined) }, { once: true })
+    return result.promise
+  })
+  const registration = ctx.forge.register(first)
+  const lookup = ctx.forge.findByHead(demo, 'topic', new AbortController().signal)
+  const rejected = expect(lookup).rejects.toThrow('forge: provider "fake" was replaced')
+  let disposed = false
+  try {
+    registration.replace(new FakeProvider())
+    await aborted.promise
+    const disposal = registration().then(() => { disposed = true })
+    await new Promise((resolve) => { setTimeout(resolve, 0) })
+    expect(disposed).toBe(false)
+    result.resolve([ref(3)])
+    await rejected
+    await disposal
+    expect(disposed).toBe(true)
+  } finally {
+    result.resolve([])
+    await rejected
+  }
+})
+
+it('forgets a replaced provider\'s call once it finishes', async () => {
+  ctx = await forgeContext()
+  const first: ForgeProvider = new FakeProvider()
+  const result = Promise.withResolvers<Awaited<ReturnType<ForgeProvider['findByHead']>>>()
+  vi.spyOn(first, 'findByHead').mockReturnValue(result.promise)
+  const registration = ctx.forge.register(first)
+  const rejected = expect(ctx.forge.findByHead(demo, 'topic', new AbortController().signal)).rejects.toThrow('was replaced')
+  registration.replace(new FakeProvider())
+
+  result.resolve([])
+  await rejected
+
+  await expect(registration()).resolves.toBeUndefined()
+})
+
+it('keeps the registered provider when its replacement is refused', async () => {
+  ctx = await forgeContext()
+  ctx.forge.register(new FakeProvider('other', ['other.test']))
+  const registration = ctx.forge.register(new FakeProvider())
+  const observer = vi.fn()
+  ctx.on('forge/providers-changed', observer)
+
+  expect(() => { registration.replace(new FakeProvider('other', ['third.test'])) })
+    .toThrow('forge: the registration of "fake" cannot serve "other"')
+  expect(() => { registration.replace(new FakeProvider('fake', ['fake.test', 'OTHER.test'])) })
+    .toThrow('forge: host "OTHER.test" is already served by the "other" provider')
+
+  expect(ctx.forge.repositoryFromRemote('fake://fake.test/Octo/Demo')).toEqual(demo)
+  expect(ctx.forge.repositoryFromRemote('fake://other.test/Octo/Demo')).toMatchObject({ forge: 'other' })
+  await Promise.resolve()
+  expect(observer).not.toHaveBeenCalled()
+})
+
+it('refuses to replace the provider of a withdrawn registration', async () => {
+  ctx = await forgeContext()
+  const registration = ctx.forge.register(new FakeProvider())
+  await registration()
+
+  expect(() => { registration.replace(new FakeProvider()) }).toThrow('forge: the withdrawn registration of "fake" cannot replace its provider')
+  expect(ctx.forge.repositoryFromRemote('fake://fake.test/Octo/Demo')).toBeUndefined()
+})
+
 it.each(['readiness', 'markReady', 'merge', 'diff', 'fileText', 'submitReview', 'fetchChecks', 'commits', 'compare'] as const)(
   'cancels and drains %s when its provider stops', async (method) => {
     ctx = await forgeContext()

@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ChangeRequestDescription, ForgeViewerList, ForgeViewerQuery } from '../src/types.ts'
+import type { ChangeRequestActivity, ChangeRequestDescription, ForgeViewerList, ForgeViewerQuery } from '../src/types.ts'
 import { FakeProvider, forgeContext, provide, ref } from './fake-provider.ts'
 
 let ctx: Context | undefined
@@ -100,5 +100,37 @@ describe('forge descriptions', () => {
     Object.assign(provider, { readDescription })
     await expect(ctx.forge.readDescription(ref(4), signal)).resolves.toBe(description)
     expect(readDescription).toHaveBeenCalledWith(ref(4), expect.any(AbortSignal))
+  })
+})
+
+describe('forge activity', () => {
+  it('delegates an activity read and reports a provider without it as unsupported', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+
+    await expect(ctx.forge.readActivity(ref(4), signal))
+      .resolves.toEqual({ code: 'unsupported', message: 'This provider does not read activity' })
+    const activity: ChangeRequestActivity = {
+      items: [{ kind: 'comment', at: '2026-11-10T00:00:00Z', actor: null, body: 'Looks good', url: null }], truncated: false, viewerCanComment: true,
+    }
+    const readActivity = vi.fn(async () => activity)
+    Object.assign(provider, { readActivity })
+    await expect(ctx.forge.readActivity(ref(4), signal)).resolves.toBe(activity)
+    expect(readActivity).toHaveBeenCalledWith(ref(4), expect.any(AbortSignal))
+  })
+
+  it('fails a comment for a provider that adds none and forwards it to one that does', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+
+    await expect(ctx.forge.addComment(ref(4), 'Thanks', signal)).resolves.toEqual({ code: 'failed', message: 'This provider adds no comments' })
+    const addComment = vi.fn(async () => undefined)
+    Object.assign(provider, { addComment })
+    await expect(ctx.forge.addComment(ref(4), 'Thanks', signal)).resolves.toBeUndefined()
+    expect(addComment).toHaveBeenCalledWith(ref(4), 'Thanks', expect.any(AbortSignal))
+    addComment.mockResolvedValueOnce({ code: 'unknown', message: 'no answer' } as never)
+    await expect(ctx.forge.addComment(ref(4), 'Thanks', signal)).resolves.toEqual({ code: 'unknown', message: 'no answer' })
   })
 })

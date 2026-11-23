@@ -30,7 +30,7 @@ export function isSegment(value: string): boolean {
  * @param parts - path segments, the project last.
  * @returns the namespace and project, or undefined.
  */
-function location(host: string, parts: readonly string[]): GitLabLocation | undefined {
+export function location(host: string, parts: readonly string[]): GitLabLocation | undefined {
   if (parts.length < 2 || !parts.every(isSegment)) return undefined
   return { host: host.toLowerCase(), owner: parts.slice(0, -1).join('/'), name: parts.slice(-1).join('') }
 }

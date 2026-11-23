@@ -37,6 +37,8 @@ export interface ChangeRequestsSectionInjected {
   readonly markReady: (entry: ChangeRequestEntry) => Promise<void>
   /** Merge a change request as `request` describes; settles once the outcome is reported. */
   readonly merge: (entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>
+  /** Turn a change request's automatic merge on or off; settles once the outcome is reported. */
+  readonly autoMerge: NonNullable<ChangeRequestActions['autoMerge']>
   /** Read the complete checks of an opened change request. */
   readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
   /** Rerun the failed checks or one check; settles once the outcome is reported. */
@@ -158,7 +160,7 @@ function SignInRow({ need, copyText, t }: {
  * @returns the cards, or null with neither bound change requests nor a sign-in to complete.
  */
 export function ChangeRequestsSection({
-  usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, readChecks,
+  usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, autoMerge, readChecks,
   rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot,
   renderFactorySlot, t,
 }: ChangeRequestsSectionProps): ReactNode {
@@ -174,7 +176,7 @@ export function ChangeRequestsSection({
   const signIn = signInNeedOf(state)
   if (signIn === null && state.changeRequests.length === 0) return null
   const actions: ChangeRequestActions = {
-    openLink, copyLink: copyText, retry: () => { void refresh() }, remove, markReady, merge, readChecks,
+    openLink, copyLink: copyText, retry: () => { void refresh() }, remove, markReady, merge, autoMerge, readChecks,
     rerunChecks, requestReviews, reviewerCandidates, updateBranch,
     viewChanges: (entry) => {
       viewChanges(entry)

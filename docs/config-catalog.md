@@ -1323,7 +1323,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:587`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:602`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1391,7 +1391,7 @@ export interface Config {
   reviewListIntervalMs?: number
   /** Milliseconds between two reads of the review page's navigation count while it is shown. */
   reviewCountIntervalMs?: number
-  /** Largest delay in milliseconds between two reads of the review page's lists or count after consecutive failures. */
+  /** Largest delay in milliseconds between two reads of the review page's lists or count on one host after its consecutive failed reads. */
   reviewMaxBackoffMs?: number
   /** Most change requests one review page list shows, capped by each provider's own limit. */
   reviewPageSize?: number
@@ -1428,7 +1428,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:833`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:932`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1451,15 +1451,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-github`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-github/src/index.ts:19`](../packages/experimental/forge-github/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/forge-github/src/index.ts:22`](../packages/experimental/forge-github/src/index.ts)
 
 ```ts config-catalog
 /** GitHub CLI executable, served hosts, and invocation limits. */
 export interface Config {
   /** GitHub CLI executable name or absolute host path. */
   ghCommand?: string
-  /** Host names this provider serves; list GitHub Enterprise hosts explicitly. */
-  hosts?: string[]
+  /**
+   * Host names this provider serves, at least one; list GitHub Enterprise hosts explicitly. Editable live: the
+   * provider registers again with the new list.
+   */
+  hosts: Volatile<string[]>
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
   /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read or review read. */
@@ -1824,15 +1828,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-forge-gitlab`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-gitlab/src/index.ts:19`](../packages/experimental/forge-gitlab/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/forge-gitlab/src/index.ts:22`](../packages/experimental/forge-gitlab/src/index.ts)
 
 ```ts config-catalog
 /** GitLab CLI executable, served hosts, and read limits. */
 export interface Config {
   /** GitLab CLI executable name or absolute host path. */
   glabCommand?: string
-  /** Host names this provider serves; list self-managed GitLab hosts explicitly. */
-  hosts?: string[]
+  /**
+   * Host names this provider serves, at least one; list self-managed GitLab hosts explicitly. Editable live: the
+   * provider registers again with the new list.
+   */
+  hosts: Volatile<string[]>
   /** Deadline in milliseconds for one `glab` invocation. */
   timeoutMs?: number
   /** Maximum captured bytes per `glab` output stream and combined JSON bytes of one complete check read or review read. */
@@ -1841,7 +1849,11 @@ export interface Config {
   maxReviewThreads?: number
   /** Most commits one merge request commit listing returns, the oldest ones when there are more. */
   maxCommits?: number
-  /** Most merge requests one status query reads; GitLab refuses a query over its complexity limit, which halves the batch. */
+  /**
+   * Most merge requests one status query reads, 1 by default: in a query that reads several, GitLab 19.5 reports a
+   * mergeable merge request after the first as conflicting. GitLab refuses a query over its complexity limit, which
+   * halves the batch.
+   */
   statusBatchSize?: number
   /** Most `glab` processes one status fetch runs at once. */
   maxConcurrentRequests?: number

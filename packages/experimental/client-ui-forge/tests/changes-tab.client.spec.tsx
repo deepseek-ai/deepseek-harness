@@ -41,6 +41,8 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 const english = makeTranslate(en)
 /** Copy of a view of a GitHub pull request, which names the code host and the noun. */
 const t = (key: string, params?: Record<string, unknown>): string => english(key, { forge: 'GitHub', noun: 'PR', ...params })
+/** The actions that open GitHub, as a view of a change request whose provider names itself GitHub words them. */
+const ON_GITHUB = { open: t('change.viewOn'), view: t('diff.viewInBrowser'), file: t('diff.openFileInBrowser') }
 const SESSION = brandString<SessionId>('s1')
 const TAB = 'tab-changes' as TabId
 const URL7 = 'https://github.com/octo/demo/pull/7'
@@ -1409,7 +1411,7 @@ describe('ChangesTab change requests', () => {
     expect(m.view.getByRole('img', { name: 'Change request state: Open' })).toBeTruthy()
     expect(m.view.getByText('Change 7')).toBeTruthy()
     expect(m.view.getByText('#7')).toBeTruthy()
-    fireEvent.click(m.view.getByRole('button', { name: en['change.view'] }))
+    fireEvent.click(m.view.getByRole('button', { name: ON_GITHUB.open }))
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     await settle()
 
@@ -1434,17 +1436,17 @@ describe('ChangesTab change requests', () => {
     }
     expect(menu('docs/notes.txt')).toEqual([en['diff.copyPath']])
     expect(menu('docs/gone.txt')).toEqual([en['diff.copyPath']])
-    expect(menu('src/app.ts')).toEqual([en['diff.copyPath'], en['diff.openFileInBrowser']])
+    expect(menu('src/app.ts')).toEqual([en['diff.copyPath'], ON_GITHUB.file])
     fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'More actions for app.ts' }))
-    fireEvent.click(m.view.getByRole('menuitem', { name: en['diff.openFileInBrowser'] }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: ON_GITHUB.file }))
     expect(m.faces.openLink).toHaveBeenLastCalledWith(CHANGE.fileUrls['src/app.ts'])
   })
 
   it('shows in place that the host did not provide the diff, offering its web page and a retry', async () => {
     const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockResolvedValueOnce(REFUSED.hostRefused) } })
     await settle()
-    expect(m.view.getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}${en['diff.viewInBrowser']}`)
-    fireEvent.click(m.view.getByRole('button', { name: en['diff.viewInBrowser'] }))
+    expect(m.view.getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}${ON_GITHUB.view}`)
+    fireEvent.click(m.view.getByRole('button', { name: ON_GITHUB.view }))
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     fireEvent.click(m.view.getByRole('button', { name: en.retry }))
     await settle()
@@ -1454,9 +1456,9 @@ describe('ChangesTab change requests', () => {
   it('says a diff over a size limit is too large to show and offers only its web page', async () => {
     const m = mount({ source, setup: (faces) => { faces.changeRequestDiff.mockResolvedValue(REFUSED.tooLarge) } })
     await settle()
-    expect(m.view.getByRole('status').textContent).toBe(`${en['diff.tooLarge']}${en['diff.viewInBrowser']}`)
+    expect(m.view.getByRole('status').textContent).toBe(`${en['diff.tooLarge']}${ON_GITHUB.view}`)
     expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
-    fireEvent.click(m.view.getByRole('button', { name: en['diff.viewInBrowser'] }))
+    fireEvent.click(m.view.getByRole('button', { name: ON_GITHUB.view }))
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
   })
 
@@ -1551,7 +1553,7 @@ describe('ChangesTab change requests', () => {
     })
     await settle()
     expect(failed.faces.changeRequestDiff).toHaveBeenCalledOnce()
-    expect(within(failed.view.container).getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}${en['diff.viewInBrowser']}`)
+    expect(within(failed.view.container).getByRole('status').textContent).toBe(`${en['diff.error']}${en.retry}${ON_GITHUB.view}`)
   })
 
   it('waits for the first status of a change request whose entry shows a snapshot kept from an earlier panel stream', async () => {
@@ -1572,9 +1574,14 @@ describe('ChangesTab change requests', () => {
     expect(m.view.getByRole('img', { name: 'Change request state: Unknown' })).toBeTruthy()
     expect(m.view.getByText(URL7)).toBeTruthy()
     expect(m.view.getByText('#7')).toBeTruthy()
-    fireEvent.click(m.view.getByRole('button', { name: en['change.view'] }))
+    // Before the Session's state names the provider, the action names the host of the URL and carries the leaving arrow.
+    const open = m.view.getByRole('button', { name: t('change.viewOn', { forge: 'github.com' }) })
+    expect(open.querySelector('svg[viewBox="-2 -2 28 28"]')).toBeNull()
+    fireEvent.click(open)
     expect(m.faces.openLink).toHaveBeenLastCalledWith(URL7)
     act(() => { m.panel.set({ state: ready({ changeRequests: [entry(7, null)] }), disconnected: false }) })
+    // The provider's family picks the mark: GitHub's for a GitHub change request.
+    expect(m.view.getByRole('button', { name: ON_GITHUB.open }).querySelector('svg[viewBox="-2 -2 28 28"]')).not.toBeNull()
     expect(m.view.getByText(URL7)).toBeTruthy()
     await settle()
 

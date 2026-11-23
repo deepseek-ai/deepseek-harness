@@ -6,14 +6,14 @@
   en: 37c9cbfb3141702b
   zh: c5fcbb7f4fda1dbc
 /forges/providers-and-change-requests:
-  en: 8df1bf8a6d294252
-  zh: 79ba96596739569f
+  en: ef1335232f8e2156
+  zh: b19c42e7f8671b01
 /forges/status-polling:
   en: 33640257c4f9197d
   zh: b0f435bc3e03cfa4
 /forges/change-request-actions:
-  en: ae735fbdbdf2d870
-  zh: 9903fcc571104ad8
+  en: dc3b95bf473a2ddc
+  zh: 8399387a6195f70f
 /forges/review-threads:
   en: 6a4162560b1aa158
   zh: 5349e9f25d08fd97
@@ -23,6 +23,9 @@
 /forges/viewer-lists-and-descriptions:
   en: 05dba49e668fbd82
   zh: 7502689f5dd46118
+/forges/activity-and-comments:
+  en: fdfee3180c86d028
+  zh: 8b092bb23594c7a7
 /forges/session-bindings:
   en: 74255d6005e1c9e8
   zh: 252d0d552f1e26a1
@@ -30,8 +33,8 @@
   en: 83ad892728d13987
   zh: d19b012f5898ef07
 /forges/panel/review-page:
-  en: f576f6e104ec9546
-  zh: b97efdd34b3a9d1b
+  en: de8dc146c603314b
+  zh: 976884cb9b3a7464
 /forges/extension-api:
   en: f35345e482e84f4f
   zh: 2ecb7d9498decb31

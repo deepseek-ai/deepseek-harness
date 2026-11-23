@@ -1,8 +1,8 @@
 /** GitLab merge request status through GraphQL, mapped to forge snapshots. */
 
 import type {
-  ChangeRequestCheck, ChangeRequestIssue, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, ChecksRollup,
-  CheckState, ForgeCheckId, ForgeFailure, MergeMethod, ReviewDecision, ReviewVerdict,
+  ChangeRequestAutoMerge, ChangeRequestCheck, ChangeRequestIssue, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot,
+  ChecksRollup, CheckState, ForgeCheckId, ForgeFailure, MergeMethod, ReviewDecision, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import { avatarUrlOf, parseIssueUrl } from './urls.ts'
@@ -15,6 +15,9 @@ export const POLL_JOBS = 50
 
 /** Jobs per page of a complete check read. */
 export const JOB_PAGE = 100
+
+/** The automatic merge strategy that merges once every merge check passes, as `availableAutoMergeStrategies` names it. */
+const CHECKS_PASS_STRATEGY = 'merge_when_checks_pass'
 
 /** Job fields every job page reads. */
 const JOB_FIELDS = 'name status allowFailure stage { name } webPath startedAt finishedAt'
@@ -30,6 +33,7 @@ export const MERGE_REQUEST_FRAGMENT = `fragment MergeRequestStatus on MergeReque
   sourceBranch targetBranch
   diffRefs { baseSha headSha }
   detailedMergeStatus mergeStatusEnum conflicts divergedFromTargetBranch rebaseInProgress
+  autoMergeEnabled availableAutoMergeStrategies mergeUser { username }
   diffStatsSummary { additions deletions }
   squash squashOnMerge squashReadOnly approved
   resolvableDiscussionsCount resolvedDiscussionsCount
@@ -46,8 +50,10 @@ export const JOBS_QUERY = `query($path: ID!, $iid: String!, $cursor: String!) {
 }`
 
 /**
- * Build one query that reads the status of several merge requests, each under the alias `m<index>` with the variables
- * `p<index>` (project path) and `i<index>` (number as a string).
+ * Build one query that reads the signed-in user's username and the status of several merge requests, each under the
+ * alias `m<index>` with the variables `p<index>` (project path) and `i<index>` (number as a string). GitLab 19.5 answers
+ * `CONFLICT` for every merge request it found mergeable after the first one of a query, since each selects
+ * `diffStatsSummary`.
  * @param count - number of merge requests.
  * @returns the GraphQL document.
  */
@@ -55,7 +61,8 @@ export function statusQuery(count: number): string {
   const declared = Array.from({ length: count }, (_, index) => `$p${index}: ID!, $i${index}: String!`)
   const selected = Array.from({ length: count }, (_, index) =>
     `m${index}: project(fullPath: $p${index}) { mergeRequestsFfOnlyEnabled mergeRequest(iid: $i${index}) { ...MergeRequestStatus } }`)
-  return `query(${['$jobs: Int!', ...declared].join(', ')}) {\n  ${selected.join('\n  ')}\n}\n${MERGE_REQUEST_FRAGMENT}`
+  const fields = ['currentUser { username }', ...selected].join('\n  ')
+  return `query(${['$jobs: Int!', ...declared].join(', ')}) {\n  ${fields}\n}\n${MERGE_REQUEST_FRAGMENT}`
 }
 
 const pageInfo = z.object({ hasNextPage: z.boolean(), endCursor: z.string().nullable().optional() })
@@ -91,6 +98,9 @@ export const mergeRequestSchema = z.object({
   conflicts: z.boolean(),
   divergedFromTargetBranch: z.boolean(),
   rebaseInProgress: z.boolean(),
+  autoMergeEnabled: z.boolean(),
+  availableAutoMergeStrategies: z.array(z.string()).nullable(),
+  mergeUser: z.object({ username: z.string() }).nullable(),
   squash: z.boolean(),
   squashOnMerge: z.boolean(),
   squashReadOnly: z.boolean(),
@@ -116,6 +126,15 @@ export const projectSchema = z.object({
   mergeRequestsFfOnlyEnabled: z.boolean(),
   mergeRequest: mergeRequestSchema.nullable(),
 }).nullable()
+
+/**
+ * Read the signed-in user's username from the answer to a status query.
+ * @param data - the `data` object of the answer.
+ * @returns the username, or null when the answer names no signed-in user.
+ */
+export function statusViewer(data: Readonly<Record<string, unknown>>): string | null {
+  return z.object({ username: z.string() }).safeParse(data['currentUser']).data?.username ?? null
+}
 
 /** A following page of head pipeline jobs as {@link JOBS_QUERY} reads it. */
 export const jobsPageSchema = z.object({
@@ -152,7 +171,32 @@ export function needsMergeCheck(node: MergeRequestNode): boolean {
 }
 
 /** Review states of a reviewer whose review is still awaited. */
-const AWAITED = new Set(['UNREVIEWED', 'REVIEW_STARTED'])
+export const AWAITED_REVIEW_STATES: ReadonlySet<string> = new Set(['UNREVIEWED', 'REVIEW_STARTED'])
+
+/** The outcome each review state of a reviewer who gave a review stands for. */
+const REVIEW_VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
+  REVIEWED: 'commented',
+  REQUESTED_CHANGES: 'changes-requested',
+  APPROVED: 'approved',
+  UNAPPROVED: 'dismissed',
+}
+
+/** Review states of a reviewer who gave a review; with the awaited ones, every state GitLab 19.5 defines. */
+export const GIVEN_REVIEW_STATES: ReadonlySet<string> = new Set(Object.keys(REVIEW_VERDICTS))
+
+/** One reviewer's review state as GitLab returns it with a merge request. */
+export interface ReviewerInteraction {
+  /** The reviewer's interaction with the merge request, or null when GitLab reports none. */
+  readonly mergeRequestInteraction: { readonly reviewState: string | null } | null
+}
+
+/** The approval and reviewers of a merge request, which decide its aggregate review outcome with its merge status. */
+export interface ReviewedMergeRequest {
+  /** Whether GitLab reports the merge request approved. */
+  readonly approved: boolean
+  /** The reviewers GitLab listed. */
+  readonly reviewers: { readonly nodes: readonly ReviewerInteraction[] }
+}
 
 /** A merge request whose status is known, and the parts of it read elsewhere. */
 export interface StatusParts {
@@ -160,6 +204,8 @@ export interface StatusParts {
   readonly ref: ChangeRequestRef
   /** Whether the project merges by fast-forward only. */
   readonly fastForwardOnly: boolean
+  /** Username of the signed-in user, or null when GitLab named none. */
+  readonly viewer: string | null
   /** The merge request node. */
   readonly node: MergeRequestNode
   /** Every job read for the head pipeline, in GitLab's order. */
@@ -210,6 +256,7 @@ export function snapshotOf(parts: StatusParts): ChangeRequestSnapshot | ForgeFai
     mergeability,
     mergeReady: open && !node.draft && status === 'MERGEABLE' && mergeability === 'mergeable' && node.userPermissions.canMerge,
     mergeMethods: mergeMethods(parts.fastForwardOnly, node),
+    autoMerge: autoMergeOf(parts, open),
     branchUpdates: rebase ? ['rebase'] : [],
     reviewDecision: reviewDecision(node, status),
     reviewers: reviewers(node, host),
@@ -238,8 +285,38 @@ function mergeMethods(fastForwardOnly: boolean, node: MergeRequestNode): MergeMe
   return node.squash ? ['squash', base] : [base, 'squash']
 }
 
-/** A reviewer who requested changes decides first, then an approval, then GitLab's demand for one. */
-function reviewDecision(node: MergeRequestNode, status: string): ReviewDecision {
+/**
+ * How a merge request stands with GitLab's automatic merge, which counts as on only while the merge request is open.
+ * Its method is the one a merge uses then: squashing when GitLab reports that the merge squashes, else the project's
+ * merge commit or fast-forward. It can be turned on while the merge request is open and not a draft, the signed-in user
+ * may merge it, and GitLab lists the strategy that waits for every merge check as available; GitLab lists none for a
+ * merge request that can merge now, and a merge train strategy does not count. Every user who may merge it can turn it
+ * off, and so can its author.
+ */
+function autoMergeOf(parts: StatusParts, open: boolean): ChangeRequestAutoMerge {
+  const { node } = parts
+  const enabled = open && node.autoMergeEnabled
+  const mayMerge = node.userPermissions.canMerge
+  const authored = node.author?.username === parts.viewer
+  return {
+    enabled,
+    method: !enabled ? null : node.squashOnMerge ? 'squash' : parts.fastForwardOnly ? 'rebase' : 'merge',
+    enabledBy: enabled ? node.mergeUser?.username ?? null : null,
+    canEnable: open && !node.draft && !node.autoMergeEnabled && mayMerge
+      && (node.availableAutoMergeStrategies ?? []).includes(CHECKS_PASS_STRATEGY),
+    canDisable: enabled && (mayMerge || authored),
+  }
+}
+
+/**
+ * Decide a merge request's aggregate review outcome: a reviewer who requested changes decides first, then an approval,
+ * then GitLab's demand for one.
+ * @param node - the merge request's approval and reviewers.
+ * @param status - the merge request's `detailedMergeStatus`, or null for a read that does not select it, which then
+ * reports a demanded approval as `none`.
+ * @returns the review decision.
+ */
+export function reviewDecision(node: ReviewedMergeRequest, status: string | null): ReviewDecision {
   if (node.reviewers.nodes.some(reviewer => reviewer.mergeRequestInteraction?.reviewState === 'REQUESTED_CHANGES')) return 'changes-requested'
   if (node.approved) return 'approved'
   if (status === 'NOT_APPROVED') return 'review-required'
@@ -257,10 +334,9 @@ function reviewers(node: MergeRequestNode, host: string): ChangeRequestReviewer[
     listed.push(entry)
   }
   for (const reviewer of node.reviewers.nodes) {
-    const state = reviewer.mergeRequestInteraction?.reviewState ?? 'UNREVIEWED'
     add(reviewer.username, {
-      kind: reviewer.bot ? 'bot' : 'user', login: reviewer.username, avatarUrl: avatarUrlOf(host, reviewer.avatarUrl), requested: AWAITED.has(state),
-      codeOwner: false, verdict: verdictOf(state), reviewedSha: null,
+      kind: reviewer.bot ? 'bot' : 'user', login: reviewer.username, avatarUrl: avatarUrlOf(host, reviewer.avatarUrl), codeOwner: false,
+      ...reviewOf(reviewer), reviewedSha: null,
     })
   }
   for (const approver of node.approvedBy?.nodes ?? []) {
@@ -272,15 +348,19 @@ function reviewers(node: MergeRequestNode, host: string): ChangeRequestReviewer[
   return listed
 }
 
+/**
+ * Read one reviewer's review state; a reviewer GitLab reports no state for has not reviewed.
+ * @param reviewer - the reviewer as GitLab returned it.
+ * @returns whether the reviewer's review is still awaited, and the outcome of their latest review.
+ */
+export function reviewOf(reviewer: ReviewerInteraction): Pick<ChangeRequestReviewer, 'requested' | 'verdict'> {
+  const state = reviewer.mergeRequestInteraction?.reviewState ?? 'UNREVIEWED'
+  return { requested: AWAITED_REVIEW_STATES.has(state), verdict: verdictOf(state) }
+}
+
 /** A reviewer state as the outcome of their latest review; states outside the documented set read as none. */
 function verdictOf(state: string): ReviewVerdict | null {
-  switch (state) {
-    case 'APPROVED': return 'approved'
-    case 'REQUESTED_CHANGES': return 'changes-requested'
-    case 'REVIEWED': return 'commented'
-    case 'UNAPPROVED': return 'dismissed'
-    default: return null
-  }
+  return REVIEW_VERDICTS[state] ?? null
 }
 
 /**
@@ -316,8 +396,12 @@ function jobState(job: JobNode): CheckState {
   }
 }
 
-/** A pipeline status as the combined check outcome; a merge request without a pipeline has none. */
-function rollup(status: string | null): ChecksRollup {
+/**
+ * Map a pipeline status to the combined check outcome; statuses outside the documented set read as pending.
+ * @param status - status of the head pipeline, or null for a merge request without a pipeline.
+ * @returns the combined outcome, `none` without a pipeline.
+ */
+export function rollup(status: string | null): ChecksRollup {
   switch (status) {
     case null: return 'none'
     case 'SUCCESS':

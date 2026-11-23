@@ -171,7 +171,7 @@ function Reviewers({ frame, snapshot, actions, t }: StatusProps): ReactNode {
             </button>
           )}
           {requesting !== undefined && (
-            <Menu open={open} onClose={close} portal dense align="start" listClassName={overview.menu}
+            <Menu open={open} onClose={close} portal dense align="start" className={css.statusAnchor} listClassName={overview.menu}
               anchor={(
                 <button type="button" className={clsx(css.statusLine, css.statusLineButton, css.statusAction)} aria-haspopup="menu"
                   aria-expanded={open} disabled={busy} data-forge-review-request="" onClick={() => { if (open) close(); else setOpen(true) }}>
