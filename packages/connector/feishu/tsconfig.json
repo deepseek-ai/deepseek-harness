@@ -24,6 +24,9 @@
       "path": "../../skill/skill"
     },
     {
+      "path": "../../subprocess/subprocess"
+    },
+    {
       "path": "../cli-account"
     },
     {

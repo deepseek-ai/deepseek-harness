@@ -24,3 +24,6 @@
 
 - id: tool-office
   disabled: true
+
+- id: tool-cordis
+  disabled: true

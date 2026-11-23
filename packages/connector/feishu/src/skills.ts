@@ -11,17 +11,25 @@ const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u
 /** The guides are not files: the loaded entry tells the model to open them through lark-cli. */
 const RESOURCES = 'Embedded lark-cli guides; open them with the skills read command given in the loaded skill.'
 
-/** Lists the packaged entry without running lark-cli; the entry is read once, when the plugin loads. */
+/**
+ * Lists the packaged entry while lark-cli is installed, without running it; the entry is read once, when the plugin
+ * loads. The catalog caches a listing, so one made while lark-cli was missing lacks the entry until {@link relist}
+ * invalidates it.
+ */
 export class FeishuSkillProvider implements SkillProvider {
   readonly name = 'feishu'
   private readonly candidate: SkillCandidate
   private readonly content: string
+  /** Whether the catalog may hold a listing made while lark-cli was missing. */
+  private unlisted = false
 
   /**
    * @param entry - absolute path of the packaged `SKILL.md`, whose frontmatter gives the skill's name and description.
+   * @param installed - whether lark-cli, which serves the guides the entry indexes, is in place.
+   * @param invalidate - makes the catalog list this provider again.
    * @throws when the entry has no YAML frontmatter, or its frontmatter has no skill name or no description.
    */
-  constructor(entry: string) {
+  constructor(entry: string, private readonly installed: () => boolean, private readonly invalidate: () => void) {
     const raw = readFileSync(entry, 'utf8')
     const match = FRONTMATTER.exec(raw)
     const block = match?.[1]
@@ -41,7 +49,21 @@ export class FeishuSkillProvider implements SkillProvider {
   }
 
   list(): Promise<SkillCandidate[]> {
-    return Promise.resolve([this.candidate])
+    if (this.installed()) return Promise.resolve([this.candidate])
+    this.unlisted = true
+    return Promise.resolve([])
+  }
+
+  /**
+   * Invalidate the catalog once when lark-cli is in place and a listing was made without it. lark-cli can appear
+   * without a download that this plugin finished: a cancelled or failed install script may already have copied it, and
+   * the user can run that script in a terminal. The plugin calls this after each download attempt and before each
+   * account operation.
+   */
+  relist(): void {
+    if (!this.unlisted || !this.installed()) return
+    this.unlisted = false
+    this.invalidate()
   }
 
   get(): Promise<SkillDefinition> {

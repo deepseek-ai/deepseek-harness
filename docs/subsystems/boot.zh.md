@@ -134,8 +134,10 @@ Holds what CLI app plugins register: for each plugin, the CLI path the model rea
 /**
  * Register the calling plugin's CLI and account: add the CLI's absolute path to required runtime context, run the
  * plugin's account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is
- * loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active
- * operation and the CLI processes it started have stopped.
+ * loaded. With a `prepare` step, the path stays out of runtime context while the step reports that something is
+ * missing, and each check first runs the step; a check that starts with nothing missing replaces an account the
+ * step left `unprepared` with the registration's first account. The registration belongs to the calling plugin:
+ * unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.
  * @param registration - the plugin's CLI, account operations, and Plugins page text.
  * @returns the handle for the plugin's own reads and updates of the account.
  * @throws when the runtime-context name `<name>:cli` is already registered.

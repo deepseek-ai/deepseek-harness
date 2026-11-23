@@ -61,7 +61,7 @@ it.skipIf(process.platform !== 'darwin').each([
     const listed = (await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle')
     expect(listed).toMatchObject({ availability: 'installation', optional: true, enabled: false, installed: false })
     expect(listed).not.toHaveProperty('listedByDefault')
-    let toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
+    let toggle = card.getByRole('switch', { name: '启用 自动电脑操作', exact: true })
     const originalAgent = scaffold.ctx.agents.list()[0]!
     const ptcAgent = (await scaffold.ctx.agents.create({
       sessionId: brandString<SessionId>('cua-existing-ptc'),
@@ -90,7 +90,7 @@ it.skipIf(process.platform !== 'darwin').each([
     })
     try {
       await toggle.click()
-      await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor()
+      await card.getByRole('status').getByText('正在应用 自动电脑操作 的更改', { exact: true }).waitFor()
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/enabling.expected.md', import.meta.url)),
         await captureStableAria(page, '[data-plugin-package="@deepseek-ai/dsh-cua-bundle"] [role="status"]', scaffold.workspaceCwd), webSnapshotMode())
     } finally {
@@ -100,10 +100,10 @@ it.skipIf(process.platform !== 'darwin').each([
     }
     // Bundle transitions await native cleanup under the browser action deadline.
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
-    await card.getByRole('status').getByText('正在应用 Computer Use 的更改', { exact: true }).waitFor({ state: 'hidden' })
-    const setup = page.getByRole('dialog', { name: '使用 Computer Use 前需要设置', exact: true })
+    await card.getByRole('status').getByText('正在应用 自动电脑操作 的更改', { exact: true }).waitFor({ state: 'hidden' })
+    const setup = page.getByRole('dialog', { name: '配置自动电脑操作', exact: true })
     await setup.waitFor()
-    expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
+    expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/setup.expected.md', import.meta.url)),
       await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
     expect(await setup.getByRole('button', { name: '设为 PTC', exact: true }).count()).toBe(0)
@@ -113,10 +113,10 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
     expect(await card.textContent()).not.toContain('将 PTC 模式改为可持久化')
     expect(await card.textContent()).not.toContain('请切换到 PTC 模式')
-    expect(await card.textContent()).toContain('允许 agent 直接操作电脑上的应用程序。')
+    expect(await card.textContent()).toContain('允许智能体直接操作电脑上的应用程序。')
     expect(await card.textContent()).not.toContain('helper')
     expect(await card.textContent()).not.toContain('Swift')
-    const description = await card.getByRole('button', { name: '查看 Computer Use', exact: true }).evaluate((button) => {
+    const description = await card.getByRole('button', { name: '查看 自动电脑操作', exact: true }).evaluate((button) => {
       const element = document.getElementById(button.getAttribute('aria-describedby')!)!
       const style = getComputedStyle(element)
       return { lines: style.webkitLineClamp, height: element.getBoundingClientRect().height,
@@ -149,7 +149,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'function-body')
     await setup.waitFor()
-    expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
+    expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
     let saved = await readFile(settingsPath, 'utf8')
@@ -176,20 +176,20 @@ it.skipIf(process.platform !== 'darwin').each([
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(fresh.ctx)).toBe('ptc')
     expect(scaffold.ctx.tools.schemas(fresh).some(tool => tool.name === 'cua')).toBe(true)
-    await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
+    await card.getByRole('button', { name: '查看 自动电脑操作', exact: true }).click()
     const detail = plugins.locator('[data-detail-document]')
-    await detail.getByRole('img', { name: '将会议要点填入备忘录的指令和输入结果' }).waitFor()
+    await detail.getByRole('img', { name: '在多窗口桌面中自动操作选定任务看板窗口的示意图' }).waitFor()
     const guidance = plugins.locator('[data-cua-guidance]')
     await guidance.getByText(/请谨慎在生产环境中使用/).waitFor()
     expect(await guidance.textContent()).not.toContain('helperPath')
     expect(await detail.textContent()).not.toContain('PTC')
-    toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
+    toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 自动电脑操作', exact: true })
     const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
     if (!codingTools) {
       const panel = page.locator('[data-cua-settings]')
       await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
-      expect(await panel.textContent()).toContain('标准、创造和 PTC 模式均可使用 Computer Use')
-      expect(await persistent.textContent()).toContain('其他模式始终单独保留 Computer Use 状态')
+      expect(await panel.textContent()).toContain('标准、创造和 PTC 模式均支持自动电脑操作')
+      expect(await persistent.textContent()).toContain('其他模式始终各自独立保留自动电脑操作的运行状态')
       for (const width of [1680, 390]) {
         await page.setViewportSize({ width, height: 1000 })
         for (const colorScheme of ['light', 'dark'] as const) {
@@ -239,11 +239,11 @@ it.skipIf(process.platform !== 'darwin').each([
     await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
-    expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
+    expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     await setup.getByRole('button', { name: '前往设置', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
-    await page.getByRole('region', { name: '给 Computer Use 授权', exact: true }).getByRole('alert').waitFor()
+    await page.getByRole('region', { name: '系统权限与设置', exact: true }).getByRole('alert').waitFor()
     if (!codingTools) {
       expect(await readFile(settingsPath, 'utf8')).toBe(saved)
       expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: false })
@@ -278,7 +278,7 @@ it.skipIf(process.platform !== 'darwin').each([
     await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
     await setup.waitFor()
-    expect(await setup.getByText('Computer Use 插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
+    expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     expect(await setup.getByRole('button', { name: '设为 PTC', exact: true }).count()).toBe(0)
     expect(await readFile(settingsPath, 'utf8')).toBe(confirmedSettings)
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })

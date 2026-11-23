@@ -79,6 +79,34 @@ export interface CliOperationControl<Account, Phase extends string, Command exte
 }
 
 /**
+ * What a plugin puts in place before its account can be checked, such as a download of the CLI or of its skills. While
+ * `ready()` returns false, the CLI path stays out of runtime context, and each `check` operation enters `phase` and
+ * awaits `run` before the registration's `perform`; the other operations start `perform` at once.
+ */
+export interface CliAccountPreparation<Account, Phase extends string> {
+  /** The plugin phase the operation is in while `run` runs; listed in `cancellable` when the page may cancel `run`. */
+  readonly phase: Phase
+  /**
+   * The account the view reports after `run` threw or was cancelled, until a check starts its `perform` with nothing
+   * missing: that check first replaces this object with the registration's `account`.
+   */
+  readonly unprepared: Account
+  /**
+   * Tell whether everything `run` puts in place is there; called before each `check` operation and each time required
+   * runtime context is assembled.
+   * @returns false while something is missing.
+   */
+  ready(): boolean
+  /**
+   * Put in place what is missing. Throwing fails the operation, unless the operation was cancelled; what it throws is
+   * neither logged nor shown.
+   * @param signal - aborts on cancellation and when the plugin unloads.
+   * @returns once `ready()` returns true.
+   */
+  run(signal: AbortSignal): Promise<void>
+}
+
+/**
  * One app plugin's CLI, account operations, and Plugins page text. `Account` is the plugin's credential-free account
  * state, `Kind` its operations, `Phase` its operation phases, `Command` its command identifiers, and `Key` its
  * dictionary keys.
@@ -95,6 +123,8 @@ export interface CliAccountRegistration<
   readonly packageName: string
   /** The CLI the model runs by its absolute path and the operations run commands of. */
   readonly cli: CliPathContext
+  /** What the plugin puts in place before a check; absent when the CLI and what it needs are there from load. */
+  readonly prepare?: CliAccountPreparation<Account, Phase>
   /** The account before the first check. */
   readonly account: Account
   /** The operation each new Plugins page subscriber starts when none runs. */

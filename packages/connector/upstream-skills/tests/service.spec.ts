@@ -1,6 +1,6 @@
 /**
- * `ctx.upstreamSkills` lists a plugin's entry skill over its upstream files: a configured directory, downloads, retries,
- * withdrawal, and a profile's own directory, where the pin in place replaces the earlier ones.
+ * `ctx.upstreamSkills` lists a plugin's entry skill over its upstream files: a configured directory, downloads, waits
+ * for them, withdrawal, and a profile's own directory, where the pin in place replaces the earlier ones.
  */
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,7 +9,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import UpstreamSkills, { type Config, type UpstreamSkillsHandle, type UpstreamSkillSet, type UpstreamSkillsState } from '../src/index.ts'
+import UpstreamSkills, { type Config, type UpstreamSkillsHandle, type UpstreamSkillSet } from '../src/index.ts'
 import { KEPT, archivePath, pin, repository, serve, startHost, type ArchiveHost } from './harness.ts'
 
 const renameHook = vi.hoisted(() => ({ before: undefined as ((from: string, to: string) => Promise<void>) | undefined }))
@@ -109,18 +109,11 @@ async function sources(config: Partial<Config>): Promise<void> {
 const registration = (skillsDir?: string, pinned: UpstreamSkillSet = set, path = entry) => ({ name: 'vendor', entry: path, set: pinned, skillsDir })
 const register = (skillsDir?: string, pinned: UpstreamSkillSet = set, path = entry): UpstreamSkillsHandle =>
   ctx.intercept('logger', { level: WARN_LEVEL }).upstreamSkills.register(registration(skillsDir, pinned, path))
-/** Resolve with the state once no download runs. */
-const settled = (skills: UpstreamSkillsHandle) => new Promise<UpstreamSkillsState>((resolve) => {
-  if (skills.state !== 'downloading') {
-    resolve(skills.state)
-    return
-  }
-  const stop = skills.watch((state) => {
-    if (state === 'downloading') return
-    stop()
-    resolve(state)
-  })
-})
+/** A signal that no test aborts, for a caller that waits until the download ends. */
+const unaborted = () => new AbortController().signal
+/** Wait for the running download, or for a new one when none runs. @returns whether the files are in place at its end. */
+const downloaded = (skills: UpstreamSkillsHandle) => skills.install(unaborted()).then(() => true, () => false)
+const WITHDRAWN = 'skill provider "vendor" disposed'
 /** Serve the archive only after `release()`, so a test observes the download while it runs. */
 const gated = (body: Buffer) => {
   const gate = new Promise<void>((resolve) => { release = resolve })
@@ -155,25 +148,24 @@ describe('register', () => {
   it('lists the entry over a configured skills directory at once and downloads nothing', async () => {
     const skills = register(fixtures)
     expect(skills.directory).toBe(fixtures)
-    expect(skills.state).toBe('installed')
-    skills.retry()
+    expect(skills.installed()).toBe(true)
+    await skills.install(unaborted())
     expect(await ctx.skills.list()).toEqual(listed(fixtures))
     expect(await ctx.skills.get('vendor')).toEqual({ ...listed(fixtures)[0], content: BODY })
     expect(host.requests).toEqual([])
   })
 
-  it('names a skills directory that is missing at load, and reports one removed later as failed without downloading', async () => {
+  it('names a skills directory that is missing at load or removed later, and downloads nothing into it', async () => {
     const missing = join(home, 'missing')
-    expect(() => register(missing))
-      .toThrow(`vendor: skillsDir ${missing} is not a directory; set it to a directory holding the files of skills at their repository paths`)
+    const named = `vendor: skillsDir ${missing} is not a directory; set it to a directory holding the files of skills at their repository paths`
+    expect(() => register(missing)).toThrow(named)
     await mkdir(missing)
     const skills = register(missing)
     expect(await ctx.skills.list()).toEqual(listed(missing))
     await rm(missing, { recursive: true })
     expect(await ctx.skills.get('vendor')).toBeUndefined()
-    expect(skills.state).toBe('failed')
-    skills.retry()
-    expect(skills.state).toBe('failed')
+    expect(skills.installed()).toBe(false)
+    await expect(skills.install(unaborted())).rejects.toThrow(named)
     expect(host.requests).toEqual([])
   })
 
@@ -194,14 +186,12 @@ describe('register', () => {
   it('downloads at load and lists the entry once the files are published at their repository paths', async () => {
     host.routes[archivePath(set)] = gated(repository())
     const skills = register()
-    const states: UpstreamSkillsState[] = []
-    skills.watch((state) => { states.push(state) })
     expect(skills.directory).toBe(published())
-    expect(skills.state).toBe('downloading')
+    expect(skills.installed()).toBe(false)
     expect(await ctx.skills.list()).toEqual([])
     release()
-    expect(await settled(skills)).toBe('installed')
-    expect(states).toEqual(['installed'])
+    await skills.install(unaborted())
+    expect(skills.installed()).toBe(true)
     expect(await ctx.skills.list()).toEqual(listed(published()))
     for (const [path, content] of Object.entries(KEPT)) expect(await readFile(join(published(), path), 'utf8')).toBe(content)
     expect((await readdir(join(published(), 'skills', 'alpha'))).toSorted()).toEqual(['SKILL.md', 'references'])
@@ -213,7 +203,7 @@ describe('register', () => {
     await mkdir(join(cache(), EARLIER), { recursive: true })
     host.routes[archivePath(set)] = serve(repository())
     const skills = register()
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     expect(await ctx.skills.list()).toEqual(listed(published()))
     expect((await readdir(cache())).toSorted()).toEqual([EARLIER, CURRENT].toSorted())
   })
@@ -222,7 +212,7 @@ describe('register', () => {
     host.routes[archivePath(set, '/mirror')] = serve(repository())
     await sources({ skillsUrls: [`${BASE}/missing`, `${BASE}/mirror/`] })
     const skills = register()
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     expect(await ctx.skills.list()).toEqual(listed(published()))
     expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${BASE}/missing failed`])
   })
@@ -233,7 +223,7 @@ describe('register', () => {
     // The limit applies to each URL, so it also bounds the mirror on a loaded machine.
     await sources({ skillsUrls: [`${BASE}/slow`, `${BASE}/mirror`], skillsTimeoutMs: 3_000 })
     const skills = register()
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${BASE}/slow failed`])
     // Depending on which stream observes the abort first, the time limit arrives as the TimeoutError or as its cause.
     const timedOut = (error: unknown) => error instanceof Error && [error.name, error.cause instanceof Error ? error.cause.name : ''].includes('TimeoutError')
@@ -245,7 +235,9 @@ describe('register', () => {
     host.routes[archivePath(set, '/changed')] = serve(repository({ ...KEPT, LICENSE: 'MIT-License\n' }))
     await sources({ skillsUrls: [`${BASE}/empty`, `${BASE}/changed`] })
     const skills = register()
-    expect(await settled(skills)).toBe('failed')
+    await expect(skills.install(unaborted())).rejects
+      .toThrow(`could not download the upstream skills of vendor/skills-repo at ${set.commit} from any skills URL`)
+    expect(skills.installed()).toBe(false)
     expect(warnings()).toEqual([
       `vendor: downloading the upstream skills from ${BASE}/empty failed`,
       `vendor: downloading the upstream skills from ${BASE}/changed failed`,
@@ -259,21 +251,36 @@ describe('register', () => {
     expect(await ctx.skills.list()).toEqual([])
   })
 
-  it('retries a failed download without waiting for it, ignores a retry while one runs or after the files are in place', async () => {
+  it('downloads again after a failure, and has every caller wait for the one running download', async () => {
     host.routes[archivePath(set)] = (response) => { response.writeHead(500).end() }
     const skills = register()
-    expect(await settled(skills)).toBe('failed')
+    expect(await downloaded(skills)).toBe(false)
     host.routes[archivePath(set)] = gated(repository())
-    const states: UpstreamSkillsState[] = []
-    const stop = skills.watch((state) => { states.push(state) })
-    skills.retry()
-    expect(skills.state).toBe('downloading')
-    skills.retry()
+    const callers = [skills.install(unaborted()), skills.install(unaborted())]
+    await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set), archivePath(set)]) })
+    expect(skills.installed()).toBe(false)
     release()
-    expect(await settled(skills)).toBe('installed')
-    stop()
-    skills.retry()
-    expect(states).toEqual(['downloading', 'installed'])
+    await Promise.all(callers)
+    await skills.install(unaborted())
+    expect(await ctx.skills.list()).toEqual(listed(published()))
+    expect(host.requests).toEqual([archivePath(set), archivePath(set)])
+  })
+
+  it('stops the download without a warning when a waiting caller aborts, and downloads again for the next caller', async () => {
+    host.routes[archivePath(set)] = gated(repository())
+    const skills = register()
+    const caller = new AbortController()
+    const stopped = expect(skills.install(caller.signal)).rejects.toThrow('cancelled on the page')
+    await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set)]) })
+    caller.abort(new Error('cancelled on the page'))
+    await stopped
+    expect(skills.installed()).toBe(false)
+    await expect(skills.install(caller.signal)).rejects.toThrow('cancelled on the page')
+    expect(warnings()).toEqual([])
+    expect(host.requests).toEqual([archivePath(set)])
+
+    host.routes[archivePath(set)] = serve(repository())
+    await skills.install(unaborted())
     expect(await ctx.skills.list()).toEqual(listed(published()))
     expect(host.requests).toEqual([archivePath(set), archivePath(set)])
   })
@@ -281,7 +288,7 @@ describe('register', () => {
   it('keeps a directory another process published before load', async () => {
     await mkdir(published(), { recursive: true })
     const skills = register()
-    expect(skills.state).toBe('installed')
+    expect(skills.installed()).toBe(true)
     expect(await ctx.skills.list()).toEqual(listed(published()))
     expect(host.requests).toEqual([])
   })
@@ -293,7 +300,7 @@ describe('register', () => {
       await writeFile(join(to, 'other'), 'published by another process')
     }
     const skills = register()
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     expect(await readdir(published())).toEqual(['other'])
     expect(await readdir(cache())).toEqual([CURRENT])
   })
@@ -305,10 +312,11 @@ describe('register', () => {
       response.writeHead(500).end()
     }
     const skills = register()
+    const ended = downloaded(skills)
     expect(await ctx.skills.list()).toEqual([])
     await mkdir(published(), { recursive: true })
     release()
-    expect(await settled(skills)).toBe('installed')
+    expect(await ended).toBe(true)
     expect(await ctx.skills.list()).toEqual(listed(published()))
     expect(warnings()).toEqual([`vendor: downloading the upstream skills from ${BASE} failed`])
   })
@@ -317,7 +325,7 @@ describe('register', () => {
     host.routes[archivePath(set)] = serve(repository())
     renameHook.before = async (from) => { await rm(from, { recursive: true }) }
     const skills = register()
-    expect(await settled(skills)).toBe('failed')
+    expect(await downloaded(skills)).toBe(false)
     expect(logged().at(-1)?.error).toMatchObject({ code: 'ENOENT' })
     expect(await readdir(cache())).toEqual([])
   })
@@ -328,18 +336,17 @@ describe('register', () => {
     expect(await ctx.skills.list()).toEqual(listed(fixtures))
   })
 
-  it('removes the entry and aborts a running download without a warning or a state change when the registering plugin unloads', async () => {
+  it('removes the entry and aborts a running download without a warning when the registering plugin unloads', async () => {
     let skills!: UpstreamSkillsHandle
     const app = Object.assign((inner: Context) => { skills = inner.upstreamSkills.register(registration()) }, { inject: ['upstreamSkills'] })
     host.routes[archivePath(set)] = gated(repository())
     const fiber = await ctx.intercept('logger', { level: WARN_LEVEL }).plugin(app)
-    const states: UpstreamSkillsState[] = []
-    skills.watch((state) => { states.push(state) })
+    const aborted = expect(skills.install(unaborted())).rejects.toThrow(WITHDRAWN)
     await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set)]) })
     await fiber.dispose()
-    await vi.waitFor(() => { expect(skills.state).toBe('failed') })
-    skills.retry()
-    expect(states).toEqual([])
+    await aborted
+    await expect(skills.install(unaborted())).rejects.toThrow(WITHDRAWN)
+    expect(skills.installed()).toBe(false)
     expect(warnings()).toEqual([])
     expect(host.requests).toEqual([archivePath(set)])
 
@@ -366,10 +373,11 @@ describe('register', () => {
   it('withdraws the entry through the handle before the plugin unloads and aborts its download', async () => {
     host.routes[archivePath(set)] = gated(repository())
     const skills = register()
+    const aborted = expect(skills.install(unaborted())).rejects.toThrow(WITHDRAWN)
     await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set)]) })
     skills.dispose()
-    await vi.waitFor(() => { expect(skills.state).toBe('failed') })
-    skills.retry()
+    await aborted
+    await expect(skills.install(unaborted())).rejects.toThrow(WITHDRAWN)
     expect(host.requests).toEqual([archivePath(set)])
     expect(warnings()).toEqual([])
     await mkdir(published(), { recursive: true })
@@ -397,7 +405,7 @@ describe('register in a profile', () => {
     host.routes[archivePath(set)] = serve(repository())
     const skills = register()
     expect(skills.directory).toBe(join(pins(), CURRENT))
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
     for (const [path, content] of Object.entries(KEPT)) expect(await readFile(join(pins(), CURRENT, path), 'utf8')).toBe(content)
     expect(await readdir(pins())).toEqual([CURRENT])
@@ -410,10 +418,10 @@ describe('register in a profile', () => {
     for (const directory of [join(pins(), EARLIER), ...untouched]) await mkdir(directory, { recursive: true })
     host.routes[archivePath(set)] = gated(repository())
     const skills = register()
-    expect(skills.state).toBe('downloading')
+    expect(skills.installed()).toBe(false)
     expect(await entries(pins())).toEqual([staging, EARLIER].toSorted())
     release()
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     await vi.waitFor(async () => { expect(await entries(pins())).toEqual([staging, CURRENT].toSorted()) })
     for (const directory of untouched) expect((await stat(directory)).isDirectory()).toBe(true)
     expect(warnings()).toEqual([])
@@ -422,7 +430,7 @@ describe('register in a profile', () => {
   it('replaces the earlier pins at load when the pin is already in place, without a download', async () => {
     for (const name of [CURRENT, EARLIER]) await mkdir(join(pins(), name), { recursive: true })
     const skills = register()
-    expect(skills.state).toBe('installed')
+    expect(skills.installed()).toBe(true)
     await vi.waitFor(async () => { expect(await readdir(pins())).toEqual([CURRENT]) })
     expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
     expect(host.requests).toEqual([])
@@ -433,18 +441,17 @@ describe('register in a profile', () => {
     await mkdir(join(pins(), EARLIER), { recursive: true })
     host.routes[archivePath(set)] = serve(repository())
     const skills = register()
-    expect(await settled(skills)).toBe('installed')
+    expect(await downloaded(skills)).toBe(true)
     await vi.waitFor(async () => { expect(await readdir(pins())).toEqual([CURRENT]) })
 
     // Another process of the profile, running another plugin version, publishes its pin and deletes this one.
     await mkdir(join(pins(), other))
     await rm(join(pins(), CURRENT), { recursive: true })
-    expect(skills.state).toBe('failed')
+    expect(skills.installed()).toBe(false)
     const before = listHook.listed.length
-    skills.retry()
-    expect(await settled(skills)).toBe('installed')
+    await skills.install(unaborted())
 
-    // The deletion starts by listing the directory, in the same turn in which the download settles.
+    // The deletion starts by listing the directory, before the wait for the download ends.
     expect(listHook.listed.slice(before)).not.toContain(pins())
     expect(await entries(pins())).toEqual([CURRENT, other].toSorted())
     expect(await ctx.skills.list()).toEqual(listed(join(pins(), CURRENT)))
@@ -455,8 +462,24 @@ describe('register in a profile', () => {
     await mkdir(join(pins(), EARLIER), { recursive: true })
     host.routes[archivePath(set)] = (response) => { response.writeHead(500).end() }
     const skills = register()
-    expect(await settled(skills)).toBe('failed')
+    expect(await downloaded(skills)).toBe(false)
     expect(await readdir(pins())).toEqual([EARLIER])
+  })
+
+  it('keeps the earlier pins when the registration is withdrawn during its download, although another process published the pin', async () => {
+    await mkdir(join(pins(), EARLIER), { recursive: true })
+    host.routes[archivePath(set)] = gated(repository())
+    const skills = register()
+    const ended = downloaded(skills)
+    await vi.waitFor(() => { expect(host.requests).toEqual([archivePath(set)]) })
+    await mkdir(join(pins(), CURRENT))
+    const before = listHook.listed.length
+    skills.dispose()
+    expect(await ended).toBe(true)
+
+    // The deletion would start by listing the directory, before the wait for the download ends.
+    expect(listHook.listed.slice(before)).not.toContain(pins())
+    expect(await entries(pins())).toEqual([EARLIER, CURRENT].toSorted())
   })
 
   it('logs an earlier pin that cannot be deleted, keeps it, and still lists the entry', async () => {

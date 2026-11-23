@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Inspect Host and Client runtime APIs before writing plugin code. Standard and Creator modes provide this read-only tool alongside Plugin Manager, which owns persistent profile changes. The inspection registry is supplied by the Cordis host runner; browser queries need a connected page.
+Inspect Host and Client runtime APIs before writing plugin code. The Desktop Standard and Creator modes and the SDK profile provide this read-only tool alongside Plugin Manager, which owns persistent profile changes. The inspection registry is supplied by the Cordis host runner; browser queries need a connected page.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Inspect Host and Client runtime APIs before writing plugin code. Standard and Cr
 <a id="use-this-package"></a>
 ## Use this package
 
-Standard and Creator modes include this tool. Other compositions mount `@deepseek-ai/dsh-tool-cordis/host` once in the host composition beside the host runner that provides `cordisInspect`, and `@deepseek-ai/dsh-tool-cordis` in each agent preset that exposes the tool; a preset row alone registers no Host providers. Call `cordis_inspect` without `query` to discover providers, then pass a `query` object with `platform`, `provider`, `method`, and optional `input` to read a provider's exact methods and types. The Host `Config` provider lists live Loader entries in pages (`offset`, `limit` up to 100, optional exact plugin `name`; `total` and `nextOffset` bound the walk) with each entry's Loader id, the tree-local id patches address, and its Config status (`schema`, `absent`, `unsupported`, `tree` for group and include carriers, `inactive` for disabled, never imported, or disposed entries), and projects one entry's native Config into a self-contained JSON Schema document beside the entry's `packageDir`, the resolved directory holding the package README and built `lib/`, when the profile package lookup resolves it. The Host `Runtime` provider's `getVersion` returns `{ version }`, the exact running DSH version that plugin `engines.dsh` ranges and DSH peer dependencies are checked against. A call without an Agent, or a `Config` query on a Host without a Loader, fails with `ToolContextUnavailableError`; a malformed `Config` paging field fails with `ToolArgsError`; and an unknown entry id fails with `InspectError` `INSPECT_TARGET_NOT_FOUND`. Use [Plugin Manager](../../boot/plugin-manager/README.md) to install bundles containing plugin code or MCP configuration.
+The Desktop Standard and Creator modes and the SDK profile include this tool. Other compositions mount `@deepseek-ai/dsh-tool-cordis/host` once in the host composition beside the host runner that provides `cordisInspect`, and `@deepseek-ai/dsh-tool-cordis` in each agent preset that exposes the tool; a preset row alone registers no Host providers. Call `cordis_inspect` without `query` to discover providers, then pass a `query` object with `platform`, `provider`, `method`, and optional `input` to read a provider's exact methods and types. The Host `Config` provider lists live Loader entries in pages (`offset`, `limit` up to 100, optional exact plugin `name`; `total` and `nextOffset` bound the walk) with each entry's Loader id, the tree-local id patches address, and its Config status (`schema`, `absent`, `unsupported`, `tree` for group and include carriers, `inactive` for disabled, never imported, or disposed entries), and projects one entry's native Config into a self-contained JSON Schema document beside the entry's `packageDir`, the resolved directory holding the package README and built `lib/`, when the profile package lookup resolves it. The Host `Runtime` provider's `getVersion` returns `{ version }`, the exact running DSH version that plugin `engines.dsh` ranges and DSH peer dependencies are checked against. A call without an Agent, or a `Config` query on a Host without a Loader, fails with `ToolContextUnavailableError`; a malformed `Config` paging field fails with `ToolArgsError`; and an unknown entry id fails with `InspectError` `INSPECT_TARGET_NOT_FOUND`. Use [Plugin Manager](../../boot/plugin-manager/README.md) to install bundles containing plugin code or MCP configuration.
 
 -----
 
@@ -58,7 +58,7 @@ The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-cordis) des
 
 #### Token effect
 
-In the shipped Standard and Creator modes, this plugin contributes one tool schema to each model request. Query results append to the transcript; exact queries avoid loading unrelated declarations.
+In the shipped Desktop Standard and Creator modes and the SDK profile, this plugin contributes one tool schema to each model request. Query results append to the transcript; exact queries avoid loading unrelated declarations.
 
 #### KV Cache effect
 

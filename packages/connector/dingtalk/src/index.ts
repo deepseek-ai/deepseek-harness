@@ -17,7 +17,7 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import type {} from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-skill'
-import { performWith } from './account.ts'
+import { createPerform } from './account.ts'
 import { dictionaries, type DingtalkTextKey } from './locales.ts'
 import { copy, DINGTALK_PACKAGE, operations, presentAccount } from './presentation.ts'
 import { DwsRelease, executableFileName, PROGRAM } from './release.ts'
@@ -74,13 +74,19 @@ export function apply(ctx: Context, config: Config): void {
     packageName: DINGTALK_PACKAGE,
     cli: {
       product: 'DingTalk', program: PROGRAM, executable: join(release.directory, executableFileName(process.platform)),
-      scripts: true, ready: () => release.installed(),
+      scripts: true,
+    },
+    prepare: {
+      phase: 'downloading',
+      unprepared: { state: 'not-installed' },
+      ready: () => release.installed(),
+      run: signal => release.install(signal),
     },
     account: { state: 'unchecked' },
     check: 'check',
     cancellable: ['downloading', 'authorizing'],
     authorizationHosts: ['login.dingtalk.com'],
-    perform: performWith(release),
+    perform: createPerform(),
     dictionaries,
     operations,
     copy,

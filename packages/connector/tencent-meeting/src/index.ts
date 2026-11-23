@@ -1,8 +1,8 @@
 /**
- * Tencent Meeting plugin: registers the managed tmeet and its account with `ctx.cliAccounts`, which tells the model the
- * CLI's absolute path and shows the account on the Plugins page, and registers the `tencent-meeting` entry skill with
- * `ctx.upstreamSkills`, which downloads the upstream guide it indexes. The CLI's default sign-in is shared with the
- * user's own terminal.
+ * Tencent Meeting plugin: registers the `tencent-meeting` entry skill with `ctx.upstreamSkills`, which downloads the
+ * upstream guide it indexes, and registers the managed tmeet and its account with `ctx.cliAccounts`, which tells the
+ * model the CLI's absolute path once the guide is in place and shows the account on the Plugins page. The CLI's default
+ * sign-in is shared with the user's own terminal.
  * @module @deepseek-ai/dsh-tencent-meeting
  */
 
@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-cli-account'
 import type {} from '@deepseek-ai/dsh-upstream-skills'
-import { performWith } from './account.ts'
+import { perform } from './account.ts'
 import { PROGRAM, resolveCliExecutable } from './directory.ts'
 import { dictionaries, type TencentMeetingTextKey } from './locales.ts'
 import { copy, operations, presentAccount, TENCENT_MEETING_PACKAGE } from './presentation.ts'
@@ -39,7 +39,7 @@ export const Config: z<Config> = z.object({
 })
 
 /**
- * Register the entry skill, and the CLI with its account, whose view follows the guide's download.
+ * Register the entry skill, and the CLI with its account, whose check first waits for the guide's download.
  * @param ctx - Context carrying the CLI account Service and the upstream skills Service.
  * @param config - CLI location and the guide's directory.
  * @throws when this platform has no packaged `tmeet`, `tmeet` is not executable, or `skillsDir` is not a directory.
@@ -47,22 +47,27 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config): void {
   const executable = resolveCliExecutable(config.binDir)
   const guides = ctx.upstreamSkills.register({ name, entry: ENTRY, set: TMEET_SKILLS, skillsDir: config.skillsDir })
-  const account = ctx.cliAccounts.register<
+  ctx.cliAccounts.register<
     TencentMeetingAccountState, TencentMeetingOperationKind, TencentMeetingPhase, TencentMeetingCommand, TencentMeetingTextKey
   >({
     name,
     packageName: TENCENT_MEETING_PACKAGE,
     cli: { product: 'Tencent Meeting', program: PROGRAM, executable },
-    account: { state: 'unchecked', skills: guides.state },
+    prepare: {
+      phase: 'downloading',
+      unprepared: { state: 'not-installed' },
+      ready: () => guides.installed(),
+      run: signal => guides.install(signal),
+    },
+    account: { state: 'unchecked' },
     check: 'check',
-    cancellable: ['authorizing'],
+    cancellable: ['downloading', 'authorizing'],
     authorizationHosts: ['meeting.tencent.com'],
-    perform: performWith(guides),
+    perform,
     dictionaries,
     operations,
     copy,
     present: presentAccount,
   })
-  ctx.effect(() => guides.watch((skills) => { account.publish({ ...account.snapshot().account, skills }) }), 'tencent-meeting: guide')
 }
 /* jscpd:ignore-end */
