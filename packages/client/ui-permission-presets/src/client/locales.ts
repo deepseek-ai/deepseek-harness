@@ -5,7 +5,7 @@ export const PERMISSION_ACCESS_NS = 'permission.access'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'title': '权限',
+  'title': '会话默认权限',
   'description': '选择新会话的默认权限模式',
   'loading': '加载中',
   'unavailable': '不可用',
@@ -24,7 +24,7 @@ export type PermissionSettingsKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'title': 'Permission',
+  'title': 'Default session permission',
   'description': 'Choose the default permission mode for new sessions',
   'loading': 'Loading',
   'unavailable': 'Unavailable',
@@ -85,7 +85,7 @@ export const accessEn = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  'title': '権限',
+  'title': 'セッションのデフォルト権限',
   'description': '新しいセッションのデフォルトの権限モードを選択',
   'loading': '読み込み中',
   'unavailable': '利用不可',
@@ -101,7 +101,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  'title': 'Permiso',
+  'title': 'Permiso predeterminado de sesión',
   'description': 'Elija el modo de permiso predeterminado para nuevas sesiones',
   'loading': 'Cargando',
   'unavailable': 'No disponible',
@@ -117,7 +117,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  'title': 'Autorisation',
+  'title': 'Autorisation par défaut des sessions',
   'description': "Choisissez le mode d'autorisation par défaut pour les nouvelles sessions",
   'loading': 'Chargement',
   'unavailable': 'Indisponible',
@@ -133,7 +133,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  'title': 'Erlaubnis',
+  'title': 'Standardberechtigung für Sitzungen',
   'description': 'Wählen Sie den Standardberechtigungsmodus für neue Sitzungen',
   'loading': 'Laden',
   'unavailable': 'Nicht verfügbar',
@@ -149,7 +149,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  'title': 'Разрешение',
+  'title': 'Разрешение сеанса по умолчанию',
   'description': 'Выберите режим разрешений по умолчанию для новых сеансов',
   'loading': 'Загрузка',
   'unavailable': 'Недоступно',
@@ -165,7 +165,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  'title': 'Permissão',
+  'title': 'Permissão padrão da sessão',
   'description': 'Escolha o modo de permissão padrão para novas sessões',
   'loading': 'Carregando',
   'unavailable': 'Indisponível',

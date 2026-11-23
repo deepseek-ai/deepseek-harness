@@ -78,7 +78,7 @@ async function bench() {
   ctx.slots.register({
     name: 'root',
     children: {
-      'settings.general.item': { kind: 'list', scope: 'root' },
+      'settings.general.group.permissions.item': { kind: 'list', scope: 'root' },
       'conversation.input.permission': { kind: 'single', scope: 'session' },
     },
   } as never, () => null)
@@ -146,7 +146,7 @@ async function bench() {
       if (ui.kind !== 'popupSelect') throw new Error('expected the popupSelect kind')
       return ui
     },
-    permissionRow: () => ctx.slots.entries('settings.general.item')
+    permissionRow: () => ctx.slots.entries('settings.general.group.permissions.item')
       .find(entry => entry.component === PermissionRow),
     permissionSelect: () => ctx.slots.entries('conversation.input.permission')
       .find(entry => entry.component === PermissionSelect),
