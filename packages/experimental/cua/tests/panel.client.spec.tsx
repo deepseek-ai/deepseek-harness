@@ -104,6 +104,8 @@ it('keeps the saved preset visible while the roster is unavailable and closes th
   expect(within(group).getByRole('alert').textContent).toContain('offline')
   fireEvent.click(within(group).getByRole('button', { name: en.retry }))
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
+  act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: {} }) })
+  expect(within(group).getByRole('button', { name: en.unknown }).hasAttribute('disabled')).toBe(true)
   f.publish({ presets: { value: { presets: [{ id: 'ptc', isDefault: true }] }, busy: false, error: null } })
   fireEvent.click(within(group).getByRole('button', { name: 'presetPtcName' }))
   expect(screen.getByRole('menu')).toBeTruthy()
