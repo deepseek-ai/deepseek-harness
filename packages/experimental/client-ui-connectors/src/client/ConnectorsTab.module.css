@@ -41,7 +41,7 @@
 }
 
 /* An installed connector's row opens its page as an Installed card does: the name button stretches over the row,
-   its state text included. */
+   and the switch sits above it. */
 .link {
   position: relative;
 }
@@ -121,8 +121,9 @@
 }
 
 .end {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
   flex: none;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
+  align-items: center;
 }

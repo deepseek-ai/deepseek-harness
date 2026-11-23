@@ -14,14 +14,17 @@ function translator(dictionary: Record<ConnectorsLocaleKey, string>): Connectors
     Object.entries(params ?? {}).reduce<string>((text, [name, value]) => text.replaceAll(`{${name}}`, value), dictionary[key])) as ConnectorsTabProps['t']
 }
 
-function renderTab(state: ConnectorsState, version: string | undefined) {
-  const store = createSnapshotStore<ConnectorsState>(state)
-  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn() }
+type TabState = Pick<ConnectorsState, 'status' | 'connectors'> & Partial<ConnectorsState>
+
+function renderTab(state: TabState, version: string | undefined) {
+  const full = (next: TabState): ConnectorsState => ({ busy: [], failed: null, ...next })
+  const store = createSnapshotStore<ConnectorsState>(full(state))
+  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), setEnabled: vi.fn() }
   const props = {
     t: translator(en), version, ...actions, useConnectors: bindSnapshotSelector(store),
   } as ConnectorsTabProps
   render(<ConnectorsTab {...props} />)
-  const set = (next: ConnectorsState): void => { act(() => { store.set(next) }) }
+  const set = (next: TabState): void => { act(() => { store.set(full(next)) }) }
   return { actions, set }
 }
 
@@ -39,21 +42,45 @@ it('lists every official connector with its brand icon before its state is known
   expect(icons).toHaveLength(7)
   expect(new Set(icons).size).toBe(7)
   expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.queryByRole('switch')).toBeNull()
 })
 
-it('installs a missing connector at the running release, and shows an installed one\'s state and opens its page', () => {
+it('installs a missing connector at the running release, and opens an installed one\'s page from its name', () => {
   const { actions } = renderTab({ status: 'ready', connectors: {
     '@deepseek-ai/dsh-notion': 'enabled', '@deepseek-ai/dsh-tencent-docs': 'installed', '@deepseek-ai/dsh-linear': 'missing',
   } }, '1.2.3')
   fireEvent.click(within(row('linear')).getByRole('button', { name: 'Install Linear plugin' }))
   expect(actions.install).toHaveBeenCalledExactlyOnceWith({ spec: '@deepseek-ai/dsh-linear@1.2.3', title: 'Linear plugin', version: '1.2.3' })
   expect(within(row('linear')).getAllByRole('button')).toHaveLength(1)
-  expect(within(row('notion')).getByText(en.enabled)).toBeTruthy()
-  expect(within(row('tencent-docs')).getByText(en.installed)).toBeTruthy()
+  expect(within(row('linear')).queryByRole('switch')).toBeNull()
   expect(within(row('notion')).getByRole('button', { name: 'Open Notion plugin' }).textContent).toBe(en['notion.title'])
   fireEvent.click(within(row('tencent-docs')).getByRole('button', { name: 'Open Tencent Docs plugin' }))
   expect(actions.openPackage).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-tencent-docs')
   expect(within(row('tencent-docs')).getAllByRole('button')).toHaveLength(1)
+})
+
+it('shows an installed connector\'s switch on or off, switches it without opening its page, and locks it while busy', () => {
+  const connectors = { '@deepseek-ai/dsh-notion': 'enabled', '@deepseek-ai/dsh-tencent-docs': 'installed' } as const
+  const { actions, set } = renderTab({ status: 'ready', connectors }, '1.2.3')
+  const notion = within(row('notion')).getByRole('switch', { name: en['notion.title'] })
+  const tencentDocs = within(row('tencent-docs')).getByRole('switch', { name: en['tencent-docs.title'] })
+  expect(notion.getAttribute('aria-checked')).toBe('true')
+  expect(tencentDocs.getAttribute('aria-checked')).toBe('false')
+  fireEvent.click(notion)
+  fireEvent.click(tencentDocs)
+  expect(actions.setEnabled.mock.calls).toEqual([['@deepseek-ai/dsh-notion', false], ['@deepseek-ai/dsh-tencent-docs', true]])
+  expect(actions.openPackage).not.toHaveBeenCalled()
+  set({ status: 'ready', connectors, busy: ['@deepseek-ai/dsh-notion'] })
+  expect((notion as HTMLButtonElement).disabled).toBe(true)
+  expect((tencentDocs as HTMLButtonElement).disabled).toBe(false)
+})
+
+it('names the connector whose switch did not take effect until the failure clears', () => {
+  const connectors = { '@deepseek-ai/dsh-notion': 'installed' } as const
+  const { set } = renderTab({ status: 'ready', connectors, failed: '@deepseek-ai/dsh-notion' }, '1.2.3')
+  expect(screen.getByRole('alert').textContent).toBe('Couldn’t switch Notion plugin on or off.')
+  set({ status: 'ready', connectors })
+  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it('offers no Install when the build carries no version', () => {

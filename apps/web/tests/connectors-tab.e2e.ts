@@ -1,4 +1,7 @@
-/** The Connectors tab lists the official connectors, opens an installed one's page, and installs a missing one in the page's dialog. */
+/**
+ * The Connectors tab lists the official connectors, opens and switches an installed one, and installs a missing one in
+ * the page's dialog.
+ */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,7 +26,7 @@ const connectorFiles = (name: string, id: string, version: string) => ({
   'index.js': 'export function apply() {}\n',
 })
 
-it('lists the official connectors, opens an installed one\'s page, and installs a missing one at the running DSH version', async () => {
+it('lists the official connectors, opens and switches an installed one, and installs a missing one at the running DSH version', async () => {
   const root = await mkdtemp(join(tmpdir(), 'connectors-tab-web-'))
   const owned: { scaffold?: WebScaffold; browser?: Browser } = {}
   onTestFinished(async () => {
@@ -68,8 +71,15 @@ it('lists the official connectors, opens an installed one\'s page, and installs 
   await tab.click()
   const feishu = panel.locator('[data-connector="feishu"]')
   await feishu.getByRole('button', { name: '打开 飞书插件', exact: true }).waitFor()
-  await feishu.getByText('已开启', { exact: true }).waitFor()
+  const feishuSwitch = (checked: boolean) => feishu.getByRole('switch', { name: '飞书插件', exact: true, checked })
+  await feishuSwitch(true).waitFor()
   await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[data-connectors]', scaffold.workspaceCwd), webSnapshotMode())
+  // The switch changes the bundle and leaves the tab open; the row shows the state the Host answers after each change.
+  await feishuSwitch(true).click()
+  await feishuSwitch(false).waitFor()
+  await feishuSwitch(false).click()
+  await feishuSwitch(true).waitFor()
+  expect(await panel.locator(`[data-plugin-detail="${FEISHU}"]`).count()).toBe(0)
   // The row opens the page as an Installed card does: a click on its description reaches the name button.
   const description = (await feishu.getByText('在对话中使用飞书文档、消息及其他已授权的功能。').boundingBox())!
   const rowBox = (await feishu.boundingBox())!
@@ -89,7 +99,7 @@ it('lists the official connectors, opens an installed one\'s page, and installs 
   expect(JSON.parse(await readFile(join(profile, '.added'), 'utf8'))).toContain(`${WECOM}@${version}`)
   await enableNow.click()
   await wecomRow.getByRole('button', { name: '打开 企业微信插件', exact: true }).waitFor()
-  await wecomRow.getByText('已开启', { exact: true }).waitFor()
+  await wecomRow.getByRole('switch', { name: '企业微信插件', exact: true, checked: true }).waitFor()
 
   // Switching the bundle off removes only the tab: the connectors stay installed and listed.
   await panel.getByRole('tab', { name: '已安装', exact: true }).click()

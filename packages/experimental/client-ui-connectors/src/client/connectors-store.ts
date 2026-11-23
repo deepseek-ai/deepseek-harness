@@ -1,4 +1,4 @@
-/** Each official connector's installation state, read from the Host plugin manager for the Connectors tab. */
+/** Each official connector's installation state for the Connectors tab, read and switched through the Host plugin manager. */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { BundleInfo } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -11,6 +11,10 @@ export type ConnectorStatus = 'missing' | 'installed' | 'enabled'
 export interface ConnectorsState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error'
   readonly connectors: Readonly<Record<string, ConnectorStatus>>
+  /** Package names of the connectors whose switch is being written or read back. */
+  readonly busy: readonly string[]
+  /** Package name of the connector whose latest switch the Host did not apply; null once another switch starts. */
+  readonly failed: string | null
 }
 
 /** The face the tab's slot entry injects. */
@@ -23,12 +27,19 @@ export interface ConnectorsFace {
   ensure: () => void
   /** Read the states again. */
   retry: () => void
+  /** Switch an installed connector's bundle on or off, then read the states again. */
+  setEnabled: (packageName: string, enabled: boolean) => void
 }
 
-/** Reads the connectors' states through `pluginManager.listBundles`; only the latest read publishes. */
+/**
+ * Reads the connectors' states through `pluginManager.listBundles`, where only the latest read publishes, and switches
+ * a connector's bundle through `pluginManager.setBundleEnabled`.
+ */
 export class ConnectorsController {
   /** Tab state published to the tab. */
-  readonly store: SnapshotStore<ConnectorsState> = createSnapshotStore<ConnectorsState>({ status: 'idle', connectors: {} })
+  readonly store: SnapshotStore<ConnectorsState> = createSnapshotStore<ConnectorsState>({
+    status: 'idle', connectors: {}, busy: [], failed: null,
+  })
   private read = 0
   private disposed = false
 
@@ -51,6 +62,7 @@ export class ConnectorsController {
       version,
       ensure: () => { if (this.store.getSnapshot().status === 'idle') void this.load() },
       retry: () => { void this.load() },
+      setEnabled: (packageName, enabled) => { void this.setEnabled(packageName, enabled) },
     }
   }
 
@@ -74,6 +86,18 @@ export class ConnectorsController {
       status: 'ready',
       connectors: Object.fromEntries(CONNECTORS.map(connector => [connector.packageName, statusOf(bundles.get(connector.packageName))])),
     })
+  }
+
+  /** A connector stays busy through the read that follows its write, while its switch still shows the earlier state. */
+  private async setEnabled(packageName: string, enabled: boolean): Promise<void> {
+    this.patch({ busy: [...this.store.getSnapshot().busy, packageName], failed: null })
+    const answer = await this.ctx.remote.pluginManager.setBundleEnabled(packageName, enabled)
+    if (this.disposed) return
+    if (!answer.ok || answer.value.application === 'failed') this.patch({ failed: packageName })
+    await this.load()
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can run during the await.
+    if (this.disposed) return
+    this.patch({ busy: this.store.getSnapshot().busy.filter(name => name !== packageName) })
   }
 
   private patch(change: Partial<ConnectorsState>): void {
