@@ -10136,6 +10136,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionLocation {\n    readonly kind: string;\n    readonly path: string;\n}',
   },
   {
+    name: 'SessionLogBatch',
+    declaration: 'export interface SessionLogBatch {\n    readonly sessionId: SessionId;\n    readonly formatVersion: number;\n    readonly afterSeq: number;\n    readonly throughSeq: number;\n    readonly cwd?: string;\n    readonly parentSessionId?: string;\n    readonly seedLength?: number;\n    readonly batchId: string;\n    readonly purpose: string;\n    readonly events: readonly SessionLogBatchEvent[];\n    readonly severityNumber?: SeverityNumber;\n}',
+  },
+  {
+    name: 'SessionLogBatchEvent',
+    declaration: 'export type SessionLogBatchEvent = Omit<SessionEvent, \'data\'> & {\n    data: unknown;\n};',
+  },
+  {
     name: 'SessionLogOffset',
     declaration: 'export type SessionLogOffset = BrandedNumber<\'SessionLogOffset\'>;',
   },
@@ -10153,7 +10161,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionLogReporter',
-    declaration: 'export class SessionLogReporter {\n    constructor(options: SessionLogOptions);\n    reportSessionLog(record: SessionLogRecord): void;\n    stopPending(): void;\n    shutdown(): Promise<void>;\n}',
+    declaration: 'export class SessionLogReporter {\n    constructor(options: SessionLogOptions);\n    reportSessionLog(record: SessionLogRecord): void;\n    reportSessionLogBatch(batch: SessionLogBatch): void;\n    stopPending(): void;\n    shutdown(): Promise<void>;\n}',
   },
   {
     name: 'SessionLogSnapshot',

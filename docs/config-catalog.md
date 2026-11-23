@@ -3705,7 +3705,7 @@ export interface Config {
 
 - `inject`: `sessions` · `otel`
 - `refs`: [`LogExporterOptions`](../packages/telemetry/otel/src/index.ts) · [`SessionLogProcessorOptions`](../packages/telemetry/otel/src/index.ts)
-- `source`: [`packages/session/session-telemetry-otel/src/index.ts:85`](../packages/session/session-telemetry-otel/src/index.ts)
+- `source`: [`packages/session/session-telemetry-otel/src/index.ts:180`](../packages/session/session-telemetry-otel/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -3735,6 +3735,19 @@ export interface Config {
   shutdownTimeoutMillis?: number
   /** Uncompressed OTLP request byte limit, at most 4,000,000. */
   maxRequestBytes?: number
+  /**
+   * OTLP record granularity. `per-event` (default) reports one record per
+   * canonical Session event, preserving the existing collector format;
+   * `per-batch` reports one record per contiguous Session sequence range with
+   * a `delivery.*` attribute set and an `events` array body.
+   */
+  recordFormat?: SessionLogRecordFormat
+  /** `per-batch` only: maximum events per record. Defaults to 128. */
+  maxBatchEvents?: number
+  /** `per-batch` only: maximum record body JSON bytes; a larger single event still travels as its own batch. Defaults to 1,048,576. */
+  maxBatchBytes?: number
+  /** `per-batch` only: maximum age of the oldest buffered event before a record is emitted. Defaults to 1,000. */
+  batchDelayMillis?: number
 }
 
 /** Session-sharing policy selected by {@link Config.mode}. */
@@ -3742,6 +3755,9 @@ export enum SessionTelemetryMode {
   FEEDBACK_ONLY = 'FEEDBACK_ONLY',
   DISABLED = 'DISABLED',
 }
+
+/** OTLP record granularity selected by the recordFormat Config field. */
+export type SessionLogRecordFormat = 'per-event' | 'per-batch'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-telemetry-otel -->
 
