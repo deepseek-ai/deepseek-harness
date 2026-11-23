@@ -1,11 +1,11 @@
-/** First-party Host inspect providers registered by the Cordis tool package. */
+/** First-party Host inspect providers that the runner registers into its inspection registry. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
-import { InspectError, type HostCordisInspectProviderRegistration } from '@deepseek-ai/dsh-cordis-host-runner'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { EVENT_API, queryEventApi, queryServiceApi } from './api-catalog.ts'
-import { queryLiveConfig } from './config.ts'
+import { queryLiveConfig } from './inspect-config.ts'
+import { InspectError, type HostCordisInspectProviderRegistration } from './inspect-registry.ts'
 
 const EMPTY_INPUT = { type: 'object', properties: {}, additionalProperties: false } as const
 const ANY_OUTPUT = { description: 'JSON data owned by this inspect provider.' } as const
