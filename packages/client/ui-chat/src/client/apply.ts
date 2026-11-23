@@ -174,7 +174,7 @@ export function apply(ctx: Context): void {
     scope.slots.inject('settings.general.group.interaction.item', () => scope.slots.register({
       name: 'settings.general.group.interaction.item',
       id: 'link-opening',
-      order: 20,
+      order: 10,
       locale: NS,
       inject: (): LinkOpeningRowInjected => ({
         hooks: { linkOpening, browserAvailable },

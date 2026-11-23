@@ -124,7 +124,7 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
   ])
   expect(client.ctx.slots.entries('settings.general.group.interaction.item')
     .map(row => ({ id: row.options.id, order: row.options.order }))).toEqual([
-    { id: 'composer-enter', order: 0 }, { id: 'shortcuts', order: 10 }, { id: 'link-opening', order: 20 },
+    { id: 'composer-enter', order: 0 }, { id: 'link-opening', order: 10 }, { id: 'shortcuts', order: 20 },
   ])
   expect(groups.getSnapshot().map(row => row.id))
     .toEqual(['permissions', 'general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])

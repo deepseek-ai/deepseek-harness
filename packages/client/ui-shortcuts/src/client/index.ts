@@ -40,7 +40,7 @@ export function apply(ctx: Context): void {
   const injected = () => ({ platform: ctx.shortcuts.platform, runtime: ctx.shortcuts.runtime, edit, recording, describeBinding,
     hooks: { catalog: ctx.shortcuts.catalog, config: ctx.shortcuts.config, fixedCatalog: ctx.shortcuts.fixedCatalog } })
   ctx.slots.inject('settings.general.group.interaction.item', () => ctx.slots.register({
-    name: 'settings.general.group.interaction.item', id: 'shortcuts', order: 10, locale: 'shortcuts', store,
+    name: 'settings.general.group.interaction.item', id: 'shortcuts', order: 20, locale: 'shortcuts', store,
     inject: injected,
   }, ShortcutsRow))
   ctx.slots.inject('shell.overlay', () => {
