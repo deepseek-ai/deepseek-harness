@@ -32,13 +32,16 @@ export const inject = ['remote', 'slots', 'locale', 'configForms']
  */
 export async function mountCuaPermissions(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
-  const ui = ctx.inject(['remote.cuaAccess', 'remote.pluginInventory', 'slots', 'locale'], (ctx) => {
+  const ui = ctx.inject(['remote.cuaAccess', 'remote.agentPresets', 'remote.pluginInventory', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh, ja, es, fr, de, ru, pt }))
-    const controller = new PermissionController(ctx.remote.cuaAccess, () => ctx.locale.getSnapshot().active, async () => {
+    const windowsProvider = async () => {
       const result = await ctx.remote.pluginInventory.list()
       if (!result.ok) return result
-      return { ok: true, value: result.value.entries.some(entry => entry.enabled && entry.moduleName === '@deepseek-ai/dsh-cua-windows') }
-    })
+      return { ok: true as const, value: result.value.entries.some(entry => entry.enabled && entry.moduleName === '@deepseek-ai/dsh-cua-windows') }
+    }
+    const controller = new PermissionController(
+      ctx.remote.cuaAccess, () => ctx.locale.getSnapshot().active, ctx.remote.agentPresets.list, windowsProvider,
+    )
     const face = controller.face()
     ctx.slots.inject('conversation.composer', () => ctx.slots.register({
       name: 'conversation.composer', priority: -1, locale: NS,
@@ -57,13 +60,9 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,
-      hooks: { ...face.hooks, cuaDefaultPreset: preset },
-      setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
-      setPersistentPtc: async () => {
-        const result = await ctx.remote.cuaAccess.enablePersistentPtc(); if (!result.ok) throw result.error
-        face.refresh()
-        return true
-      },
+      hooks: { ...face.hooks, cuaDefaultPreset: preset, developerTools: ctx.configForms.developerTools.enabled },
+      presetText: ctx.locale.bind('settings.agentPreset'),
+      setDefaultPreset: (id: string) => preset.set('selectedDefault', id),
     }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)

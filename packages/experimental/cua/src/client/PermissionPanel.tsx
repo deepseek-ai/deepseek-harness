@@ -1,6 +1,9 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect, useState } from 'react'
-import { Button, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronDownOutlineRegular, IconSettingsOutlineRegular, Menu, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { presetDisplayText, requiresCodingTools } from '@deepseek-ai/dsh-agent-preset-registry/display'
+import type { BuiltInPresetCopyKey } from '@deepseek-ai/dsh-agent-preset-registry/types'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -17,60 +20,62 @@ export type PermissionProps = InjectFace<PermissionFace> & PropsLocale<typeof NS
 export type PermissionSetupProps = PermissionProps
   & Pick<PropsRuntime<'plugins.bundle.activation'>, 'onDismiss' | 'onOpenDetails'>
 
-type DefaultPresetProps = PermissionProps & InjectFace<{
-  hooks: { cuaDefaultPreset: ConfigForm<{ default: string; selectedDefault?: string }> }
-  setPtcDefault: () => Promise<boolean>
+/** The detail page edits the preset used for new sessions. */
+export type PermissionPanelProps = PermissionProps & InjectFace<{
+  hooks: {
+    cuaDefaultPreset: ConfigForm<{ default: string; selectedDefault?: string }>
+    developerTools: ObservableSnapshot<boolean>
+  }
+  setDefaultPreset: (id: string) => Promise<boolean>
+  presetText: (key: BuiltInPresetCopyKey) => string
 }>
 
-type PersistentPtcProps = PermissionProps & { setPersistentPtc: () => Promise<boolean> }
-
-/** The detail page owns explicit preset and execution-mode settings. */
-export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
-
-function DefaultPresetSetting(props: DefaultPresetProps) {
-  const preset = props.useCuaDefaultPreset(value => value)
-  const changing = props.useCuaPermissions(value => value.changing)
-  return <ConfigurationSetting kind="default" status={preset.value !== undefined && preset.status === 'loading' ? 'ready' : preset.status} loading={preset.value === undefined && preset.status === 'loading'} writable={preset.writable} t={props.t} busy={changing} save={props.setPtcDefault}
-    configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
-}
-
-function PersistentPtcSetting(props: PersistentPtcProps) {
-  const runtime = props.useCuaPermissions(value => value.runtime)
-  const changing = props.useCuaPermissions(value => value.changing)
-  return <ConfigurationSetting kind="persistent" loading={runtime.value === null && runtime.error === null}
-    status={runtime.error !== null ? 'unavailable' : runtime.value !== null ? 'ready' : 'loading'} writable={runtime.value?.writable === true} t={props.t} busy={changing || runtime.busy} save={props.setPersistentPtc}
-    configured={runtime.value?.persistent === true} />
-}
-
-function ConfigurationSetting({ kind, status, loading, writable, configured, save, t, busy }: PropsLocale<typeof NS> & {
-  kind: 'default' | 'persistent'
-  busy: boolean
-  status: 'loading' | 'ready' | 'unavailable'
-  loading: boolean
-  writable: boolean
-  configured: boolean
-  save: () => Promise<boolean>
-}) {
+function DefaultPresetSetting({
+  useCuaDefaultPreset, useCuaPermissions, useDeveloperTools, setDefaultPreset, presetText, refresh, t,
+}: PermissionPanelProps) {
+  const preset = useCuaDefaultPreset(value => value)
+  const roster = useCuaPermissions(value => value.presets)
+  const changing = useCuaPermissions(value => value.changing)
+  const codingTools = useDeveloperTools(value => value)
+  const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const submit = async (): Promise<void> => {
-    setSaving(true)
+  const rows = roster.value?.presets ?? []
+  const current = preset.value?.selectedDefault ?? preset.value?.default
+  const selected = rows.find(row => row.id === current)
+  const label = selected ? presetDisplayText(selected, presetText).name : current ?? t('unknown')
+  const items = rows.filter(row => row.broken === undefined && (codingTools || !requiresCodingTools(row)))
+    .map(row => ({ id: row.id, label: presetDisplayText(row, presetText).name }))
+  const disabled = changing || saving || preset.status !== 'ready' || !preset.writable || roster.error !== null || items.length === 0
+  useEffect(() => { if (disabled) setOpen(false) }, [disabled])
+  const select = async (id: string): Promise<void> => {
+    setOpen(false)
     setError(null)
+    if (id === current) return
+    setSaving(true)
     try {
-      if (!await save()) setError(t(`${kind}NotSaved`))
+      if (!await setDefaultPreset(id)) setError(t('defaultNotSaved'))
     } catch (error) {
-      setError(t(`${kind}Failed`, { message: error instanceof Error ? error.message : String(error) }))
+      setError(t('defaultFailed', { message: error instanceof Error ? error.message : String(error) }))
     } finally { setSaving(false) }
   }
-  return <div className={css.defaultSetting} role="group" aria-label={t(`${kind}Title`)}>
+  return <div className={css.defaultSetting} role="group" aria-label={t('defaultTitle')}>
     <div className={css.permission}>
-      <div><strong>{t(`${kind}Title`)}</strong><p>{t(`${kind}Body`)}</p></div>
-      {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Button size="sm" className={css.permissionAction} data-configured={configured || undefined} variant={configured ? 'outline' : 'primary'} disabled={busy || saving || configured || !writable || status !== 'ready'}
-          onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
+      <div><strong>{t('defaultTitle')}</strong></div>
+      {preset.value === undefined && preset.status === 'loading' ? <span className={css.buttonPlaceholder} aria-hidden />
+        : <Menu open={open && !disabled} onClose={() => setOpen(false)} onSelect={(id) => { void select(id) }}
+          items={items} selectedId={current} align="end" portal autoFocus className={css.modeMenu}
+          anchor={<Button size="sm" variant="outline" className={css.modeButton} disabled={disabled}
+            aria-haspopup="menu" aria-expanded={open && !disabled} onClick={() => setOpen(value => !value)}>
+            <span>{label}</span><IconChevronDownOutlineRegular size={14} />
+          </Button>} />}
     </div>
-    {!configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
-      : status === 'ready' && !writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
+    {preset.status === 'unavailable' ? <p className={css.error} role="alert">{t('defaultUnavailable')}</p>
+      : preset.value !== undefined && !preset.writable && <p className={css.error} role="alert">{t('defaultReadOnly')}</p>}
+    {roster.error !== null && <div className={css.notice} role="alert">
+      <span className={css.error}>{t('defaultFailed', { message: roster.error })}</span>
+      <Button size="sm" variant="outline" onClick={refresh}>{t('retry')}</Button>
+    </div>}
     {error !== null && <p className={css.error} role="alert">{error}</p>}
   </div>
 }
@@ -202,7 +207,6 @@ export function PermissionPanel(props: PermissionPanelProps) {
       <h3>{t('title')}</h3>
       <div className={css.card}>
         <DefaultPresetSetting {...props} />
-        <PersistentPtcSetting {...props} />
         {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
           {t('providerLookupFailed', { message: state.windowsProvider.error })}
         </p>}

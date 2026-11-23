@@ -4,11 +4,12 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-cua/remote'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { AgentPresetRoster } from '@deepseek-ai/dsh-agent-preset-registry/types'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
 
 interface PermissionData {
+  presets: AgentPresetRoster
   windowsProvider: boolean
-  runtime: { persistent: boolean; writable: boolean }
   system: CuaSystemPermissionState
   applications: CuaApplicationState
   icons: Record<string, string>
@@ -40,8 +41,8 @@ export interface PermissionFace {
 export class PermissionController {
   /** Last observed permissions and the lifetime of the current refresh/action. */
   readonly state = createSnapshotStore<PermissionView>({
+    presets: { value: null, busy: false, error: null },
     windowsProvider: { value: null, busy: false, error: null },
-    runtime: { value: null, busy: false, error: null },
     system: { value: null, busy: false, error: null },
     applications: { value: null, busy: false, error: null },
     icons: { value: null, busy: false, error: null },
@@ -55,10 +56,12 @@ export class PermissionController {
   /**
    * @param remote Generated CUA Remote namespace; failed results follow the query and action paths.
    * @param locale Current Client language, read when a permission action starts.
+   * @param listPresets Current session modes offered by the Host.
    * @param windowsProvider Read the enabled Host provider when native setup fails before reporting its platform.
    */
   constructor(private readonly remote: Context['remote']['cuaAccess'],
-    private readonly locale: () => string, private readonly windowsProvider: () => Promise<RemoteResult<boolean>>) {}
+    private readonly locale: () => string, private readonly listPresets: Context['remote']['agentPresets']['list'],
+    private readonly windowsProvider: () => Promise<RemoteResult<boolean>>) {}
   /**
    * Bind the permission projection to its user actions.
    * @returns Reactive state and controls shared by the page, prompt, and toast host.
@@ -89,7 +92,7 @@ export class PermissionController {
       state.changing = changing
       state.busy = true
       state.windowsProvider.busy = false
-      for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
+      for (const key of ['presets', 'system', 'applications', 'icons'] as const) state[key].busy = true
     })
     if (!changing) this.enqueue()
   }
@@ -103,7 +106,7 @@ export class PermissionController {
     this.state.update((state) => {
       state.busy = true
       state.windowsProvider.busy = false
-      for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
+      for (const key of ['presets', 'system', 'applications', 'icons'] as const) state[key].busy = true
     })
     this.tail = this.tail.then(async () => {
       if (!current()) return
@@ -121,7 +124,7 @@ export class PermissionController {
       }
       const latest = () => current() && this.sequence === sequence
       const refresh = Promise.all([
-        this.read('runtime', this.remote.ptcConfiguration, latest),
+        this.read('presets', this.listPresets, latest),
         this.read('system', this.remote.systemStatus, latest).then(async () => {
           // The Windows helper can be missing before its first permission response.
           if (latest() && this.state.getSnapshot().system.value === null) {

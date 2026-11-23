@@ -31,6 +31,14 @@ export function isBuiltInPreset(preset: PresetDisplaySource): boolean {
   return preset.name === undefined && BUILT_IN_PRESET_KEYS[preset.id] !== undefined
 }
 
+/** Whether a shipped preset requires the Coding Tools preference.
+ * @param preset Roster entry; named custom overrides keep their own behavior.
+ * @returns True only for the built-in PTC and Minimal presets.
+ */
+export function requiresCodingTools(preset: PresetDisplaySource | undefined): boolean {
+  return preset !== undefined && isBuiltInPreset(preset) && (preset.id === 'ptc' || preset.id === 'minimal')
+}
+
 /**
  * Resolve preset display copy without making user-authored metadata translatable.
  * @param preset - roster row whose copy is being rendered.

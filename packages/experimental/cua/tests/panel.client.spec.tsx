@@ -22,8 +22,11 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
+    presets: { value: { presets: [
+      { id: 'standard', isDefault: false }, { id: 'ptc', isDefault: true },
+      { id: 'research', name: 'Research', isDefault: false }, { id: 'broken', broken: 'invalid', isDefault: false },
+    ] }, busy: false, error: null },
     windowsProvider: { value: null, busy: false, error: null },
-    runtime: { value: { persistent: false, writable: true }, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
   })
@@ -31,14 +34,15 @@ function fixture() {
     status: 'ready', value: { default: 'standard', selectedDefault: 'ptc' },
     base: {}, user: {}, revision: 1, writable: true,
   })
+  const codingTools = createSnapshotStore(true)
   const refresh = vi.fn()
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
-    setPersistentPtc: vi.fn(async () => true),
-    useCuaDefaultPreset: bindSnapshotSelector(preset), setPtcDefault: vi.fn(async () => true),
+    useDeveloperTools: bindSnapshotSelector(codingTools), presetText: key => key,
+    useCuaDefaultPreset: bindSnapshotSelector(preset), setDefaultPreset: vi.fn(async () => true),
     refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
   } satisfies PermissionPanelProps
-  return { state, preset, props,
+  return { state, preset, props, codingTools,
     publish(patch: Partial<PermissionView>) { act(() => { state.set({ ...state.getSnapshot(), ...patch }) }) },
   }
 }
@@ -68,19 +72,27 @@ it.each([en, zh])('changes the default from the detail page and retains a refuse
   f.publish({ ...observe(value) })
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const group = screen.getByRole('group', { name: dictionary.defaultTitle })
-  expect(within(group).getByText(dictionary.defaultBody)).toBeTruthy()
-  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
+  const button = within(group).getByRole('button', { name: 'presetStandardName' })
+  const choose = () => {
+    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Research' }))
+  }
   const write = Promise.withResolvers<boolean>()
-  f.props.setPtcDefault.mockReturnValueOnce(write.promise)
-  fireEvent.click(within(group).getByRole('button', { name: dictionary.defaultConfirm }))
-  expect(within(group).getByRole('button', { name: dictionary.defaultConfirm }).hasAttribute('disabled')).toBe(true)
+  f.props.setDefaultPreset.mockReturnValueOnce(write.promise)
+  choose()
+  expect(button.hasAttribute('disabled')).toBe(true)
   await act(async () => { write.resolve(false); await write.promise })
   expect(screen.getByRole('alert').textContent).toBe(dictionary.defaultNotSaved)
-  fireEvent.click(within(group).getByRole('button', { name: dictionary.defaultConfirm }))
+  choose()
   await waitFor(() => { expect(screen.queryByRole('alert')).toBeNull() })
-  expect(f.props.setPtcDefault).toHaveBeenCalledTimes(2)
-  act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard', selectedDefault: 'ptc' } }) })
-  expect(within(group).getByRole('button', { name: dictionary.defaultSet }).hasAttribute('disabled')).toBe(true)
+  expect(f.props.setDefaultPreset.mock.calls).toEqual([['research'], ['research']])
+  act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard', selectedDefault: 'research' } }) })
+  act(() => { f.codingTools.set(false) })
+  fireEvent.click(within(group).getByRole('button', { name: 'Research' }))
+  expect(screen.queryByRole('menuitem', { name: 'presetPtcName' })).toBeNull()
+  expect(screen.queryByRole('menuitem', { name: 'broken' })).toBeNull()
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Research' }))
+  expect(f.props.setDefaultPreset).toHaveBeenCalledTimes(2)
 })
 
 it('dismisses activation when permissions are ready without changing the default', () => {
@@ -90,15 +102,16 @@ it('dismisses activation when permissions are ready without changing the default
   render(<PermissionSetup {...f.props} onDismiss={onDismiss} onOpenDetails={vi.fn()} />)
   expect(onDismiss).toHaveBeenCalledOnce()
   expect(screen.queryByRole('dialog')).toBeNull()
-  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
+  expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
 })
 
 it.each([new Error('offline'), 'offline'])('reports a failed default-mode request on the detail page', async (error) => {
   const f = fixture()
   f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard' } })
-  f.props.setPtcDefault.mockRejectedValueOnce(error)
+  f.props.setDefaultPreset.mockRejectedValueOnce(error)
   render(<PermissionPanel {...f.props} />)
-  fireEvent.click(screen.getByRole('button', { name: en.defaultConfirm }))
+  fireEvent.click(screen.getByRole('button', { name: 'presetStandardName' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'presetPtcName' }))
   await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('offline') })
 })
 
@@ -106,10 +119,10 @@ it('waits for the settings document and recognizes PTC as the deployment default
   const f = fixture()
   f.preset.set({ ...f.preset.getSnapshot(), status: 'loading', value: undefined })
   render(<PermissionPanel {...f.props} />)
-  expect(screen.queryByRole('button', { name: en.defaultConfirm })).toBeNull()
+  expect(within(screen.getByRole('group', { name: en.defaultTitle })).queryByRole('button')).toBeNull()
   act(() => { f.preset.set({ ...f.preset.getSnapshot(), status: 'ready', value: { default: 'ptc' } }) })
-  expect(screen.getByRole('button', { name: en.defaultSet }).hasAttribute('disabled')).toBe(true)
-  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
+  expect(screen.getByRole('button', { name: 'presetPtcName' }).hasAttribute('disabled')).toBe(false)
+  expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
 })
 
 it.each(['unavailable', 'ready'] as const)('explains why the %s settings document cannot change the default', (status) => {
@@ -118,8 +131,8 @@ it.each(['unavailable', 'ready'] as const)('explains why the %s settings documen
     value: status === 'ready' ? { default: 'standard' } : undefined })
   render(<PermissionPanel {...f.props} />)
   expect(screen.getByRole('alert').textContent).toBe(status === 'ready' ? en.defaultReadOnly : en.defaultUnavailable)
-  expect(screen.getByRole('button', { name: en.defaultConfirm }).hasAttribute('disabled')).toBe(true)
-  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
+  expect(within(screen.getByRole('group', { name: en.defaultTitle })).getByRole('button').hasAttribute('disabled')).toBe(true)
+  expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
 })
 
 it('shows query failures as unknown while retaining previously displayed apps', () => {
@@ -166,8 +179,7 @@ it('offers setup after inspection, permits dismissal, and dismisses once both pr
   f.publish({ ...observe(value) })
   const dialog = screen.getByRole('dialog', { name: en.setupTitle })
   expect(within(dialog).getByText('Computer use is enabled. Before using it, grant Accessibility and Screen Recording permissions. Open the plugin details to complete setup.')).toBeTruthy()
-  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
-  expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
+  expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
   fireEvent.click(within(dialog).getByRole('button', { name: en.openSetup }))
   expect(onOpenDetails).toHaveBeenCalledOnce()
   fireEvent.click(within(dialog).getByRole('button', { name: en.later }))
@@ -232,13 +244,13 @@ it('shows application icons and names while keeping the executable path in the t
   expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
 })
 
-it.each([en, zh])('shows four requirements with the target application beside each system permission', (dictionary) => {
+it.each([en, zh])('shows the default mode and system permissions with the target application beside each system permission', (dictionary) => {
   const f = fixture()
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const application = { name: 'Visual Studio Code.app', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   f.publish({ ...observe({ ...value, system: { ...value.system, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication: application } }) })
   const requirements = screen.getByRole('region', { name: dictionary.title })
-  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
+  expect(within(requirements).getAllByRole('group')).toHaveLength(3)
   expect(screen.getByRole('region', { name: dictionary.applicationsTitle })).toBeTruthy()
   const accessibility = within(requirements).getByRole('group', { name: dictionary.accessibility })
   expect(within(accessibility).getByText(application.name)).toBeTruthy()
@@ -283,11 +295,11 @@ it('keeps permission management guidance after both permissions are granted', ()
 })
 
 
-it('keeps all four requirements visible before the first permission response', () => {
+it('keeps the default mode and system permissions visible before the first permission response', () => {
   const f = fixture()
   render(<PermissionPanel {...f.props} />)
   const requirements = screen.getByRole('region', { name: en.title })
-  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
+  expect(within(requirements).getAllByRole('group')).toHaveLength(3)
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
   for (const permission of [en.accessibilityUse, en.screenRecordingUse]) expect(within(screen.getByRole('group', { name: permission })).queryByRole('button')).toBeNull()
@@ -299,7 +311,7 @@ it('keeps content mounted and disables actions while management changes are pend
   f.publish({ changing: true })
   const view = render(<PermissionPanel {...f.props} />)
   const requirements = screen.getByRole('region', { name: en.title })
-  expect(within(requirements).getAllByRole('group')).toHaveLength(4)
+  expect(within(requirements).getAllByRole('group')).toHaveLength(3)
   expect(screen.getByRole('alert').textContent).toContain('provider is reloading')
   expect(within(screen.getByRole('group', { name: en.accessibility })).getByRole('button', { name: en.unknown }).hasAttribute('disabled')).toBe(true)
   fireEvent.focus(window)
@@ -377,41 +389,6 @@ it('finishes activation guidance without waiting for application icons', () => {
   expect(f.state.getSnapshot().icons.busy).toBe(true)
 })
 
-it.each([en, zh])('saves persistent PTC only from its own row and retains failures for retry', async (dictionary) => {
-  const f = fixture()
-  render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
-  const row = screen.getByRole('group', { name: dictionary.persistentTitle })
-  expect(within(row).getByText(dictionary.persistentBody)).toBeTruthy()
-  expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
-  const write = Promise.withResolvers<boolean>()
-  f.props.setPersistentPtc.mockReturnValueOnce(write.promise)
-  fireEvent.click(within(row).getByRole('button', { name: dictionary.persistentConfirm }))
-  expect(within(row).getByRole('button').hasAttribute('disabled')).toBe(true)
-  await act(async () => { write.resolve(false); await write.promise })
-  expect(within(row).getByRole('alert').textContent).toBe(dictionary.persistentNotSaved)
-  fireEvent.click(within(row).getByRole('button'))
-  await waitFor(() => { expect(within(row).queryByRole('alert')).toBeNull() })
-  f.publish({ runtime: { value: { persistent: true, writable: true }, busy: false, error: null } })
-  expect(within(row).getByRole('button', { name: dictionary.persistentSet }).hasAttribute('disabled')).toBe(true)
-  expect(f.props.setPtcDefault).not.toHaveBeenCalled()
-})
-
-it('loads the runtime setting independently and reports unavailable and read-only configurations', () => {
-  const f = fixture()
-  f.publish({ runtime: { value: null, busy: true, error: null } })
-  render(<PermissionPanel {...f.props} />)
-  const row = screen.getByRole('group', { name: en.persistentTitle })
-  expect(within(row).queryByRole('button')).toBeNull()
-  expect(screen.getByRole('button', { name: en.defaultSet })).toBeTruthy()
-  f.publish({ runtime: { value: null, busy: false, error: 'offline' } })
-  expect(within(row).getByRole('alert').textContent).toBe(en.persistentUnavailable)
-  f.publish({ runtime: { value: { persistent: false, writable: false }, busy: false, error: null } })
-  expect(within(row).getByRole('alert').textContent).toBe(en.persistentReadOnly)
-  expect(within(row).getByRole('button').hasAttribute('disabled')).toBe(true)
-  expect(f.props.setPersistentPtc).not.toHaveBeenCalled()
-})
-
-
 it('retains uncertainty and the diagnostic until a refresh succeeds', () => {
   const f = fixture()
   f.publish(observe(value))
@@ -425,17 +402,14 @@ it('retains uncertainty and the diagnostic until a refresh succeeds', () => {
 it('retains a known read-only configuration and query failure throughout management and refresh', () => {
   const f = fixture()
   f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard' }, writable: false })
-  f.publish({ ...observe(value), runtime: { value: { persistent: false, writable: false }, busy: false, error: null },
+  f.publish({ ...observe(value),
     applications: { value, busy: false, error: 'offline' } })
   const view = render(<PermissionPanel {...f.props} />)
-  const readonly = screen.getByText(en.persistentReadOnly)
   const defaultReadonly = screen.getByText(en.defaultReadOnly)
   act(() => { f.preset.set({ ...f.preset.getSnapshot(), status: 'loading' }) })
   const query = screen.getByText(en.applicationsFailed.replace('{message}', 'offline'))
   f.publish({ changing: true, busy: true,
-    runtime: { ...f.state.getSnapshot().runtime, busy: true },
     applications: { ...f.state.getSnapshot().applications, busy: true } })
-  expect(screen.getByText(en.persistentReadOnly)).toBe(readonly)
   expect(screen.getByText(en.defaultReadOnly)).toBe(defaultReadonly)
   expect(screen.getByText(en.applicationsFailed.replace('{message}', 'offline'))).toBe(query)
   view.unmount()
