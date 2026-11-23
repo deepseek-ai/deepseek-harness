@@ -4529,7 +4529,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-time-context`
 
 - `inject`: `agents` · `sessionProjections`
-- `source`: [`packages/context/time-context/src/index.ts:52`](../packages/context/time-context/src/index.ts)
+- `source`: [`packages/context/time-context/src/index.ts:50`](../packages/context/time-context/src/index.ts)
 
 ```ts config-catalog
 /** Request-preparation clock formatting and append scheduling. Invalid values fail plugin load. */
