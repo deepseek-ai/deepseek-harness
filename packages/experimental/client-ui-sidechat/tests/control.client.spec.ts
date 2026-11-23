@@ -80,19 +80,22 @@ describe('SidechatControl.fork', () => {
     control.fork(SOURCE)
     expect(forks).toEqual([])
     expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'noTurn' })
-    expect(control.pending.getSnapshot()).toEqual([])
   })
 
-  it('accepts one in-flight creation per source and none without a mounted Session', async () => {
+  it('treats a window with older pages as inside a Turn even when the page shows no turn/start', async () => {
+    const entries = [durable(7, { type: 'step/end', data: { turn: 1, step: 3 } } as never)]
+    const { control, forks, opened } = harness({ entries, hasMore: true, revision: 1, change: { kind: 'replace', entries } })
+    control.fork(SOURCE)
+    await vi.waitFor(() => { expect(opened).toHaveLength(1) })
+    expect(forks).toEqual([{ sessionId: SOURCE, atSeq: 7, increaseTitle: true }])
+  })
+
+  it('forks on every call and never without a mounted Session', async () => {
     const h = harness()
-    const first = Promise.withResolvers<SessionId>()
-    h.fork.mockReturnValueOnce(first.promise)
     h.control.fork(SOURCE)
     h.control.fork(SOURCE)
-    expect(h.fork).toHaveBeenCalledTimes(1)
-    expect(h.control.pending.getSnapshot()).toEqual([SOURCE])
-    first.resolve(CHILD)
-    await vi.waitFor(() => { expect(h.control.pending.getSnapshot()).toEqual([]) })
+    await vi.waitFor(() => { expect(h.opened).toHaveLength(2) })
+    expect(h.fork).toHaveBeenCalledTimes(2)
     const none = harness(STARTED, null)
     none.control.fork(SOURCE)
     expect(none.fork).not.toHaveBeenCalled()
@@ -130,7 +133,8 @@ describe('SidechatControl.fork', () => {
     h.control.fork(MAIN)
     expect(h.fork).toHaveBeenCalledTimes(1)
     slow.resolve(CHILD)
-    await vi.waitFor(() => { expect(h.control.pending.getSnapshot()).toEqual([]) })
+    await vi.waitFor(() => { expect(h.fork.mock.results[0]?.type).toBe('return') })
+    await Promise.resolve()
     expect(h.opened).toEqual([])
     const failing = harness()
     failing.fork.mockImplementation(async () => { failing.control.dispose(); throw new Error('late') })
