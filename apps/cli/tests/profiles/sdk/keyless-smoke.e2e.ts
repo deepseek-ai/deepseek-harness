@@ -194,9 +194,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       const requestText = JSON.stringify(modelRequests[0])
       if (ptc) {
         expect(toolNames).toEqual(['run_code'])
-        // The PTC overlay keeps the pre-apply_patch tool set, as the Web ptc preset does.
-        for (const tool of expectedTools.filter(tool => tool !== 'apply_patch')) expect(requestText.includes(`${tool}:`), tool).toBe(true)
-        expect(requestText.includes('apply_patch:')).toBe(false)
+        for (const tool of expectedTools) expect(requestText.includes(`${tool}:`), tool).toBe(true)
       } else {
         expect(toolNames).toEqual(expect.arrayContaining(expectedTools))
         expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)

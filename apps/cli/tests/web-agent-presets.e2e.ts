@@ -707,6 +707,7 @@ describe('the shipped Web composition', () => {
         expect(cordisPersona).toEqual(standardPersona.map(section => section.name === 'deployment:persona-prefix'
           ? { ...section, text: `${section.text} You help the user customize DeepSeek Harness itself.` }
           : section))
+        expect(toolNames(ctx, handle.agent)).toContain('apply_patch')
         const definition = composeEntries([webPatches('Creator persona')])
           .find(row => row.id === 'preset-cordis')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
         const unregister = await ctx.agentPresets.register({
@@ -753,6 +754,8 @@ describe('the shipped Web composition', () => {
       const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
       expect(sdk).not.toContain('str_replace_editor')
       expect(sdk).toContain('web_search')
+      expect(toolNames(ctx, coded.agent)).toContain('apply_patch')
+      expect(sdk).toContain('apply_patch')
       // Like `standard`, PTC manages plugins when the Host provides an editable profile.
       expect(toolNames(ctx, coded.agent)).toContain('plugin_manager')
       expect(sdk).toContain('plugin_manager')
