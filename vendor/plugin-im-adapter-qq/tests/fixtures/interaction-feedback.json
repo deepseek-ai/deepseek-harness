@@ -1,0 +1,24 @@
+{
+  "op": 0,
+  "s": 3103,
+  "t": "INTERACTION_CREATE",
+  "id": "INTERACTION_CREATE:c30c003e-9454-4450-8e5e-665267c088c4",
+  "d": {
+    "application_id": "1904842048",
+    "chat_type": 2,
+    "data": {
+      "resolved": {
+        "checked": 1,
+        "feedback_opt": "LIKE",
+        "message_id": "ROBOT1.0_feedback0d5e6f708192a3b4c5d6e7f809"
+      },
+      "type": 13
+    },
+    "id": "c30c003e-9454-4450-8e5e-665267c088c4",
+    "scene": "c2c",
+    "timestamp": "2026-07-20T21:54:38+08:00",
+    "type": 13,
+    "user_openid": "DD8246C68EC19CAF8D2AA76941180EA4",
+    "version": 1
+  }
+}

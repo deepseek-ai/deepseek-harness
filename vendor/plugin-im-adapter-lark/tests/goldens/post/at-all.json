@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "<at user_id=\"all\"></at> build is green again"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/im-session-commands/README.md
+/:
+  en: b5766ae6d9a7f50e
+  zh: 6e0404a5e0c5e21b
+/deepseek-ai-dsh-im-session-commands:
+  en: 7a118244ca350278
+  zh: 330bc7207b51200a
+/deepseek-ai-dsh-im-session-commands/summary:
+  en: 57782a41531f87a8
+  zh: 60f492d7658f33d7
+/deepseek-ai-dsh-im-session-commands/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 4ebceb2533647b32
+/deepseek-ai-dsh-im-session-commands/use-this-package:
+  en: ba05afae5e788511
+  zh: 236d01f687f4cdce
+/deepseek-ai-dsh-im-session-commands/use-this-package/commands:
+  en: 114edc1a5075349c
+  zh: 64f4844ffd0fb695
+/deepseek-ai-dsh-im-session-commands/use-this-package/command-matching-rules:
+  en: 608df670468dcc7a
+  zh: ccbb8dd64b4c845d
+/deepseek-ai-dsh-im-session-commands/understand-the-implementation:
+  en: 5719adb225853500
+  zh: 2a8ac37f944f5f0f
+/deepseek-ai-dsh-im-session-commands/understand-the-implementation/source-map:
+  en: 50aa6f260099be99
+  zh: dc6a0d8d75f60c90
+/deepseek-ai-dsh-im-session-commands/further-exploration:
+  en: 890ce151137b1c07
+  zh: 0a223309e0119243
+/deepseek-ai-dsh-im-session-commands/model-experience:
+  en: a461f0180c305a52
+  zh: bf7fcdef64cfab64
+/deepseek-ai-dsh-im-session-commands/model-experience/kv-cache-effect:
+  en: 6e9dfa680f2d6206
+  zh: 6fccf9cfae4e997c
+/deepseek-ai-dsh-im-session-commands/known-limitations-and-deferred-work:
+  en: a9f8fb4ce0cc3944
+  zh: f4f852c60b229cf2
+/deepseek-ai-dsh-im-session-commands/known-limitations-and-deferred-work/dev-note:
+  en: 883f5f0882a4eedc
+  zh: 1ab431133941237c

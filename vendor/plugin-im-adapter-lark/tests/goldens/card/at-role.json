@@ -1,0 +1,38 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "eaupnw23uehnjbwd",
+              "content": "@Admins please review",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [
+      {
+        "tag": "at",
+        "variant": "role",
+        "via": "text",
+        "path": "message/p[0]/at[0]"
+      }
+    ],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

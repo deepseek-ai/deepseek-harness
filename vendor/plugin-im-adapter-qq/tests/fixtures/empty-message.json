@@ -1,0 +1,27 @@
+{
+  "op": 0,
+  "s": 1204,
+  "t": "GROUP_AT_MESSAGE_CREATE",
+  "id": "GROUP_AT_MESSAGE_CREATE:708192a3b4c5d6e7f8091a2b3c4d5e6f",
+  "d": {
+    "id": "ROBOT1.0_d9U0sV8xZ3bG5cD7eF1gH4jK6lM8nP0qR2sT4uV6wX8yZ0aB2cD4eF6gH8jK0mN2pQ4rS6tU8vW0",
+    "author": {
+      "id": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4",
+      "member_openid": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4",
+      "member_role": "admin",
+      "username": "小明",
+      "bot": false
+    },
+    "content": " ",
+    "group_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+    "message_type": 0,
+    "timestamp": "2026-07-21T10:20:00+08:00",
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "msg_idx=REFIDX_eeeeeeeeeeeeeee==",
+        "auth_token=2a3b4c5d6e7f8091a2b3c4d5e6f70819"
+      ]
+    }
+  }
+}

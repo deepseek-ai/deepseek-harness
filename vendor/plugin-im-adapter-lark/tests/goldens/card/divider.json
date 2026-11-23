@@ -1,0 +1,41 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "eaupnw23uehnjbwd",
+              "content": "above the line",
+              "text_align": "left"
+            },
+            {
+              "tag": "hr",
+              "element_id": "ecqkyblaffsmnfjx"
+            },
+            {
+              "tag": "markdown",
+              "element_id": "e2n6zausksui7wbh",
+              "content": "below the line",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Commandes de session de messagerie",
+    "description": "Traite /clear, /new, /stop, /status et /help envoyés dans une discussion avant que le message n'atteigne l'agent."
+  }
+}

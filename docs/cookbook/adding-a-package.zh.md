@@ -41,7 +41,7 @@ package.json 不变式（由 `pnpm run constraints` / `scripts/check-workspace-c
 
 ## 3. 确定包拓扑
 
-对于可替换的能力，当 Service Definition／Service Provider／Consumer 角色需要独立演进时，将它们拆分到不同包中（见 docs/architecture.md § "Capability seams"——shell 三组件是模板）。单一用途的插件保持为一个包。
+对于可替换的能力，当 Service Definition／Service Provider／Consumer 角色需要独立演进时，将它们拆分到不同包中（见 [architecture.zh.md](../architecture.zh.md) 的「Capability seams」一节——shell 三组件是模板）。单一用途的插件保持为一个包。
 
 ### 使用符合实际的角色名称
 

@@ -329,6 +329,9 @@
     "@deepseek-ai/dsh-forge-gitlab": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
-    "@deepseek-ai/dsh-tool-session-list": "workspace:*"
+    "@deepseek-ai/dsh-tool-session-list": "workspace:*",
+    "ws": "^8.18.3",
+    "@types/ws": "^8.18.1",
+    "protobufjs": "^8.0.0"
   }
 }

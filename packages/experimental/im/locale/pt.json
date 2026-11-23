@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Automação de mensagens",
+    "description": "Armazena e distribui mensagens de conversas Feishu/Lark ou QQ admitidas, hospeda sessões de agente e publica respostas com recibos duráveis."
+  }
+}

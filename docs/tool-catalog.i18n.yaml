@@ -9,8 +9,35 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 92fe4be7a61af314
-  zh: 4d94aaab95817ae2
+  en: b2317acc3fb0e92d
+  zh: 8a1efa6959b25f54
+/tool-schema-catalog/deepseek-ai-dsh-im:
+  en: 707c35f0d3451baa
+  zh: 707c35f0d3451baa
+/tool-schema-catalog/deepseek-ai-dsh-im/im-history:
+  en: 6c1227a2696fab49
+  zh: 6c1227a2696fab49
+/tool-schema-catalog/deepseek-ai-dsh-im/im-members:
+  en: 14319a20e2afa545
+  zh: 14319a20e2afa545
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read:
+  en: 7f4765144673fc36
+  zh: 7f4765144673fc36
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read-file:
+  en: 1259abf38f3e6f73
+  zh: 1259abf38f3e6f73
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read-image:
+  en: 8b705d054087e6f8
+  zh: 8b705d054087e6f8
+/tool-schema-catalog/deepseek-ai-dsh-im/im-reply:
+  en: a3a892b3dee1d1f0
+  zh: a3a892b3dee1d1f0
+/tool-schema-catalog/deepseek-ai-dsh-im/im-send:
+  en: 2869b8da22139254
+  zh: 2869b8da22139254
+/tool-schema-catalog/deepseek-ai-dsh-im/im-send-file:
+  en: 94201ef458696c1b
+  zh: 08383250c6a69f8c
 /tool-schema-catalog/deepseek-ai-dsh-tool-session-control:
   en: 79ab575ea6da86e2
   zh: 79ab575ea6da86e2

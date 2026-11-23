@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comandos de sesión de mensajería",
+    "description": "Gestiona /clear, /new, /stop, /status y /help enviados en un chat de mensajería antes de que el mensaje llegue al agente."
+  }
+}

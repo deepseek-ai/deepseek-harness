@@ -85,6 +85,9 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
 | [`session-inspector`](session-inspector/README.md) | Sidebar tables for raw Session logs and Chat nodes | — |
 | [`inspector-profile`](inspector-profile/README.md) | Optional Web bundle for Session log and Chat node inspection | — |
+| [`im`](im/README.md) | IM message admission, hosted sessions, the shared default session, and `im_*` tools | `ctx.im` |
+| [`im-session-commands`](im-session-commands/README.md) | IM chat slash commands | — |
+| [`im-bundle`](im-bundle/README.md) | Explicitly installed Feishu/Lark IM automation layer | — |
 | [`tool-worktree`](tool-worktree/README.md) | Optional bundle and model tool for creating and entering worktrees | `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |

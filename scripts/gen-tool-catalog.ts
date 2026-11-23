@@ -64,6 +64,9 @@ import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as TerminalPanel from '@deepseek-ai/dsh-terminal-panel'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
+import { Config as ImConfig } from '@deepseek-ai/dsh-im/src/config.ts'
+import type { ImToolHost } from '@deepseek-ai/dsh-im/src/tools.ts'
+import { applyTools as applyImTools } from '@deepseek-ai/dsh-im/src/tools.ts'
 import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
 import ScheduleService from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
@@ -216,6 +219,20 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-im',
+    dir: 'im',
+    source: 'packages/experimental/im/src/tools.ts',
+    requires: ['ctx.tools', 'ctx.im', 'ctx.systemPrompt', 'ctx.fs + ctx.workingDirectory (im_send_file)'],
+    writes: ['tool/call', 'IM send receipts for publication', 'tool/result'],
+    mount(ctx) {
+      // The catalog reads schemas without executing IM operations or prompt callbacks:
+      // `applyTools` is the service's own registration entry, so no ImService boot is needed.
+      applyImTools(ctx, {} as ImToolHost, ImConfig())
+      return Promise.resolve()
+    },
+    note: 'Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-session-control',
     dir: 'tool-session-control',

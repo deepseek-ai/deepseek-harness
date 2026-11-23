@@ -1,0 +1,23 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_post_v2",
+    "app_id": "cli_lark",
+    "create_time": "1700000015000"
+  },
+  "event": {
+    "sender": {
+      "sender_id": { "open_id": "ou_user" },
+      "sender_type": "user"
+    },
+    "message": {
+      "message_id": "om_post_v2",
+      "chat_id": "oc_chat",
+      "chat_type": "group",
+      "message_type": "post",
+      "create_time": "1700000015000",
+      "content": "{\"title\":\"日报\",\"content_v2\":[[{\"tag\":\"md\",\"text\":\"## 进展\\n- 完成 A\\n- 完成 B\"}],[{\"tag\":\"text\",\"text\":\"行内 \"},{\"tag\":\"md\",\"text\":\"**重点**\"}]]}"
+    }
+  }
+}
