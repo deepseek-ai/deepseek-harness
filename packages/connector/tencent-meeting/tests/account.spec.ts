@@ -1,5 +1,8 @@
-/** Account operations over a scripted tmeet: status text, sign-in, sign-out, cancellation, and the Plugins page wiring. */
-import { mkdtemp, rm } from 'node:fs/promises'
+/**
+ * Account operations over a scripted tmeet: status text, the guide's download a check waits for, sign-in, sign-out,
+ * cancellation, and the Plugins page wiring.
+ */
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -7,6 +10,7 @@ import type { ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '../src/directory.ts'
 import * as TencentMeeting from '../src/index.ts'
+import { TMEET_SKILLS } from '../src/skills.ts'
 import type { TencentMeetingOperationKind, TencentMeetingState } from '../src/types.ts'
 import { createHost, type CliReply, type ScriptedProcess, type ScriptedSubprocess, type TencentMeetingPage } from './harness.ts'
 
@@ -83,11 +87,11 @@ describe('Tencent Meeting account operations', () => {
   beforeEach(() => load())
 
   it.each<[string, CliReply, TencentMeetingState['account']]>([
-    ['a sign-in the server accepts', CONNECTED, { state: 'connected', userName: '测试 用户', skills: 'installed' }],
-    ['no sign-in', NOT_LOGGED_IN, { state: 'signed-out', skills: 'installed' }],
-    ['a sign-in the CLI cleared after a failed refresh', SESSION_EXPIRED, { state: 'signed-out', skills: 'installed' }],
-    ['a sign-in whose refresh token expired', REFRESH_EXPIRED, { state: 'signed-out', skills: 'installed' }],
-    ['a stored sign-in the server did not confirm', UNVERIFIED, { state: 'unverified', skills: 'installed' }],
+    ['a sign-in the server accepts', CONNECTED, { state: 'connected', userName: '测试 用户' }],
+    ['no sign-in', NOT_LOGGED_IN, { state: 'signed-out' }],
+    ['a sign-in the CLI cleared after a failed refresh', SESSION_EXPIRED, { state: 'signed-out' }],
+    ['a sign-in whose refresh token expired', REFRESH_EXPIRED, { state: 'signed-out' }],
+    ['a stored sign-in the server did not confirm', UNVERIFIED, { state: 'unverified' }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
     const id = start('check')
@@ -102,7 +106,7 @@ describe('Tencent Meeting account operations', () => {
     script[STATUS] = [reply]
     const result = await settled(start('check'))
     expect(result).toEqual({
-      account: { state: 'unchecked', skills: 'installed' },
+      account: { state: 'unchecked' },
       result: { id: result.result?.id, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: reply.exitCode ?? 0 } },
     })
     expect(errors()).toEqual([['tencent-meeting: account operation failed: %o', {
@@ -125,9 +129,7 @@ describe('Tencent Meeting account operations', () => {
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: LOGIN_LINK }) })
     authorizing.reply({ stdout: 'Login successful. Start managing your meetings using tmeet.\n' })
 
-    expect(await settled(id)).toEqual({
-      account: { state: 'connected', userName: '测试 用户', skills: 'installed' }, result: { id, kind: 'sign-in', outcome: 'succeeded' },
-    })
+    expect(await settled(id)).toEqual({ account: { state: 'connected', userName: '测试 用户' }, result: { id, kind: 'sign-in', outcome: 'succeeded' } })
     expect(commands()).toEqual([LOGIN, STATUS])
     expect(errors()).toEqual([])
   })
@@ -152,7 +154,7 @@ describe('Tencent Meeting account operations', () => {
     const cancelling = account.cancel(id)
     expect(account.snapshot().operation).toEqual({ id, kind: 'sign-in', phase: 'cancelling', cancellable: false })
     await cancelling
-    expect(account.snapshot()).toEqual({ account: { state: 'unchecked', skills: 'installed' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'sign-in', outcome: 'cancelled' } })
     expect(subprocess.processes[0]?.terminated).toBe(true)
     expect(errors()).toEqual([])
   })
@@ -167,7 +169,7 @@ describe('Tencent Meeting account operations', () => {
     await account.cancel(id)
     signingOut.reply({ stdout: 'Logout success, welcome to use it again.\n' })
 
-    expect(await settled(id)).toEqual({ account: { state: 'signed-out', skills: 'installed' }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'sign-out', outcome: 'succeeded' } })
     expect(commands()).toEqual([LOGOUT, STATUS])
   })
 
@@ -179,41 +181,70 @@ describe('Tencent Meeting account operations', () => {
   })
 })
 
-describe('Tencent Meeting guide the plugin downloads', () => {
+describe('Tencent Meeting guide a check waits for', () => {
   let home: string
   /** Answers each request for the guide's archive. */
-  let archive: () => Promise<Response>
+  let archive: (signal: AbortSignal) => Promise<Response>
+
+  /** A request that stays unanswered until its download is stopped. */
+  const unanswered = (signal: AbortSignal): Promise<Response> => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+  })
+  /** Where the upstream skills Service publishes the guide without a profile. */
+  const published = (): string => join(home, 'cache', 'tencent-meeting', `skills-${TMEET_SKILLS.sha256.slice(0, 16)}`)
 
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-home-'))
     vi.stubEnv('DSH_HOME', home)
-    vi.stubGlobal('fetch', () => archive())
+    vi.stubGlobal('fetch', (_url: string, init: { signal: AbortSignal }) => archive(init.signal))
   })
 
   afterEach(() => rm(home, { recursive: true, force: true }))
 
-  it('restarts a failed download of the guide on each check without waiting for it, and reports the state it leaves', async () => {
+  it('reports a guide whose download did not finish as not installed, without running a command', async () => {
     archive = () => Promise.reject(new Error('offline'))
     await load({})
-    await vi.waitFor(() => { expect(account.snapshot().account.skills).toBe('failed') })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' } })
 
-    archive = () => new Promise(() => {})
-    script[STATUS] = [NOT_LOGGED_IN]
     const id = start('check')
-    expect(account.snapshot().account).toEqual({ state: 'unchecked', skills: 'downloading' })
-    expect(await settled(id)).toEqual({ account: { state: 'signed-out', skills: 'downloading' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true })
+    expect(await settled(id)).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'failed' } })
+    expect(errors()).toEqual([['tencent-meeting: account operation failed: %o', { id, kind: 'check', phase: 'downloading' }]])
+    expect(commands()).toEqual([])
   })
 
-  it('reports a new state of the guide with the current account', async () => {
-    const download = Promise.withResolvers<Response>()
-    archive = () => download.promise
+  it('downloads the guide again on the next check, in a step of its own before the status command', async () => {
+    archive = () => Promise.reject(new Error('offline'))
     await load({})
+    await settled(start('check'))
+
+    const request = Promise.withResolvers<Response>()
+    archive = () => request.promise
     script[STATUS] = [NOT_LOGGED_IN]
-    expect((await settled(start('check'))).account).toEqual({ state: 'signed-out', skills: 'downloading' })
+    const id = start('check')
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true })
+    expect(commands()).toEqual([])
+    // No fixture archive matches the pinned digest, so the guide arrives the way another process publishes it.
+    await mkdir(published(), { recursive: true })
+    request.reject(new Error('offline'))
 
-    download.reject(new Error('offline'))
+    expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(commands()).toEqual([STATUS])
+  })
 
-    await vi.waitFor(() => { expect(account.snapshot().account).toEqual({ state: 'signed-out', skills: 'failed' }) })
+  it('cancels a download of the guide, which leaves it not installed and runs no command', async () => {
+    archive = unanswered
+    await load({})
+    const id = start('check')
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true })
+
+    const cancelling = account.cancel(id)
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'cancelling', cancellable: false })
+    await cancelling
+
+    expect(account.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'cancelled' } })
+    expect(commands()).toEqual([])
+    expect(errors()).toEqual([])
   })
 })
 
@@ -226,9 +257,9 @@ describe('Tencent Meeting on the Plugins page', () => {
     script[STATUS] = [NOT_LOGGED_IN]
     account.refresh()
     const check = account.snapshot().operation
-    expect(account.snapshot()).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
+    expect(account.snapshot()).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
     expect(await finished(check!.id)).toMatchObject({ kind: 'check', outcome: 'succeeded' })
-    expect(account.snapshot().account).toEqual({ state: 'signed-out', skills: 'installed' })
+    expect(account.snapshot().account).toEqual({ state: 'signed-out' })
     expect(subprocess.lookups[0]?.command).toBe(join(binDir, executableFileName(process.platform)))
     expect(await finished(start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 

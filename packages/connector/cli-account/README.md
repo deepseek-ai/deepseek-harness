@@ -95,14 +95,20 @@ export function apply(ctx: Context): void {
 - `packageName` is the npm package whose Plugins page shows the account.
 - `cli` names the product, the program, and the absolute path of the executable that the model and the operations both run.
 - `account` is the account before the first check, and `check` is the operation the page starts for each new subscriber when none runs.
+- `prepare` is optional: what the plugin puts in place before its account can be checked, such as a download of the CLI or of its skills. [Prepare before a check](#prepare-before-a-check) describes it.
 - `perform(kind, control, signal)` carries out one operation: `control.run` runs one command of the CLI, `control.stage` enters a phase of the plugin, `control.offer` offers an authorization link to the page, and `control.publish` replaces the account.
 - `operations(text)` lists the operations a page button may start, `copy(text)` writes the fixed text of the account section, and `present(view, text)` maps the current view to what the section shows. `text(key, params)` writes one key of `dictionaries` in every language they hold and fills each `{name}` placeholder from `params`; the browser resolves the result in its active language.
 
 The returned handle serves the plugin outside an operation: `snapshot()` returns the current `CliAccountView`, `publish(account)` replaces the account, `refresh()` starts a check unless an operation already runs, and `dispose()` withdraws the registration before the plugin unloads. The JSDoc in [`src/types.ts`](src/types.ts) states each member's exact behavior.
 
+<a id="prepare-before-a-check"></a>
+### Prepare before a check
+
+A plugin whose CLI or skills are downloaded after load registers `prepare: { phase, unprepared, ready, run }`. While `ready()` returns false, each `check` operation enters `phase`, awaits `run(signal)`, enters the Service's `checking` phase, and only then calls `perform`; the other operations call `perform` at once. When `run` throws, the account becomes `unprepared`, `perform` is not called, and the operation fails without a command in its result. The page can cancel `run` when `phase` is listed in `cancellable`: the signal aborts, the account becomes `unprepared`, and the operation ends as cancelled. `run` is not called while `ready()` returns true, and the next check calls it again after a failure, which makes the page's retry button the way to repeat a download. A check that calls `perform` while the account is still the `unprepared` object first replaces it with the registration's `account`: once nothing is missing, a `perform` that fails without publishing leaves the first account, not `unprepared`.
+
 ### Runtime context
 
-`register` adds one required runtime-context entry, named `<name>:cli`, that tells the model to run `cli.program` by `cli.executable`, the path the operations' commands run. With `cli.scripts`, it also tells the model to put the executable's directory first on PATH only in the commands that run the skill's scripts, and never to run `cli.program` by name. The text follows the shell that shipped compositions give the model on the Host platform. Outside Windows it uses POSIX shell syntax: the prefix is `PATH="<executable directory>:$PATH"`, which changes PATH for that command only, and the text also forbids exporting PATH. On Windows, where the model runs PowerShell, it names the executable with the call operator, `& '<executable>'`, and gives the prefix as `$env:PATH = '<executable directory>;' + $env:PATH`, which lasts only for that call because each PowerShell call runs in a fresh process. With `cli.ready`, the entry contributes nothing while `ready()` returns false. The text is never interpolated. [Model Experience](#model-experience) shows the text.
+`register` adds one required runtime-context entry, named `<name>:cli`, that tells the model to run `cli.program` by `cli.executable`, the path the operations' commands run. With `cli.scripts`, it also tells the model to put the executable's directory first on PATH only in the commands that run the skill's scripts, and never to run `cli.program` by name. The text follows the shell that shipped compositions give the model on the Host platform. Outside Windows it uses POSIX shell syntax: the prefix is `PATH="<executable directory>:$PATH"`, which changes PATH for that command only, and the text also forbids exporting PATH. On Windows, where the model runs PowerShell, it names the executable with the call operator, `& '<executable>'`, and gives the prefix as `$env:PATH = '<executable directory>;' + $env:PATH`, which lasts only for that call because each PowerShell call runs in a fresh process. With `prepare`, the entry contributes nothing while `prepare.ready()` returns false. The text is never interpolated. [Model Experience](#model-experience) shows the text.
 
 ### Commands, links, and failures
 
@@ -153,7 +159,7 @@ The Service owns each registration's lifetime and the plugin owns the meaning of
 
 #### What the model sees
 
-One required runtime-context entry, at context order 220, for each plugin registered with `ctx.cliAccounts` whose `cli.ready` is absent or returns true; it stays when optional runtime context is off. The second line appears only with `cli.scripts`. The placeholders come from the registration's `cli`. Outside Windows the quoted values are JSON strings; on Windows they are PowerShell single-quoted strings, in which a single quote is doubled. While no plugin is registered, the Service adds nothing to a model request.
+One required runtime-context entry, at context order 220, for each plugin registered with `ctx.cliAccounts` whose `prepare` is absent or whose `prepare.ready()` returns true; it stays when optional runtime context is off. The second line appears only with `cli.scripts`. The placeholders come from the registration's `cli`. Outside Windows the quoted values are JSON strings; on Windows they are PowerShell single-quoted strings, in which a single quote is doubled. While no plugin is registered, the Service adds nothing to a model request.
 
 ##### Runtime-context entry
 

@@ -12,12 +12,12 @@ export const toolParityExceptions: Record<ToolMode, readonly Exception[]> = {
   standard: [
     { tool: 'list_subagent_models', side: 'desktop',
       reason: 'Desktop enables subagent model discovery; SDK delegation inherits the caller model by default.' },
-    { tool: 'cordis_inspect', side: 'desktop',
-      reason: 'Web exposes inspection of its Host and connected Client runtime; the SDK profile does not compose the Cordis inspection providers.' },
   ],
   ptc: [
     { tool: 'list_subagent_models', side: 'desktop',
       reason: 'Desktop enables subagent model discovery; SDK delegation inherits the caller model by default.' },
+    { tool: 'cordis_inspect', side: 'sdk',
+      reason: 'The SDK profile composes runtime inspection for both executors; the Desktop PTC preset omits it.' },
     { tool: 'workflow', side: 'sdk',
       reason: 'The SDK PTC overlay changes only the executor so existing base workflow callers keep working; Desktop PTC uses run_code orchestration and omits the separate workflow surface.' },
   ],
