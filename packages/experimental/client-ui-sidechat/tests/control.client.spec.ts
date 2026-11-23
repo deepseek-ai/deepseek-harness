@@ -1,4 +1,4 @@
-/** `/side` forks at the newest durable event on screen, opens the child beside the on-screen Session, and reports failures once. */
+/** `/side` forks a started source at its newest durable event, opens the child beside the on-screen Session, and reports outcomes once. */
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionEventLikeEntry, SessionEventWindow } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -26,7 +26,12 @@ function transient(seq: number): SessionEventLikeEntry {
 
 interface ForkCall { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean | undefined; onCreated?: (id: SessionId) => void }
 
-function harness(window: SessionEventWindow | undefined, mounted: SessionId | null = MAIN) {
+const STARTED: SessionEventWindow = (() => {
+  const entries = [durable(0, { type: 'turn/start', data: { turn: 1 } })]
+  return { entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } }
+})()
+
+function harness(window: SessionEventWindow | null = STARTED, mounted: SessionId | null = MAIN) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   const forks: ForkCall[] = []
@@ -37,7 +42,7 @@ function harness(window: SessionEventWindow | undefined, mounted: SessionId | nu
     return Promise.resolve(CHILD)
   })
   ctx.provide('sessions', {
-    binding: (id: SessionId) => id === SOURCE && window !== undefined
+    binding: (id: SessionId) => id === SOURCE && window !== null
       ? { sessionId: id, eventSource: { getSnapshot: () => window, subscribe: () => () => {} } }
       : undefined,
     fork,
@@ -64,15 +69,22 @@ describe('SidechatControl.fork', () => {
     expect(opened).toEqual([{ main: MAIN, address: sidechatAddress(CHILD) }])
   })
 
-  it('leaves the cut to the Host when the source has no retained event window', async () => {
-    const { control, forks, opened } = harness(undefined)
+  it.each([
+    { name: 'no retained event window', window: null },
+    { name: 'only configuration events before the first Turn', window: ((): SessionEventWindow => {
+      const entries: SessionEventLikeEntry[] = [{ type: 'event', event: { type: 'approval/policy', seq: SessionSeq(0), time: 0, data: { policy: 'ask' } } }]
+      return { entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } }
+    })() },
+  ])('reports that there is nothing to branch with $name', ({ window }) => {
+    const { control, forks } = harness(window)
     control.fork(SOURCE)
-    await vi.waitFor(() => { expect(opened).toHaveLength(1) })
-    expect(forks).toEqual([{ sessionId: SOURCE, increaseTitle: true }])
+    expect(forks).toEqual([])
+    expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'noTurn' })
+    expect(control.pending.getSnapshot()).toEqual([])
   })
 
   it('accepts one in-flight creation per source and none without a mounted Session', async () => {
-    const h = harness(undefined)
+    const h = harness()
     const first = Promise.withResolvers<SessionId>()
     h.fork.mockReturnValueOnce(first.promise)
     h.control.fork(SOURCE)
@@ -81,13 +93,13 @@ describe('SidechatControl.fork', () => {
     expect(h.control.pending.getSnapshot()).toEqual([SOURCE])
     first.resolve(CHILD)
     await vi.waitFor(() => { expect(h.control.pending.getSnapshot()).toEqual([]) })
-    const none = harness(undefined, null)
+    const none = harness(STARTED, null)
     none.control.fork(SOURCE)
     expect(none.fork).not.toHaveBeenCalled()
   })
 
   it('reports a failed creation as a dismissable notice and logs it', async () => {
-    const h = harness(undefined)
+    const h = harness()
     h.fork.mockRejectedValueOnce(new Error('Connection lost'))
     h.control.fork(SOURCE)
     await vi.waitFor(() => { expect(h.control.notice.getSnapshot()).toEqual({ serial: 1, key: 'createFailed' }) })
@@ -101,7 +113,7 @@ describe('SidechatControl.fork', () => {
   })
 
   it('opens a created child whose title rename failed, without a notice', async () => {
-    const h = harness(undefined)
+    const h = harness()
     h.fork.mockImplementation(async (opts) => { opts.onCreated?.(CHILD); throw new Error('rename failed') })
     h.control.fork(SOURCE)
     await vi.waitFor(() => { expect(h.opened).toEqual([{ main: MAIN, address: sidechatAddress(CHILD) }]) })
@@ -110,7 +122,7 @@ describe('SidechatControl.fork', () => {
   })
 
   it('neither opens nor reports after disposal', async () => {
-    const h = harness(undefined)
+    const h = harness()
     const slow = Promise.withResolvers<SessionId>()
     h.fork.mockImplementation(async (opts) => { opts.onCreated?.(CHILD); return slow.promise })
     h.control.fork(SOURCE)
@@ -120,7 +132,7 @@ describe('SidechatControl.fork', () => {
     slow.resolve(CHILD)
     await vi.waitFor(() => { expect(h.control.pending.getSnapshot()).toEqual([]) })
     expect(h.opened).toEqual([])
-    const failing = harness(undefined)
+    const failing = harness()
     failing.fork.mockImplementation(async () => { failing.control.dispose(); throw new Error('late') })
     failing.control.fork(SOURCE)
     await vi.waitFor(() => { expect(failing.error).toHaveBeenCalled() })

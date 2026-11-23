@@ -6,16 +6,18 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sidechatAddress } from './resource.ts'
 
-/** Transient creation failure rendered by the root overlay; `serial` restarts the Toast for a repeated failure. */
-export interface SidechatNotice { readonly serial: number; readonly key: 'createFailed' }
+/** Transient outcome rendered by the root overlay; `serial` restarts the Toast for a repeated notice. */
+export interface SidechatNotice { readonly serial: number; readonly key: 'createFailed' | 'noTurn' }
 
 /**
- * Seq of the newest durable event in the Client window; live chunk rows carry no durable seq.
+ * Seq of the newest durable event in the Client window once the source has started a Turn; live chunk rows
+ * carry no durable seq, and a Session that only holds configuration events has nothing to branch.
  * @param window - event window of the retained source, or undefined when the source is not retained.
- * @returns the inclusive fork cut, or undefined when the window holds no durable event.
+ * @returns the inclusive fork cut, or undefined before the first `turn/start` or without a window.
  */
-function latestDurableSeq(window: SessionEventWindow | undefined): number | undefined {
-  return window?.entries.findLast(entry => entry.type === 'event')?.event.seq
+function latestTurnSeq(window: SessionEventWindow | undefined): number | undefined {
+  if (window === undefined || !window.entries.some(entry => entry.type === 'event' && entry.event.type === 'turn/start')) return undefined
+  return window.entries.findLast(entry => entry.type === 'event')?.event.seq
 }
 
 /** Forks at the newest event on screen and opens the child beside the Session that was on screen when the user asked. */
@@ -33,16 +35,20 @@ export class SidechatControl {
   /**
    * Fork at the newest durable event the Client has seen, including inside a running Turn, and open the
    * child in the right Sidebar of the Session on screen. Forking from a side conversation therefore adds
-   * the child beside it, not inside it. Without a retained event window the Host selects the latest
-   * completed Turn. A blank source forks its configuration events into an empty child, which behaves
-   * like a new Session. A source with a fork in flight and a disposed control are ignored.
+   * the child beside it, not inside it. A source whose window shows no `turn/start` yet reports that
+   * there is nothing to branch instead of forking. A source with a fork in flight and a disposed control
+   * are ignored.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {
     if (this.closed || this.pending.getSnapshot().includes(sessionId)) return
     const main = this.ctx.sidebarRight.mounted.getSnapshot()
     if (main === undefined) return
-    const atSeq = latestDurableSeq(this.ctx.sessions.binding(sessionId)?.eventSource.getSnapshot())
+    const atSeq = latestTurnSeq(this.ctx.sessions.binding(sessionId)?.eventSource.getSnapshot())
+    if (atSeq === undefined) {
+      this.notice.set({ serial: ++this.serial, key: 'noTurn' })
+      return
+    }
     void this.create(sessionId, atSeq, main)
   }
 
@@ -56,14 +62,12 @@ export class SidechatControl {
     this.notice.set(null)
   }
 
-  private async create(sessionId: SessionId, atSeq: number | undefined, main: SessionId): Promise<void> {
+  private async create(sessionId: SessionId, atSeq: number, main: SessionId): Promise<void> {
     this.pending.set([...this.pending.getSnapshot(), sessionId])
     let childId: SessionId | undefined
     try {
       // `onCreated` runs before the child title rename, so a rename failure still opens the created child.
-      await this.ctx.sessions.fork({
-        sessionId, ...(atSeq === undefined ? {} : { atSeq }), increaseTitle: true, onCreated: (id) => { childId = id },
-      })
+      await this.ctx.sessions.fork({ sessionId, atSeq, increaseTitle: true, onCreated: (id) => { childId = id } })
     } catch (error) {
       this.ctx.logger.error(childId === undefined ? 'Side conversation creation failed' : 'Side conversation title rename failed', error)
       if (childId === undefined && !this.closed) this.notice.set({ serial: ++this.serial, key: 'createFailed' })

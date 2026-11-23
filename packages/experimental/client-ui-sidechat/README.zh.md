@@ -33,7 +33,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-client-ui-sidechat
 
 [补丁](cordis.patch.yml)在 Web 各层之后加入 `ui-sidechat` 行；没有配置项。用 `dsh plugin --profile web remove @deepseek-ai/dsh-client-ui-sidechat` 移除；已创建的 Session 仍可通过普通历史访问。
 
-**/side** 出现在输入框的命令菜单中，并且始终作为命令被消费，因此输入的 `/side` 不会作为消息发给模型。它在浏览器已加载的最新持久事件处分支，包括正在运行的回合内部，此时 Host 用合成的 forked 工具结果关闭未完成的回合；没有已加载的事件窗口时，Host 从最后一个已完成的回合分支。来源正在创建侧栏对话时，第二次 `/side` 会被忽略直到第一次完成。空会话会把其配置事件分支为一个空的子对话，其行为等同新会话。侧栏对话作为 tab 在屏幕上对话的右侧栏中打开；在侧栏对话中执行 `/side` 会把新的子对话加到它旁边，而不是嵌套在里面。**分支到新对话**保持原有行为，并把主区域导航到子对话。
+**/side** 出现在输入框的命令菜单中，并且始终作为命令被消费，因此输入的 `/side` 不会作为消息发给模型。它在浏览器已加载的最新持久事件处分支，包括正在运行的回合内部，此时 Host 用合成的 forked 工具结果关闭未完成的回合。已加载事件中还没有 `turn/start` 的对话（包括只有配置事件的空会话）会提示暂无可分支的内容，而不会分支。来源正在创建侧栏对话时，第二次 `/side` 会被忽略直到第一次完成。侧栏对话作为 tab 在屏幕上对话的右侧栏中打开；在侧栏对话中执行 `/side` 会把新的子对话加到它旁边，而不是嵌套在里面。**分支到新对话**保持原有行为，并把主区域导航到子对话。
 
 侧栏 tab 以分支图标显示子对话的实时标题，并像 subagent 侧栏聊天一样渲染 Chat 视图、输入框和消息操作；没有 Session 头部和视图切换。子对话像普通 fork 一样获得带编号的标题，并出现在左侧栏列表其来源旁边，可以从那里作为主对话打开。关闭 tab 只关闭当前窗口的 tab；Session 及其历史仍保留在列表中。已保存的 tab 在重新加载后重新打开；无法再保留其 Session 的 tab 会就地显示失败信息。
 
@@ -47,7 +47,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-client-ui-sidechat
 <details>
 <summary>实现内部细节 — 点击展开</summary>
 
-[`src/index.ts`](src/index.ts) 是惰性的 Host 发现入口；插件不添加 Host 服务、Remote 或 Session 事件。[Client 入口](src/client/index.ts)通过 `commandUi` 注册 `/side` 命令、`shell.overlay` 中的根失败通知、`sidechat` 资源提供者、`sidechat` 侧栏 tab 类型及其正文和标题。[控制器](src/client/control.ts)从保留的来源窗口读取最新持久事件的序号，以该切点和 `increaseTitle` 调用 `sessions.fork`，然后对用户操作时屏幕上的 Session 调用 `sidebarRight.openResourceIn`；若该主 Session 的 store 已释放，打开操作不做任何事，子对话仍保留在列表中。[资源提供者](src/client/resource.ts)在 tab 生命周期内带 `conversation` facet 保留子 Session，并对格式错误的地址或获取失败产生失败帧。[tab 正文](src/client/views.tsx)通过 `SessionProvider` 绑定保留的引用，并以 `embedded` 变体、固定 Chat 视图且不显示 Hero 渲染 [`ui-conversation`](../../client/ui-conversation/README.zh.md) 的 `conversation.content` Factory。
+[`src/index.ts`](src/index.ts) 是惰性的 Host 发现入口；插件不添加 Host 服务、Remote 或 Session 事件。[Client 入口](src/client/index.ts)通过 `commandUi` 注册 `/side` 命令、`shell.overlay` 中的根失败通知、`sidechat` 资源提供者、`sidechat` 侧栏 tab 类型及其正文和标题。[控制器](src/client/control.ts)在保留的来源窗口出现 `turn/start` 后读取最新持久事件的序号，以该切点和 `increaseTitle` 调用 `sessions.fork`，然后对用户操作时屏幕上的 Session 调用 `sidebarRight.openResourceIn`；若该主 Session 的 store 已释放，打开操作不做任何事，子对话仍保留在列表中。[资源提供者](src/client/resource.ts)在 tab 生命周期内带 `conversation` facet 保留子 Session，并对格式错误的地址或获取失败产生失败帧。[tab 正文](src/client/views.tsx)通过 `SessionProvider` 绑定保留的引用，并以 `embedded` 变体、固定 Chat 视图且不显示 Hero 渲染 [`ui-conversation`](../../client/ui-conversation/README.zh.md) 的 `conversation.content` Factory。
 
 </details>
 
