@@ -41,7 +41,7 @@ import { DesktopUpdateSource } from './desktop-update-source.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection, type GeneralSectionInjected } from './GeneralSection.tsx'
 import { SettingsSectionView } from './SettingsSectionView.tsx'
-import { GeneralGroup, PermissionsGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup } from './GeneralGroup.tsx'
+import { GeneralGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup } from './GeneralGroup.tsx'
 import { CurrentVersionRow } from './CurrentVersionRow.tsx'
 import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperToolsRow.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
@@ -132,11 +132,6 @@ export function apply(ctx: ClientContext): void {
   // seat, and the nav label is a thunk the owner resolves per render — no
   // locale/change re-registration wiring.
   const t = ctx.locale.bind(NS)
-  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
-    name: 'settings.general.group', id: 'permissions', order: 0,
-    label: () => t('general.group.permissions'),
-    children: { 'settings.general.group.permissions.item': { kind: 'list', scope: 'root' } },
-  }, PermissionsGroup))
   ctx.slots.inject('settings.general.group', () => ctx.slots.register({
     name: 'settings.general.group', id: 'general', order: 10,
     label: () => t('general.group.general'),

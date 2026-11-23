@@ -14,7 +14,7 @@ export interface PerformanceUsageRowInjected extends PerformanceUsageInjected {
 
 /** Full Settings-row props. */
 export type PerformanceUsageRowProps =
-  PropsRuntime<'settings.general.item'>
+  PropsRuntime<'settings.general.group.display.item'>
   & PropsLocale<'chat'>
   & InjectFace<PerformanceUsageRowInjected>
 

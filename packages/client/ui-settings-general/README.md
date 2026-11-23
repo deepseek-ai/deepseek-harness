@@ -56,7 +56,6 @@ Register into an existing group’s item slot to choose its location:
 
 | Group ID | Order | Item slot |
 |---|---|---|
-| `permissions` | 0 | `settings.general.group.permissions.item` |
 | `general` | 10 | `settings.general.item` |
 | `display` | 20 | `settings.general.group.display.item` |
 | `interaction` | 30 | `settings.general.group.interaction.item` |
@@ -64,7 +63,7 @@ Register into an existing group’s item slot to choose its location:
 | `data` | 50 | `settings.general.group.data.item` |
 | `updates` | 60 | `settings.general.group.updates.item` |
 
-The default Preferences group retains language, appearance, fonts, and additive `settings.general.item` contributions. Chat experience contains Default session permission, the three work-details preferences (Work details, When to collapse work details, and Replies after collapse), Personalized recommendations, Show coding view, and performance/usage, in that order; Interaction contains busy-session sending, link opening, and shortcuts. Data management contains Session log preferences. The Permissions group remains an extension target with no built-in rows and stays hidden until a plugin supplies content. Item `id` and `order` apply within the chosen slot; no `groupId` option is needed.
+The default Preferences group retains language, appearance, fonts, and additive `settings.general.item` contributions. Chat experience contains Default session permission, the three work-details preferences (Work details, When to collapse work details, and Replies after collapse), Personalized recommendations, Show coding view, and performance/usage, in that order; Interaction contains busy-session sending, link opening, and shortcuts. Data management contains Session log preferences. Notifications stays hidden until a plugin supplies rows. Item `id` and `order` apply within the chosen slot; no `groupId` option is needed.
 
 A custom group declaration-merges its exact item key into `SlotMap`, registers its own component, and declares that item slot at runtime in `children`. The component renders the child outlet through `PropsRenderSlots`; the page supplies the surrounding header and card. Given `ctx` in your plugin’s `apply`, a namespace-bound `t`, and your module-level `AcmeRow` component, register:
 

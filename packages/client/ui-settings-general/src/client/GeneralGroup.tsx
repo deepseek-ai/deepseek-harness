@@ -9,11 +9,6 @@ export function GeneralGroup({ renderSlot }: GroupProps<'settings.general.item'>
   return renderSlot('settings.general.item', {})
 }
 
-/** @param props - authorized permissions renderer. @returns the permission preferences. */
-export function PermissionsGroup({ renderSlot }: GroupProps<'settings.general.group.permissions.item'>) {
-  return renderSlot('settings.general.group.permissions.item', {})
-}
-
 /** @param props - authorized display renderer. @returns the session display preferences. */
 export function DisplayGroup({ renderSlot }: GroupProps<'settings.general.group.display.item'>) {
   return renderSlot('settings.general.group.display.item', {})

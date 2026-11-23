@@ -46,8 +46,8 @@
 }
 
 /* Empty outlets remain mounted so late registrations can reveal the group. */
-.group:has(.card > [data-slot='settings.general.group']:empty),
-.group:has(.card > [data-slot='settings.general.group'] > [data-slot]:only-child:empty) {
+.group:has(.card > [data-slot='settings.general.group'] > [data-slot-item]:empty),
+.group:has(.card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot]:only-child:empty) {
   display: none;
 }
 

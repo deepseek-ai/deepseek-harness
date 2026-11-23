@@ -9,7 +9,7 @@ import { allowAllAccess, bindSnapshotSelector, RemoteError } from '@deepseek-ai/
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import {
-  GeneralGroup, PermissionsGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup,
+  GeneralGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup,
 } from '../src/client/GeneralGroup.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
@@ -133,7 +133,6 @@ describe('chrome content', () => {
 describe('General group bodies', () => {
   it.each([
     [GeneralGroup, 'settings.general.item'],
-    [PermissionsGroup, 'settings.general.group.permissions.item'],
     [DisplayGroup, 'settings.general.group.display.item'],
     [InteractionGroup, 'settings.general.group.interaction.item'],
     [NotificationsGroup, 'settings.general.group.notifications.item'],

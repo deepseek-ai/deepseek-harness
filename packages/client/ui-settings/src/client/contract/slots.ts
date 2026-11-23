@@ -103,8 +103,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * registrant owns content and any child item-slot declarations.
      */
     'settings.general.group': { kind: 'list'; scope: 'root'; owner: SettingsGeneralGroupOwnerProps }
-    /** Default permission preferences. */
-    'settings.general.group.permissions.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps }
     /** Session and work-step display preferences. */
     'settings.general.group.display.item': { kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps }
     /** Sending behavior, shortcuts, and link preferences. */
@@ -126,7 +124,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 /** Built-in group item slots; custom groups declare their own SlotMap keys. */
 export type SettingsGeneralGroupItemSlot =
-  | 'settings.general.group.permissions.item'
   | 'settings.general.group.display.item'
   | 'settings.general.group.interaction.item'
   | 'settings.general.group.notifications.item'

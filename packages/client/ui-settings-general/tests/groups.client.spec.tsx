@@ -35,9 +35,9 @@ afterAll(() => {
 const GROUP_OWNER = 'test-settings-group-owner'
 const ROW_OWNER = 'test-settings-group-rows'
 const CUSTOM_SLOT = 'settings.general.group.custom.item'
-const BUILTIN_IDS = ['permissions', 'general', 'display', 'interaction', 'notifications', 'data', 'updates']
-const ZH_LABELS = ['权限', '常规', '会话偏好', '交互与快捷键', '通知', '数据管理', '版本与更新']
-const EN_LABELS = ['Permissions', 'Preferences', 'Chat experience', 'Interaction and shortcuts', 'Notifications', 'Data management', 'Version and updates']
+const BUILTIN_IDS = ['general', 'display', 'interaction', 'notifications', 'data', 'updates']
+const ZH_LABELS = ['常规', '会话偏好', '交互与快捷键', '通知', '数据管理', '版本与更新']
+const EN_LABELS = ['Preferences', 'Chat experience', 'Interaction and shortcuts', 'Notifications', 'Data management', 'Version and updates']
 
 function CustomGroup({ renderSlot }: PropsRuntime<'settings.general.group'> & PropsRenderSlots<typeof CUSTOM_SLOT>) {
   return renderSlot(CUSTOM_SLOT, {})
@@ -114,10 +114,18 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
   expect(product.map(row => row.id)).toEqual(BUILTIN_IDS)
   expect(product.map(row => row.label)).toEqual(ZH_LABELS)
   expect(client.ctx.slots.entries('settings.general.group').map(row => row.options.order))
-    .toEqual([0, 10, 15, 20, 30, 40, 50, 60])
+    .toEqual([10, 15, 20, 30, 40, 50, 60])
+  // A registrant that omits both order and label still projects a first-position row.
+  let removeBare = () => {}
+  act(() => {
+    removeBare = client.ctx.slots.register({ name: 'settings.general.group', id: 'bare' } as never, NullRow)
+  })
+  expect(groups.getSnapshot()[0]).toEqual({ id: 'bare', label: '' })
+  act(() => { removeBare() })
+  expect(groups.getSnapshot().some(row => row.id === 'bare')).toBe(false)
   expect(client.ctx.slots.entries('settings.general.group').filter(row => row.options.id !== 'custom')
     .map(row => Object.keys(row.children ?? {}))).toEqual([
-    ['settings.general.group.permissions.item'], ['settings.general.item'],
+    ['settings.general.item'],
     ['settings.general.group.display.item'], ['settings.general.group.interaction.item'],
     ['settings.general.group.notifications.item'], ['settings.general.group.data.item'],
     ['settings.general.group.updates.item'],
@@ -127,7 +135,7 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
     { id: 'composer-enter', order: 0 }, { id: 'link-opening', order: 10 }, { id: 'shortcuts', order: 20 },
   ])
   expect(groups.getSnapshot().map(row => row.id))
-    .toEqual(['permissions', 'general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])
+    .toEqual(['general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])
   expect(groups.getSnapshot()).toBe(groups.getSnapshot())
   expect(client.ctx.slots.spec(CUSTOM_SLOT)).toEqual({ kind: 'list', scope: 'root' })
   expect(client.ctx.slots.entries(CUSTOM_SLOT).map(row => row.options.id)).toEqual(['custom-child', 'null-child'])
@@ -139,7 +147,7 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
   expect(within(screen.getByRole('region', { name: '常规' })).getByText('Legacy general preference')).toBeTruthy()
   expect(within(screen.getByRole('region', { name: '会话偏好' })).getByText('Targeted display preference')).toBeTruthy()
   expect(screen.getAllByRole('heading', { level: 3 }).map(row => row.textContent))
-    .toEqual(['权限', '常规', '扩展偏好', '会话偏好', '交互与快捷键', '通知', '数据管理', '版本与更新'])
+    .toEqual(['常规', '扩展偏好', '会话偏好', '交互与快捷键', '通知', '数据管理', '版本与更新'])
 
   let removeShadow = () => {}
   act(() => {
@@ -152,7 +160,7 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
     expect(client.ctx.slots.entries('settings.general.group').filter(row => row.options.id === 'custom')).toHaveLength(2)
     expect(groups.getSnapshot().filter(row => row.id === 'custom')).toEqual([{ id: 'custom', label: '扩展偏好' }])
     expect(groups.getSnapshot().map(row => row.id))
-      .toEqual(['permissions', 'general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])
+      .toEqual(['general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])
     expect(screen.getAllByRole('region', { name: '扩展偏好' })).toHaveLength(1)
     expect(screen.queryByRole('region', { name: 'Shadowed preferences' })).toBeNull()
     expect(screen.getAllByText('Custom child preference')).toHaveLength(1)
@@ -178,7 +186,7 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
     await client.flush()
     expect(client.ctx.slots.entries(CUSTOM_SLOT).map(row => row.options.id)).toEqual(['custom-child', 'null-child'])
     expect(screen.getAllByText('Custom child preference')).toHaveLength(1)
-    expect(groups.getSnapshot().map(row => row.id)).toEqual(['permissions', 'general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])
+    expect(groups.getSnapshot().map(row => row.id)).toEqual(['general', 'custom', 'display', 'interaction', 'notifications', 'data', 'updates'])
 
     await client.unload(GROUP_OWNER)
     await client.flush()
