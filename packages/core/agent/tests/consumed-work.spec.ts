@@ -171,6 +171,8 @@ describe('foldConsumedWork', () => {
 
     expect(state).toMatchObject(foldConsumedWork(session.snapshotEvents()))
     expect(state).toMatchObject({ droppedUnrun: true, open: 2 })
+    expect([...state.stepped]).toEqual([])
+    expect([...state.claimed]).toEqual([])
     expect(foldConsumedWork([])).toEqual({ droppedUnrun: false })
   })
 })

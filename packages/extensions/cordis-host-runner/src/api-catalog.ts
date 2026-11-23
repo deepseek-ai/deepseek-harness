@@ -208,7 +208,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve an identity without starting an Agent.',
         parameters: [{ name: 'id', description: 'Explicit preset or the current default.' }],
         returns: 'Current metadata, including failure when activation failed.',
-        throws: ['when `id` is omitted and no default is configured.'],
+        throws: ['RemoteError `agent-preset/no-default` when `id` is omitted and no default is configured.'],
       },
       {
         signature: '@Remote(\'read\') readDocument(agentPreset: string): Promise<AgentPresetDocument>',

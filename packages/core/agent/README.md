@@ -118,7 +118,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 | [`src/types.ts`](src/types.ts) | `AgentOptions`, cancellation causes, and inbox projection vocabulary |
 | [`src/dispatch.ts`](src/dispatch.ts) | `agentEvents` fused dispatcher and `assembleContextFor(agent)` |
 | [`src/model-selection.ts`](src/model-selection.ts) | `AgentModel`, its durable projection, and `installModelSelection` switch notices |
-| [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)` and its per-event step `foldConsumedWorkForEvent(state, event)`: what the log's consumed work became |
+| [`src/consumed-work.ts`](src/consumed-work.ts) | `foldConsumedWork(events)` reports the outcome of consumed work. Its incremental form `foldConsumedWorkForEvent(state, event)` retains turn numbers only until those turns close |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `turn` family of the Workspace registry's archive admission: a running turn and its user-cause cancel |
 
 ### Registry and lifecycle
