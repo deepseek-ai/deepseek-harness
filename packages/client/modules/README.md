@@ -86,7 +86,14 @@ Executing a plugin bundle registers its factory and optional `meta` without call
 
 ### Main execution environment
 
-The module system constructs its own Main Realm around `loadBundle`, or the existing page script transport when no carrier hook is supplied. Default boot still prefetches the immediate tier before creating Loader entries; no Realm registry or isolation configuration is required. `dispose()` stops accepting scripts and waits for pending carrier operations without cancelling them. The optional [Realm registry](../script-realm/README.md) and [iframe provider](../script-realm-iframe/README.md) do not participate in this default path.
+The module system constructs its own Main Realm around `loadBundle`, or the existing page script transport when no carrier hook is supplied. Default boot still prefetches the immediate tier before creating Loader entries; no Realm registry or isolation configuration is required. `dispose()` stops accepting scripts, disposes isolated Realms, and waits for pending carrier operations without cancelling them. The default Web roster loads the [Realm registry](../script-realm/README.md) and [iframe provider](../script-realm-iframe/README.md) as ordinary entries; boot waits for them only when a package is script-isolated, and they create no frame otherwise.
+
+<a id="script-isolated-packages"></a>
+### Script-isolated packages
+
+Set `__unstable_enable_client_isolation: script` on a Client package’s Loader entry, or use [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.md). Omission or `null` keeps its scripts in the Main Realm. An unsupported mode or script isolation on a stage-one (`immediately`) row fails composition. The Host publishes the mode in the graph row’s `isolation`; editing it replaces the Client package without restarting its Host entry. `ctx.modules.isolationOf(id)` reads the current mode.
+
+The package’s `client.js` and package-local chunks load from their own revisioned URLs, outside all startup batches, in one iframe per package. They register with the page’s `__ModuleLoader__`, so `require` returns the same React, Cordis and library instances. Boot and later graph updates activate the registry and its `iframe` provider before creating isolated entries. An isolated load fails if the registry or provider is missing. Code invalidation disposes the package’s Realm; live replacement retains it until teardown of the old runtime.
 
 ### Incremental composition
 
@@ -114,6 +121,7 @@ The host contributes structured index rows that inject, into `<head>`: the `wind
 | [`src/assets.ts`](src/assets.ts) | Package-asset media types, export, content revision, revisioned file name, and browser reference shared by the build preset, the asset route, and gates |
 | [`src/client/index.ts`](src/client/index.ts) | Browser half: bootstrap export, `ctx.modules` enrollment |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`: load/materialize/invalidate machinery |
+| [`src/client/isolated-realms.ts`](src/client/isolated-realms.ts) | One Script Realm per script-isolated package, its creation and disposal |
 | [`src/client/entries.ts`](src/client/entries.ts) | Page entry reconciliation, retries, code replacement, and synced Config delivery |
 | [`src/client/synced-config.ts`](src/client/synced-config.ts) | The `SyncedConfigRef` implementation and the per-package synced Config object |
 | [`src/config-projection.ts`](src/config-projection.ts) | Host projection of volatile Config fields with secrets removed |
@@ -162,6 +170,7 @@ These limits define what the module system does not do. They are current package
 - **Lazy delivery retains requested bodies** — the Host holds each bundle and lazy response plan; a script or map body remains cached after its first `GET`, and HMR additionally retains one prior startup generation. Memory grows only for response bodies that clients request while preserving one-generation race tolerance.
 - **An unrequested prior-generation map reads the current map file** — combo revisions track executable bundles, not debug artifacts. If HMR rebuilds a map before the retained prior URL receives its first map `GET`, that response uses the current authored map with the prior bundle offsets; requesting the map before the rebuild fixes that URL's response.
 - **A manifest edit alone is not observed** — the Host reads a package manifest when its Loader entry starts or restarts; editing only `package.json` takes effect at the next entry restart or Host restart. The asset route resolves through Node's package configuration cache, so a `./assets/*` export edited in place takes effect only after boot HMR expires that package or the Host restarts.
+- **Script isolation is an unstable test switch** — a Realm is a same-origin iframe, not a security boundary: bare `window`, `document`, timers, and event targets in an isolated bundle are the iframe's own, so page-level listeners, selection, and `instanceof` checks against page constructors do not observe the main document.
 - **Desktop re-reads package assets on every display** — the Desktop forwarder rewrites every `/plugins/` cache header to `no-store`, so the immutable asset headers do not reach its browser cache.
 
 <a id="dev-note"></a>

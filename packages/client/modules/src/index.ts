@@ -41,19 +41,32 @@ import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
-import { exactPackageSpecifier, parseDshClient, stripClientSuffix } from './client/manifest.ts'
+import { exactPackageSpecifier, isolatesScript, parseClientIsolation, parseDshClient, stripClientSuffix } from './client/manifest.ts'
 import { SyncedConfigPublisher } from './config-sync.ts'
-import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease } from './client/manifest.ts'
+import type {
+  ClientIsolation, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
+} from './client/manifest.ts'
 
 export { stripClientSuffix } from './client/manifest.ts'
 export type {
-  BootManifest, BootModuleRow, BootPluginRow, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
+  BootManifest, BootModuleRow, BootPluginRow, ClientIsolation, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
 } from './client/manifest.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** The web plugin table (provided by the client-modules node half). */
     clientModules: ClientModuleRegistry
+  }
+}
+
+declare module '@deepseek-ai/cordis-plugin-loader' {
+  interface EntryOptions {
+    /**
+     * Execute this Client package's scripts in a dedicated iframe Realm instead of a startup batch.
+     * Omission or null keeps the Main Realm. An unsupported mode or a stage-one (`immediately`) row
+     * with script isolation fails composition. This is an unstable test switch, not a product setting.
+     */
+    __unstable_enable_client_isolation?: ClientIsolation | null
   }
 }
 
@@ -93,6 +106,8 @@ interface ResolvedPkgMeta {
 interface ClientPackageSource extends ResolvedPkgMeta {
   /** Loader specifier from the active row. */
   loaderName: string
+  /** Isolation requested by the active row's Loader entry. */
+  isolation: ClientIsolation | undefined
   /** Resolution base of the config tree that owns the row. */
   baseUrl: string
   /** Stable source identity and contribution key. */
@@ -529,7 +544,7 @@ function buildBatch(
 }
 
 /** Graph row for one bundle rev (the reference carries the rev as its cache-busting query). */
-function graphRow(id: string, rev: string, fields: WebBootRowFields): WebBootEntry {
+function graphRow(id: string, rev: string, fields: WebBootRowFields, isolation: ClientIsolation | undefined): WebBootEntry {
   return {
     id,
     url: comboReference([id], rev),
@@ -537,6 +552,7 @@ function graphRow(id: string, rev: string, fields: WebBootRowFields): WebBootEnt
     ...(fields.inject !== undefined ? { inject: fields.inject } : {}),
     ...(fields.immediately ? { immediately: true } : {}),
     ...(fields.external.length > 0 ? { external: fields.external } : {}),
+    ...(isolation === undefined ? {} : { isolation }),
   }
 }
 
@@ -680,9 +696,7 @@ export class ClientModuleRegistry extends Service {
     // Subscribe before seeding so a fiber arriving mid-activation lands in the
     // same dirty set (Set idempotence makes the overlap harmless). An entry-less
     // fiber is a child plugin or a manual mount — never a loader row; O(1) drop.
-    ctx.on('internal/plugin', (fiber) => {
-      const entryName = fiber.entry?.options.name
-      if (entryName === undefined) return
+    const markDirty = (entryName: string): void => {
       this.dirty.add(entryName)
       if (this.flushQueued) return
       this.flushQueued = true
@@ -690,7 +704,13 @@ export class ClientModuleRegistry extends Service {
         this.flushQueued = false
         this.flush((err) => { ctx.logger.warn(err) })
       })
+    }
+    ctx.on('internal/plugin', (fiber) => {
+      const entryName = fiber.entry?.options.name
+      if (entryName !== undefined) markDirty(entryName)
     })
+    // An option edit outside `config` patches the running fiber without restarting it.
+    ctx.on('loader/partial-dispose', (entry) => { markDirty(entry.options.name) })
 
     // Activation pass: the initial scan IS the incremental path over the
     // current entries, flushed synchronously (nothing async between subscribe,
@@ -800,7 +820,7 @@ export class ClientModuleRegistry extends Service {
     if (rev === record.entry.rev) return rev
     const bundle = readFileSync(record.meta.clientPath)
     record.baseline = baseline
-    record.entry = graphRow(id, rev, record.meta)
+    record.entry = graphRow(id, rev, record.meta, record.entry.isolation)
     record.bundle = bundle
     this.composed = this.compose()
     for (const notify of this.rebuildListeners) {
@@ -846,8 +866,9 @@ export class ClientModuleRegistry extends Service {
       .map(id => this.table.get(id))
       .filter((record): record is WebPluginRecord => record !== undefined)
     const bootstrapIds = new Set(bootstrap.map(record => record.entry.id))
+    // A script-isolated row executes in its own Realm, never inside a Main Realm batch.
     const application = entries
-      .filter(entry => !bootstrapIds.has(entry.id))
+      .filter(entry => !bootstrapIds.has(entry.id) && !isolatesScript(entry.isolation))
       .map(entry => this.table.get(entry.id))
       .filter((record): record is WebPluginRecord => record !== undefined)
     const artifacts: BatchArtifact[] = []
@@ -1101,7 +1122,15 @@ export class ClientModuleRegistry extends Service {
     }
     const resolved = this.resolveMeta(loaderName, baseUrl)
     if (resolved === null) return undefined
-    return { ...resolved, loaderName, baseUrl, sourceKey: this.sourceKey(loaderName, baseUrl) }
+    const isolation = parseClientIsolation(
+      `loader entry ${JSON.stringify(entry.options.id)} (${resolved.packageName})`,
+      '__unstable_enable_client_isolation',
+      entry.options.__unstable_enable_client_isolation,
+    )
+    if (isolatesScript(isolation) && resolved.meta.immediately) {
+      throw new Error(`client-modules: ${resolved.packageName} is a stage-one (immediately) row and cannot isolate its scripts`)
+    }
+    return { ...resolved, loaderName, isolation, baseUrl, sourceKey: this.sourceKey(loaderName, baseUrl) }
   }
 
   private reconcilePackage(packageName: string): boolean {
@@ -1122,7 +1151,7 @@ export class ClientModuleRegistry extends Service {
     const { clientPath } = source.meta
     // Startup and HMR share revisions so unchanged artifacts survive a server restart.
     const baseline = this.readClientBundle(packageName, clientPath, () => this.captureArtifactBaseline(clientPath))
-    const entry = graphRow(packageName, artifactRevision(baseline), source.meta)
+    const entry = graphRow(packageName, artifactRevision(baseline), source.meta, source.isolation)
     const current = this.table.get(packageName)
     // A restart that finds the same manifest and bundle metadata leaves the published graph as it is, unread.
     const unchanged = current?.sourceKey === source.sourceKey

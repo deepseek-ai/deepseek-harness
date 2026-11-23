@@ -78,6 +78,8 @@
     "@deepseek-ai/dsh-client-modules": "workspace:*",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
     "@deepseek-ai/dsh-client-resources": "workspace:*",
+    "@deepseek-ai/dsh-client-script-realm": "workspace:*",
+    "@deepseek-ai/dsh-client-script-realm-iframe": "workspace:*",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@deepseek-ai/dsh-client-ui-account-notifications": "workspace:*",
     "@deepseek-ai/dsh-client-ui-agent-preset": "workspace:*",

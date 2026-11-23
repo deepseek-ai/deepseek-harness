@@ -7285,6 +7285,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
   },
   {
+    name: 'ClientIsolation',
+    declaration: 'export type ClientIsolation = \'script\';',
+  },
+  {
     name: 'CliOperationControl',
     declaration: 'export interface CliOperationControl<Account, Phase extends string, Command extends string> {\n    stage(phase: Phase | \'checking\'): void;\n    offer(url: string): boolean;\n    run(command: Command, args: readonly string[], signal: AbortSignal, options?: CliRunOptions): Promise<CliCommandResult>;\n    publish(account: Account): void;\n}',
   },
@@ -12410,7 +12414,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootEntry',
-    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n}',
+    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n    isolation?: ClientIsolation;\n}',
   },
   {
     name: 'WebBootGraph',

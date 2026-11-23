@@ -3248,6 +3248,12 @@ importers:
       '@deepseek-ai/dsh-client-resources':
         specifier: workspace:*
         version: link:../../client/resources
+      '@deepseek-ai/dsh-client-script-realm':
+        specifier: workspace:*
+        version: link:../../client/script-realm
+      '@deepseek-ai/dsh-client-script-realm-iframe':
+        specifier: workspace:*
+        version: link:../../client/script-realm-iframe
       '@deepseek-ai/dsh-client-shortcuts':
         specifier: workspace:*
         version: link:../../client/shortcuts

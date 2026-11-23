@@ -2,8 +2,10 @@
 import type { FiberState } from '@deepseek-ai/cordis'
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { parseBootManifest, readRelease } from './manifest.ts'
-import type { BootManifest, ClientModuleLoader } from './manifest.ts'
+import type {} from '@deepseek-ai/dsh-client-script-realm/client'
+import { isolatesScript, parseBootManifest, readRelease } from './manifest.ts'
+import type { BootManifest, BootModuleRow, ClientModuleLoader } from './manifest.ts'
+import { ISOLATED_REALM_PROVIDER_ROWS } from './isolated-realms.ts'
 import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
 import { notifySubscribers } from './notify.ts'
 import { tearDownEntryFiber } from './entry-lifecycle.ts'
@@ -31,9 +33,27 @@ interface ModuleIndex {
 const ACTIVE = 2 as FiberState.ACTIVE
 const FAILED = 3 as FiberState.FAILED
 
-/** Revisions and requests identify desired code; URLs only select its immutable delivery resource. */
+/** Realm provider, registered by {@link ISOLATED_REALM_PROVIDER_ROWS}, that script-isolated packages execute in. */
+const ISOLATED_REALM_PROVIDER = 'iframe'
+
+/**
+ * Order graph rows so the Realm provider entries precede every other entry.
+ * @param rows - Rows in graph order.
+ * @returns The provider rows, then the remaining rows, each group in graph order.
+ */
+function realmProvidersFirst<Row extends { readonly id: string }>(rows: readonly Row[]): Row[] {
+  const provides = (row: Row): boolean => ISOLATED_REALM_PROVIDER_ROWS.includes(row.id)
+  return [...rows.filter(provides), ...rows.filter(row => !provides(row))]
+}
+
+/** Revisions, requests, and isolation identify desired code; URLs only select its immutable delivery resource. */
 function entryTargets(manifest: BootManifest): string {
-  return JSON.stringify(manifest.modules.map(row => [row.id, row.rev, row.inject, row.external]))
+  return JSON.stringify(manifest.modules.map(row => [row.id, row.rev, row.inject, row.external, row.isolation]))
+}
+
+/** The running code of one entry: its artifact revision executed in the environment its isolation selects. */
+function runningTarget(row: Pick<BootModuleRow, 'rev' | 'isolation'>): string {
+  return JSON.stringify([row.rev, row.isolation ?? null])
 }
 
 /** Manages only entries created from the Host manifest; other Loader contributors retain ownership. */
@@ -54,6 +74,7 @@ export class ClientEntries {
   private readonly managed = new Map<string, Entry>()
   /** Latest synced values per package that has appeared in the graph, and the Config object of its current activation. */
   private readonly synced = new Map<string, SyncedConfigEntry>()
+  /** {@link runningTarget} of each managed entry's current runtime. */
   private readonly revisions = new Map<string, string>()
   private loader: Loader | undefined
   private queue: Promise<void> = Promise.resolve()
@@ -121,12 +142,26 @@ export class ClientEntries {
       this.generation++
       return this.queue
     }, 'client-modules: entry reconciliation')
+    // The registry is read when a Realm is created: its entries are active before a script-isolated entry loads.
+    this.modules.useIsolatedRealms(async (options) => {
+      const registry = loader.ctx.get('scriptRealms')
+      if (registry === undefined) {
+        throw new Error(`client-modules: script isolation needs the ${ISOLATED_REALM_PROVIDER_ROWS.join(' and ')} entries, and the Realm registry is not active`)
+      }
+      return registry.create(ISOLATED_REALM_PROVIDER, options)
+    })
     return this.enqueue(async () => {
-      await Promise.all(this.desired.plugins.map(async ({ id }) => {
+      const create = async ({ id }: { readonly id: string }): Promise<void> => {
         await this.create(loader, id).catch((error: unknown) => { loader.ctx.logger.error(error) })
-      }))
+      }
+      // A script-isolated bundle executes in a Realm that the provider entries supply once they are active.
+      if (this.desired.modules.some(row => isolatesScript(row.isolation))) {
+        await Promise.all(this.desired.plugins.filter(row => ISOLATED_REALM_PROVIDER_ROWS.includes(row.id)).map(create))
+        await loader.await()
+      }
+      await Promise.all(this.desired.plugins.filter(row => !this.managed.has(row.id)).map(create))
       await loader.await()
-      for (const row of this.modules.manifest.modules) this.revisions.set(row.id, row.rev)
+      for (const row of this.modules.manifest.modules) this.revisions.set(row.id, runningTarget(row))
     })
   }
 
@@ -180,9 +215,9 @@ export class ClientEntries {
         await this.reconcile(this.generation)
         return
       }
-      if (this.revisions.get(id) === rev) return
+      if (this.revisions.get(id) === runningTarget(desired)) return
       this.publish({ syncing: true, failures: this.snapshot.failures.filter(failure => failure.id !== id) })
-      await this.replace(entry, id, rev, this.generation)
+      await this.replace(entry, desired, this.generation)
       this.publish({ syncing: false, failures: this.snapshot.failures })
     }, id)
   }
@@ -247,7 +282,8 @@ export class ClientEntries {
     }
   }
 
-  private async replace(entry: Entry, id: string, rev: string, generation: number): Promise<void> {
+  private async replace(entry: Entry, row: BootModuleRow, generation: number): Promise<void> {
+    const { id, rev } = row
     this.index.invalidateForReplacement(id, rev)
     await this.modules.prefetch(id)
     if (!this.current(generation)) return
@@ -260,7 +296,7 @@ export class ClientEntries {
     await entry.refresh()
     await entry.fiber?.await()
     if (entry.fiber === undefined) throw new Error(`client-modules: ${id} import failed (see console)`)
-    this.revisions.set(id, rev)
+    this.revisions.set(id, runningTarget(row))
   }
 
   private async reconcile(generation: number): Promise<void> {
@@ -282,9 +318,16 @@ export class ClientEntries {
       // Removed fibers no longer appear in Loader.getTasks().
       while (fiber?.inertia !== undefined) await fiber.inertia
     }
-    for (const row of manifest.modules) {
+    const needsProviders = manifest.modules.some(row => isolatesScript(row.isolation))
+    let providersSettled = !needsProviders
+    for (const row of needsProviders ? realmProvidersFirst(manifest.modules) : manifest.modules) {
       if (!this.current(generation)) break
       try {
+        // Even a main-page entry can request a script-isolated dependency during prefetch.
+        if (!providersSettled && !ISOLATED_REALM_PROVIDER_ROWS.includes(row.id)) {
+          await loader.await()
+          providersSettled = true
+        }
         const entry = this.managed.get(row.id)
         if (entry === undefined) {
           await this.modules.prefetch(row.id)
@@ -292,11 +335,11 @@ export class ClientEntries {
           await this.modules.import(row.id, '', {})
           if (!this.current(generation)) break
           await this.create(loader, row.id)
-          this.revisions.set(row.id, row.rev)
-        } else if (this.revisions.get(row.id) !== row.rev) {
-          await this.replace(entry, row.id, row.rev, generation)
+          this.revisions.set(row.id, runningTarget(row))
+        } else if (this.revisions.get(row.id) !== runningTarget(row)) {
+          await this.replace(entry, row, generation)
         } else if (entry.fiber === undefined) {
-          await this.replace(entry, row.id, row.rev, generation)
+          await this.replace(entry, row, generation)
         } else if (entry.fiber.state === FAILED) {
           // A retry with unchanged config is not a configuration change to persist.
           await entry.fiber.update(entry.options.config, true)

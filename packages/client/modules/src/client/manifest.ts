@@ -34,7 +34,7 @@ import type {
   DshClientManifest, ClientModuleMetaFactory,
   DshClientModuleManifest,
 } from '@deepseek-ai/dsh-package-manifest'
-import type { ScriptRealm } from '@deepseek-ai/dsh-client-script-realm/client'
+import type { ScriptRealm, ScriptRealmCreateOptions } from '@deepseek-ai/dsh-client-script-realm/client'
 export type { ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientEntries } from './entries.ts'
 import type { ClientModuleSystem } from './system.ts'
@@ -44,6 +44,34 @@ declare module '@deepseek-ai/cordis' {
     /** The client module system the web shell builds at boot (provided by the `./client` wrapper plugin). */
     modules: ClientModuleLoader
   }
+}
+
+/** Unstable test switch: execute one package's scripts in a dedicated Script Realm. */
+export type ClientIsolation = 'script'
+
+/**
+ * Validate an optional isolation value read from a Loader entry or from the boot wire.
+ * @param subject - Diagnostic prefix naming the entry or wire row.
+ * @param field - Field name as it appears in the diagnostic.
+ * @param value - Raw field value; `undefined` and `null` mean no isolation.
+ * @returns The validated isolation, or undefined when the field is absent.
+ * @throws {Error} when the value is present but is not a {@link ClientIsolation}.
+ */
+export function parseClientIsolation(subject: string, field: string, value: unknown): ClientIsolation | undefined {
+  if (value === undefined || value === null) return undefined
+  if (value !== 'script') {
+    throw new Error(`client-modules: ${subject} ${field} must be "script", received ${JSON.stringify(value)}`)
+  }
+  return value
+}
+
+/**
+ * Whether an isolation value moves the package's scripts out of the Main Realm.
+ * @param isolation - Validated isolation, or undefined for none.
+ * @returns true when the package requests script isolation.
+ */
+export function isolatesScript(isolation: ClientIsolation | undefined): boolean {
+  return isolation === 'script'
 }
 
 /**
@@ -72,6 +100,8 @@ export interface WebBootEntry {
   external?: string[]
   /** Browser-synced values of the plugin's top-level volatile Config fields, secrets removed; omitted when it has none. */
   config?: SyncedConfigValues
+  /** Unstable isolation switch copied from the row's Loader entry; omitted when the package is not isolated. */
+  isolation?: ClientIsolation
 }
 
 /** Initial scheduling phase for one revisioned combo script. */
@@ -109,7 +139,10 @@ export interface WebBootGraph {
    * unrelated and remains owned by fiber service waiting.
    */
   entries: WebBootEntry[]
-  /** Initial combo descriptors; every entry belongs to exactly one descriptor. */
+  /**
+   * Initial combo descriptors. Every entry whose isolation excludes `script` belongs to exactly one
+   * descriptor; a script-isolated entry belongs to none and loads from its own {@link WebBootEntry.url}.
+   */
   batches: WebBootBatch[]
 }
 
@@ -127,6 +160,8 @@ export interface BootModuleRow {
   inject: string[]
   /** Module specifiers this row requests from the module table ([] when the wire omits them). */
   external: string[]
+  /** Isolation requested for this package; absent when the wire omits it. */
+  isolation?: ClientIsolation
 }
 
 /** The cordis-plugin view of one boot row: what entry composition needs (optional wire fields normalized). */
@@ -273,12 +308,17 @@ export function parseBootManifest(wire: unknown): BootManifest {
     if (row.immediately !== undefined && typeof row.immediately !== 'boolean') {
       throw new Error(`client-modules: boot manifest entry ${where} immediately must be a boolean`)
     }
+    const isolation = parseClientIsolation(subject, 'isolation', row.isolation)
+    if (row.immediately === true && isolatesScript(isolation)) {
+      throw new Error(`client-modules: boot manifest entry ${where} cannot isolate scripts of a stage-one row`)
+    }
     moduleFields.push({
       id: row.id,
       url: row.url,
       rev: row.rev,
       inject: inject === undefined ? [] : [...inject],
       external: external === undefined ? [] : [...external],
+      ...(isolation === undefined ? {} : { isolation }),
     })
     if (row.config !== undefined && (typeof row.config !== 'object' || row.config === null || Array.isArray(row.config))) {
       throw new Error(`client-modules: boot manifest entry ${where} config must be an object`)
@@ -292,6 +332,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
   }
 
   const entryIds = new Set(moduleFields.map(row => row.id))
+  const scriptIsolated = new Set(moduleFields.filter(row => isolatesScript(row.isolation)).map(row => row.id))
   const initialUrls = new Map<string, string>()
   const batchUrls = new Set<string>()
   for (const value of graph.batches as unknown[]) {
@@ -318,6 +359,9 @@ export function parseBootManifest(wire: unknown): BootManifest {
       if (!entryIds.has(id)) {
         throw new Error(`client-modules: boot manifest ${phase} batch names unknown entry "${id}"`)
       }
+      if (scriptIsolated.has(id)) {
+        throw new Error(`client-modules: boot manifest ${phase} batch names script-isolated entry "${id}"`)
+      }
       if (initialUrls.has(id)) {
         throw new Error(`client-modules: boot manifest entry "${id}" belongs to more than one batch`)
       }
@@ -325,6 +369,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
     }
   }
   const modules = moduleFields.map((row): BootModuleRow => {
+    if (scriptIsolated.has(row.id)) return { ...row, initialUrl: row.url }
     const initialUrl = initialUrls.get(row.id)
     if (initialUrl === undefined) {
       throw new Error(`client-modules: boot manifest entry "${row.id}" belongs to no initial-load batch`)
@@ -357,6 +402,9 @@ export function readRelease(wire: unknown): WebBootRelease | undefined {
   if (typeof wire !== 'object' || wire === null) return undefined
   return decodeRelease((wire as Record<string, unknown>).release) ?? undefined
 }
+
+/** Create one dedicated Script Realm for a script-isolated package; the module system owns and disposes the result. */
+export type IsolatedRealmFactory = (options: ScriptRealmCreateOptions) => Promise<ScriptRealm>
 
 /** Registration face of one shared browser artifact manifest. */
 export type ClientBundleRegistration = DshClientModuleManifest
@@ -450,7 +498,19 @@ export interface ClientModuleLoader {
   loadCache: Map<string, ClientModuleRecord>
   /** Initial execution environment, fixed when the module system is constructed. */
   readonly mainRealm: Pick<ScriptRealm, 'id' | 'execute' | 'dispose'>
-  /** Stop accepting scripts and await pending carrier operations. */
+  /**
+   * Isolation the current graph requests for one package.
+   * @param id - Graph entry name, or its `/client` specifier.
+   * @returns The row's isolation, or undefined when the package is not isolated or not a graph row.
+   */
+  isolationOf(id: string): ClientIsolation | undefined
+  /**
+   * Install the factory for script-isolated packages. Entry startup installs one that reads the Realm
+   * registry; a script-isolated load that starts while none is installed fails.
+   * @param factory - Factory creating one dedicated Realm per package.
+   */
+  useIsolatedRealms(factory: IsolatedRealmFactory): void
+  /** Stop accepting scripts, dispose isolated Realms, and await pending carrier operations. */
   dispose(): Promise<void>
   /**
    * Internal contract consumed by the vendored Loader's `tree.import`. Resolves

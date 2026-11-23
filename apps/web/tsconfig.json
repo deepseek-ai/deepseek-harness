@@ -294,7 +294,8 @@
     "tests/notion-oauth-fixture.ts",
     "tests/tencent-docs-connection.e2e.ts",
     "tests/tencent-docs-oauth-fixture.ts",
-    "tests/feishu-connection.e2e.ts"
+    "tests/feishu-connection.e2e.ts",
+    "tests/client-isolation.e2e.ts"
   ],
   "references": [
     { "path": "../../packages/experimental/auto-review" },
