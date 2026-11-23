@@ -70,6 +70,14 @@ The slot declaration fixes two independent axes.
 
 `priority` is a shadowing rank for `single`, `list`, `keyed`, and `hoc` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list or hoc `id`, or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
 
+<a id="list-item-roots"></a>
+
+### List item roots
+
+A `list` outlet (`[data-slot="key"]`) has one direct `[data-slot-item]` child for the winning registration of each selected `id`, even when `only` selects a single `id`. The attribute has an empty value; it does not identify the registration or the render instance. The outlet and its item roots are `div`s by default or `span`s when the list declares `inline: true`. Both use `display: contents` and have no layout box of their own.
+
+A winner that returns `null` leaves an empty item. Text and all local nodes of a React Fragment stay inside one item; portal content stays at its destination. Counting item roots does not tell you how many controls are visible. If the list has no registrations or `only` matches no `id`, the owner's `fallback` renders directly inside the outlet (nothing if omitted). If all registrations for a matching `id` have failed, its `[data-slot-error="key"]` placeholder is a direct child of the outlet instead of an item.
+
 <a id="hoc-layers"></a>
 
 ### Hoc layers

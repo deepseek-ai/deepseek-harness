@@ -70,6 +70,14 @@ Slot 声明固定两个相互独立的维度。
 
 对于 `single`、`list`、`keyed` 和 `hoc` cell，`priority` 是遮蔽优先级；对于 `chain`，它是选举顺序。数值越小越先运行或渲染。普通增量贡献应选用新的 list 或 hoc `id`，或 keyed `key`；复用已有 cell 表示有意替换其展示。
 
+<a id="list-item-roots"></a>
+
+### list 行根
+
+`list` 出口（`[data-slot="key"]`）为每个选中 `id` 的胜出注册项渲染一个直接子元素 `[data-slot-item]`，用 `only` 只选一个 `id` 时也一样。该属性的值为空，不标识注册项或渲染实例。出口和行根默认都用 `div`；list 声明 `inline: true` 时都用 `span`。两者都使用 `display: contents`，自身没有布局盒。
+
+胜出组件返回 `null` 时会留下一个空行根。文本和 React Fragment 在本地渲染的所有节点都在同一个行根内；通过 Portal 渲染的内容仍在目标容器内。行根数量并不代表可见控件数。list 没有注册项或 `only` 未匹配任何 `id` 时，owner 的 `fallback` 直接渲染在出口内（省略时不渲染内容）。若匹配的 `id` 下所有注册项都已渲染失败，`[data-slot-error="key"]` 占位元素会取代行根，成为出口的直接子元素。
+
 <a id="hoc-layers"></a>
 
 ### Hoc 层

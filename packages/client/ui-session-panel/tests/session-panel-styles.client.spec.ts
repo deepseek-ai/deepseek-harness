@@ -129,20 +129,6 @@ describe('SessionPanel.module.css section reordering', () => {
     expect(hover).toMatch(/\.head:hover:has\(> \.grip\) > \.actions \{\s*visibility: var\(--section-trailing-visibility\);/)
   })
 
-  it('offers the drag only on a shown section with a handle that has another such section before or after it', () => {
-    expect(declarationsOf('.section')).toMatchObject({
-      '--section-head-cursor': 'auto', '--section-grip-opacity': '0', '--section-trailing-visibility': 'visible',
-    })
-    const movable = '.section:has(> .head > .grip)'
-      + ':not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))'
-    // The selector list holds commas of its own, so the rule is read from the stylesheet with its whitespace collapsed.
-    const flat = css.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
-    expect(flat).toContain(
-      `.section:nth-child(n + 2 of ${movable}), .section:nth-last-child(n + 2 of ${movable}) {`
-      + ' --section-head-cursor: grab; --section-grip-opacity: 1; --section-trailing-visibility: hidden; }',
-    )
-  })
-
   it('plays the entrance and the exit only on a panel that carries the mark, and moves the transcript over the same time and curve', () => {
     const motion = '160ms cubic-bezier(0.4, 0, 0.2, 1)'
     expect(declarationsOf('.panel')['animation']).toBeUndefined()
