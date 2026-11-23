@@ -31,6 +31,7 @@ function assertVoiceActions(value: Record<string, unknown>): asserts value is Re
   assert(typeof value.prepare === 'function')
   assert(typeof value.cancelPreparation === 'function')
   assert(typeof value.transcribe === 'function')
+  assert(typeof value.signIn === 'function')
   assert(typeof value.hooks === 'object' && value.hooks !== null)
 }
 
@@ -80,6 +81,28 @@ it('starts without the Plugins page navigation and follows its presence', async 
     expect(b.openBundle).toHaveBeenCalledWith('@deepseek-ai/dsh-experimental-voice-input-bundle')
     await navigation.dispose()
     expect(actions.hooks.pluginNavigation.getSnapshot()).toBe(false)
+  } finally {
+    await b.ctx.fiber.dispose()
+  }
+})
+
+it('follows the account sign-in entry and opens it only while present', async () => {
+  hostApply()
+  const b = await fixture()
+  try {
+    await b.ctx.plugin({ inject: [...inject], apply: ctx => mountVoiceInput(ctx, REMOTE) })
+    const actions = b.ctx.slots.entries('conversation.input.activity').find(item => item.component === VoiceInput)!.inject!()
+    assertVoiceActions(actions)
+    expect(actions.hooks.accountSignIn.getSnapshot()).toBe(false)
+    expect(() => { actions.signIn() }).not.toThrow()
+    const open = vi.fn()
+    const account = b.ctx.plugin({ apply: (ctx: Context) => { ctx.provide('accountSignIn', { open } as never) } })
+    await account
+    await vi.waitFor(() => { expect(actions.hooks.accountSignIn.getSnapshot()).toBe(true) })
+    actions.signIn()
+    expect(open).toHaveBeenCalledOnce()
+    await account.dispose()
+    expect(actions.hooks.accountSignIn.getSnapshot()).toBe(false)
   } finally {
     await b.ctx.fiber.dispose()
   }

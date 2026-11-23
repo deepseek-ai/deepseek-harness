@@ -5,9 +5,20 @@ import z from '@deepseek-ai/schemastery'
 // entry and `loader/volatile-update` merges.
 import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
-import type { SpeechPreparationOptions, SpeechProvider, SpeechProviderId, SpeechProviderInfo, SpeechSnapshot, SpeechSelectionPatch, SpeechRequest, SpeechSpec, Transcript } from './types.ts'
+import type {
+  SpeechPreparationOptions, SpeechProvider, SpeechProviderId, SpeechProviderInfo, SpeechSelection, SpeechSnapshot, SpeechSelectionPatch,
+  SpeechPreparationState, SpeechRequest, SpeechSpec, Transcript,
+} from './types.ts'
 
 export type * from './types.ts'
+export { SpeechTranscriptionError } from './failure.ts'
+
+/** Preference value that follows `autoOrder`; no provider may register it as an id. */
+const AUTO = 'auto'
+/** Phases in which a recording starts without preparation. */
+const RECORDABLE: ReadonlySet<SpeechPreparationState['phase']> = new Set(['ready', 'standby', 'waking'])
+/** Phases that refuse recordings until the user acts or the failure is resolved. */
+const REFUSING: ReadonlySet<SpeechPreparationState['phase']> = new Set(['unavailable', 'failed'])
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -18,8 +29,10 @@ declare module '@deepseek-ai/cordis' {
 
 /** Live selection read before a transcription starts; `configure()` writes it through the profile. */
 export interface Config {
-  /** Registered provider selected when the caller omits an id. */
+  /** Registered provider selected when the caller omits an id, or `auto` to follow `autoOrder`. */
   defaultProvider: Volatile<string>
+  /** Provider ids considered by automatic selection, in preference order; required while `defaultProvider` is `auto`. */
+  autoOrder: string[]
   /** Provider language hint selected when the caller omits one. */
   language: Volatile<string>
 }
@@ -35,6 +48,7 @@ interface Registration {
 export default class SpeechToText extends Service {
   static Config = z.object({
     defaultProvider: z.string().min(1).required().volatile(),
+    autoOrder: z.array(z.string().min(1)).default([]),
     language: z.string().min(1).default('auto').volatile(),
   })
 
@@ -46,6 +60,10 @@ export default class SpeechToText extends Service {
 
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'speechToText')
+    if (config.autoOrder.includes(AUTO)) throw new Error('Speech autoOrder lists provider ids; `auto` is reserved')
+    if (config.defaultProvider.get() === AUTO && config.autoOrder.length === 0) {
+      throw new Error('Automatic speech provider selection requires a non-empty autoOrder')
+    }
     this.entryId = ctx.fiber.entry?.options.id
     ctx.on('loader/volatile-update', () => { this.changed() })
     ctx.effect(() => async () => {
@@ -62,6 +80,8 @@ export default class SpeechToText extends Service {
    */
   register(provider: SpeechProvider): () => Promise<void> {
     this.lifetime.signal.throwIfAborted()
+    if (provider.info.id === AUTO) throw new Error('Speech provider id `auto` is reserved for automatic selection')
+    if (!provider.info.languages.includes(AUTO)) throw new Error(`Speech provider ${provider.info.id} must accept the language hint \`auto\``)
     if (this.providers.has(provider.info.id)) throw new Error(`Speech provider already registered: ${provider.info.id}`)
     const registration: Registration = { provider, lifetime: new AbortController(), pending: new Set(),
       unsubscribe: provider.preparation?.subscribe(() => { this.changed() }) ?? (() => {}) }
@@ -123,31 +143,63 @@ export default class SpeechToText extends Service {
   snapshot(): SpeechSnapshot {
     return { providers: [...this.providers.values()].map(({ provider }) => ({ ...provider.info,
       preparation: provider.preparation?.snapshot() ?? { phase: 'ready' },
-    })), selection: { providerId: this.config.defaultProvider.get() as SpeechProviderId, language: this.config.language.get() } }
+    })), selection: this.selection() }
   }
 
   /**
-   * Persist changed selection fields into this plugin's profile entry; the resulting language must be accepted by the selected provider.
-   * @param patch - explicit provider or language changes.
+   * Apply the saved preference: an explicit id is kept even while unregistered; `auto` takes the first registered
+   * `autoOrder` provider that records without preparation, else the first one that is neither unavailable nor failed,
+   * else the first registered one so its state explains the refusal. A saved language no registered provider lists is
+   * reported as `auto`.
+   */
+  private selection(): SpeechSelection {
+    const language = this.savedLanguage(), choice = this.config.defaultProvider.get()
+    if (choice !== AUTO) return { mode: 'explicit', providerId: choice as SpeechProviderId, language }
+    const registered = this.config.autoOrder.flatMap(id => this.providers.get(id as SpeechProviderId)?.provider ?? [])
+    const phase = (provider: SpeechProvider) => provider.preparation?.snapshot().phase ?? 'ready'
+    const chosen = registered.find(provider => RECORDABLE.has(phase(provider)))
+      ?? registered.find(provider => !REFUSING.has(phase(provider))) ?? registered[0]
+    return { mode: 'auto', providerId: chosen?.info.id ?? this.config.autoOrder[0] as SpeechProviderId, language }
+  }
+
+  /** The saved language hint, or `auto` when no registered provider lists it, as after its provider is removed. */
+  private savedLanguage(): string {
+    const language = this.config.language.get()
+    for (const { provider } of this.providers.values()) if (provider.info.languages.includes(language)) return language
+    return AUTO
+  }
+
+  /**
+   * Persist changed selection fields into this plugin's profile entry. The language must be listed by at least one
+   * registered provider; a provider that does not list it receives `auto` when it transcribes.
+   * @param patch - explicit provider, `auto`, or language changes.
    * @returns after the profile write and the live update it applies.
    */
   async configure(patch: SpeechSelectionPatch): Promise<void> {
     const settings = this.ctx.get('settings')
     const entry = this.entryId
     if (settings === undefined || entry === undefined) throw new Error('Speech selection requires the settings service and a profile entry')
-    const id = patch.providerId ?? this.config.defaultProvider.get() as SpeechProviderId
-    this.selectedProvider(id, patch.language ?? this.config.language.get())
+    const choice = patch.providerId ?? this.config.defaultProvider.get()
+    if (choice === AUTO) {
+      if (this.config.autoOrder.length === 0) throw new Error('Automatic speech provider selection requires a non-empty autoOrder')
+    } else {
+      this.registered(choice as SpeechProviderId)
+    }
+    this.knownLanguage(patch.language ?? this.config.language.get())
     await settings.update(entry, { ...patch.providerId === undefined ? {} : { defaultProvider: patch.providerId },
       ...patch.language === undefined ? {} : { language: patch.language } })
   }
 
-  private selectedProvider(id: SpeechProviderId, language: string): SpeechProvider {
+  private registered(id: SpeechProviderId): SpeechProvider {
     const registration = this.providers.get(id)
     if (!registration) throw new Error(`Speech provider is unavailable: ${id}`)
-    if (!registration.provider.info.languages.includes(language)) {
-      throw new Error(`Speech provider ${id} does not support language: ${language}`)
-    }
     return registration.provider
+  }
+
+  /** Reject a hint that no registered provider lists; such a value cannot come from any offered choice. */
+  private knownLanguage(language: string): string {
+    for (const { provider } of this.providers.values()) if (provider.info.languages.includes(language)) return language
+    throw new Error(`No registered speech provider supports language: ${language}`)
   }
 
   /**
@@ -173,14 +225,19 @@ export default class SpeechToText extends Service {
   }
 
   /**
-   * Apply composition defaults and capture the selected provider. Missing providers and unsupported languages fail explicitly.
+   * Apply the saved selection and capture the provider. Missing providers and requested hints no registered provider
+   * lists fail explicitly; a saved hint no registered provider lists becomes `auto`. The captured provider receives the
+   * hint when it lists it and `auto` otherwise.
    * @param request - complete recording and optional selection.
    * @returns provider-pinned input for transcribe().
    */
   resolve(request: SpeechRequest): SpeechSpec {
-    const id = request.providerId ?? this.config.defaultProvider.get() as SpeechProviderId
-    const language = request.language ?? this.config.language.get()
-    return { provider: this.selectedProvider(id, language), audio: request.audio, language }
+    if (request.providerId === undefined && this.config.defaultProvider.get() === AUTO && this.config.autoOrder.length === 0) {
+      throw new Error('Automatic speech provider selection requires a non-empty autoOrder')
+    }
+    const provider = this.registered(request.providerId ?? this.selection().providerId)
+    const language = request.language === undefined ? this.savedLanguage() : this.knownLanguage(request.language)
+    return { provider, audio: request.audio, language: provider.info.languages.includes(language) ? language : AUTO }
   }
 
   /**

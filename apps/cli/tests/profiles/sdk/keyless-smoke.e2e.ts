@@ -797,3 +797,69 @@ it.each(['standard', 'ptc'] as const)('lists and loads the packaged dsh-doc skil
   const exit = await child
   expect(exit.exitCode, stderr).toBe(0)
 })
+
+it('inspects the Host runtime through cordis_inspect in the SDK profile', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'sdk-cordis-inspect-'))
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const requests: { messages: { content: { type: string; tool_use_id?: string; content?: unknown; is_error?: boolean }[] }[] }[] = []
+  const toolUses = [
+    { type: 'tool_use', id: 'inspect-directory', name: 'cordis_inspect', input: {} },
+    { type: 'tool_use', id: 'inspect-version', name: 'cordis_inspect', input: { query: { platform: 'host', provider: 'Runtime', method: 'getVersion' } } },
+  ] as const
+  const server = createServer((request, response) => {
+    let body = ''
+    request.setEncoding('utf8').on('data', (chunk: string) => { body += chunk })
+    request.on('end', () => {
+      requests.push(JSON.parse(body) as typeof requests[number])
+      const toolUse = toolUses[requests.length - 1]
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.end(toolUse === undefined ? messagesResponse({ type: 'text', text: 'done' }, 'end_turn') : messagesResponse(toolUse, 'tool_use'))
+    })
+  })
+  onTestFinished(() => new Promise<void>((resolve) => { server.close(() => { resolve() }) }))
+  await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
+  const address = server.address()
+  if (address === null || typeof address === 'string') throw new Error('model fixture did not bind')
+  const launch = resolveExampleLaunch({
+    srcBin: fileURLToPath(new URL('../../../src/bin.ts', import.meta.url)), mode: 'lib',
+    configArgs: ['--profile', 'sdk'],
+    env: { DSH_HOME: join(root, 'home'), DSH_PRIMARY_RUNTIME: '', DSH_PERMISSION_MODE: 'danger-full-access', DSH_TELEMETRY_DISABLED: '1',
+      DEEPSEEK_API_KEY: 'local-fixture', DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}` },
+  })
+  const child = execa(launch.command, launch.args, { cwd: repoRoot, env: launch.env, timeout: 60_000, reject: false })
+  onTestFinished(async () => { child.kill('SIGKILL'); await child })
+  let buffer = '', stderr = ''
+  const lines: string[] = []
+  child.stdout.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString()
+    const parts = buffer.split('\n')
+    buffer = parts.pop() ?? ''
+    lines.push(...parts)
+  })
+  child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+  const send = (id: number, method: string, params?: object) => {
+    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`)
+    return waitForLine(lines, value => value.id === id, () => stderr)
+  }
+  expect(await send(1, 'initialize', { cwd: root, provider: 'deepseek-official', model: 'deepseek-v4-pro' })).toHaveProperty('result')
+  await send(2, 'session/prompt', { sessionId: 'cordis-inspect', contentBlocks: [{ type: 'text', text: 'Which DSH version is running?' }] })
+  await waitForLine(lines, (value) => {
+    const params = value.params as { sessionId?: string; event?: { type?: string } } | undefined
+    return value.method === 'session.event' && params?.sessionId === 'cordis-inspect' && params.event?.type === 'turn/end'
+  }, () => stderr)
+  expect(requests).toHaveLength(toolUses.length + 1)
+  const results = requests.at(-1)!.messages.flatMap(message => message.content).filter(block => block.type === 'tool_result')
+  const result = (id: string) => {
+    const block = results.find(candidate => candidate.tool_use_id === id)
+    expect(block?.is_error, JSON.stringify(block)).not.toBe(true)
+    return JSON.stringify(block?.content)
+  }
+  const directory = result('inspect-directory')
+  for (const provider of ['Service', 'Event', 'Config', 'Runtime', 'Tool']) expect(directory).toContain(provider)
+  expect(directory).not.toContain('Slots')
+  const { version } = JSON.parse(await readFile(join(repoRoot, 'packages/boot/app-boot/package.json'), 'utf8')) as { version: string }
+  expect(result('inspect-version')).toContain(version)
+  await send(3, 'shutdown')
+  const exit = await child
+  expect(exit.exitCode, stderr).toBe(0)
+})

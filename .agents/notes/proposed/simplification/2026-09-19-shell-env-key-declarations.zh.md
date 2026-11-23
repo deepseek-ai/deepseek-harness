@@ -8,7 +8,7 @@ Status: proposed
 
 [shell 环境注册表](../../../../packages/shell/shell-env/src/index.ts) 要求每个声明变量提供描述，并暴露 `list()` 枚举它。运行时收集仅使用贡献方身份、声明键和解析后的值。[Bash](../../../../packages/shell/tool-bash/src/index.ts) 与 [PowerShell](../../../../packages/shell/tool-pwsh/src/index.ts) 调用 `collect`；[Web 组合包](../../../../packages/bundle/web-app/src/index.ts) 贡献 `DSH_WEB_URL`。搜索未发现 `list()` 的固定生产调用方或其描述的消费方。
 
-但该方法可通过 [Cordis 检查提供方](../../../../packages/extensions/tool-cordis/src/providers.ts) 发现，因此这是显式 API 收缩，而非删除不可达代码。[最初的身份与日志位置记录](../../archived/feature/2026-07-10-agent-session-identity-and-log-location.md) 预期它会服务于诊断以及未来提示/UI 消费方。当前 TODO 与 [README 限制](../../../../packages/shell/shell-env/README.zh.md) 仍描述一个未包含内置变量的不完整目录。
+但该方法可通过 [Cordis 检查提供方](../../../../packages/extensions/cordis-host-runner/src/inspect-providers.ts) 发现，因此这是显式 API 收缩，而非删除不可达代码。[最初的身份与日志位置记录](../../archived/feature/2026-07-10-agent-session-identity-and-log-location.md) 预期它会服务于诊断以及未来提示/UI 消费方。当前 TODO 与 [README 限制](../../../../packages/shell/shell-env/README.zh.md) 仍描述一个未包含内置变量的不完整目录。
 
 ## 提案
 

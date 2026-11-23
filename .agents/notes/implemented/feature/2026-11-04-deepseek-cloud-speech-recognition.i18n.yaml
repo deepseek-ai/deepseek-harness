@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-04-deepseek-cloud-speech-recognition.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-04-deepseek-cloud-speech-recognition.md
+/agent-note-deepseek-cloud-speech-recognition-with-automatic-selection:
+  en: 8207b0d1f3d81458
+  zh: 431b2eddb379d59b
+/agent-note-deepseek-cloud-speech-recognition-with-automatic-selection/problem:
+  en: a38fcacabfddbfd4
+  zh: 765e6e4de7992e7d
+/agent-note-deepseek-cloud-speech-recognition-with-automatic-selection/decision:
+  en: 3b485e7faa64addd
+  zh: 81c24f7fe6332584
+/agent-note-deepseek-cloud-speech-recognition-with-automatic-selection/alternatives-considered:
+  en: 6400c368f8246bed
+  zh: 939773aac1846523
+/agent-note-deepseek-cloud-speech-recognition-with-automatic-selection/consequences:
+  en: 78370588e3f3d7c8
+  zh: a2008336742dd8f2

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-cordis-host-runner` 提供运行时检查，并为程序调用方和浏览器控件保留进程内动态定义。Host 部分在 `node:vm` 中运行；浏览器部分使用 Client runner 和审批 UI。定义在重启后消失。Agent 通过 `tool-cordis` 发现 API，通过 Plugin Manager 安装持久化 bundle；没有模型工具创建动态定义。
+`dsh-cordis-host-runner` 提供运行时检查注册表及其一方 Host 提供方，并为程序调用方和浏览器控件保留进程内动态定义。Host 部分在 `node:vm` 中运行；浏览器部分使用 Client runner 和审批 UI。定义在重启后消失。Agent 通过 `tool-cordis` 发现 API，通过 Plugin Manager 安装持久化 bundle；没有模型工具创建动态定义。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-需要检查注册表或程序侧动态包生命周期时挂载此插件。浏览器生命周期消费者还需要 Client runner 和 UI 包。内置 Creator 流程使用已安装 bundle，不使用此定义注册表。
+需要检查注册表及其 Host 提供方，或需要程序侧动态包生命周期时，在 Host 组合中挂载一次此插件。浏览器生命周期消费者还需要 Client runner 和 UI 包。内置 Creator 流程使用已安装 bundle，不使用此定义注册表。
 
 ### 最小配置
 
@@ -41,6 +41,21 @@ kind: "package-reference"
 | `clientInspectTimeoutMs` | `10000` | 等待有效 Client 检查响应的最长时间；1 到 2147483647 毫秒之间的整数 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cordis-host-runner)是每个受支持字段的穷尽式真源。
+
+<a id="host-inspect-providers"></a>
+### Host 检查提供方
+
+挂载时，runner 按以下顺序向其注册表注册五个 Host 提供方，并在卸载时撤销。Agent 通过 [`cordis_inspect`](../tool-cordis/README.zh.md) 查询它们。
+
+| 提供方 | 方法 | 返回内容 |
+|---|---|---|
+| `Service` | `listService` | 来自生成目录的 Host Service 精简目录，或单个 Service 的方法及其引用的类型声明 |
+| `Event` | `listEvents` | 来自生成目录的 Host Event 精简目录，或单个 Event 的分发模式、签名与参数 |
+| `Config` | `listConfigs` | 运行中的 Loader entry 目录，或单个 entry 投影后的 Config JSON Schema |
+| `Runtime` | `getVersion` | `{ version }`：当前运行的 DSH 版本 |
+| `Tool` | `listTools` | 发起请求的 Agent 可调用的全部工具 schema |
+
+`Config` 提供方分页列出运行中的 Loader entry（`offset`、最多 100 的 `limit`、可选的精确插件 `name`；`total` 与 `nextOffset` 界定遍历），每个 entry 带 Loader id、patch 所寻址的树内 id 及其 Config 状态（`schema`、`absent`、`unsupported`、group 与 include 载体为 `tree`、禁用、未导入或已销毁的 entry 为 `inactive`），并把单个 entry 的原生 Config 投影为自包含的 JSON Schema 文档，同时在 profile 包查找能解析时给出该 entry 的 `packageDir`，即包 README 与构建产物 `lib/` 所在目录。`Runtime` 返回的版本是插件 `engines.dsh` 范围和 DSH peer 依赖所比对的当前运行 DSH 的精确版本。在没有 Loader 的 Host 上的 `Config` 查询以 `ToolContextUnavailableError` 失败；`Config` 分页字段格式错误时以 `ToolArgsError` 失败；未知 entry id 以 `InspectError` `INSPECT_TARGET_NOT_FOUND` 失败。
 
 <a id="client-inspection"></a>
 ### Client 检查
@@ -91,6 +106,9 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 | [`src/guard.ts`](src/guard.ts) | 注册边界：schema 规范化、沙箱 `ctx` façade、插件形态检查 |
 | [`src/lifecycle.ts`](src/lifecycle.ts) | 在 `cordis-dynamic` fiber 组下启动 host 半 |
 | [`src/inspect-registry.ts`](src/inspect-registry.ts) | `ctx.cordisInspect` 注册表：host 提供方加镜像的 client manifest（元数据清单） |
+| [`src/inspect-providers.ts`](src/inspect-providers.ts) | runner 注册的一方 Host 提供方 |
+| [`src/inspect-config.ts`](src/inspect-config.ts) | `Config.listConfigs`：运行中的 Loader entry 目录与 Config JSON Schema 投影 |
+| [`src/api-catalog.ts`](src/api-catalog.ts) | 由 `pnpm run gen-cordis-catalog` 生成的 Host Service、Event 与类型目录 |
 | [`src/types.ts`](src/types.ts) | `dynamicCordisRunner` remote namespace 与转发事件共享的 client 安全载荷形态 |
 
 ### 一次 run 的流程
@@ -106,7 +124,7 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 
 当包级约定不够用时阅读以下页面。它们从 runner 逐步进入调用它的工具、应答它的浏览器半与生成的表面。
 
-- [工具包](../tool-cordis/README.zh.md)——使用其检查注册表的只读工具。
+- [工具包](../tool-cordis/README.zh.md)——查询其检查注册表的只读工具。
 - [Client runner](../cordis-client-runner/README.zh.md)——应答运行请求并装载浏览器半代码的浏览器半。
 - [UI 包](../ui-cordis/README.zh.md)——用户批准并操作运行的面板。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cordis-host-runner)——每个受支持配置字段。
@@ -122,7 +140,7 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 
 #### 模型看到的内容
 
-本包不注册工具或提示。程序侧 `run` 调用和浏览器控件可向所属会话发送结果与诊断；停止和移除操作注入用户消息。内置模型工具无法创建或更新动态定义。
+本包不注册工具或提示；其 Host 检查提供方回答工具包所描述的 [`cordis_inspect`](../tool-cordis/README.zh.md#model-experience) 查询。程序侧 `run` 调用和浏览器控件可向所属会话发送结果与诊断；停止和移除操作注入用户消息。内置模型工具无法创建或更新动态定义。
 
 #### Token 影响
 
@@ -145,6 +163,7 @@ runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `D
 - **`vmTimeoutMs` 只约束同步求值**——async 的 host 半函数体会逃出该上限，这与工具集基于协作的信任立场一致。
 - **陈旧成功的拒绝会让请求继续挂起**——作答页面点名的 revision 已被注册表越过时，该结论会被拒绝（`accepted: false`），请求保持可作答，直到另一个页面作答或调用方取消；浏览器半不读这个 ack。
 - **运行播报不携带服务声明**——浏览器半声明的 `inject` 是从它在页面里返回的插件上读出的，因此 `cordis/request-run` 只携带元数据，绝无代码或服务清单。
+- **`Config.listConfigs` 只遍历 profile 的 Loader 树**——Agent preset 的 `plugins` 列表挂载在独立的 preset 树中，所以只出现在 preset 声明里的插件不会被列出，除非 profile 树也挂载了它。
 - **`zod` 是生成的 Typert 契约面的运行时依赖，不是 `src` 的依赖**——`./typert` 与 `./remote` 解析到未打包的 `lib` 文件，其中带有裸的 `import { z } from 'zod'`，所以即使 `src` 里没有任何代码 import zod，本包也要声明它。
 
 <a id="dev-note"></a>

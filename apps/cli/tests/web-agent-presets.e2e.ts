@@ -1143,10 +1143,11 @@ describe('a user preset declared from the shipped cordis rows', () => {
   }
 
   it('mounts beside the shipped `cordis` preset and reads the shared Host inspect providers', async () => {
-    // The Host inspect providers are one process-global set registered by the
-    // host composition (`@deepseek-ai/dsh-tool-cordis/host`); each preset's
-    // `tool-cordis` row only registers the tools. Before that split the copy
-    // failed to mount: its row re-registered provider "Service".
+    // The Host inspect providers are one process-global set that the host
+    // composition's `cordis-host-runner` row registers; each preset's
+    // `tool-cordis` row only registers the tools. The registry rejects a
+    // duplicate provider id, so a preset row that registered providers would
+    // fail to mount beside another preset.
     const root = await mkdtemp(join(tmpdir(), 'dsh-copied-preset-'))
     const cordis = composeEntries([webPatches('test')]).find(row => row.id === 'preset-cordis')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
     const copyCtx = await bootWeb(root, [{ insert: [{

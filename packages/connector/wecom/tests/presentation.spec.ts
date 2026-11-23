@@ -1,4 +1,4 @@
-/** The WeCom section offers each state's next step, the guide download rows, and failure guidance, in every shipped language. */
+/** The WeCom section offers each state's next step, the guides' download step, and failure guidance, in every shipped language. */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { rm } from 'node:fs/promises'
@@ -36,7 +36,7 @@ afterAll(async () => {
 
 const presentAccount = (view: WecomState): ConnectorAccountDisplay => page.present(view)
 
-const unauthorized = { state: 'unauthorized', skills: 'installed' } as const
+const unauthorized = { state: 'unauthorized' } as const
 
 it('offers the next step for each state', () => {
   let shown = presentAccount({ account: unauthorized })
@@ -61,18 +61,18 @@ it('offers the next step for each state', () => {
   shown = presentAccount({ account: unauthorized, operation: { id: OP, kind: 'connect', phase: 'checking', cancellable: false } })
   expect(shown).toMatchObject({ status: say('step.connecting'), buttons: [] })
 
-  shown = presentAccount({ account: { state: 'authorized', botId: 'bot-1', skills: 'installed' } })
+  shown = presentAccount({ account: { state: 'authorized', botId: 'bot-1' } })
   expect(shown).toMatchObject({ phase: 'connected', status: say('status.connected'), badge: say('badge.connected'), detail: say('detail.connected') })
   expect(shown.buttons).toMatchObject([{
     label: say('action.rebind'), command: CONNECT,
     confirm: { title: say('rebind.title'), body: say('rebind.body'), label: say('action.rebind') },
   }])
   expect(shown.notes).toMatchObject([{ text: { zh: '已绑定机器人：bot-1', en: 'Bound bot: bot-1' } }])
-  expect(presentAccount({ account: { state: 'authorized', skills: 'installed' } }).notes).toEqual([])
+  expect(presentAccount({ account: { state: 'authorized' } }).notes).toEqual([])
 
   for (const view of [
-    { account: { state: 'authorized', skills: 'installed' }, operation: { id: OP, kind: 'check', phase: 'checking', cancellable: false } },
-    { account: { state: 'unchecked', skills: 'installed' } },
+    { account: { state: 'authorized' }, operation: { id: OP, kind: 'check', phase: 'checking', cancellable: false } },
+    { account: { state: 'unchecked' } },
   ] as const satisfies readonly WecomState[]) {
     shown = presentAccount(view)
     expect(shown).toMatchObject({ phase: 'checking', status: say('status.checking'), buttons: [] })
@@ -87,24 +87,30 @@ it('reports a failed connection with its diagnostic items, and no failure for a 
   shown = presentAccount({ account: unauthorized, result: { id: OP, kind: 'connect', outcome: 'failed' } })
   expect(shown.failure).toMatchObject({ text: say('failed') })
   expect(shown.failure).not.toHaveProperty('details')
-  shown = presentAccount({ account: { state: 'authorized', skills: 'installed' }, result: { id: OP, kind: 'connect', outcome: 'failed' } })
+  shown = presentAccount({ account: { state: 'authorized' }, result: { id: OP, kind: 'connect', outcome: 'failed' } })
   expect(shown.failure).toBeDefined()
   expect(presentAccount({ account: unauthorized, result: { id: OP, kind: 'connect', outcome: 'cancelled' } }).failure).toBeUndefined()
 })
 
 it('retries an unreadable authorization by checking again', () => {
   const shown = presentAccount({
-    account: { state: 'unchecked', skills: 'installed' }, result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 1 } },
+    account: { state: 'unchecked' }, result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 1 } },
   })
   expect(shown).toMatchObject({ phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.unavailable') })
   expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
   expect(shown.failure?.details).toEqual(['auth-status', 'exit 1'])
 })
 
-it('reports guides that are downloading, and retries a failed download by checking again', () => {
-  expect(presentAccount({ account: { state: 'authorized', skills: 'downloading' } }).notes).toMatchObject([{ text: say('skills.downloading') }])
-  const [note] = presentAccount({ account: { state: 'authorized', skills: 'failed' } }).notes
-  expect(note).toMatchObject({ text: say('skills.failed'), button: { label: say('action.retry'), command: CHECK } })
+it('shows the guides\' download with its cancel, and retries one that did not finish by checking again', () => {
+  let shown = presentAccount({ account: { state: 'unchecked' }, operation: { id: OP, kind: 'check', phase: 'downloading', cancellable: true } })
+  expect(shown).toMatchObject({ phase: 'checking', status: say('step.downloading'), notes: [] })
+  expect(shown.buttons).toMatchObject([{ label: say('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' }])
+
+  shown = presentAccount({ account: { state: 'not-installed' }, result: { id: OP, kind: 'check', outcome: 'failed' } })
+  expect(shown).toMatchObject({ phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.missing') })
+  expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
+  expect(shown.failure).toMatchObject({ text: say('failed') })
+  expect(presentAccount({ account: { state: 'not-installed' }, result: { id: OP, kind: 'check', outcome: 'cancelled' } }).failure).toBeUndefined()
 })
 
 it('names the section, its activation prompt, and the notice a connection reports', () => {

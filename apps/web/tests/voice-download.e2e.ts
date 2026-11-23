@@ -10,6 +10,9 @@ import { expect, it, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage } from './support.ts'
 
+/** Model download only: the shipped cloud recognizer would change automatic selection and its setup guidance. */
+const LOCAL_ONLY = '- id: speech-to-text-deepseek\n  disabled: true\n'
+
 const bundle = fileURLToPath(new URL('../../../packages/experimental/voice-input-bundle', import.meta.url))
 const expected = fileURLToPath(new URL('./expected/voice-download.expected.md', import.meta.url))
 // The input-device picker on the same page shows its own alert when headless Chromium offers no microphone.
@@ -37,7 +40,7 @@ it('shows the failed asset, actual download source and recovery advice, then ret
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('Expected a loopback listener')
   const origin = `http://127.0.0.1:${address.port}`, overlay = join(root, 'voice.patch.yml')
-  await writeFile(overlay, `- id: speech-to-text-sensevoice\n  config:\n    dataRoot: ${JSON.stringify(join(root, 'models'))}\n    modelOrigin: ${origin}\n`)
+  await writeFile(overlay, `- id: speech-to-text-sensevoice\n  config:\n    dataRoot: ${JSON.stringify(join(root, 'models'))}\n    modelOrigin: ${origin}\n${LOCAL_ONLY}`)
   const scaffold = await launchWebScaffold({ profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: overlay })
   resources.scaffold = scaffold
   const browser = await chromium.launch()
@@ -98,7 +101,7 @@ it.each([{ winner: 0, manual: false }, { winner: 1, manual: false }, { winner: 0
     const overlay = join(root, 'voice.patch.yml')
     await writeFile(overlay, `- id: speech-to-text-sensevoice\n  config: ${JSON.stringify({
       dataRoot: join(root, 'models'), modelOrigins: origins, modelProbeTimeoutMs: 10_000,
-    })}\n`)
+    })}\n${LOCAL_ONLY}`)
     const scaffold = await launchWebScaffold({ profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: overlay })
     resources.scaffold = scaffold
     const browser = await chromium.launch(); resources.browser = browser

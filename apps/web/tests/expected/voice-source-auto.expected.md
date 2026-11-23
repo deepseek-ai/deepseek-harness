@@ -1,4 +1,4 @@
-- strong: SenseVoiceSmall (INT8)
+- strong: SenseVoiceSmall (INT8) local recognition
 - paragraph: Local models will be downloaded to the machine running DSH. No Python or compiler is required.
 - term: Disk space
 - definition: Allow about 1 GB for models, runtime, and download caches

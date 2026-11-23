@@ -39,7 +39,7 @@ import { rewriteTranslationLinkLocales } from './translation-links.ts'
 const root = resolve(import.meta.dirname, '..')
 const SUBSYSTEMS_DIR = 'docs/subsystems'
 const OUT_INHERITED = 'docs/cordis-api/inherited.md'
-const OUT_RUNTIME_API = 'packages/extensions/tool-cordis/src/api-catalog.ts'
+const OUT_RUNTIME_API = 'packages/extensions/cordis-host-runner/src/api-catalog.ts'
 
 export { REGION_BEGIN, REGION_END }
 
@@ -224,6 +224,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   layout: 'client-side interface-typed browser service — packages/client/ui-layout/README.md owns the API',
   pluginNavigation: 'client-side bundle navigation — packages/client/ui-plugin-manager/README.md owns the API',
   pluginChanges: 'client-side read-only management activity — packages/client/ui-plugin-manager/README.md owns the API',
+  accountSignIn: 'client-side account sign-in entry — packages/client/ui-settings-account/README.md owns the API',
   locale: 'client-side interface-typed browser service — packages/client/locale/README.md owns the API',
   modelDirectories: 'client-side interface-typed browser service — packages/client/ui-model-selection/README.md owns the API',
   modules: 'client-side interface-typed browser service — packages/client/modules/README.md owns the API',

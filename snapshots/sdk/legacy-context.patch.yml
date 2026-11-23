@@ -25,6 +25,9 @@
 - id: tool-office
   disabled: true
 
+- id: tool-cordis
+  disabled: true
+
 # The recorded tool catalog includes the optional patch tool.
 - id: tool-fs
   config:

@@ -24,7 +24,7 @@
 - list:
   - listitem:
     - button "查看 语音输入": 语音输入
-    - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
+    - text: 实验性 登录 DeepSeek 账号或配置 API Key 后使用云端识别转写录音，也可以下载本地 SenseVoice 模型。
     - status
     - switch "启用 语音输入"
   - listitem:

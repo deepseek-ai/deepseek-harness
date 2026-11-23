@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/sdk-cordis-inspect/guide.md
+/:
+  en: 895270534c3c0211
+  zh: 5da3b94c9350547c
+/sdk-runtime-inspection-tool:
+  en: 750dcdacf1b45f1a
+  zh: b94ccea9590bfc90
+/sdk-runtime-inspection-tool/change:
+  en: 40c570412810ae86
+  zh: dbb36328a5ff3467
+/sdk-runtime-inspection-tool/migration:
+  en: 09f6d683b9849e88
+  zh: 3a5dad616b8d8d2d
