@@ -140,6 +140,7 @@ internal static class Program
                         switch (command)
                         {
                             case "sibling": sibling.Show(); sibling.Activate(); sibling.Editor.Focus(); Write(sibling.Inspect()); break;
+                            case "change-text": form.Editor.Text = "CUA notification sample"; Write(form.Inspect()); break;
                             case "inspect": Write(form.Inspect()); break;
                             case "inspect-sibling": Write(sibling.Inspect()); break;
                             case "focus": form.Activate(); form.Editor.Focus(); Write(form.Inspect()); break;

@@ -7,7 +7,9 @@ import { omitsGeneratedPage } from '../../../settings/settings/tests/live-config
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentPresets from '../src/index.ts'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 afterEach(async () => { for (const ctx of contexts.splice(0)) await ctx.fiber.dispose() })
@@ -241,6 +243,24 @@ it('ignores a retired modeSelectionEnabled field in the user patch', async () =>
   expect((await ctx.agentPresets.remoteExportList()).presets.find(row => row.id === 'minimal')?.isDefault).toBe(true)
   // Neither read nor rewritten: the raw entry keeps the key it was loaded with.
   expect(live.entry.options.config).toMatchObject({ selectedDefault: 'minimal', modeSelectionEnabled: false })
+})
+
+it('mounts without a default and fails only a caller that names no preset', async () => {
+  const ctx = new Context()
+  contexts.push(ctx)
+  await ctx.plugin(Loader)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(AgentRegistry)
+  await ctx.plugin(AgentPresets, {})
+
+  expect(ctx.agentPresets.defaultId).toBeUndefined()
+  expect(await ctx.agentPresets.list()).toEqual([])
+  const session = ctx.sessions.create(brandString<SessionId>('no-default'), { meta: { agentPreset: 'recorded' } })
+  expect(ctx.agentPresets.presetForSession(session)).toBe('recorded')
+  await expect(ctx.agentPresets.resolve()).rejects.toThrow('no preset was requested and `default` is not configured')
+  await expect(ctx.agentPresets.acquireScope()).rejects.toThrow('no preset was requested and `default` is not configured')
+  await expect(ctx.agentPresets.resolve('named')).rejects.toMatchObject({ code: 'agent-preset/not-found' })
 })
 
 it('keeps its own instance off the generated Settings pages', () => omitsGeneratedPage(async (ctx) => {

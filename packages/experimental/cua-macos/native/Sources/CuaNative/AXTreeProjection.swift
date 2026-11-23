@@ -9,7 +9,7 @@ struct AXReadNode {
 
 enum AXTreeProjection {
     static func project(roots: AXObservedChildren, focusedWindowID: UInt32?, windowScoped: Bool,
-                        maxElements: Int, maxDepth: Int, includeMenus: Bool, details: Bool,
+                        maxElements: Int, maxDepth: Int, includeMenus: Bool, details: Bool, numbered: Bool = false,
                         checkCancellation: () throws -> Void, read: (AXUIElement) throws -> AXReadNode) throws -> AXProjection {
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
@@ -21,10 +21,11 @@ enum AXTreeProjection {
         if roots.parentIncomplete {
             lines.append(windowScoped ? AXTextFormatter.incompleteDiscovery : AXTextFormatter.unreadableChildLine(level: 0, positioned: false))
         }
+        var treeLines: [AXTreeLine] = []
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        var pending = roots.entries.reversed().map { (element: $0, level: 0, depth: 0) }
-        while let (entry, level, depth) = pending.popLast() {
+        var pending = roots.entries.reversed().map { (element: $0, level: 0, depth: 0, parent: Optional<AXUIElement>.none) }
+        while let (entry, level, depth, parent) = pending.popLast() {
             try checkCancellation()
             let hash = entry.map { CFHash($0) }
             if let element = entry, let hash, visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
@@ -47,8 +48,17 @@ enum AXTreeProjection {
             var node = observation.text
             let transparent = node.omitted
             if !transparent {
-                node.index = node.addressable ? indexed.count : nil
-                lines.append(AXTextFormatter.line(node, level: level, details: details))
+                node.index = node.addressable ? (numbered ? treeLines.count : indexed.count) : nil
+                if numbered {
+                    let id = treeLines.count
+                    let line = AXTreeLine(element: element, parent: parent, depth: level, id: id,
+                                          body: AXTextFormatter.body(node, details: details, inlineFocusAndSelection: false), focused: node.focused == true,
+                                          selectedText: node.selectedText)
+                    treeLines.append(line)
+                    lines.append(line.rendered)
+                } else {
+                    lines.append(AXTextFormatter.line(node, level: level, details: details))
+                }
                 if let index = node.index {
                     indexed[index] = element
                     let frame: JSONValue = node.bounds.map { .array([.number($0.x), .number($0.y), .number($0.width), .number($0.height)]) } ?? .null
@@ -71,12 +81,12 @@ enum AXTreeProjection {
             if children.elementLimitReached { elementLimitReached = true }
             if children.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: childLevel, positioned: false)) }
             for child in children.entries.reversed() {
-                pending.append((child, childLevel, depth + 1))
+                pending.append((child, childLevel, depth + 1, transparent ? parent : element))
             }
         }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         if elementLimitReached || depthLimitReached { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed,
+        return AXProjection(frame: menusCollapsed ? .menusCollapsed : .tree, tree: lines.joined(separator: "\n"), lines: treeLines, elements: elements, indexed: indexed,
                             focusedWindowID: focusedWindowID, truncated: elementLimitReached || depthLimitReached, hasUnreadableElements: hasUnreadableElements)
     }
 }

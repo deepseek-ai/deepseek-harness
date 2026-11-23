@@ -13,7 +13,7 @@ import { windowsHost, prepareWsl, retainWslHelper } from './windows-host.ts'
 const CAPABILITIES: CuaStartupCapabilities = {
   platform: 'windows',
   methods: [
-    'getCapabilities', 'listApps', 'getApp', 'activate', 'show', 'listWindows', 'getState',
+    'getCapabilities', 'listApps', 'findApps', 'getApp', 'launchApp', 'activate', 'show', 'listWindows', 'getState',
     'listActions', 'getActionSchema', 'performAction', 'invoke', 'mouseMove', 'toggleMouse', 'click', 'setValue', 'selectText',
     'typeText', 'paste', 'pressKey', 'sendKeyEvent', 'scroll', 'drag', 'screenshot',
   ],
@@ -34,6 +34,8 @@ export interface Config extends CuaConfig {
   windowsPowerShellPath: string
   /** Milliseconds between application-readiness and clipboard-release observations. */
   pollIntervalMs: number
+  /** Maximum distinct UIA notifications per diff read. The Windows helper defaults to 50. */
+  maxDiffNotifications?: number
 }
 
 /** Validate platform configuration before locating and launching the helper. */
@@ -48,6 +50,7 @@ export const Config = Schema.object({
   graceMs: CuaConfigFields.graceMs.default(60_000),
   windowsPowerShellPath: Schema.string().min(1).default('powershell.exe'),
   pollIntervalMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(25),
+  maxDiffNotifications: Schema.number().step(1).min(1).max(2 ** 31 - 1),
   textEventIntervalMs: CuaConfigFields.textEventIntervalMs.default(0),
   maxRequestBytes: CuaConfigFields.maxRequestBytes.max(2 ** 31 - 1),
   maxResponseBytes: CuaConfigFields.maxResponseBytes.max(2 ** 31 - 1),
@@ -87,7 +90,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   controller.signal.throwIfAborted()
   const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, config.timeoutMs, host === 'wsl' ? 'stdio' : 'pipe')
   installCua(ctx, config, {
-    helperPath, createChannel: (_owner, native) => runtime.connect(native), getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,
+    helperPath, createChannel: (_owner, native) => runtime.connect({ ...native, maxDiffNotifications: config.maxDiffNotifications }),
+    getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,
     disposeNative: () => runtime.dispose(), heldInputState: true,
     permissionParameters: (_method, permission) => ({ permission }),
   })

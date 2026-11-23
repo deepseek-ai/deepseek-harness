@@ -48,7 +48,7 @@ URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与
 
 **SDK 传输需要独立验证。** OTLP 导出器在 Node 上选择 `http-exporter-transport`，通过 `node:http` 投递并绕过全局 fetch dispatcher；其浏览器实现中的 `globalThis.fetch` 引用不能证明 Node 路由。[E2B 移除决策](../simplification/2026-09-11-remove-e2b-providers.zh.md)撤下另一项 SDK 传输集成，但不改变这一要求。
 
-**遥测的直连是有意为之。** 要让它走代理只有两条路，代价都超过这条通道本身的价值。`http.Agent` 通过 `proxyEnv` 读取环境，而该选项自 Node 22.21 与 24.5 才有——高于采用此决策时的运行时下限，因此 Node 22.19、22.20 与 24.0–24.4 无论如何仍是直连，而代理包还得为一条只在当时部分运行时生效的路径保留 `createNodeHttpAgent` 导出。Node 24.9 下限消除了这一 API 缺口；代理路由仍需要独立集成传输，并保留压缩。改用 SDK 的 `fetch` delegate 替换传输可以覆盖所有运行时，但该 delegate 没有压缩能力，而随附的 `base` bundle 启用了 gzip：实测一批真实规模的 OTLP 数据启用后体积只有 1/6.4。曾有一版转而在加载期拒绝 `exporter.compression`，结果凡是启动随附 bundle 的测试全部失败；另一版在 serializer 处 gzip 确实能跑通，但代价是把传输层代码塞进了遥测插件。
+**遥测的直连是有意为之。** 要让它走代理只有两条路，代价都超过这条通道本身的价值。`http.Agent` 通过 `proxyEnv` 读取环境，而该选项自 Node 22.21 与 24.5 才有——高于采用此决策时的运行时下限，因此 Node 22.19、22.20 与 24.0–24.4 无论如何仍是直连，而代理包还得为一条只在当时部分运行时生效的路径保留 `createNodeHttpAgent` 导出。受支持的 Node 24.22.3 下限消除了这一 API 缺口；代理路由仍需要独立集成传输，并保留压缩。改用 SDK 的 `fetch` delegate 替换传输可以覆盖所有运行时，但该 delegate 没有压缩能力，而随附的 `base` bundle 启用了 gzip：实测一批真实规模的 OTLP 数据启用后体积只有 1/6.4。曾有一版转而在加载期拒绝 `exporter.compression`，结果凡是启动随附 bundle 的测试全部失败；另一版在 serializer 处 gzip 确实能跑通，但代价是把传输层代码塞进了遥测插件。
 
 与之相比，遥测是唯一一条丢失了对用户毫无代价的出网通道：没有任何工具、模型请求或会话依赖它，而连不上的导出本就被静默丢弃。处在强制代理后的用户，只是停留在本次改动之前的状态，而不是被弄坏。`egress.spec.ts` 现在断言这一排除——若某次 SDK 升级把导出器挪到 `fetch` 上，遥测就会开始静默走代理，而该用例正是让这件事暴露出来的东西。
 

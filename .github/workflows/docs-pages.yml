@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 env:
-  PRIMARY_NODE_VERSION: '24'
+  PRIMARY_NODE_VERSION: '^24.22.3'
   # Projected source links target the public repository, whose history can
   # differ from this workflow's source repository. This stays on master rather
   # than following the dispatched tag: that repository advances only to each

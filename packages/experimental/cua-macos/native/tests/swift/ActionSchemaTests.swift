@@ -78,20 +78,40 @@ func plainActionsAcceptOnlyAnAbsentArgument(action: String) throws {
     let position = try argumentSchema("AXWindow.AXPosition.Set")
     let size = try argumentSchema("AXWindow.AXSize.Set")
     let range = try argumentSchema("AXTextArea.AXSelectedTextRange.Set")
-    #expect(position == pointSchema)
-    #expect(size == sizeSchema)
-    #expect(range == rangeSchema)
+    for (actual, expected) in [(position, pointSchema), (size, sizeSchema), (range, rangeSchema)] {
+        for key in ["type", "properties", "required", "additionalProperties"] { #expect(actual[key] == expected[key]) }
+    }
+    #expect(position["description"].string?.contains("screen") == true)
+    #expect(size["description"].string?.contains("points") == true)
+    #expect(range["description"].string?.contains("UTF-16") == true)
+}
+
+@Test func standardSettersIdentifyTheirArgumentWithoutAControl() throws {
+    for attribute in ["AXMain", "AXMinimized", "AXSelected", "AXExpanded"] {
+        #expect(try argumentSchema("AXWindow.\(attribute).Set")["type"] == .string("boolean"))
+    }
+    let focus = try argumentSchema("AXButton.AXFocused.Set")
+    #expect(focus["type"] == .string("boolean"))
+    #expect(focus["description"].string?.contains("true") == true)
+    for attribute in ["AXTitle", "AXSelectedText"] {
+        #expect(try argumentSchema("AXTextField.\(attribute).Set")["type"] == .string("string"))
+    }
+    #expect(try argumentSchema("AXTextField.AXVisibleCharacterRange.Set")["properties"] == rangeSchema["properties"])
+    for role in ["AXSlider", "AXIncrementor"] {
+        let argument = try argumentSchema("\(role).AXValue.Set")
+        #expect(argument["oneOf"] == .array([finiteNumber, .object(["type": .string("string")])]))
+    }
 }
 
 @Test func unknownAttributesAcceptEverySupportedKind() throws {
-    for action in ["AXTextArea.AXValue.Set", "AXButton.AXTitle.Set", "AXWindow.AXFocused.Set"] {
+    for action in ["AXGroup.AXValue.Set", "AXGroup.AXCustomValue.Set"] {
         let argument = try argumentSchema(action)
         #expect(argument == unsupportedKinds)
     }
 }
 
 @Test func attributeAlternativesFormDisjointOneOfBranches() throws {
-    let union = try argumentSchema("AXTextArea.AXValue.Set")["oneOf"]
+    let union = try argumentSchema("AXGroup.AXValue.Set")["oneOf"]
     guard case .array(let alternatives) = union else {
         Issue.record("Attribute argument schema is not a oneOf union")
         return
@@ -149,7 +169,7 @@ func plainActionsAcceptOnlyAnAbsentArgument(action: String) throws {
         ("AXValue", rangeValue, .object(["location": .number(1), "length": .number(2)])),
     ]
     for entry in accepted {
-        _ = try AXAccess.attributeValue(attribute: entry.attribute, argument: entry.value, current: entry.current)
+        _ = try encodedAttribute(attribute: entry.attribute, argument: entry.value, current: entry.current)
     }
 }
 
@@ -165,7 +185,7 @@ func plainActionsAcceptOnlyAnAbsentArgument(action: String) throws {
     ]
     for entry in rejected {
         do {
-            _ = try AXAccess.attributeValue(attribute: entry.attribute, argument: entry.value, current: entry.current)
+            _ = try encodedAttribute(attribute: entry.attribute, argument: entry.value, current: entry.current)
             Issue.record("\(entry.attribute) accepted \(entry.value)")
         } catch let error as NativeFailure {
             #expect(error.code == "INVALID_ARGUMENT" || error.code == "UNSUPPORTED")
@@ -177,7 +197,7 @@ func plainActionsAcceptOnlyAnAbsentArgument(action: String) throws {
     let properties = try argumentSchema("AXTextArea.AXSelectedTextRange.Set")["properties"]
     #expect(properties["location"] == rangeField)
     #expect(properties["length"] == rangeField)
-    _ = try AXAccess.attributeValue(attribute: "AXSelectedTextRange",
+    _ = try encodedAttribute(attribute: "AXSelectedTextRange",
         argument: .object(["location": .number(Double(Int.max) - 1024), "length": .number(0)]), current: nil)
 }
 
@@ -204,7 +224,7 @@ private func failOnSessionRead() -> @Sendable () -> Bool? {
         "id": .string("schema"), "method": .string("getActionSchema"),
         "params": .object(["action": .string("AXWindow.AXPosition.Set")]),
     ])))
-    let outcome = try await worker.execute("getActionSchema", params: RequestParameters(request),
+    let outcome = try await worker.execute("getActionSchema", deadline: .now + .seconds(30), params: RequestParameters(request),
                                            catalog: ApplicationCatalogSnapshot(applications: [], frontPID: nil))
     guard case .result(let schema) = outcome else {
         throw NativeFailure(code: "TEST", message: "Expected an action schema")
@@ -221,7 +241,7 @@ private func failOnSessionRead() -> @Sendable () -> Bool? {
         "params": .object(["action": .string("")]),
     ])))
     do {
-        _ = try await worker.execute("getActionSchema", params: RequestParameters(request),
+        _ = try await worker.execute("getActionSchema", deadline: .now + .seconds(30), params: RequestParameters(request),
                                      catalog: ApplicationCatalogSnapshot(applications: [], frontPID: nil))
         Issue.record("Empty action name produced a schema")
     } catch let error as NativeFailure {

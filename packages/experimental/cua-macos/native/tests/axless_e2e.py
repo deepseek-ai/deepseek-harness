@@ -5,6 +5,7 @@ changes no system permission settings, and controls no user applications.
 """
 import argparse
 import base64
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,66 @@ import time
 
 from native_test_support import ROOT, NativeHelper, run_cleanup
 from capabilities_e2e import stop_application, wait_for_state
+
+
+def focus_fixture(helper, app, path, ready=lambda: True):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        helper.call('activate', app)
+        first = wait_for_state(path, lambda s: s['active'] and s['key'])
+        since = time.monotonic()
+        while time.monotonic() - since < 1:
+            state = json.loads(path.read_text())
+            if not state['key'] or state['keyLosses'] != first['keyLosses']:
+                break
+            time.sleep(0.025)
+        else:
+            if ready():
+                return state
+    raise AssertionError(f'could not establish keyboard focus for {path.stem}')
+
+
+def check_stage_groups(helper, make_bundle, executable, root):
+    def launch(name, owned):
+        path = root / (name + '.json')
+        binary = make_bundle(name, path, stage_participant=True)
+        shutil.copy2(executable, binary)
+        handle = helper.call('getApp', {'selector': str(binary.parents[2])})['appHandle']
+        app = {'appHandle': handle}
+        helper.call('launchApp', app)
+        state = wait_for_state(path, lambda s: bool(s.get('windowId')))
+        owned.callback(stop_application, state['pid'])
+        return app, path, state['windowId']
+
+    def expanded(binding):
+        app, path, window_id = binding
+        state = json.loads(path.read_text())
+        window = next(w for w in helper.call('listWindows', app) if w['windowId'] == window_id)
+        return window['isOnScreen'] and all(abs(window['bounds'][k] - actual) <= 1
+                                            for k, actual in zip(('width', 'height'), state['size']))
+
+    def focus(binding):
+        app, path, _ = binding
+        return focus_fixture(helper, app, path, lambda: expanded(binding))
+
+
+    for name, explicit in [('StageApp', False), ('StageWindow', True)]:
+        with ExitStack() as owned:
+            front = launch(name + 'Front', owned)
+            target = launch(name, owned)
+            app, path, window_id = target
+            focus(target)
+            focus(front)
+            # Stage Manager keeps the thumbnail on screen even after the normal window leaves the stage.
+            wait_for_state(path, lambda s: not s['minimized'] and not s['active'] and not expanded(target))
+            assert next(w for w in helper.call('listWindows', app) if w['windowId'] == window_id)['isOnScreen']
+            params = {**app, 'windowId': window_id} if explicit else app
+            result = helper.call('show', params)
+            assert result == {'windowId': window_id, 'dispatched': True, 'foregroundChanged': False}, result
+            wait_for_state(front[1], lambda s: s['active'] and s['keySettled'] and expanded(front) and expanded(target))
+            assert not json.loads(path.read_text())['minimized']
+            assert helper.call('show', params) == {**result, 'dispatched': False}
+            print(f'PASS: {name} joined the current stage at full size; original window kept keyboard focus')
 
 
 def main():
@@ -37,13 +98,14 @@ def main():
         with tempfile.TemporaryDirectory(prefix='dsh-cua-axless-') as directory:
             root = Path(directory)
             state_path = root / 'state.json'
-            def app_binary(name, state_file):
+            def app_binary(name, state_file, stage_participant=False, reopen_delay=0):
                 contents = root / (name + '.app') / 'Contents'
                 (contents / 'MacOS').mkdir(parents=True)
                 (contents / 'Info.plist').write_bytes(plistlib.dumps({
                     'CFBundleIdentifier': 'org.deepseek-harness.cua.' + root.name + '.' + name,
                     'CFBundleExecutable': 'fixture', 'CFBundleName': name, 'CFBundlePackageType': 'APPL',
-                    'DSHFixtureStatePath': str(state_file),
+                    'DSHFixtureStatePath': str(state_file), 'DSHStageParticipant': stage_participant,
+                    'DSHReopenDelay': reopen_delay,
                 }))
                 return contents / 'MacOS/fixture'
 
@@ -127,7 +189,7 @@ def main():
                 fixture = None
                 original_binary = binary
                 state_path = root / 'restoration.json'
-                binary = app_binary('Restoration', state_path)
+                binary = app_binary('Restoration', state_path, reopen_delay=2)
                 shutil.copy2(original_binary, binary)
                 pending = helper.call('getApp', {'selector': str(binary.parents[2])})
                 launched = helper.call('launchApp', {'appHandle': pending['appHandle']})
@@ -144,33 +206,84 @@ def main():
                 launched = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})
                 assert launched['running'] is True, launched
                 foreground = wait_for_state(foreground_path, lambda state: state['pid'] > 0)['pid']
-                subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
-                wait_state(lambda state: foreground_path.exists() and json.loads(foreground_path.read_text()).get('active')
-                           and not state['active'], 'foreground fixture did not take focus')
-                for number, key, target in [(signal.SIGALRM, 'hidden', owner),
-                                            (signal.SIGHUP, 'minimized', {**owner, 'windowId': window_id})]:
-                    if key == 'minimized':
-                        subprocess.run(['open', '-a', str(binary.parents[2])], check=True)
-                        wait_state(lambda state: state['active'], 'target fixture did not activate for minimization')
-                    os.kill(fixture, number)
-                    wait_state(lambda state: state[key], 'fixture did not ' + key)
-                    subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
-                    wait_state(lambda state: json.loads(foreground_path.read_text())['active'] and not state['active'],
-                               'foreground fixture did not regain focus before restoration')
-                    restored = helper.call('show', target)
-                    actual = wait_state(lambda state: not state[key], 'show did not restore ' + key)
-                    assert restored['windowId'] == window_id, restored
-                    assert restored['dispatched'], restored
-                    assert restored['foregroundChanged'] is False, restored
-                    assert not actual['active'] and json.loads(foreground_path.read_text())['active']
+                front_owner = {'appHandle': pending_foreground['appHandle']}
+                target = {**owner, 'windowId': window_id}
+
+                def focus_foreground():
+                    return focus_fixture(helper, front_owner, foreground_path)
+
+                def check_show(before, selected, status):
+                    result = helper.call('show', selected)
+                    after = wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+                    assert result == {'dispatched': status == 'restored', 'windowId': window_id, 'foregroundChanged': False}, (result, before, after)
+                    if status != 'restored':
+                        assert after['keyLosses'] == before['keyLosses'], after
+                    return after
+
+                before = focus_foreground()
+                check_show(before, target, 'already_visible')
+                os.kill(fixture, signal.SIGALRM)
+                wait_state(lambda s: s['hidden'], 'fixture did not hide')
+                check_show(before, owner, 'restored')
+                wait_state(lambda s: not s['hidden'], 'hidden application remained hidden')
+
+                helper.call('activate', owner)
+                wait_state(lambda s: s['active'] and s['key'], 'target did not regain keyboard focus')
+                os.kill(fixture, signal.SIGHUP)
+                state = wait_state(lambda s: s['minimizeRequested'] and (s['minimized'] or not s['active']),
+                                   'target did not minimize or leave the active Stage Manager group')
+                before = focus_foreground()
+                # With Stage Manager a minimize request can just move the window to the strip.
+                # The ordinary-window pairs below cover that transition in their own stages.
+                if state['minimized']:
+                    foreground_after = check_show(before, owner, 'restored')
+                    after = wait_state(lambda s: not s['minimized'], 'target remained minimized')
+                    assert after['size'] == state['size'], after
+                    check_show(foreground_after, target, 'already_visible')
+                    os.kill(fixture, signal.SIGXCPU)
+                    wait_state(lambda s: s['focusOnRestore'], 'target did not arm foreground restoration')
+                    helper.call('activate', owner)
+                    wait_state(lambda s: s['active'] and s['key'], 'target did not gain focus')
+                    os.kill(fixture, signal.SIGHUP)
+                    wait_state(lambda s: s['minimized'], 'target did not minimize')
+                    before = focus_foreground()
+                    after = check_show(before, target, 'restored')
+                    assert after['keyLosses'] > before['keyLosses'], 'target did not exercise the focus handoff'
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')
-                helper.eof()
-                print('PASS: AXless input, resize guards, fresh observation, movement and background unhide/unminimize')
+                before_close = json.loads(state_path.read_text())['reopened']
+                os.kill(fixture, signal.SIGINFO)
+                wait_state(lambda s: s['closed'], 'target did not close its main window')
+                focus_foreground()
+                stale = helper.call('show', target, 'WINDOW_UNAVAILABLE')
+                assert 'app.show()' in stale['message'], stale
+                closed = json.loads(state_path.read_text())
+                assert closed['closed'] and closed['reopened'] == before_close, closed
+                # The app responds to AX reads while it waits two seconds to create the replacement window.
+                with ExitStack() as clients:
+                    short_ax = NativeHelper([], args.helper, '--ax-timeout-ms', '1000', '--timeout-ms', '10000')
+                    clients.callback(short_ax.stop)
+                    selection = short_ax.call('getApp', {'selector': str(fixture)})
+                    opened = short_ax.call('show', {'appHandle': selection['appHandle']})
+                new = wait_state(lambda s: not s['closed'] and s.get('windowId') != window_id,
+                                 'reopen did not replace the closed window')
+                assert opened == {'dispatched': True,
+                                  'windowId': new['windowId'], 'foregroundChanged': False}, opened
+                assert new['reopened'] == before_close + 1 and new['pid'] == fixture, new
+                wait_for_state(foreground_path, lambda s: s['active'] and s['key'])
+                assert helper.call('show', owner) == {'dispatched': False, 'windowId': new['windowId'], 'foregroundChanged': False}
+                helper.call('show', target, 'WINDOW_UNAVAILABLE')
+                assert json.loads(state_path.read_text())['reopened'] == new['reopened']
             finally:
                 run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
                             lambda: stop_application(fixture))
                 fixture = None
                 foreground = None
+            stage = subprocess.run(['defaults', 'read', 'com.apple.WindowManager', 'GloballyEnabled'],
+                                   capture_output=True, text=True)
+            if stage.stdout.strip() == '1':
+                check_stage_groups(helper, app_binary, binary, root)
+            helper.eof()
+            print('PASS: AXless input, resize guards, fresh observation, movement and focus-preserving show')
     finally:
         run_cleanup(lambda: stop_application(foreground) if foreground is not None else None,
                     lambda: stop_application(fixture) if fixture is not None else None,

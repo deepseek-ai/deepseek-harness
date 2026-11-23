@@ -60,7 +60,8 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   const results = events.filter(event => event.type === 'tool/result')
   expect(results).toHaveLength(2)
   expect(results.every(event => !event.data.message.isError)).toBe(true)
-  expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(12)
+  const subcalls = events.filter(event => event.type === 'tool/ptc-dispatch')
+  expect(subcalls).toHaveLength(13)
   const calls = page.locator('[data-tool="cua_run_code"]')
   const description = 'Select and capture the fixture window'
   const turnControl = page.locator('[data-turn-process="1"]')
@@ -78,7 +79,7 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   const source = calls.first().locator('pre.shiki')
   await source.waitFor()
   expect(await source.textContent()).toContain('var app = await cua.getApp("test.fixture")')
-  expect(await page.locator('[data-subcalls] [data-tool="cua"]').count()).toBe(12)
+  expect(await page.locator('[data-subcalls] [data-tool="cua"]').count()).toBe(subcalls.length)
   expect(events.filter(event => event.type === 'tool/ptc-dispatch' && event.data.content.some(block => block.type === 'image'))).toHaveLength(1)
   expect(events.filter(event => event.type === 'tool/result'
     && event.data.message.content.some(block => block.type === 'image'))).toHaveLength(1)

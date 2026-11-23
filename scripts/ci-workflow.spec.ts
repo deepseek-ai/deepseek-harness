@@ -37,7 +37,7 @@ describe('CI workflow', () => {
     expect(compatibilityLimit).toBeGreaterThan(0)
     expect(compatibility.strategy).toMatchObject({
       'fail-fast': false,
-      matrix: { include: [{ node: '24.9' }, { node: 26 }] },
+      matrix: { include: [{ node: '24.22.3' }, { node: 26 }] },
     })
     expect(workflowJob(ci, 'all-checks-passed').needs).toContain('node-compat')
     // The web snapshot shards are the only other matrix: one job, one runner per shard.

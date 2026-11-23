@@ -6,7 +6,7 @@ permissions:
   contents: read
 
 env:
-  PRIMARY_NODE_VERSION: '24'
+  PRIMARY_NODE_VERSION: '^24.22.3'
   # CI runs must never report to the production telemetry endpoint baked
   # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
   DSH_TELEMETRY_DISABLED: '1'
@@ -40,7 +40,7 @@ jobs:
           path: publisher-isolated
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check preflights before dependency installation
         working-directory: publisher-isolated
         run: node apps/desktop-publisher/tests/preinstall.mjs
@@ -1015,6 +1015,7 @@ jobs:
     env:
       DSH_GATE_CONCURRENCY: ${{ matrix.gate_concurrency }}
       DSH_NODE_COMPAT_SKIP_TYPECHECK: '1'
+      DSH_NODE_COMPAT_BUILD: ${{ matrix.build }}
       # A failed smoke aborts the remaining compatibility gates instead of
       # letting the build-backed legs run against an already-red aggregate.
       DSH_GATE_FAIL_FAST: '1'
@@ -1023,16 +1024,18 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          # Pin the supported floor, whose internal loader is v1. Primary
-          # jobs track latest 24 and exercise v2, introduced in 24.12.0.
-          - node: '24.9'
-            name: node 24.9
+          # Pin the supported floor. Primary jobs track latest 24, which can be
+          # this same release, so only this leg requests the build-backed gates.
+          - node: '24.22.3'
+            name: node 24.22.3
             runner: ubuntu-latest
             gate_concurrency: '1'
+            build: '1'
           - node: 26
             name: node 26
             runner: ubuntu-latest
             gate_concurrency: '1'
+            build: ''
     steps:
       - uses: actions/checkout@v7.0.1
         with:

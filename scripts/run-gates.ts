@@ -106,8 +106,11 @@ type ResultObserver = (result: GateResult) => void
 /** Worker cap of the documentation and hygiene aggregates, locally and in CI, whose leaves each build a full ts.Program. */
 const PROGRAM_MODE_CAP = 8
 
-/** CI pins this minor in .github/workflows/ci.yml; its compatibility leg owns the built CLI smoke. */
-export const BUILD_BACKED_NODE_COMPAT_VERSION = '24.9'
+/**
+ * CI pins this supported-floor release in .github/workflows/ci.yml. Its compatibility leg owns the built CLI smoke and
+ * requests it with `DSH_NODE_COMPAT_BUILD=1`; the primary lanes can run this same release and stay source-only.
+ */
+export const BUILD_BACKED_NODE_COMPAT_VERSION = '24.22.3'
 
 const root = resolve(import.meta.dirname, '..')
 if (import.meta.main) {
@@ -490,8 +493,11 @@ function nodeCompatGates(): Gate[] {
   const typecheck = flagEnabled('DSH_NODE_COMPAT_SKIP_TYPECHECK')
     ? []
     : [pnpmScript('typecheck', 'typecheck')]
-  if (!process.versions.node.startsWith(`${BUILD_BACKED_NODE_COMPAT_VERSION}.`)) {
+  if (!flagEnabled('DSH_NODE_COMPAT_BUILD')) {
     return [...typecheck, ...nodeCompatSmokeGates()]
+  }
+  if (process.versions.node !== BUILD_BACKED_NODE_COMPAT_VERSION) {
+    throw new Error(`run-gates: DSH_NODE_COMPAT_BUILD requires Node ${BUILD_BACKED_NODE_COMPAT_VERSION}, got ${process.versions.node}.`)
   }
   return [
     ...typecheck,

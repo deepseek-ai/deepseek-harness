@@ -5,6 +5,10 @@ import Foundation
 import Testing
 @testable import CuaNative
 
+func encodedAttribute(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> CFTypeRef {
+    try AXSetterParameter.resolve(role: nil, attribute: attribute).encode(argument, attribute: attribute) { current }
+}
+
 @Test func parsesOnlyCompleteAttributeSetActions() {
     let target = AXAttributeSetTarget("AXTextArea.AXValue.Set")
     #expect(target?.role == "AXTextArea")
@@ -30,27 +34,27 @@ import Testing
 }
 
 @Test func mapsScalarsToTheirDirectCoreFoundationTypes() throws {
-    #expect(CFGetTypeID(try AXAccess.attributeValue(attribute: "AXValue", argument: .string("hello"), current: nil)) == CFStringGetTypeID())
-    #expect(CFGetTypeID(try AXAccess.attributeValue(attribute: "AXValue", argument: .bool(true), current: nil)) == CFBooleanGetTypeID())
-    #expect(CFGetTypeID(try AXAccess.attributeValue(attribute: "AXValue", argument: .number(2.5), current: nil)) == CFNumberGetTypeID())
+    #expect(CFGetTypeID(try encodedAttribute(attribute: "AXValue", argument: .string("hello"), current: nil)) == CFStringGetTypeID())
+    #expect(CFGetTypeID(try encodedAttribute(attribute: "AXValue", argument: .bool(true), current: nil)) == CFBooleanGetTypeID())
+    #expect(CFGetTypeID(try encodedAttribute(attribute: "AXValue", argument: .number(2.5), current: nil)) == CFNumberGetTypeID())
 }
 
 @Test func mapsPositionSizeAndRangeObjectsToAccessibilityValues() throws {
-    let position = unsafeDowncast(try AXAccess.attributeValue(attribute: "AXPosition",
+    let position = unsafeDowncast(try encodedAttribute(attribute: "AXPosition",
         argument: .object(["x": .number(10), "y": .number(20)]), current: nil), to: AXValue.self)
     var point = CGPoint.zero
     #expect(AXValueGetType(position) == .cgPoint)
     #expect(AXValueGetValue(position, .cgPoint, &point))
     #expect(point == CGPoint(x: 10, y: 20))
 
-    let size = unsafeDowncast(try AXAccess.attributeValue(attribute: "AXSize",
+    let size = unsafeDowncast(try encodedAttribute(attribute: "AXSize",
         argument: .object(["width": .number(640), "height": .number(480)]), current: nil), to: AXValue.self)
     var dimensions = CGSize.zero
     #expect(AXValueGetType(size) == .cgSize)
     #expect(AXValueGetValue(size, .cgSize, &dimensions))
     #expect(dimensions == CGSize(width: 640, height: 480))
 
-    let range = unsafeDowncast(try AXAccess.attributeValue(attribute: "AXSelectedTextRange",
+    let range = unsafeDowncast(try encodedAttribute(attribute: "AXSelectedTextRange",
         argument: .object(["location": .number(2), "length": .number(3)]), current: nil), to: AXValue.self)
     var value = CFRange()
     #expect(AXValueGetType(range) == .cfRange)
@@ -97,7 +101,7 @@ import Testing
     ]
     for (attribute, argument, current) in cases {
         do {
-            _ = try AXAccess.attributeValue(attribute: attribute, argument: argument, current: current)
+            _ = try encodedAttribute(attribute: attribute, argument: argument, current: current)
             Issue.record("\(attribute) accepted \(argument)")
         } catch let error as NativeFailure {
             #expect(error.code == "INVALID_ARGUMENT" || error.code == "UNSUPPORTED")
