@@ -640,26 +640,6 @@
   font: var(--dsw-font-xs-13);
 }
 
-.promptDiffSections {
-  display: flex;
-  max-height: 100%;
-  flex-direction: column;
-  padding: 10px 14px 14px;
-  gap: 14px;
-  overflow: auto;
-}
-
-.promptDiffSection {
-  min-width: 0;
-}
-
-.promptDiffTitle {
-  margin: 0 0 6px;
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xs-strong-13);
-  user-select: none;
-}
-
 .promptDiff {
   margin: 0;
   overflow: auto;
@@ -1945,6 +1925,87 @@
 
 .systemPrompt {
   box-sizing: border-box;
+}
+
+/* Update and per-source System Prompt views; the detail body owns the scroll. */
+.promptView {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 10px 0 16px;
+  gap: 18px;
+}
+
+.promptGroup {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.promptGroupTitle {
+  margin: 0;
+  padding: 0 14px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-strong-13);
+  user-select: none;
+}
+
+.promptGroupBody {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 0 14px;
+  gap: 14px;
+}
+
+/* One registered source: a greyed, unselectable name above the model-facing text. */
+.promptSource {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.promptSourceTitle {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin: 0;
+  gap: 2px 8px;
+  font: var(--dsw-font-xs-13);
+  user-select: none;
+}
+
+.promptSourceName {
+  min-width: 0;
+  color: var(--dsw-alias-label-caption);
+  font: 400 12px/18px var(--ds-font-family-code);
+  overflow-wrap: anywhere;
+}
+
+.promptSourceLabel {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.promptSourceCaption,
+.promptSourceNotice {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Explanatory copy, excluded from a copied prompt. */
+.promptSourceCaptionStatic {
+  user-select: none;
+}
+
+.promptSourceText {
+  min-height: 0;
+  padding: 0;
 }
 
 .toolCatalog {

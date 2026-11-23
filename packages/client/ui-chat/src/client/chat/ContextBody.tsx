@@ -8,7 +8,7 @@ import type { ReactNode } from 'react'
 import { JsonBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { ContextMessageNode } from '../contract/snapshot.ts'
-import type { KnownContextForm } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { KnownContextForm, SystemMessageSections } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import css from './ContextBody.module.css'
 
 /** Model-facing text stays bounded at the disclosure, not at the producer. */
@@ -403,6 +403,36 @@ export function SnapshotBody({ content, source, t }: {
           <div key={index} className={css.section}>
             <dt className={css.sectionName}>{section.name}</dt>
             <dd className={css.sectionText}>{boundedText(section.text, t)}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
+  )
+}
+
+/**
+ * One incremental system message split by the sources it names, in the order the model read them:
+ * what each source did, the notices attached to it, then the text the message carries for it.
+ * @param props - Section-attributed reading of the message and the locale seat.
+ * @returns The system update body.
+ */
+export function SystemSectionsBody({ message, t }: { message: SystemMessageSections; t: Translate }): ReactNode {
+  return (
+    <>
+      {message.reset && (
+        <p className={css.catalogNotice} data-system-reset>{t('message.systemPromptReset')}</p>
+      )}
+      {message.notices.map((notice, index) => (
+        <p key={index} className={css.catalogNotice} data-system-notice>{boundedText(notice, t)}</p>
+      ))}
+      <dl className={css.sections} data-system-sections>
+        {message.changes.map(change => (
+          <div key={change.name} className={css.section} data-system-section={change.change}>
+            <dt className={css.sectionName}>{t(`message.systemSection.${change.change}`, { name: change.name })}</dt>
+            {change.notices.map((notice, index) => (
+              <dd key={index} className={css.sectionNotice} data-system-notice>{boundedText(notice, t)}</dd>
+            ))}
+            {change.text !== '' && <dd className={css.sectionText}>{boundedText(change.text, t)}</dd>}
           </div>
         ))}
       </dl>

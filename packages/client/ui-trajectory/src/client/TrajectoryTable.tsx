@@ -28,7 +28,7 @@ import type { JsonTreeLabels, JsonTreeProps, MarkdownLabels } from '@deepseek-ai
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { structuredPatch } from 'diff'
 import type {
-  AssistantRequestConfig, ConversationPromptSnapshot, MessageImageLoader,
+  AssistantRequestConfig, ConversationPromptSnapshot, EffectiveSystemSection, MessageImageLoader, SystemMessageSections,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   AssistantMetricDetail, TrajectoryCellKind, TrajectoryCellProps, TrajectorySourceBlock,
@@ -188,7 +188,7 @@ type DetailTab =
   | 'options'
   | 'usage'
   | 'timing'
-  | 'diff'
+  | 'update'
 type RecordState = 'complete' | 'running' | 'error'
 
 interface DetailTabItem {
@@ -228,14 +228,9 @@ const TOOL_REQUEST_MIN_WIDTH = 180
 const TOOL_REQUEST_MAX_WIDTH = 480
 const DEFAULT_TOOL_REQUEST_SHARE = 0.36
 const DEFAULT_TOOL_REQUEST_OFFSET = 56
-const SYSTEM_PROMPT_TABS: readonly DetailTabItem[] = [
-  { id: 'system-prompt', labelKey: 'tab.systemPrompt' },
-  { id: 'tools', labelKey: 'tab.tools' },
-]
-const SYSTEM_UPDATE_TABS: readonly DetailTabItem[] = [
-  { id: 'diff', labelKey: 'tab.diff' },
-  ...SYSTEM_PROMPT_TABS,
-]
+const SYSTEM_UPDATE_TAB: DetailTabItem = { id: 'update', labelKey: 'tab.update' }
+const SYSTEM_PROMPT_TAB: DetailTabItem = { id: 'system-prompt', labelKey: 'tab.systemPrompt' }
+const SYSTEM_TOOLS_TAB: DetailTabItem = { id: 'tools', labelKey: 'tab.tools' }
 const REQUEST_TABS: readonly DetailTabItem[] = [
   { id: 'overview', labelKey: 'tab.summary' },
   { id: 'options', labelKey: 'tab.options' },
@@ -990,14 +985,75 @@ function markdownSource(record: TableRecord): string | undefined {
   return undefined
 }
 
+/** Stable identity of one tool definition, so a changed definition reads as a removal plus an addition. */
+function toolKey(tool: ConversationPromptSnapshot['tools'][number]): string {
+  return JSON.stringify(tool)
+}
+
+/** What a SYSTEM record changed, in the order the Update tab lists it. */
+interface PromptUpdate {
+  /** Per-source reading of the appended system message. */
+  message?: SystemMessageSections
+  /** Retained system text before and after, for a change without section metadata. */
+  systemText?: { before: string; after: string }
+  added: ConversationPromptSnapshot['tools']
+  removed: ConversationPromptSnapshot['tools']
+  /** The catalog changed only in order. */
+  toolOrderOnly: boolean
+}
+
+/**
+ * Derive what a SYSTEM record changed. The initial prompt has nothing to compare against; a rebuilt prompt presents
+ * only its tool changes, because the model read the rebuilt history rather than a system update.
+ * @param cell - SYSTEM record.
+ * @returns The record's changes, or undefined when it presents none.
+ */
+function promptUpdate(cell: TrajectoryCellProps): PromptUpdate | undefined {
+  const before = cell.previousPromptDetail
+  const after = cell.promptDetail
+  const rebuilt = cell.promptRebuilt === true
+  const message = rebuilt ? undefined : cell.promptMessageDetail
+  const systemText = !rebuilt && message === undefined && before !== undefined && after !== undefined
+    && before.system !== after.system
+    ? { before: before.system, after: after.system }
+    : undefined
+  // Tools are compared only when both catalogs are known.
+  let added: ConversationPromptSnapshot['tools'] = []
+  let removed: ConversationPromptSnapshot['tools'] = []
+  let toolOrderOnly = false
+  if (before !== undefined && after !== undefined) {
+    const beforeTools = new Set(before.tools.map(toolKey))
+    const afterTools = new Set(after.tools.map(toolKey))
+    added = after.tools.filter(tool => !beforeTools.has(toolKey(tool)))
+    removed = before.tools.filter(tool => !afterTools.has(toolKey(tool)))
+    toolOrderOnly = added.length === 0 && removed.length === 0
+      && JSON.stringify(before.tools) !== JSON.stringify(after.tools)
+  }
+  if (message === undefined && systemText === undefined && added.length === 0 && removed.length === 0 && !toolOrderOnly) {
+    return undefined
+  }
+  return {
+    ...(message === undefined ? {} : { message }),
+    ...(systemText === undefined ? {} : { systemText }),
+    added,
+    removed,
+    toolOrderOnly,
+  }
+}
+
+/** Whether the model received this record's system prompt as updates; the initial and a rebuilt prompt were sent whole. */
+function deliveredIncrementally(cell: TrajectoryCellProps): boolean {
+  return cell.promptRebuilt !== true && (cell.previousPromptDetail !== undefined || cell.promptMessageDetail !== undefined)
+}
+
 function detailTabs(record: TableRecord): readonly DetailTabItem[] {
   if (record.cell.kind === 'system') {
-    if (record.cell.promptDetail === undefined && record.cell.systemPromptDetail !== undefined) {
-      return SYSTEM_PROMPT_TABS.filter(tab => tab.id === 'system-prompt')
-    }
-    return record.cell.previousPromptDetail === undefined
-      ? SYSTEM_PROMPT_TABS
-      : SYSTEM_UPDATE_TABS
+    return [
+      ...(promptUpdate(record.cell) === undefined ? [] : [SYSTEM_UPDATE_TAB]),
+      SYSTEM_PROMPT_TAB,
+      // A standalone prompt without a loaded request header has no known tool catalog.
+      ...(record.cell.promptDetail === undefined ? [] : [SYSTEM_TOOLS_TAB]),
+    ]
   }
   if (record.cell.kind === 'compacted') {
     return [
@@ -1387,6 +1443,23 @@ function ToolCatalog({
   if (tools.length === 0) return <p className={css.noPayload}>{t('record.toolsMissing')}</p>
   return (
     <div className={css.toolCatalog}>
+      <ToolCatalogItems tools={tools} stringWrapping={stringWrapping} t={t} />
+    </div>
+  )
+}
+
+/** One collapsible row per tool: name and description, expanding to its full description and parameters. */
+function ToolCatalogItems({
+  tools,
+  stringWrapping,
+  t,
+}: {
+  tools: ConversationPromptSnapshot['tools']
+  stringWrapping: JsonTreeProps['stringWrapping']
+  t: TrajectoryTranslate
+}) {
+  return (
+    <>
       {tools.map((tool, index) => (
         <details className={css.toolCatalogItem} key={`${tool.name}:${index}`}>
           <summary className={css.toolCatalogSummary}>
@@ -1409,7 +1482,7 @@ function ToolCatalog({
           </div>
         </details>
       ))}
-    </div>
+    </>
   )
 }
 
@@ -1435,59 +1508,152 @@ function promptDiffLines(before: string, after: string): readonly PromptDiffLine
   ])
 }
 
-function PromptDiffSection({
-  title,
-  before,
-  after,
-}: {
-  title: string
-  before: string
-  after: string
-}) {
+/** Line diff of two texts, or nothing when they are equal. */
+function PromptDiff({ before, after }: { before: string; after: string }) {
   const lines = promptDiffLines(before, after)
   if (lines.length === 0) return null
   return (
-    <section className={css.promptDiffSection}>
-      <h3 className={css.promptDiffTitle}>{title}</h3>
-      <pre className={css.promptDiff}>
-        {lines.map((line, index) => (
-          <span className={css[`promptDiffLine${line.kind}`]} key={index}>
-            {line.text || ' '}
-            {'\n'}
-          </span>
-        ))}
-      </pre>
+    <pre className={css.promptDiff}>
+      {lines.map((line, index) => (
+        <span className={css[`promptDiffLine${line.kind}`]} key={index}>
+          {line.text || ' '}
+          {'\n'}
+        </span>
+      ))}
+    </pre>
+  )
+}
+
+/** One titled group of the Update view. */
+function PromptUpdateGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={css.promptGroup}>
+      <h3 className={css.promptGroupTitle}>{title}</h3>
+      {children}
     </section>
   )
 }
 
-function SystemPromptDiff({
-  before,
-  after,
+/**
+ * One source of a per-source prompt view. The name and state label are presentation only: they are
+ * excluded from selection so a copied prompt contains just the text the model read.
+ */
+function PromptSourceSection({
+  name,
+  label,
+  notices = [],
+  text,
   t,
 }: {
-  before: ConversationPromptSnapshot
-  after: ConversationPromptSnapshot
+  name: string
+  label?: string | undefined
+  notices?: readonly string[]
+  text: string
   t: TrajectoryTranslate
 }) {
-  const toolsBefore = JSON.stringify(before.tools, null, 2)
-  const toolsAfter = JSON.stringify(after.tools, null, 2)
   return (
-    <div className={css.promptDiffSections}>
-      {before.system !== after.system && (
-        <PromptDiffSection
-          title={t('record.systemPrompt')}
-          before={before.system}
-          after={after.system}
-        />
+    <section className={css.promptSource} data-prompt-source={name}>
+      <h4 className={css.promptSourceTitle}>
+        <code className={css.promptSourceName}>{name}</code>
+        {label !== undefined && <span className={css.promptSourceLabel}>{label}</span>}
+      </h4>
+      {notices.map((notice, index) => (
+        <p className={css.promptSourceNotice} key={index}>{notice}</p>
+      ))}
+      {text !== '' && (
+        <div className={`${css.markdownPayload} ${css.promptSourceText}`}>
+          <MarkdownText text={text} labels={markdownLabels(t)} />
+        </div>
       )}
-      {toolsBefore !== toolsAfter && (
-        <PromptDiffSection
-          title={t('record.tools')}
-          before={toolsBefore}
-          after={toolsAfter}
-        />
+    </section>
+  )
+}
+
+/**
+ * What one SYSTEM record changed, independent of whether the model's route accepts in-history deltas:
+ * the system message by source (or a text diff when it lacks section metadata), then added and removed tools.
+ */
+function SystemPromptUpdate({
+  update,
+  stringWrapping,
+  t,
+}: {
+  update: PromptUpdate
+  stringWrapping: JsonTreeProps['stringWrapping']
+  t: TrajectoryTranslate
+}) {
+  const { message, systemText, added, removed, toolOrderOnly } = update
+  return (
+    <div className={css.promptView}>
+      {message !== undefined && (
+        <PromptUpdateGroup title={t('record.systemUpdates')}>
+          <div className={css.promptGroupBody}>
+            {message.reset && <p className={css.promptSourceCaption}>{t('record.systemUpdateReset')}</p>}
+            {message.notices.map((notice, index) => (
+              <p className={css.promptSourceNotice} key={index}>{notice}</p>
+            ))}
+            {message.changes.map(change => (
+              <PromptSourceSection
+                key={change.name}
+                name={change.name}
+                label={t(`record.systemSection.${change.change}`)}
+                notices={change.notices}
+                text={change.text}
+                t={t}
+              />
+            ))}
+          </div>
+        </PromptUpdateGroup>
       )}
+      {systemText !== undefined && (
+        <PromptUpdateGroup title={t('record.systemUpdates')}>
+          <div className={css.promptGroupBody}>
+            <PromptDiff before={systemText.before} after={systemText.after} />
+          </div>
+        </PromptUpdateGroup>
+      )}
+      {added.length > 0 && (
+        <PromptUpdateGroup title={t('record.toolsAdded')}>
+          <div><ToolCatalogItems tools={added} stringWrapping={stringWrapping} t={t} /></div>
+        </PromptUpdateGroup>
+      )}
+      {removed.length > 0 && (
+        <PromptUpdateGroup title={t('record.toolsRemoved')}>
+          <div><ToolCatalogItems tools={removed} stringWrapping={stringWrapping} t={t} /></div>
+        </PromptUpdateGroup>
+      )}
+      {toolOrderOnly && (
+        <div className={css.promptGroupBody}>
+          <p className={css.promptSourceCaption}>{t('record.toolOrderChanged')}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Instructions in force per source, combined as if the prompt were rebuilt at this point. After an update the note
+ * explains that the model received them as incremental messages; the initial and a rebuilt prompt were sent as shown.
+ */
+function EffectiveSystemPrompt({
+  sections,
+  updated,
+  t,
+}: {
+  sections: readonly EffectiveSystemSection[]
+  updated: boolean
+  t: TrajectoryTranslate
+}) {
+  return (
+    <div className={css.promptView}>
+      <div className={css.promptGroupBody}>
+        {updated && (
+          <p className={`${css.promptSourceCaption} ${css.promptSourceCaptionStatic}`}>{t('record.effectivePromptNote')}</p>
+        )}
+        {sections.filter(section => section.text !== '').map(section => (
+          <PromptSourceSection key={section.name} name={section.name} text={section.text} t={t} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -2284,10 +2450,12 @@ export function TrajectoryTable({
   const selectedPrompt = selected?.cell.kind === 'system'
     ? selected.cell.promptDetail
     : undefined
-  const selectedPreviousPrompt = selected?.cell.kind === 'system'
-    ? selected.cell.previousPromptDetail
-    : undefined
   const selectedSystemPrompt = selectedPrompt?.system ?? selected?.cell.systemPromptDetail
+  const selectedPromptUpdate = selected?.cell.kind === 'system'
+    ? promptUpdate(selected.cell)
+    : undefined
+  const selectedSections = selectedPrompt?.sections
+    ?? (selected?.cell.kind === 'system' ? selected.cell.systemSectionsDetail : undefined)
   const promptSelected = selectedSystemPrompt !== undefined
   const selectedState = selected === undefined ? undefined : stateOf(selected)
   const selectedRequestInfo = selectedRequest === null
@@ -3306,23 +3474,26 @@ export function TrajectoryTable({
                 t={t}
               />
             )}
-            {selectedPrompt !== undefined
-              && selectedPreviousPrompt !== undefined
-              && activeTab === 'diff' && (
-              <SystemPromptDiff
-                before={selectedPreviousPrompt}
-                after={selectedPrompt}
-                t={t}
-              />
+            {selectedPromptUpdate !== undefined && activeTab === 'update' && (
+              <SystemPromptUpdate update={selectedPromptUpdate} stringWrapping={stringWrapping} t={t} />
             )}
             {promptSelected && activeTab === 'system-prompt' && (
-              selectedSystemPrompt === ''
+              // Per-source instructions decide emptiness when known: a text-less update can leave sources in force.
+              (selectedSections === undefined ? selectedSystemPrompt === '' : selectedSections.every(section => section.text === ''))
                 ? <p className={css.noPayload}>{t('record.systemPromptMissing')}</p>
-                : (
-                  <div className={`${css.markdownPayload} ${css.systemPrompt}`}>
-                    <MarkdownText text={selectedSystemPrompt} labels={markdownLabels(t)} />
-                  </div>
-                )
+                : selectedSections === undefined
+                  ? (
+                    <div className={`${css.markdownPayload} ${css.systemPrompt}`}>
+                      <MarkdownText text={selectedSystemPrompt} labels={markdownLabels(t)} />
+                    </div>
+                  )
+                  : (
+                    <EffectiveSystemPrompt
+                      sections={selectedSections}
+                      updated={selected !== undefined && deliveredIncrementally(selected.cell)}
+                      t={t}
+                    />
+                  )
             )}
             {selectedPrompt !== undefined && activeTab === 'tools' && (
               <ToolCatalog tools={selectedPrompt.tools} stringWrapping={stringWrapping} t={t} />
