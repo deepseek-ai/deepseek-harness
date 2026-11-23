@@ -8,13 +8,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, IconRightUpOutlineRegular, MarkdownText,
+  Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, MarkdownText,
   Menu, Tag, Tooltip, type MarkdownLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReviewComment, ForgeReviewThread, ForgeReviewWrite, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { formatAgo } from './format.ts'
+import { ForgeGlyph } from './glyphs.tsx'
 import { anchorRange, hunkExcerpt, type ThreadPlace } from './review-threads.ts'
 import { SplitAction } from './ReviewComposer.tsx'
 import { INPUT_QUOTE_COPY, settleQuote, type QuoteCopy } from './review.ts'
@@ -50,6 +51,8 @@ export interface ThreadActions {
   readonly quoteCopy?: QuoteCopy | undefined
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
+  /** Forge family of the change request's provider, whose mark the opening action carries; null without a provider. */
+  readonly forge: string | null
   /** Read a file of the change request's repository at a commit. */
   readonly readText: (commit: string, path: string) => Promise<RemoteResult<string>>
   /** Report that the input refused a thread. */
@@ -393,7 +396,7 @@ export function ThreadCard({ thread, place, actions, t }: PropsLocale<typeof NS>
         {t((actions.quoteCopy ?? INPUT_QUOTE_COPY).add)}
       </Button>
       {url !== null && <Button size="sm" onClick={() => { actions.openLink(url) }}>
-        <IconRightUpOutlineRegular size={14} />{t('thread.openOnHost')}
+        <ForgeGlyph forge={actions.forge} />{t('thread.openOnHost')}
       </Button>}
       {writes !== null && thread.viewerCanResolve && <Resolution thread={thread} writes={writes} t={t} />}
     </div>

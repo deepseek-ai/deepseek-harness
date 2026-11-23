@@ -2471,6 +2471,11 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRegistrationHandle",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeCommit",
       "source": "packages/experimental/forge/src/types.ts"
     },
@@ -2747,6 +2752,16 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "MergeRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestAutoMerge",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "AutoMergeRequest",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {
@@ -3097,6 +3112,16 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ChangeRequestLabel",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestActivityItem",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestActivity",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {

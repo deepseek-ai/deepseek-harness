@@ -68,6 +68,17 @@ interface ForgeProvider {
   countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
   /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
   readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
+  /**
+   * Read the activity of a change request: the comments in its conversation, its submitted reviews, its commits, and
+   * the changes of its state. Omission declares that this provider reads no activity.
+   */
+  readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+  /**
+   * Add a comment of Markdown source `body` to a change request's conversation, resolving to undefined once the host
+   * saved it. A comment is never retried. Omission declares that this provider adds no comments, and its `readActivity`
+   * then denies `viewerCanComment`.
+   */
+  addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**
@@ -120,6 +131,14 @@ interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /**
+   * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+   * resolving to undefined once the host accepted it. Omission declares that the provider sets no automatic merge, and
+   * its snapshots then carry no `autoMerge`.
+   */
+  setAutoMerge?(
+    ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined>
   /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
@@ -181,6 +200,28 @@ interface ForgeProvider {
    * `branchUpdates`.
    */
   updateBranch?(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+}
+```
+
+`ctx.forge.register` 返回该次注册的 disposer。它的 `replace` 用同一家族的另一个提供方替换已注册的提供方；主机列表在运行期间被修改的提供方调用它来服务新的列表：
+
+```ts type-equiv
+/**
+ * What `ctx.forge.register` returns: the disposer, plus the replacement of the registered provider by another provider
+ * of the same forge family, for a provider whose configuration changes while it runs.
+ */
+interface ForgeRegistrationHandle {
+  /** Unregister the provider this registration holds and wait for its calls, and those of the providers it replaced, to finish. */
+  (): Promise<void>
+  /**
+   * Replace the registered provider in one synchronous step, so no reader finds the family without a provider. The
+   * replaced provider's in-flight calls are cancelled and their results discarded; watches of the family poll at once
+   * and `forge/providers-changed` announces the change.
+   * @param provider - provider of the same forge family.
+   * @throws when the registration was withdrawn, `provider.forge` is another family, or another family's provider
+   *   serves one of `provider.hosts`, compared without case; the registered provider then keeps serving.
+   */
+  replace(provider: ForgeProvider): void
 }
 ```
 
@@ -337,6 +378,11 @@ interface ChangeRequestSnapshot {
   /** Merge methods the repository accepts, the signed-in user's usual one first. */
   readonly mergeMethods: readonly MergeMethod[]
   /**
+   * How the change request stands with its host's automatic merge; omitted by a provider that sets none, whose change
+   * requests then offer no automatic merge.
+   */
+  readonly autoMerge?: ChangeRequestAutoMerge
+  /**
    * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
    * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
    * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
@@ -485,6 +531,32 @@ interface MergeRequest {
   /** Commit object name the head must still have; the merge is refused once the head moves. */
   readonly headSha: string
 }
+```
+
+`ctx.forge.setAutoMerge` 为用户确认过的 head 提交启用代码托管平台的自动合并（方式取快照 `mergeMethods` 中的一种），或取消它；启用后，变更请求满足合并条件时由平台自行合并。快照的 `autoMerge` 说明它是否已启用、平台给出时的合并方式与启用人，以及当前用户现在能否启用或取消。不设置自动合并的提供方两者都不提供，此时 `setAutoMerge` 不询问平台，直接返回失败。
+
+```ts type-equiv
+/** How a change request stands with its host's automatic merge. */
+interface ChangeRequestAutoMerge {
+  /** Whether the host merges the change request by itself once its merge requirements are met. */
+  readonly enabled: boolean
+  /** How the commits enter the base branch then, while enabled and the host names the method; null otherwise. */
+  readonly method: MergeMethod | null
+  /** Login of the account that turned it on, while enabled and the host names one; null otherwise. */
+  readonly enabledBy: string | null
+  /** Whether the signed-in user can turn it on now through `setAutoMerge`; false while it is on. */
+  readonly canEnable: boolean
+  /** Whether the signed-in user can turn it off now through `setAutoMerge`; false while it is off. */
+  readonly canDisable: boolean
+}
+```
+
+```ts type-equiv
+/** Turning a change request's automatic merge on for the head commit the user saw, or off. */
+type AutoMergeRequest =
+  /** `method` is one of the snapshot's `mergeMethods`; the host refuses once the head is no longer `headSha`. */
+  | { readonly enabled: true; readonly method: MergeMethod; readonly headSha: string }
+  | { readonly enabled: false }
 ```
 
 ```ts type-equiv
@@ -931,10 +1003,6 @@ interface ChangeRequestSummary {
    * `organization/slug`, when the request asks a team the user belongs to rather than the user.
    */
   readonly viewerRequest: { readonly team: string | null } | null
-  /** Issues the host closes once the change request merges, in host order, at most the provider's limit. */
-  readonly closingIssues: readonly ChangeRequestIssue[]
-  /** Whether the host reported more closing issues than `closingIssues` holds. */
-  readonly closingIssuesTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
 }
@@ -980,6 +1048,55 @@ interface ChangeRequestLabel {
   readonly name: string
   /** Six-digit hexadecimal color without `#`, or null when the host reports none. */
   readonly color: string | null
+}
+```
+
+## 动态与评论
+
+`ctx.forge.readActivity` 读取变更请求上发生过的事：对话中的评论、已提交的评审、提交，以及状态的变化，按时间从旧到新，最多为提供方的上限，超出时保留最新的条目。`ctx.forge.addComment` 向对话添加一条评论，之后如果该变更请求正被监视，就立即轮询一次。提供方可以实现其中一个或两个方法：没有 `readActivity` 的提供方返回 `unsupported`，没有 `addComment` 的提供方返回失败；动态的 `viewerCanComment` 说明当前用户能否添加评论。评论和评审的正文是 Markdown 源文本，其中的原始 HTML 不得作为 HTML 渲染。请求以及各主机的记录如何变成条目，由 [GitHub](../../packages/experimental/forge-github/README.zh.md#use-this-package) 与 [GitLab](../../packages/experimental/forge-gitlab/README.zh.md#use-this-package) 提供方的 README 说明。
+
+```ts type-equiv
+/**
+ * One entry of a change request's activity: a comment in its conversation, a submitted review, a commit, a change of
+ * its state, or a record the host words itself.
+ */
+type ChangeRequestActivityItem = {
+  /** ISO 8601 time of the entry. */
+  readonly at: string
+  /** Account the entry is by, or null when the host names none or the account no longer exists. */
+  readonly actor: ForgeCommentAuthor | null
+} & (
+  /** A comment in the conversation. `body` is Markdown source; it may contain raw HTML, which readers must not render as HTML. */
+  | { readonly kind: 'comment'; readonly body: string; readonly url: string | null }
+  /**
+   * A submitted review: its decision, its own Markdown text, which follows the rule of a comment's `body` and is empty
+   * without one, and the number of comments it left on lines and files.
+   */
+  | { readonly kind: 'review'; readonly verdict: ReviewVerdict; readonly body: string; readonly comments: number; readonly url: string | null }
+  /**
+   * A commit added to the change request: its object name, abbreviated when the host records only an abbreviation, and
+   * the first line of its message.
+   */
+  | { readonly kind: 'commit'; readonly sha: string; readonly title: string }
+  | { readonly kind: 'merged' | 'closed' | 'reopened' | 'ready-for-review' | 'converted-to-draft' | 'force-pushed' }
+  | { readonly kind: 'auto-merge-enabled' | 'auto-merge-disabled' }
+  /** A review was requested from an account or a team, named as the host spells it; null when the host names neither. */
+  | { readonly kind: 'review-requested'; readonly reviewer: string | null }
+  | { readonly kind: 'renamed'; readonly from: string; readonly to: string }
+  /** A record with no kind of its own, as plain text in the host's own words. */
+  | { readonly kind: 'other'; readonly text: string }
+)
+```
+
+```ts type-equiv
+/** The activity of a change request. */
+interface ChangeRequestActivity {
+  /** Entries oldest first, at most the provider's limit; the latest ones when the change request has more. */
+  readonly items: readonly ChangeRequestActivityItem[]
+  /** Whether the change request has entries older than `items` holds. */
+  readonly truncated: boolean
+  /** Whether the signed-in user can add a comment through `addComment`; false for a provider without it. */
+  readonly viewerCanComment: boolean
 }
 ```
 
@@ -1602,7 +1719,7 @@ interface ForgeLocalChanges {
 
 ### 代码评审页
 
-[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；连续失败的轮次按 `reviewMaxBackoffMs` 为上限退避。计数每隔 `reviewCountIntervalMs` 读取一次，全部仓库范围的列表读取也会更新它。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目以及最近一次读取的失败；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
+[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`、`reviewActivity`、`reviewComment`、`reviewSetAutoMerge`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；读取失败的主机每次间隔更久再读，以 `reviewMaxBackoffMs` 为上限，其他主机保持原来的间隔。计数每隔 `reviewCountIntervalMs` 以同样的方式读取，全部仓库范围的列表读取也会更新它。范围是全部主机的全部仓库，或一个 `ForgeReviewRepository`；后者带有主机，只在该主机上读取。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目、最近一次读取的失败，以及主机拒绝当前用户时其提供方的 `readiness` 给出的登录命令；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
 
 对话标签在 `connectWorkspace` 解析出的空白会话中开始，并用 `reviewStage` 记录该变更请求；Host 只在内存中保存这个选择，等该会话的下一条消息进入收件箱时再绑定，因此未使用的空白会话保持未绑定。
 
@@ -1741,11 +1858,12 @@ Registry of forge providers. Watchers of one change request share a single polli
  * registration ends. Unregistering cancels and awaits its in-flight calls;
  * results from the withdrawn registration are discarded.
  * @param provider - provider to serve `provider.forge` on `provider.hosts`.
- * @returns the disposer that unregisters the provider and waits for its calls to finish.
+ * @returns the disposer that unregisters the provider and waits for its calls to finish, carrying
+ *   {@link ForgeRegistrationHandle.replace}.
  * @throws when another provider already serves the same forge or one of the same hosts, compared without case, and
  * when the provider names a batch size that is not a positive safe integer.
  */
-register(provider: ForgeProvider): () => Promise<void>
+register(provider: ForgeProvider): ForgeRegistrationHandle
 
 /**
  * Name a forge family and its change requests for readers.
@@ -1787,13 +1905,13 @@ changeRequestUrl(ref: ChangeRequestRef): string
 async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>
 
 /**
- * Report whether the provider can reach the repository's host with current credentials.
- * @param repository - repository served by a registered provider.
+ * Report whether a provider can reach one host with current credentials.
+ * @param repository - forge family of a registered provider and the host to probe; a repository names both.
  * @param signal - cancellation for the probe.
  * @returns the provider's readiness for the host.
- * @throws when no provider serves the repository's forge.
+ * @throws when no provider serves the forge.
  */
-async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>
+async readiness(repository: Pick<ForgeRepository, 'forge' | 'host'>, signal: AbortSignal): Promise<ForgeReadiness>
 
 /**
  * Mark a draft change request ready for review, then poll it at once when it is watched.
@@ -1857,6 +1975,17 @@ async reviewerCandidates( ref: ChangeRequestRef, query: string, signal: AbortSig
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
 async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
+ * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+ * then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async setAutoMerge( ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>
 
 /**
  * Read complete check details independently of periodic polling.
@@ -2000,6 +2129,25 @@ async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<
 async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
 
 /**
+ * Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.
+ * @param ref - change request served by a registered provider.
+ * @param signal - cancellation of the read.
+ * @returns the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+
+/**
+ * Add a comment to a change request's conversation, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param body - Markdown source of the comment.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
  * Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced
  * with `forge/review-changed`.
  * @param ref - change request served by a registered provider.
@@ -2120,13 +2268,15 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
  * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
- * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
- * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
- * @param repository - one repository to list in, or null for every repository the user can read.
+ * reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed
+ * again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream
+ * lasts. The stream ends when `signal` aborts or the Remote stops.
+ * @param repository - one repository to list in, read on its host only, or null for every repository the user can
+ * read on every host.
  * @param signal - ends the stream.
  * @returns frames, each complete.
  */
-@Remote({ mode: 'stream' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
+@Remote({ mode: 'stream' }) async *reviewLists( repository: ForgeReviewRepository | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
 
 /**
  * Stream the number of open change requests that ask the signed-in user for a review, summed over the hosts read:
@@ -2142,6 +2292,18 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param signal - request cancellation.
  */
 @Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>
+
+/**
+ * Report whether a provider reaches one of its hosts with the Host's current credentials, for the host list on the
+ * Plugins page of that provider's row. The read names no Session, so, like the review page reads, only callers that
+ * may use the Host's code host credentials reach it.
+ * @param forge - forge family of a registered provider, such as `gitlab`.
+ * @param host - host name as the provider's configuration lists it.
+ * @param signal - request cancellation.
+ * @returns the provider's readiness for the host; `unavailable` with the reason when no provider serves the family,
+ * the probe fails, or it runs past `readinessTimeoutMs`.
+ */
+@Remote async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness>
 
 /**
  * Poll one change request the review page shows at once; its stream reports the result.
@@ -2172,6 +2334,27 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * host's reason when the host does not provide it.
  */
 @Remote async reviewDescription(url: string, signal: AbortSignal): Promise<ChangeRequestDescription>
+
+/**
+ * Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes
+ * of state.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the activity, or null when the change request's provider reads none.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the
+ * host's reason when the host does not provide it.
+ */
+@Remote async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null>
+
+/**
+ * Add a comment to the conversation of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param body - Markdown source of the comment.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is
+ * blank, or with the host's reason; `forgePanel/action-unknown` when the host's answer did not confirm the comment.
+ */
+@Remote async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void>
 
 /**
  * Read every check of a change request the review page shows.
@@ -2291,6 +2474,17 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
  */
 @Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Turn the code host's automatic merge of a change request the review page shows on, while its head is still the
+ * request's `headSha`, or off.
+ * @param url - web URL of the change request.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>
 
 /**
  * Rerun the failed checks of a change request the review page shows.
@@ -2654,6 +2848,20 @@ registerLens(lens: ForgeLens): () => Promise<void>
 @Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
 
 /**
+ * Turn the code host's automatic merge of a change request of a Session on, while its head is still the request's
+ * `headSha`, or off; the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param request - on with the merge method and the head commit the user confirmed, or off.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past the request's `headSha`; `forgePanel/action-failed` with the
+ * host's reason when the host refuses otherwise, cannot be reached, or sets no automatic merge;
+ * `forgePanel/action-unknown` when the host's answer did not confirm the change.
+ */
+@Remote async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>
+
+/**
  * Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user
  * saw; the change request is polled again once the host answers.
  * @param session - Session the change request is bound to.
@@ -2885,11 +3093,11 @@ Source: [`packages/experimental/forge-session/src/index.ts`](../../packages/expe
 
 #### `forge/providers-changed` — parallel
 
-Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.
+Announces a provider registration, replacement, or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.
 
 ```ts cordis-catalog
 /**
- * Announces a provider registration or withdrawal after the registry changes.
+ * Announces a provider registration, replacement, or withdrawal after the registry changes.
  * Listener failures are logged without preventing other listeners from running.
  * @param forge - family whose provider changed.
  * @mode parallel

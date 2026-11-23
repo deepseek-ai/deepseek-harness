@@ -181,3 +181,23 @@ export function checkDuration(check: ChangeRequestCheck): number | undefined {
   const elapsed = Date.parse(check.completedAt) - Date.parse(check.startedAt)
   return Number.isFinite(elapsed) && elapsed >= 0 ? elapsed : undefined
 }
+
+/** What stands between an open change request and its merge, in the order a reader resolves them. */
+const BLOCKERS: readonly { readonly key: ForgePanelKey; readonly applies: (snapshot: ChangeRequestSnapshot) => boolean }[] = [
+  { key: 'change.blocked.conflict', applies: snapshot => snapshot.mergeability === 'conflicting' },
+  { key: 'change.blocked.changesRequested', applies: snapshot => snapshot.reviewDecision === 'changes-requested' },
+  { key: 'change.blocked.reviewRequired', applies: snapshot => snapshot.reviewDecision === 'review-required' },
+  { key: 'change.blocked.checksFailed', applies: snapshot => snapshot.checksRollup === 'failure' },
+  { key: 'change.blocked.checksPending', applies: snapshot => snapshot.checksRollup === 'pending' },
+]
+
+/**
+ * Name why the code host would not merge an open change request now, from what its snapshot reports.
+ * @param snapshot - the change request's latest snapshot.
+ * @returns the dictionary key of each reason the snapshot shows, or of the general one when it shows none, as for a
+ * user without the right to merge.
+ */
+export function mergeBlockers(snapshot: ChangeRequestSnapshot): readonly ForgePanelKey[] {
+  const found = BLOCKERS.filter(blocker => blocker.applies(snapshot)).map(blocker => blocker.key)
+  return found.length > 0 ? found : ['change.blocked.other']
+}

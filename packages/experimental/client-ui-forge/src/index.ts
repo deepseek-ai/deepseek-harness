@@ -6,11 +6,12 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateMethod, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot,
-  ChangeRequestUpdate, ForgeActionFailure, ForgeCommitList,
+  AutoMergeRequest, BranchUpdateMethod, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef,
+  ChangeRequestReviewer,
+  ChangeRequestSnapshot, ChangeRequestUpdate, ForgeActionFailure, ForgeCommitList,
   ForgeFailure,
-  ForgeLineComment, ForgeRerunRequest, ForgeReviewChange, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult,
-  ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeMethod,
+  ForgeLineComment, ForgeReadiness, ForgeRerunRequest, ForgeReviewChange, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest,
+  ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeMethod,
 } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
@@ -19,7 +20,7 @@ import type { Session, SessionEvent, SessionId, UserMessage } from '@deepseek-ai
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-query'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { gitIn, hasBranch, inspectCheckout } from './git.ts'
@@ -45,7 +46,7 @@ import { Reader, ViewerLists } from './viewer-lists.ts'
 import type { KeptPanel, PanelConfig } from './panel.ts'
 import type {
   Config, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
-  ForgeReviewChangeRequest, ForgeReviewCountFrame, ForgeReviewFrame,
+  ForgeReviewChangeRequest, ForgeReviewCountFrame, ForgeReviewFrame, ForgeReviewRepository,
   ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
   ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeBases, ForgeWorktreeState,
 } from './types.ts'
@@ -196,6 +197,7 @@ export class ForgePanelController extends TypertRemoteService {
       sources: () => ctx.forge.viewerSources(),
       list: async (forge, query, signal) => await ctx.forge.listForViewer(forge, query, signal),
       count: async (forge, host, signal) => await ctx.forge.countForViewer(forge, host, signal),
+      signIn: async (forge, host, signal) => (await ctx.forge.readiness({ forge, host }, signal)).signIn?.command ?? null,
       report: (error) => { ctx.logger.warn(`forge-panel: reading a review list failed: ${String(error)}`) },
     }, {
       listIntervalMs: resolved.reviewListIntervalMs,
@@ -287,15 +289,17 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
    * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
-   * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
-   * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
-   * @param repository - one repository to list in, or null for every repository the user can read.
+   * reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed
+   * again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream
+   * lasts. The stream ends when `signal` aborts or the Remote stops.
+   * @param repository - one repository to list in, read on its host only, or null for every repository the user can
+   * read on every host.
    * @param signal - ends the stream.
    * @returns frames, each complete.
    */
   @Remote({ mode: 'stream' })
   async *reviewLists(
-    repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal,
+    repository: ForgeReviewRepository | null, signal: AbortSignal,
   ): AsyncIterable<ForgeReviewFrame> {
     yield* this.viewerLists.lists(repository, signal)
   }
@@ -321,6 +325,28 @@ export class ForgePanelController extends TypertRemoteService {
   async reviewRefresh(signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     this.viewerLists.refresh()
+  }
+
+  /**
+   * Report whether a provider reaches one of its hosts with the Host's current credentials, for the host list on the
+   * Plugins page of that provider's row. The read names no Session, so, like the review page reads, only callers that
+   * may use the Host's code host credentials reach it.
+   * @param forge - forge family of a registered provider, such as `gitlab`.
+   * @param host - host name as the provider's configuration lists it.
+   * @param signal - request cancellation.
+   * @returns the provider's readiness for the host; `unavailable` with the reason when no provider serves the family,
+   * the probe fails, or it runs past `readinessTimeoutMs`.
+   */
+  @Remote
+  async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness> {
+    signal.throwIfAborted()
+    try {
+      using timeout = deadline(signal, this.config.readinessTimeoutMs, 'FORGE_PANEL_READINESS_TIMEOUT')
+      return await this.home.forge.readiness({ forge, host: host.toLowerCase() }, timeout.signal)
+    } catch (error) {
+      signal.throwIfAborted()
+      return { state: 'unavailable', message: messageOf(error), signIn: null }
+    }
   }
 
   /**
@@ -389,6 +415,41 @@ export class ForgePanelController extends TypertRemoteService {
     const result = await this.home.forge.readDescription(this.served(url).ref, signal)
     if ('code' in result) throw new RemoteError('forgePanel/description-failed', result.message, {})
     return result
+  }
+
+  /**
+   * Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes
+   * of state.
+   * @param url - web URL of the change request.
+   * @param signal - request cancellation.
+   * @returns the activity, or null when the change request's provider reads none.
+   * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the
+   * host's reason when the host does not provide it.
+   */
+  @Remote
+  async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.readActivity(this.served(url).ref, signal)
+    if (!('code' in result)) return result
+    if (result.code === 'unsupported') return null
+    throw new RemoteError('forgePanel/activity-failed', result.message, {})
+  }
+
+  /**
+   * Add a comment to the conversation of a change request the review page shows.
+   * @param url - web URL of the change request.
+   * @param body - Markdown source of the comment.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is
+   * blank, or with the host's reason; `forgePanel/action-unknown` when the host's answer did not confirm the comment.
+   */
+  @Remote
+  async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const { ref } = this.served(url)
+    if (body.trim() === '') throw new RemoteError('forgePanel/action-failed', 'The comment is empty', {})
+    const failure = await this.home.forge.addComment(ref, body, signal)
+    if (failure !== undefined) throw actionError(failure)
   }
 
   /**
@@ -557,6 +618,22 @@ export class ForgePanelController extends TypertRemoteService {
   async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     const failure = await this.home.forge.merge(this.served(url).ref, { method, headSha }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Turn the code host's automatic merge of a change request the review page shows on, while its head is still the
+   * request's `headSha`, or off.
+   * @param url - web URL of the change request.
+   * @param request - on with the merge method and the head commit the user confirmed, or off.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+   * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+   */
+  @Remote
+  async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.setAutoMerge(this.served(url).ref, request, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 
@@ -1118,6 +1195,25 @@ export class ForgePanelController extends TypertRemoteService {
   async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     const failure = await this.home.forge.merge(this.bound(session, url).ref, { method, headSha }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Turn the code host's automatic merge of a change request of a Session on, while its head is still the request's
+   * `headSha`, or off; the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param request - on with the merge method and the head commit the user confirmed, or off.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past the request's `headSha`; `forgePanel/action-failed` with the
+   * host's reason when the host refuses otherwise, cannot be reached, or sets no automatic merge;
+   * `forgePanel/action-unknown` when the host's answer did not confirm the change.
+   */
+  @Remote
+  async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.setAutoMerge(this.bound(session, url).ref, request, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 

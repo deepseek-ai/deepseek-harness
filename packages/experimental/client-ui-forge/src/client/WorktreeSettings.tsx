@@ -1,21 +1,14 @@
 /** The worktree service's row page on the Plugins page: the archive cleanup switch. */
 import { useId } from 'react'
 import { SettingsForm, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { NS } from './locales.ts'
+import { rowFormLabels } from './row-form-labels.ts'
 import type { WorktreeSettingsInjected } from './worktree-settings-form.ts'
 import css from './WorktreeSettings.module.css'
 
 export type WorktreeSettingsProps = PropsRuntime<'plugins.row.config'> & PropsLocale<typeof NS> & InjectFace<WorktreeSettingsInjected>
-
-function formLabels(t: WorktreeSettingsProps['t']): SettingsFormLabels {
-  return {
-    unavailable: t('settings.unavailable'), readOnly: t('settings.readOnly'), saveFailed: t('settings.saveFailed'),
-    save: t('settings.save'), saving: t('settings.saving'),
-  }
-}
 
 /**
  * Render the worktree row's configuration: one switch that keeps every
@@ -29,7 +22,7 @@ export function WorktreeSettings(props: WorktreeSettingsProps) {
   const state = props.useWorktreeForm(value => value)
   if (props.view === 'summary') return t('settings.retainOnArchive.title')
   const disabled = !state.writable || state.saving
-  return <SettingsForm labels={formLabels(t)} state={state} onSave={props.save} onDiscard={props.discard}>
+  return <SettingsForm labels={rowFormLabels(t, 'settings.unavailable')} state={state} onSave={props.save} onDiscard={props.discard}>
     <div className={css.row}>
       <div className={css.text}>
         <label className={css.title} htmlFor={id}>{t('settings.retainOnArchive.title')}</label>

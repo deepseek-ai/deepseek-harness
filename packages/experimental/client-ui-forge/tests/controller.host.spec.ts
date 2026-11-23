@@ -2058,6 +2058,32 @@ describe('forgePanel actions', () => {
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
   })
 
+  it('turns the automatic merge of a bound change request on and off through its provider', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && polled(state, pullUrl(7)))
+    const on = { enabled: true as const, method: 'merge' as const, headSha: 'a'.repeat(40) }
+
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider sets no automatic merge' })
+    const setAutoMerge = vi.fn<NonNullable<ForgeProvider['setAutoMerge']>>(() => Promise.resolve(undefined))
+    Object.assign(opened.provider, { setAutoMerge })
+    await opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, signal)
+    await opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), { enabled: false }, signal)
+    expect(setAutoMerge.mock.calls.map(([target, request]) => [target.number, request])).toEqual([[7, on], [7, { enabled: false }]])
+    setAutoMerge.mockResolvedValueOnce({ code: 'stale', message: 'Head moved' })
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'Head moved' })
+    // A URL the Session does not bind names no change request to act on.
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(8), on, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    const aborted = new AbortController()
+    aborted.abort(new Error('closed'))
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, aborted.signal)).rejects.toThrow('closed')
+    expect(setAutoMerge).toHaveBeenCalledTimes(3)
+  })
+
   it('reads and saves viewed marks of a bound change request through its provider, separating a moved head', async () => {
     const { repo } = await project()
     const opened = await open(repo)

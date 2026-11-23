@@ -29,7 +29,7 @@ afterEach(() => {
 
 function actions(overrides: Partial<ThreadActions> = {}): ThreadActions {
   return {
-    author: 'octo', focused: null,
+    author: 'octo', focused: null, forge: 'github',
     addToInput: vi.fn(() => true), openLink: vi.fn(), readText: vi.fn(async (): Promise<RemoteResult<string>> => ({ ok: true, value: 'a\nb\nc' })),
     inputFailed: vi.fn(),
     writes: null,
@@ -270,7 +270,10 @@ describe('ThreadCard', () => {
     fireEvent.click(view.getByRole('button', { name: en['review.addToInput'] }))
     expect(shared.addToInput).toHaveBeenCalledWith(thread, 'R3')
     expect(shared.inputFailed).toHaveBeenCalledOnce()
-    fireEvent.click(view.getByRole('button', { name: hostCopy('thread.openOnHost') }))
+    // The action that opens the thread on its code host carries that host's mark.
+    const open = view.getByRole('button', { name: hostCopy('thread.openOnHost') })
+    expect(open.querySelector('svg[viewBox="-2 -2 28 28"]')).not.toBeNull()
+    fireEvent.click(open)
     expect(shared.openLink).toHaveBeenCalledWith(thread.comments[0]?.url)
   })
 
@@ -368,7 +371,7 @@ describe('ThreadList', () => {
   function list(overrides: Partial<ThreadListProps> = {}) {
     const props: ThreadListProps = {
       entries: [], files: [], truncated: false, url: 'https://github.com/octo/demo/pull/7', filter: 'all', claim: false,
-      claimed: vi.fn(), choose: vi.fn(), open: vi.fn(), openLink: vi.fn(), close: vi.fn(), t, ...overrides,
+      claimed: vi.fn(), choose: vi.fn(), open: vi.fn(), openLink: vi.fn(), forge: 'github', close: vi.fn(), t, ...overrides,
     }
     return { props, view: render(<ThreadList {...props} />) }
   }
@@ -378,7 +381,9 @@ describe('ThreadList', () => {
     cleanup()
     const { view } = list({ entries: [{ thread: reviewThread(), place: { kind: 'line', side: 'R', startLine: 3, endLine: 3 } }], filter: 'resolved' })
     expect(view.getByText(en['thread.none'])).toBeDefined()
-    expect(view.getByRole('button', { name: hostCopy('thread.openAll') }).parentElement?.textContent).toBe(hostCopy('thread.openAll'))
+    const all = view.getByRole('button', { name: hostCopy('thread.openAll') })
+    expect(all.parentElement?.textContent).toBe(hostCopy('thread.openAll'))
+    expect(all.querySelector('svg[viewBox="-2 -2 28 28"]')).not.toBeNull()
   })
 
   it('orders each file\'s threads from file threads to lines to outdated ones and describes each', () => {
