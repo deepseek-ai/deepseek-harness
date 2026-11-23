@@ -20,7 +20,7 @@ import { OfficeKitError } from './errors.ts'
 import type { OfficeKitGeneration, OfficeSourceKey } from './identity.ts'
 import type {
   OfficeConversionRequest, OfficeFileResult, OfficeImageInputExtension, OfficeImagesRequest, OfficeImagesResult,
-  OfficeKitRequest, OfficeKitResult, OfficeKitPriority, OfficeOutputTarget, OfficeRecalculationRequest, OfficeRenderer,
+  OfficeKitRequest, OfficeKitResult, OfficeKitPriority, OfficeOutputTarget, OfficeRecalculationRequest, DocumentRenderer,
   RenderedDocumentBytes,
 } from './types.ts'
 import { readOutput, readPdf, readPng } from './output.ts'
@@ -91,9 +91,9 @@ export interface Config {
    */
   renderers: {
     /** Order for every input except PDF; excludes `poppler`, which renders only PDF. */
-    office: OfficeRenderer[]
+    office: DocumentRenderer[]
     /** Order for PDF input. */
-    pdf: OfficeRenderer[]
+    pdf: DocumentRenderer[]
   }
   /** Poppler executables used by the `poppler` renderer. */
   poppler: {
@@ -254,8 +254,8 @@ export class OfficeKit extends TypertRemoteService {
 
   /** Select the rendering backend for one request; see {@link renderImages}. */
   private async resolveRenderer(
-    extension: OfficeImageInputExtension, requested: OfficeRenderer | undefined, signal: AbortSignal | undefined,
-  ): Promise<OfficeRenderer> {
+    extension: OfficeImageInputExtension, requested: DocumentRenderer | undefined, signal: AbortSignal | undefined,
+  ): Promise<DocumentRenderer> {
     signal?.throwIfAborted()
     if (requested !== undefined) {
       if (requested === 'poppler' && extension !== 'pdf') {
@@ -270,19 +270,19 @@ export class OfficeKit extends TypertRemoteService {
       if (await this.unavailableRenderer(candidate, signal) === undefined) return candidate
     }
     // Validated configuration lists are nonempty.
-    return candidates[candidates.length - 1] as OfficeRenderer
+    return candidates[candidates.length - 1] as DocumentRenderer
   }
 
   /**
    * Check whether `renderer` can start on this Host.
    * @returns undefined when it can, otherwise the `unavailable` failure; cancellation rejects with its reason.
    */
-  private async unavailableRenderer(renderer: OfficeRenderer, signal: AbortSignal | undefined): Promise<OfficeKitError | undefined> {
+  private async unavailableRenderer(renderer: DocumentRenderer, signal: AbortSignal | undefined): Promise<OfficeKitError | undefined> {
     try {
       switch (renderer) {
         case 'libreoffice': await this.loadKit(); return undefined
         case 'poppler': await locatePoppler(this.ctx, this.config.poppler, signal); return undefined
-        /* v8 ignore next -- OfficeRenderer is a closed union */
+        /* v8 ignore next -- DocumentRenderer is a closed union */
         default: throw new Error(`Unexpected Office renderer: ${JSON.stringify(renderer satisfies never)}`)
       }
     } catch (error) {

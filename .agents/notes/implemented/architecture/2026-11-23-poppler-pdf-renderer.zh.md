@@ -6,15 +6,15 @@ Status: implemented
 
 ## 问题
 
-`office_render` 过去在 Office 套件的 LibreOffice 转换器中栅格化所有输入，包括 PDF。该转换器是常驻进程，单个实例约占 600 到 900 MiB。在内存上限 2 GiB 的 Linux x64 容器中渲染 280 多页的扫描 PDF 会内存耗尽。栅格化 PDF 并不需要 Office 引擎，而 Host 上常常已经装有 Poppler 的 `pdftoppm` 和 `pdfinfo`。
+`document_render` 过去在 Office 套件的 LibreOffice 转换器中栅格化所有输入，包括 PDF。该转换器是常驻进程，单个实例约占 600 到 900 MiB。在内存上限 2 GiB 的 Linux x64 容器中渲染 280 多页的扫描 PDF 会内存耗尽。栅格化 PDF 并不需要 Office 引擎，而 Host 上常常已经装有 Poppler 的 `pdftoppm` 和 `pdfinfo`。
 
 ## 决策
 
 [Office 套件](../../../../packages/document/office-kit/README.zh.md)有两个图片渲染后端：`libreoffice` 和 `poppler`。`OfficeImagesRequest.renderer` 指定只使用其中一个；`poppler` 只接受 PDF，指定的后端不可用时以 `unavailable` 失败。未指定 `renderer` 时，提供方按 `renderers` 配置中该输入类型的顺序取第一个可用后端，默认为 `office: [libreoffice]` 和 `pdf: [poppler, libreoffice]`，最后一项不预先检查，直接使用。只有「不可用」才会换下一项。Kit 能导入时 LibreOffice 可用；`subprocess` 服务存在且能找到两个已配置的可执行文件时 Poppler 可用。后端在队列准入前确定并写入 operation，因此结果注明所用后端，缓存的渲染结果不会跨后端复用。
 
-Poppler 通过 `ctx.subprocess` 以 argv 启动短生命周期子进程，不占用 LibreOffice 转换器槽位，但共用队列的准入、并发和源字节预留。提供方与进程之间不传递文件：每个进程从 stdin 读取 PDF（写入时处理背压），`pdftoppm` 把 PNG 图片首尾相接写到 stdout。因此 subprocess 提供方在哪个执行环境中运行进程（包括 SSH 主机），Poppler 路径都能工作，也不需要文件系统提供方。每个进程的工作目录是解析出的可执行文件所在目录，该目录在那个执行环境中一定存在。`pdfinfo` 报告页数及每个所选页面的裁剪框尺寸和旋转，提供方在渲染前以 LibreOffice 路径的错误码拒绝过大或越界的选择。`pdftoppm -cropbox` 对每段连续页码各渲染一次；提供方在数据到达时按 PNG chunk 边界切分其 stdout，字节数超过剩余预算时终止它，要求每页恰好一张图片，并再次核对每张图片头部的尺寸。一个 `timeoutMs` 期限覆盖一次渲染的全部进程；取消、超过期限和提供方卸载都会终止正在运行的进程，每次调用都等进程退出后才结束。
+Poppler 通过 `ctx.subprocess` 以 argv 启动短生命周期子进程，不占用 LibreOffice 转换器槽位，但共用队列的准入、并发和源字节预留。提供方与进程之间不传递文件：每个进程从 stdin 读取 PDF（写入时处理背压），`pdftoppm` 把 PNG 图片首尾相接写到 stdout。因此 subprocess 提供方在哪个执行环境中运行进程（包括 SSH 主机），Poppler 路径都能工作，也不需要文件系统提供方。每个进程的工作目录是解析出的可执行文件所在目录，该目录在那个执行环境中一定存在。第一个 `pdfinfo` 报告页数，取其最后一行 `Pages:`，因为标题等文档属性先输出，其中可能包含伪造的行；第二个报告从第一个到最后一个所选页面中每页的裁剪框尺寸和旋转，提供方在渲染前以 LibreOffice 路径的错误码拒绝过大或越界的选择。`pdftoppm -cropbox` 对每段连续页码各渲染一次；提供方在数据到达时按 PNG chunk 边界切分其 stdout，字节数超过剩余预算时终止它，要求每页恰好一张图片，并再次核对每张图片头部的尺寸。一个 `timeoutMs` 期限覆盖一次渲染的全部进程；取消、超过期限和提供方卸载都会终止正在运行的进程，每次调用都等进程退出后才结束。
 
-[`office_render`](../../../../packages/document/tool-office/README.zh.md) 向模型提供 `renderer` 参数，对非 PDF 输入在读取前拒绝 `poppler`，并在结果文本中注明所用后端。显式请求的 `poppler` 不可用时，提示模型省略 `renderer` 或改用 `libreoffice`。
+[`document_render`](../../../../packages/document/tool-document/README.zh.md) 向模型提供 `renderer` 参数，对非 PDF 输入在读取前拒绝 `poppler`，并在结果文本中注明所用后端。显式请求的 `poppler` 不可用时，提示模型省略 `renderer` 或改用 `libreoffice`。
 
 ## 考虑过的替代方案
 
@@ -32,9 +32,9 @@ Poppler 通过 `ctx.subprocess` 以 argv 启动短生命周期子进程，不占
 
 ## 后果
 
-在装有 Poppler 的环境中，PDF 渲染不再启动 LibreOffice 转换器，内存随每个进程结束而释放。Poppler 进程在 DSH 沙箱之外运行，除操作系统外没有内存上限，只有 `timeoutMs` 约束它们；提供方既不安装 Poppler，也不检查其版本。使用 SSH 提供方时，Poppler 必须装在 SSH 主机上，PDF 每启动一个进程就经过连接传输一次。每次渲染启动一个读取页数的 `pdfinfo`，并为每段连续页码各启动一个 `pdfinfo` 和一个 `pdftoppm`，每个进程都接收完整的 PDF。Poppler 与 LibreOffice 的栅格化方式不同，因此同一请求的图片取决于 Poppler 是否可用；结果中的 `renderer` 字段和文本让这种差异可见。
+在装有 Poppler 的环境中，PDF 渲染不再启动 LibreOffice 转换器，内存随每个进程结束而释放。Poppler 进程在 DSH 沙箱之外运行，除操作系统外没有内存上限，只有 `timeoutMs` 约束它们；提供方既不安装 Poppler，也不检查其版本。使用 SSH 提供方时，Poppler 必须装在 SSH 主机上，PDF 每启动一个进程就经过连接传输一次。每次渲染启动两个 `pdfinfo`（一个读取页数，一个读取从第一个到最后一个所选页面的尺寸），并为每段连续页码各启动一个 `pdftoppm`，每个进程都接收完整的 PDF。Poppler 与 LibreOffice 的栅格化方式不同，因此同一请求的图片取决于 Poppler 是否可用；结果中的 `renderer` 字段和文本让这种差异可见。
 
-Office 套件的测试用带 stdin 和 stdout 流的脚本化子进程提供方覆盖后端顺序与退回、显式请求与不可用请求、连续页段拆分、跨多次读取的 PNG 切分、图片数不符、格式错误或被截断的 PNG 流、像素和尺寸预检、数量和字节上限（等于与超出）、读取缓慢和写入失败的 stdin、退出码映射、超时、取消和卸载时的终止、按后端缓存，以及配置校验。另有一个测试在两个可执行文件都在 PATH 上时，通过 `node:child_process` 管道用真实 Poppler 渲染生成的 PDF。工具测试覆盖 `renderer` 参数、对非 PDF 输入的拒绝、结果文本和不可用提示。
+Office 套件的测试用带 stdin 和 stdout 流的脚本化子进程提供方覆盖后端顺序与退回、显式请求与不可用请求、连续页段拆分、文档属性伪造的 `Pages:` 与尺寸行、跨多次读取的 PNG 切分、图片数不符、格式错误或被截断的 PNG 流、像素和尺寸预检、数量和字节上限（等于与超出）、读取缓慢和写入失败的 stdin、退出码映射、超时、取消和卸载时的终止、按后端缓存，以及配置校验。另有一个测试在本机 subprocess 提供方能找到两个可执行文件时，通过它用真实 Poppler 渲染生成的 PDF，其中一个的标题伪造了更小的页数。工具测试覆盖 `renderer` 参数、对非 PDF 输入的拒绝、结果文本和不可用提示。
 
 ## 相关记录
 

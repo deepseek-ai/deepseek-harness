@@ -25,9 +25,9 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)以 `office-kit` 条目挂载此提供方；[Office 工具](../tool-office/README.zh.md)是其面向模型的消费方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
+[Web bundle](../../bundle/web-app/README.zh.md)和 [SDK bundle](../../bundle/sdk-app/README.zh.md)以 `office-kit` 条目挂载此提供方；[Office 工具](../tool-document/README.zh.md)是其面向模型的消费方。独立组合通过 `cordis.yml` 条目挂载 `@deepseek-ai/dsh-office-kit`。
 
-调用方提交已授权源的标识、版本、可选字节数、延迟的有界读取、输入扩展名；PDF 转换还指定调度优先级，图片渲染、格式转换和重算以前台优先级运行。源版本变化会拒绝操作。取消以原因为拒绝值，失败使用 `OfficeKitError`，其小写 `code` 也是 `document-render/failed` 的原因；[`dsh-tool-office`](../tool-office/README.zh.md#use-this-package) 在工具结果中把它映射为 `OfficeToolError` 的代码。每个结果都携带缺失字体；PDF 结果还携带转换 generation（配置替换后随之改变）。
+调用方提交已授权源的标识、版本、可选字节数、延迟的有界读取、输入扩展名；PDF 转换还指定调度优先级，图片渲染、格式转换和重算以前台优先级运行。源版本变化会拒绝操作。取消以原因为拒绝值，失败使用 `OfficeKitError`，其小写 `code` 也是 `document-render/failed` 的原因；[`dsh-tool-document`](../tool-document/README.zh.md#use-this-package) 在工具结果中把它映射为 `OfficeToolError` 的代码。每个结果都携带缺失字体；PDF 结果还携带转换 generation（配置替换后随之改变）。
 
 | 方法 | 操作 | 结果 |
 |---|---|---|
@@ -36,11 +36,11 @@ kind: "package-reference"
 | `convertTo()` | 转换为 `format` 指定的格式；CSV 需要 `sheet` | 已保存文件的 Host 路径、大小和 PDF 页数 |
 | `recalculate()` | 把 XLS、XLSX 或 ODS 重算为 XLSX 或 ODS | 已保存工作簿的 Host 路径和大小 |
 
-`renderImages()` 要求提供 `maxImages`、`maxPixels`、`maxDimension` 和 `maxBytes`。图片数超过 `maxImages`，或单张图片超过像素或尺寸上限时，引擎拒绝该选择；图片 PNG 总字节数超过 `maxBytes` 时，提供方在读取前和读取过程中以 `output-too-large` 拒绝。引擎拒绝的页、工作表、区域、分辨率或格式选择以 `invalid-request` 失败，并附带引擎的说明。转换和重算的文件受 `maxOutputBytes` 限制。提供方从不写入工作区：它把每个输出保存在 `outputDirectory` 下各自仅属主可访问的目录中，按请求的 `output.owner`（`office_convert` 和 `office_recalculate` 传入调用方 subagent 树的根 Session）分组，并返回绝对 Host 路径。文件在 `outputRetentionMs` 到期、较新的输出需要 `maxOutputStoreBytes` 内的空间（最旧的先删）、id 等于 owner 的 Session 卸载或提供方卸载时删除；单个文件超过 `maxOutputStoreBytes` 时以 `output-too-large` 失败。文件在删除成功之前一直计入 `maxOutputStoreBytes`；删除失败时记录日志，并在之后的淘汰、释放和卸载时重试，腾不出足够空间的保存以 `unavailable` 失败。卸载会等待进行中的删除结束。启动时还会删除之前进程留下的、超过保留期的输出目录，但只处理名字符合提供方生成格式的真实目录，不处理链接或 junction：`outputDirectory` 下一级为 `session-` 加 24 位小写十六进制数字，其下为小写 UUID v4 的输出目录。其他条目保持不动。服务公开 `outputDirectory`，供消费方检查其执行环境能否读取。
+`renderImages()` 要求提供 `maxImages`、`maxPixels`、`maxDimension` 和 `maxBytes`。图片数超过 `maxImages`，或单张图片超过像素或尺寸上限时，引擎拒绝该选择；图片 PNG 总字节数超过 `maxBytes` 时，提供方在读取前和读取过程中以 `output-too-large` 拒绝。引擎拒绝的页、工作表、区域、分辨率或格式选择以 `invalid-request` 失败，并附带引擎的说明。转换和重算的文件受 `maxOutputBytes` 限制。提供方从不写入工作区：它把每个输出保存在 `outputDirectory` 下各自仅属主可访问的目录中，按请求的 `output.owner`（`document_convert` 和 `document_recalculate` 传入调用方 subagent 树的根 Session）分组，并返回绝对 Host 路径。文件在 `outputRetentionMs` 到期、较新的输出需要 `maxOutputStoreBytes` 内的空间（最旧的先删）、id 等于 owner 的 Session 卸载或提供方卸载时删除；单个文件超过 `maxOutputStoreBytes` 时以 `output-too-large` 失败。文件在删除成功之前一直计入 `maxOutputStoreBytes`；删除失败时记录日志，并在之后的淘汰、释放和卸载时重试，腾不出足够空间的保存以 `unavailable` 失败。卸载会等待进行中的删除结束。启动时还会删除之前进程留下的、超过保留期的输出目录，但只处理名字符合提供方生成格式的真实目录，不处理链接或 junction：`outputDirectory` 下一级为 `session-` 加 24 位小写十六进制数字，其下为小写 UUID v4 的输出目录。其他条目保持不动。服务公开 `outputDirectory`，供消费方检查其执行环境能否读取。
 
 `renderImages()` 在准入前选定渲染后端。请求的 `renderer` 只使用该后端：`poppler` 用于非 PDF 输入时以 `unsupported-format` 失败，后端不可用时以 `unavailable` 失败。未指定 `renderer` 时，PDF 输入取 `renderers.pdf`、其他输入取 `renderers.office` 中第一个可用的后端，最后一项不预先检查，直接使用。只有「不可用」才会换下一项；选中的后端运行失败、超时或输出无效时直接拒绝请求。Kit 能导入时 LibreOffice 可用。`subprocess` 服务存在，且能在其执行环境中找到两个已配置的可执行文件时，Poppler 可用；组合了 SSH 提供方时，该执行环境是 SSH 主机。结果注明所用后端，缓存的渲染结果按后端分别保存。
 
-Poppler 渲染 PDF 页面时不占用 LibreOffice 转换器槽位，但仍共用队列准入、并发和源字节预留。每个进程从 stdin 读取 PDF，提供方与进程之间不传递任何文件。`pdfinfo` 报告页数及每个所选页面的裁剪框尺寸和旋转，提供方在渲染前按 LibreOffice 路径的错误码拒绝选择：页数超过 `maxImages`，或某页在所请求的 DPI（默认 144）下超过 `maxPixels` 或 `maxDimension`，为 `output-too-large`；页码超出文档为 `invalid-request`。随后 `pdftoppm` 对每段连续页码各渲染一次，把 PNG 图片首尾相接写到 stdout。提供方在数据到达时按 PNG chunk 边界切分，字节数超过剩余的 `maxBytes` 时终止 `pdftoppm` 并报 `output-too-large`，要求该段每页恰好一张图片，按每张图片头部的尺寸再次核对上限，并返回空的 `missingFonts` 列表。退出码 1 映射为 `invalid-document`，超过 `timeoutMs` 期限映射为 `timeout`，其他失败映射为 `failed`。
+Poppler 渲染 PDF 页面时不占用 LibreOffice 转换器槽位，但仍共用队列准入、并发和源字节预留。每个进程从 stdin 读取 PDF，提供方与进程之间不传递任何文件。第一个 `pdfinfo` 报告页数，取其最后一行 `Pages:`，因为标题等文档属性先输出；第二个报告从第一个到最后一个所选页面中每页的裁剪框尺寸和旋转，提供方在渲染前按 LibreOffice 路径的错误码拒绝选择：页数超过 `maxImages`，或某页在所请求的 DPI（默认 144）下超过 `maxPixels` 或 `maxDimension`，为 `output-too-large`；页码超出文档为 `invalid-request`。随后 `pdftoppm` 对每段连续页码各渲染一次，把 PNG 图片首尾相接写到 stdout。提供方在数据到达时按 PNG chunk 边界切分，字节数超过剩余的 `maxBytes` 时终止 `pdftoppm` 并报 `output-too-large`，要求该段每页恰好一张图片，按每张图片头部的尺寸再次核对上限，并返回空的 `missingFonts` 列表。退出码 1 映射为 `invalid-document`，超过 `timeoutMs` 期限映射为 `timeout`，其他失败映射为 `failed`。
 
 此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `0.2.3`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
@@ -102,7 +102,7 @@ Poppler 进程通过 `subprocess` 服务以 argv 启动，从不经过 shell 命
 ## 延伸阅读
 
 - [Office Kit](../../../docs/subsystems/office-kit.zh.md) — 组合与输入、结果所有权。
-- [Office 工具](../tool-office/README.zh.md) — 面向模型的渲染、转换和重算工具。
+- [Office 工具](../tool-document/README.zh.md) — 面向模型的渲染、转换和重算工具。
 - [工作区文件](../../api/workspace-files/README.zh.md) — Session 文件授权与有界读取。
 
 -----
@@ -110,7 +110,7 @@ Poppler 进程通过 `subprocess` 服务以 argv 启动，从不经过 shell 命
 <a id="model-experience"></a>
 ## 模型体验
 
-间接地，通过 [Office 工具](../tool-office/README.zh.md#model-experience)，这些工具返回此服务渲染的图片和转换的文件。
+间接地，通过 [Office 工具](../tool-document/README.zh.md#model-experience)，这些工具返回此服务渲染的图片和转换的文件。
 
 #### KV Cache effect
 
@@ -126,7 +126,7 @@ Poppler 进程通过 `subprocess` 服务以 argv 启动，从不经过 shell 命
 - 渲染的图片以字节返回。转换和重算后的文件存放在提供方的输出目录中，不写入工作区；由调用方把每个文件复制到目标位置。
 - 映射原生路径时不验证解包副本是否存在。Kit 会拒绝缺失的清单或资源，而不会将其视为原生包缺失。
 - Poppler 作为 subprocess 提供方的普通进程运行，不受 DSH 沙箱约束，也没有内存上限；只有 `timeoutMs` 约束它。提供方既不安装 Poppler，也不检查其版本。
-- 每个 Poppler 进程都从 stdin 接收完整的 PDF，因此包含多段页码的渲染会为每个 `pdfinfo` 和 `pdftoppm` 进程各发送一次源文件；使用 SSH 提供方时，每份副本都经过 SSH 连接。
+- 每个 Poppler 进程都从 stdin 接收完整的 PDF，因此一次渲染会把源文件发给两个 `pdfinfo` 进程，并为每段连续页码发给一个 `pdftoppm` 进程；使用 SSH 提供方时，每份副本都经过 SSH 连接。
 - Poppler 与 LibreOffice 光栅化 PDF 页面的方式不同，同一页由不同后端渲染的图片可能有差异。
 
 <a id="dev-note"></a>

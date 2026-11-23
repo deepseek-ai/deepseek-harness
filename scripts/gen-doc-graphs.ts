@@ -320,7 +320,7 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
-    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
+    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-document'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
   },
   {

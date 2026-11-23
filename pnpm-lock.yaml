@@ -3027,9 +3027,9 @@ importers:
       '@deepseek-ai/dsh-tool-cordis':
         specifier: workspace:*
         version: link:../../extensions/tool-cordis
-      '@deepseek-ai/dsh-tool-office':
+      '@deepseek-ai/dsh-tool-document':
         specifier: workspace:*
-        version: link:../../document/tool-office
+        version: link:../../document/tool-document
       '@deepseek-ai/dsh-tool-present':
         specifier: workspace:*
         version: link:../../deliverables/tool-present
@@ -3566,6 +3566,9 @@ importers:
       '@deepseek-ai/dsh-tool-cordis':
         specifier: workspace:*
         version: link:../../extensions/tool-cordis
+      '@deepseek-ai/dsh-tool-document':
+        specifier: workspace:*
+        version: link:../../document/tool-document
       '@deepseek-ai/dsh-tool-executor-ptc':
         specifier: workspace:*
         version: link:../../core/tool-executor-ptc
@@ -3581,9 +3584,6 @@ importers:
       '@deepseek-ai/dsh-tool-jobs':
         specifier: workspace:*
         version: link:../../jobs/tool-jobs
-      '@deepseek-ai/dsh-tool-office':
-        specifier: workspace:*
-        version: link:../../document/tool-office
       '@deepseek-ai/dsh-tool-present':
         specifier: workspace:*
         version: link:../../deliverables/tool-present
@@ -9649,8 +9649,11 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:*
+        version: link:../../subprocess/subprocess-local
 
-  packages/document/tool-office:
+  packages/document/tool-document:
     dependencies:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
@@ -21318,6 +21321,9 @@ importers:
       '@deepseek-ai/dsh-tool-cordis':
         specifier: workspace:*
         version: link:../../packages/extensions/tool-cordis
+      '@deepseek-ai/dsh-tool-document':
+        specifier: workspace:*
+        version: link:../../packages/document/tool-document
       '@deepseek-ai/dsh-tool-executor-ptc':
         specifier: workspace:*
         version: link:../../packages/core/tool-executor-ptc
@@ -21333,9 +21339,6 @@ importers:
       '@deepseek-ai/dsh-tool-jobs':
         specifier: workspace:*
         version: link:../../packages/jobs/tool-jobs
-      '@deepseek-ai/dsh-tool-office':
-        specifier: workspace:*
-        version: link:../../packages/document/tool-office
       '@deepseek-ai/dsh-tool-present':
         specifier: workspace:*
         version: link:../../packages/deliverables/tool-present

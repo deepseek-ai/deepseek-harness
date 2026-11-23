@@ -3195,9 +3195,9 @@ export interface Config {
    */
   renderers: {
     /** Order for every input except PDF; excludes `poppler`, which renders only PDF. */
-    office: OfficeRenderer[]
+    office: DocumentRenderer[]
     /** Order for PDF input. */
-    pdf: OfficeRenderer[]
+    pdf: DocumentRenderer[]
   }
   /** Poppler executables used by the `poppler` renderer. */
   poppler: {
@@ -3212,7 +3212,7 @@ export interface Config {
  * Image rendering backend: `libreoffice` renders every image input in the provider's LibreOffice Kit converter;
  * `poppler` renders PDF only, through short-lived `pdfinfo` and `pdftoppm` subprocesses.
  */
-export type OfficeRenderer = 'libreoffice' | 'poppler'
+export type DocumentRenderer = 'libreoffice' | 'poppler'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
 
@@ -4963,6 +4963,31 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-document -->
+<a id="deepseek-aidsh-tool-document"></a>
+
+## `@deepseek-ai/dsh-tool-document`
+
+- `inject`: `tools` · `fs` · `workingDirectory` · `agents`
+- `source`: [`packages/document/tool-document/src/index.ts:43`](../packages/document/tool-document/src/index.ts)
+
+```ts config-catalog
+/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
+export interface Config {
+  /** Skill names whose successful loading admits all three tools from the following step. */
+  activationSkills: string[]
+  /** Maximum images one render returns, including worksheet fragments. */
+  maxImages: number
+  /** Maximum pixels of each image. */
+  maxImagePixels: number
+  /** Maximum width and height of each image in pixels. */
+  maxImageDimension: number
+  /** Maximum PNG bytes across all images of one render. */
+  maxImageBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-document -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
 <a id="deepseek-aidsh-tool-executor-ptc"></a>
 
@@ -5132,31 +5157,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-lsp -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
-<a id="deepseek-aidsh-tool-office"></a>
-
-## `@deepseek-ai/dsh-tool-office`
-
-- `inject`: `tools` · `fs` · `workingDirectory` · `agents`
-- `source`: [`packages/document/tool-office/src/index.ts:43`](../packages/document/tool-office/src/index.ts)
-
-```ts config-catalog
-/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
-export interface Config {
-  /** Skill names whose successful loading admits all three tools from the following step. */
-  activationSkills: string[]
-  /** Maximum images one render returns, including worksheet fragments. */
-  maxImages: number
-  /** Maximum pixels of each image. */
-  maxImagePixels: number
-  /** Maximum width and height of each image in pixels. */
-  maxImageDimension: number
-  /** Maximum PNG bytes across all images of one render. */
-  maxImageBytes: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-present -->
 <a id="deepseek-aidsh-tool-present"></a>

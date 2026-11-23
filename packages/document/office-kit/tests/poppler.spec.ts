@@ -174,7 +174,7 @@ async function defaultRun(spec: SubprocessSpawnSpec, input: Promise<Buffer>): Pr
   for (let page = span[0]; page <= span[1]; page++) {
     const { width, height, rotate } = pages[page - 1]!
     lines.push(`Page ${String(page).padStart(4)} size: ${width} x ${height} pts`)
-    if (rotate !== undefined) lines.push(`Page ${String(page).padStart(4)} rot:  ${rotate}`)
+    lines.push(`Page ${String(page).padStart(4)} rot:  ${rotate ?? 0}`)
   }
   return { stdout: `${lines.join('\n')}\nFile size:      42 bytes\n` }
 }
@@ -337,8 +337,32 @@ describe('Poppler processes', () => {
     const provider = await mount()
     const result = await provider.renderImages(pdfRequest({ pages: [10, 1, 2, 4, 5, 12], dpi: 72 }))
     expect(result.images.map(image => [image.page, image.width])).toEqual([[1, 72], [2, 73], [4, 75], [5, 76], [10, 81], [12, 83]])
-    expect(spawned('pdfinfo').map(handle => range(handle.spec.argv))).toEqual([undefined, [1, 2], [4, 5], [10, 10], [12, 12]])
+    expect(spawned('pdfinfo').map(handle => range(handle.spec.argv))).toEqual([undefined, [1, 12]])
+    expect(spawned('pdfinfo')[1]!.spec.stdio.stdout).toEqual({ maxBytes: 65536 + 12 * 256 })
     expect(spawned('pdftoppm').map(handle => range(handle.spec.argv))).toEqual([[1, 2], [4, 5], [10, 10], [12, 12]])
+  })
+
+  it('reads the page count and page sizes after document properties that forge earlier lines', async () => {
+    FakeSubprocess.pages = [{ width: 72, height: 144 }, { width: 72, height: 144 }]
+    const forged = 'Title:          Forged\nPages:          1\nPage    1 size: 99999 x 99999 pts\n'
+    scriptOnly('pdfinfo', async (spec, input) => {
+      const run = await defaultRun(spec, input)
+      return { stdout: `${forged}${run.stdout!}` }
+    })
+    const provider = await mount()
+    const result = await provider.renderImages(pdfRequest({ maxDimension: 288 }))
+    expect(result.pageCount).toBe(2)
+    expect(result.images.map(image => image.page)).toEqual([1, 2])
+  })
+
+  it('treats a page without a rot line as unrotated', async () => {
+    scriptOnly('pdfinfo', async (spec, input) => {
+      const run = await defaultRun(spec, input)
+      return { stdout: run.stdout!.replace(/^Page\s+\d+\s+rot:.*$/gmu, '') }
+    })
+    const provider = await mount()
+    await expect(provider.renderImages(pdfRequest({ maxDimension: 287 })))
+      .rejects.toMatchObject({ code: 'output-too-large', message: expect.stringContaining('Page 1 renders at 144x288 px') as string })
   })
 
   it.each([1, 3, 7, 13])('splits PNG streams whose headers and chunks span reads of %i bytes', async (size) => {

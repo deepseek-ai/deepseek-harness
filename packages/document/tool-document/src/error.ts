@@ -1,4 +1,4 @@
-/** Typed Office tool failures. @module @deepseek-ai/dsh-tool-office/src/error */
+/** Typed Office tool failures. @module @deepseek-ai/dsh-tool-document/src/error */
 
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { OfficeKitErrorCode } from '@deepseek-ai/dsh-office-kit'
@@ -18,9 +18,9 @@ import type { OfficeKitErrorCode } from '@deepseek-ai/dsh-office-kit'
  * - `OFFICE_TIMEOUT`: the conversion exceeded its deadline.
  * - `OFFICE_SOURCE_CHANGED`: the source changed after its read was authorized; retry on the current file.
  * - `OFFICE_CONVERSION_FAILED`: the engine failed without a more specific class.
- * - `OFFICE_UNSUPPORTED_REMOTE_WORKSPACE`: `office_convert` and `office_recalculate` cannot return a file the
+ * - `OFFICE_UNSUPPORTED_REMOTE_WORKSPACE`: `document_convert` and `document_recalculate` cannot return a file the
  *   execution world reads, because the workspace is on a remote host.
- * - `MODEL_DOES_NOT_SUPPORT_IMAGES`: the calling model route does not declare image input, so `office_render` cannot
+ * - `MODEL_DOES_NOT_SUPPORT_IMAGES`: the calling model route does not declare image input, so `document_render` cannot
  *   return images; switch to an image-capable model. The value matches the attachment refusal reason of the same
  *   name.
  */

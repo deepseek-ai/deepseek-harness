@@ -10,9 +10,9 @@ Status: implemented
 
 ## Decision
 
-`@deepseek-ai/dsh-skill-office` 只注册 `office`。`office` 正文说明 `office_render`、`office_convert` 和 `office_recalculate` 会在下一步可用，指出内置 `pypdf` 用于读取现有 PDF、旧版 `.doc`／`.ppt`／`.xls` 需先用 `office_convert` 转换，内联列出 Word、PowerPoint 和 Excel 中会静默丢失格式、东亚字体、版面适配、公式计算值或工作表的精简易错点，并在末尾追加一次配置的 Python 环境说明。不再内置或读取单独的格式文件。本文取代[渐进式 Office 技能](2026-09-27-progressive-office-skills.zh.md)的目录与创作正文设计，同时保留[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)的激活设计（`activationSkills` 默认为 `['office']`）。
+`@deepseek-ai/dsh-skill-office` 只注册 `office`。`office` 正文说明 `document_render`、`document_convert` 和 `document_recalculate` 会在下一步可用，指出内置 `pypdf` 用于读取现有 PDF、旧版 `.doc`／`.ppt`／`.xls` 需先用 `document_convert` 转换，内联列出 Word、PowerPoint 和 Excel 中会静默丢失格式、东亚字体、版面适配、公式计算值或工作表的精简易错点，并在末尾追加一次配置的 Python 环境说明。不再内置或读取单独的格式文件。本文取代[渐进式 Office 技能](2026-09-27-progressive-office-skills.zh.md)的目录与创作正文设计，同时保留[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)的激活设计（`activationSkills` 默认为 `['office']`）。
 
-[Office 工具](../../../../packages/document/tool-office/README.zh.md)的 `activationSkills` 默认为 `['office']`。目录发现和加载时，提供者读取 `office/SKILL.md`；文件缺失或元数据无效时，`office` 从目录中省略并记录警告，其他读取错误使本次发现不完整，由注册表重试。
+[Office 工具](../../../../packages/document/tool-document/README.zh.md)的 `activationSkills` 默认为 `['office']`。目录发现和加载时，提供者读取 `office/SKILL.md`；文件缺失或元数据无效时，`office` 从目录中省略并记录警告，其他读取错误使本次发现不完整，由注册表重试。
 
 由于全部指导都随 `skill` 工具结果返回，无需第二次 `read` 调用，且在本地、Desktop（`app.asar`）以及远程或 SSH 工作区中都能获得完全一致的指导。
 

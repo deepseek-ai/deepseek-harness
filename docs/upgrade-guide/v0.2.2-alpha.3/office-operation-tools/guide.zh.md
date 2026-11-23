@@ -9,7 +9,7 @@ description: "删除 `office-render`、`office-recalculate` 和 `office-export-p
 
 ## 变更
 
-`@deepseek-ai/dsh-skill-office` 不再注册 `office-render`、`office-recalculate` 和 `office-export-pdf` 技能，只注册 `office` 路由技能，以及 `office-docx`、`office-pptx` 和 `office-xlsx` 编写技能。加载 Office 技能后，模型从下一步起调用 [`office_render`、`office_convert` 和 `office_recalculate`](../../../../packages/document/tool-office/README.zh.md)。
+`@deepseek-ai/dsh-skill-office` 不再注册 `office-render`、`office-recalculate` 和 `office-export-pdf` 技能，只注册 `office` 路由技能，以及 `office-docx`、`office-pptx` 和 `office-xlsx` 编写技能。加载 Office 技能后，模型从下一步起调用 [`office_render`、`office_convert` 和 `office_recalculate`](../../../../packages/document/tool-document/README.zh.md)。
 
 配置变化：
 

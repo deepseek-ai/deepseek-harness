@@ -51,7 +51,7 @@ export type OfficeRecalculationFormat = 'xlsx' | 'ods'
  * Image rendering backend: `libreoffice` renders every image input in the provider's LibreOffice Kit converter;
  * `poppler` renders PDF only, through short-lived `pdfinfo` and `pdftoppm` subprocesses.
  */
-export type OfficeRenderer = 'libreoffice' | 'poppler'
+export type DocumentRenderer = 'libreoffice' | 'poppler'
 
 /**
  * Render selected pages, slides, or worksheet areas of one document as PNG images.
@@ -64,7 +64,7 @@ export interface OfficeImagesRequest {
    * Backend to use exclusively; omission selects the first available backend of the provider's `renderers` order
    * for this input. `poppler` accepts only `pdf`.
    */
-  readonly renderer?: OfficeRenderer
+  readonly renderer?: DocumentRenderer
   /** Distinct one-based pages or slides; omission renders every page. */
   readonly pages?: readonly number[]
   /** Exact worksheet name; omission renders each visible worksheet's data area. */
@@ -108,7 +108,7 @@ export interface OfficeImagesResult {
   /** Requested OOXML font families unavailable to this rendering. */
   readonly missingFonts: string[]
   /** Backend that rendered the images. */
-  readonly renderer: OfficeRenderer
+  readonly renderer: DocumentRenderer
 }
 
 /** Owner and file name of a converted or recalculated output saved in the provider's output store. */

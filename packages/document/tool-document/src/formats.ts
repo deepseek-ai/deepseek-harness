@@ -1,9 +1,9 @@
 /**
  * Office document families, accepted formats, and input-dependent argument rules.
- * @module @deepseek-ai/dsh-tool-office/formats
+ * @module @deepseek-ai/dsh-tool-document/formats
  */
 
-import type { OfficeConversionFormat, OfficeRecalculationFormat, OfficeRenderer } from '@deepseek-ai/dsh-office-kit'
+import type { OfficeConversionFormat, OfficeRecalculationFormat, DocumentRenderer } from '@deepseek-ai/dsh-office-kit'
 import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 
 /** Operation requested by one Office tool call. */
@@ -40,7 +40,7 @@ export interface OfficeRenderArgs {
   range?: string
   dpi?: number
   /** Backend to use exclusively; omission lets the Office service choose. */
-  renderer?: OfficeRenderer
+  renderer?: DocumentRenderer
 }
 
 /** Arguments for converting a document. */
@@ -57,7 +57,7 @@ export interface OfficeRecalculateArgs {
 }
 
 /** Model-facing Office tool name. */
-export type OfficeToolName = 'office_render' | 'office_convert' | 'office_recalculate'
+export type OfficeToolName = 'document_render' | 'document_convert' | 'document_recalculate'
 
 /**
  * Refuse argument keys the called tool does not declare, because the open parameter object would otherwise ignore

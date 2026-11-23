@@ -88,12 +88,13 @@ export async function renderPdf(
   const run = AbortSignal.any([signal, deadline.signal])
   try {
     const pageCount = parsePageCount(await runTool(tools, 'pdfinfo', ['-'], pdf, run, PDFINFO_STDOUT_BYTES))
-    const runs = contiguousRuns(selectPages(operation, pageCount))
-    for (const [first, last] of runs) {
-      const sizes = await runTool(tools, 'pdfinfo', ['-f', String(first), '-l', String(last), '-'], pdf, run,
-        PDFINFO_STDOUT_BYTES + (last - first + 1) * PDFINFO_PAGE_BYTES)
-      checkPageSizes(sizes, first, last, dpi, operation)
-    }
+    const pages = selectPages(operation, pageCount)
+    const runs = contiguousRuns(pages)
+    const spanFirst = Math.min(...pages)
+    const spanLast = Math.max(...pages)
+    const sizes = await runTool(tools, 'pdfinfo', ['-f', String(spanFirst), '-l', String(spanLast), '-'], pdf, run,
+      PDFINFO_STDOUT_BYTES + (spanLast - spanFirst + 1) * PDFINFO_PAGE_BYTES)
+    for (const [first, last] of runs) checkPageSizes(sizes, first, last, dpi, operation)
     const images: OfficeImage[] = []
     let remaining = operation.maxBytes
     for (const [first, last] of runs) {
@@ -159,14 +160,19 @@ function contiguousRuns(pages: readonly number[]): [number, number][] {
   return runs
 }
 
+/**
+ * Read the page count from the last `Pages:` line. pdfinfo prints document properties such as Title before it, and a
+ * property value containing a newline can forge an earlier `Pages:` line; only fixed-format fields follow the real one.
+ */
 function parsePageCount(stdout: string): number {
-  const match = /^Pages:\s+(\d+)\s*$/mu.exec(stdout)
-  if (match === null) throw new OfficeKitError('invalid-output', 'pdfinfo did not report the page count.')
+  const match = [...stdout.matchAll(/^Pages:\s+(\d+)\s*$/gmu)].at(-1)
+  if (match === undefined) throw new OfficeKitError('invalid-output', 'pdfinfo did not report the page count.')
   return Number(match[1])
 }
 
 /** Refuse pages whose crop box at `dpi` exceeds the pixel or dimension limit. */
 function checkPageSizes(stdout: string, first: number, last: number, dpi: number, operation: ImagesOperation): void {
+  // pdfinfo prints the real page lines after the document properties, so they overwrite any line a property value forges.
   const sizes = new Map<number, { width: number; height: number }>()
   const rotations = new Map<number, number>()
   for (const match of stdout.matchAll(/^Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/gmu)) {
@@ -282,18 +288,18 @@ class PngSplitter {
  * reports the outcome.
  */
 async function feed(stdin: Writable, bytes: Uint8Array): Promise<void> {
-  let stopped = false
+  const state = { stopped: false }
   const stop = new Promise<void>((resolve) => {
-    const end = (): void => { stopped = true; resolve() }
+    const end = (): void => { state.stopped = true; resolve() }
     stdin.on('error', end)
     stdin.once('close', end)
   })
-  for (let offset = 0; offset < bytes.byteLength && !stopped; offset += STDIN_CHUNK_BYTES) {
+  for (let offset = 0; offset < bytes.byteLength && !state.stopped; offset += STDIN_CHUNK_BYTES) {
     if (!stdin.write(bytes.subarray(offset, offset + STDIN_CHUNK_BYTES))) {
       await Promise.race([new Promise((resolve) => { stdin.once('drain', resolve) }), stop])
     }
   }
-  if (!stopped) stdin.end()
+  if (!state.stopped) stdin.end()
 }
 
 /**

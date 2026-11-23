@@ -53,7 +53,12 @@ export function OfficeRow({
   )
 }
 
-/** Registers the three Office toolviews. */
+/** Office tool names; the `office_*` names are the earlier names, kept so calls in older Sessions keep the Office row. */
+const OFFICE_TOOL_NAMES = [
+  'document_render', 'document_convert', 'document_recalculate', 'office_render', 'office_convert', 'office_recalculate',
+] as const
+
+/** Registers the Office toolviews under the current and earlier tool names. */
 export const officeToolview = {
   name: 'office-toolview',
   inject: ['slots', 'sessions'],
@@ -63,9 +68,9 @@ export const officeToolview = {
    */
   apply(ctx: Context): void {
     ctx.slots.inject('tool.call.toolview', function* () {
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'office_render', locale: NS, inject: toolFileInject(ctx) }, OfficeRow)
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'office_convert', locale: NS, inject: toolFileInject(ctx) }, OfficeRow)
-      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'office_recalculate', locale: NS, inject: toolFileInject(ctx) }, OfficeRow)
+      for (const key of OFFICE_TOOL_NAMES) {
+        yield ctx.slots.register({ name: 'tool.call.toolview', key, locale: NS, inject: toolFileInject(ctx) }, OfficeRow)
+      }
     })
   },
 }

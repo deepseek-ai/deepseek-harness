@@ -391,7 +391,7 @@
     { "path": "./packages/client/ui-sidebar-browser/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
     { "path": "./packages/document/office-kit" },
-    { "path": "./packages/document/tool-office" },
+    { "path": "./packages/document/tool-document" },
 
     { "path": "./packages/account/deepseek-account" },
     { "path": "./packages/account/deepseek-auth" },
