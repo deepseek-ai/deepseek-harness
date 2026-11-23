@@ -8,7 +8,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { PluginPackages } from '@deepseek-ai/dsh-app-boot'
 import z from '@deepseek-ai/schemastery'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { queryLiveConfig } from '../src/config.ts'
+import { queryLiveConfig } from '../src/inspect-config.ts'
 
 /** The Config provider reads the running Loader tree: only live fibers expose a Config, carriers never do. */
 
@@ -29,7 +29,7 @@ interface Ids {
 
 /** A Loader tree whose base directory holds `node_modules/with-schema/package.json`, so the package lookup resolves that plugin. */
 async function loaded(): Promise<{ ctx: Context; ids: Ids; packageDir: string }> {
-  const dir = mkdtempSync(join(tmpdir(), 'dsh-tool-cordis-config-'))
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-cordis-inspect-config-'))
   onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })
   const packageDir = join(dir, 'node_modules', 'with-schema')
   mkdirSync(packageDir, { recursive: true })
