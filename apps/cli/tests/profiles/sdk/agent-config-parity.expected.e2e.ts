@@ -1,7 +1,8 @@
 /**
- * Static comparison of the agent-plane plugin rows of the shipped SDK profile and the Desktop standard agent preset, read from
+ * Static comparison of the plugin rows of the shipped SDK profile with the Desktop standard composition, read from
  * `dsh --dump-config` without booting. It covers rows whose model effect a default turn does not show, such as the
- * plan mode section. Only rows the preset declares are compared; the remaining rows are the Desktop host plane.
+ * plan mode section. An SDK row compares with the standard agent preset row of the same id, or else with the Desktop
+ * host row of that id; an enabled SDK row with neither is SDK-only. Desktop host rows the SDK lacks are not compared.
  * Record differences in parity-exceptions.ts.
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -20,11 +21,20 @@ const GROUP = 'cordis:group'
 
 interface Row { id?: string; name?: string; disabled?: unknown; config?: unknown }
 
+/** Replace each unevaluated `!!js` node with `!!js <source>`, so a differing expression reports at its own field. */
+function literal(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(literal)
+  if (value === null || typeof value !== 'object') return value
+  const entries = Object.entries(value)
+  if (entries.length === 1 && entries[0]![0] === '__jsExpr') return `!!js ${String(entries[0]![1])}`
+  return Object.fromEntries(entries.map(([key, item]) => [key, literal(item)]))
+}
+
 /** Leaf rows by id; group rows contribute their members, and an absent `disabled` reads as `false`. */
 function leaves(rows: readonly Row[], into = new Map<string, unknown>()): Map<string, unknown> {
   for (const row of rows) {
     if (row.name === GROUP && Array.isArray(row.config)) leaves(row.config as Row[], into)
-    else if (row.id !== undefined) into.set(row.id, { name: row.name, disabled: row.disabled ?? false, config: row.config })
+    else if (row.id !== undefined) into.set(row.id, literal({ name: row.name, disabled: row.disabled ?? false, config: row.config }))
   }
   return into
 }
@@ -36,14 +46,37 @@ function presetRows(rows: readonly Row[]): Map<string, unknown> {
 }
 
 /**
- * The SDK rows with the ids a preset declares. A preset `persona` row and the SDK `system-prompt.personaPrefix`
- * render the same persona section, so the SDK prefix compares as that row.
+ * The SDK rows by id. A preset `persona` row and the SDK `system-prompt.personaPrefix` render the same persona section,
+ * so the SDK prefix also compares as that row.
  */
-function sdkRows(rows: readonly Row[], ids: Iterable<string>): Map<string, unknown> {
+function sdkRows(rows: readonly Row[]): Map<string, unknown> {
   const all = leaves(rows)
   const prefix = (all.get('system-prompt') as { config?: { personaPrefix?: unknown } } | undefined)?.config?.personaPrefix
   if (prefix !== undefined) all.set('persona', { name: '@deepseek-ai/dsh-persona', disabled: false, config: { prefix } })
-  return new Map([...ids].filter(id => all.has(id)).map(id => [id, all.get(id)]))
+  return all
+}
+
+/**
+ * Pair each SDK row with the Desktop row it is compared against: the standard preset row of its id, else the Desktop
+ * host row of its id. A disabled SDK row with neither counterpart is absent on both sides.
+ * @param sdk - SDK rows by id.
+ * @param web - the Desktop (`web`) composition rows.
+ * @returns the SDK and Desktop sides of one entry table each.
+ */
+function pairRows(sdk: ReadonlyMap<string, unknown>, web: readonly Row[]): [Map<string, unknown>, Map<string, unknown>] {
+  const preset = presetRows(web)
+  const host = leaves(web)
+  const desktop = new Map(preset)
+  const compared = new Map<string, unknown>()
+  for (const id of preset.keys()) if (sdk.has(id)) compared.set(id, sdk.get(id))
+  for (const [id, row] of sdk) {
+    if (preset.has(id)) continue
+    if (host.has(id)) {
+      compared.set(id, row)
+      desktop.set(id, host.get(id))
+    } else if ((row as { disabled: unknown }).disabled !== true) compared.set(id, row)
+  }
+  return [compared, desktop]
 }
 
 async function fixture(test: TestContext) {
@@ -62,13 +95,12 @@ async function fixture(test: TestContext) {
     return parseEntryYaml(result.stdout) as Row[]
   }
   return async (sdkPatches: object[] = []): Promise<ParityDifference[]> => {
-    const desktop = presetRows(await dump('web'))
-    const sdk = sdkRows(await dump('sdk', sdkPatches), desktop.keys())
+    const [sdk, desktop] = pairRows(sdkRows(await dump('sdk', sdkPatches)), await dump('web'))
     return compareEntries('config', 'config', sdk, desktop)
   }
 }
 
-it('compares the SDK agent rows with the Desktop standard preset', async (test) => {
+it('compares the SDK rows with the Desktop standard composition', async (test) => {
   const differences = await fixture(test)
   assertParity(['config'], await differences())
 })
@@ -77,4 +109,14 @@ it('detects a one-sided agent row change', async (test) => {
   const differences = await fixture(test)
   const changed = await differences([{ id: 'tool-todo', config: { allowParallelInProgress: false } }])
   expect(() => { assertParity(['config'], changed) }).toThrow('config tool-todo:/config/allowParallelInProgress (differs)')
+})
+
+it('detects SDK rows outside the preset: a host row change and an SDK-only row', async (test) => {
+  const differences = await fixture(test)
+  const changed = await differences([
+    { id: 'repeat-tool-reminder', config: { thresholds: [3, 5, 9], argumentsPreviewChars: 500 } },
+    { insert: [{ id: 'parity-sdk-only', name: '@deepseek-ai/dsh-tool-present' }] },
+  ])
+  expect(() => { assertParity(['config'], changed) }).toThrow('config repeat-tool-reminder:/config/thresholds/2 (differs)')
+  expect(() => { assertParity(['config'], changed) }).toThrow('config parity-sdk-only (sdk only)')
 })
