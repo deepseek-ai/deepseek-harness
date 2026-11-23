@@ -8,6 +8,7 @@ const modelSelection = 'Desktop enables subagent model selection and discovery; 
 const webSurface = 'Desktop tells the model about the Web GUI that serves it; the SDK has no graphical surface.'
 const harnessSource = 'Desktop composes harness-dev-context to name the Harness checkout that serves its GUI; SDK embedders do not run the GUI.'
 const primaryRuntime = 'Desktop always ships the primary runtime and selects it for the desktop profile; the SDK uses it only when the caller provides DSH_PRIMARY_RUNTIME or downloads it, and otherwise points the Office skills at the user Python.'
+const presetRegistry = 'Desktop mounts each Session agent from an agent preset selected through the registry; the SDK composes its agent rows directly, so its base row stays disabled.'
 const sdkTransport = 'The SDK serves JSON-RPC over stdio instead of a Web server; the rows contribute no model context.'
 
 /** Every accepted difference; an entry that no longer matches an observed difference fails the comparison. */
@@ -36,5 +37,7 @@ export const parityExceptions: readonly ParityException[] = [
     reason: 'The SDK has no title surface and skips the separate title request; the request is outside the agent context.' },
   { kind: 'config', key: 'sdk-app-startup', side: 'sdk', reason: sdkTransport },
   { kind: 'config', key: 'sdk-jsonrpc-server', side: 'sdk', reason: sdkTransport },
+  { kind: 'config', key: 'agent-preset-registry:/disabled', reason: presetRegistry },
+  { kind: 'config', key: 'agent-preset-registry:/config', reason: presetRegistry },
   { kind: 'config', key: 'connection:/config', reason: 'Desktop passes the trusted hosts of its Web server to the client connection; the SDK has no browser transport.' },
 ]
