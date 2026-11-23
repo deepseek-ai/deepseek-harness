@@ -46,16 +46,16 @@
 }
 
 /* Empty outlets remain mounted so late registrations can reveal the group. */
-.group:has(.card > :global([data-slot='settings.general.group']):empty),
-.group:has(.card > :global([data-slot='settings.general.group']) > :global([data-slot]):only-child:empty) {
+.group:has(.card > [data-slot='settings.general.group']:empty),
+.group:has(.card > [data-slot='settings.general.group'] > [data-slot]:only-child:empty) {
   display: none;
 }
 
 /* Group item outlets flatten their rows; null entries leave no separator. */
-.card > :global([data-slot='settings.general.group']) > :global([data-slot]) > * {
+.card > [data-slot='settings.general.group'] > [data-slot] > * {
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-.card > :global([data-slot='settings.general.group']) > :global([data-slot]) > :last-child {
+.card > [data-slot='settings.general.group'] > [data-slot] > :last-child {
   border-bottom: none;
 }

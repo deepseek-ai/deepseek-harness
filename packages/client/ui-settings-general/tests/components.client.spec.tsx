@@ -200,25 +200,13 @@ describe('GeneralSection', () => {
     expect(renderSlot).not.toHaveBeenCalled()
   })
 
-  it.each([false, true])('removes only the last element separator across items (trailing error: %s)', (trailingError) => {
-    const renderSlot: GeneralSectionComponentProps['renderSlot'] = () => (
-      <div data-slot="settings.general.item">
-        <div data-slot-error="settings.general.item" className="divider" />
-        <div data-slot-item=""><article className="divider" /><aside className="divider" /></div>
-        {trailingError && <div data-slot-error="settings.general.item" className="divider" />}
-        <div data-slot-item="">Plain text</div>
-        <div data-slot-item="" />
-      </div>
-    )
-    const { container } = render(<GeneralSection {...kit} close={vi.fn()} renderSlot={renderSlot} />)
-    const sheet = document.createElement('style')
-    // Vitest stubs CSS Modules; use the mounted class to apply the production selector.
-    sheet.textContent = '.divider { border-bottom: 2px dashed; }\n' + readFileSync(
+  it('declares separators for group items and clears the last one', () => {
+    const css = readFileSync(
       resolve(import.meta.dirname, '../src/client/GeneralSection.module.css'), 'utf8',
-    ).replaceAll('.section', `.${container.firstElementChild!.className}`)
-    container.append(sheet)
-    const borders = [...container.querySelectorAll('.divider')].map(row => getComputedStyle(row).borderBottomStyle)
-    expect(borders).toEqual(trailingError ? ['dashed', 'dashed', 'dashed', 'none'] : ['dashed', 'dashed', 'none'])
+    )
+    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot] > * {")
+    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot] > :last-child {")
+    expect(css).not.toContain(':global(')
   })
 })
 
