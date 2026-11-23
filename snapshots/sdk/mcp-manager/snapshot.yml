@@ -1,0 +1,8 @@
+version: 1
+scenario: mcp-manager
+profile: sdk
+composition: sdk-mcp-manager
+recording: authored
+header:
+  class: sdk-mcp-manager
+  pin: true

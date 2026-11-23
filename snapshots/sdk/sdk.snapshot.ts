@@ -66,6 +66,7 @@ import {
 } from '@deepseek-ai/dsh-sdk-client'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
+import { startHttpMcpFixture, type HttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
 
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -139,6 +140,18 @@ interface SdkAssertions {
   expectedToolDescriptions?: Readonly<Record<string, string>>
   /** Expected runtime-context state in the real assembled request. */
   runtimeContext?: false | { includes: readonly string[]; excludes: readonly string[] }
+  /**
+   * An HTTP MCP fixture at `DSH_MCP_DEMO_URL`. The runtime starts managed servers after it reports ready, so the first
+   * prompt waits until the fixture has answered `listings` tool listings.
+   */
+  mcpDemo?: {
+    /** OAuth credential keys whose grants for the fixture URL are saved before the runtime starts. */
+    oauthCredentialKeys: readonly string[]
+    /** Tool listings that precede the first prompt. */
+    listings: number
+    /** Tool calls the fixture serves during the run. */
+    calls: readonly string[]
+  }
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
@@ -221,6 +234,10 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   'session-title-stability': { waitForProviderTitle: true },
   'dynamic-tool-updates': {
     expectedFinalResponse: 'DONE',
+  },
+  'mcp-manager': {
+    expectedFinalResponse: 'MCP_MANAGER_OK',
+    mcpDemo: { oauthCredentialKeys: ['mcp-client/linear'], listings: 2, calls: ['ping', 'ping'] },
   },
   'tool-scheduler-recovery': {
     patches: [fileURLToPath(new URL('./tool-scheduler-recovery/runtime.cordis.yml', import.meta.url))],
@@ -693,6 +710,35 @@ async function waitForRootEvent(
   }
 }
 
+/**
+ * Save an OAuth grant for each credential key in the managed credential document of one DSH home.
+ * @param dshHome - the runtime's DSH home.
+ * @param url - the MCP server URL each grant is bound to.
+ * @param keys - the OAuth credential keys to grant.
+ */
+async function seedMcpGrants(dshHome: string, url: string, keys: readonly string[]): Promise<void> {
+  await mkdir(dshHome, { recursive: true })
+  const records = Object.fromEntries(keys.map((key, index) => [key, { kind: 'grant', payload: {
+    version: 1, type: 'mcp-oauth-grant', id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    serverUrl: url, issuer: new URL(url).origin, clientKey: `${key}-client`, clientId: 'snapshot-client',
+    tokens: { access_token: 'snapshot-mcp-access-token', token_type: 'Bearer' },
+  } }]))
+  await writeFile(join(dshHome, '.credentials.yaml'), JSON.stringify({ version: 1, records }) + '\n', { mode: 0o600 })
+}
+
+/**
+ * Wait until an MCP fixture has answered a number of tool listings.
+ * @param fixture - the running fixture.
+ * @param listings - the required count of answered `tools/list` requests.
+ */
+async function waitForMcpListings(fixture: HttpMcpFixture, listings: number): Promise<void> {
+  const deadline = Date.now() + 30_000
+  while (fixture.methods.filter(method => method === 'tools/list').length < listings) {
+    if (Date.now() >= deadline) throw new Error(`MCP fixture answered ${JSON.stringify(fixture.methods)} before the deadline`)
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+}
+
 /** Command lifecycle notifications precede the RPC result on the same ordered transport. */
 function collectCommandNotifications(
   subscription: NotificationSubscription,
@@ -849,6 +895,8 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   }
   const firstTurn = actions.find(action => action.kind === 'turn')
   if (firstTurn !== undefined) await prepareTurnReplay(firstTurn.turn)
+  const mcpDemo = assertions.mcpDemo === undefined ? undefined : await startHttpMcpFixture()
+  if (mcpDemo !== undefined) await seedMcpGrants(dshHome, mcpDemo.url, assertions.mcpDemo!.oauthCredentialKeys)
   const env: Record<string, string> = {
     ...Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== undefined)) as Record<string, string>,
     ...recording ? {} : REPLAY_CREDENTIAL_ENV,
@@ -870,6 +918,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...scenario.manifest.environment,
     ...assertions.environment,
     ...childEnvironment,
+    ...mcpDemo === undefined ? {} : { DSH_MCP_DEMO_URL: mcpDemo.url },
     ...resumeReplayFile === undefined ? {} : { DSH_SNAPSHOT_OVERRIDE: resumeReplayFile },
   }
 
@@ -920,6 +969,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       })
     }
     await harness.start()
+    if (mcpDemo !== undefined) await waitForMcpListings(mcpDemo, assertions.mcpDemo!.listings)
     let subscription = harness.client.subscribeSessionTree(sessionId)
     const titleSubscription = assertions.waitForProviderTitle === true
       ? harness.client.subscribeSessionTree(sessionId)
@@ -1084,9 +1134,11 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       ? records(await readFile(join(dshHome, assertions.modelRequestsFile), 'utf8'))
       : []
     if (planReviews !== undefined) expect(planReviews).toEqual([])
+    if (mcpDemo !== undefined) expect(mcpDemo.calls).toEqual(assertions.mcpDemo!.calls)
     return { results, notifications, observedMethods, logs, initialWorkspace, finalWorkspace, cwd, modelRequests }
   } finally {
     await harness.close()
+    await mcpDemo?.close()
     await rm(cwd, { recursive: true, force: true })
   }
 }
@@ -1615,6 +1667,12 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expect(events.filter(event => event.type === 'tool/result').at(-1)).toMatchObject({ data: { message: {
           toolCallId: 'call_dynamic_ping', isError: false, content: [{ type: 'text', text: 'pong' }],
         } } })
+      }
+      if (scenario.name === 'mcp-manager') {
+        // The configured server and the Linear connector's registered server both reach the first request.
+        const header = records(ordered[0]!.content).find(event => event.type === 'request/header')
+        const names = ((header?.data as { header: { tools: LoggedTool[] } } | undefined)?.header.tools ?? []).map(tool => tool.name)
+        expect(names).toEqual(expect.arrayContaining(['mcp__configured__ping', 'mcp__linear__ping']))
       }
       if (scenario.name === 'tool-scheduler-recovery') {
         expect(results).toHaveLength(2)

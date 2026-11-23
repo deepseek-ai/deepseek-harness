@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-每个宿主挂载一次管理器。它自己创建 MCP 客户端宿主，只通过它校验、挂载、探测和授权服务器。Web 与 Desktop profile 将它作为 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 的 `mcp-manager` 行挂载。其 volatile `config.servers` 存放配置条目；Settings 以所属条目 id 作为命名空间（下例为 `mcp`）。凭据模板与 OAuth 授权经凭据提供方解析，因此只要条目可能用到它们，就为该行加上 `inject: [credentials]`。
+每个宿主挂载一次管理器。它自己创建 MCP 客户端宿主，只通过它校验、挂载、探测和授权服务器。Web 与 Desktop profile 将它作为 [`dsh-web-app`](../../bundle/web-app/README.zh.md) 的 `mcp-manager` 行挂载，SDK profile 通过 [`dsh-sdk-app`](../../bundle/sdk-app/README.zh.md) 挂载同一行。其 volatile `config.servers` 存放配置条目；Settings 以所属条目 id 作为命名空间（下例为 `mcp`）。凭据模板与 OAuth 授权经凭据提供方解析，因此只要条目可能用到它们，就为该行加上 `inject: [credentials]`。
 
 ### 何时选择它
 
