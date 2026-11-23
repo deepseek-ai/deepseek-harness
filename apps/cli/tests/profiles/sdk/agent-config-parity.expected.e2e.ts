@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import { expect, it, type TestContext } from 'vitest'
-import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml, stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import { profileEnvironment } from './fixtures/profile-environment.ts'
 import { assertParity, compareEntries, type ParityDifference } from './parity.ts'
 
@@ -30,19 +30,40 @@ function literal(value: unknown): unknown {
   return Object.fromEntries(entries.map(([key, item]) => [key, literal(item)]))
 }
 
-/** Leaf rows by id; group rows contribute their members, and an absent `disabled` reads as `false`. */
-function leaves(rows: readonly Row[], into = new Map<string, unknown>()): Map<string, unknown> {
+/**
+ * Combine the `disabled` of an enclosing group with a member's own. A disabled group disables every member; an
+ * expression on the group is recorded beside the member's value, since either one disables it.
+ * @param group - the enclosing groups' combined value; `false` outside any group.
+ * @param row - the member's own value, `false` when absent.
+ * @returns `true`, the member's value, or both conditions.
+ */
+function combineDisabled(group: unknown, row: unknown): unknown {
+  if (group === false || row === true) return row
+  if (group === true || row === false) return group
+  return { group, row }
+}
+
+/**
+ * Leaf rows by id; group rows contribute their members with the group's `disabled` combined into each, and an absent
+ * `disabled` reads as `false`.
+ */
+function leaves(rows: readonly Row[], into = new Map<string, unknown>(), group: unknown = false): Map<string, unknown> {
   for (const row of rows) {
-    if (row.name === GROUP && Array.isArray(row.config)) leaves(row.config as Row[], into)
-    else if (row.id !== undefined) into.set(row.id, literal({ name: row.name, disabled: row.disabled ?? false, config: row.config }))
+    const disabled = combineDisabled(group, row.disabled ?? false)
+    if (row.name === GROUP && Array.isArray(row.config)) leaves(row.config as Row[], into, disabled)
+    else if (row.id !== undefined) into.set(row.id, literal({ name: row.name, disabled, config: row.config }))
   }
   return into
 }
 
-function presetRows(rows: readonly Row[]): Map<string, unknown> {
+function standardPreset(rows: readonly Row[]): Row & { config: { plugins: Row[] } } {
   const preset = rows.find(row => row.name === PRESET && (row.config as { id?: string } | undefined)?.id === 'standard')
   if (preset === undefined) throw new Error('Desktop profile has no standard agent preset')
-  return leaves((preset.config as { plugins: Row[] }).plugins)
+  return preset as Row & { config: { plugins: Row[] } }
+}
+
+function presetRows(rows: readonly Row[]): Map<string, unknown> {
+  return leaves(standardPreset(rows).config.plugins)
 }
 
 /**
@@ -84,19 +105,25 @@ async function fixture(test: TestContext) {
   test.onTestFinished(() => rm(root, { recursive: true, force: true }))
   const env = profileEnvironment(root, 'http://127.0.0.1:9')
   /** Desktop composes the Web template's bundles, and the dump leaves `!!js` unevaluated, so `web` dumps Desktop's rows. */
-  async function dump(profile: 'sdk' | 'web', patches: object[] = []): Promise<Row[]> {
+  async function dump(profile: 'sdk' | 'web', patches: readonly Row[] | readonly object[] = []): Promise<Row[]> {
     const home = await mkdtemp(join(root, `${profile}-`))
     const patch = join(home, 'mutation.patch.yml')
-    await writeFile(patch, JSON.stringify(patches))
+    await writeFile(patch, stringifyEntryYaml(patches))
     const result = await execa(process.execPath, [join(repo, 'apps/cli/lib/bin.js'), '--profile', profile, '--dump-config',
       '--patch', patch], {
       cwd: home, env: { ...env, DSH_HOME: home }, extendEnv: false, cancelSignal: test.signal,
     })
     return parseEntryYaml(result.stdout) as Row[]
   }
-  return async (sdkPatches: object[] = []): Promise<ParityDifference[]> => {
-    const [sdk, desktop] = pairRows(sdkRows(await dump('sdk', sdkPatches)), await dump('web'))
-    return compareEntries('config', 'config', sdk, desktop)
+  /**
+   * @param sdkPatches - overlay rows for the SDK side.
+   * @param editDesktop - rewrites the Desktop rows before comparison, expressed as a profile patch so Loader semantics apply.
+   */
+  return async (sdkPatches: object[] = [], editDesktop?: (rows: readonly Row[]) => Row[]): Promise<ParityDifference[]> => {
+    const web = await dump('web')
+    const desktop = editDesktop === undefined ? web : await dump('web', editDesktop(web))
+    const [sdk, desktopRows] = pairRows(sdkRows(await dump('sdk', sdkPatches)), desktop)
+    return compareEntries('config', 'config', sdk, desktopRows)
   }
 }
 
@@ -109,6 +136,18 @@ it('detects a one-sided agent row change', async (test) => {
   const differences = await fixture(test)
   const changed = await differences([{ id: 'tool-todo', config: { allowParallelInProgress: false } }])
   expect(() => { assertParity(['config'], changed) }).toThrow('config tool-todo:/config/allowParallelInProgress (differs)')
+})
+
+it('reads the members of a disabled preset group as disabled', async (test) => {
+  const differences = await fixture(test)
+  const changed = await differences([], (rows) => {
+    const preset = structuredClone(standardPreset(rows))
+    const planning = preset.config.plugins.find(row => row.id === 'planning')
+    if (planning === undefined) throw new Error('Desktop standard preset has no planning group')
+    planning.disabled = true
+    return [preset]
+  })
+  expect(() => { assertParity(['config'], changed) }).toThrow('config plan-mode:/disabled (differs)')
 })
 
 it('detects SDK rows outside the preset: a host row change and an SDK-only row', async (test) => {
