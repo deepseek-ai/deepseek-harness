@@ -256,6 +256,22 @@ interface FsWriteOutcome {
 
 `editText` is a provider-level mutation, not a `read` plus `write` composed elsewhere. When guarded it verifies the expected version BEFORE literal matching (so a stale edit reports `FS_STALE_VERSION`, not a match failure against newer content); unguarded it edits the current content. Either way it applies the replacement and writes atomically — keeping matching, line-ending handling, the stale check, and atomic replacement inside one mutation critical section — and a missing target reports `FS_STALE_VERSION` on both paths.
 
+`writeBytes` stores exact bytes: no decoding, no newline normalization, no diff basis. It is how a consumer materializes content it already holds — a downloaded attachment, a rendered document — inside the execution world, and it takes the same optional intent guard and per-call policy as `writeText`. A provider that cannot store arbitrary bytes keeps the base rejection (`FS_IO_ERROR`, naming the missing capability) rather than degrading the write.
+
+```ts type-equiv
+/**
+ * Outcome of a full-file byte write. Bytes carry no diff basis, so the outcome
+ * reports only what the write produced: a caller that needs the previous
+ * content reads it first.
+ */
+interface FsWriteBytesOutcome {
+  /** Whether the write created a new file or replaced an existing one. */
+  operation: 'create' | 'update'
+  /** Opaque version of the file after the write. */
+  version: FsVersion
+}
+```
+
 ```ts type-equiv
 /** A literal-replacement edit request. */
 interface FsEditRequest {
@@ -383,7 +399,7 @@ type FsErrorCode = typeof FS_ERROR_CODES[number]
 
 ## The service and the plugin
 
-`FileSystem` (`ctx.fs`, abstract) owns the provider primitives: `resolve`, `processPath`, `processPathFromHostPath`, `fileUrl`, `contains`, `stat`, `lstat`, `readText`, `streamText`, `readBytes`, `listDir`, `writeText`, `editText`, `patchText`, `deleteFile`, and `moveFile`. `dsh-fs-observation-policy` registers **no service** — it is a plugin that adds policy through the `fs/*` event gate: it decides the write/edit/delete intent waterfalls from unseen/absent/present state and records `FsObservation` values. The executor is `dsh-tool-fs`: it reads/writes/edits through `ctx.fs`, dispatches the waterfalls, and emits the recording event. The generated [`ctx.fs` section](#ctxfs--filesystem-abstract-seam) below shows the exact signatures.
+`FileSystem` (`ctx.fs`, abstract) owns the provider primitives: `resolve`, `processPath`, `processPathFromHostPath`, `fileUrl`, `contains`, `stat`, `lstat`, `readText`, `streamText`, `readBytes`, `readByteRange`, `listDir`, `writeText`, `writeBytes`, `editText`, `patchText`, `deleteFile`, and `moveFile`. `dsh-fs-observation-policy` registers **no service** — it is a plugin that adds policy through the `fs/*` event gate: it decides the write/edit/delete intent waterfalls from unseen/absent/present state and records `FsObservation` values. The executor is `dsh-tool-fs`: it reads/writes/edits through `ctx.fs`, dispatches the waterfalls, and emits the recording event. The generated [`ctx.fs` section](#ctxfs--filesystem-abstract-seam) below shows the exact signatures.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -551,6 +567,23 @@ abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
  * @returns the outcome, including the version the write produced.
  */
 abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteOutcome>
+
+/**
+ * Atomically create or replace one file from exact bytes: no decoding, no
+ * newline normalization, no diff basis. The bytes are stored as given, which
+ * is how a consumer materializes content it already holds — a downloaded
+ * attachment, a rendered document — inside this execution world. Backends
+ * that cannot store arbitrary bytes keep this default rejection.
+ * @param target - the resolved target to write.
+ * @param data - the exact bytes to store.
+ * @param expected - the write intent guarding the write; omit for unconditional.
+ * @param signal - aborts before atomic publication takes effect.
+ * @param sandboxPolicy - the per-call mode and workspace root this write
+ *   runs under; a sandboxing backend fences the write by it, the bare backend
+ *   ignores it. Omit to leave the backend its own default.
+ * @returns the outcome, including the version the write produced.
+ */
+writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>
 
 /**
  * Atomically edit literal text. When supplied, the version guard is checked

@@ -16,7 +16,7 @@ import type { SandboxExecutionPolicy, SandboxPolicy } from '@deepseek-ai/dsh-san
 import { z } from 'zod'
 import { SshRpcPeer, RemoteOperationError, SSH_MAX_PROCESS_HANDLES, SSH_MAX_TEXT_STREAMS, SSH_PROTOCOL_VERSION } from './protocol.ts'
 import { RemoteProcesses } from './helper-processes.ts'
-import { hunkSchema, moveOptionsSchema, versionGuardSchema, editSchema, environmentSchema, intentSchema, policySchema, processIdSchema, remotePath, targetSchema, textStreamIdSchema } from './schemas.ts'
+import { MAX_BYTE_WRITE_BYTES, hunkSchema, moveOptionsSchema, versionGuardSchema, editSchema, environmentSchema, intentSchema, policySchema, processIdSchema, remotePath, targetSchema, textStreamIdSchema } from './schemas.ts'
 import type { SshTextStreamId } from './schemas.ts'
 
 const MAX_FRAME_BYTES = 64 * 1024 * 1024
@@ -231,6 +231,20 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
           length: z.number().int().nonnegative().max(MAX_TEXT_BYTES).parse(input.length),
         }, signal)
       return Buffer.from(bytes).toString('base64')
+    }
+    if (method === 'fs.writeBytes') {
+      const input = z.object({
+        target: targetSchema, data: z.base64(), expected: intentSchema.optional(), policy: policySchema,
+      }).strict().parse(raw)
+      const bytes = Buffer.from(input.data, 'base64')
+      if (bytes.byteLength > MAX_BYTE_WRITE_BYTES) {
+        throw new FsError('SSH byte write exceeds the 8 MiB limit', 'FS_TOO_LARGE')
+      }
+      const resolved = await policy(input.policy, signal)
+      return await ctx.fs.writeBytes(
+        asTarget(input.target), bytes,
+        input.expected === undefined ? undefined : intentSchema.parse(input.expected) as FsWriteIntent, signal, resolved,
+      )
     }
     if (method === 'fs.write' || method === 'fs.edit') {
       const input = z.object({
