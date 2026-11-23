@@ -1,5 +1,7 @@
 /** Shared provider limits and Chat Files API defaults. */
 
+/** Provider hard encoded-byte limit for one request image. */
+export const MAX_IMAGE_BYTES = 32 * 1024 * 1024
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Default combined request/response context capacity. */

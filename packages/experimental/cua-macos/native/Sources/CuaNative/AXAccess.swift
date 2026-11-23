@@ -5,10 +5,15 @@ import Darwin
 
 private typealias AXWindowFunction = @convention(c) (AXUIElement, UnsafeMutablePointer<CGWindowID>) -> AXError
 
+/// Complete trees have a scope header and may end with a menu-disclosure line.
+enum AXTreeFrame { case noWindowRoot, tree, menusCollapsed }
+
 struct AXProjection {
-    let tree: String
-    let elements: [JSONValue]
-    let indexed: [Int: AXUIElement]
+    let frame: AXTreeFrame
+    var tree: String
+    let lines: [AXTreeLine]
+    var elements: [JSONValue]
+    var indexed: [Int: AXUIElement]
     let focusedWindowID: UInt32?
     let truncated: Bool
     let hasUnreadableElements: Bool
@@ -23,6 +28,8 @@ struct AXNodeObservation {
 struct AXAttributeSetTarget: Sendable {
     let role: String
     let attribute: String
+
+    var parameter: AXSetterParameter { AXSetterParameter.resolve(role: role, attribute: attribute) }
 
     init?(_ action: String) {
         let parts = action.split(separator: ".", omittingEmptySubsequences: false)
@@ -229,31 +236,68 @@ final class AXAccess {
         guard let focused = try element(AXUIElementCreateApplication(pid), "AXFocusedWindow") else { return nil }
         return try windowID(focused)
     }
-    /// Restore a selected or unambiguous window without raising it or requesting application activation.
-    func restoreWindow(_ requested: UInt32?, owner: ProcessIdentity) throws -> UInt32? {
-        let app = AXUIElementCreateApplication(owner.pid)
-        try clearBooleanAttribute(app, "AXHidden")
-        let windows = try children(app, "AXWindows")
-        let selected: AXUIElement?
-        if let requested {
-            _ = try NativePlatform.ownedWindow(owner.pid, requested)
-            selected = try windows.first { try windowID($0) == requested }
-            guard selected != nil else { throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Window is not exposed for restoration; read fresh state before deciding whether to activate") }
-        } else {
-            selected = try element(app, "AXFocusedWindow") ?? element(app, "AXMainWindow") ?? (windows.count == 1 ? windows[0] : nil)
-        }
-        guard let selected else { return nil }
-        try clearBooleanAttribute(selected, "AXMinimized")
-        return try windowID(selected)
+    /// A Stage Manager thumbnail can be on screen while its application's full-size window is off stage.
+    func displayedForShow(_ info: WindowInfo, window: AXUIElement?, shelf: StageManagerShelf?, piles: [StageManagerShelf.Pile]) throws -> Bool {
+        guard info.isOnScreen else { return false }
+        guard shelf != nil else { return true }
+        guard !piles.contains(where: { $0.ids.contains(info.windowID) }),
+              let window, let actual = try bounds(window) else { return false }
+        return StageManagerShelf.matchesWindowSize(info.bounds, actual)
     }
-    private func clearBooleanAttribute(_ element: AXUIElement, _ name: String) throws {
-        guard try boolean(element, name) == true else { return }
-        guard try writable(element, name) == true else {
-            throw NativeFailure(code: "UNSUPPORTED", message: "Cannot restore \(name) without activation; read fresh state before deciding whether to activate")
+
+    /// App-scoped show can reopen the app. A window-scoped request can only display its original WindowServer ID.
+    func selectWindowForShow(_ requested: UInt32?, owner: ProcessIdentity, shelf: StageManagerShelf?) throws -> WindowForShow {
+        let app = AXUIElementCreateApplication(owner.pid)
+        let windows = try children(app, "AXWindows")
+        let observed = NativePlatform.applicationWindows(owner.pid)
+        let piles = try shelf?.piles(self) ?? []
+        let shelved = Set(piles.flatMap(\.ids))
+        if let requested {
+            let missing = NativeFailure(code: "WINDOW_UNAVAILABLE",
+                message: "The selected window is no longer available. Use app.show() to reopen the app, then select a current window from app.getWindows().")
+            guard let owned = observed.first(where: { $0.windowID == requested }) else { throw missing }
+            if shelved.contains(requested) { return .needs(.shelf(requested)) }
+            let match = try windows.first(where: { try windowID($0) == requested })
+            let minimized = try match.flatMap { try boolean($0, "AXMinimized") }
+            if minimized != true, try displayedForShow(owned, window: match, shelf: shelf, piles: piles) { return .visible(requested) }
+            guard let match, minimized != nil else { throw missing }
+            if shelf != nil && owned.isOnScreen && minimized == false { return .needs(.shelf(requested)) }
+            return .needs(.window(requested, match))
         }
-        try prepare(element)
-        let error = AXUIElementSetAttributeValue(element, name as CFString, kCFBooleanFalse)
-        guard error == .success else { throw failure(error, "clear \(name)") }
+
+        let focused = try element(app, "AXFocusedWindow")
+        let main = try element(app, "AXMainWindow")
+        var seen = Set<UInt32>()
+        var minimized: (UInt32, AXUIElement)?
+        var inPile: UInt32?
+        for window in [focused, main].compactMap({ $0 }) + windows {
+            guard let id = try windowID(window), seen.insert(id).inserted,
+                  let owned = observed.first(where: { $0.windowID == id && $0.layer == 0 }) else { continue }
+            let state = try boolean(window, "AXMinimized")
+            if state != true, try displayedForShow(owned, window: window, shelf: shelf, piles: piles) { return .visible(id) }
+            if shelved.contains(id) || (shelf != nil && owned.isOnScreen && state == false) { inPile = inPile ?? id }
+            if minimized == nil && state == true && owned.onCurrentSpace == true { minimized = (id, window) }
+        }
+        if shelf == nil, let other = observed.first(where: { $0.layer == 0 && $0.isOnScreen && !seen.contains($0.windowID) }) {
+            return .visible(other.windowID)
+        }
+        let ownedIDs = Set(observed.map(\.windowID))
+        let movable = Set(piles.filter { $0.ids.allSatisfy(ownedIDs.contains) }.flatMap(\.ids))
+        if let id = inPile, movable.contains(id) { return .needs(.shelf(id)) }
+        if let member = observed.first(where: { movable.contains($0.windowID) }) { return .needs(.shelf(member.windowID)) }
+        if let (id, window) = minimized { return .needs(.window(id, window)) }
+        if let id = inPile ?? observed.first(where: { shelved.contains($0.windowID) })?.windowID { return .needs(.shelf(id)) }
+        return .needs(.application)
+    }
+    /// An unsupported raise permits explicit deminimization. Other AX failures can have an unknown outcome.
+    func raiseForShow(_ window: AXUIElement) throws -> Bool {
+        guard try actions(window).contains("AXRaise") else { return false }
+        try requireEnabled(window)
+        try prepare(window)
+        let status = AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        if status == .actionUnsupported || status == .notImplemented { return false }
+        guard status == .success else { throw failure(status, "raise window") }
+        return true
     }
     func actions(_ element: AXUIElement, requireKnown: Bool = false) throws -> [String] {
         try prepare(element)
@@ -271,16 +315,24 @@ final class AXAccess {
     func listActions(_ element: AXUIElement) throws -> [String] {
         let advertised = try actions(element)
         let attributes = try writableAttributes(element)
-        guard !attributes.isEmpty else { return advertised }
-        let role = try string(element, "AXRole")
-        return try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes)
+        let role = attributes.isEmpty ? nil : try string(element, "AXRole")
+        return try Self.listActionNames(actions: advertised, role: role, writableAttributes: attributes) {
+            try attribute(element, $0)
+        }
     }
-    static func listActionNames(actions: [String], role: String?, writableAttributes: [String]) throws -> [String] {
-        guard !writableAttributes.isEmpty else { return actions }
+    static func listActionNames(actions: [String], role: String?, writableAttributes: [String],
+                                read: (String) throws -> CFTypeRef?) throws -> [String] {
+        // Schema lookup and dispatch reserve Role.Attribute.Set for attribute writes.
+        let native = actions.filter { AXAttributeSetTarget($0) == nil }
+        guard !writableAttributes.isEmpty else { return native }
         guard let role, !role.isEmpty else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Cannot name attribute-setting operations without an accessibility role")
         }
-        return actions + writableAttributes.map { "\(role).\($0).Set" }
+        return native + (try writableAttributes.compactMap { attribute in
+            let name = "\(role).\(attribute).Set"
+            guard let target = AXAttributeSetTarget(name), try target.parameter.canList(attribute: attribute, read: { try read(attribute) }) else { return nil }
+            return name
+        })
     }
     func writableAttributes(_ element: AXUIElement) throws -> [String] {
         try prepare(element)
@@ -357,8 +409,8 @@ final class AXAccess {
         guard try writable(element, attributeName) == true else {
             throw RequestParameters.invalid("\(attributeName) is not writable on this element")
         }
-        let current = try attribute(element, attributeName)
-        let converted = try Self.attributeValue(attribute: attributeName, argument: value, current: current)
+        let parameter = AXSetterParameter.resolve(role: expectedRole, attribute: attributeName)
+        let converted = try parameter.encode(value, attribute: attributeName) { try attribute(element, attributeName) }
         try requireEnabled(element)
         try prepare(element)
         let error = AXUIElementSetAttributeValue(element, attributeName as CFString, converted)
@@ -374,112 +426,6 @@ final class AXAccess {
             return
         }
         try setAttribute(element, target.attribute, argument, expectedRole: target.role)
-    }
-    enum AttributeValueKind: CaseIterable {
-        case string, boolean, number, point, size, range
-    }
-    /// Convert one direct JSON argument to the Core Foundation value expected by the attribute's live type.
-    static func attributeValue(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> CFTypeRef {
-        let kind = try valueKind(attribute: attribute, argument: argument, current: current)
-        switch kind {
-        case .string:
-            guard case .string(let text) = argument else { throw RequestParameters.invalid("\(attribute) requires a string value") }
-            return text as CFString
-        case .boolean:
-            guard case .bool(let flag) = argument else { throw RequestParameters.invalid("\(attribute) requires a boolean value") }
-            return flag ? kCFBooleanTrue! : kCFBooleanFalse!
-        case .number:
-            guard case .number(let number) = argument, number.isFinite else {
-                throw RequestParameters.invalid("\(attribute) requires a finite number")
-            }
-            return NSNumber(value: number)
-        case .point:
-            let values = try fields(argument, attribute: attribute, keys: ["x", "y"])
-            var point = CGPoint(x: try finite(values["x"], name: "x", attribute: attribute),
-                                y: try finite(values["y"], name: "y", attribute: attribute))
-            guard let value = AXValueCreate(.cgPoint, &point) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
-            }
-            return value
-        case .size:
-            let values = try fields(argument, attribute: attribute, keys: ["width", "height"])
-            var size = CGSize(width: try dimension(values["width"], name: "width", attribute: attribute),
-                              height: try dimension(values["height"], name: "height", attribute: attribute))
-            guard let value = AXValueCreate(.cgSize, &size) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
-            }
-            return value
-        case .range:
-            let values = try fields(argument, attribute: attribute, keys: ["location", "length"])
-            let location = try nonnegativeInteger(values["location"], name: "location", attribute: attribute)
-            let length = try nonnegativeInteger(values["length"], name: "length", attribute: attribute)
-            guard location <= Int.max - length else { throw RequestParameters.invalid("\(attribute) range is too large") }
-            var range = CFRange(location: location, length: length)
-            guard let value = AXValueCreate(.cfRange, &range) else {
-                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create \(attribute)")
-            }
-            return value
-        }
-    }
-    /// The value kind the attribute name determines without an observed element.
-    static func knownValueKind(attribute: String) -> AttributeValueKind? {
-        switch attribute {
-        case "AXPosition": return .point
-        case "AXSize": return .size
-        case "AXSelectedTextRange": return .range
-        default: return nil
-        }
-    }
-    private static func valueKind(attribute: String, argument: JSONValue, current: CFTypeRef?) throws -> AttributeValueKind {
-        if let known = knownValueKind(attribute: attribute) { return known }
-        if let current { return try inferredKind(current, attribute: attribute) }
-        switch argument {
-        case .string: return .string
-        case .bool: return .boolean
-        case .number: return .number
-        default:
-            throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) has no known value type for this JSON argument")
-        }
-    }
-    private static func inferredKind(_ value: CFTypeRef, attribute: String) throws -> AttributeValueKind {
-        let type = CFGetTypeID(value)
-        if type == CFStringGetTypeID() { return .string }
-        if type == CFBooleanGetTypeID() { return .boolean }
-        if type == CFNumberGetTypeID() { return .number }
-        if type == AXValueGetTypeID() {
-            switch AXValueGetType(unsafeDowncast(value, to: AXValue.self)) {
-            case .cgPoint: return .point
-            case .cgSize: return .size
-            case .cfRange: return .range
-            default: break
-            }
-        }
-        throw NativeFailure(code: "UNSUPPORTED", message: "Accessibility \(attribute) value type is not supported for attribute-setting arguments")
-    }
-    private static func fields(_ argument: JSONValue, attribute: String, keys: Set<String>) throws -> [String: JSONValue] {
-        guard case .object(let values) = argument, Set(values.keys) == keys else {
-            throw RequestParameters.invalid("\(attribute) requires exactly \(keys.sorted().joined(separator: ", "))")
-        }
-        return values
-    }
-    private static func finite(_ value: JSONValue?, name: String, attribute: String) throws -> Double {
-        guard let value, case .number(let number) = value, number.isFinite else {
-            throw RequestParameters.invalid("\(attribute) \(name) must be a finite number")
-        }
-        return number
-    }
-    private static func dimension(_ value: JSONValue?, name: String, attribute: String) throws -> Double {
-        let number = try finite(value, name: name, attribute: attribute)
-        guard number >= 0 else { throw RequestParameters.invalid("\(attribute) \(name) must be nonnegative") }
-        return number
-    }
-    private static func nonnegativeInteger(_ value: JSONValue?, name: String, attribute: String) throws -> Int {
-        guard let value, case .number(let number) = value, number.isFinite,
-              number.rounded(.towardZero) == number, number >= 0, number <= Double(Int.max),
-              let integer = Int(exactly: number) else {
-            throw RequestParameters.invalid("\(attribute) \(name) must be a nonnegative integer")
-        }
-        return integer
     }
     func pasteCommand(_ pid: Int32, maxElements: Int, maxDepth: Int) throws -> AXUIElement {
         guard let menu = try element(AXUIElementCreateApplication(pid), "AXMenuBar") else {
@@ -682,7 +628,7 @@ final class AXAccess {
         if error == .success { enabledProcesses.insert(key) }
     }
 
-    func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false) throws -> AXProjection {
+    func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false, numbered: Bool = false) throws -> AXProjection {
         let app = AXUIElementCreateApplication(identity.pid)
         try enableAX(app, identity: identity)
         var budget = AXChildRecoveryBudget(maxElements: maxElements, timeout: timeout)
@@ -741,7 +687,7 @@ final class AXAccess {
                 var lines: [String] = []
                 if hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
                 if limited { lines.append(AXTextFormatter.truncation(maxElements: maxElements, maxDepth: nil)) }
-                return AXProjection(tree: lines.joined(separator: "\n"), elements: [], indexed: [:], focusedWindowID: focusedID,
+                return AXProjection(frame: .noWindowRoot, tree: lines.joined(separator: "\n"), lines: [], elements: [], indexed: [:], focusedWindowID: focusedID,
                                     truncated: limited, hasUnreadableElements: hasUnreadableElements)
             }
             let dialog = try matches.contains { root in
@@ -764,7 +710,7 @@ final class AXAccess {
             parentIncomplete: requested == nil ? appChildren.parentIncomplete : appChildren.hasUnreadableElements,
             elementLimitReached: appChildren.elementLimitReached)
         return try AXTreeProjection.project(roots: rootObservation, focusedWindowID: focusedID, windowScoped: requested != nil,
-            maxElements: maxElements, maxDepth: maxDepth, includeMenus: includeMenus, details: details,
+            maxElements: maxElements, maxDepth: maxDepth, includeMenus: includeMenus, details: details, numbered: numbered,
             checkCancellation: { try self.cancellation.check() }, read: { element in
                 if let failure = rootDiscovery.invalidRoots[element] { throw failure }
                 return try self.readNode(element, includeMenus: includeMenus, readChildren: { observation in

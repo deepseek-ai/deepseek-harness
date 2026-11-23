@@ -90,6 +90,14 @@ describe('AssistantOutputFold', () => {
     expect(fold.collect()).toEqual([{ type: 'text', text: 'partial answer' }])
   })
 
+  it('keeps the selected message when text is pushed after it', () => {
+    const fold = new AssistantOutputFold()
+    fold.pushText('partial')
+    fold.push(message([{ type: 'text', text: 'complete answer' }]))
+    fold.pushText(' late text')
+    expect(fold.collect()).toEqual([{ type: 'text', text: 'complete answer' }])
+  })
+
   it('collects undefined until any output is folded', () => {
     expect(new AssistantOutputFold().collect()).toBeUndefined()
   })

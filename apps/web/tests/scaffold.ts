@@ -311,6 +311,8 @@ export interface LaunchOptions {
   developerTools?: boolean
   /** Enable the real Open In rows with deterministic launch-environment facts. */
   openInAppEnvironment?: LaunchEnvironmentSnapshot
+  /** Keep the shipped personalized recommendation rows, whose two card skills enter the model-visible skill catalog. */
+  actionCards?: true
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
   /** Fixed JSON-quoted workspace path length for compaction estimates; omitted values use the ordinary prefix. */
@@ -689,6 +691,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
     ...options.ptcExecutionMode === undefined ? [] : [{ id: 'ptc-runtime', config: { executionMode: options.ptcExecutionMode } }],
+    // Ordinary scenarios exclude the card skills, so their requests omit two catalog entries that shipped Standard requests carry.
+    ...['action-cards', 'client-ui-action-cards', 'creation-recommendations', 'client-ui-creation-recommendations',
+      'plugin-recommendations', 'client-ui-plugin-recommendations'].map(id => ({ id, disabled: options.actionCards !== true })),
     ...options.agentPresets === undefined ? [] : [
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },

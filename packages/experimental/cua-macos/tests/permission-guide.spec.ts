@@ -29,7 +29,7 @@ it('matches language variants and falls back to English for unsupported language
   expect(parameters('requestPermission', 'accessibility', 'ZH-CN')).toEqual({
     permission: 'accessibility', pollIntervalMs: 2000,
     instruction: '将 {application} 拖入上方列表以允许辅助功能', backLabel: '返回', finderLabel: '在 Finder 中显示',
-    unavailableMessage: '找不到此应用。请重新启用 Computer Use 后重试',
+    unavailableMessage: '找不到此应用。请重新启用“自动电脑操作”插件后重试',
     settingsMessage: '请手动打开系统设置 > 隐私与安全性 > 辅助功能',
   })
   expect(parameters('requestPermission', 'screenRecording', 'it')).toEqual(parameters('requestPermission', 'screenRecording', 'en'))

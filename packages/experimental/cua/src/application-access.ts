@@ -236,6 +236,38 @@ export class ApplicationAccess {
    */
   async run<T>(client: NativeClient, handle: CuaAppHandle, signal: AbortSignal,
     dispatch: (signal: AbortSignal) => Promise<T>, prepare?: (signal: AbortSignal) => Promise<void>): Promise<T> {
+    const { agent, selected, lifetime, requireAccess } = this.authorizedHandle(client, handle, signal)
+    if (prepare) {
+      await requireAccess()
+      await prepare(lifetime)
+      lifetime.throwIfAborted()
+    }
+    return this.options.store.withApplication(selected.identity.id, lifetime, async () => {
+      await requireAccess()
+      return this.withOperation(agent, client, selected.identity, lifetime, dispatch)
+    })
+  }
+
+  /**
+   * Read helper-owned metadata without queuing behind desktop input. Consent is checked again before delivery.
+   * @param client Helper that holds the cached data.
+   * @param handle Selected application.
+   * @param signal Calling step lifetime.
+   * @param read Read-only cache query, cancelled on local revocation.
+   * @returns The result while the original grant remains valid.
+   */
+  async readCached<T>(client: NativeClient, handle: CuaAppHandle, signal: AbortSignal,
+    read: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const { agent, selected, lifetime, requireAccess } = this.authorizedHandle(client, handle, signal)
+    return this.withOperation(agent, client, selected.identity, lifetime, async (authorized) => {
+      await requireAccess()
+      const result = await read(authorized)
+      await requireAccess()
+      return result
+    })
+  }
+
+  private authorizedHandle(client: NativeClient, handle: CuaAppHandle, signal: AbortSignal) {
     const state = this.clients.get(client)
     const selected = state?.handles.get(handle)
     if (!state || !selected) throw new NativeError('APP_ACCESS_REQUIRED', 'Select the application with getApp and obtain user consent before reading or controlling it')
@@ -250,15 +282,7 @@ export class ApplicationAccess {
       }
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
     }
-    if (prepare) {
-      await requireAccess()
-      await prepare(lifetime)
-      lifetime.throwIfAborted()
-    }
-    return this.options.store.withApplication(selected.identity.id, lifetime, async () => {
-      await requireAccess()
-      return this.withOperation(state.agent, client, selected.identity, lifetime, dispatch)
-    })
+    return { agent: state.agent, selected, lifetime, requireAccess }
   }
 
   private async selectInOrder(agent: Agent, id: CuaApplicationId, select: () => Promise<void>): Promise<void> {

@@ -1,1 +1,1 @@
-![A request to add meeting notes and the resulting text in Notes](preview.svg)
+![An automated cursor operating a selected task window amid other desktop windows](preview.svg)

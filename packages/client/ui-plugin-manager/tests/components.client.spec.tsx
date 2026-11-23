@@ -1518,7 +1518,6 @@ describe('PluginManagerPage', () => {
 
     it.each([
       '@deepseek-ai/dsh-experimental-session-titles-bundle',
-      '@deepseek-ai/dsh-personalized-recommendations',
     ])('returns %s details to the secondary page and retains it across React remounts', (name) => {
       const b = renderTab({ packages: [pkg({ name, official: true, enabled: false })] })
       fireEvent.click(screen.getByRole('button', { name: en.moreAction }))
@@ -1536,7 +1535,6 @@ describe('PluginManagerPage', () => {
 
     it.each([
       '@deepseek-ai/dsh-experimental-inspector-profile',
-      '@deepseek-ai/dsh-personalized-recommendations',
     ])('pins enabled %s onto the main list and removes it when disabled', (first) => {
       const team = '@deepseek-ai/dsh-experimental-voice-input-bundle'
       const second = '@deepseek-ai/dsh-experimental-cot-translation-bundle'

@@ -39,7 +39,7 @@ import { rewriteTranslationLinkLocales } from './translation-links.ts'
 const root = resolve(import.meta.dirname, '..')
 const SUBSYSTEMS_DIR = 'docs/subsystems'
 const OUT_INHERITED = 'docs/cordis-api/inherited.md'
-const OUT_RUNTIME_API = 'packages/extensions/tool-cordis/src/api-catalog.ts'
+const OUT_RUNTIME_API = 'packages/extensions/cordis-host-runner/src/api-catalog.ts'
 
 export { REGION_BEGIN, REGION_END }
 
@@ -224,6 +224,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   layout: 'client-side interface-typed browser service — packages/client/ui-layout/README.md owns the API',
   pluginNavigation: 'client-side bundle navigation — packages/client/ui-plugin-manager/README.md owns the API',
   pluginChanges: 'client-side read-only management activity — packages/client/ui-plugin-manager/README.md owns the API',
+  accountSignIn: 'client-side account sign-in entry — packages/client/ui-settings-account/README.md owns the API',
   locale: 'client-side interface-typed browser service — packages/client/locale/README.md owns the API',
   modelDirectories: 'client-side interface-typed browser service — packages/client/ui-model-selection/README.md owns the API',
   modules: 'client-side interface-typed browser service — packages/client/modules/README.md owns the API',
@@ -799,6 +800,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SessionReadFrame: 'web-client.md',
   SessionTitleProvider: 'session-title.md',
   SessionTitleSnapshot: 'session-title.md',
+  SkillCandidate: 'skills.md',
   SkillCatalogSnapshot: 'skills.md',
   SkillDefinition: 'skills.md',
   SkillLookupOptions: 'skills.md',
@@ -1110,12 +1112,12 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   CliAccountHandle: 'registered account handle is owned by packages/connector/cli-account/README.md',
   UpstreamSkillsRegistration: 'entry skill and pinned upstream files registration is owned by packages/connector/upstream-skills/README.md',
   UpstreamSkillsHandle: 'registered upstream files handle is owned by packages/connector/upstream-skills/README.md',
-  ActionCardDecision: 'packages/experimental/action-cards/README.md',
-  ActionCardId: 'packages/experimental/action-cards/README.md',
-  ActionCardKind: 'packages/experimental/action-cards/README.md',
-  ActionCardResult: 'packages/experimental/action-cards/README.md',
-  ActionCardView: 'packages/experimental/action-cards/README.md',
-  RecommendationDetails: 'packages/experimental/plugin-recommendations/README.md',
+  ActionCardDecision: 'packages/interaction/action-cards/README.md',
+  ActionCardId: 'packages/interaction/action-cards/README.md',
+  ActionCardKind: 'packages/interaction/action-cards/README.md',
+  ActionCardResult: 'packages/interaction/action-cards/README.md',
+  ActionCardView: 'packages/interaction/action-cards/README.md',
+  RecommendationDetails: 'packages/extensions/plugin-recommendations/README.md',
   DeepseekChatImportLimits: 'upload limits returned to the browser are owned by packages/experimental/deepseek-chat-import/src/types.ts',
   ProductEvent: 'Desktop event fields are owned by packages/client/product-analytics/README.md and src/events.ts',
   ConnectionFetchHandler: 'shared Fetch dispatch is owned by packages/client/connection/src/rpc.ts',

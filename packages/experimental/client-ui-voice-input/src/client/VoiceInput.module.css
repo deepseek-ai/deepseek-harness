@@ -18,6 +18,10 @@
 .summaryRow { min-height: 28px; height: auto; flex-wrap: wrap; gap: 4px; }
 .summaryTitle { flex: 1; min-width: 0; }
 .metric { font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.selectionHint { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.billing { display: grid; gap: 4px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+.link { justify-self: start; color: var(--dsw-alias-link); text-decoration: none; }
+@media (hover: hover) { .link:hover { text-decoration: underline; } }
 .progress { width: 100%; height: 6px; accent-color: var(--dsw-alias-state-business-primary); }
 .steps { list-style: none; display: flex; flex-direction: column; gap: 14px; padding: 16px 0 2px; margin: 0; }
 .steps li { display: flex; align-items: flex-start; gap: 10px; line-height: 18px; }
@@ -29,6 +33,7 @@
 .preferences { display: grid; gap: 12px; font-size: 13px; margin: 18px 0; }
 .deviceRow, .preferences label, .sourceChoice label { display: grid; grid-template-columns: 100px minmax(120px, 280px); align-items: center; gap: 12px; }
 .preferences select, .sourceChoice select { border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; padding: 6px 10px; background: transparent; color: inherit; font: inherit; }
+.preferences select:disabled { opacity: 0.5; cursor: default; }
 .sourceChoice { display: grid; gap: 6px; }
 .preferences p { margin: 0; }
 .settingsCard { list-style: none; padding: 16px; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; }

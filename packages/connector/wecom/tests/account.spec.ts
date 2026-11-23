@@ -1,5 +1,8 @@
-/** Authorization operations over a scripted wecom-cli: checks, QR-code connection, cancellation, and the Plugins page wiring. */
-import { mkdtemp, rm } from 'node:fs/promises'
+/**
+ * Authorization operations over a scripted wecom-cli: checks, the guides' download a check waits for, QR-code
+ * connection, cancellation, and the Plugins page wiring.
+ */
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -7,6 +10,7 @@ import type { ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { executableFileName } from '../src/directory.ts'
 import * as Wecom from '../src/index.ts'
+import { WECOM_SKILLS } from '../src/skills.ts'
 import type { WecomOperationKind, WecomState } from '../src/types.ts'
 import { createHost, type CliReply, type ScriptedProcess, type ScriptedSubprocess, type WecomPage } from './harness.ts'
 
@@ -69,9 +73,9 @@ describe('WeCom account operations', () => {
   beforeEach(() => load())
 
   it.each<[string, CliReply, WecomState['account']]>([
-    ['an authorized bot', AUTHORIZED, { state: 'authorized', botId: 'bot-1', skills: 'installed' }],
-    ['an authorized bot whose id the CLI omits', { stdout: 'Status: authorized\n' }, { state: 'authorized', skills: 'installed' }],
-    ['no authorization', UNAUTHORIZED, { state: 'unauthorized', skills: 'installed' }],
+    ['an authorized bot', AUTHORIZED, { state: 'authorized', botId: 'bot-1' }],
+    ['an authorized bot whose id the CLI omits', { stdout: 'Status: authorized\n' }, { state: 'authorized' }],
+    ['no authorization', UNAUTHORIZED, { state: 'unauthorized' }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
     const id = start('check')
@@ -86,7 +90,7 @@ describe('WeCom account operations', () => {
     script[STATUS] = [reply]
     const result = await settled(start('check'))
     expect(result).toEqual({
-      account: { state: 'unchecked', skills: 'installed' },
+      account: { state: 'unchecked' },
       result: { id: result.result?.id, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: reply.exitCode ?? 0 } },
     })
     expect(errors()).toEqual([['wecom: account operation failed: %o', {
@@ -113,7 +117,7 @@ describe('WeCom account operations', () => {
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: QR_LINK }) })
     authorizing.reply({ stdout: 'Authorized\n' })
 
-    expect(await settled(id)).toEqual({ account: { state: 'authorized', botId: 'bot-1', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'authorized', botId: 'bot-1' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
     stop()
     expect(offered).toEqual([QR_LINK])
     expect(commands()).toEqual([INIT, STATUS])
@@ -140,7 +144,7 @@ describe('WeCom account operations', () => {
     const cancelling = account.cancel(id)
     expect(account.snapshot().operation).toEqual({ id, kind: 'connect', phase: 'cancelling', cancellable: false })
     await cancelling
-    expect(account.snapshot()).toEqual({ account: { state: 'unchecked', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'cancelled' } })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' }, result: { id, kind: 'connect', outcome: 'cancelled' } })
     expect(subprocess.processes[0]?.terminated).toBe(true)
     expect(errors()).toEqual([])
   })
@@ -158,41 +162,70 @@ describe('WeCom account operations', () => {
   })
 })
 
-describe('WeCom guides the plugin downloads', () => {
+describe('WeCom guides a check waits for', () => {
   let home: string
   /** Answers each request for the guides' archive. */
-  let archive: () => Promise<Response>
+  let archive: (signal: AbortSignal) => Promise<Response>
+
+  /** A request that stays unanswered until its download is stopped. */
+  const unanswered = (signal: AbortSignal): Promise<Response> => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+  })
+  /** Where the upstream skills Service publishes the guides without a profile. */
+  const published = (): string => join(home, 'cache', 'wecom', `skills-${WECOM_SKILLS.sha256.slice(0, 16)}`)
 
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), 'dsh-wecom-home-'))
     vi.stubEnv('DSH_HOME', home)
-    vi.stubGlobal('fetch', () => archive())
+    vi.stubGlobal('fetch', (_url: string, init: { signal: AbortSignal }) => archive(init.signal))
   })
 
   afterEach(() => rm(home, { recursive: true, force: true }))
 
-  it('restarts a failed download of the guides on each check without waiting for it, and reports the state it leaves', async () => {
+  it('reports guides whose download did not finish as not installed, without running a command', async () => {
     archive = () => Promise.reject(new Error('offline'))
     await load({})
-    await vi.waitFor(() => { expect(account.snapshot().account.skills).toBe('failed') })
+    expect(account.snapshot()).toEqual({ account: { state: 'unchecked' } })
 
-    archive = () => new Promise(() => {})
-    script[STATUS] = [AUTHORIZED]
     const id = start('check')
-    expect(account.snapshot().account).toEqual({ state: 'unchecked', skills: 'downloading' })
-    expect(await settled(id)).toEqual({ account: { state: 'authorized', botId: 'bot-1', skills: 'downloading' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true })
+    expect(await settled(id)).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'failed' } })
+    expect(errors()).toEqual([['wecom: account operation failed: %o', { id, kind: 'check', phase: 'downloading' }]])
+    expect(commands()).toEqual([])
   })
 
-  it('reports a new state of the guides with the current authorization', async () => {
-    const download = Promise.withResolvers<Response>()
-    archive = () => download.promise
+  it('downloads the guides again on the next check, in a step of its own before the status command', async () => {
+    archive = () => Promise.reject(new Error('offline'))
     await load({})
+    await settled(start('check'))
+
+    const request = Promise.withResolvers<Response>()
+    archive = () => request.promise
     script[STATUS] = [AUTHORIZED]
-    expect((await settled(start('check'))).account).toEqual({ state: 'authorized', botId: 'bot-1', skills: 'downloading' })
+    const id = start('check')
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true })
+    expect(commands()).toEqual([])
+    // No fixture archive matches the pinned digest, so the guides arrive the way another process publishes them.
+    await mkdir(published(), { recursive: true })
+    request.reject(new Error('offline'))
 
-    download.reject(new Error('offline'))
+    expect(await settled(id)).toEqual({ account: { state: 'authorized', botId: 'bot-1' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(commands()).toEqual([STATUS])
+  })
 
-    await vi.waitFor(() => { expect(account.snapshot().account).toEqual({ state: 'authorized', botId: 'bot-1', skills: 'failed' }) })
+  it('cancels a download of the guides, which leaves them not installed and runs no command', async () => {
+    archive = unanswered
+    await load({})
+    const id = start('check')
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true })
+
+    const cancelling = account.cancel(id)
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'cancelling', cancellable: false })
+    await cancelling
+
+    expect(account.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'cancelled' } })
+    expect(commands()).toEqual([])
+    expect(errors()).toEqual([])
   })
 })
 
@@ -205,9 +238,9 @@ describe('WeCom on the Plugins page', () => {
     script[STATUS] = [UNAUTHORIZED]
     account.refresh()
     const check = account.snapshot().operation
-    expect(account.snapshot()).toMatchObject({ account: { state: 'unchecked', skills: 'installed' }, operation: { kind: 'check' } })
+    expect(account.snapshot()).toMatchObject({ account: { state: 'unchecked' }, operation: { kind: 'check' } })
     expect(await finished(check!.id)).toMatchObject({ kind: 'check', outcome: 'succeeded' })
-    expect(account.snapshot().account).toEqual({ state: 'unauthorized', skills: 'installed' })
+    expect(account.snapshot().account).toEqual({ state: 'unauthorized' })
     expect(subprocess.lookups[0]?.command).toBe(join(binDir, executableFileName(process.platform)))
     expect(await finished(start('check'))).toMatchObject({ kind: 'check', outcome: 'succeeded' })
 

@@ -1,4 +1,4 @@
-/** A Host for Feishu plugin specs: scripted lark-cli processes, a temporary bin directory, and a recording Plugins page registry. */
+/** A Host for Feishu plugin specs: scripted processes, a temporary bin directory, and a recording Plugins page registry. */
 
 import { chmod, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,6 +13,7 @@ import type {
   SubprocessCollectedOutputs,
   SubprocessHandle,
   SubprocessOutcome,
+  SubprocessOutputReader,
   SubprocessSpawnSpec,
   SubprocessTerminalEnvironment,
 } from '@deepseek-ai/dsh-subprocess'
@@ -29,32 +30,49 @@ export interface CliReply {
   signal?: NodeJS.Signals | null
 }
 
-/** A piped process whose managed range exits on termination. */
+type Stream = 'stdout' | 'stderr'
+
+/** A process whose managed range exits on termination; a stream the spec collects is read through `collected`. */
 export class ScriptedProcess implements SubprocessHandle {
   readonly stdin = undefined
   readonly stdout = new PassThrough()
   readonly stderr = new PassThrough()
   readonly control = undefined
-  readonly collected: SubprocessCollectedOutputs = {}
+  readonly collected: SubprocessCollectedOutputs
   readonly done: Promise<SubprocessOutcome>
   terminated = false
+  private readonly written: Record<Stream, string> = { stdout: '', stderr: '' }
   private readonly outcome = Promise.withResolvers<SubprocessOutcome>()
   private readonly exit = Promise.withResolvers<boolean>()
 
   constructor(readonly spec: SubprocessSpawnSpec) {
     this.done = this.outcome.promise
+    this.collected = {
+      ...typeof spec.stdio.stdout === 'object' ? { stdout: this.reader('stdout') } : {},
+      ...typeof spec.stdio.stderr === 'object' ? { stderr: this.reader('stderr') } : {},
+    }
     spec.signal?.addEventListener('abort', () => { this.terminate() }, { once: true })
   }
 
   /** Write output while the command keeps running. */
-  write(stream: 'stdout' | 'stderr', text: string): void {
+  write(stream: Stream, text: string): void {
+    this.written[stream] += text
     this[stream].write(text)
+  }
+
+  private reader(stream: Stream): SubprocessOutputReader {
+    return {
+      readFrom: (fromByte) => {
+        const bytes = Buffer.from(this.written[stream])
+        return { text: bytes.subarray(fromByte).toString(), nextOffset: bytes.length, lossy: false }
+      },
+    }
   }
 
   /** Finish the command with the given output; the managed range stays alive until termination. */
   reply(reply: CliReply): void {
-    if (reply.stdout !== undefined) this.stdout.write(reply.stdout)
-    if (reply.stderr !== undefined) this.stderr.write(reply.stderr)
+    if (reply.stdout !== undefined) this.write('stdout', reply.stdout)
+    if (reply.stderr !== undefined) this.write('stderr', reply.stderr)
     this.close()
     this.outcome.resolve({ exitCode: reply.exitCode === undefined ? 0 : reply.exitCode, signal: reply.signal ?? null })
   }

@@ -29,7 +29,7 @@ export interface DeepSeekCatalogModel {
    */
   imagePixelBudget?: number | 'low'
   /** Encoded-byte target for one deterministic request preview; the smallest quality-ladder output is used when no quality fits. */
-  imageMaxBytes?: number
+  imageTargetBytes?: number
   /**
    * `'in-history'` declares that the endpoint reads the latest `system`
    * message at any position of the conversation as the complete effective

@@ -198,6 +198,7 @@ Factory: conversation.content [ConversationContent]
 │  └─ conversation.plan-review.actions
 ├─ conversation.composer.bar [InputBar]
 │  ├─ conversation.input.attachments
+│  ├─ conversation.input.placeholder
 │  ├─ conversation.input.permission
 │  ├─ conversation.input.plan
 │  ├─ conversation.input.model

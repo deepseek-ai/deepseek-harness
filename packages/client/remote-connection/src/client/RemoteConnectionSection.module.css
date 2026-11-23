@@ -211,6 +211,11 @@
   min-width: 0;
 }
 
+.warningList {
+  padding-inline-start: 1.5em;
+  list-style-type: decimal;
+}
+
 .cautionTitle {
   margin: 0;
   font-size: 13px;

@@ -77,18 +77,18 @@ export function apply(ctx: Context, config: Config): void {
     set: VENDOR_SKILLS,
     skillsDir: config.skillsDir,
   })
-  skills.watch((state) => { ctx.logger.info(`vendor: upstream skills ${state}`) })
+  if (!skills.installed()) ctx.logger.info('vendor: downloading the upstream skills')
 }
 ```
 
-`register` 从入口的 YAML frontmatter 读取名称和描述，以 `name` 注册一个技能提供方，文件不在位时开始下载。注册属于用其 `ctx` 发起调用的插件：该插件卸载时，下载被中止，提供方被移除，通知停止。以同一个 `name` 再次注册会抛出异常，第一次注册保持不变。
+`register` 从入口的 YAML frontmatter 读取名称和描述，以 `name` 注册一个技能提供方，文件不在位时开始下载。注册属于用其 `ctx` 发起调用的插件：该插件卸载时，下载被中止，提供方被移除。以同一个 `name` 再次注册会抛出异常，第一次注册保持不变。
 
 - `name` 是技能提供方的名称、插件的错误和日志记录的前缀，也是 `$DSH_HOME/cache` 下接收下载内容的目录。
 - `entry` 是随包发布的入口 `SKILL.md` 的绝对路径，其正文按仓库路径引用上游文件，例如 `skills/<子指南>/SKILL.md`。
 - `set` 是 `scripts/upstream-skills-digest.ts` 输出的固定信息。
-- `skillsDir` 是插件自己的可选配置字段：一个已按仓库路径存放保留文件的目录。设置后不下载，路径不是目录时 `register` 抛出异常。
+- `skillsDir` 是插件自己的可选配置字段：一个已按仓库路径存放保留文件的目录。设置后不下载：路径不是目录时 `register` 抛出异常，目录之后被移除时 `install` 以异常结束。
 
-返回的句柄供插件的账号视图和检查使用。`directory` 是 `skillsDir`；没有设置时，在 profile 中是 `$DSH_HOME/cache/<name>/<profile>/skills-<摘要前 16 位>`，没有 profile 时是 `$DSH_HOME/cache/<name>/skills-<摘要前 16 位>`。下载进行中时 `state` 为 `downloading`，否则这个目录存在时为 `installed`，不存在时为 `failed`。`watch(listener)` 报告每次下载的开始和结束；`retry()` 在失败后开始新的下载，并立即返回。插件在账号旁显示这个状态，并在检查中调用 `retry()` 而不等待，因此下载再慢也不会占住账号操作。下载失败会记为警告。`dispose()` 在插件卸载之前撤回注册。以 [`src/index.ts`](src/index.ts) 和 [`src/types.ts`](src/types.ts) 中的约定为准。
+返回的句柄供插件的账号检查使用。`directory` 是 `skillsDir`；没有设置时，在 profile 中是 `$DSH_HOME/cache/<name>/<profile>/skills-<摘要前 16 位>`，没有 profile 时是 `$DSH_HOME/cache/<name>/skills-<摘要前 16 位>`。`installed()` 返回这个目录是否存在。目录存在时 `install(signal)` 立即返回；否则它等待进行中的下载，没有下载在进行时开始一次，下载失败时以异常结束。中止 `signal` 会停止这次下载，其他等待它的调用方也随之结束。通过 `ctx.cliAccounts` 注册的插件把这两个方法作为它的 [`prepare` 步骤](../cli-account/README.zh.md#prepare-before-a-check)传入，即 `ready: () => skills.installed()` 和 `run: signal => skills.install(signal)`：它的账号检查于是等文件就位，模型只在文件就位后得到 CLI 的路径，插件页的重试会重新下载。下载失败会记为警告。`dispose()` 在插件卸载之前撤回注册。以 [`src/index.ts`](src/index.ts) 和 [`src/types.ts`](src/types.ts) 中的约定为准。
 
 ### 保留的文件与校验
 
@@ -110,7 +110,7 @@ Service 按顺序从每个 `skillsUrls` 前缀下载 `<前缀>/<owner>/<reposito
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-`register` 在调用方插件的 context 中运行，因此技能提供方是该插件的 effect，随它一起移除。提供方只在句柄的 `directory` 存在时列出入口技能，来源为 `bundled`、使用内置技能的优先级，因此同名的项目或用户技能优先。发布前它返回完整的空列表，因为不完整的结果会让整个技能目录变成不完整；发布后改为使目录失效；下载失败但发现另一个进程已发布目录时也使目录失效。同一时间只运行一次下载，卸载插件时，提供方注册的信号会中止它。保留文件在与摘要一致之前只存在内存中，总量受 `bytes` 限制，因此未经校验的文件不会写入磁盘；选择范围之外的文件读取后即丢弃，花在它们上面的时间受 `skillsTimeoutMs` 限制。
+`register` 在调用方插件的 context 中运行，因此技能提供方是该插件的 effect，随它一起移除。提供方只在句柄的 `directory` 存在时列出入口技能，来源为 `bundled`、使用内置技能的优先级，因此同名的项目或用户技能优先。发布前它返回完整的空列表，因为不完整的结果会让整个技能目录变成不完整；发布后改为使目录失效；下载失败但发现另一个进程已发布目录时也使目录失效。同一时间只运行一次下载：下载进行中的每次 `install` 调用都等待它，其中任一调用方的 signal 中止都会停止它，卸载插件时，提供方注册的信号也会中止它。保留文件在与摘要一致之前只存在内存中，总量受 `bytes` 限制，因此未经校验的文件不会写入磁盘；选择范围之外的文件读取后即丢弃，花在它们上面的时间受 `skillsTimeoutMs` 限制。
 
 | 文件 | 职责 |
 |---|---|
@@ -146,7 +146,7 @@ Service 按顺序从每个 `skillsUrls` 前缀下载 `<前缀>/<owner>/<reposito
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，入口技能不会列出，插件显示 `failed` 状态。
+- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，入口技能不会列出，账号检查等待这些文件的插件报告下载失败，而不是账号。
 - 每个加载该插件的 profile 都各自下载一份固定提交。
 - 同一个 profile 的多个进程可以同时运行同一插件的不同版本，例如一个在插件更新之前启动，另一个在更新之后启动。后启动的进程会删除先启动的进程正在读取的固定提交：先启动的进程不再列出入口技能，其中的 Agent 也打不开子指南，直到它下一次检查重新下载完成。此后两个固定提交都保留，直到这个 profile 的某个进程再次加载该插件。
 - 移除插件后，它的固定提交仍留在缓存中。进程在写入下载内容时退出，也会在那里留下它的暂存目录 `.skills-<摘要>-<uuid>`。两者都不会被删除。

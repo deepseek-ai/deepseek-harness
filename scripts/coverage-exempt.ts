@@ -29,7 +29,7 @@ export const COVERAGE_EXEMPT_ENV = 'DSH_COVERAGE_EXEMPT_HEAVY'
 export const coverageExemptHeavySuites: readonly CoverageExemptSuite[] = [
   // Typert src is threshold-excluded; compiler analysis runs uninstrumented.
   // The generator's tools-catalog registry and
-  // tool-cordis imports are fully covered by those packages' own tests.
+  // cordis-host-runner imports are fully covered by those packages' own tests.
   {
     filter: 'packages/typert/',
     exclude: 'packages/typert/*/tests/**',

@@ -163,7 +163,7 @@ export class CordisCatalogProjector {
   }
 
   /**
-   * Render the model-facing static API consumed by `tool-cordis`.
+   * Render the model-facing static API consumed by `cordis-host-runner`.
    * @param model - validated Cordis catalog projection from this projector.
    * @returns the model-facing TypeScript catalog source.
    */
@@ -686,7 +686,7 @@ function renderRuntimeApi(
     ' * the same AST walk as docs/cordis-catalog, so this data and the rendered',
     ' * docs cannot diverge.',
     ' *',
-    ' * @module @deepseek-ai/dsh-tool-cordis/api-catalog',
+    ' * @module @deepseek-ai/dsh-cordis-host-runner/api-catalog',
     ' */',
     '',
     '/* jscpd:ignore-start */',

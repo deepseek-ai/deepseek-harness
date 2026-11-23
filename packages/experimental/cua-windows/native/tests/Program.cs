@@ -19,8 +19,32 @@ void Refuses(Action action, string code)
     catch (NativeFailure failure) { Check(failure.Code == code, "Unexpected refusal: " + failure.Code); }
 }
 
+var handshakeConfig = new JsonObject
+{
+    ["maxRequestBytes"] = 8192, ["maxResponseBytes"] = 8192, ["axTimeoutMs"] = 10, ["textEventIntervalMs"] = 0,
+    ["screenshotTimeoutMs"] = 10, ["timeoutMs"] = 50, ["graceMs"] = 10, ["pollIntervalMs"] = 1,
+    ["launchWaitMs"] = 10, ["maxClickHoldMs"] = 25,
+};
+NativeConfig ReadConfig() => NativeConfig.Parse(JsonSerializer.SerializeToElement(handshakeConfig));
+Check(ReadConfig().MaxDiffNotifications == 50, "An existing handshake defaults to 50 distinct notifications");
+handshakeConfig["maxDiffNotifications"] = 2;
+Check(ReadConfig().MaxDiffNotifications == 2, "The handshake overrides the diff limit independently of tree traversal");
+foreach (var invalid in new[] { "0", "-1", "1.5", "2147483648", "null", "\"2\"" })
+{
+    handshakeConfig["maxDiffNotifications"] = JsonNode.Parse(invalid);
+    Refuses(() => ReadConfig(), "INVALID_CONFIG");
+}
+
+NotificationChecks.Run(Check);
+await NotificationCleanupChecks.Run(Check);
+
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
+var fullTreeRequest = NativeRequest.Parse(WireJson.Parse("""{"id":"full","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":false}}"""));
+Check(!fullTreeRequest.Params.GetProperty("showDiff").GetBoolean(), "Explicit full-tree reads remain supported");
+var diffRequest = NativeRequest.Parse(WireJson.Parse("""{"id":"diff","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":true}}"""));
+Check(diffRequest.Id == "diff" && diffRequest.Params.GetProperty("showDiff").GetBoolean(), "Difference requests reach the executor with their correlation ID");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"diff","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":"true"}}""")), "INVALID_ARGUMENT");
 foreach (var (maxElements, maxDepth) in new[] { (1, 1), (7, 3), (10000, 100) })
 {
     var observation = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
@@ -36,6 +60,15 @@ Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getSta
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":10001,"maxDepth":100}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":10000,"maxDepth":101}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"typeText","params":{"appHandle":"app","text":"hello","unowned":1}}""")), "INVALID_ARGUMENT");
+foreach (var query in new string?[] { "", null, " \t\n", "Editor" })
+{
+    var search = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        id = "all-apps", method = "findApps", @params = new { query, maxAppMatches = 1 },
+    })));
+    Check(search.Params.GetProperty("query").GetString() == query, "Application query admission preserves strings and null");
+}
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"search","method":"findApps","params":{"maxAppMatches":1}}""")), "INVALID_ARGUMENT");
 Refuses(() => WireJson.Parse("""{"id":"one","id":"two"}"""), "INVALID_REQUEST");
 Refuses(() => WireJson.Parse("""{"params":{"x":1,"x":2}}"""), "INVALID_REQUEST");
 foreach (var path in new[] { @"C:\Tools\Editor.exe", @"D:\Portable Apps\编辑器.exe", @"\\server\tools\Editor.exe" })
@@ -74,6 +107,7 @@ foreach (var direction in new[] { "down", "up" })
 }
 foreach (var invalid in new[]
 {
+    """{"appHandle":"app","windowId":"1","mouseButton":"left","direction":"down","taskId":"other"}""",
     """{"appHandle":"app","windowId":"1","mouseButton":"left"}""",
     """{"appHandle":"app","windowId":"1","direction":"down"}""",
     """{"appHandle":"app","mouseButton":"left","direction":"down"}""",
@@ -83,6 +117,14 @@ foreach (var invalid in new[]
 })
     Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"mouse\",\"method\":\"toggleMouse\",\"params\":" + invalid + "}")), "INVALID_ARGUMENT");
 
+foreach (var method in new[] { "getHeldInputs", "releaseHeldInputs" })
+{
+    var query = $$$"""{"id":"holds","method":"{{{method}}}","params":{}}""";
+    Check(NativeRequest.Parse(WireJson.Parse(query)).Method == method, "Held-input operations use the requesting connection");
+    Refuses(() => NativeRequest.Parse(WireJson.Parse($$$"""{"id":"holds","method":"{{{method}}}","params":{"taskId":"other"}}""")), "INVALID_ARGUMENT");
+}
+HeldInputChecks.Run(Check, Refuses);
+
 var actionSchema = NativeRequest.Parse(WireJson.Parse("""{"id":"schema","method":"getActionSchema","params":{"action":"Invoke.Invoke"}}"""));
 Check(actionSchema.Params.EnumerateObject().Select(item => item.Name).SequenceEqual(["action"]),
     "Action schema requests carry only the exact action name");
@@ -90,6 +132,10 @@ foreach (var parameters in new[] { """{}""", """{"action":""}""", """{"action":"
     """{"action":"Invoke.Invoke","windowId":"1"}""", """{"action":"Invoke.Invoke","elementId":"1"}""" })
     Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"schema\",\"method\":\"getActionSchema\",\"params\":" + parameters + "}")), "INVALID_ARGUMENT");
 
+var newInstance = NativeRequest.Parse(WireJson.Parse("""{"id":"new-instance","method":"launchApp","params":{"appHandle":"selected"}}"""));
+Check(newInstance.Method == "launchApp" && newInstance.Params.GetProperty("appHandle").GetString() == "selected",
+    "New-instance launch retains the selected application handle");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"new-instance","method":"launchApp","params":{"appHandle":"selected","windowId":"1"}}""")), "INVALID_ARGUMENT");
 var launch = NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}"""));
 Check(launch.Method == "launchApp" && launch.Params.GetProperty("appHandle").GetString() == "pending",
     "Host launch continuation retains the selected application handle");
@@ -100,7 +146,7 @@ foreach (var parameters in new[] { "{}", "{\"appHandle\":\"\"}", "{\"selector\":
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"close"}"""), null) == NativeControl.Close, "Connection close needs no active operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one") == NativeControl.Cancel, "Cancellation matches the live operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one", completed: true) == NativeControl.CompletedCancel,
-    "Cancellation arriving after the matching response is a no-op");
+    "Cancellation can identify a discarded reply after the matching operation completes");
 foreach (var frame in new[] { "null", "[]", "{}", "{\"type\":1}",
     "{\"type\":\"close\",\"extra\":1}", "{\"type\":\"cancel\"}",
     "{\"type\":\"cancel\",\"id\":null}", "{\"type\":\"cancel\",\"id\":1}",

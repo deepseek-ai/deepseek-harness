@@ -881,7 +881,6 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-experimental-auto-review', 1],
       ['@deepseek-ai/dsh-experimental-forge-bundle', 1],
-      ['@deepseek-ai/dsh-personalized-recommendations', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ...cuaSupported ? [['@deepseek-ai/dsh-cua-bundle', 1]] : [],
       ['@deepseek-ai/dsh-timeline', 1],
@@ -1286,12 +1285,12 @@ describe('web e2e: plugin manager', () => {
     await panel.getByRole('button', { name: '查看 语音输入', exact: true }).click()
     const packageName = panel.locator('[data-plugin-name]')
     expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-voice-input-bundle')
-    expect(await panel.getByText('在本机使用 SenseVoice 转写录音，首次使用需安装依赖。').count()).toBe(1)
+    expect(await panel.getByText('登录 DeepSeek 账号或配置 API Key 后使用云端识别转写录音，也可以下载本地 SenseVoice 模型。').count()).toBe(1)
     try {
       await setLanguage('en')
       await panel.getByRole('heading', { name: 'Voice input', exact: true }).waitFor()
       expect(await packageName.textContent()).toBe('@deepseek-ai/dsh-experimental-voice-input-bundle')
-      expect(await panel.getByText('Transcribe recordings locally with SenseVoice; first use requires installing dependencies').count()).toBe(1)
+      expect(await panel.getByText('Dictate with DeepSeek cloud recognition through a DeepSeek account or API key, or download the local SenseVoice model').count()).toBe(1)
       await panel.getByRole('button', { name: 'Back to plugins' }).click()
       await panel.getByRole('button', { name: 'View Voice input', exact: true }).waitFor()
       expect(await panel.getByRole('switch', { name: 'Enable Voice input', exact: true }).count()).toBe(1)

@@ -55,6 +55,18 @@ function contextAnswer(mode: { readonly sessionMode: string; readonly sessionMod
   })
 }
 
+
+/** Session rows on this page drag out only as copies, which open them in the right Sidebar; none is a reorder handle. */
+function expectNoReorderHandles(): void {
+  for (const row of document.querySelectorAll<HTMLElement>('[role="treeitem"][draggable="true"]')) {
+    expect(row.dataset.rowKey).toMatch(/^session:/u)
+    const dataTransfer = { effectAllowed: '', setData: () => {}, setDragImage: () => {} }
+    fireEvent.dragStart(row, { dataTransfer })
+    fireEvent.dragEnd(row, { dataTransfer: { dropEffect: 'none' } })
+    expect(dataTransfer.effectAllowed).toBe('copy')
+  }
+}
+
 describe('Assembled liveshare viewer page branching a share', () => {
   it('branches the shared Session into the reader\'s own child, then closes with the grant', async () => {
     inputFixture = installViewerInputFixture()
@@ -102,8 +114,8 @@ describe('Assembled liveshare viewer page branching a share', () => {
     // The read-only page offers no way to change the shared Session's own settings.
     expect(screen.queryByRole('button', { name: /^Access mode/u })).toBeNull()
     // Reordering Sessions and Workspaces is the same Host state rename and delete write, so no row on
-    // this page is a drag handle either.
-    expect(document.querySelector('[role="treeitem"][draggable="true"]')).toBeNull()
+    // this page is a reorder handle either.
+    expectNoReorderHandles()
     // Before any branch exists, no row on this page is marked as one.
     expect(screen.queryByText('Fork')).toBeNull()
     // The branch action follows the access snapshot the owner's Gateway sent this reader, not the

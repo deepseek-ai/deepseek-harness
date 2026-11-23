@@ -164,6 +164,7 @@ async function hitsItself(locator: Locator): Promise<boolean> {
  * surface and release over the conversation.
  */
 async function floatByDrag(page: Page, tab: Locator): Promise<void> {
+  await tab.hover({ trial: true })
   const surface = page.locator('[data-dockkit-surface]').first()
   const box = await surface.boundingBox()
   if (box === null) throw new Error('surface is not rendered')

@@ -12,6 +12,14 @@ export function createNativeFixture(selectorPid?: number): {
   createChannel: NativeChannelFactory
   calls: Array<{ id: string; method: string; params: Record<string, JsonValue> }>
   events: string[]
+  held: Array<{ connection: number; key: string }>
+  /** Control one native reply or cancellation acknowledgement at a deterministic barrier. */
+  controlNext(method: string, options?: { afterDispatch?: boolean; waitForCancellation?: boolean }): {
+    entered: Promise<void>
+    cancelled: Promise<void>
+    reply(error?: { code: string; message: string }): void
+    disconnect(): void
+  }
   state: { count: number; openedChannels: number; closedChannels: number }
   /** @returns A barrier reached when the next click waits for native cancellation. */
   holdNextClick(): Promise<void>

@@ -1,7 +1,0 @@
-{
-  "meta": {
-    "title": "Personalisierte Empfehlungen",
-    "description": "Zeigt für Ihre individuellen Anforderungen an DSH Empfehlungskarten unter der Antwort an: Wenn Sie eine Seite oder ein kleines Tool zur dauerhaften Nutzung möchten, wird eine neue personalisierte Seite vorgeschlagen, die nach einem Klick auf Erstellen im Hintergrund erstellt wird; wenn Sie fragen, wie etwas in dieser App geht, oder sagen, dass eine Funktion fehlt, wird das integrierte Plugin empfohlen, das sie bereitstellt, und nach einem Klick auf Aktivieren eingeschaltet.",
-    "detail": "docs/DETAIL.md"
-  }
-}

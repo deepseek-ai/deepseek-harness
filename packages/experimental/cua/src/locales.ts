@@ -9,7 +9,7 @@ export const en = {
 
 /** Chinese application-access messages. */
 export const zh = {
-  question: '允许智能体通过 Computer Use 控制此应用吗？',
+  question: '允许智能体自动操作此应用吗？',
   detail: '在插件页面管理所有会话的应用权限。',
   approve: '本会话允许',
 } satisfies Record<keyof typeof en, string>
@@ -84,7 +84,7 @@ export const applicationAccessDisplay = {
 /** Window consent never grants access to sibling windows or application launch. */
 export const windowAccessQuestion = {
   en: 'Allow computer use to read, capture and control this window?',
-  zh: '允许电脑操作读取、截图并控制这个窗口吗？',
+  zh: '允许智能体读取、截图并操作此窗口吗？',
   ja: 'このウィンドウの読み取り、撮影、操作を許可しますか？',
   es: '¿Permitir leer, capturar y controlar esta ventana?',
   fr: 'Autoriser la lecture, la capture et le contrôle de cette fenêtre ?',
@@ -95,7 +95,7 @@ export const windowAccessQuestion = {
 /** Launch consent does not grant access to resulting windows. */
 export const launchAccessQuestion = {
   en: 'Allow computer use to launch this entry? Window access is requested separately.',
-  zh: '允许电脑操作启动这个入口吗？窗口访问将单独请求授权。',
+  zh: '允许启动此项吗？窗口访问将单独请求授权。',
   ja: 'この項目の起動を許可しますか？ウィンドウへのアクセスは別途確認します。',
   es: '¿Permitir iniciar esta entrada? El acceso a ventanas se solicita por separado.',
   fr: 'Autoriser le lancement de cette entrée ? L’accès aux fenêtres sera demandé séparément.',

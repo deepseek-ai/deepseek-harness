@@ -1,11 +1,12 @@
-/** Execution-period records, capacity slots, child serialization, and local output capture.
+/** Execution-period records, capacity slots, child serialization, and local result capture.
  * @module @deepseek-ai/dsh-subagent/activation
  */
 
-import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
-import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { Agent, AgentHandle, ConsumedWorkFoldState } from '@deepseek-ai/dsh-agent'
+import { foldConsumedWorkForEvent } from '@deepseek-ai/dsh-agent'
+import type { SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { finalAssistantOutput } from './assistant-output.ts'
+import type { AssistantOutputFold } from './assistant-output.ts'
 import { epochStopReason } from './lifecycle.ts'
 import { SubagentError } from './error.ts'
 import type { StructuredAttachment } from './structured.ts'
@@ -75,7 +76,13 @@ export type ActivationResource =
   | {
     readonly kind: 'local'
     readonly handle: AgentHandle
-    readonly outputStart: SessionLogOffset
+    /** Fold of every child event committed since this epoch began. */
+    readonly output: AssistantOutputFold
+    /** {@link foldConsumedWorkForEvent} state over the same events; `undefined` before the first. */
+    work: ConsumedWorkFoldState | undefined
+    /** The first error each fold threw; {@link captureLocalResult} rethrows it. */
+    outputFailure: { error: unknown } | undefined
+    workFailure: { error: unknown } | undefined
     readonly structured: StructuredAttachment | undefined
     /** Latest live failure not superseded by a later committed turn ending. */
     failureAt: SessionLogOffset | undefined
@@ -146,15 +153,41 @@ export function observeLocalFailure(activation: LocalActivation, wake: () => voi
 }
 
 /**
+ * Fold one committed child event into the result its epoch settles with.
+ * `session/event` dispatch discards a listener exception, so each fold keeps
+ * its first one and stops; {@link captureLocalResult} rethrows it.
+ * @param activation - the resident local execution that owns the child.
+ * @param event - the child Session event just committed.
+ */
+export function foldLocalResult(activation: LocalActivation, event: SessionEvent): void {
+  if (activation.outputFailure === undefined) {
+    try {
+      activation.output.push(event)
+    } catch (error: unknown) {
+      activation.outputFailure = { error }
+    }
+  }
+  if (activation.workFailure === undefined) {
+    try {
+      activation.work = foldConsumedWorkForEvent(activation.work, event)
+    } catch (error: unknown) {
+      activation.workFailure = { error }
+    }
+  }
+}
+
+/**
  * Capture local output and retain failures without a later committed turn ending.
  * @param activation - the settled local execution and any structured result.
  * @returns final output, stop reason, and committed structured value.
+ * @throws the first error a fold of this epoch's events threw; the stop-reason
+ *   fold is not consulted after a retained live failure.
  */
 export function captureLocalResult(activation: LocalActivation): SubagentResult {
-  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-  const events = activation.handle.agent.session.snapshotEvents(activation.outputStart)
-  const output = finalAssistantOutput(events) ?? []
-  const stopReason = activation.failureAt === undefined ? epochStopReason(events) : 'error'
+  if (activation.outputFailure !== undefined) throw activation.outputFailure.error
+  if (activation.failureAt === undefined && activation.workFailure !== undefined) throw activation.workFailure.error
+  const output = activation.output.collect() ?? []
+  const stopReason = activation.failureAt === undefined ? epochStopReason(activation.work ?? { droppedUnrun: false }) : 'error'
   const structured = activation.structured
   if (structured !== undefined) {
     const captured = structured.captured()

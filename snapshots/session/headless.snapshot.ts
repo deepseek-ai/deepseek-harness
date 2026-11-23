@@ -1049,10 +1049,11 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   for (const [logIndex, log] of actualLogs.entries()) {
     const headers = normalizedHeaders(log.content, ctx)
     const prompts = normalizedSystemPrompts(log.content, ctx)
+    const promptChanges = scenario.manifest.header.promptChanges ?? pin.manifest.header.promptChanges ?? 0
     if (headers.length > 0) {
       expect(systemPromptPrecedesRequests(log.content), `${scenario.name}: a system/message precedes the first request/header`).toBe(true)
       expect(prompts.length, `${scenario.name}: system/message count`)
-        .toBe(1 + (logIndex === 0 ? pin.manifest.header.promptChanges ?? 0 : 0))
+        .toBe(1 + (logIndex === 0 ? promptChanges : 0))
     }
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
@@ -1064,9 +1065,21 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
       expect(
         formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
         `${scenario.name}: system prompts`,
-      ).toBe(childPrompts.get(logIndex) ?? prompt)
+      ).toBe(childPrompts.get(logIndex) ?? leadingPromptSections(prompt, logIndex === 0 ? promptChanges : 0))
     }
   }
+}
+
+/**
+ * Keep the pinned prompt sidecar through change `changes`; a scenario that declares fewer prompt changes than its pin
+ * compares against that leading part.
+ * @param prompt - complete pinned prompt sidecar.
+ * @param changes - prompt changes the scenario declares.
+ * @returns the sidecar text before change `changes + 1`.
+ */
+function leadingPromptSections(prompt: string, changes: number): string {
+  const end = prompt.indexOf(`\n<!-- system/message change ${changes + 1} -->`)
+  return end < 0 ? prompt : prompt.slice(0, end)
 }
 
 describe('headless recorded-session snapshots', () => {
@@ -1569,9 +1582,9 @@ describe('headless recorded-session snapshots', () => {
                   type: 'text', text: expect.stringMatching(/^Error: cannot render ".+[\\/]report\.docx": model "deepseek-v4-flash" does not accept images$/u),
                 }])
               }
-              expect(results).toHaveLength(2)
+              expect(results).toHaveLength(1)
               expect(results.every(result => result.isError === false)).toBe(true)
-              expect(log).toContain('# Office task routing')
+              expect(log).toContain('# Office tasks')
             }
             if (scenario.name === 'complete-prompt-in-history') {
               const events = parseSessionLog(actualLogs[0]!.content)

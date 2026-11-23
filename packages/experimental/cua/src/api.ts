@@ -1,7 +1,7 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionNamesResult, ActionResult, ActionSchemaResult, AppResult, AppsResult, CapabilitiesResult, HoverResult, MouseMoveTargets, NativeAppsResult, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -52,13 +52,13 @@ export function createCuaApi(dispatch: CuaDispatch): CuaApi {
       return capabilities
     },
     async listApps() {
-      return AppsResult.parse(await call('listApps', {})).map(({ id, name, bundleId, ...state }) => {
+      return NativeAppsResult.parse(await call('listApps', {})).map(({ id, name, bundleId, ...state }) => {
         const selector = id ?? (bundleId || (state.isRunning && state.pid !== undefined ? String(state.pid) : name))
         return { id: selector, displayName: name, ...state }
       })
     },
     async findApps(query) {
-      return FoundAppsResult.parse(await call('findApps', { query }))
+      return AppsResult.parse(await call('findApps', { query }))
     },
     async getState() {
       return { apps: await api.listApps(), browsers: [] }
@@ -118,6 +118,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
           ...options?.maxDepth === undefined ? {} : { maxDepth: options.maxDepth },
           ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
           ...options?.details === undefined ? {} : { details: options.details },
+          ...options?.showDiff === undefined ? {} : { showDiff: options.showDiff },
         }))
         if (state.appHandle !== target.appHandle || state.windowId !== (target.windowId ?? null)) {
           throw new Error('Native observation belongs to another application or window')
@@ -251,6 +252,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
     })
     return {
       ...base.surface, appHandle,
+      async launch() { return base.action('launchApp', {}) },
       async activate() { return base.action('activate', {}) },
       async getWindows() {
         return WindowsResult.parse(await base.call('listWindows', {}))

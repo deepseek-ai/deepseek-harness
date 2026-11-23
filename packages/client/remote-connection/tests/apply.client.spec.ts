@@ -132,8 +132,19 @@ async function bench(call: ConnectionHandle['rpc']['call'], beforeMount?: (ctx: 
 }
 
 describe('remote connection settings registration', () => {
+  it('keeps the Remote mounted without registering settings or polling in Desktop', async () => {
+    vi.stubGlobal('dshDesktop', { protocolVersion: 1 })
+    onTestFinished(() => { vi.unstubAllGlobals() })
+    const call = vi.fn<ConnectionHandle['rpc']['call']>()
+    const { ctx, slots } = await bench(call)
+    expect(slots.entries('settings.section')).toHaveLength(0)
+    expect(slots.entries('shell.overlay')).toHaveLength(0)
+    expect(call).not.toHaveBeenCalled()
+    expect(ctx.get('remote.remoteConnection')).toBeDefined()
+  })
+
   it('keeps one navigation entry and replaces QR, link login, and pairing approvals together', async () => {
-    const status = { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 }
+    const status = { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 }
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 1000 }
         : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private' : status,
@@ -163,7 +174,7 @@ describe('remote connection settings registration', () => {
 
   it('registers localized content and removes the section and generated namespace when unloaded', async () => {
     const status = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({ ok: true, value: endpoint === 'remoteConnection/loginUrl'
-      ? 'https://host.example/?token=private' : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }))
+      ? 'https://host.example/?token=private' : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 } }))
     const { ctx, slots, locale, fiber } = await bench(status)
     await vi.waitFor(() => { expect(status).toHaveBeenCalledWith('/api', 'remoteConnection/status', { args: { id: null } }, expect.any(AbortSignal)) })
     const entry = slots.entries('settings.section')[0]!
@@ -210,7 +221,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
       if (endpoint === 'remoteConnection/status') await response.promise
       return { ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+        : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 } }
     })
     let ctx: Context | undefined
     try {
@@ -234,7 +245,7 @@ describe('remote connection settings registration', () => {
     const requestSignals: AbortSignal[] = []
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation((_channel, endpoint, _data, signal) => {
       if (pendingEndpoint === 'loginUrl' && endpoint === 'remoteConnection/status') {
-        return Promise.resolve({ ok: true, value: { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } })
+        return Promise.resolve({ ok: true, value: { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 } })
       }
       if (signal !== undefined) requestSignals.push(signal)
       return new Promise<never>((_resolve, reject) => {
@@ -259,7 +270,7 @@ describe('remote connection settings registration', () => {
         return { ok: true, value: { id: 'extension-invitation', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
       }
       if (endpoint === 'remoteConnection/cancel') return { ok: true, value: 'cancelled' }
-      return { ok: true, value: { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 60_000 } }
+      return { ok: true, value: { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 60_000 } }
     })
     const { ctx, slots, close } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -304,7 +315,7 @@ describe('remote connection settings registration', () => {
   it('shares an existing invitation with replacement content and restores its remaining lifetime on unload', async () => {
     const clock = vi.spyOn(performance, 'now').mockReturnValue(1000)
     onTestFinished(() => { clock.mockRestore() })
-    const status = { url: 'https://host.example/', availability: 'available', ticket: 'pending', pollIntervalMs: 60_000 }
+    const status = { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'pending', pollIntervalMs: 60_000 }
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
       if (endpoint === 'remoteConnection/pairingRequests') return { ok: true, value: { requests: [], pollIntervalMs: 60_000 } }
       if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
@@ -354,7 +365,7 @@ describe('remote connection settings registration', () => {
         return { ok: true, value: { id: 'invitation-b', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
       }
       if (endpoint === 'remoteConnection/cancel') return { ok: true, value: 'cancelled' }
-      return { ok: true, value: { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 60_000 } }
+      return { ok: true, value: { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 60_000 } }
     })
     const { ctx, slots, fiber } = await bench(call, async (ctx) => {
       await ctx.plugin(replacementPlugin).await()
@@ -401,7 +412,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
         : endpoint === 'remoteConnection/loginUrl' ? url
-          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+          : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { ctx, slots } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -427,7 +438,7 @@ describe('remote connection settings registration', () => {
     call.mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
         : endpoint === 'remoteConnection/loginUrl' ? `${url}-new`
-          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+          : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
     }))
     act(() => { ctx.emit('connection/reset') })
     await screen.findByText(`${url}-new`)
@@ -460,7 +471,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
         : endpoint === 'remoteConnection/loginUrl' ? url
-          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+          : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { slots } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -481,7 +492,7 @@ describe('remote connection settings registration', () => {
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1)
   })
 
-  it('refreshes deployment on every reconnect and prefetches the login link once available', async () => {
+  it('shows and copies a loopback login link, then drops it when the Host stops permitting it', async () => {
     const write = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } })
@@ -489,11 +500,13 @@ describe('remote connection settings registration', () => {
       if (clipboardDescriptor === undefined) Reflect.deleteProperty(navigator, 'clipboard')
       else Object.defineProperty(navigator, 'clipboard', clipboardDescriptor)
     })
-    let available = false
+    let loginUrlAllowed = false
+    const url = 'http://127.0.0.1:5432/'
+    const link = `${url}?token=private`
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
-        : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-          : { url: 'https://host.example/', availability: available ? 'available' : 'untrusted-host', ticket: 'none', pollIntervalMs: 1000 },
+        : endpoint === 'remoteConnection/loginUrl' ? link
+          : { url, availability: loginUrlAllowed ? 'unreachable-host' : 'untrusted-host', loginUrlAllowed, ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { ctx, slots } = await bench(call)
     await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
@@ -503,27 +516,62 @@ describe('remote connection settings registration', () => {
     const face = slots.spec('settings.remoteConnection.content')!.inject
     await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.availability).toBe('untrusted-host') })
     face.copyLink()
-    await vi.waitFor(() => { expect(write).toHaveBeenCalledExactlyOnceWith('https://host.example/') })
+    await vi.waitFor(() => { expect(write).toHaveBeenCalledExactlyOnceWith(url) })
     await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().notice).toBe('linkCopied') })
     expect(face.hooks.loginLink.getSnapshot().copied).toBe(false)
-    available = true
+    loginUrlAllowed = true
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1) })
-    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().url).toBe('https://host.example/?token=private') })
-    available = false
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().url).toBe(link) })
+    render(slots.renderSlot('root', {}))
+    const address = within(screen.getByRole('region', { name: zh.addressTitle }))
+    expect(address.getByText(link)).toBeTruthy()
+    expect(screen.queryByRole('region', { name: zh.qrTitle })).toBeNull()
+    fireEvent.click(address.getByRole('button', { name: zh.copyLink }))
+    await screen.findByText(zh.linkWarning)
+    expect(write).toHaveBeenLastCalledWith(link)
+    loginUrlAllowed = false
     act(() => { ctx.emit('connection/reset') })
     await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.availability).toBe('untrusted-host') })
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/status')).toHaveLength(4)
-    await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(2) })
     act(() => { ctx.emit('connection/reset') })
-    await vi.waitFor(() => { expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/status')).toHaveLength(5) })
-    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(2)
-    expect(face.hooks.loginLink.getSnapshot().url).toBe('https://host.example/?token=private')
+    await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.loginUrlAllowed).toBe(false) })
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/status')).toHaveLength(5)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1)
+    expect(face.hooks.loginLink.getSnapshot().url).toBeNull()
+    expect(screen.queryByText(link)).toBeNull()
+    expect(screen.queryByText(zh.linkWarning)).toBeNull()
+    face.reloadLink()
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'remoteConnection/loginUrl')).toHaveLength(1)
     face.copyLink()
-    await vi.waitFor(() => { expect(write).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(write).toHaveBeenCalledTimes(3) })
     await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().notice).toBe('linkCopied') })
-    expect(write).toHaveBeenLastCalledWith('https://host.example/')
+    expect(write).toHaveBeenLastCalledWith(url)
     expect(face.hooks.loginLink.getSnapshot().copied).toBe(false)
+  })
+
+  it('requests a new link when the advertised address changes between eligible addresses', async () => {
+    const previous = 'https://host.example/'
+    const local = 'http://127.0.0.1/'
+    let address = previous
+    const nextRead = Promise.withResolvers<string>()
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/loginUrl') {
+        return { ok: true, value: address === local ? await nextRead.promise : `${previous}?token=previous` }
+      }
+      return { ok: true, value: { url: address, availability: address === local ? 'unreachable-host' : 'available',
+        loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 } }
+    })
+    const { slots } = await bench(call)
+    onTestFinished(() => { nextRead.resolve(`${local}?token=local`) })
+    const face = slots.spec('settings.remoteConnection.content')!.inject
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().url).toBe(`${previous}?token=previous`) })
+    address = local
+    face.reload()
+    await vi.waitFor(() => { expect(face.hooks.remoteConnection.getSnapshot().deployment?.url).toBe(local) })
+    expect(face.hooks.loginLink.getSnapshot().url).toBeNull()
+    nextRead.resolve(`${local}?token=local`)
+    await vi.waitFor(() => { expect(face.hooks.loginLink.getSnapshot().url).toBe(`${local}?token=local`) })
   })
 
   it.each(['en', 'zh'] as const)('copies the clean address after a credential read fails and reports clipboard outcomes in %s', async (language) => {
@@ -539,7 +587,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
       if (endpoint === 'remoteConnection/loginUrl') throw new Error('credential transport unavailable')
       return { ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
-        : { url, availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+        : { url, availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 } }
     })
     const { slots, locale } = await bench(call)
     locale.setLocale(language)
@@ -579,7 +627,7 @@ describe('remote connection settings registration', () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
       ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
         : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+          : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { slots, fiber } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -612,7 +660,7 @@ it('submits approval through the shared namespace and keeps its notice outside S
   const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
     ok: true, value: endpoint === 'remoteConnection/decidePairing' ? 'approved'
       : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+        : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
   }))
   const { slots, fiber } = await bench(call)
   const face = approvalFace(slots)
@@ -641,7 +689,7 @@ it('shares owner approval with appended options across panel replacement', async
       pollIntervalMs: 1000,
     } }
     return { ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-      : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }
+      : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 } }
   })
   const { ctx, slots, fiber } = await bench(call)
   const extension = ctx.plugin(pairingExtensionPlugin)
@@ -674,7 +722,7 @@ it('shares owner approval with appended options across panel replacement', async
 it('preserves QR navigation while refusing pairing controls and reads without owner access', async () => {
   const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
     ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-      : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+      : { url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 },
   }))
   const { ctx, slots, fiber } = await bench(call, undefined, false)
   await ctx.plugin(pairingExtensionPlugin).await()
@@ -696,7 +744,7 @@ it('aborts a pending pairing read and decision when the shared plugin unloads', 
   const signals: AbortSignal[] = []
   const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint, _args, signal) => {
     if (endpoint === 'remoteConnection/status') return { ok: true, value: {
-      url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000,
+      url: 'https://host.example/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000,
     } }
     if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
     if (signal === undefined) throw new Error('Missing lifetime signal')

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-loader",
   "description": "Plugin loader for cordis",
-  "version": "1.1.0",
+  "version": "1.2.0-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -31,7 +31,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
-    "node-addon-require-builtin": "^0.1.9"
+    "node-addon-require-builtin": "^0.1.10"
   },
   "peerDependenciesMeta": {
     "node-addon-require-builtin": {

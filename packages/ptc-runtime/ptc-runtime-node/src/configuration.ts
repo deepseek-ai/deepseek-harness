@@ -8,7 +8,7 @@ const SCOPED_REPL_BY_DEFAULT: boolean = true
 
 /**
  * Select retained Node execution while preserving Script and scoped REPL syntax.
- * @param programFormat - Effective syntax; omission uses the Node provider's default function-body syntax.
+ * @param programFormat - Effective syntax; omission selects function bodies.
  * @returns All three settings to merge into the profile atomically, replacing stale values; function bodies and REPL statements
  * switch to `persistent-in-memory` with `SCOPED_REPL_BY_DEFAULT`, which is also the default when `replScoped` is omitted.
  */
