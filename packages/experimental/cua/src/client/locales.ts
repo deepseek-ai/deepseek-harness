@@ -1,5 +1,6 @@
-/** Product copy for native permission onboarding and application revocation. */
 import { presetNames } from '@deepseek-ai/dsh-agent-preset-registry/display'
+
+/** Product copy for native permission onboarding and application revocation. */
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
