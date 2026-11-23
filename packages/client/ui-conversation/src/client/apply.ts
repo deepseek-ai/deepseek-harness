@@ -164,6 +164,7 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
   slots.registerFactory({
     name: 'conversation.user.text',
     scope: 'session',
+    inline: true,
     children: {
       'conversation.user.text.node': { kind: 'keyed', scope: 'session', inline: true },
     },

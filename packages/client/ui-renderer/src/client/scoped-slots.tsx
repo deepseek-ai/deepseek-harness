@@ -471,7 +471,7 @@ class SlotErrorBoundary extends Component<
 /** Contain one Factory occurrence without retiring the shared definition. */
 /* jscpd:ignore-start */
 class FactoryErrorBoundary extends Component<
-  { name: string; onEntryError: (error: unknown) => void; children: ReactNode }, { failed: boolean }
+  { name: string; anchor: SlotAnchorTag; onEntryError: (error: unknown) => void; children: ReactNode }, { failed: boolean }
 > {
   override state = { failed: false }
   static getDerivedStateFromError(error: unknown): { failed: boolean } {
@@ -483,8 +483,8 @@ class FactoryErrorBoundary extends Component<
     this.props.onEntryError(error)
   }
   override render(): ReactNode {
-    if (this.state.failed) return <div data-factory-error={this.props.name} />
-    return this.props.children
+    const { anchor: Anchor, name, children } = this.props
+    return this.state.failed ? <Anchor data-factory-error={name} /> : children
   }
 }
 /* jscpd:ignore-end */
@@ -846,7 +846,9 @@ function useFactorySlotRuntime(name: string, fallback: FC<InjectedProps>): FC<In
   const Selected = selected ?? fallback
   const usesFallback = selected === undefined
   const { definition, host } = occurrence
+  const Anchor = declared.inline ? 'span' : 'div'
   return useMemo(function bindFactoryLocalComponent() {
+    const localSlotKey = `${definition.name}:${name}`
     return function BoundFactoryLocalComponent(localProps: InjectedProps): ReactNode {
       const current = useContext(FactoryOccurrenceContext)
       const localScopeBinding = useScopeBinding()
@@ -875,17 +877,20 @@ function useFactorySlotRuntime(name: string, fallback: FC<InjectedProps>): FC<In
       assertNoPropOverlap(`factory '${definition.name}' local slot '${name}'`, localRegistrationKit, localStandard)
       const provided = { ...localRegistrationKit, ...localStandard }
       assertNoPropOverlap(`factory '${definition.name}' local slot '${name}'`, provided, localProps)
-      return (
+      const content = (
         <FactoryErrorBoundary
-          key={`${definition.name}:${name}:${localScopeIdentity}`}
-          name={`${definition.name}:${name}`}
+          key={`${localSlotKey}:${localScopeIdentity}`}
+          name={localSlotKey}
+          anchor={Anchor}
           onEntryError={(error) => { host.reportFactoryError(definition.name, localOwner, error) }}
         >
           <Selected {...provided} {...localProps} />
         </FactoryErrorBoundary>
       )
+      if (usesFallback) return content
+      return <Anchor data-slot-factory-children={localSlotKey} style={ANCHOR_STYLE}>{content}</Anchor>
     }
-  }, [Selected, declared.scope, definition, host, name, usesFallback])
+  }, [Anchor, Selected, declared.scope, definition, host, name, usesFallback])
 }
 
 function assertNoPropOverlap(owner: string, provided: InjectedProps, received: object): void {
@@ -1045,23 +1050,27 @@ function FactoryOutlet({ name, inputProps, slots: selected = EMPTY_FACTORY_SELEC
         ? 'session:absent'
         : `session:${sessionGenerationKeyOf(binding as ScopedStandardSourceBinding)}`
       : `session-maybe:${maybeEpoch}`
+  const Anchor = definition.inline ? 'span' : 'div'
   return (
-    <FactoryErrorBoundary
-      key={`${name}:${version}:${scopeIdentity}`}
-      name={name}
-      onEntryError={(error) => { host.reportFactoryError(name, definition, error) }}
-    >
-      <FactoryAncestryContext.Provider value={nextAncestors}>
-        <FactoryOccurrence
-          definition={definition}
-          inputProps={inputProps}
-          selected={selected}
-          caller={caller}
-          binding={binding}
-          maybeEpoch={maybeEpoch}
-        />
-      </FactoryAncestryContext.Provider>
-    </FactoryErrorBoundary>
+    <Anchor data-slot-factory={name} style={ANCHOR_STYLE}>
+      <FactoryErrorBoundary
+        key={`${name}:${version}:${scopeIdentity}`}
+        name={name}
+        anchor={Anchor}
+        onEntryError={(error) => { host.reportFactoryError(name, definition, error) }}
+      >
+        <FactoryAncestryContext.Provider value={nextAncestors}>
+          <FactoryOccurrence
+            definition={definition}
+            inputProps={inputProps}
+            selected={selected}
+            caller={caller}
+            binding={binding}
+            maybeEpoch={maybeEpoch}
+          />
+        </FactoryAncestryContext.Provider>
+      </FactoryErrorBoundary>
+    </Anchor>
   )
 }
 

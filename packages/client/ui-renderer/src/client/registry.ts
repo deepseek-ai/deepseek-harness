@@ -100,15 +100,7 @@ interface ErasedRegisterOptions {
   module?: string
 }
 
-interface ErasedFactoryOptions {
-  name: string
-  scope: SlotScope
-  children?: Record<string, SlotSpec<SlotEntryDef>>
-  store?: StoreDecl
-  inject?: (...args: never[]) => Record<string, unknown>
-  locale?: string
-  slots?: Record<string, { scope: SlotScope }>
-}
+type ErasedFactoryOptions = Omit<StoredFactory, 'component' | 'registrant'>
 
 /** Erased core call face (the service re-erases at its own boundary; the core's typed face targets end callers). */
 interface ErasedCore { register(options: object, component: unknown): () => void }
