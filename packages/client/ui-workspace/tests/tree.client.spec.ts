@@ -10,8 +10,8 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SessionProjectionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   type ArchivedFilter,
-  deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningGroupKey, owningParentFolder,
-  pinCurrentBlank, reconcileManualOrder, sessionMemberIds, visibleSessionIds, workspaceLabel, UNGROUPED_KEY,
+  currentRowSessionId, deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, sessionSearchIndex, owningGroupKey,
+  owningParentFolder, pinCurrentBlank, reconcileManualOrder, sessionMemberIds, visibleSessionIds, workspaceLabel, UNGROUPED_KEY,
 } from '../src/client/tree.ts'
 import { createWorkspaceViewStore } from '../src/client/stores.ts'
 
@@ -114,6 +114,22 @@ describe('owningGroupKey', () => {
     const workspaces = [workspace('first', ['owned'])]
     expect(owningGroupKey(workspaces, sid('owned'))).toBe('first')
     expect(owningGroupKey(workspaces, sid('loose'))).toBe(UNGROUPED_KEY)
+  })
+})
+
+describe('currentRowSessionId', () => {
+  const sub = (id: string, parentId: string): SessionSummary => ({ ...summary(id, 0), origin: 'subagent', parentId: sid(parentId) })
+
+  it('resolves a viewed subagent Session to its nearest non-subagent ancestor', () => {
+    const sessions = list(summary('root', 1), sub('child', 'root'), sub('grandchild', 'child'))
+    expect(currentRowSessionId(sessions)).toBeUndefined()
+    expect(currentRowSessionId(withMain(sessions, sid('root')))).toBe('root')
+    expect(currentRowSessionId(withMain(sessions, sid('grandchild')))).toBe('root')
+  })
+
+  it('stops at an absent parent or a lineage cycle', () => {
+    expect(currentRowSessionId(withMain(list(sub('orphan', 'missing')), sid('orphan')))).toBe('orphan')
+    expect(currentRowSessionId(withMain(list(sub('a', 'b'), sub('b', 'a')), sid('a')))).toBe('a')
   })
 })
 
