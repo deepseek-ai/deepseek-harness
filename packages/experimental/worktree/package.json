@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
+    "@deepseek-ai/dsh-sandbox-policy-git": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "zod": "4.6.6"
   },

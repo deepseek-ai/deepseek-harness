@@ -1,4 +1,0 @@
-- group "新会话默认模式":
-  - strong: 新会话默认模式
-  - paragraph: 标准、创造和 PTC 模式均支持自动电脑操作。在此选择 PTC，可将其设为新会话的默认模式。
-  - button "设为 PTC"

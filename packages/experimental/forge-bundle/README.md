@@ -63,7 +63,7 @@ Enabling or disabling the bundle changes the model's tool schema list. Calls app
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The bundle serves github.com and gitlab.com only; a GitHub Enterprise or self-managed GitLab host needs a profile patch that lists it in the `forge-github` row's [`hosts`](../forge-github/README.md#use-this-package) or the `forge-gitlab` row's [`hosts`](../forge-gitlab/README.md#use-this-package). No provider recognizes other code hosts.
+- The bundle serves github.com and gitlab.com until another host is added: the page of its GitHub or GitLab row on the Plugins page adds a GitHub Enterprise or self-managed GitLab host and writes it to the profile patch, in the `forge-github` row's [`hosts`](../forge-github/README.md#use-this-package) or the `forge-gitlab` row's [`hosts`](../forge-gitlab/README.md#use-this-package). No provider recognizes other code hosts.
 - The model has no tool for bound change requests yet.
 
 -----

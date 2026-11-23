@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Voice input",
-    "description": "Transcribe recordings locally with SenseVoice; first use requires installing dependencies.",
+    "description": "Dictate with DeepSeek cloud recognition through a DeepSeek account or API key, or download the local SenseVoice model.",
     "detail": "docs/DETAIL.md"
   }
 }

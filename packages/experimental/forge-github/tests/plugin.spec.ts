@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GH_COMMANDS } from '../src/commands.ts'
 import * as ForgeGitHub from '../src/index.ts'
 import { briefNode, pull, pullRequestNode } from './fixtures.ts'
+import { liveConfig, omitsGeneratedPage } from '../../../settings/settings/tests/live-config.ts'
 
 let ctx: Context | undefined
 
@@ -93,8 +94,8 @@ describe('forge-github plugin', () => {
 
   it.each([
     [{ ghCommand: '  ' }, 'forge-github: ghCommand must not be empty'],
-    [{ hosts: [] }, 'forge-github: hosts must list at least one host'],
-    [{ hosts: ['https://github.com'] }, 'forge-github: invalid host "https://github.com"'],
+    [{ hosts: [] }, '$.hosts expected array length >= 1 but got 0'],
+    [{ hosts: ['https://github.com'] }, '$.hosts[0] expect string to match regexp'],
     [{ timeoutMs: 0 }, 'forge-github: timeoutMs must be a positive integer no greater than 2147483647'],
     [{ timeoutMs: 2_147_483_648 }, 'forge-github: timeoutMs must be a positive integer no greater than 2147483647'],
     [{ timeoutMs: 1.5 }, 'forge-github: timeoutMs must be a positive integer no greater than 2147483647'],
@@ -117,12 +118,59 @@ describe('forge-github plugin', () => {
     await expect(context.plugin(ForgeGitHub, config)).rejects.toThrow(message)
   })
 
+  it('serves the host list a live edit sets without mounting again', async () => {
+    const context = await forge()
+    const live = await liveConfig(context, ForgeGitHub)
+    expect(context.forge.repositoryFromRemote('https://ghe.corp.example/team/svc.git')).toBeUndefined()
+
+    await live.update({ hosts: ['github.com', 'ghe.corp.example'] })
+
+    expect(context.forge.repositoryFromRemote('https://ghe.corp.example/team/svc.git')).toEqual({ forge: 'github', host: 'ghe.corp.example', owner: 'team', name: 'svc' })
+    expect(context.forge.repositoryFromRemote('https://github.com/octo/demo.git')).toBeDefined()
+    // Identity only: printing a Fiber walks Context proxies.
+    expect(Object.is(live.entry.fiber, live.fiber)).toBe(true)
+
+    await live.update({ hosts: ['github.com'] })
+    expect(context.forge.repositoryFromRemote('https://ghe.corp.example/team/svc.git')).toBeUndefined()
+  })
+
+  it('keeps serving its previous hosts when a live edit adds one another provider serves', async () => {
+    const context = await forge()
+    context.forge.register({ ...otherProvider(), hosts: ['code.example.test'] })
+    const live = await liveConfig(context, ForgeGitHub)
+    const warned = vi.spyOn(context.logger, 'warn').mockImplementation(() => {})
+
+    await live.update({ hosts: ['github.com', 'code.example.test'] })
+
+    expect(context.forge.repositoryFromRemote('https://github.com/octo/demo.git')).toMatchObject({ forge: 'github', host: 'github.com' })
+    expect(context.forge.changeRequestFromUrl('https://code.example.test/octo/demo/pull/1')).toBeUndefined()
+    expect(warned.mock.calls.map((call): unknown => call[0]))
+      .toContainEqual(new Error('forge: host "code.example.test" is already served by the "gitlab" provider'))
+  })
+
+  it('keeps its own instance off the generated Settings pages', async () => {
+    await omitsGeneratedPage(async (context) => {
+      await context.plugin(ForgeService)
+      return context.plugin(ForgeGitHub, {})
+    })
+  })
+
   it('does not apply timer limits to the output byte budget', async () => {
     const context = await forge()
     await context.plugin(ForgeGitHub, { maxOutputBytes: 2_147_483_648 })
     expect(context.forge.repositoryFromRemote('https://github.com/octo/demo.git')).toBeDefined()
   })
 })
+
+/** A provider of the `gitlab` family that serves nothing it is asked. */
+function otherProvider(): Parameters<Context['forge']['register']>[0] {
+  const never = (): never => { throw new Error('not called') }
+  return {
+    forge: 'gitlab', hosts: [], label: 'GitLab', changeRequestNoun: 'merge-request',
+    repositoryFromRemote: () => undefined, changeRequestFromUrl: () => undefined, changeRequestUrl: never, fetch: never,
+    findByHead: never, readiness: never, markReady: never, merge: never, diff: never, fileText: never, fileUrl: never,
+  }
+}
 
 // The recording `gh` is a POSIX shell script, as in gh.spec.ts.
 describe.skipIf(process.platform === 'win32')('forge-github plugin status queries', () => {

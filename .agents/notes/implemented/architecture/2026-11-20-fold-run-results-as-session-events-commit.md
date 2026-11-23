@@ -35,7 +35,7 @@ The listener is registered on the activation-owner scope because the two nearer 
 
 ### Headless adoption check
 
-The `dsh-headless` bundle mounts the [agent preset registry](../../../../packages/preset/agent-preset-registry/README.md) without a `default` and without any preset declaration. The registry maintains the `agentPreset` projection: the header's creation-time preset, replaced by each `agent-preset/selected` event. The runner refuses to adopt a Session whose projection value is not `null`. It reads the value from the observation taken before resume, and from `agentPresets.presetForSession` for a live Agent under the same id, after resume, and before it submits the task. The registry's `default` is optional so that a composition can mount the registry for this projection alone; a caller that requests no preset fails where it resolves or mounts one.
+The `dsh-headless` bundle enables the [agent preset registry](../../../../packages/preset/agent-preset-registry/README.md) supplied by `dsh-base` and preserves the defaults configured by earlier bundles. The registry maintains the `agentPreset` projection: the header's creation-time preset, replaced by each `agent-preset/selected` event. The runner refuses to adopt a Session whose projection value is not `null`. It reads the value from the observation taken before resume, and from `agentPresets.presetForSession` for a live Agent under the same id, after resume, and before it submits the task. The registry's `default` is optional so that a composition can mount the registry for this projection alone; a caller that requests no preset fails where it resolves or mounts one.
 
 ### Fold functions
 
@@ -59,7 +59,7 @@ The `dsh-headless` bundle mounts the [agent preset registry](../../../../package
 
 **Replace `foldConsumedWork(events)` with the per-event function.** The array form is a published export of `@deepseek-ai/dsh-agent`. Keeping it leaves its callers and its existing specs unchanged, at the cost of one more value export from that plugin entry.
 
-**Replace the two turn-number sets in `foldConsumedWork` with scalars for the open turn.** The state becomes constant-size, but `step/start` and `turn/end` are keyed by their own turn number and not by the open turn, so equivalence needs a separate argument. The sets keep one integer for each turn that both stepped and claimed input, which is every ordinary turn of the interval.
+**Replace the two turn-number sets in `foldConsumedWork` with scalars for the open turn.** The state becomes constant-size, but `step/start` and `turn/end` are keyed by their own turn number and not by the open turn, so equivalence needs a separate argument. Both sets release the turn number when that turn closes.
 
 ## Consequences
 
@@ -70,7 +70,7 @@ The `dsh-headless` bundle mounts the [agent preset registry](../../../../package
 - With the registry mounted, a `tool-subagent` row that selects an agent preset activates in a composition that declares none; the unknown preset is reported when a child is started.
 - The fold step runs inside `Session.append` for every event of every resident child, where a suffix read would run once per settlement. The owner-scope listener is also called for every other Session event in the process and returns after one map lookup.
 - After a tree disposal, the headless fold ends when the Agent's scope is disposed, while `run` reads the outcome later. A `turn/start`, `assistant/message`, or `turn/end` appended in between is not folded. Only the agent loop's driver appends those types, and it is idle before its scope is disposed.
-- When `drain()` rejects, Cordis skips the remaining disposers of that effect, so the activation-owner scope and its listener stay registered.
+- The manager releases the activation-owner scope and removes its listener even when `drain()` rejects.
 - A result must be read outside `session/event` dispatch. A batch append pushes every member into the log before it dispatches the first, so a read from inside a listener would see folds that lag the log.
 - This decision does not own the rule that a run's output is its last non-empty assistant message, or the redelivery of a settlement notice lost while the parent was offline.
 

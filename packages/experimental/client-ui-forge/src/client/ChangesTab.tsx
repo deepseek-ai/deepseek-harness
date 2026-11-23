@@ -17,7 +17,7 @@ import {
 import clsx from 'clsx'
 import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
-  IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconRightUpOutlineRegular, IconWorkspaceTreeOutlineRegular,
+  IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
   Menu, Tooltip,
   type MenuEntry,
@@ -55,7 +55,7 @@ import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
 import { ChangesLoading } from './ChangesLoading.tsx'
 import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
-import { ChangeRequestGlyph } from './glyphs.tsx'
+import { ChangeRequestGlyph, ForgeGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { useForgeCopy } from './forge-copy.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
@@ -428,9 +428,9 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
           {t('review.submit')}{reviewCount > 0 ? ` (${reviewCount})` : ''}
         </Button>
       </span>
-      <Tooltip label={t('change.view')} side="bottom" delayMs={500}>
-        <button type="button" className={css.tool} aria-label={t('change.view')} onClick={() => { openLink(href) }}>
-          <IconRightUpOutlineRegular size={14} />
+      <Tooltip label={t('change.viewOn')} side="bottom" delayMs={500}>
+        <button type="button" className={css.tool} aria-label={t('change.viewOn')} onClick={() => { openLink(href) }}>
+          <ForgeGlyph forge={entry?.forge?.forge ?? null} />
         </button>
       </Tooltip>
     </div>
@@ -1070,11 +1070,13 @@ export function ChangesView({
   // Thread groups keep their identity across renders that change neither the threads nor what their cards share, so
   // only the sections whose threads changed redraw.
   const url = data?.kind === 'change' ? data.url : null
+  const family = entry?.forge?.forge ?? null
   const threadActions = useMemo((): ThreadActions | null => review === null || url === null ? null : {
     author: prAuthor,
     addToInput: (thread, range) => addThreadToInput(thread, url, range),
     quoteCopy,
     openLink,
+    forge: family,
     readText: (commit, path) => changeRequestText(url, commit, path),
     inputFailed: () => { live.current.report(quoteCopy?.failed ?? 'thread.inputFailed') },
     focused: focus,
@@ -1083,7 +1085,7 @@ export function ChangesView({
       reviewStarted: review.pendingReview !== null,
       canReview: review.viewerCanReview,
     },
-  }, [review, url, prAuthor, addThreadToInput, quoteCopy, openLink, changeRequestText, focus])
+  }, [review, url, prAuthor, addThreadToInput, quoteCopy, openLink, family, changeRequestText, focus])
   const fileThreads = useMemo(() => new Map<string, FileThreads>(threadActions === null ? []
     : [...placed.files].map(([path, group]) => [path, { ...group, actions: threadActions }])), [placed.files, threadActions])
   /** Show a file's next unresolved thread in display order after the one last shown, or its first. */
@@ -1511,7 +1513,7 @@ export function ChangesView({
               if (covering) setThreadList(value => ({ ...value, open: false }))
               openThread(entry, covering)
             }}
-            openLink={openLink} close={closeThreadList} t={t} />
+            openLink={openLink} forge={family} close={closeThreadList} t={t} />
         )}
       </div>
     </div>

@@ -25,7 +25,7 @@ Create an isolated checkout from a local commit and continue the same Session in
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the service alongside `workingDirectory`, `fs`, `subprocess`, `sandbox`, `sandboxPolicy`, and `sessionProjections` providers. Archive cleanup additionally needs `workspaceRegistry` and `sessionQuery`, and uses `sessionProjectionCache` when it is mounted; without the first two the service only creates and restores. Add the tool package when models need the operation.
+Mount the service alongside `workingDirectory`, `fs`, `subprocess`, `sandbox`, `sandboxPolicy`, and `sessionProjections` providers. Archive cleanup additionally needs `workspaceRegistry` and `sessionQuery`, and uses `sessionProjectionCache` when it is mounted; without the first two the service only creates and restores. The service mounts the [linked-worktree grant](../sandbox-policy-git/README.md), which on macOS and Linux lets a Session that works in a linked worktree write its repository's Git directory under `workspace-write`. Add the tool package when models need the operation.
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-worktree'
@@ -54,7 +54,7 @@ The default checkout directory is `<current checkout root>/.agents/worktrees/<na
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Git and directory allocation run through the mounted subprocess and sandbox providers with the calling Session's existing file policy; archive cleanup runs them unconfined. Creation does not widen write access to the destination or shared Git administration directory. Directory creation claims the destination exclusively; cancellation and failed setup can leave retained artifacts, whose path appears in the error. Service disposal aborts pending operations and waits for their settlement.
+Git and directory allocation run through the mounted subprocess and sandbox providers with the calling Session's existing file policy; archive cleanup runs them unconfined. Creation itself does not widen write access to the destination or shared Git administration directory; a Session that works in a linked worktree holds the latter through the linked-worktree grant. Directory creation claims the destination exclusively; cancellation and failed setup can leave retained artifacts, whose path appears in the error. Service disposal aborts pending operations and waits for their settlement.
 
 | Source | Responsibility |
 |---|---|
@@ -97,7 +97,7 @@ This package contributes no prompt text. Its consumers own the appended tool res
 - **Local revisions unless asked** — creation fetches only the one remote branch a request asks for; it does not fetch other commits or missing partial-clone objects, initialize submodules, install dependencies, or copy uncommitted files. On Git that meets the execution requirements, missing local objects cause creation to fail.
 - **Filtered representations** — checkout skips configured filters to avoid executing repository-configured programs or triggering implicit downloads. Git LFS pointers and encrypted blobs stay in their stored representation; hydration or decryption is a separate user-controlled operation.
 - **Execution requirements** — the subprocess provider must offer Git and Node in the same execution world as the filesystem provider. Git must honor `GIT_NO_LAZY_FETCH`, which Git 2.45 and the 2.39.4, 2.40.2, 2.41.1, 2.42.2, 2.43.4, and 2.44.1 maintenance releases do; older releases ignore it and proceed instead of failing, so creation can fetch missing partial-clone objects from a promisor remote. The `git --no-lazy-fetch` option would reject these releases, but it exists only in Git 2.45 and later and also rejects the patched maintenance releases. The existing sandbox must permit all checkout and shared Git metadata writes.
-- **Commits inside a worktree** — the repository's Git directory lies outside a linked worktree, so under `workspace-write` a Session that works in one cannot run `git add` or `git commit`, or create another worktree from it, until the [sandbox policy](../../sandbox/sandbox-policy/README.md#use-this-package) grants that directory through `additionalWritableRoots` or `registerWritableRoot`. This service registers no grant, and Windows processes ignore such grants.
+- **Commits inside a worktree** — the repository's Git directory lies outside a linked worktree, so under `workspace-write` a Session that works in one runs `git add` and `git commit`, and creates another worktree from it, only while a grant covers that directory. The [linked-worktree grant](../sandbox-policy-git/README.md) this service mounts registers it on macOS and Linux. On Windows it registers nothing, and processes there ignore a grant made through `additionalWritableRoots` or `registerWritableRoot`.
 
 <a id="dev-note"></a>
 ### Dev Note

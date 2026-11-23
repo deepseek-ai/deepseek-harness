@@ -36,7 +36,7 @@ export interface ConsumedWorkFoldState extends ConsumedWork {
   readonly open: number | undefined
   /** Turns that entered a model step and have not closed. */
   readonly stepped: Set<number>
-  /** Turns that claimed inbox input; a turn leaves when it closes without having stepped. */
+  /** Turns that claimed inbox input and have not closed. */
   readonly claimed: Set<number>
 }
 
@@ -115,7 +115,9 @@ export function foldConsumedWorkForEvent(state: ConsumedWorkFoldState | undefine
     case 'turn/end': {
       const { turn, reason } = event.data
       open = undefined
-      if (stepped.delete(turn) || (claimed.delete(turn) && accountsForClaim(reason))) {
+      const hadStep = stepped.delete(turn)
+      const hadClaim = claimed.delete(turn)
+      if (hadStep || (hadClaim && accountsForClaim(reason))) {
         end = event
         // Anything dropped before this turn closed is what its own ending
         // reports; only a later drop is still unaccounted for.

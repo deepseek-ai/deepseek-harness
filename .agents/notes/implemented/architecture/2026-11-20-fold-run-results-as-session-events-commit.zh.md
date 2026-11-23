@@ -35,7 +35,7 @@ headless runner 还会扫描整个日志，以得知它用 `--session-id` 沿用
 
 ### Headless 沿用检查
 
-`dsh-headless` bundle 挂载 [agent preset 注册表](../../../../packages/preset/agent-preset-registry/README.zh.md)，不配置 `default`，也不声明任何 preset。注册表维护 `agentPreset` projection：header 中创建时的 preset，被每个 `agent-preset/selected` 事件替换。runner 拒绝沿用 projection 值不为 `null` 的 Session。它从 resume 之前取得的 observation 读取该值，并在以下三处从 `agentPresets.presetForSession` 读取：同 id 的存活 Agent、resume 之后、提交任务之前。注册表的 `default` 是可选的，这样一个组合可以只为这个 projection 而挂载注册表；未指定 preset 的调用方在解析或挂载 preset 的位置失败。
+`dsh-headless` bundle 启用 `dsh-base` 提供的 [agent preset 注册表](../../../../packages/preset/agent-preset-registry/README.zh.md)，保留前序组合包配置的默认值。注册表维护 `agentPreset` projection：header 中创建时的 preset，被每个 `agent-preset/selected` 事件替换。runner 拒绝沿用 projection 值不为 `null` 的 Session。它从 resume 之前取得的 observation 读取该值，并在以下三处从 `agentPresets.presetForSession` 读取：同 id 的存活 Agent、resume 之后、提交任务之前。注册表的 `default` 是可选的，这样一个组合可以只为这个 projection 而挂载注册表；未指定 preset 的调用方在解析或挂载 preset 的位置失败。
 
 ### 折叠函数
 
@@ -59,7 +59,7 @@ headless runner 还会扫描整个日志，以得知它用 `--session-id` 沿用
 
 **用逐事件函数取代 `foldConsumedWork(events)`。** 数组形式是 `@deepseek-ai/dsh-agent` 的已发布导出。保留它使其调用方和现有 spec 不变，代价是该插件入口多一个值导出。
 
-**用描述当前打开轮次的标量取代 `foldConsumedWork` 的两个轮次编号集合。** 状态变为固定大小，但 `step/start` 和 `turn/end` 以各自携带的轮次编号为键，而不是以当前打开的轮次为键，所以等价性需要单独论证。这两个集合为每个既进入过步骤又认领过输入的轮次保留一个整数，区间内每个普通轮次都属于这种情况。
+**用描述当前打开轮次的标量取代 `foldConsumedWork` 的两个轮次编号集合。** 状态变为固定大小，但 `step/start` 和 `turn/end` 以各自携带的轮次编号为键，而不是以当前打开的轮次为键，所以等价性需要单独论证。轮次关闭时，两个集合都移除该轮次编号。
 
 ## 影响
 
@@ -70,7 +70,7 @@ headless runner 还会扫描整个日志，以得知它用 `--session-id` 沿用
 - 挂载注册表之后，选择了 agent preset 的 `tool-subagent` 行在没有声明任何 preset 的组合里也会激活；未知的 preset 在启动子会话时才被报告。
 - 折叠步骤在 `Session.append` 内对每个驻留子会话的每个事件运行，而后缀读取每次结算只运行一次。owner scope 上的监听器也会被进程内其他每个会话事件调用，做一次 map 查找后返回。
 - 进程树被释放之后，headless 的折叠在 Agent 的 scope 被释放时结束，而 `run` 在此之后才读取结果。这期间追加的 `turn/start`、`assistant/message` 或 `turn/end` 不会被折叠。只有 agent loop 的驱动器追加这些类型，而它在自己的 scope 被释放之前已经空闲。
-- `drain()` 拒绝时，Cordis 会跳过该 effect 余下的 disposer，所以 activation-owner scope 及其监听器保持注册。
+- 即使 `drain()` 拒绝，管理器也会释放 activation-owner scope 并移除其监听器。
 - 结果必须在 `session/event` 派发之外读取。批量追加先把所有成员写入日志，再派发第一个成员，所以在监听器内读取会看到落后于日志的折叠。
 - 本决策不负责"运行的输出是其最后一条非空 assistant 消息"这条规则，也不负责补发因父会话离线而丢失的结算通知。
 

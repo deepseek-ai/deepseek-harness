@@ -62,6 +62,8 @@ export interface AgentPresetDocument {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    /** The request omitted a preset and the deployment has no default. */
+    'agent-preset/no-default': { readonly available: readonly string[] }
     /** No declaration supplies the requested identity. */
     'agent-preset/not-found': { readonly agentPreset: string; readonly available: readonly string[] }
     /** The id is unusable, already taken, or its composition cannot be installed. */

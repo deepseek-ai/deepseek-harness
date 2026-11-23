@@ -173,6 +173,10 @@
     - id: session-projection
       name: '@deepseek-ai/dsh-session-projection'
 
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+      disabled: true
+
     # Durable KV storage: the storage hub, the json backend, and the
     # schema-validated domain form over them. Session-layer persistence (the
     # projection cache below; workspace in web layers)

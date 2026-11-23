@@ -70,10 +70,11 @@ const UNAVAILABLE = {
 }
 
 /**
- * The same facts once the Session works in its worktree: its root no longer contains the repository's Git
- * directory, which another worktree would have to write. The option that shows the blocker is hidden by then.
+ * The same facts once the Session works in its worktree. Its root no longer contains the repository's Git
+ * directory, which another worktree would have to write; the worktree service's linked-worktree grant covers that
+ * directory except on Windows. The option that shows the blocker is hidden by then.
  */
-const IN_WORKTREE = { ...UNAVAILABLE, blocker: 'outside-writable-root' as const }
+const IN_WORKTREE = { ...UNAVAILABLE, blocker: process.platform === 'win32' ? 'outside-writable-root' as const : null }
 
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
@@ -998,6 +999,19 @@ describe('forgePanel worktree blockers', () => {
     expect(revoked.worktree.blocker).toBe('outside-writable-root')
   })
 
+  it('offers a worktree from a linked checkout when the worktree service is mounted, whose linked-worktree grant covers the shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked, {}, { worktrees: true })
+
+    const state = await reader(opened).until(ready)
+
+    // The grant is registered at Agent creation, before the panel's first inspection; Windows gets none.
+    expect(state.checkout).toMatchObject({ state: 'ready', checkout: { root: linked, branch: 'feat', linked: true } })
+    expect(state.worktree.blocker).toBe(process.platform === 'win32' ? 'outside-writable-root' : null)
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
@@ -1585,7 +1599,9 @@ describe('forgePanel removed worktrees', () => {
     // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary
     // and keeps the Session's grants. Creation ran an earlier `show-ref`, before the grant.
     const probe = opened.sandbox.calls.findLast(call => call.argv.includes('show-ref'))
-    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [granted] })
+    // The worktree service's linked-worktree grant registered the repository's Git directory when the Session entered the worktree.
+    const grants = process.platform === 'win32' ? [granted] : [join(repo, '.git'), granted]
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: grants })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)
@@ -2056,6 +2072,32 @@ describe('forgePanel actions', () => {
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Pull Request is not mergeable' })
 
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
+  })
+
+  it('turns the automatic merge of a bound change request on and off through its provider', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && polled(state, pullUrl(7)))
+    const on = { enabled: true as const, method: 'merge' as const, headSha: 'a'.repeat(40) }
+
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider sets no automatic merge' })
+    const setAutoMerge = vi.fn<NonNullable<ForgeProvider['setAutoMerge']>>(() => Promise.resolve(undefined))
+    Object.assign(opened.provider, { setAutoMerge })
+    await opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, signal)
+    await opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), { enabled: false }, signal)
+    expect(setAutoMerge.mock.calls.map(([target, request]) => [target.number, request])).toEqual([[7, on], [7, { enabled: false }]])
+    setAutoMerge.mockResolvedValueOnce({ code: 'stale', message: 'Head moved' })
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'Head moved' })
+    // A URL the Session does not bind names no change request to act on.
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(8), on, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    const aborted = new AbortController()
+    aborted.abort(new Error('closed'))
+    await expect(opened.ctx.forgePanel.setAutoMerge(opened.session, pullUrl(7), on, aborted.signal)).rejects.toThrow('closed')
+    expect(setAutoMerge).toHaveBeenCalledTimes(3)
   })
 
   it('reads and saves viewed marks of a bound change request through its provider, separating a moved head', async () => {

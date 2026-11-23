@@ -10,6 +10,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import * as sandboxPolicyGit from '@deepseek-ai/dsh-sandbox-policy-git'
 import type {} from '@deepseek-ai/dsh-settings'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -145,6 +146,8 @@ export class WorktreeService extends Service {
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(worktreeProjection)
+    // Git in a worktree writes the repository's Git directory, outside the Session's workspace root.
+    await this.ctx.plugin(sandboxPolicyGit)
     // Reclamation needs the Workspace archive events and the Session corpus; without
     // them the service only creates and restores, as a headless profile composes it.
     this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory'], (scope) => {
