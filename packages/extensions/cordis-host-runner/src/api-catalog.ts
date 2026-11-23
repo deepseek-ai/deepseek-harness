@@ -9399,7 +9399,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpAccountRegistration',
-    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName: string;\n    readonly copy: McpAccountCopy;\n}',
+    declaration: 'export interface McpAccountRegistration {\n    readonly server: string;\n    readonly packageName?: string | undefined;\n    readonly copy: McpAccountCopy;\n}',
   },
   {
     name: 'McpAuthorizationReason',

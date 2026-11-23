@@ -43,7 +43,8 @@ export default class McpAccounts extends Service {
   register(registration: McpAccountRegistration): () => void {
     const { server, packageName, copy } = registration
     return this.ownerContext.connectorAccounts.register({
-      key: `mcp:${server}`, packageName, source: new ServerAccount(this.ownerContext, server), copy: sectionCopy(copy),
+      key: `mcp:${server}`, ...packageName === undefined ? {} : { packageName },
+      source: new ServerAccount(this.ownerContext, server), copy: sectionCopy(copy),
       operations: [{ kind: 'connect', notice: copy.notice.connected }, { kind: 'sign-out', notice: copy.notice.signedOut }, { kind: 'retry' }],
       present: view => present(view, copy),
     })

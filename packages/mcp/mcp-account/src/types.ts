@@ -34,7 +34,10 @@ export interface McpAccountCopy<Text extends LocalizedText = LocalizedText> {
 export interface McpAccountRegistration {
   /** The name the connector registers its server under with the MCP manager; it also keys the account. */
   readonly server: string
-  /** npm package whose bundle page carries the section and tag. */
-  readonly packageName: string
+  /**
+   * npm package whose bundle page carries the section and tag. Without one, the account shows only where a surface
+   * renders it by key, such as the Connectors tab.
+   */
+  readonly packageName?: string | undefined
   readonly copy: McpAccountCopy
 }
