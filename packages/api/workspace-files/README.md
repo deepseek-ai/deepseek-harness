@@ -157,6 +157,7 @@ None; this package neither assembles nor sends a provider request.
 - **Provider watch support** — unsupported backends, including SSH, report `watch-unsupported`; ordinary reads and manual refresh remain available, without polling for external changes.
 - **Linux parent-directory recreation** — automatic watch recovery after a parent directory is deleted and recreated is deferred; see [fs-local](../../fs/fs-local/README.md).
 - **Directories start at the workspace root** — directory listing and watches reach a directory outside the Session workspace only through a link below the root; file reads and watches use the filesystem backend's read authority.
+- **Link cycles are not detected** — a directory link that leads back to one of its ancestors lists again at every level, inside the workspace or through a link that leaves it. Each `list` call returns one level and each directory watch covers one level, so no call recurses; a path with more links than the platform resolves in one path fails with the filesystem backend's error.
 - **No total line count** — a page reports `eof`, not how many lines follow; a consumer that needs the total pages to the end or estimates from `bytes`.
 - **One giant line has no page** — a single line above `maxBytes` fails `too-large` at every window that includes it, because pages are cut by lines, not bytes.
 - **Reads are not transactional** — result metadata comes from stat before content is read; a concurrent write can make the reported version and returned contents differ.

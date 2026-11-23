@@ -116,7 +116,7 @@ None; directory listings and searches travel over the Remote and assemble no mod
 - **A query with `/` highlights nothing across names.** Each name is highlighted on its own, so a query that spans a `/` marks no row.
 - **Names with glob characters cannot be excluded.** A rule may not contain `* ? [ ] { } !`, so a literal path such as Next.js `app/[slug]` cannot be named.
 - **Preferences do not follow other browser tabs.** Each tab reads browser storage once when the plugin loads and writes the preferences of every root back as one value, so a tab that writes overwrites the changes other tabs made since it loaded to any workspace's preferences, until it reloads.
-- **One root.** The tree is rooted at the session's workspace root; there is no way to browse above it, and the Host refuses a directory that neither resolves inside the workspace root nor is reached by descending from it. A directory link in the workspace that resolves outside it expands like any directory; search does not follow links, so it finds nothing below one.
+- **One root.** The tree is rooted at the session's workspace root; there is no way to browse above it, and the Host refuses a directory that neither resolves inside the workspace root nor is reached by descending from it. A directory link in the workspace that resolves outside it expands like any directory; search does not follow links, so it finds nothing below one. The tree marks no link cycle: a link that leads back to one of its ancestors expands again at each level, until the Host's listing of a deeper level fails.
 
 <a id="dev-note"></a>
 ### Dev Note
