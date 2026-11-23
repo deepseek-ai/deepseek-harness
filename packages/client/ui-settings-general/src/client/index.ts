@@ -321,6 +321,7 @@ export function apply(ctx: ClientContext): void {
             version = nextVersion
             revision = nextRevision
             groups = slots.entriesOfSlot('settings.general.group')
+              /* v8 ignore next -- the slot ledger normalizes options.order to a number */
               .toSorted((a, b) => (a.options.order ?? 0) - (b.options.order ?? 0))
               .map(entry => ({
                 /* v8 ignore next -- list registrations require an id */
