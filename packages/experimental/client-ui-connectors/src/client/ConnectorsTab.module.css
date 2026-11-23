@@ -18,8 +18,10 @@
   cursor: pointer;
 }
 
-.back:hover {
-  color: var(--dsw-alias-label-secondary);
+@media (hover: hover) {
+  .back:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .back:focus-visible {

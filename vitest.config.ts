@@ -208,6 +208,7 @@ const claudeCodeTestingAliases = {
 const liveshareRemoteBuild = fileURLToPath(new URL('./packages/experimental/liveshare/lib/typert.remote-client.js', import.meta.url))
 const chatImportRemoteBuild = fileURLToPath(new URL('./packages/experimental/deepseek-chat-import/lib/typert.remote-client.js', import.meta.url))
 const hmrRemoteBuild = fileURLToPath(new URL('./packages/client/hmr/lib/typert.remote-client.js', import.meta.url))
+const connectorsRemoteBuild = fileURLToPath(new URL('./packages/experimental/client-ui-connectors/lib/typert.remote-client.js', import.meta.url))
 const generatedRemoteAliases = {
   ...existsSync(hmrRemoteBuild) ? {} : {
     '@deepseek-ai/dsh-client-hmr/remote': fileURLToPath(new URL('./packages/client/hmr/tests/generated-remote-stub.ts', import.meta.url)),
@@ -217,6 +218,9 @@ const generatedRemoteAliases = {
   },
   ...existsSync(chatImportRemoteBuild) ? {} : {
     '@deepseek-ai/dsh-deepseek-chat-import/remote': fileURLToPath(new URL('./packages/experimental/deepseek-chat-import/tests/generated-remote-stub.ts', import.meta.url)),
+  },
+  ...existsSync(connectorsRemoteBuild) ? {} : {
+    '@deepseek-ai/dsh-client-ui-connectors/remote': fileURLToPath(new URL('./packages/experimental/client-ui-connectors/tests/generated-remote-stub.ts', import.meta.url)),
   },
 }
 const testingAliases = { ...claudeCodeTestingAliases, ...generatedRemoteAliases }
