@@ -300,8 +300,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         if (state.Notifications is { } notifications)
         {
             var removal = mta.Invoke(() => { notifications.Stop(); return true; }, CancellationToken.None);
-            await NotificationCleanup.WaitForDisconnect(removal, TimeSpan.FromMilliseconds(graceMs),
-                error => NativeServer.Report("NATIVE_CLEANUP", error));
+            _ = NotificationCleanup.ObserveRemovalAsync(removal, error => NativeServer.Report("NATIVE_CLEANUP", error));
         }
     }
 
