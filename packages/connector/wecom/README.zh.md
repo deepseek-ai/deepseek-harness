@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 插件加载后，一个 `wecom` skill 进入 skill 目录。agent 用 `skill` 工具加载它，用文件工具打开所需的子指南（例如 `wecomcli-doc` 或 `wecomcli-message`），并在当前沙箱与审批策略下通过普通 Shell 工具按这个路径运行 `wecom-cli`。`wecom-cli auth show --status` 报告未授权时，agent 会请用户到插件页连接企业微信；只有用户要求在对话中完成时，才运行 CLI 自带的 `auth init`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。命令返回 `errcode` 853004（`cli token expired`）时，agent 不会请用户重新授权，也不会转述服务端的升级建议，而是带 `sandbox_permissions` 和 `justification` 重跑同一条命令，因为在文件沙箱下 CLI 保存不了刚换到的 token。
 
-子指南来自 `WecomTeam/wecom-cli` 在提交 `4c74ff2` 时的 `skills/`。该行加载时下载这个提交的归档，并把校验后的文件保存在 `$DSH_HOME/cache/wecom/`；文件就位之前，skill 目录中没有 `wecom` skill，插件页会报告下载状态。下载失败时，由插件页的检查重试。
+子指南来自 `WecomTeam/wecom-cli` 在提交 `4c74ff2` 时的 `skills/`。该行加载时下载这个提交的归档，并把校验后的文件保存在 `$DSH_HOME/cache/wecom/`；文件就位之前，skill 目录中没有 `wecom` skill，运行时上下文不给出 `wecom-cli` 路径，插件页显示的是下载而不是授权。插件页的检查会等待下载，并把它显示为一个带**取消**的步骤。没有完成的下载使授权处于 `not-installed`：页面提示没能下载技能并提供**重试**，下一次检查会重新下载。
 
 在 Plugin Manager 中关闭插件会撤下 skill、运行时上下文中的路径和授权区块，CLI 的授权和已下载的子指南保持不变。
 
@@ -51,11 +51,11 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 
 | 操作 | 作用 |
 |---|---|
-| `check` | 重新检查授权；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
+| `check` | 子指南缺失时先等待它们下载完成（没有下载在运行时发起一次），然后重新检查授权；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
 | `connect` | 运行 `auth init --noninteractive --no-browser`，等待用户扫码，然后确认 CLI 报告机器人已授权。已授权的区块以“更换机器人”再次提供它，需先确认，因为新绑定会替换终端共用的那一个 |
-| 取消 | 在等待扫码期间取消连接并等待其命令退出；其他步骤会被忽略 |
+| 取消 | 在等待扫码期间取消连接，或在检查等待子指南下载期间取消检查，并等待命令或下载停止；其他步骤会被忽略 |
 
-检查运行 `auth show`。授权状态从 CLI 输出的 `Status` 行读作 `authorized` 或 `unauthorized`，CLI 打印 `Bot ID` 行时，从中读取已绑定机器人的 id 并显示在区块中；其他输出或非零退出码会使检查失败，并保留之前的状态。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
+检查运行 `auth show`。授权状态从 CLI 输出的 `Status` 行读作 `authorized` 或 `unauthorized`，CLI 打印 `Bot ID` 行时，从中读取已绑定机器人的 id 并显示在区块中；其他输出或非零退出码会使检查失败，并保留之前的状态，只是下载就位之后 `not-installed` 会换成 `unchecked`；没有完成的下载使状态成为 `not-installed`。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
 
 ### 配置
 
@@ -76,7 +76,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `wecom` 行插入，插件页以本包名作为授权区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，按 [`src/skills.ts`](src/skills.ts) 中的固定信息把 `wecom` skill 注册到 `ctx.upstreamSkills`，并把这个路径和授权注册到 `ctx.cliAccounts`。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型，按同一路径运行每条命令，一次执行一个操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用企业微信的命令完成每个操作，并从 `auth init` 的输出行中读取扫码链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `wecom` 行插入，插件页以本包名作为授权区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/wecom-cli`（Windows 上为 `wecom-cli.exe`）是否可执行，按 [`src/skills.ts`](src/skills.ts) 中的固定信息把 `wecom` skill 注册到 `ctx.upstreamSkills`，并把这个路径和授权注册到 `ctx.cliAccounts`。这次注册的 [`prepare` 步骤](../cli-account/README.zh.md#prepare-before-a-check)就是 skill 句柄的 `installed` 和 `install`，因此每次检查都先等待子指南下载完成，没有下载在运行时发起一次。[`src/directory.ts`](src/directory.ts) 定位 `@wecom/cli` 作为可选依赖安装的平台包。[CLI 账号 Service](../cli-account/README.zh.md) 在子指南就位期间于运行时上下文中把这个路径告诉模型，在它们缺失时于检查的第一条命令之前运行 `prepare` 步骤，按同一路径运行每条命令，一次执行一个操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用企业微信的命令完成每个操作，并从 `auth init` 的输出行中读取扫码链接。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令和子指南的下载，并在这些命令的进程退出后完成。
 
 [`skills/wecom/SKILL.md`](skills/wecom/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引和打开方式。上游只在其仓库发布这些子指南，没有放进 npm 包，因此由[上游技能 Service](../upstream-skills/README.zh.md) 下载；它们是 skill 基础目录下的文件，不是独立的 skill。DSH 指引与 `wecomcli-shared` 不一致时，总入口要求 agent 以 DSH 指引为准：使用插件提供的 `wecom-cli`，不再自行安装，并把授权引导到插件页。引用文件是每个子指南目录中的普通文件。
 
@@ -130,7 +130,7 @@ skill 目录只列出一个 `wecom` skill。其中文描述列出它覆盖的企
 
 #### 模型看到什么
 
-该行加载期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `wecom-cli` 的路径；`binDir` 默认是 `@wecom/cli` 安装的平台包的 `bin` 目录。第二行针对按名称调用 `wecom-cli` 的子指南脚本，例如 `build_page.py`。
+该行加载且子指南就位期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出 `binDir` 中 `wecom-cli` 的路径；`binDir` 默认是 `@wecom/cli` 安装的平台包的 `bin` 目录。第二行针对按名称调用 `wecom-cli` 的子指南脚本，例如 `build_page.py`。
 
 ##### 运行时上下文条目
 
@@ -152,7 +152,7 @@ Scripts in the WeCom skill call `wecom-cli` by name; start only the commands tha
 
 #### KV Cache 影响
 
-系统提示词不变；加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
+系统提示词不变；子指南下载完成、加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
 
 ## 已知限制与延期工作
 
@@ -163,7 +163,7 @@ Scripts in the WeCom skill call `wecom-cli` by name; start only the commands tha
 - 插件使用 CLI 的默认配置。在 DSH 中授权会影响用户自己的终端，没有 DSH 私有机器人或机器人选择器。`wecom-cli` 无法撤销授权，因此页面和关闭插件都不会移除它；页面只能把已绑定的机器人换成另一个。
 - 连接从 `auth init --noninteractive --no-browser` 的纯文本输出中读取扫码链接；CLI 版本改变该输出时，连接以可重试的结果失败。
 - 子指南跟随上游提交 `4c74ff2`；更新时要用 `scripts/upstream-skills-digest.ts` 生成新的固定信息，之后按新的子指南核对总入口的索引和 DSH 指引。
-- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，agent 没有 `wecom` skill。
+- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，agent 既没有 `wecom` skill 也没有 `wecom-cli` 路径，页面也不提供授权。两者都访问不到的电脑需要设置 `skillsDir`。headless profile 没有页面的检查，因此加载时失败的下载要到下一次加载才会重试。
 - 插件卸载或改为固定其他提交后，已下载的子指南仍留在 `$DSH_HOME/cache/wecom/`。
 - 在文件沙箱下，`wecom-cli` 读取已保存的授权时不需要写入，所以在已保存的 token 过期之前命令可以直接运行。token 过期后，CLI 无法把刚换到的 token 保存到工作区之外的配置目录，命令会返回 `errcode` 853004 和服务端的升级建议。重跑这条命令需要一次单条命令审批，之后命令又可以在沙箱中运行，直到下一次过期。页面的检查只读取本地状态，不会刷新 token。
 
