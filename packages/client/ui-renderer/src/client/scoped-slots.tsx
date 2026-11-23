@@ -1519,7 +1519,11 @@ function renderOutletContent(
   return (
     <>
       {list.map((item, i) => item.entry !== undefined
-        ? guarded(item.entry, `e${entryKeyOf(item.entry)}`)
+        ? (
+          <Anchor data-slot-item="" style={ANCHOR_STYLE} key={`e${entryKeyOf(item.entry)}`}>
+            {guarded(item.entry)}
+          </Anchor>
+        )
         : <Anchor data-slot-error={slotKey} key={`x${item.id ?? i}`} />)}
     </>
   )

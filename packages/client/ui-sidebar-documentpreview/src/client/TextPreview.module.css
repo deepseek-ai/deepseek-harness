@@ -52,14 +52,17 @@
 
 /* Match the trailing icon box above, retaining its internal glyph whitespace. */
 .externalActions {
-  display: flex;
+  display: none;
   flex: none;
   margin-inline-start: 6px;
   margin-inline-end: 6px;
 }
 
-.externalActions:not(:has(:global([data-slot]) > *)) {
-  display: none;
+.externalActions:has(
+  > [data-slot] > [data-slot-item] > *,
+  > [data-slot] > :not([data-slot-item])
+) {
+  display: flex;
 }
 
 .path {

@@ -1,8 +1,9 @@
-/* Font settings: the expanded rows follow the text font-size row with the
- * same full-width separators, so the group adds none of its own. When the
- * group ends the General column, its last visible row drops the separator. */
+/* The group owns the bottom separator; its rows draw only the internal ones. */
+.group {
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
 
-.group:last-child > :last-child,
-.group:last-child > :last-child > :last-child {
+.group > :only-child,
+.group > :nth-child(2) > :last-child {
   border-bottom: 0;
 }

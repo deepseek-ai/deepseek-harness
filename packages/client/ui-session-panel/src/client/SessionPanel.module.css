@@ -180,15 +180,19 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
-/* An empty body hides its section: a plain section renders into one outlet
-   anchor, and a shared section renders its own row outlet inside it. */
-.section:has(> .body > [data-slot]:empty),
-.section:has(> .body > [data-slot] > [data-slot]:only-child:empty) {
+/* Only the body outlet counts, not the title's actions. A winner may be
+   plain text; an empty item is not content, but a direct error marker is.
+   A shared section forwards its row outlet as its only element. */
+.section:not(:has(> .body > [data-slot] > :not([data-slot-item]:empty))),
+.section:has(> .body > [data-slot] > * > [data-slot]:only-child:empty),
+.section:has(> .body > [data-slot] > * > [data-slot]:only-child > [data-slot-item]:empty):not(:has(> .body > [data-slot] > * > [data-slot] > :not([data-slot-item]:empty))) {
   display: none;
 }
 
-.section:not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
-  ~ .section:not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty)) {
+.section:nth-child(n + 2 of .section:has(> .body > [data-slot] > :not([data-slot-item]:empty)):not(
+  :has(> .body > [data-slot] > * > [data-slot]:only-child:empty),
+  :has(> .body > [data-slot] > * > [data-slot]:only-child > [data-slot-item]:empty):not(:has(> .body > [data-slot] > * > [data-slot] > :not([data-slot-item]:empty)))
+)) {
   margin-top: 2px;
   padding-top: 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
@@ -205,18 +209,16 @@
   cursor: var(--section-head-cursor);
 }
 
-/* A section the reader can move: one with a drag handle that shows, beside
-   at least one other. A lone one stays where it is, since a section always
-   lands after Environment, so its title row offers no drag: no grab cursor
-   and no handle. "Shows" is the negation of the empty-body rule above, and
-   the two selectors match a section with such a section before it and one
-   with such a section after it. */
-.section:nth-child(
-  n + 2 of .section:has(> .head > .grip):not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
-),
-.section:nth-last-child(
-  n + 2 of .section:has(> .head > .grip):not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))
-) {
+/* A drag changes the order only with another shown, movable section before
+   or after this one. Environment's title never has a handle. */
+.section:nth-child(n + 2 of .section:has(> .head > .grip):has(> .body > [data-slot] > :not([data-slot-item]:empty)):not(
+  :has(> .body > [data-slot] > * > [data-slot]:only-child:empty),
+  :has(> .body > [data-slot] > * > [data-slot]:only-child > [data-slot-item]:empty):not(:has(> .body > [data-slot] > * > [data-slot] > :not([data-slot-item]:empty)))
+)),
+.section:nth-last-child(n + 2 of .section:has(> .head > .grip):has(> .body > [data-slot] > :not([data-slot-item]:empty)):not(
+  :has(> .body > [data-slot] > * > [data-slot]:only-child:empty),
+  :has(> .body > [data-slot] > * > [data-slot]:only-child > [data-slot-item]:empty):not(:has(> .body > [data-slot] > * > [data-slot] > :not([data-slot-item]:empty)))
+)) {
   --section-head-cursor: grab;
   --section-grip-opacity: 1;
   --section-trailing-visibility: hidden;
