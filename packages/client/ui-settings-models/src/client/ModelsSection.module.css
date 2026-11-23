@@ -703,6 +703,31 @@
   cursor: pointer;
 }
 
+/* The drag mark sits in the row's start inset, between its edge and its text,
+   and takes no room of its own. It shows while the pointer is on the row,
+   during the drag, and in the drag preview. */
+.modelGrip {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.modelEntry[data-dragging] > .modelGrip,
+.modelDragPreview .modelGrip {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .modelEntry:hover > .modelGrip {
+    opacity: 1;
+  }
+}
+
 .modelRow {
   display: grid;
   grid-column: 1 / -1;

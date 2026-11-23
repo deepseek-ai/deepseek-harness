@@ -230,6 +230,22 @@ describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
     expect(nextPreview.isConnected).toBe(false)
   })
 
+  it('marks a row that can be dragged with a hidden six-dot mark, and no other row', () => {
+    const models = [{ id: 'first' }, { id: 'second' }]
+    const view = render(<Editor family={family} initial={models} changed={vi.fn()} />)
+    const mark = (position: number) => entry(position).querySelector('[data-icon^="dsw-icon-drag-dots-fill"]')
+    expect(mark(1)?.parentElement?.getAttribute('aria-hidden')).toBe('true')
+    // The mark names nothing: the row's text stays the model alone.
+    expect(entry(1).textContent).toBe('first')
+
+    fireEvent.click(toggle(1))
+    expect(mark(1)).toBeNull()
+    expect(mark(2)).not.toBeNull()
+
+    view.rerender(<Editor family={family} initial={models} changed={vi.fn()} disabled />)
+    expect(mark(2)).toBeNull()
+  })
+
   it('does not drag an unfolded row, which still accepts a dropped row', () => {
     const changed = vi.fn()
     render(<Editor family={family} initial={[{ id: 'first' }, { id: 'second' }]} changed={changed} />)

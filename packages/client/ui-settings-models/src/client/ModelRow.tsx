@@ -1,12 +1,14 @@
 /**
  * One model of either adapter catalog editor. A folded row is a line of text
- * that names the model and is the drag source for reordering; unfolding it
- * replaces the text with the fields, and an unfolded row is not dragged.
+ * that names the model and is the drag source for reordering, marked by six
+ * dots at its start while the pointer is on it; unfolding it replaces the
+ * text with the fields, and an unfolded row is not dragged.
  */
 
 import type { DragEvent, ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconTrashOutlineRegular, useRowDragPreview,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragDotsFillRegular, IconTrashOutlineRegular,
+  useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
@@ -123,6 +125,10 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         props.order.onDrop(rowHalf(event))
       }}
     >
+      {/* A mark, not a control: the row is the drag source, and the mark lets pointer events through to it. */}
+      {draggable
+        ? <span className={styles['modelGrip']} aria-hidden="true"><IconDragDotsFillRegular /></span>
+        : null}
       <div className={styles['modelRow']} data-expanded={props.expanded || undefined}>
         {props.expanded
           ? (
