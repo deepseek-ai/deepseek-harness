@@ -9,6 +9,7 @@
     "src/index.ts",
     "src/types.ts",
     "src/changes.ts",
+    "src/descent.ts",
     "src/search.ts"
   ],
   "references": [
