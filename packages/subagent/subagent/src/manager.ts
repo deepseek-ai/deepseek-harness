@@ -45,7 +45,8 @@ import type {
 import { attachStructuredRuntime } from './structured.ts'
 import type { StructuredAttachment } from './structured.ts'
 import type { SubagentDelivery } from './control-types.ts'
-import { ActivationPool, ChildLock, activationAgent, captureLocalResult, observeLocalFailure, requireLocalActivation } from './activation.ts'
+import { ActivationPool, ChildLock, activationAgent, captureLocalResult, foldLocalResult, observeLocalFailure, requireLocalActivation } from './activation.ts'
+import { AssistantOutputFold } from './assistant-output.ts'
 import type { Activation, ActivationResource, LocalActivation } from './activation.ts'
 
 /** Inputs shared by model steering and human prompt delivery. */
@@ -167,6 +168,13 @@ export class SubagentManager {
     // Drain managed instances before Cordis releases their owning scope.
     const scope = ctx.plugin(function activationOwner() {})
     this.ownerCtx = scope.ctx
+    // This scope outlives every activation, including one whose child was
+    // disposed by another owner and has already released its own listeners.
+    // Global, because a child may run under a scope this manager is not in.
+    scope.ctx.on('session/event', (session, event) => {
+      const activation = this.resident.get(session.id)
+      if (activation?.kind === 'local' && activation.handle.agent.session === session) foldLocalResult(activation, event)
+    }, { global: true })
     installSubagentArchiveAdmission(ctx, (agent) => {
       const activation = this.resident.get(agent.id)
       return activation !== undefined && activationAgent(activation) === agent ? activation.ancestors : undefined
@@ -182,7 +190,15 @@ export class SubagentManager {
     })
     ctx.effect(function* (this: SubagentManager) {
       yield scope.dispose
-      yield () => this.drain()
+      // A rejected drain skips the disposers yielded before it, which would
+      // leave the scope's global listener on the session/event dispatch.
+      yield async () => {
+        try {
+          await this.drain()
+        } finally {
+          await scope.dispose()
+        }
+      }
     }.bind(this), 'subagents.manager()')
   }
 
@@ -884,7 +900,10 @@ export class SubagentManager {
       resource = {
         kind: 'local',
         handle,
-        outputStart: handle.agent.session.seq,
+        output: new AssistantOutputFold(),
+        work: undefined,
+        outputFailure: undefined,
+        workFailure: undefined,
         structured,
         failureAt: undefined,
         poke: Promise.withResolvers<void>(),

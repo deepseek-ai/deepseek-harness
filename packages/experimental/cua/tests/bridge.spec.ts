@@ -52,8 +52,8 @@ it('propagates a denied action without retrying it', async () => {
 })
 
 it('returns normalized application records', async () => {
-  const cua = connectCua(() => async () => [{ id: 'editor-selector', name: 'Editor', isRunning: true }])
-  await expect(cua.listApps()).resolves.toEqual([{ id: 'editor-selector', displayName: 'Editor', isRunning: true }])
+  const cua = connectCua(() => async () => [{ id: 'editor-selector', identity: 'editor-identity', name: 'Editor', isRunning: true }])
+  await expect(cua.listApps()).resolves.toEqual([{ id: 'editor-selector', identity: 'editor-identity', displayName: 'Editor', isRunning: true }])
 })
 
 it.each([null, 'text only', { content: [{ type: 'text', text: '{}' }] }])('rejects an unusable tool result %j', async (result) => {

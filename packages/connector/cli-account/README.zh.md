@@ -95,14 +95,20 @@ export function apply(ctx: Context): void {
 - `packageName` 是 npm 包名，账号显示在这个包的插件页上。
 - `cli` 给出产品名、程序名，以及模型和账号操作共同运行的可执行文件的绝对路径。
 - `account` 是首次检查之前的账号，`check` 是没有操作运行时插件页为每个新订阅者启动的操作。
+- `prepare` 可选：插件在账号可以检查之前要准备好的内容，例如下载 CLI 或它的 skills，见[检查之前的准备](#prepare-before-a-check)。
 - `perform(kind, control, signal)` 执行一个操作：`control.run` 运行 CLI 的一条命令，`control.stage` 进入插件的一个阶段，`control.offer` 向插件页提供授权链接，`control.publish` 替换账号。
 - `operations(text)` 列出插件页按钮可以启动的操作，`copy(text)` 写出账号区域的固定文案，`present(view, text)` 把当前视图映射为该区域显示的内容。`text(key, params)` 用 `dictionaries` 中的每种语言写出一个键，并用 `params` 填充每个 `{name}` 占位符；浏览器按其当前语言解析结果。
 
 返回的句柄供插件在操作之外使用：`snapshot()` 返回当前的 `CliAccountView`，`publish(account)` 替换账号，`refresh()` 在没有操作运行时启动一次检查，`dispose()` 在插件卸载之前撤回注册。每个成员的确切行为见 [`src/types.ts`](src/types.ts) 中的 JSDoc。
 
+<a id="prepare-before-a-check"></a>
+### 检查之前的准备
+
+CLI 或 skills 在加载之后才下载的插件注册 `prepare: { phase, unprepared, ready, run }`。`ready()` 返回 false 期间，每次 `check` 操作先进入 `phase`，等待 `run(signal)`，再进入 Service 的 `checking` 阶段，然后才调用 `perform`；其他操作直接调用 `perform`。`run` 抛出异常时，账号变为 `unprepared`，`perform` 不被调用，操作失败，结果中没有命令。`phase` 列在 `cancellable` 中时，插件页可以取消 `run`：signal 中止，账号变为 `unprepared`，操作以取消结束。`ready()` 返回 true 时不调用 `run`；失败之后的下一次检查会再次调用它，所以插件页的重试按钮就是重新下载的方式。账号仍是 `unprepared` 这个对象时，调用 `perform` 的检查会先把它换成注册的 `account`：什么都不缺之后，`perform` 没有发布就失败时，留下的是最初的账号，而不是 `unprepared`。
+
 ### 运行时上下文
 
-`register` 添加一条必需的运行时上下文条目，名为 `<name>:cli`，让模型按 `cli.executable` 运行 `cli.program`，这正是账号操作的命令运行的路径。设置 `cli.scripts` 时，它还让模型只在运行 skill 脚本的命令中把可执行文件所在目录放到 PATH 最前面，并且不要按名称运行 `cli.program`。文本采用内置组合在 Host 平台上提供给模型的 shell 写法。在 Windows 以外的平台上使用 POSIX shell 语法：前缀是 `PATH="<可执行文件所在目录>:$PATH"`，只改变这一条命令的 PATH，文本还要求不要导出 PATH。在 Windows 上模型使用 PowerShell，文本用调用运算符写出可执行文件 `& '<可执行文件>'`，前缀写作 `$env:PATH = '<可执行文件所在目录>;' + $env:PATH`；PowerShell 每次调用都在新进程中运行，所以这个修改只在本次调用内有效。设置 `cli.ready` 时，`ready()` 返回 false 期间这条上下文不贡献任何内容。文本从不做变量插值。文本见[模型体验](#model-experience)。
+`register` 添加一条必需的运行时上下文条目，名为 `<name>:cli`，让模型按 `cli.executable` 运行 `cli.program`，这正是账号操作的命令运行的路径。设置 `cli.scripts` 时，它还让模型只在运行 skill 脚本的命令中把可执行文件所在目录放到 PATH 最前面，并且不要按名称运行 `cli.program`。文本采用内置组合在 Host 平台上提供给模型的 shell 写法。在 Windows 以外的平台上使用 POSIX shell 语法：前缀是 `PATH="<可执行文件所在目录>:$PATH"`，只改变这一条命令的 PATH，文本还要求不要导出 PATH。在 Windows 上模型使用 PowerShell，文本用调用运算符写出可执行文件 `& '<可执行文件>'`，前缀写作 `$env:PATH = '<可执行文件所在目录>;' + $env:PATH`；PowerShell 每次调用都在新进程中运行，所以这个修改只在本次调用内有效。设置 `prepare` 时，`prepare.ready()` 返回 false 期间这条上下文不贡献任何内容。文本从不做变量插值。文本见[模型体验](#model-experience)。
 
 ### 命令、链接与失败
 
@@ -153,7 +159,7 @@ Service 负责每个注册的生命周期，插件负责每条命令的含义。
 
 #### 模型看到什么
 
-每个通过 `ctx.cliAccounts` 注册、且 `cli.ready` 未设置或返回 true 的插件，在上下文顺序 220 处有一条必需的运行时上下文条目；关闭可选运行时上下文时它仍然保留。第二行只在设置 `cli.scripts` 时出现。占位符取自注册的 `cli`。在 Windows 以外的平台上，引号内的值是 JSON 字符串；在 Windows 上是 PowerShell 单引号字符串，其中的单引号写成两个。没有插件注册时，Service 不向模型请求添加任何内容。
+每个通过 `ctx.cliAccounts` 注册、且 `prepare` 未设置或 `prepare.ready()` 返回 true 的插件，在上下文顺序 220 处有一条必需的运行时上下文条目；关闭可选运行时上下文时它仍然保留。第二行只在设置 `cli.scripts` 时出现。占位符取自注册的 `cli`。在 Windows 以外的平台上，引号内的值是 JSON 字符串；在 Windows 上是 PowerShell 单引号字符串，其中的单引号写成两个。没有插件注册时，Service 不向模型请求添加任何内容。
 
 ##### 运行时上下文条目
 

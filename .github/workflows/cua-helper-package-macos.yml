@@ -65,7 +65,7 @@ jobs:
           if(!["test","production"].includes(process.env.DSH_PACKAGING_PRESET)) throw Error("Invalid preset");'
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
           package-manager-cache: false
       - name: Record CUA helper build inputs
         id: build-inputs

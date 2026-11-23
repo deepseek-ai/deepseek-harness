@@ -1,6 +1,7 @@
 /**
  * Dynamic Cordis Plugin service: immutable package definitions, one active run
- * per Plugin, human-approved Client activation, and Host/Client invocation.
+ * per Plugin, human-approved Client activation, Host/Client invocation, and the
+ * runtime inspection registry with its first-party Host providers.
  * @module @deepseek-ai/dsh-cordis-host-runner
  */
 
@@ -20,6 +21,7 @@ declare module '@deepseek-ai/dsh-llm' {
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { isPlugin, normalizeHandler } from './guard.ts'
+import { hostInspectProviders } from './inspect-providers.ts'
 import { CordisInspectRegistryService } from './inspect-registry.ts'
 import { missingServices, startHostHalf } from './lifecycle.ts'
 import { DynamicCordisRegistry } from './registry.ts'
@@ -157,12 +159,15 @@ export class DynamicCordisRunnerService extends TypertRemoteService {
   private readonly resolved: ResolvedConfig
   private group: Fiber | undefined
 
-  /** Create the service under the Host composition. */
+  /** Create the service under the Host composition and register the first-party Host inspect providers. */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'dynamicCordisRunner')
     this.rootCtx = ctx
     this.resolved = config as ResolvedConfig
     this.inspectRegistry = new CordisInspectRegistryService(ctx, this.resolved.clientInspectTimeoutMs)
+    for (const provider of hostInspectProviders(ctx)) {
+      ctx.effect(() => this.inspectRegistry.register(provider), `cordis-host-runner: inspect ${provider.manifest.id}`)
+    }
   }
 
   /**

@@ -87,7 +87,7 @@ describe('Typert-backed Cordis catalog', () => {
       }
     }
     expect(projector.renderRuntimeApi(model)).toBe(
-      expected('packages/extensions/tool-cordis/src/api-catalog.ts'),
+      expected('packages/extensions/cordis-host-runner/src/api-catalog.ts'),
     )
   })
 

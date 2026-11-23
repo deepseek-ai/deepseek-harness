@@ -25,7 +25,7 @@ extensions 组为 agent 提供只读运行时 API 发现、供程序和浏览器
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`tool-cordis`](tool-cordis/README.zh.md) | 一个只读运行时 API 发现工具 | 注册到 `ctx.tools` |
-| [`cordis-host-runner`](cordis-host-runner/README.zh.md) | host 半：定义注册表、沙箱化的 host 半生命周期，以及用于应答浏览器查询的 inspect 注册表 | 提供 `ctx.dynamicCordisRunner` 与 `ctx.cordisInspect` |
+| [`cordis-host-runner`](cordis-host-runner/README.zh.md) | host 半：定义注册表、沙箱化的 host 半生命周期，以及带 Host 提供方、用于应答浏览器查询的 inspect 注册表 | 提供 `ctx.dynamicCordisRunner` 与 `ctx.cordisInspect` |
 | [`cordis-client-runner`](cordis-client-runner/README.zh.md) | 浏览器半：将浏览器半源码求值为运行中的插件，并应答运行请求 | client 面；提供浏览器侧 `ctx.dynamicCordisRunner` |
 | [`ui-cordis`](ui-cordis/README.zh.md) | 浏览器面板与历史生命周期工具卡片 | client 侧；注册 slot |
 | [`creation-recommendations`](creation-recommendations/README.zh.md) | 针对明确需求创建持续可用、可移除的界面插件 | — |

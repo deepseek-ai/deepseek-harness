@@ -112,7 +112,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
           getGuidance: () => COMMON_GUIDANCE,
           acceptsPidSelector: selectorPid !== undefined, heldInputState,
           ...disposeNative ? { disposeNative: () => disposeNative(native.state) } : {},
-          capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
+          capabilities: { platform, methods: ['getCapabilities', 'listApps', 'findApps', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
             appLevelAccessibility: platform !== 'windows', keyboard: platform === 'windows' ? ['window'] : ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
@@ -358,8 +358,20 @@ it.each([
   const result = agent.session.deriveMessages().find(message => message.role === 'tool')
   expect(result?.isError).toBe(false)
   expect(JSON.parse(result!.content.filter(block => block.type === 'text').map(block => block.text).join('')))
-    .toEqual([{ id: 'test.fixture', displayName: 'Fixture', isRunning: true, ...expectedProcess }])
+    .toEqual([{ id: 'test.fixture', displayName: 'Fixture', identity: null, isRunning: true, ...expectedProcess }])
   expect(native.calls.filter(call => call.method === 'getApp').map(call => call.params.selector)).toEqual([selector])
+})
+
+it('uses the running application list for the top-level state summary', async () => {
+  const { agent, run, native } = await setup(['inspect(JSON.stringify(await cua.getState()))'])
+  await run()
+  const result = agent.session.deriveMessages().find(message => message.role === 'tool')
+  expect(result?.isError).toBe(false)
+  expect(JSON.parse(result!.content.filter(block => block.type === 'text').map(block => block.text).join(''))).toEqual({
+    apps: [{ id: 'test.fixture', displayName: 'Fixture', identity: null, isRunning: true }], browsers: [],
+  })
+  expect(native.calls.map(({ method, params }) => ({ method, params })))
+    .toEqual([{ method: 'listApps', params: {} }])
 })
 
 it('forwards per-read accessibility limits to the Windows backend', async () => {

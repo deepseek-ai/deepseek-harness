@@ -214,6 +214,16 @@ def main():
                     time.sleep(0.025)
                 window = primary["windowId"]
                 observed = a.call("getState", {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20})
+                params = {"appHandle": app_a, "windowId": window, "maxElements": 300, "maxDepth": 20, "showDiff": True}
+                assert a.call("getState", params)["tree"].startswith("AX scope=window")
+                a.send({"id": "discarded-read", "method": "getState", "params": params})
+                assert select.select([a.socket], [], [], 10)[0], "Expected the committed observation's reply"
+                a.send({"type": "cancel", "id": "discarded-read"})
+                reply = a.read()
+                assert reply["id"] == "discarded-read" and reply["result"]["tree"].startswith("There has been no change in the accessibility tree for Window:")
+                observed = a.call("getState", params)
+                assert observed["tree"].startswith("AX scope=window"), "Client discarded the preceding reply"
+                assert a.call("getState", params)["tree"].startswith("There has been no change in the accessibility tree for Window:")
                 b.call("invoke", {"appHandle": app_b, "snapshotId": observed["snapshotId"], "elementId": '0'}, error="STALE_SNAPSHOT")
                 own_observation = b.call("getState", {"appHandle": app_b, "windowId": window, "maxElements": 300, "maxDepth": 20})
                 button = next(element for element in own_observation["elements"]

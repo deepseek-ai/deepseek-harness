@@ -76,7 +76,7 @@ internal static class NativeServer
         }
     }
 
-    private static void Report(string code, Exception error)
+    internal static void Report(string code, Exception error)
     {
         try { Console.Error.WriteLine($"{code}: {error.GetType().Name}"); }
         catch (Exception reportError) when (reportError is IOException or ObjectDisposedException)
@@ -99,7 +99,8 @@ internal static class NativeServer
             Task? active = null;
             TaskCompletionSource? replying = null;
             CancellationTokenSource? cancellation = null;
-            string? latestRequestId = null;
+            (string? Id, bool IsRead) latestRequest = default;
+            var discardCancelledRead = false;
             var closeRequested = false;
             var cleanupTimeoutMs = connectTimeoutMs;
             try
@@ -131,8 +132,10 @@ internal static class NativeServer
                     var value = WireJson.Parse(line);
                     if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty("type", out _))
                     {
-                        var control = NativeControlFrame.Parse(value, latestRequestId, active?.IsCompleted != false);
+                        var control = NativeControlFrame.Parse(value, latestRequest.Id, active?.IsCompleted != false);
                         if (control == NativeControl.Close) { closeRequested = true; break; }
+                        // The client discards the matching reply even when it has already been written.
+                        discardCancelledRead = latestRequest.IsRead;
                         if (control == NativeControl.Cancel) cancellation!.Cancel();
                         continue;
                     }
@@ -144,10 +147,13 @@ internal static class NativeServer
                         continue;
                     }
                     if (active is not null) await active;
+                    // An active read can publish its snapshot until it settles.
+                    if (discardCancelledRead && state.Notifications is { } notifications) notifications.LastSnapshot = null;
+                    discardCancelledRead = false;
                     cancellation?.Dispose();
                     cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
                     cancellation.CancelAfter(request.Method == "screenshot" ? Math.Min(config.TimeoutMs, config.ScreenshotTimeoutMs) : config.TimeoutMs);
-                    latestRequestId = request.Id;
+                    latestRequest = (request.Id, request.Method == "getState");
                     replying = new(TaskCreationOptions.RunContinuationsAsynchronously);
                     active = Dispatch(request, state, executor, config, pipe, writer, replying, cancellation.Token, lifetime.Token);
                 }

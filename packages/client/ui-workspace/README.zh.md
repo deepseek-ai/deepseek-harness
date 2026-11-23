@@ -95,7 +95,7 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 `mainView` 引用保留 `conversation` 子要素。主视图离开一个非空白、未归档的 Session 时，导航先以不带子要素的 `recentViews` 引用保留它，因此其历史仍已加载，切回时无需再请求历史，而 Conversation 组装在重新显示前停止。运行中、等待用户或完成未读的最近访问会话始终保留且不计数；其余最近访问会话最多保留 `recentViewLimit` 个（默认 10），不含主视图 Session。`recentViewLimit` 是插件 Host `Config` 的 volatile 字段，在其 `cordis.yml` 行中设置，并经 [Client Modules](../modules/README.zh.md#synced-plugin-configuration) 同步到浏览器；修改后无需刷新页面即生效，按新上限释放或保留最近访问会话，已释放的 Session 不会回来。浏览器收到值之前，所有计数的最近访问会话都会保留。超出时先释放最早离开的未置顶会话，再释放最早离开的置顶会话；被释放的最近访问会话只有在主视图再次离开该 Session 时才会回来。Session 回到主视图、被移除或归档，或插件卸载时，会释放其最近访问引用。
 
-Session 行与 Workspace 行的可用操作来自浏览器根的访问 Hook：`useWorkspaceAccess` 门控 Workspace 的新建、重命名、删除与排序动作，`useSessionAccess` 门控 Session 行的重命名、分叉、重排拖拽、置顶、归档与取消归档动作，以及搜索结果的恢复控件。被拒绝的动作不渲染，但每个发往 Host 的请求仍以其授权为准。Ungrouped 标题行不提供新建会话，因为它没有可在其中新建会话的后备 Workspace。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
+Session 行与 Workspace 行的可用操作来自浏览器根的访问 Hook：`useWorkspaceAccess` 门控 Workspace 的新建、重命名、删除与排序动作，`useSessionAccess` 门控 Session 行的重命名、分叉、重排拖拽、置顶、归档与取消归档动作，以及搜索结果的恢复控件。被拒绝的动作不渲染，但每个发往 Host 的请求仍以其授权为准。Ungrouped 标题行不提供新建会话，因为它没有可在其中新建会话的后备 Workspace。启动恢复会 retain 主 reference，不改变已选面板，也不取消后续导航。归档主 Session 会释放其 reference 并清除主选择。选择失败时保留当前全局面板。主视图显示子代理 Session 时，其在列表中最近的非子代理祖先行显示为选中。Session 行读取 `usePanelInfo`，在全局面板活跃时不显示 Session 选中样式；仅把焦点移到搜索框或目录选择器不会离开该面板。
 
 导航和启动恢复通过所选 Session 的 `follow` 获取投影，不会另行刷新该 Session 或其父会话的投影；例外是恢复已保存的空白会话时先重新加载该 Session 的投影，因为列表中的值是缓存提示，Host 非正常退出后可能落后于其日志。
 

@@ -92,6 +92,42 @@ it('retries an unconfirmed sign-in by checking again', () => {
   expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
 })
 
+it('retries a check that failed before the account was ever read', () => {
+  const shown = presentAccount({
+    account: { state: 'unchecked' },
+    result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 3 } },
+  })
+  expect(shown).toMatchObject({
+    phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.unavailable'),
+    notes: [], failure: { text: say('failed'), details: ['auth-status', 'exit 3'] },
+  })
+  expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
+})
+
+it('shows the download of a missing CLI with its cancel, and a retry after one that did not finish', () => {
+  const UNCHECKED: FeishuState = { account: { state: 'unchecked' } }
+  let shown = presentAccount({ ...UNCHECKED, operation: { id: OP, kind: 'check', phase: 'downloading', cancellable: true } })
+  expect(shown).toMatchObject({ phase: 'checking', status: say('step.downloading'), notes: [] })
+  expect(shown.buttons).toMatchObject([{ label: say('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' }])
+  expect(shown.badge).toBeUndefined()
+  shown = presentAccount({ ...UNCHECKED, operation: { id: OP, kind: 'check', phase: 'cancelling', cancellable: false } })
+  expect(shown).toMatchObject({ phase: 'checking', status: say('status.checking'), buttons: [] })
+  shown = presentAccount({ ...UNCHECKED, operation: { id: OP, kind: 'link-app', phase: 'downloading', cancellable: true } })
+  expect(shown).toMatchObject({ phase: 'connecting', status: say('step.downloading') })
+
+  const MISSING: FeishuState = { account: { state: 'not-installed' } }
+  shown = presentAccount({ ...MISSING, result: { id: OP, kind: 'check', outcome: 'failed' } })
+  expect(shown).toMatchObject({
+    phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.missing'),
+    notes: [], failure: { text: say('failed') },
+  })
+  expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
+  shown = presentAccount({ ...MISSING, result: { id: OP, kind: 'check', outcome: 'cancelled' } })
+  expect(shown).toMatchObject({ phase: 'unavailable', detail: say('detail.missing') })
+  expect(labels(shown)).toEqual([zh['action.retry']])
+  expect(shown.failure).toBeUndefined()
+})
+
 it('reports app-link recovery with the command and exit code', () => {
   let shown = presentAccount({
     ...UNCONFIGURED,

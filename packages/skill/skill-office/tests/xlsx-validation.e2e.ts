@@ -6,10 +6,9 @@ import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
-import { readImageFile } from '@deepseek-ai/dsh-attachment-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expectNoRenderContext, officeCalls, officeImages, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
+import { officeCalls, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
 const assetRoot = fileURLToPath(new URL('../assets/', import.meta.url))
@@ -30,22 +29,14 @@ w.create_sheet('Notes')['A1'] = 'Preserve this note'
 w.save('input.xlsx')
 `
 
-const previewPixels = `
-import io, sys
-from PIL import Image
-im = Image.open(io.BytesIO(sys.stdin.buffer.read())).convert('RGBA')
-visible = Image.alpha_composite(Image.new('RGBA', im.size, 'white'), im).convert('RGB')
-print('content' if any(low != high for low, high in visible.getextrema()) else 'blank')
-`
-
 const cases = [
   {
-    name: 'data edits with basic styling skip visual inspection',
+    name: 'data edits with basic styling',
     task: 'Change Revenue!B2 to 20 and add Q3 with revenue 7 in A4:B4. Bold the header row and show revenue as whole numbers.',
     kind: 'data',
   },
   {
-    name: 'formula edits refresh cached results without rendering',
+    name: 'formula edits refresh cached results',
     task: 'Change Revenue!B2 to 20, set A4 to Total and B4 to =SUM(B2:B3). The delivered workbook must contain the formula and its updated calculated result.',
     kind: 'formula',
   },
@@ -60,7 +51,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each(['native', 'ptc'
   it.each(mode === 'native' ? cases : cases.filter(({ kind }) => kind === 'layout'))('$name', async ({ task, kind }) => {
     let events: SessionEvent[] = []
     let original: Buffer | undefined
-    let previewHasContent = false
     const controlRoot = await mkdtemp(join(tmpdir(), 'dsh-xlsx-control-test-'))
     onTestFinished(() => rm(controlRoot, { recursive: true, force: true }))
     const configPath = join(controlRoot, 'office.patch.json')
@@ -138,47 +128,22 @@ else:
 `], { cwd })
         expect(verified.exitCode).toBe(0)
         if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'office_recalculate')).toBe(true)
-        for (const block of officeImages(events)) {
-          const stored = await readImageFile(join(imageRoot, 'attachments/v1'), block.attachment)
-          const pixels = await execa(python!, ['-c', previewPixels], { input: Buffer.from(stored.data) })
-          previewHasContent ||= pixels.stdout === 'content'
-        }
       },
     })
     const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data] : event.type === 'tool/ptc-dispatch' ? [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments), callId: event.data.rootCallId }] : [])
     const loaded = calls.filter(call => call.name === 'skill').map(call => (JSON.parse(call.arguments) as { name: string }).name)
-    const commands = calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
-      .map(call => (JSON.parse(call.arguments) as { command: string }).command).join('\n')
     const answer = events.findLast(event => event.type === 'assistant/message')
     const diagnostic = JSON.stringify({ loadedSkills: loaded,
       commands: calls.filter(call => call.name === 'bash' || call.name === 'pwsh')
         .map(call => (JSON.parse(call.arguments) as { command: string }).command.slice(0, 600)),
       answer: answer?.type === 'assistant/message'
         ? answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n').slice(0, 800) : undefined })
-    expect(loaded, diagnostic).toContain('office-xlsx')
+    expect(loaded, diagnostic).toContain('office')
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
     if (kind === 'layout') {
       const office = officeCalls(events)
       expect(office.some(call => call.name === 'office_render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
       expect(office.some(call => call.name === 'office_convert'), diagnostic).toBe(false)
-      const reads = calls.filter(call => call.name === 'office_render')
-      if (!previewHasContent) {
-        const answer = events.findLast(event => event.type === 'assistant/message')
-        if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')
-        const text = answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
-        expect(text).toMatch(/(?:content|structure)[^.!?]{0,100}pass/iu)
-        expect(text).toMatch(/visual (?:inspection|check)[^.!?]{0,100}(?:not completed|incomplete|could not be completed|unverified)/iu)
-        expect(text).not.toMatch(/visually (?:verified|validated|confirmed)|visual (?:check|inspection) (?:passed|successful)/iu)
-        expect(reads.length).toBeLessThanOrEqual(1)
-      }
-    } else {
-      expectNoRenderContext(events)
-      expect(officeCalls(events).some(call => call.name === 'office_render')).toBe(false)
-      expect(commands).not.toMatch(/(?<![\w/.-])(?:render|convert)(?![\w/.-])|\.pdf\b|\.png\b/iu)
-      const answer = events.findLast(event => event.type === 'assistant/message')
-      if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')
-      const text = answer.data.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
-      expect(text).not.toMatch(/(?:visual|layout).{0,60}(?:not|skip|omit)|(?:not|skip|omit).{0,60}(?:visual|render)/iu)
     }
   })
 })

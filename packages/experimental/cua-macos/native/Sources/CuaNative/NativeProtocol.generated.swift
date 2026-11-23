@@ -13,7 +13,7 @@ enum NativeProtocol {
         "getApp": ["selector"],
         "getCapabilities": [],
         "getHeldInputs": [],
-        "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "windowId"],
+        "getState": ["appHandle", "details", "includeMenus", "maxDepth", "maxElements", "showDiff", "windowId"],
         "invoke": ["appHandle", "elementId", "snapshotId", "windowId"],
         "launchApp": ["appHandle"],
         "listActions": ["appHandle", "elementId", "snapshotId", "windowId"],

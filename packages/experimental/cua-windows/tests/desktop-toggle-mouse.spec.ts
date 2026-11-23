@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline'
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
+import { AppsResult } from '@deepseek-ai/dsh-cua/protocol'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
 import { Config } from '../src/index.ts'
@@ -21,7 +22,7 @@ const FixtureState = z.object({
 const Initial = z.object({ pid: z.number().int(), state: FixtureState })
 const Cover = z.object({ form: FixtureState, sibling: FixtureState })
 const App = z.object({ appHandle: z.string(), running: z.boolean() })
-const Windows = z.array(z.object({ windowId: z.string(), title: z.string() }))
+const Windows = z.array(z.object({ windowId: z.string(), title: z.string(), pid: z.never().optional() }))
 const ToggleResult = z.object({ dispatched: z.boolean() })
 
 interface Fixture {
@@ -98,7 +99,18 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const native = new NativeClient(ctx, { ...Config({}), helperPath: helperPath!, cwd: process.cwd() },
       (_owner, config) => nativeRuntime.connect(config))
     cleanups.push(() => native.dispose())
-    const app = App.parse(await native.request('getApp', { selector: fixturePath! }, signal))
+    // The private fixture has a running window but no StartApps registration.
+    const direct = AppsResult.parse(await native.request('findApps', { query: fixturePath!, maxAppMatches: 1 }, signal))
+    expect(direct).toHaveLength(1)
+    const fixtureApp = direct[0]!
+    expect(fixtureApp.isRunning).toBe(true)
+    const listed = z.array(z.object({ id: z.string() })).parse(await native.request('listApps', {}, signal))
+    expect(listed.some(item => item.id === fixtureApp.id)).toBe(true)
+    for (const query of ['', null, fixtureApp.displayName]) {
+      const installed = AppsResult.parse(await native.request('findApps', { query, maxAppMatches: 1000 }, signal))
+      expect(installed.some(item => item.id === fixtureApp.id)).toBe(false)
+    }
+    const app = App.parse(await native.request('getApp', { selector: fixtureApp.id }, signal))
     expect(app.running).toBe(true)
     const windows = Windows.parse(await native.request('listWindows', { appHandle: app.appHandle }, signal))
     const windowId = initial.state.window

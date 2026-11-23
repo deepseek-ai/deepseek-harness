@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PRIMARY_NODE_VERSION: '24'
+  PRIMARY_NODE_VERSION: '^24.22.3'
   # CI runs must never report to the production telemetry endpoint baked
   # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
   DSH_TELEMETRY_DISABLED: '1'
@@ -41,7 +41,7 @@ jobs:
           path: publisher-isolated
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check preflights before dependency installation
         working-directory: publisher-isolated
         run: node apps/desktop-publisher/tests/preinstall.mjs

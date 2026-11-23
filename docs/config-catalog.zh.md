@@ -172,8 +172,8 @@ export type Config = PresetDefinition
 ```ts config-catalog
 /** Registry selection policy. */
 export interface Config {
-  /** Deployment default when the caller omits a preset. */
-  default: string
+  /** Deployment default when the caller omits a preset. Without one, such a caller fails. */
+  default?: string
   /** User-selected default; edited through Settings. */
   selectedDefault: Volatile<string | undefined>
 }
@@ -964,7 +964,7 @@ export interface ToolResultPruneConfig {
 ## `@deepseek-ai/dsh-cordis-host-runner`
 
 - `inject`: `tools`
-- `source`: [`packages/extensions/cordis-host-runner/src/index.ts:107`](../packages/extensions/cordis-host-runner/src/index.ts)
+- `source`: [`packages/extensions/cordis-host-runner/src/index.ts:109`](../packages/extensions/cordis-host-runner/src/index.ts)
 
 ```ts config-catalog
 /** Runner configuration. */
@@ -1078,6 +1078,8 @@ export interface Config extends CuaConfig {
   windowsPowerShellPath: string
   /** Milliseconds between application-readiness and clipboard-release observations. */
   pollIntervalMs: number
+  /** Maximum distinct UIA notifications per diff read. The Windows helper defaults to 50. */
+  maxDiffNotifications?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
@@ -1780,13 +1782,16 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-feishu`
 
-- `inject`: `cliAccounts` · `skills`
-- `source`: [`packages/connector/feishu/src/index.ts:30`](../packages/connector/feishu/src/index.ts)
+- `inject`: `cliAccounts` · `skills` · `subprocess`
+- `source`: [`packages/connector/feishu/src/index.ts:33`](../packages/connector/feishu/src/index.ts)
 
 ```ts config-catalog
 /** Where lark-cli is. */
 export interface Config {
-  /** Absolute directory holding the `lark-cli` executable; defaults to the installed `@larksuite/cli` package. */
+  /**
+   * Absolute directory holding the `lark-cli` executable, which the plugin then never downloads. Defaults to the
+   * installed `@larksuite/cli` package.
+   */
   binDir?: string
 }
 ```
@@ -4052,20 +4057,20 @@ export interface Config {
 ## `@deepseek-ai/dsh-skill-office`
 
 - `inject`: `skills`
-- `source`: [`packages/skill/skill-office/src/index.ts:34`](../packages/skill/skill-office/src/index.ts)
+- `source`: [`packages/skill/skill-office/src/index.ts:33`](../packages/skill/skill-office/src/index.ts)
 
 ```ts config-catalog
 /** Configuration after schema defaults apply. */
 export interface ResolvedConfig extends Config {
-  /** Python environment named in the Python authoring and verification skills. */
+  /** Python environment named at the end of the `office` skill. */
   pythonEnvironment: PythonEnvironment
 }
 
 /** Office skill resources and Python environment. */
 export interface Config {
-  /** Absolute assets directory containing skill folders; defaults to packaged assets. */
+  /** Absolute assets directory containing the `office` skill folder; defaults to packaged assets. */
   assetRoot?: string
-  /** Python environment named in the Python authoring and verification skills. @default 'workspace-dependencies' */
+  /** Python environment named at the end of the `office` skill. @default 'workspace-dependencies' */
   pythonEnvironment?: PythonEnvironment
 }
 

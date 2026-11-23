@@ -8,7 +8,7 @@ const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps'
 const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
   'getAccessibilityTree', 'listActions', 'getActionSchema', 'invoke', 'performAction', 'setValue', 'selectText',
 ]
-const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
+const appNames: Array<keyof CuaApp> = ['appHandle', 'launch', 'activate', 'getWindows', 'getWindow']
 const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'toggleMouse', 'click', 'scroll', 'drag']
 const getActionSchemaLine = '- getActionSchema(action: string) -> JSON Schema — query the parameter schema for an action.'
 
@@ -100,8 +100,8 @@ it('enumerates every public method once in its catalog entry', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(27)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(26)
+  expect(signatures).toHaveLength(28)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(27)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })
@@ -125,22 +125,43 @@ it('documents option fields and return fields', () => {
   for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'path', 'width', 'height', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
 })
 
-it('inlines discovery, restoration, and mouse-move return records', () => {
+it('inlines capability, window, restoration, and mouse-move return records', () => {
   const lines = COMMON_GUIDANCE.split('\n')
-  for (const name of ['cua.getCapabilities', 'cua.listApps', 'cua.findApps', 'cua.getState', 'app.getWindows', 'app.show', 'window.show', 'mouseMove']) {
+  for (const name of ['cua.getCapabilities', 'cua.getState', 'app.getWindows', 'app.show', 'window.show', 'mouseMove']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toMatch(/ -> \(?\{ /)
   }
   expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemInput: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
-  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: boolean, pid?: number }[]')
-  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[]')
   expect(COMMON_GUIDANCE).toContain('getScreenshot() -> Image')
   expect(COMMON_GUIDANCE).toContain('bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null')
+})
+
+it('reuses CuaAppInfo for running and discoverable application rows', () => {
+  const lines = COMMON_GUIDANCE.split('\n')
+  const entry = (name: string) => lines.find(line => line.startsWith(`- ${name}(`))
+  const definition = 'CuaAppInfo = { id: string, displayName: string, identity: string | null, isRunning: boolean, pid?: number }'
+  expect(COMMON_GUIDANCE).toContain(`${definition}. Pass id unchanged to cua.getApp.`)
+  expect(entry('cua.listApps')).toBe('- cua.listApps() -> CuaAppInfo[] — list running applications exposed by the provider.')
+  expect(entry('cua.findApps')).toContain('- cua.findApps(query: string | null) -> CuaAppInfo[] — query is a partial-match search string for discoverable applications, including stopped apps.')
+  expect(entry('cua.findApps')).toContain('Pass an empty string or null to list all discoverable apps without a match-count limit.')
+  expect(entry('cua.getState')).toBe('- cua.getState() -> { apps: CuaAppInfo[], browsers: [] } — return the running application list from listApps(), together with an empty browser list.')
+  expect(GUIDANCE).toContain('Each row represents one running process.')
+  expect(GUIDANCE).toContain('Each row represents an installation.')
+  for (const catalog of [GUIDANCE, PROGRAM_GUIDANCE]) {
+    expect(catalog).toContain('On macOS, identity comes from the canonical application bundle path. For installations sharing an id, pass their non-null identity unchanged to cua.getApp. To select a specific running instance, pass String(pid); instances of the same installation can share both id and identity. Running records include a pid; stopped records omit it.')
+  }
+})
+
+it('names accessibility operations without AX abbreviations in shared guidance', () => {
+  expect(COMMON_GUIDANCE).toContain('return without reading the accessibility tree or requesting activation')
+  expect(COMMON_GUIDANCE).toContain('do not read or replace the current accessibility snapshot')
+  expect(COMMON_GUIDANCE).toContain('based on the current accessibility observation or screenshot')
+  expect(COMMON_GUIDANCE).not.toMatch(/\bAX\b/)
 })
 
 it('documents shared types while leaving Modifier members platform-defined', () => {
   const signatures = COMMON_GUIDANCE.split('\n').filter(line => line.startsWith('- ')).map(line => line.split(' — ')[0]).join('\n')
   const names = signatures.replace(/'[^']*'/g, '').match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? []
-  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JSON', 'JsonValue', 'Modifier', 'Schema', 'Window'])
+  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'CuaAppInfo', 'Image', 'JSON', 'JsonValue', 'Modifier', 'Schema', 'Window'])
   expect(COMMON_GUIDANCE).toContain('ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }')
   expect(COMMON_GUIDANCE).toContain('JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }')
   expect(COMMON_GUIDANCE).toContain('App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level')
@@ -194,6 +215,7 @@ it('keeps consent, lock, observation, and no-replay rules', () => {
 it('omits raw protocol details from operation guidance', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     expect(catalog).not.toContain('Raw tools use { method, params }')
+    expect(catalog).not.toContain('cua.getState maps to findApps')
     expect(catalog).not.toContain('snapshotId')
   }
 })
