@@ -292,6 +292,7 @@ describe('ImService facade', () => {
     await expect(service.readMessage(CHAT, 'm-plain')).rejects.toMatchObject({
       code: 'unavailable', message: 'plain adapter boom', cause: plainError,
     })
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- covers an adapter that rejects with a non-Error reason
     bot.members = () => Promise.reject('raw string failure')
     await expect(service.members(CHAT)).rejects.toMatchObject({
       code: 'unavailable', message: 'raw string failure', cause: 'raw string failure',

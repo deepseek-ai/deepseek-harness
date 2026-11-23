@@ -260,12 +260,13 @@ async function resolveAddresses(
     timer.unref()
   })
   let onAbort: (() => void) | undefined
-  const aborted = signal === undefined
-    ? undefined
-    : new Promise<never>((_resolve, reject) => {
-      onAbort = () => { reject(signal.reason) }
-      signal.addEventListener('abort', onAbort, { once: true })
-    })
+  let aborted: Promise<never> | undefined
+  if (signal !== undefined) {
+    const abort = Promise.withResolvers<never>()
+    onAbort = () => { abort.reject(signal.reason) }
+    signal.addEventListener('abort', onAbort, { once: true })
+    aborted = abort.promise
+  }
   try {
     const racers: Promise<readonly string[] | undefined>[] = [resolve(hostname), deadline]
     if (aborted !== undefined) racers.push(aborted)

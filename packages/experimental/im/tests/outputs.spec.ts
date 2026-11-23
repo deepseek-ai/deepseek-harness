@@ -332,12 +332,12 @@ describe('ImOutputRegistry buttons', () => {
     harness.host({ output: 'probe' })
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['another-user'] })
 
-    await harness.registry.button(click('dsh:plain'))
+    harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toEqual([])
 
     // The sender the rule admits reaches the host again.
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', users: ['user-1'] })
-    await harness.registry.button(click('dsh:plain'))
+    harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toHaveLength(1)
   })
 
@@ -347,7 +347,7 @@ describe('ImOutputRegistry buttons', () => {
     // The chat record outlives the rule in `im_messages`; the click must not fall through to "no allowlist".
     harness.sources.delete('team')
 
-    await harness.registry.button(click('dsh:plain'))
+    harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toEqual([])
   })
 
@@ -358,11 +358,11 @@ describe('ImOutputRegistry buttons', () => {
     // record stays in `im_messages`, but the old chat's members must not keep pressing the session's controls.
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: ['elsewhere'] })
 
-    await harness.registry.button(click('dsh:plain'))
+    harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toEqual([])
 
     harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: [chatOf().ref.id] })
-    await harness.registry.button(click('dsh:plain'))
+    harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toHaveLength(1)
   })
 
@@ -370,17 +370,17 @@ describe('ImOutputRegistry buttons', () => {
     const harness = booted()
     harness.host({ output: 'probe' })
 
-    await harness.registry.button(click('dsh:plain'))
+    harness.registry.button(click('dsh:plain'))
     expect(harness.buttons).toHaveLength(1)
     expect(harness.buttons[0]?.message).toBeUndefined()
     expect(harness.buttons[0]?.session).toBeUndefined()
     expect(harness.buttons[0]?.data).toBeUndefined()
 
     // A click in a chat this host does not know is invisible.
-    await harness.registry.button(click('dsh:plain', { chat: 'elsewhere' }))
+    harness.registry.button(click('dsh:plain', { chat: 'elsewhere' }))
     expect(harness.buttons).toHaveLength(1)
     // An envelope without a button is not a click.
-    await harness.registry.button(noClick())
+    harness.registry.button(noClick())
     expect(harness.buttons).toHaveLength(1)
   })
 
@@ -393,7 +393,7 @@ describe('ImOutputRegistry buttons', () => {
     harness.messages.set(ImMessageKey('fake:bot', 'REFIDX_shared'), foreignMsg)
     harness.sender.owners.set(foreignMsg.key, foreign.sessionId)
 
-    await harness.registry.button(click('dsh:plain', { message: 'REFIDX_shared' }))
+    harness.registry.button(click('dsh:plain', { message: 'REFIDX_shared' }))
     expect(harness.buttons).toHaveLength(1)
     expect(harness.buttons[0]?.message).toBeUndefined()
     expect(harness.buttons[0]?.session).toBeUndefined()
