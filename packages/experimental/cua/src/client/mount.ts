@@ -57,7 +57,7 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
         return () => { unsubscribe(); controller.setChanging(false) }
       })
     })
-    const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
+    const preset = ctx.configForms.get<{ selectedDefault?: string }>('agent-preset-registry')
     const settings = {
       ...face,
       hooks: { ...face.hooks, cuaDefaultPreset: preset, developerTools: ctx.configForms.developerTools.enabled },

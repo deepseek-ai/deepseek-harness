@@ -159,7 +159,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
-  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(4)
+  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(3)
   expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)

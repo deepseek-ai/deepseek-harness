@@ -23,15 +23,15 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
     presets: { value: { presets: [
-      { id: 'standard', isDefault: false }, { id: 'ptc', isDefault: true },
+      { id: 'standard', isDefault: true }, { id: 'ptc', isDefault: false },
       { id: 'research', name: 'Research', isDefault: false }, { id: 'broken', broken: 'invalid', isDefault: false },
     ] }, busy: false, error: null },
     windowsProvider: { value: null, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
   })
-  const preset = createSnapshotStore<ConfigFormSnapshot<{ default: string; selectedDefault?: string }>>({
-    status: 'ready', value: { default: 'standard', selectedDefault: 'ptc' },
+  const preset = createSnapshotStore<ConfigFormSnapshot<{ selectedDefault?: string }>>({
+    status: 'ready', value: { selectedDefault: 'ptc' },
     base: {}, user: {}, revision: 1, writable: true,
   })
   const codingTools = createSnapshotStore(true)
@@ -68,7 +68,7 @@ it('requests only a missing privilege and leaves OS attribution to the system pr
 
 it.each([en, zh])('changes the default from the detail page and retains a refused write for retry', async (dictionary) => {
   const f = fixture()
-  f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard' } })
+  f.preset.set({ ...f.preset.getSnapshot(), value: {} })
   f.publish({ ...observe(value) })
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const group = screen.getByRole('group', { name: dictionary.defaultTitle })
@@ -86,7 +86,7 @@ it.each([en, zh])('changes the default from the detail page and retains a refuse
   choose()
   await waitFor(() => { expect(screen.queryByRole('alert')).toBeNull() })
   expect(f.props.setDefaultPreset.mock.calls).toEqual([['research'], ['research']])
-  act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard', selectedDefault: 'research' } }) })
+  act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: { selectedDefault: 'research' } }) })
   act(() => { f.codingTools.set(false) })
   fireEvent.click(within(group).getByRole('button', { name: 'Research' }))
   expect(screen.queryByRole('menuitem', { name: 'presetPtcName' })).toBeNull()
@@ -114,7 +114,7 @@ it('keeps the saved preset visible while the roster is unavailable and closes th
 
 it('dismisses activation when permissions are ready without changing the default', () => {
   const f = fixture(), onDismiss = vi.fn()
-  f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard', selectedDefault: 'minimal' } })
+  f.preset.set({ ...f.preset.getSnapshot(), value: { selectedDefault: 'minimal' } })
   f.publish({ ...observe({ ...value, system: { ...value.system, accessibility: true } }) })
   render(<PermissionSetup {...f.props} onDismiss={onDismiss} onOpenDetails={vi.fn()} />)
   expect(onDismiss).toHaveBeenCalledOnce()
@@ -124,7 +124,7 @@ it('dismisses activation when permissions are ready without changing the default
 
 it.each([new Error('offline'), 'offline'])('reports a failed default-mode request on the detail page', async (error) => {
   const f = fixture()
-  f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard' } })
+  f.preset.set({ ...f.preset.getSnapshot(), value: {} })
   f.props.setDefaultPreset.mockRejectedValueOnce(error)
   render(<PermissionPanel {...f.props} />)
   fireEvent.click(screen.getByRole('button', { name: 'presetStandardName' }))
@@ -132,20 +132,20 @@ it.each([new Error('offline'), 'offline'])('reports a failed default-mode reques
   await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('offline') })
 })
 
-it('waits for the settings document and recognizes PTC as the deployment default', () => {
+it('waits for the settings document and reads the deployment default from the Host roster', () => {
   const f = fixture()
   f.preset.set({ ...f.preset.getSnapshot(), status: 'loading', value: undefined })
   render(<PermissionPanel {...f.props} />)
   expect(within(screen.getByRole('group', { name: en.defaultTitle })).queryByRole('button')).toBeNull()
-  act(() => { f.preset.set({ ...f.preset.getSnapshot(), status: 'ready', value: { default: 'ptc' } }) })
-  expect(screen.getByRole('button', { name: 'presetPtcName' }).hasAttribute('disabled')).toBe(false)
+  act(() => { f.preset.set({ ...f.preset.getSnapshot(), status: 'ready', value: {} }) })
+  expect(screen.getByRole('button', { name: 'presetStandardName' }).hasAttribute('disabled')).toBe(false)
   expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
 })
 
 it.each(['unavailable', 'ready'] as const)('explains why the %s settings document cannot change the default', (status) => {
   const f = fixture()
   f.preset.set({ ...f.preset.getSnapshot(), status, writable: false,
-    value: status === 'ready' ? { default: 'standard' } : undefined })
+    value: status === 'ready' ? {} : undefined })
   render(<PermissionPanel {...f.props} />)
   expect(screen.getByRole('alert').textContent).toBe(status === 'ready' ? en.defaultReadOnly : en.defaultUnavailable)
   expect(within(screen.getByRole('group', { name: en.defaultTitle })).getByRole('button').hasAttribute('disabled')).toBe(true)
@@ -418,7 +418,7 @@ it('retains uncertainty and the diagnostic until a refresh succeeds', () => {
 
 it('retains a known read-only configuration and query failure throughout management and refresh', () => {
   const f = fixture()
-  f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard' }, writable: false })
+  f.preset.set({ ...f.preset.getSnapshot(), value: {}, writable: false })
   f.publish({ ...observe(value),
     applications: { value, busy: false, error: 'offline' } })
   const view = render(<PermissionPanel {...f.props} />)

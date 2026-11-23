@@ -23,7 +23,7 @@ export type PermissionSetupProps = PermissionProps
 /** The detail page edits the preset used for new sessions. */
 export type PermissionPanelProps = PermissionProps & InjectFace<{
   hooks: {
-    cuaDefaultPreset: ConfigForm<{ default: string; selectedDefault?: string }>
+    cuaDefaultPreset: ConfigForm<{ selectedDefault?: string }>
     developerTools: ObservableSnapshot<boolean>
   }
   setDefaultPreset: (id: string) => Promise<boolean>
@@ -41,7 +41,7 @@ function DefaultPresetSetting({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const rows = roster.value?.presets ?? []
-  const current = preset.value?.selectedDefault ?? preset.value?.default
+  const current = preset.value?.selectedDefault ?? rows.find(row => row.isDefault)?.id
   const selected = rows.find(row => row.id === current)
   const label = selected ? presetDisplayText(selected, presetText).name : current ?? t('unknown')
   const items = rows.filter(row => row.broken === undefined && (codingTools || !requiresCodingTools(row)))
