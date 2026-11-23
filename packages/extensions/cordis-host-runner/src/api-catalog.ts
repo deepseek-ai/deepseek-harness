@@ -9,7 +9,7 @@
  * the same AST walk as docs/cordis-catalog, so this data and the rendered
  * docs cannot diverge.
  *
- * @module @deepseek-ai/dsh-tool-cordis/api-catalog
+ * @module @deepseek-ai/dsh-cordis-host-runner/api-catalog
  */
 
 /* jscpd:ignore-start */

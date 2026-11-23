@@ -106,14 +106,11 @@
       name: '@deepseek-ai/dsh-deliverable-file-references'
 
 # Runtime inspection, as the Desktop standard and Creator presets expose it.
-# The registry and Host providers mount once per process; the directory lists
-# no Client providers because the SDK serves no browser.
+# The runner mounts the registry and its Host providers once per process; the
+# directory lists no Client providers because the SDK serves no browser.
 - insert:
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
-
-    - id: cordis-inspect-providers
-      name: '@deepseek-ai/dsh-tool-cordis/host'
 
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
