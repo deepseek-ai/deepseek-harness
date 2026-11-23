@@ -39,8 +39,9 @@ it('reads each connector as missing, installed, or on, once, and only after the 
   await vi.waitFor(() => { expect(face.hooks.connectors.getSnapshot().status).toBe('ready') })
   expect(listBundles).toHaveBeenCalledOnce()
   expect(face.hooks.connectors.getSnapshot().connectors).toEqual({
-    '@deepseek-ai/dsh-feishu': 'missing', '@deepseek-ai/dsh-wecom': 'missing', '@deepseek-ai/dsh-tencent-meeting': 'missing',
-    '@deepseek-ai/dsh-notion': 'enabled', '@deepseek-ai/dsh-tencent-docs': 'installed', '@deepseek-ai/dsh-linear': 'missing',
+    '@deepseek-ai/dsh-feishu': 'missing', '@deepseek-ai/dsh-wecom': 'missing', '@deepseek-ai/dsh-dingtalk': 'missing',
+    '@deepseek-ai/dsh-tencent-meeting': 'missing', '@deepseek-ai/dsh-notion': 'enabled',
+    '@deepseek-ai/dsh-tencent-docs': 'installed', '@deepseek-ai/dsh-linear': 'missing',
   })
   face.ensure()
   expect(listBundles).toHaveBeenCalledOnce()

@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginTabProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import dingtalk from './assets/dingtalk.svg'
 import feishu from './assets/feishu.svg'
 import linear from './assets/linear.svg'
 import notion from './assets/notion.svg'
@@ -16,8 +17,8 @@ import css from './ConnectorsTab.module.css'
 
 /** Each connector's brand icon, the same file its bundle declares. */
 const ICONS: Readonly<Record<ConnectorId, string>> = {
-  'feishu': feishu, 'wecom': wecom, 'tencent-meeting': tencentMeeting, 'notion': notion, 'tencent-docs': tencentDocs,
-  'linear': linear,
+  'feishu': feishu, 'wecom': wecom, 'dingtalk': dingtalk, 'tencent-meeting': tencentMeeting, 'notion': notion,
+  'tencent-docs': tencentDocs, 'linear': linear,
 }
 
 /** Tab props: the Plugins page's install and open callbacks, the dictionary, and the injected face. */
