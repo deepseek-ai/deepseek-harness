@@ -67,8 +67,7 @@
   },
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml",
-      "listedByDefault": false
+      "patch": "./cordis.patch.yml"
     },
     "client": {
       "inject": [

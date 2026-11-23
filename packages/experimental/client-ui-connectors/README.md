@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop Plugins page. The tab lists the official connectors with their brand icons, installs a missing one at the running DSH version, and opens an installed one's page, where its account is connected. Shipped profiles leave the bundle disabled, and the Plugins page does not list it until it is enabled.
+Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop Plugins page. The tab lists the official connectors with their brand icons, installs a missing one at the running DSH version, and opens an installed one's page, where its account is connected. Shipped profiles leave the bundle disabled, and the Plugins page lists it under Experimental plugins.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Enable Connectors to add a Connectors tab beside Installed on the Web or Desktop
 <a id="use-this-package"></a>
 ## Use this package
 
-In **Plugins → Add plugin**, enter `@deepseek-ai/dsh-client-ui-connectors`, choose **Install**, then **Enable now**. DSH uses the shipped copy without downloading another one. Alternatively, add the name to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed; switching the bundle off removes the tab and hides the bundle's card again. This package has no configuration fields.
+Open **Plugins** and switch on **Connectors** under **Experimental plugins**. Alternatively, add `@deepseek-ai/dsh-client-ui-connectors` to `dsh.profile.bundles` in the target [profile](../../boot/app-boot/README.md#profiles)'s `package.json`. The Connectors tab then appears beside Installed; switching the bundle off removes the tab. This package has no configuration fields.
 
 Each row shows the connector's brand icon, title, and description in the interface language. A connector the profile does not hold shows **Install**, which opens the Plugins install dialog at its check screen with the connector's package at the running DSH version; the dialog offers **Enable now** once the installation finishes. A build that carries no DSH version shows no Install. An installed connector shows **Installed** or **On**; its row opens its page, and that page's Back button returns to the tab. Installed connectors keep their cards and switches on the Installed tab and run whether or not this bundle is enabled.
 

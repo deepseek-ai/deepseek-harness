@@ -867,11 +867,7 @@ describe('web e2e: plugin manager', () => {
       .toMatchObject({ enabled: false, optional: true, availability: 'installation', ...cuaSupported ? {} : { listedByDefault: false } })
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count())
       .toBe(cuaSupported ? 1 : 0)
-    for (const name of [
-      '@deepseek-ai/dsh-experimental-session-search',
-      '@deepseek-ai/dsh-experimental-ralph-bundle',
-      '@deepseek-ai/dsh-client-ui-connectors',
-    ]) {
+    for (const name of ['@deepseek-ai/dsh-experimental-session-search', '@deepseek-ai/dsh-experimental-ralph-bundle']) {
       expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === name))
         .toMatchObject({ enabled: false, optional: true, availability: 'installation', listedByDefault: false })
       expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)
@@ -885,6 +881,7 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-plugin-market-bundle', 1],
       ['@deepseek-ai/dsh-experimental-auto-review', 1],
       ['@deepseek-ai/dsh-experimental-forge-bundle', 1],
+      ['@deepseek-ai/dsh-client-ui-connectors', 1],
       ['@deepseek-ai/dsh-experimental-inspector-profile', 1],
       ...cuaSupported ? [['@deepseek-ai/dsh-cua-bundle', 1]] : [],
       ['@deepseek-ai/dsh-timeline', 1],
@@ -1036,14 +1033,13 @@ describe('web e2e: plugin manager', () => {
     }
   })
 
-  it('enables the default-hidden shipped bundles by name without adding a profile dependency', async () => {
+  it('enables both default-hidden shipped bundles by name without adding a profile dependency', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-manager-bundled-enable'))
     const profileDir = join(scaffold.harnessHome, 'profiles', 'scaffold')
     const before = readProfileManifest('dsh', profileDir).dependencies
     for (const [name, title] of [
       ['@deepseek-ai/dsh-experimental-session-search', '会话搜索'],
       ['@deepseek-ai/dsh-experimental-ralph-bundle', 'Ralph 循环'],
-      ['@deepseek-ai/dsh-client-ui-connectors', '连接器'],
     ] as const) {
       const panel = await openPluginsPanel()
       expect(await panel.locator(`[data-plugin-package="${name}"]`).count()).toBe(0)

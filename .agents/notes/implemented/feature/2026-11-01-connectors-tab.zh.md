@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-实验性可选的 [“连接器”bundle](../../../../packages/experimental/client-ui-connectors/README.zh.md) 默认关闭，并声明 `dsh.bundle.listedByDefault: false`，插件页只在它开启后才列出它。这个 bundle 不组合其他插件，所以 bundle 声明和标签页放在同一个包里：bundle 补丁插入本包自己的一行，这一行的浏览器入口通过 `plugins.tab` 注册“连接器”标签页。入口做成标签页而不是 bundle 详情页，是因为只有标签页的 owner props 带有 `install`，以及打开后能返回该标签页的 `openPackage`；从另一个 bundle 的详情页打开的页面，插件管理器不保留导航栈。
+实验性可选的 [“连接器”bundle](../../../../packages/experimental/client-ui-connectors/README.zh.md) 默认关闭，插件页在“实验性插件”下列出它。这个 bundle 不组合其他插件，所以 bundle 声明和标签页放在同一个包里：bundle 补丁插入本包自己的一行，这一行的浏览器入口通过 `plugins.tab` 注册“连接器”标签页。入口做成标签页而不是 bundle 详情页，是因为只有标签页的 owner props 带有 `install`，以及打开后能返回该标签页的 `openPackage`；从另一个 bundle 的详情页打开的页面，插件管理器不保留导航栈。
 
 标签页和“发现”标签页一样使用插件页现有的能力，不改动插件页，也不改动共享的 bundle 名单。它自带连接器名单、每个连接器在所有随附语言中的名称和简介，以及品牌图标。profile 未持有的连接器显示**安装**，点击后把 `<包名>@<DSH_CLIENT_VERSION>` 交给插件页的安装对话框；已安装的连接器显示是否已开启，点这一行会打开它的详情页。连接器包保持单独安装，不加入 `ON_DEMAND_BUNDLES`；撤掉实验后，所有连接器仍可用 `dsh plugin add` 安装。
 
