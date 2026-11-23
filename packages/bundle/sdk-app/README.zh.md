@@ -50,11 +50,11 @@ Python 运行时向本 profile 提供显式下载的创作资源和 Office sidec
 
 #### 模型看到什么
 
-profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、`plugin_manager`、定时任务工具、共用文件引用说明和时间上下文。子 agent 不能使用定时任务工具。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。每条普通 prompt 像 Web prompt 一样上报时区：传入了客户端的 `timeZone`（Python 中为 `time_zone`）时用它，否则用运行时为这条 prompt 采样的进程时区，因此模型看到 `Browser time zone for this request: <zone>. Interpret otherwise-unqualified dates and times in this zone.`。进程时区既不是 UTC 也不是 IANA Area/Location 名称时（例如 `TZ=GMT` 产生的 `+00:00`），上报 `unavailable`。技能目录总是列出 Office skills；有创作载荷时其 Python 环境说明指向 `load_workspace_dependencies`，没有时指向用户已有的 Python。技能目录还列出 `dsh-doc`，即 Desktop 标准模式、PTC 模式和创造模式列出的 DSH 文档 skill；其用途参见 [Web app](../web-app/README.zh.md#model-experience)。
+profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、`plugin_manager`、`cordis_inspect`、定时任务工具、共用文件引用说明和时间上下文。`cordis_inspect` 与 Desktop 标准模式和创造模式一样读取 Host 运行时 API；SDK 不提供浏览器，因此它的目录不列出 Client provider。子 agent 不能使用定时任务工具。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。每条普通 prompt 像 Web prompt 一样上报时区：传入了客户端的 `timeZone`（Python 中为 `time_zone`）时用它，否则用运行时为这条 prompt 采样的进程时区，因此模型看到 `Browser time zone for this request: <zone>. Interpret otherwise-unqualified dates and times in this zone.`。进程时区既不是 UTC 也不是 IANA Area/Location 名称时（例如 `TZ=GMT` 产生的 `+00:00`），上报 `unavailable`。技能目录总是列出 Office skills；有创作载荷时其 Python 环境说明指向 `load_workspace_dependencies`，没有时指向用户已有的 Python。技能目录还列出 `dsh-doc`，即 Desktop 标准模式、PTC 模式和创造模式列出的 DSH 文档 skill；其用途参见 [Web app](../web-app/README.zh.md#model-experience)。
 
 #### Token 影响
 
-此 profile 添加一句 coding persona、所挂载的工具定义与说明，以及记录在日志中的运行时上下文和时间消息。 即使操作无法获批，`plugin_manager` 的描述和参数 schema 仍增加输入 token；不使用插件管理的嵌入方可禁用该条目。`dsh-doc` 目录项使首个请求增加约 125 个启发式估算 token；其指令和参考资料仅在模型加载该 skill 时进入上下文。
+此 profile 添加一句 coding persona、所挂载的工具定义与说明，以及记录在日志中的运行时上下文和时间消息。 即使操作无法获批，`plugin_manager` 的描述和参数 schema 仍增加输入 token；不使用插件管理的嵌入方可禁用该条目。`cordis_inspect` 的 schema 增加一个工具定义；查询结果仅在模型调用它时进入转录。`dsh-doc` 目录项使首个请求增加约 125 个启发式估算 token；其指令和参考资料仅在模型加载该 skill 时进入上下文。
 
 #### KV Cache 影响
 
