@@ -210,7 +210,7 @@ interface SubagentMemberNames {
 
 `sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 等待整棵树释放；activation 回执的 `dispose()` 仅释放那一次执行。
 
-`selectModel` 使用目标子级的 Session id，以及用户或确切在线祖先权限。选择与图片准入共用子级锁。目标不在线时，在其在线树根下持久写入日志，不激活 Agent，也不运行任务或产生完成通知。远程 `selectModelByUser` 操作检查目标 Session 授权，并保持用户默认值不变。[模型选择规则](../../packages/subagent/subagent/README.zh.md#child-model-choices)定义创建、步骤时序与兼容行为。
+`selectModel` 使用目标子级的 Session id，以及用户或确切在线祖先权限。选择与图片准入共用子级锁。目标不在线时，在其在线树根下以维护方式恢复：不占容量，不发布生命周期事件，不运行任务，也不产生完成通知。远程 `selectModelByUser` 操作检查目标 Session 授权，并保持用户默认值不变。[模型选择规则](../../packages/subagent/subagent/README.zh.md#child-model-choices)定义创建、步骤时序与兼容行为。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */

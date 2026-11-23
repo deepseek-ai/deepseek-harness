@@ -46,4 +46,12 @@ describe('restored child options', () => {
     }
     expect(restorationOptions(partial, RECORDED)).toEqual({ provider: 'initial', reasoningEffort: 'low' })
   })
+
+  it('routes a maintenance restoration through the choice it records only when no saved model exists', () => {
+    const selecting = { provider: 'repair', model: 'chosen', reasoningEffort: brandString<ReasoningEffortId>('high') }
+    expect(restorationOptions(CURRENT, null, selecting)).toEqual(selecting)
+    expect(restorationOptions(CURRENT, RECORDED, selecting)).toEqual({})
+    expect(restorationOptions(HISTORICAL, null, selecting))
+      .toEqual({ provider: 'initial', model: 'historical', reasoningEffort: 'low' })
+  })
 })

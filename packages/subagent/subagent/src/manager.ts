@@ -15,7 +15,7 @@ import type { Agent, AgentOptions, CreateAgentOptions, ModelSelection } from '@d
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
-import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionObservation, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
@@ -112,6 +112,8 @@ type MaterializeInputs = MaterializeBase & (
     agentOptions: AgentOptions
     composition: ChildComposition
     outputSchema?: ObjectJsonSchema | undefined
+    /** Restore only to record durable state; see {@link Activation.maintenance}. */
+    maintenance?: boolean
   }
   | { kind: 'external'; start: (signal: AbortSignal) => Promise<SubagentRun> }
 )
@@ -660,7 +662,9 @@ export class SubagentManager {
   }
 
   /**
-   * Record a child's next selection without waking it or changing user defaults.
+   * Record a child's next selection without running it or changing user defaults.
+   * A cold child is restored for maintenance only: it holds no capacity slot,
+   * publishes no lifecycle events, admits no input, and closes before return.
    * @param childId - durable continuable child Session id.
    * @param selection - complete selection; omitted effort follows adapter defaults.
    * @param authority - trusted user operation or exact live creation ancestor.
@@ -691,36 +695,19 @@ export class SubagentManager {
           signal.throwIfAborted()
           this.authorizeSelection(childId, root, ancestors, authority)
           const activation = this.resident.get(childId)
-          if (activation !== undefined) {
-            if (activation.root !== root) throw new SubagentError('target belongs to another subagent tree', 'UNAUTHORIZED')
-            const { handle } = requireLocalActivation(activation)
+          if (activation === undefined) {
             await this.validateModelSelection(this.ctx, selected, signal)
-            signal.throwIfAborted()
-            this.authorizeSelection(childId, root, activation.ancestors, authority)
-            if (activation.closing !== undefined) return { closing: activation.closing }
-            const persistence = this.requirePersistence()
-            const session = handle.agent.session
-            const before = session.seq
-            try {
-              handle.agent.model.select(selected)
-              const appended = session.seq > before
-              const recordedSeq = appended ? before : session.seq - 1
-              if (!await handle.agent.ctx.sessions.flush(session)) {
-                throw new Error('no Session durability listener participated')
-              }
-              await using stored = await persistence.open(childId, 'read')
-              const { events } = await stored.read(recordedSeq, 1)
-              const event = events[0]
-              if (!isDeepStrictEqual(stored.header, session.header) || event?.seq !== recordedSeq
-                || (appended && (event.type !== 'model/selection' || !isDeepStrictEqual(event.data, selected)))) {
-                throw new Error('the recorded selection is not present in the durable child log')
-              }
-            } catch (error: unknown) {
-              throw this.selectionPersistenceFailure(childId, error)
-            }
-          } else {
-            await this.selectColdModel(childId, selected, root, authority, signal)
+            const restored = await this.restoreTarget(root, childId, signal, selected)
+            await this.selectWhileMaintained(restored, selected, root, authority)
+            return { selected }
           }
+          if (activation.root !== root) throw new SubagentError('target belongs to another subagent tree', 'UNAUTHORIZED')
+          const { handle } = requireLocalActivation(activation)
+          await this.validateModelSelection(this.ctx, selected, signal)
+          signal.throwIfAborted()
+          this.authorizeSelection(childId, root, activation.ancestors, authority)
+          if (activation.closing !== undefined) return { closing: activation.closing }
+          await this.recordSelection(handle.agent, selected)
           return { selected }
         })
         if ('selected' in result) return result.selected
@@ -756,39 +743,58 @@ export class SubagentManager {
     }
   }
 
-  /** Update a cold log under its exclusive writer without allocating an Activation. */
-  private async selectColdModel(
-    childId: SessionId, selection: ModelSelection, root: Agent,
-    authority: SubagentInterruptAuthority, signal: AbortSignal,
+  /**
+   * Record a choice through a maintenance restoration and begin its release
+   * from the idle phase it owns. Input that reaches the Agent meanwhile cannot
+   * start a turn, and the release cancels it.
+   */
+  private async selectWhileMaintained(
+    activation: Activation, selection: ModelSelection, root: Agent, authority: SubagentInterruptAuthority,
   ): Promise<void> {
-    using source = await this.observeContinuation(childId, signal)
-    const descriptor = foldSubagentDescriptor(source.events.slice(source.inheritedEventCount))
-    if (descriptor?.mode !== 'continuable') {
-      throw new SubagentError('subagent has no supported continuation state', 'NOT_RESUMABLE')
-    }
-    const { ancestors } = await this.resolveCreationAncestry(source, signal, root)
-    this.authorizeSelection(childId, root, ancestors, authority)
-    await this.validateModelSelection(this.ctx, selection, signal)
-    signal.throwIfAborted()
-    this.authorizeSelection(childId, root, ancestors, authority)
-    let writeStarted = false
+    let closed: Promise<void> | undefined
+    const close = (): Promise<void> => closed ??= this.close(activation, () => this.finishDisposal(activation, false))
     try {
-      await using handle = await this.requirePersistence().open(childId, 'write', { signal })
-      const { events } = await handle.read(undefined, undefined, { signal })
-      const currentDescriptor = foldSubagentDescriptor(events.slice(handle.inheritedEventCount))
-      if (currentDescriptor?.mode !== 'continuable') {
-        throw new SubagentError('subagent has no supported continuation state', 'NOT_RESUMABLE')
+      const { agent } = requireLocalActivation(activation).handle
+      await agent.runMaintenance(async () => {
+        try {
+          this.authorizeSelection(activation.childId, root, activation.ancestors, authority)
+          await this.recordSelection(agent, selection)
+        } finally {
+          // Begin release while this task owns the idle phase; the outer finally observes its outcome.
+          void close().catch(() => undefined)
+        }
+      })
+    } finally {
+      try {
+        await close()
+      } catch (error: unknown) {
+        // The selection outcome is already settled; release failure is reported separately.
+        this.reportTeardownFailure(activation, error)
       }
-      signal.throwIfAborted()
-      this.authorizeSelection(childId, root, ancestors, authority)
-      writeStarted = true
-      await handle.append([{ type: 'model/selection', data: selection, seq: SessionSeq(events.length), time: Date.now() }])
-      // close joins provider withdrawal's same durability barrier if it began
-      // while append was in flight; a later flush would use a closing handle.
-      await handle.close()
+    }
+  }
+
+  /** Append a choice through the child's live Session and confirm it in the durable log. */
+  private async recordSelection(agent: Agent, selection: ModelSelection): Promise<void> {
+    const persistence = this.requirePersistence()
+    const session = agent.session
+    const before = session.seq
+    try {
+      agent.model.select(selection)
+      const appended = session.seq > before
+      const recordedSeq = appended ? before : session.seq - 1
+      if (!await agent.ctx.sessions.flush(session)) {
+        throw new Error('no Session durability listener participated')
+      }
+      await using stored = await persistence.open(agent.id, 'read')
+      const { events } = await stored.read(recordedSeq, 1)
+      const event = events[0]
+      if (!isDeepStrictEqual(stored.header, session.header) || event?.seq !== recordedSeq
+        || (appended && (event.type !== 'model/selection' || !isDeepStrictEqual(event.data, selection)))) {
+        throw new Error('the recorded selection is not present in the durable child log')
+      }
     } catch (error: unknown) {
-      if (writeStarted) throw this.selectionPersistenceFailure(childId, error)
-      throw error
+      throw this.selectionPersistenceFailure(agent.id, error)
     }
   }
 
@@ -803,7 +809,7 @@ export class SubagentManager {
 
   /** Admit local input synchronously before any teardown can begin. */
   private deliver(activation: Activation, message: UserMessage, delivery: SubagentDelivery): void {
-    if (activation.closing !== undefined) {
+    if (activation.closing !== undefined || activation.maintenance) {
       throw new SubagentError(
         'subagent activation is being disposed; the message was not accepted',
         'ACTIVATION_CLOSING',
@@ -875,8 +881,10 @@ export class SubagentManager {
   private materialize(inputs: MaterializeInputs): Promise<Activation> {
     this.assertAdmitting(inputs.root)
     inputs.signal.throwIfAborted()
-    const pool = this.rootPool(inputs.root)
-    const releaseSlot = pool.reserve(this.maxActiveSubagents())
+    // Maintenance runs no work, so it does not compete for execution capacity.
+    const releaseSlot = inputs.kind === 'local' && inputs.maintenance === true
+      ? () => {}
+      : this.rootPool(inputs.root).reserve(this.maxActiveSubagents())
     return this.materializeTracked(inputs, releaseSlot).catch((error: unknown) => {
       releaseSlot()
       throw error
@@ -1069,6 +1077,7 @@ export class SubagentManager {
       result: Promise.withResolvers<SubagentResult>(),
       closing: undefined,
       accepted: false,
+      maintenance: inputs.kind === 'local' && inputs.maintenance === true,
     }
     void activation.result.promise.catch(() => undefined)
     this.resident.set(childId, activation)
@@ -1095,7 +1104,7 @@ export class SubagentManager {
       }
       // Listeners may read the resident Agent or drain it immediately. Publish
       // after residency and inbox listeners, as the last rollback-protected step.
-      this.host.emitLifecycle('subagent/start', this.runInfo(activation), root)
+      if (!activation.maintenance) this.host.emitLifecycle('subagent/start', this.runInfo(activation), root)
     } catch (error: unknown) {
       /* v8 ignore next -- rollback failure must not mask the admission failure
        * that prevented this operation from returning an accepted message id. */
@@ -1286,11 +1295,13 @@ export class SubagentManager {
     this.notifySettlement(activation, result)
     // The sole end publication follows resource release and parent notification,
     // before result delivery.
-    this.host.emitLifecycle('subagent/end', {
-      ...this.runInfo(activation),
-      stopReason: terminal.stopReason,
-      ...terminal.output.length === 0 ? {} : { lastAssistantMessage: terminal.output },
-    }, activation.root)
+    if (!activation.maintenance) {
+      this.host.emitLifecycle('subagent/end', {
+        ...this.runInfo(activation),
+        stopReason: terminal.stopReason,
+        ...terminal.output.length === 0 ? {} : { lastAssistantMessage: terminal.output },
+      }, activation.root)
+    }
     if (resultFailure === undefined) activation.result.resolve(result)
     else activation.result.reject(resultFailure.error)
     if (failure !== undefined) throw failure
@@ -1391,8 +1402,18 @@ export class SubagentManager {
     }
   }
 
-  /** Reconstruct only the target under its subagent tree root; the caller owns acceptance or rollback. */
-  private async restoreTarget(root: Agent, childId: SessionId, signal: AbortSignal): Promise<Activation> {
+  /**
+   * Reconstruct only the target under its subagent tree root; the caller owns
+   * acceptance or rollback. A selection restores it for maintenance instead.
+   * @param root - exact live subagent tree root that owns the child.
+   * @param childId - durable continuable child Session id.
+   * @param signal - cancellation through publication.
+   * @param maintenanceSelection - choice being recorded; it also supplies the route of a child that has none.
+   * @returns the published Activation.
+   */
+  private async restoreTarget(
+    root: Agent, childId: SessionId, signal: AbortSignal, maintenanceSelection?: ModelSelection,
+  ): Promise<Activation> {
     return this.trackStartup(root, signal, async (signal) => {
       using source = await this.observeContinuation(childId, signal)
       this.assertAdmitting(root)
@@ -1414,7 +1435,16 @@ export class SubagentManager {
         )
       }
       const { ancestors, path } = await this.resolveCreationAncestry(source, signal, root)
-      const agentOptions = restorationOptions(descriptor, source.projections?.values.modelSelection?.next)
+      // Releasing a maintenance restoration cancels queued input, so leave pending input to an execution.
+      const pending = source.projections?.values.inbox
+      if (maintenanceSelection !== undefined && pending !== undefined
+        && pending['next-turn'].length + pending['next-step'].length > 0) {
+        throw new SubagentError(
+          `subagent "${childId}" has pending input; continue it before changing its model`,
+          'CONTINUATION_UNAVAILABLE',
+        )
+      }
+      const agentOptions = restorationOptions(descriptor, source.projections?.values.modelSelection?.next, maintenanceSelection)
       let activation: Activation
       try {
         const projectedPreset = source.projections?.values.agentPreset
@@ -1436,6 +1466,7 @@ export class SubagentManager {
             toolFilter: descriptor.toolFilter,
           },
           signal,
+          maintenance: maintenanceSelection !== undefined,
         })
       } catch (error: unknown) {
         signal.throwIfAborted()

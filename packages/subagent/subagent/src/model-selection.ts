@@ -27,15 +27,18 @@ export function requireInitialModel(options: AgentOptions): ModelSelection {
  * route applies only when that log records neither a choice nor a request.
  * @param descriptor - continuable descriptor from the child's own log.
  * @param recorded - the observed log's next choice, or none.
- * @returns Agent options carrying the descriptor's historical route, if any.
- * @throws {SubagentError} with NOT_RESUMABLE when neither source supplies a complete model.
+ * @param selecting - choice a maintenance restore is about to record; it supplies the route only when neither source has one.
+ * @returns Agent options carrying the descriptor's historical route or the selecting choice, if any.
+ * @throws {SubagentError} with NOT_RESUMABLE when no source supplies a complete model.
  */
 export function restorationOptions(
   descriptor: ContinuableSubagentDescriptorData,
   recorded: ModelSelection | null | undefined,
+  selecting?: ModelSelection,
 ): AgentOptions {
   const { agentProvider: provider, agentModel: model, agentReasoningEffort: reasoningEffort } = descriptor
   if (recorded == null && (!provider || !model)) {
+    if (selecting !== undefined) return { ...selecting }
     throw new SubagentError(
       'subagent has no complete saved model selection and cannot be resumed; select its model or create a new child',
       'NOT_RESUMABLE',

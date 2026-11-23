@@ -1632,10 +1632,13 @@ describe('headless recorded-session snapshots', () => {
                 .toEqual(['deepseek-v4-pro', 'deepseek-v4-flash'])
               expect(childEvents.filter(event => event.type === 'turn/end').map(event => event.data.reason.kind))
                 .toEqual(['completed', 'completed'])
+              // The maintenance restoration records the resume marker and resume-time policy facts, then the choice.
               const legacyEvents = parseSessionLog(actualLogs[2]!.content)
-              expect(legacyEvents.map(event => event.type)).toEqual(['subagent/descriptor', 'model/selection'])
+              expect(legacyEvents.map(event => event.type)).toEqual([
+                'subagent/descriptor', 'session/end-seed', 'permission/preset', 'sandbox/mode', 'approval/policy', 'model/selection',
+              ])
               expect(legacyEvents[0]?.data).toEqual({ version: 3, mode: 'continuable', provider: 'spawn', label: 'Legacy child' })
-              expect(legacyEvents[1]?.data).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+              expect(legacyEvents.at(-1)?.data).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
             }
             if (scenario.name === 'subagent-depth-two-rejection') {
               expect(actualLogs).toHaveLength(3)

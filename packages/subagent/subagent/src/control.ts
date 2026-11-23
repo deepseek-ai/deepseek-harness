@@ -153,7 +153,6 @@ export function rejectModelSelection(error: unknown, childSessionId: SessionId, 
         )
       case 'DRAINING':
       case 'ACTIVATION_CLOSING':
-      case 'ACTIVATION_LIMIT_REACHED':
       case 'CONTINUATION_UNAVAILABLE':
       case 'PERSISTENCE_UNAVAILABLE':
         throw new RemoteError(

@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### Activation 容量
 
-在 Host 插件上设置 `maxActiveSubagents`，限制每棵 subagent 树中在线和正在创建的子级数量。默认值为 `8`，接受正安全整数。顶层父级建立由本地和外部后代共享的池，根父级不占名额。新建和冷恢复在让出执行前预留名额，资源释放完成后才归还。有待处理收件箱内容以及正在停止的 activation 仍计入容量；向驻留子级发送消息复用其名额。委派深度是独立策略。
+在 Host 插件上设置 `maxActiveSubagents`，限制每棵 subagent 树中在线和正在创建的子级数量。默认值为 `8`，接受正安全整数。顶层父级建立由本地和外部后代共享的池，根父级不占名额。新建和冷恢复在让出执行前预留名额，资源释放完成后才归还。为选模型进行的维护恢复不预留名额。有待处理收件箱内容以及正在停止的 activation 仍计入容量；向驻留子级发送消息复用其名额。委派深度是独立策略。
 
 调用方通过 `ctx.subagents.maxActiveSubagents` 读取当前上限；每次新建或冷恢复 Activation 前，准入也读取同一个值。调高后已有树可接纳更多子代理；调低后驻留子代理继续运行，使用量降至上限以下前拒绝新接纳。
 
@@ -84,7 +84,7 @@ kind: "package-reference"
 
 `selectModel(childId, selection, authority, signal)` 校验并为可继续子级记录完整选择。Agent 调用方需要与中断相同的确切在线祖先权限；远程 `selectModelByUser` 操作则要求目标 Session 上的授权。两者都要求树根在线，不改变用户默认值，并把选择操作与图片能力检查到收件箱准入串行执行。外部执行不支持后续选择；创建时支持 `agentOptions` 不代表具有此能力。被拒绝的选择保留 `LlmError`；`selectModelByUser` 以 `subagent/model-unavailable` 返回，并保留 LLM 消息。
 
-为冷子级选模型时，在验证 descriptor 和创建链后写入并刷盘已有日志。完整的新选择可以补足受支持子级日志中缺失的模型。它不创建 Agent 或 Activation，不占容量，不执行排队输入，也不发送完成通知。后续继续执行恢复已保存的选择。Session 持久化屏障完成后才返回成功。取消、失效权限、无效选择或不可用的持久化服务都会使操作失败。`PERSISTENCE_UNCONFIRMED`（远程为 `subagent/model-selection-unconfirmed`）表示选择可能已改变，但无法确认持久化；重试前应重新加载子级状态。
+为冷子级选模型时，在其在线树根下以维护方式恢复子级，通过恢复出的 Agent 记录选择，并在返回前释放它。这次恢复不占容量，不发布 `subagent/start` 或 `subagent/end`，不运行轮次，不发送完成通知，并拒绝经由 manager 投递的输入；直接发给该 Agent 的输入会随它一起被取消。有待处理输入的子级会以 `CONTINUATION_UNAVAILABLE` 拒绝，这些输入留给下一次执行。完整的新选择也可以补足受支持子级日志中缺失的模型。每次恢复都会在选择之前记录普通的 `session/end-seed` 恢复标记。后续继续执行恢复已保存的选择。Session 持久化屏障完成后才返回成功。取消、失效权限、无效选择或不可用的持久化服务都会使操作失败。`PERSISTENCE_UNCONFIRMED`（远程为 `subagent/model-selection-unconfirmed`）表示选择可能已改变，但无法确认持久化；重试前应重新加载子级状态。
 
 ### 消息、中断与发现
 

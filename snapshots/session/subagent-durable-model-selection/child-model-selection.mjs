@@ -68,9 +68,9 @@ export function apply(ctx) {
       const legacyReader = await ctx.sessionPersistence.open(legacyId, 'read')
       try {
         const { events: repaired } = await legacyReader.read()
-        assert.equal(repaired.length, 2)
         assert.equal(repaired[0].data.version, 3)
-        assert.deepEqual(repaired[1].data, selected)
+        assert.deepEqual(repaired.at(-1).data, selected)
+        assert.equal(repaired.some(event => event.type === 'turn/start' || event.type === 'request/header'), false)
       } finally {
         await legacyReader.close()
       }

@@ -367,7 +367,6 @@ describe('subagent model selection Remote', () => {
       ['NOT_CONTINUABLE', 'subagent/not-resumable'],
       ['DRAINING', 'subagent/model-selection-unavailable'],
       ['ACTIVATION_CLOSING', 'subagent/model-selection-unavailable'],
-      ['ACTIVATION_LIMIT_REACHED', 'subagent/model-selection-unavailable'],
       ['CONTINUATION_UNAVAILABLE', 'subagent/model-selection-unavailable'],
       ['PERSISTENCE_UNAVAILABLE', 'subagent/model-selection-unavailable'],
     ]
