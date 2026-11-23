@@ -65,11 +65,6 @@
       ".text :global(.textLayer) > :not(:global(.markedContent))": 1
     }
   },
-  "packages/client/ui-sidebar-files/src/client/FilesBody.module.css": {
-    "unkeyed-costly-subject": {
-      "[data-files-navigator-row] > :not(.navigator)": 1
-    }
-  },
   "packages/client/ui-sidebar/src/client/SidebarRoot.module.css": {
     "has-outside-subject": {
       ".panelEntry:has(:focus-visible) .panelUnpin": 1,

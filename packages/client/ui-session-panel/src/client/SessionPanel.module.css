@@ -445,7 +445,7 @@
 }
 
 /* A shared menu button renders nothing while its target has no menu entries. */
-.panel :where([data-session-panel-row] > [data-row-part='menu']:empty) {
+.panel :where([data-session-panel-row] > [data-row-part='menu']:is(:empty, :has(> [data-slot-factory]:only-child:empty))) {
   display: none;
 }
 
@@ -471,7 +471,10 @@
 }
 
 @media (hover: hover) {
-  .panel :where([data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty)):hover) {
+  .panel :where([data-session-panel-row]:hover:is(
+    :has(> button[data-row-part='body']),
+    :has(> [data-row-part='menu']:not(:empty)):not(:has(> [data-row-part='menu'] > [data-slot-factory]:only-child:empty))
+  )) {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 

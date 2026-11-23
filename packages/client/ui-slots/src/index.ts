@@ -683,8 +683,10 @@ type FactoryField<
   Value,
 > = K extends keyof SlotFactoryMap[F] ? { [P in K]-?: Value } : { [P in K]?: never }
 
+type FactoryOutletSpec<S extends SlotScope = SlotScope> = { scope: S; inline?: true }
+
 type RuntimeFactorySlots<F extends keyof SlotFactoryMap & string> = {
-  [N in FactoryLocalNameOf<F>]: { scope: FactoryLocalDefOf<F, N>['scope'] }
+  [N in FactoryLocalNameOf<F>]: FactoryOutletSpec<FactoryLocalDefOf<F, N>['scope']>
 }
 
 type FactoryInjectCollisionKeys<F extends keyof SlotFactoryMap & string> = Extract<
@@ -751,8 +753,8 @@ type FactoryChildrenCheck<F extends keyof SlotFactoryMap & string> =
 /** Registration options checked against the complete declaration-merged Factory definition. */
 export type RegisterFactoryOptions<F extends keyof SlotFactoryMap & string> = {
   name: F
-  scope: FactoryDefOf<F>['scope']
-} & FactoryField<F, 'children', FactoryChildrenOf<F>>
+} & FactoryOutletSpec<FactoryDefOf<F>['scope']>
+  & FactoryField<F, 'children', FactoryChildrenOf<F>>
   & FactoryField<F, 'store', FactoryStoreOf<F> | (() => FactoryStoreOf<F>)>
   & FactoryField<F, 'inject', (...args: FactoryInjectParams<F>) => FactoryInjectOf<F>>
   & FactoryField<F, 'locale', FactoryLocaleOf<F>>
@@ -778,11 +780,12 @@ export interface StoredFactory {
   readonly name: string
   readonly component: unknown
   readonly scope: SlotScope
+  readonly inline?: true
   readonly children?: Readonly<Record<string, SlotSpec<SlotEntryDef>>> | undefined
   readonly store?: StoreDecl | undefined
   readonly inject?: ((...args: never[]) => Record<string, unknown>) | undefined
   readonly locale?: string | undefined
-  readonly slots?: Readonly<Record<string, { scope: SlotScope }>> | undefined
+  readonly slots?: Readonly<Record<string, FactoryOutletSpec>> | undefined
   /** Diagnostics label of who registered the definition. */
   readonly registrant?: string | undefined
 }
@@ -1081,16 +1084,7 @@ export class SlotCore {
 
   /** Register one reusable Factory definition. */
   readonly registerFactory: RegisterFactory = ((rawOptions: object, component: unknown): (() => void) => {
-    const options = rawOptions as {
-      name: string
-      scope: SlotScope
-      children?: Record<string, SlotSpec<SlotEntryDef>>
-      store?: StoreDecl
-      inject?: (...args: never[]) => Record<string, unknown>
-      locale?: string
-      slots?: Record<string, { scope: SlotScope }>
-      registrant?: string
-    }
+    const options = rawOptions as Omit<StoredFactory, 'component'>
     const record = this.factoryRecord(options.name)
     if (record.definition !== undefined) {
       throw new Error(`slot factory "${options.name}" already has a definition`)
@@ -1114,6 +1108,7 @@ export class SlotCore {
       name: options.name,
       component,
       scope: options.scope,
+      ...(options.inline === undefined ? {} : { inline: options.inline }),
       ...(options.children === undefined ? {} : { children: options.children }),
       ...(options.store === undefined ? {} : { store: options.store }),
       ...(options.inject === undefined ? {} : { inject: options.inject }),
