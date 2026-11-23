@@ -1,4 +1,4 @@
-/** Production styles keep oversized floating panels aligned with their triggers. */
+/** Production styles keep floating panels aligned with their triggers across size and scroll changes. */
 import { readFile } from 'node:fs/promises'
 import { chromium, webkit } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
@@ -18,6 +18,44 @@ const PANELS = [
   { file: 'client/ui-plugin-manager/src/client/PluginManagerPage.module.css', classes: 'registry', align: 'end' },
   { file: 'experimental/session-inspector/src/client/views/inspector.module.css', classes: 'typeFilterPanel', align: 'start' },
 ] as const
+
+const COMPOSER_PANELS = PANELS.filter(panel => /(?:ContextMeter|stat-dialog)/.test(panel.file))
+
+it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
+  'keeps composer panels on a sticky trigger while the transcript grows ($name)', async ({ engine }) => {
+    const browser = await engine.launch()
+    onTestFinished(() => browser.close())
+    const page = await browser.newPage({ viewport: { width: 1000, height: 600 } })
+    expect(COMPOSER_PANELS).toHaveLength(2)
+    for (const panel of COMPOSER_PANELS) {
+      const css = await readFile(new URL(`../../../packages/${panel.file}`, import.meta.url), 'utf8')
+      // The transcript and sticky seat are synthetic; the panel placement comes from its owner.
+      await page.setContent(`<style>${css}
+      html, body { margin: 0; height: 100%; }
+      #scroller { height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+      #transcript { flex: none; }
+      #transcript p { margin: 0; height: 40px; }
+      #seat { position: sticky; bottom: 0; flex: none; height: 120px; margin-top: auto; }
+      #trigger { position: absolute; left: 400px; top: 60px; width: 100px; height: 28px; anchor-name: --probe; }
+      #content { height: 80px; width: 180px; }
+      </style><div id="scroller"><div id="transcript">${'<p></p>'.repeat(30)}</div>
+        <div id="seat"><button id="trigger">Trigger</button></div></div>
+      <div id="panel" class="${panel.classes}" style="position-anchor: --probe"><div id="content">Details</div></div>`)
+      await page.locator('#scroller').evaluate((node) => { node.scrollTop = node.scrollHeight })
+      const gap = () => page.evaluate(() => {
+        const trigger = document.querySelector('#trigger')!.getBoundingClientRect()
+        const card = document.querySelector('#panel')!.getBoundingClientRect()
+        return { above: Math.round(trigger.top - card.bottom), left: Math.round(card.left - trigger.left) }
+      })
+      await expect.poll(gap, { message: `${engine.name()}: ${panel.file} opened` }).toEqual({ above: 8, left: 0 })
+      // Streaming output appends below the reader's scroll position while the seat stays stuck.
+      for (let index = 0; index < 5; index++) {
+        await page.locator('#transcript').evaluate((node) => { node.append(document.createElement('p')) })
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      }
+      await expect.poll(gap, { message: `${engine.name()}: ${panel.file} after output` }).toEqual({ above: 8, left: 0 })
+    }
+  })
 
 it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
   'retains horizontal anchors when tall panels exhaust both sides ($name)', async ({ engine }) => {

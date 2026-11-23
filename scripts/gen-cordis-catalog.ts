@@ -39,7 +39,7 @@ import { rewriteTranslationLinkLocales } from './translation-links.ts'
 const root = resolve(import.meta.dirname, '..')
 const SUBSYSTEMS_DIR = 'docs/subsystems'
 const OUT_INHERITED = 'docs/cordis-api/inherited.md'
-const OUT_RUNTIME_API = 'packages/extensions/tool-cordis/src/api-catalog.ts'
+const OUT_RUNTIME_API = 'packages/extensions/cordis-host-runner/src/api-catalog.ts'
 
 export { REGION_BEGIN, REGION_END }
 

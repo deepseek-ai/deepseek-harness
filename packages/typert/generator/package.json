@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-tools": "workspace:*",
-    "@deepseek-ai/dsh-tool-cordis": "workspace:*",
+    "@deepseek-ai/dsh-cordis-host-runner": "workspace:*",
     "@deepseek-ai/dsh-typert-registry": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "zod": "4.6.6"

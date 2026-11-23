@@ -169,14 +169,10 @@
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
 
+    # Inspection registry plus the process-global Host inspect providers that
+    # every preset's `tool-cordis` row reads.
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
-
-    # The Host inspect providers are process-global: the registry rejects a
-    # duplicate id, so they register here once and every preset's `tool-cordis`
-    # row reads them.
-    - id: cordis-inspect-providers
-      name: '@deepseek-ai/dsh-tool-cordis/host'
 
     # Ordinary provider for the parsed Web flags. Its plugin-level injection
     # waits for cmdlineArgs; no launcher metadata or special row kind is needed.

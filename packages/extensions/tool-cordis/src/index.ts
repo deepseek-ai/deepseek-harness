@@ -1,6 +1,8 @@
 /** Read-only Host and Client runtime API discovery for plugin development. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+// Declares `Context.cordisInspect`, the registry whose Host providers the runner registers.
+import type {} from '@deepseek-ai/dsh-cordis-host-runner'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -14,7 +16,7 @@ function requireAgent(exec: ToolExecution): Agent {
   return exec.agent
 }
 
-/** Register runtime inspection over the Host providers registered once per process.
+/** Register runtime inspection over the Host providers that the Cordis host runner registers once per process.
  * @param ctx Agent-scoped registration context.
  */
 export function apply(ctx: Context): void {
