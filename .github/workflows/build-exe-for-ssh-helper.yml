@@ -72,7 +72,7 @@ jobs:
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: '^24.22.3'
           cache: pnpm
       - uses: actions/cache@v4
         with:

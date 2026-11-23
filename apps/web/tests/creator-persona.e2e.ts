@@ -13,7 +13,7 @@ const CUSTOMIZATION_INTENT = 'You help the user customize DeepSeek Harness itsel
 it('sends the Creator customization intent without taking actions for an ordinary request', async () => {
   const scaffold = await launchWebScaffold({
     replayFixture: FIXTURE, compareReplaySession: true, paceMs: 10,
-    agentPresets: { default: 'cordis' },
+    actionCards: true, agentPresets: { default: 'cordis' },
   })
   try {
     const browser = await chromium.launch()
@@ -45,6 +45,12 @@ it('sends the Creator customization intent without taking actions for an ordinar
         heuristicTokens: scaffold.ctx.tokenMeter.estimateMessage(system)
           - scaffold.ctx.tokenMeter.estimateMessage({ ...system, content: [{ type: 'text', text: sharedPrompt }] }),
       })
+      const catalog = agent.session.snapshotEvents().flatMap(event =>
+        event.type === 'user/message' && event.data.source.kind === 'skill-catalog'
+          ? event.data.source.entries.map(entry => entry.name) : [])
+      expect(catalog).toContain('dsh-doc')
+      expect(catalog).not.toContain('official-plugins')
+      expect(catalog).not.toContain('personalized-pages')
       expect(agent.session.snapshotEvents().filter(event => event.type === 'tool/call')).toEqual([])
       await page.getByText('READY', { exact: true }).waitFor()
     } finally {

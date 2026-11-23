@@ -632,7 +632,7 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   const requests: Record<string, unknown>[] = []
   const toolUses = [
     ...enabled ? [{ type: 'tool_use', id: 'workspace-dependencies', name: 'load_workspace_dependencies', input: {} } as const] : [],
-    { type: 'tool_use', id: 'office-docx', name: 'skill', input: { name: 'office-docx' } } as const,
+    { type: 'tool_use', id: 'office', name: 'skill', input: { name: 'office' } } as const,
   ]
   const server = createServer((request, response) => {
     let body = ''
@@ -693,14 +693,13 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   // Loading an Office skill declares the Office tools from the following request.
   expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(officeTools)
   expect(names).not.toContain('render_document')
-  for (const name of ['office-docx', 'office-pptx', 'office-xlsx']) {
-    expect(JSON.stringify(requests[0]!.messages)).toContain(name)
-  }
+  expect(JSON.stringify(requests[0]!.messages)).not.toMatch(/office-(?:docx|pptx|xlsx)/u)
   expect(requests).toHaveLength(toolUses.length + 1)
   const messages = requests.at(-1)!.messages as { content: { type: string; tool_use_id?: string; content?: unknown }[] }[]
-  const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office-docx'))
-  const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office-docx').split(sep).join('/')
+  const skill = JSON.stringify(messages.flatMap(message => message.content).find(block => block.tool_use_id === 'office'))
+  const skillDirectory = join(mode === 'python-only-patched' ? patchedSkills : packagedSkills, 'office').split(sep).join('/')
   expect(skill).toContain(JSON.stringify(`Base directory for this skill: ${skillDirectory}`).slice(1, -1))
+  expect(skill).toContain('# Office tasks')
   expect(skill).toContain('## Python environment')
   expect(skill.includes('Otherwise call `load_workspace_dependencies`')).toBe(enabled)
   expect(skill.includes('`python3` or `python` on PATH')).toBe(!enabled)

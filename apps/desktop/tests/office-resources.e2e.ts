@@ -11,7 +11,7 @@ import { builtHost, prepareDesktopHome } from './harness.ts'
 afterEach(() => { vi.unstubAllEnvs() })
 
 const SKILL_PROBE = 'desktop-office-skill-probe'
-const OFFICE_SKILLS = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+const OFFICE_SKILLS = ['office']
 
 /** Add a test-only profile bundle whose route reports the Host registry's Office skills through the real Loader. */
 function installSkillProbe(profile: string): void {
@@ -21,6 +21,8 @@ function installSkillProbe(profile: string): void {
     name: SKILL_PROBE, version: '1.0.0', type: 'module', exports: './index.js', dsh: { bundle: { patch: './bundle.yml' } },
   }))
   writeFileSync(join(plugin, 'index.js'), `
+import { readdir } from 'node:fs/promises'
+
 export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/${SKILL_PROBE}', async handler(_request, response) {
     try {
@@ -30,9 +32,10 @@ export function apply(ctx) {
         const skill = listed.has(name) ? await ctx.skills.get(name) : undefined
         return { name, bytes: skill?.content.length ?? 0 }
       }))
-      const content = {}
-      for (const name of ['office', 'office-docx']) content[name] = (await ctx.skills.get(name))?.content ?? null
-      response.end(JSON.stringify({ names, content, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
+      const office = await ctx.skills.get('office')
+      const content = { office: office?.content ?? null }
+      const resources = office?.resourceBase?.kind === 'directory' ? await readdir(office.resourceBase.path) : null
+      response.end(JSON.stringify({ names, content, resources, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))
@@ -77,6 +80,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       const skills = JSON.parse(body) as {
         names: string[]
         content: Record<string, string | null>
+        resources: string[] | null
         loaded: { name: string; bytes: number }[]
         officeKit: boolean
         tools: string[]
@@ -87,7 +91,9 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       expect(skills.tools).toEqual([])
       // skill-office reads the skills from its packaged assets, independent of the primary runtime directory.
       expect(skills.names.toSorted()).toEqual(OFFICE_SKILLS)
-      expect(skills.content['office-docx']).toEqual(expect.any(String))
+      // The advertised resource directory holds only the skill file.
+      expect(skills.resources).toEqual(['SKILL.md'])
+      expect(skills.content.office).toContain('# Office tasks')
       expect(skills.content.office).toContain('`office_render`')
       expect(failures).toEqual([])
     } finally {

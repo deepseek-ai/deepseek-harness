@@ -28,6 +28,7 @@ export const en = {
   loading: 'Loading remote connection',
   creating: 'Creating login code',
   cancelling: 'Cancelling login code',
+  /** Additional lines in this notice appear as numbered steps. */
   'unreachable-host': 'This address cannot be used to sign in from another device; configure a reachable address, such as a LAN address or an already configured public or VPN address.',
   'untrusted-host': 'Allow this address in the Host’s trusted hosts before using either login method.',
   loadFailed: 'Could not load remote connection settings. Try again.',
@@ -66,7 +67,11 @@ export const zh: Record<RemoteConnectionLocaleKey, string> = {
   loading: '正在加载远程连接',
   creating: '正在生成登录二维码',
   cancelling: '正在取消登录二维码',
-  'unreachable-host': '当前地址不能用于其他设备登录，请配置其他设备可访问的地址，例如能连通的局域网地址或已配置的公网、VPN 地址',
+  'unreachable-host': [
+    '当前地址无法用于跨设备登录。请用另一台设备能访问的地址重新启动服务。',
+    '两台设备在同一局域网时，可用局域网 IP。',
+    '通过 VPN 或公网访问时，可用已开通访问的 VPN 地址或公网 IP。',
+  ].join('\n'),
   'untrusted-host': '请先将此访问地址加入 Host 的可信主机配置，才能使用下方的登录方式',
   loadFailed: '无法加载远程连接设置，请重试',
   createFailed: '无法确认二维码是否生成，可能仍有有效二维码；生成新二维码会将其替换',

@@ -38,7 +38,7 @@ English | [中文](2026-10-11-user-text-credential-matching.zh.md)
 
 ### Performance gate
 
-[benchmarks/user-text](../../../../benchmarks/user-text/user-text.bench.client.ts) runs in the required `node 24 / benchmarks` lane. Its compiled worker uses the production UserText registry and every shipped matcher (session, file, folder, skill, command, whitespace, credential) under plain Node, in two processes: timing and allocation.
+[benchmarks/user-text](../../../../benchmarks/user-text/user-text.bench.client.ts) runs in the required `node 24 / benchmarks 2/2` lane. Its compiled worker uses the production UserText registry and every shipped matcher (session, file, folder, skill, command, whitespace, credential) under plain Node, in two processes: timing and allocation.
 
 | Item | Content |
 |---|---|

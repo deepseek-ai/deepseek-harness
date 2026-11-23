@@ -7,9 +7,9 @@ export interface ConnectionIndexRequest extends ConnectionTrustRequest {
   readonly url?: string | undefined
 }
 
-/** Response operations used by the token implementation. */
+/** Response operations used by the token implementation; an array header value writes one header line per element. */
 export interface ConnectionIndexResponse {
-  writeHead(status: number, headers?: Readonly<Record<string, string>>): unknown
+  writeHead(status: number, headers?: Readonly<Record<string, string | string[]>>): unknown
   end(body?: string): unknown
 }
 

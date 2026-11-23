@@ -131,6 +131,7 @@
     "apps/web/tests/draft-initialization.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",
     "apps/web/tests/session-log-upload.e2e.ts",
+    "apps/web/tests/action-cards-setting.e2e.ts",
     "apps/web/tests/caption-overlays.e2e.ts",
     "apps/web/tests/settings-appearance.e2e.ts",
     "apps/web/tests/menu-material.e2e.ts",
@@ -316,10 +317,9 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
-    { "path": "./packages/experimental/action-cards" },
-    { "path": "./packages/experimental/creation-recommendations" },
-    { "path": "./packages/experimental/plugin-recommendations" },
-    { "path": "./packages/experimental/personalized-recommendations" },
+    { "path": "./packages/interaction/action-cards" },
+    { "path": "./packages/extensions/creation-recommendations" },
+    { "path": "./packages/extensions/plugin-recommendations" },
 
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.host.json" },
     { "path": "./packages/experimental/cot-translation-bundle" },

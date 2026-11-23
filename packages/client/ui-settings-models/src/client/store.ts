@@ -147,7 +147,7 @@ export function protocolChoices(
 }
 
 /**
- * The reasoning levels a hand-declared route's models may declare, read out of
+ * The reasoning levels a pi-ai route's models may declare, read out of
  * the owning namespace's own schema for the same reason as
  * {@link protocolChoices}: the levels the page offers and the keys the
  * adapter accepts in `reasoningEfforts` come from the same `Config`.

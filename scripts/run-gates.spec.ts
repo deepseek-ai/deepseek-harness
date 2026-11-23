@@ -26,6 +26,7 @@ import {
 beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_SHARD', undefined)
+  vi.stubEnv('DSH_BENCH_PHASE', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
   vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
@@ -293,6 +294,26 @@ describe('gate graph validation', () => {
     )
     expect(scripts['build:native-system']).toBe('tsx native/system/scripts/build.ts --host-addon-only')
     expect(scripts['test:bench:built']).toBe('tsx scripts/run-bench-suite.ts')
+  })
+
+  it.each(['first', 'last'] as const)('runs the %s benchmark phase on restored shared-build output', (phase) => {
+    const subject = withEnv('DSH_BENCH_PHASE', phase, () => withPnpmEntrypoint(() => gatesForMode('ci-bench-prebuilt')))
+    const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+
+    expect(scripts['check:ci:bench-prebuilt']).toBe('tsx scripts/run-gates.ts ci-bench-prebuilt')
+    expect(subject).toHaveLength(1)
+    expect(subject[0]).toMatchObject({
+      id: 'bench',
+      label: `performance benchmarks (${phase} phase)`,
+      args: ['/private/pnpm.cjs', 'exec', 'tsx', 'scripts/run-ci-bench.ts', `--phase=${phase}`],
+    })
+  })
+
+  it.each([undefined, '', 'all', 'second'])('refuses benchmark phase %j', (raw) => {
+    expect(() => withEnv('DSH_BENCH_PHASE', raw, () => withPnpmEntrypoint(() => gatesForMode('ci-bench-prebuilt'))))
+      .toThrow('benchmark phase must be "first" or "last"')
   })
 
   it('checks all maintained repository references locally and in CI', () => {
@@ -1001,7 +1022,7 @@ describe('Typert contract preparation', () => {
 })
 
 describe('Node compatibility graph', () => {
-  it.each(['24.9.0', '24.19.0', '26.0.0'])('runs all source compatibility smokes serially on Node %s', (version) => {
+  it.each(['24.22.3', '24.23.0', '26.0.0'])('runs all source compatibility smokes serially on Node %s', (version) => {
     const subject = withNodeVersion(version, () =>
       withPnpmEntrypoint(() => gatesForMode('node-compat')))
 
@@ -1034,18 +1055,28 @@ describe('Node compatibility graph', () => {
     expect(subject.find(item => item.id === 'source-compat-smokes')?.env).toEqual({ VITEST_MAX_WORKERS: '1' })
   })
 
-  it.each(['24.19.0', '26.0.0'])('keeps Node %s compatibility source-only', (version) => {
+  // The primary lanes nest this mode on latest 24, which can be the floor release itself.
+  it.each(['24.22.3', '24.23.0', '26.0.0'])('keeps Node %s compatibility source-only without a build request', (version) => {
     const subject = withNodeVersion(version, () =>
-      withPnpmEntrypoint(() => gatesForMode('node-compat')))
+      withEnv('DSH_NODE_COMPAT_BUILD', undefined, () =>
+        withPnpmEntrypoint(() => gatesForMode('node-compat'))))
 
     expect(subject.map(item => item.id)).not.toContain('build')
     expect(subject.map(item => item.id)).not.toContain('cli-lazy-search-startup-smoke')
   })
 
-  it.each([undefined, '1'])('builds the complete Node 24.9 artifacts once with skip-typecheck=%s', (skipTypecheck) => {
-    const subject = withNodeVersion('24.9.0', () =>
-      withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', skipTypecheck, () =>
-        withPnpmEntrypoint(() => gatesForMode('node-compat'))))
+  it.each(['24.23.0', '26.0.0'])('rejects a build request on Node %s', (version) => {
+    expect(() => withNodeVersion(version, () =>
+      withEnv('DSH_NODE_COMPAT_BUILD', '1', () =>
+        withPnpmEntrypoint(() => gatesForMode('node-compat')))))
+      .toThrow(`DSH_NODE_COMPAT_BUILD requires Node 24.22.3, got ${version}.`)
+  })
+
+  it.each([undefined, '1'])('builds the complete Node 24.22.3 artifacts once on request with skip-typecheck=%s', (skipTypecheck) => {
+    const subject = withNodeVersion('24.22.3', () =>
+      withEnv('DSH_NODE_COMPAT_BUILD', '1', () =>
+        withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', skipTypecheck, () =>
+          withPnpmEntrypoint(() => gatesForMode('node-compat')))))
 
     expect(subject.filter(item => item.displayCommand === 'pnpm run build:artifacts')).toHaveLength(1)
     expect(subject.find(item => item.id === 'build')?.args).toEqual([
@@ -1058,10 +1089,11 @@ describe('Node compatibility graph', () => {
     })
   })
 
-  it.each(['passed', 'failed'] as const)('runs the Node 24.9 lazy-search smoke only after a passed build (%s)', async (buildStatus) => {
-    const subject = withNodeVersion('24.9.0', () =>
-      withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', '1', () =>
-        withPnpmEntrypoint(() => gatesForMode('node-compat'))))
+  it.each(['passed', 'failed'] as const)('runs the Node 24.22.3 lazy-search smoke only after a passed build (%s)', async (buildStatus) => {
+    const subject = withNodeVersion('24.22.3', () =>
+      withEnv('DSH_NODE_COMPAT_BUILD', '1', () =>
+        withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', '1', () =>
+          withPnpmEntrypoint(() => gatesForMode('node-compat')))))
     let buildCompleted = false
     let smokeStarted = false
     const results = await runGates(subject, 2, async (item) => {

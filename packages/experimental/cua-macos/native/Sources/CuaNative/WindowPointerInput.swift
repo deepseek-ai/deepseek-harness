@@ -15,12 +15,14 @@ final class WindowPointerInput {
         let release: CGEvent
     }
 
+    private let held: HeldInputs
     private let poster: PIDEventPoster
     private let systemKeyboard: SystemKeyboardInput
     private let checkCancellation: @Sendable () throws -> Void
 
-    init(poster: PIDEventPoster, systemKeyboard: SystemKeyboardInput = SystemKeyboardInput(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
+    init(poster: PIDEventPoster, held: HeldInputs = HeldInputs(), systemKeyboard: SystemKeyboardInput = SystemKeyboardInput(), checkCancellation: @escaping @Sendable () throws -> Void = {}) {
         self.poster = poster
+        self.held = held
         self.systemKeyboard = systemKeyboard
         self.checkCancellation = checkCancellation
     }
@@ -50,23 +52,30 @@ final class WindowPointerInput {
         }
     }
 
-    /// Send one window-directed transition at the current cursor. A release can be outside the window.
-    func toggleMouse(in route: WindowRoute, button: String, isDown: Bool,
-                     isolation: isolated (any Actor)? = #isolation) async throws {
+    /// Save the exact window release before posting the down event.
+    func mouseDown(owner: HeldInputs.Owner, in route: WindowRoute, button: String,
+                   isolation: isolated (any Actor)? = #isolation) async throws {
         let selected = try Self.button(button)
         try Self.validateWindow(route)
         guard let screen = CGEvent(source: nil)?.location else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not read the current pointer position")
         }
+        try await Self.checkSystemHit(route, at: screen)
         let point = WindowPoint(x: screen.x - route.bounds.x, y: screen.y - route.bounds.y)
-        if isDown {
-            try await Self.checkSystemHit(route, at: screen)
-        }
-        let event = try mouseEvent(source: Self.source(), route: route, screen: screen, local: point,
-                                   type: isDown ? Self.down(selected) : Self.up(selected),
-                                   button: selected, clickState: 1, subtype: 3, group: nil)
+        let pair = try mousePair(source: Self.source(), route: route, screen: screen, local: point,
+                                 button: selected, clickState: 1, group: Self.clickGroup())
         try checkCancellation()
-        poster.post(event, to: route.owner.pid)
+        let poster = self.poster
+        try held.pointerDown(owner: owner, route: route, button: selected, system: false, down: pair.down, up: pair.up,
+                             post: { poster.post($0, to: route.owner.pid) }, prepareRelease: { event in
+            guard let screen = CGEvent(source: nil)?.location else { return }
+            let current: WindowInfo
+            do { current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID) }
+            catch let error as NativeFailure where error.code == "WINDOW_UNAVAILABLE" { return }
+            event.location = screen
+            try poster.stampWindow(event, pid: route.owner.pid, windowID: route.windowID,
+                                   point: WindowPoint(x: screen.x - current.bounds.x, y: screen.y - current.bounds.y))
+        })
     }
 
     /// Post balanced mouse presses; system input also holds and releases the requested keyboard modifiers.
@@ -79,6 +88,7 @@ final class WindowPointerInput {
         }
         let source = try Self.source(system: useSystemInput)
         let selectedButton = try Self.button(button)
+        try held.requirePointerAvailable(route: route, button: selectedButton, system: useSystemInput)
         var flags = try KeyboardInput.modifierFlags(modifiers)
         if useSystemInput { flags.formUnion(CGEventSource.flagsState(.combinedSessionState)) }
         let group = Self.clickGroup()
@@ -170,6 +180,7 @@ final class WindowPointerInput {
         }
         let source = try Self.source(system: useSystemInput)
         let selected = try Self.button(button)
+        try held.requirePointerAvailable(route: route, button: selected, system: useSystemInput)
         var flags = try KeyboardInput.modifierFlags(modifiers)
         if useSystemInput { flags.formUnion(CGEventSource.flagsState(.combinedSessionState)) }
         let group = Self.clickGroup()

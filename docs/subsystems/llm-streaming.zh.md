@@ -939,12 +939,12 @@ declare abstract class LlmAdapter {
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;
   /**
-   * Resolve the image dimensions and byte target this adapter sends to the model.
+   * Resolve the maximum image dimensions and byte budgets this adapter uses for the model.
    * The default preserves normalized images; adapters that resize must override it.
    * @param _provider - registered provider route.
    * @param _model - exact model id.
    * @param image - normalized image whose request projection is being resolved.
-   * @returns the same target used by request serialization, before provider-internal processing.
+   * @returns the target used by request serialization; encoded images can be smaller to satisfy the hard byte limit.
    */
   imageRequestTarget(_provider: string, _model: string, image: ImageAttachmentRef): ImageRequestTarget;
   /**
@@ -1123,7 +1123,7 @@ imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | u
  * @param provider - registered provider route.
  * @param model - exact model id.
  * @param image - normalized image reference.
- * @returns dimensions and byte target used by the adapter's request serializer.
+ * @returns maximum dimensions and byte budgets used by the request serializer; readImageRequest returns the actual encoded dimensions.
  */
 imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget
 

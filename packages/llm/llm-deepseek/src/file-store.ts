@@ -11,8 +11,8 @@ import { deepSeekFileScope, DeepSeekUploadIndex } from './upload-index.ts'
 import { serializeAuthHeaders } from './auth-headers.ts'
 import type { DeepSeekUploadRecord } from './upload-index.ts'
 
-/** Shared Files-store limit for each request image, including file-id references. */
-export const MAX_IMAGE_BYTES = 32 * 1024 * 1024
+import { MAX_IMAGE_BYTES } from './defaults.ts'
+export { MAX_IMAGE_BYTES } from './defaults.ts'
 const OWNED_FILE_PREFIX = 'dsh-'
 /** Per-image deadline whose expiry during upload starts Files backoff. */
 export const FILES_API_TIMEOUT = 'DEEPSEEK_FILES_API_TIMEOUT'

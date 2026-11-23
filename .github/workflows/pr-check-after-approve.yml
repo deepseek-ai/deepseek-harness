@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
           package-manager-cache: false
 
       # The check app's token makes the review check run its own row instead of joining this workflow's suite.

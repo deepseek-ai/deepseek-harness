@@ -58,10 +58,10 @@ it.each(['per-call', 'persistent-in-memory'] as const)('rejects Script retention
 })
 
 // The only ptc-runtime-node mode test that omits executionMode; it pins the provider default.
-it('selects per-call function bodies when executionMode is omitted', async () => {
+it('selects the retained scoped REPL when executionMode is omitted', async () => {
   const { runtime } = await mountConfiguredRuntime(new Context(), {})
-  expect(runtime.retainsState).toBe(false)
-  expect(runtime.programFormat).toBe('function-body')
+  expect(runtime.retainsState).toBe(true)
+  expect(runtime.programFormat).toBe('scoped-repl')
 })
 
 // The only ptc-runtime-node mode test that omits replScoped; it pins SCOPED_REPL_BY_DEFAULT from configuration.ts.

@@ -63,7 +63,7 @@ The `minimal` agent preset uses a persistent shell, the `read_image` tool, and a
 
 WebApp owns `printUrl` and `openBrowser`. This bundle enables URL printing and maps the parsed `--no-open` setting to the runtime. After readiness, synchronous `webserver/entry-url` listeners contribute complete entries. WebApp prints every entry as `label: url` when printing is enabled and opens only the first entry marked `open: true` when browser opening is enabled outside SSH. No entries means no output or opening.
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them. It also inserts the six personalized recommendation rows, from [`action-cards`](../../interaction/action-cards/README.md) to `client-ui-plugin-recommendations`, whose `enabled` switch is in Settings → General.
 
 The `standard`, `cordis`, and `ptc` presets set `config.interrupt: false` on their `tool-subagent-control` rows. To expose `interrupt_agent`, including in Team mode, override the relevant preset declaration as described in the [migration steps](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.md); changing the disabled Host row does not change preset tools.
 
@@ -96,7 +96,7 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 ### Per-session agent setup
 
-Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
+Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard, PTC, and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
 Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard, PTC, and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
 
@@ -205,15 +205,15 @@ None; the plugin contributes no system-prompt text.
 
 #### What the model sees
 
-The skill catalog lists the Office router and three Office authoring skills in every profile. The loaded Python skills end with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+The skill catalog lists the `office` skill in every profile; it gives concise inline guidance for Word, PowerPoint, and Excel pitfalls and for the Office tools. The loaded skill ends with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
 
 #### Token effect
 
-The four catalog summaries in each initial catalog; loaded skill bodies only when the model requests them.
+One catalog summary in each initial catalog; the skill body only when the model loads it.
 
 #### KV Cache effect
 
-While resources and configuration stay unchanged, the built-in Office summaries and Python environment sections stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
+While resources and configuration stay unchanged, the built-in Office summary and Python environment section stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
 
 ## Known Limitations and Deferred Work
 

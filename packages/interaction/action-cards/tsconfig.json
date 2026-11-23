@@ -1,0 +1,28 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "references": [
+    { "path": "../../util/brand" },
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
+    { "path": "../../../vendor/loader" },
+    { "path": "../../typert/protocol" },
+    { "path": "../../llm/llm" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/session" },
+    { "path": "../../skill/skill" },
+    { "path": "../../session/session-projection" },
+    { "path": "../../api/remote-access/tsconfig.host.json" },
+    { "path": "../../sandbox/sandbox-policy" },
+    { "path": "../../util/values" }
+  ],
+  "files": [
+    "src/index.ts",
+    "src/types.ts",
+    "src/projection.ts",
+    "src/fence.ts"
+  ]
+}

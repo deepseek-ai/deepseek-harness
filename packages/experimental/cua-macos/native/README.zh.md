@@ -61,6 +61,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 <a id="request-protocol"></a>
 ## 请求协议
 
+每条连接通过握手字段 `recentActivityWindowMs` 或参数 `--recent-activity-window-ms` 设置回看时长，默认 60000 毫秒，填 `"off"` 可关闭。为判断先前观察到的窗口是否可能发生变化，启用的连接在内存中按窗口和来源保留最近一次活动的时间。外部输入监听器通过进程和窗口 ID 判断点击或滚动属于哪个窗口，处理后即丢弃事件。Host 在每个已授权的应用句柄下调用 `takeWindowActivity` 查询观察过的窗口，并在本轮结束时调用 `clearWindowActivity`。所有窗口都停止等待提醒时，helper 卸载共享监听器。
+
 操作帧为 `{ "id": "opaque request id", "method": "method name", "params": {} }`。对应回复只包含 `result` 或 `error: {code, message}` 中的一项；无效信封返回 `INVALID_REQUEST`，ID 为 null。每条连接同时最多发送一个操作。`{ "type": "cancel", "id": "request id" }` 取消该请求，迟到的取消不会产生额外回复。`protocol.schema.json` 定义操作字段。
 
 截图诊断通过原始连接发送 `type: "diagnostic"` 帧。记录包含 requestId、stage、从接收开始计算的 elapsedMs 和可选的 errorCode，不含窗口标题、AX 文本或图片字节。stdin/stdout 代理在 stderr 上以 `[cua-screenshot]` 前缀转发诊断，操作回复仍写入 stdout。Host 保留有上限的诊断缓冲区，并将其附在截图失败中。
@@ -70,21 +72,21 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | 方法 | 结果 |
 | --- | --- |
 | `getCapabilities` | `{permissions: {accessibility, screenRecording}, sessionLocked}`。权限值是布尔型预检结果，不打开系统提示。TypeScript provider 在暴露结果前合并其静态启动字段（`platform`、`methods`、`appLevelAccessibility`、`keyboard`、`browser`、`coordinateSpace`）。 |
-| `listApps` | 运行中的普通应用数组，元素为 `{pid, name, bundleId}`。 |
-| `findApps` | 从标准应用目录或绝对应用路径返回已安装匹配项 `{id, displayName, path, isRunning, pid?}`；发现过程不启动应用。 |
+| `listApps` | 运行中的普通应用数组，元素为 `{pid, name, bundleId?, identity, isRunning: true}`。`identity` 是规范化的 `.app` 路径，无法取得应用包路径时为 null。 |
+| `findApps` | 从标准应用目录或绝对应用路径返回安装匹配项 `{id, displayName, identity, isRunning, pid?}`，其中 `identity` 用于区分安装副本。空字符串或 null 列出全部扫描到的安装副本，不受匹配数量限制。发现过程不启动应用。 |
 | `getApp` | 运行中的选择返回 `{appHandle, pid, name, bundleId?, running: true, authorization}`。未运行的选择返回 `{appHandle, name, bundleId?, running: false, authorization}`，其中没有 `pid`，并等待 Host 授权。找到安装包后，按可执行文件路径查找运行进程。若匹配多个进程，返回 `AMBIGUOUS_APP`，可从 `listApps` 选择 PID。 |
-| `launchApp` | Host 授权后，打开指定安装副本，等待启动完成并将句柄绑定到已核实的进程，全程不请求激活。若授权或启动期间出现多个匹配实例，待启动句柄失效，返回 `AMBIGUOUS_APP`。 |
+| `launchApp` | Host 授权后，打开待启动的安装副本并将句柄绑定到已核实的进程，全程不请求激活；有歧义的待启动选择以 `AMBIGUOUS_APP` 失效。对已选定的运行应用，请求新实例并返回 `{dispatched: true}`，原句柄继续绑定原先选定的进程。 |
 | `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated, hasUnreadableElements?}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和无法确定观察范围的错误仍会拒绝观察。 |
-| `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
-| `getActionSchema` | 查询动作的参数 JSON Schema。 |
-| `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
+| `listActions` | 先列出控件的完整原生动作名，再列出可写属性的 `Role.Attribute.Set`。`Role.Attribute.Set` 是属性写入的专用名称，角色和属性名必须非空且不含点号。只考虑控件报告为可写的属性。需要元素引用的属性，以及实际值类型无法编码的动态属性，都会省略。非连续文本选区可以使用系统定义的范围数组写入。 |
+| `getActionSchema` | 按完整动作名查询参数的 JSON Schema。原生动作无须参数。动作枚举、参数查询和写入共用属性定义。schema 说明参数类型、单位和必填字段。设置控件方向或排序方向时，传入的字符串必须与列出的取值大小写一致。文本控件接受字符串，滑块和步进控件可接受数字或字符串。未知属性按实际值类型处理，只凭动作名无法确定具体控件的取值范围。 |
+| `show` | 未指定 `windowId` 时，优先返回已显示的普通窗口，其次恢复最小化的窗口，否则向选中的运行中应用发送一次重新打开请求。返回实际在屏的窗口 ID。指定 ID 时只显示原窗口，原窗口已关闭时返回错误并提示使用 `app.show()`。`dispatched: false` 表示窗口已经显示。 台前调度开启时，根据窗口 ID 定位系统提供的侧栏窗口组，调用其 `AXAddToStage` 动作，归还焦点后确认目标在原组以正常尺寸显示。如果侧栏组包含多个窗口，只有在这些窗口都属于目标应用时，才可由应用级 show 移入顶层窗口。 排队和窗口恢复共用请求开始时按 `timeoutMs` 确定的截止时间。 |
 | `invoke`, `performAction`, `mouseMove`, `toggleMouse`, `click`, `setValue`, `selectText`, `typeText`, `paste`, `pressKey`, `sendKeyEvent`, `scroll`, `drag` | `{dispatched: boolean}` 记录原生分派；`invoke` 在没有可用的默认动作时返回 false。`mouseMove` 还报告 `hoverRoute` 和 `systemPointerMoved`。需要读取新状态以核实预期的应用变化。 |
 | `screenshot` | `{mimeType: "image/png", data, pixelWidth, pixelHeight, bounds, coordinateSpace: "window-points", windowId}`。Retina 显示器上 PNG 像素尺寸可能不同于窗口 point 尺寸。 |
 
-每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。重复获取同一存活进程会共享句柄。如果进程在授权期间启动，而当前连接已取得其句柄，`launchApp` 返回 `STALE_APP`，只有待启动句柄失效。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的句柄。
+每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。只有进程仍存活且授权身份相同时才复用句柄；授权身份变化会使旧句柄失效并创建新句柄。完成待启动选择时，如果授权后当前连接已经持有同一进程、同一授权身份的句柄，`launchApp` 返回 `STALE_APP`，只有待启动句柄失效。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的待启动句柄。
 
-稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（按下鼠标键或移动系统指针要求命中前台目标窗口）、`INPUT_BUSY`（有鼠标键按下，等松开后再请求系统按下或拖动）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
+稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`BACKGROUND_RESTORE_UNAVAILABLE`（无法在保留键盘焦点的前提下恢复窗口）、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（按下鼠标键或移动系统指针要求命中前台目标窗口）、`INPUT_BUSY`（有鼠标键按下，等松开后再请求系统按下或拖动）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 
 应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可选的可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中和未启动应用都对 `macos:executable-path:` 与解析符号链接后的可执行路径计算 SHA-256，仍可保存长期授权。进程路径查询失败时，运行中的有效 Bundle ID 仍可用于授权，记录省略 executablePath；路径可取得时仍须与所选目标一致。两种身份均不可用时，在执行目标操作前返回 APP_PATH_UNAVAILABLE，保留路径查询原因和 errno。PROCESS_INSPECTION_FAILED 表示无法验证进程实例，只有进程检查返回 ESRCH 时才报告进程不存在；两种失败都不触发自动重试。进程号和启动时间只校验存活句柄，不进入已保存身份。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
 
@@ -102,7 +104,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 窗口隐藏本身不会使 AX 快照失效。刷新清单时，只有同一窗口 ID 仍存在且观察到的尺寸未变，才能继续使用此前截图的像素坐标。观察到尺寸变化后需要重新截图；窗口销毁后不能继续操作。清单中省略窗口不会阻止按已知 ID 发起输入。窗口归属、尺寸和输入检查仍然生效，成功分派不代表应用已接收。
 
-窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemInput` 后，helper 通过 HID 发送系统按键事件。只有按下该键的连接能通过原窗口显式松开。在同一窗口请求系统指针移动会发送该按键的拖动事件。Host 在回合结束时请求清理，连接关闭也会松开按键。
+窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemInput` 后，helper 通过 HID 发送系统按键事件。只有按下该键的连接能通过原窗口显式松开。在同一窗口请求系统指针移动会发送该按键的拖动事件。
 
 点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和默认拖动核实窗口归属和边界后，向目标进程和窗口投递事件。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。显式传入 `useSystemInput: true` 的拖动通过 HID 投递，起点及每段移动都要命中目标前台窗口。手势共用事件号，每段携带位移。取消时在最后投递的位置松开鼠标键。
 
@@ -112,7 +114,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。`pressKey` 向目标 PID 依次发送修饰键和一个主键的按下事件，再逆序释放。操作中途取消也会逆序释放已按下的键。键盘事件直接发给目标进程，绕过全局 HID 队列。按键名由平台定义；KP_0 和 KP_Enter 等数字键盘名称保留物理键码。后台鼠标操作可能改变键盘焦点。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。`typeText` 的每次按下和抬起后等待配置的文本事件间隔；`pressKey` 使用自己的按下与释放节奏，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-宿主为每次 `run_code` 或 `cua_run_code` 的 `sendKeyEvent` 附上执行标识。按下时，helper 保存已选应用、接收进程的 PID 与启动时间、物理键码及对应的松开事件。持有方再次按下普通键时，helper 复用原记录，向接收进程发送一次带 `keyboardEventAutorepeat` 标志的按下事件。AppKit 视图可能只收到首次按下和最终松开，过滤中间的重复事件。重复、显式松键和执行结束时都会核对原进程身份。其他执行尝试按下或松开同一个键时，错误会指出键名，并区分其他会话和同一连接内的其他执行。正常返回、异常退出或用户暂停时，宿主等待在途原生请求结束，再通知 helper 释放该执行持有的其余按键。连接断开时，helper 也会清理该连接持有的按键。
+`HeldInputs` 在派发前记录请求所属的连接、应用、原进程身份、键码或按钮、释放事件和实际输入方式。重复按键只保留一条记录。显式 up 使用保存的目标和输入方式；进程退出或 PID 身份变化后跳过定向释放。`getHeldInputs` 只报告当前连接的记录，不读取用户物理按键状态。成功结束的程序用该快照生成提醒。程序失败、取消或销毁时，`releaseHeldInputs` 按派发顺序的反序统一释放键盘和鼠标记录。正常程序结束和回合结束不释放输入。`releaseHeldInputs` 返回已派发 up 的记录，用于确认后的清理提醒。连接关闭先等待原生操作停止，再兜底释放。完整击键、文本、点击和拖动保留操作内清理。
 
 所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
@@ -156,6 +158,8 @@ helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回
 
 在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。 运行 `python3 packages/experimental/cua-macos/native/tests/nested_application_e2e.py`，用独立签名的测试应用验证 helper 在外层 `.app` 之外保留签名发布、并发发布和服务退出。
 
+运行 `python3 packages/experimental/cua-macos/native/tests/action_inventory_e2e.py --helper /absolute/path/to/helper`，对照八个控件的 AX 系统查询结果，逐项查询参数，并验证两个自定义回调、滑块写入和文本视图中两段不相邻的选区。
+
 运行 `python3 packages/experimental/cua-macos/native/tests/floating_windows_e2e.py --helper /absolute/path/to/helper`，验证独立浮层的发现、截图、实际点击，以及隐藏、调整大小和销毁后的行为。
 
 构建并解锁 Mac 后运行 `python3 packages/experimental/cua-macos/native/tests/axless_e2e.py`，验证应用移除并恢复 AX 根节点的窗口。检查需要已有辅助功能/屏幕录制权限，会拒绝过期元素 ID，捕获无 AX 窗口，通过 fixture 状态文件核实坐标点击，并检查恢复。不会修改系统权限设置。
@@ -164,7 +168,7 @@ helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回
 
 使用 `--panels-only` 验证通过文档窗口操作 sheet 控件时会返回该 sheet 的窗口 ID，并验证选择 sheet 后能读取该控件。fixture 窗口可加入应用集合，避免 Stage Manager 在后台输入时缩小它们。使用 `e2e.py` 或 `electron_e2e.py` 的 `--hover-only`，可独立于键盘和文件面板场景验证悬停。为 `e2e.py` 加上 `--alternate-hover` 可验证 AX 展开、进入子控件、点击和移出，并采样确认系统指针不变。`--input-overlays` 验证穿透鼠标的覆盖窗口允许悬停、拦截输入的覆盖窗口拒绝悬停且不移动指针。
 
-构建后运行 `python3 packages/experimental/cua-macos/native/tests/e2e.py`，操作一个隔离的双窗口 AppKit fixture。fixture 独立记录按钮计数、Unicode 文本、实际滚动位置、右键回调和拖动释放位置。滚动、右键按下/抬起和拖动按下/抬起计数每次手势必须恰好增加一次。检查还验证真实 NSOpenPanel sheet、路径输入的键盘路由和选中文件 URL，并覆盖范围内快照替换、截图尺寸、过期应用清理和 EOF 退出。`--artifacts DIRECTORY` 写出仅包含 fixture 的截图和私有协议记录；协议记录包含运行中应用清单，不用于公开发布。加上 `--selection-only` 后，测试会缩放并还原第二个窗口，用测试应用记录的尺寸核对两个窗口。
+构建后运行 `python3 packages/experimental/cua-macos/native/tests/e2e.py`，操作一个隔离的双窗口 AppKit fixture。fixture 独立记录按钮计数、Unicode 文本、实际滚动位置、右键回调和拖动释放位置。滚动、右键按下/抬起和拖动按下/抬起计数每次手势必须恰好增加一次。检查还验证真实 NSOpenPanel sheet、路径输入的键盘路由和选中文件 URL，并覆盖范围内快照替换、截图尺寸、过期应用清理和 EOF 退出。`--artifacts DIRECTORY` 写出仅包含 fixture 的截图和私有协议记录；协议记录包含运行中应用清单，不用于公开发布。加上 `--selection-only` 后，测试会缩放并还原第二个窗口，用测试应用记录的尺寸核对两个窗口。 加上 `--ax-diff-only` 可验证按需返回树差分、当前快照 ID、窗口隔离、完整树请求，以及选项变化、截断或失败后的比较基准重建。
 
 Blender 键盘检查使用 `python3 packages/experimental/cua-macos/native/tests/blender_keyboard_e2e.py --blender /absolute/path/to/Blender.app/Contents/MacOS/Blender`。它以独立用户目录启动一个采用出厂配置的 GUI，观察 Text Editor 的实际文本、选区和修饰键标志，检查 Command+A 替换、Shift+Left 选区及修饰键释放后的普通输入。需要解锁的 macOS 会话和辅助功能权限。测试会激活自建实例，运行时避免并发桌面自动化。`--helper` 选择以前兼容的二进制作为反例对照，`--artifacts` 指定新建私有证据目录的父目录。不下载 Blender 运行时。
 

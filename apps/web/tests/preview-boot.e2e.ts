@@ -859,14 +859,14 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
         }),
       })
       const body = await response.json() as {
-        result: { ok: true; value: { url: string; availability: string; ticket: string; pollIntervalMs: number } }
+        result: { ok: true; value: { url: string; availability: string; loginUrlAllowed: boolean; ticket: string; pollIntervalMs: number } }
           | { ok: false; error: { message: string } }
       }
       if (!body.result.ok) throw new Error(`empty remoteConnection/status failed: ${body.result.error.message}`)
       return body.result.value
     })
     expect(remoteStatus).toEqual({
-      url: 'http://127.0.0.1:3080', availability: 'unreachable-host', ticket: 'none', pollIntervalMs: 1000,
+      url: 'http://127.0.0.1:3080', availability: 'unreachable-host', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000,
     })
     const pairingScript = await page.evaluate(async () => {
       const transport = (globalThis as typeof globalThis & {

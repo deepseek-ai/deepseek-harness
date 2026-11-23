@@ -151,8 +151,8 @@ async function fixture(options: FixtureOptions = {}) {
   const config: NativeClientConfig = { helperPath, cwd: directory, timeoutMs: 30_000, connectTimeoutMs: 5000,
     screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1_048_576, maxResponseBytes: 1_048_576,
     graceMs: 3000, textEventIntervalMs: 0, maxClickHoldMs: 10_000 }
-  const client = () => {
-    const value = new NativeClient(owner, config, (_owner, native) => activeRuntime.connect(native))
+  const client = (maxDiffNotifications?: number) => {
+    const value = new NativeClient(owner, config, (_owner, native) => activeRuntime.connect({ ...native, maxDiffNotifications }))
     clients.push(value)
     return value
   }
@@ -161,12 +161,16 @@ async function fixture(options: FixtureOptions = {}) {
 
 it('shares one Host helper while closing only the selected Agent connection', async () => {
   const f = await fixture({ split: true })
-  const a = f.client(), b = f.client(), signal = new AbortController().signal
+  const a = f.client(7), signal = new AbortController().signal
   expect(await a.request('one', {}, signal)).toMatchObject({ connection: 1, pid: 100 })
+  const b = f.client()
   expect(await b.request('two', {}, signal)).toMatchObject({ connection: 2, pid: 100 })
   expect(f.spawn).toHaveBeenCalledOnce()
   expect(f.generations[0]!.received[0]?.config?.pollIntervalMs).toBe(25)
   expect(f.generations[0]!.received[0]?.config?.launchWaitMs).toBe(750)
+  const hellos = f.generations[0]!.received.filter(frame => frame.type === 'hello')
+  expect(hellos[0]?.config?.maxDiffNotifications).toBe(7)
+  expect(hellos[1]?.config).not.toHaveProperty('maxDiffNotifications')
   await a.dispose()
   expect(await b.request('after-close', {}, signal)).toMatchObject({ connection: 2 })
   await b.dispose()

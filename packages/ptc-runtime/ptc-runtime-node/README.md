@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Execute model-written TypeScript with host-provided async functions. The default `per-call` mode runs async function bodies in fresh Node processes; `vm-script` supports top-level await and optionally retains a context per Agent with `scriptPersistence`. Opt-in `persistent-in-memory` retains a REPL per Agent. All modes apply the file sandbox policy at process launch and return captured logs, lossless JSON, or structured failures. Elapsed deadlines, output bounds and a V8 heap limit constrain execution. Unacknowledged stops and one-shot completion clean up the managed process range; unavailable confinement fails execution.
+Execute model-written TypeScript with host-provided async functions. The default `persistent-in-memory` mode retains a scoped REPL per Agent; `per-call` runs async function bodies in fresh Node processes; `vm-script` supports top-level await and optionally retains a context per Agent with `scriptPersistence`. All modes apply the file sandbox policy at process launch and return captured logs, lossless JSON, or structured failures. Elapsed deadlines, output bounds and a V8 heap limit constrain execution. Unacknowledged stops and one-shot completion clean up the managed process range; unavailable confinement fails execution.
 
 ## Table of Contents
 
@@ -36,7 +36,7 @@ Configure the provider row after its required services are available:
 ```yaml
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
-    executionMode: per-call
+    executionMode: persistent-in-memory
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -49,7 +49,7 @@ Configure the provider row after its required services are available:
 
 | Field | Default | Meaning |
 |---|---|---|
-| `executionMode` | `per-call` | `per-call` runs async function bodies in fresh processes; `vm-script` evaluates Scripts; `persistent-in-memory` retains a confined REPL per owner |
+| `executionMode` | `persistent-in-memory` | `persistent-in-memory` retains a confined REPL per owner; `per-call` runs async function bodies in fresh processes; `vm-script` evaluates Scripts |
 | `scriptPersistence` | `false` | With `executionMode: vm-script`, reuse a process and context per owner; `true` with another mode rejects at load |
 | `replScoped` | `true` with `persistent-in-memory`, otherwise `false` | With `executionMode: persistent-in-memory`, run scoped REPL statements whose calls receive copies of earlier top-level bindings; `false` selects Node's REPL evaluator, and `true` with another mode rejects at load |
 | `timeoutMs` | `120,000` | Default elapsed execution deadline, including nested tool and approval waits |
@@ -102,12 +102,12 @@ Set `executionMode: vm-script` to evaluate erasable TypeScript through `node:vm`
 <a id="persistent-repl"></a>
 ### In-memory modes
 
-The `persistent-in-memory` mode and Script mode with `scriptPersistence: true` retain state per owner. To retain a REPL, set `executionMode: persistent-in-memory` on the existing `@deepseek-ai/dsh-ptc-runtime-node` plugin; it runs the scoped REPL unless `replScoped: false` selects Node's REPL evaluator. All modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy` and apply the file sandbox policy at process launch. Enable it deliberately with a profile patch:
+The `persistent-in-memory` mode and Script mode with `scriptPersistence: true` retain state per owner. `persistent-in-memory` is the default `executionMode` and runs the scoped REPL unless `replScoped: false` selects Node's REPL evaluator. All modes require `fs`, `subprocess`, `sandbox` and `sandboxPolicy` and apply the file sandbox policy at process launch. To run function bodies in fresh processes instead, select `per-call` with a profile patch:
 
 ```yaml
 - id: ptc-runtime
   config:
-    executionMode: persistent-in-memory
+    executionMode: per-call
 ```
 
 Save the patch and pass its path to `dsh headless --patch <path>` in a composition with PTC tool presentation. The `per-call` mode and Script mode with `scriptPersistence: false` retain no program memory between calls. Changing the configuration reloads the provider and releases its execution resources. Packaged single-executable hosts use their embedded carrier by default; the host sends the selected program format and retention flag with each evaluation, so the embedded `process.js` bootstrap serves both per-call and retained execution. Remote script deployments use a `node-script` launch with `launch.bootstrapPath` pointing to this package's built `persistent-process.js`.
@@ -247,7 +247,7 @@ These limits qualify the execution guarantees and retained output.
 - **Confinement inherits the selected backend's limits** — full and partial enforcement are reported separately; sandbox policy and managed-process containment are distinct guarantees.
 - **The heap cap is not a process-tree memory limit** — native allocations and descendant memory are outside the V8 old-generation bound. No process-tree CPU meter is supplied.
 - **Cleanup inherits subprocess observability** — escaped descendants on a fallback platform may remain outside the managed range; see the subprocess provider's stated limits.
-- **Default execution is one-shot** — retained state requires `persistent-in-memory` mode or Script mode with `scriptPersistence: true`; no mode offers a yield/wait API.
+- **`per-call` execution is one-shot** — retained state requires `persistent-in-memory`, the default, or Script mode with `scriptPersistence: true`; no mode offers a yield/wait API.
 - **Await lowering relaxes declaration semantics** — in transformed programs, top-level `let`, `const`, and `class` bindings are mutable and initialized to `undefined` before execution; the native temporal dead zone does not apply. Function declarations populate retained globals when execution reaches them, and a `var` declaration without an initializer resets its binding to `undefined`. Direct-eval declarations stay within that evaluation. Top-level `using` declarations are rejected; put disposable bindings inside a block. Runtime stack locations refer to the transformed source. Scripts that compile without lowering keep native semantics.
 - **Failed native lexical initialization can reserve a name** — if a top-level `let`, `const`, or `class` initializer throws before initializing its binding, that name remains uninitialized in the retained Script context. Reading, assigning or redeclaring it fails; use a new name or release and recreate the environment.
 - **Scoped REPL copies values when a call starts** — with `replScoped` omitted or `true`, assignments that earlier code makes afterwards stay invisible to later calls, and a `let`, `const` or `class` redeclaration cannot read the earlier value of its own name. A `var` redeclaration starts from that value, so `var count = count + 1` adds to it, also after an earlier `let` or `const` of the same name. Relative `import()` specifiers keep resolving from the environment's first working directory after a later call changes directory; relative file access follows the current directory. The `codeGeneration` limit rejects only the program context's own `eval`, `Function` and WebAssembly compilation and is no isolation: main-realm functions copied into the context, such as `setTimeout.constructor`, still compile code. Columns after the inserted completion on the final expression's line shift right by 17, programs that start with `#!` or contain `__$binding_` anywhere are rejected, binding-global and error-class names containing that prefix fail before process launch, and a surviving function keeps every value copied into its call. The [scoped REPL decision](../../../.agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.md) lists the complete behavior.

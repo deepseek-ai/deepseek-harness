@@ -222,8 +222,7 @@ export default class RemoteConnection extends TypertRemoteService {
   @Remote
   create(): RemoteLoginTicket {
     this.requireOwner()
-    const deployment = this.availableDeployment()
-    return this.tickets.create(deployment.url, this.config.ticketLifetimeMs)
+    return this.tickets.create(this.loginBaseUrl('qr'), this.config.ticketLifetimeMs)
   }
 
   /**
@@ -233,7 +232,7 @@ export default class RemoteConnection extends TypertRemoteService {
   @Remote
   loginUrl(): string {
     this.requireOwner()
-    const url = this.tokenLoginUrl(this.availableDeployment().url)
+    const url = this.tokenLoginUrl(this.loginBaseUrl('token'))
     if (url === undefined) throw new RemoteError('remote-connection/token-unavailable', 'Token login is not enabled for this Host.', {})
     return url
   }
@@ -283,30 +282,30 @@ export default class RemoteConnection extends TypertRemoteService {
     if (this.stopped) throw new RemoteError('remote-connection/disposed', 'Remote login is no longer available.', {})
   }
 
-  private availableDeployment(): Pick<RemoteConnectionStatus, 'url' | 'availability'> {
+  private loginBaseUrl(method: 'qr' | 'token'): string {
     const deployment = this.deployment()
-    if (deployment.availability !== 'available') {
+    if (deployment.availability !== 'available' && (method === 'qr' || !deployment.loginUrlAllowed)) {
       throw new RemoteError('remote-connection/unavailable', 'Configure a reachable, trusted URL before signing in remotely.', {
         reason: deployment.availability,
       })
     }
-    return deployment
+    return deployment.url
   }
 
-  private deployment(): Pick<RemoteConnectionStatus, 'url' | 'availability'> {
+  private deployment(): Pick<RemoteConnectionStatus, 'url' | 'availability' | 'loginUrlAllowed'> {
     const url = this.ctx.webApp.getAdvertisedUrl()
     const root = new URL(url)
     const hostname = root.hostname
-    if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]'
-      || hostname === '[::]' || hostname === '0.0.0.0' || (hostname.startsWith('127.') && isIPv4(hostname))) {
-      return { url, availability: 'unreachable-host' }
+    if (hostname.endsWith('.localhost') || hostname === '[::]' || hostname === '0.0.0.0') {
+      return { url, availability: 'unreachable-host', loginUrlAllowed: false }
     }
     const admission = this.owner.bail(this.owner.webServer, 'webserver/authorize', {
       headers: { host: root.host, origin: root.origin }, method: 'GET', url: root, transport: 'http',
     }, 'anonymous')
-    if (admission?.kind === 'deny') {
-      return { url, availability: 'untrusted-host' }
+    const loginUrlAllowed = admission?.kind === 'allow'
+    if (hostname === 'localhost' || hostname === '[::1]' || (hostname.startsWith('127.') && isIPv4(hostname))) {
+      return { url, availability: 'unreachable-host', loginUrlAllowed }
     }
-    return { url, availability: 'available' }
+    return { url, availability: loginUrlAllowed ? 'available' : 'untrusted-host', loginUrlAllowed }
   }
 }
