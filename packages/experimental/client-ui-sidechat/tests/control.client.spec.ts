@@ -31,7 +31,7 @@ const STARTED: SessionEventWindow = (() => {
   return { entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } }
 })()
 
-function harness(window: SessionEventWindow | null = STARTED, mounted: SessionId | null = MAIN) {
+function harness(window: SessionEventWindow | null = STARTED, mounted: SessionId | null = MAIN, origin?: 'subagent') {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   const forks: ForkCall[] = []
@@ -42,6 +42,7 @@ function harness(window: SessionEventWindow | null = STARTED, mounted: SessionId
     return Promise.resolve(CHILD)
   })
   ctx.provide('sessions', {
+    list: createSnapshotStore({ ids: [SOURCE], byId: { [SOURCE]: { id: SOURCE, ...(origin === undefined ? {} : { origin }) } } }),
     binding: (id: SessionId) => id === SOURCE && window !== null
       ? { sessionId: id, eventSource: { getSnapshot: () => window, subscribe: () => () => {} } }
       : undefined,
@@ -80,6 +81,13 @@ describe('SidechatControl.fork', () => {
     control.fork(SOURCE)
     expect(forks).toEqual([])
     expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'noTurn' })
+  })
+
+  it('declines a subagent source with a notice', () => {
+    const { control, forks } = harness(STARTED, MAIN, 'subagent')
+    control.fork(SOURCE)
+    expect(forks).toEqual([])
+    expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'subagentSource' })
   })
 
   it('treats a window with older pages as inside a Turn even when the page shows no turn/start', async () => {

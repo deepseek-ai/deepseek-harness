@@ -7,7 +7,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sidechatAddress } from './resource.ts'
 
 /** Transient outcome rendered by the root overlay; `serial` restarts the Toast for a repeated notice. */
-export interface SidechatNotice { readonly serial: number; readonly key: 'createFailed' | 'noTurn' }
+export interface SidechatNotice { readonly serial: number; readonly key: 'createFailed' | 'noTurn' | 'subagentSource' }
 
 /**
  * Seq of the newest durable event in the Client window once the source has started a Turn; live chunk rows
@@ -35,14 +35,20 @@ export class SidechatControl {
   /**
    * Fork at the newest durable event the Client has seen, including inside a running Turn, and open the
    * child in the right Sidebar of the Session on screen. Forking from a side conversation therefore adds
-   * the child beside it, not inside it. A source whose window shows no `turn/start` yet reports that
-   * there is nothing to branch instead of forking. Every call forks; a disposed control ignores the call.
+   * the child beside it, not inside it. A subagent source reports that it cannot start a side conversation:
+   * its child would inherit the delegated approval policy and preset without the delegation itself. A source
+   * whose window shows no `turn/start` yet reports that there is nothing to branch instead of forking. Every
+   * other call forks; a disposed control ignores the call.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {
     if (this.closed) return
     const main = this.ctx.sidebarRight.mounted.getSnapshot()
     if (main === undefined) return
+    if (this.ctx.sessions.list.getSnapshot().byId[sessionId]?.origin === 'subagent') {
+      this.notice.set({ serial: ++this.serial, key: 'subagentSource' })
+      return
+    }
     const atSeq = latestTurnSeq(this.ctx.sessions.binding(sessionId)?.eventSource.getSnapshot())
     if (atSeq === undefined) {
       this.notice.set({ serial: ++this.serial, key: 'noTurn' })

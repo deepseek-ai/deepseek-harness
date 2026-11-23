@@ -31,7 +31,8 @@ it('registers contributions through effects and removes all of them at disposal'
   const fork = vi.fn(async () => { throw new Error('offline') })
   const entries = [{ type: 'event', event: { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } } }]
   const binding = () => ({ eventSource: { getSnapshot: () => ({ entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } }) } })
-  ctx.provide('sessions', { retain: vi.fn(() => ({ release })), fork, binding } as never)
+  const list = { getSnapshot: () => ({ ids: [], byId: {} }), subscribe: () => () => {} }
+  ctx.provide('sessions', { retain: vi.fn(() => ({ release })), fork, binding, list } as never)
   let definition: { title: () => string; canOpen: (address: string) => boolean } | undefined
   const unregisterTabs = vi.fn()
   ctx.provide('sidebarRightTabs', { register: (value: typeof definition) => { definition = value; return unregisterTabs } } as never)

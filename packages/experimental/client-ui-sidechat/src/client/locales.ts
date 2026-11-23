@@ -10,6 +10,7 @@ export const zh = {
   'openFailed': '无法打开对话',
   'createFailed': '无法创建侧栏对话，请稍后再试',
   'noTurn': '此会话暂无可分支的内容',
+  'subagentSource': '子智能体会话不能创建侧栏对话',
 }
 
 /** English side conversation copy. */
@@ -21,6 +22,7 @@ export const en: Record<keyof typeof zh, string> = {
   'openFailed': 'Could not open conversation',
   'createFailed': 'Could not create the side conversation. Try again later.',
   'noTurn': 'This conversation has nothing to branch yet.',
+  'subagentSource': 'A subagent conversation cannot start a side conversation.',
 }
 
 /** Japanese side conversation copy. */
@@ -32,6 +34,7 @@ export const ja: Record<keyof typeof zh, string> = {
   'openFailed': '会話を開けませんでした',
   'createFailed': 'サイド会話を作成できませんでした。後でもう一度お試しください。',
   'noTurn': 'この会話にはまだ分岐できる内容がありません。',
+  'subagentSource': 'サブエージェントの会話からはサイド会話を作成できません。',
 }
 
 /** Spanish side conversation copy. */
@@ -43,6 +46,7 @@ export const es: Record<keyof typeof zh, string> = {
   'openFailed': 'No se pudo abrir la conversación',
   'createFailed': 'No se pudo crear la conversación lateral. Inténtalo de nuevo más tarde.',
   'noTurn': 'Esta conversación aún no tiene nada que ramificar.',
+  'subagentSource': 'Una conversación de subagente no puede iniciar una conversación lateral.',
 }
 
 /** French side conversation copy. */
@@ -54,6 +58,7 @@ export const fr: Record<keyof typeof zh, string> = {
   'openFailed': 'Impossible d’ouvrir la conversation',
   'createFailed': 'Impossible de créer la conversation latérale. Réessayez plus tard.',
   'noTurn': 'Cette conversation n’a encore rien à brancher.',
+  'subagentSource': 'Une conversation de sous-agent ne peut pas démarrer une conversation latérale.',
 }
 
 /** German side conversation copy. */
@@ -65,6 +70,7 @@ export const de: Record<keyof typeof zh, string> = {
   'openFailed': 'Gespräch konnte nicht geöffnet werden',
   'createFailed': 'Das Seitengespräch konnte nicht erstellt werden. Versuche es später erneut.',
   'noTurn': 'Dieses Gespräch hat noch nichts zum Verzweigen.',
+  'subagentSource': 'Ein Subagent-Gespräch kann kein Seitengespräch starten.',
 }
 
 /** Russian side conversation copy. */
@@ -76,6 +82,7 @@ export const ru: Record<keyof typeof zh, string> = {
   'openFailed': 'Не удалось открыть разговор',
   'createFailed': 'Не удалось создать боковой разговор. Повторите попытку позже.',
   'noTurn': 'В этом разговоре пока нечего ветвить.',
+  'subagentSource': 'Разговор субагента не может начать боковой разговор.',
 }
 
 /** Portuguese side conversation copy. */
@@ -87,6 +94,7 @@ export const pt: Record<keyof typeof zh, string> = {
   'openFailed': 'Não foi possível abrir a conversa',
   'createFailed': 'Não foi possível criar a conversa lateral. Tente novamente mais tarde.',
   'noTurn': 'Esta conversa ainda não tem nada para ramificar.',
+  'subagentSource': 'Uma conversa de subagente não pode iniciar uma conversa lateral.',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
