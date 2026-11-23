@@ -101,7 +101,7 @@ export function apply(ctx: ClientContext): void {
   }, DeveloperToolsRow))
   // Version information follows the core preferences.
   ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
-    name: 'settings.general.group.updates.item', id: 'current-version', order: 100, locale: NS,
+    name: 'settings.general.group.updates.item', id: 'current-version', order: 101, locale: NS,
   }, CurrentVersionRow))
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-settings-general: dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
@@ -113,7 +113,7 @@ export function apply(ctx: ClientContext): void {
     const channel = new DesktopChannelSource(channelBridge)
     ctx.effect(() => () => { channel.dispose() }, 'ui-settings-general: desktop channel')
     ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
-      name: 'settings.general.group.updates.item', id: 'desktop-update-channel', order: 101, locale: NS,
+      name: 'settings.general.group.updates.item', id: 'desktop-update-channel', order: 100, locale: NS,
       inject: () => ({ hooks: { channel: channel.store }, select: (value: 'nightly' | 'stable') => channel.select(value) }),
     }, DesktopChannelRow))
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({

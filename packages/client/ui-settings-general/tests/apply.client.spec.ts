@@ -228,7 +228,7 @@ describe('ui-settings-general apply', () => {
     onTestFinished(() => { vi.unstubAllGlobals() })
     const { c } = await client(mock, start)
     const row = c.ctx.slots.entries('settings.general.group.updates.item').find(row => row.options.id === 'desktop-update-channel')!
-    expect(row.options.order).toBe(101)
+    expect(row.options.order).toBe(100)
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-channel-toast')).toBe(true)
     const select = row.inject!().select as DesktopChannelRowInjected['select']
     await select('stable')
