@@ -36,6 +36,8 @@ export const intentSchema = z.discriminatedUnion('kind', [z.object({ kind: z.lit
 export const editSchema = z.object({ oldString: z.string(), newString: z.string(), replaceAll: z.boolean() }).strict()
 /** Atomic write observation. */
 export const writeResultSchema = z.object({ operation: z.enum(['create', 'update']), version: z.string(), before: z.string().nullable(), after: z.string() }).strict()
+/** Atomic byte-write observation: bytes carry no diff basis, so only identity and length. */
+export const writeBytesResultSchema = z.object({ operation: z.enum(['create', 'update']), version: z.string(), bytes: z.number().int().nonnegative() }).strict()
 /** Atomic edit observation. */
 export const editResultSchema = z.object({ version: z.string(), before: z.string(), after: z.string() }).strict()
 /** Parsed patch hunk admitted at the remote JSON boundary. */

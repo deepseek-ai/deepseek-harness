@@ -2148,6 +2148,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the outcome, including the version the write produced.',
       },
       {
+        signature: 'writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>',
+        description: 'Atomically create or replace one file from exact bytes: no decoding, no newline normalization, no diff basis. The bytes are stored as given, which is how a consumer materializes content it already holds — a downloaded attachment, a rendered document — inside this execution world. Backends that cannot store arbitrary bytes keep this default rejection.',
+        parameters: [{ name: 'target', description: 'the resolved target to write.' }, { name: 'data', description: 'the exact bytes to store.' }, { name: 'expected', description: 'the write intent guarding the write; omit for unconditional.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this write runs under; a sandboxing backend fences the write by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
+        returns: 'the outcome, including the version the write produced and its byte count.',
+      },
+      {
         signature: 'abstract editText( target: FsTarget, edit: FsEditRequest, expected?: { version: FsVersion }, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsEditOutcome>',
         description: 'Atomically edit literal text. When supplied, the version guard is checked before matching so stale content reports `FS_STALE_VERSION`; omission edits the current content without a freshness precondition.',
         parameters: [{ name: 'target', description: 'the resolved target to edit.' }, { name: 'edit', description: 'the literal search/replace request.' }, { name: 'expected', description: 'the version guard; omit for an unconditional edit.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this edit runs under; a sandboxing backend fences the edit by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
@@ -8050,6 +8056,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'FsVersion',
     declaration: 'export type FsVersion = Branded<\'FsVersion\'>;',
+  },
+  {
+    name: 'FsWriteBytesOutcome',
+    declaration: 'export interface FsWriteBytesOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n    bytes: number;\n}',
   },
   {
     name: 'FsWriteIntent',

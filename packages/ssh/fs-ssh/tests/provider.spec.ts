@@ -118,6 +118,20 @@ describe('SSH filesystem provider', () => {
     expect(dispatch).toHaveBeenLastCalledWith('fs.edit', { target, edit, expected: { version: 'v2' }, policy }, signal)
   })
 
+  it('sends a byte write as base64 under the resolved deployment policy', async () => {
+    const { fs, dispatch } = await setup()
+    const outcome = { operation: 'create', version: 'v1', bytes: 3 }
+    dispatch.mockResolvedValueOnce(outcome)
+    const data = new Uint8Array([0, 255, 128])
+    expect(await fs.writeBytes(target, data)).toEqual(outcome)
+    expect(dispatch).toHaveBeenLastCalledWith('fs.writeBytes', {
+      target,
+      data: Buffer.from(data).toString('base64'),
+      expected: undefined,
+      policy: { mode: 'read-only', workspaceRoot: '/remote/work' },
+    }, undefined)
+  })
+
   it('resolves deployment policy for mutations without an explicit policy', async () => {
     const { fs, dispatch } = await setup()
     dispatch.mockResolvedValueOnce({ operation: 'create', version: 'v1', before: null, after: 'new' })
