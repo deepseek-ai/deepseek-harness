@@ -51,11 +51,12 @@ Each command does only its own job.
 | `dev:web` ([`scripts/dev-web.ts`](../../../../scripts/dev-web.ts)), `dev:desktop` (`apps/desktop/scripts/dev.ts`) | `build:artifacts` | None before launch; after `dev:web` launches, its `tsc -b tsconfig.client.json --watch` keeps checking the Client aggregate root program |
 | Prerequisite step of `lint`, `lint:fix`, `doc-typecheck`, and the CI Typert contracts gate | Source-only Typert generation before Host package compilation (`compile-referenced-projects.ts host-contracts`), without any bundle | None |
 | CI node 24 / build (`check:ci:build`), whose restored output `node 24 / snapshots and artifacts` (`check:ci:consumers-prebuilt`) and `node 24 / web snapshots <shard>/2` consume, windows node 24 / build & observational (`check:ci:windows-blocking`) | `build` | Yes, the two required lanes |
-| CI node-compat 24.9 | `build:artifacts` (through run-gates) | None |
+| CI node-compat 24.22.3 | `build:artifacts` (through run-gates) | None |
 | CI python runtime | `build-exe-for-python-sdk.ts --build-artifacts` | None |
 | PR rehearsals in `e2e.yml` and `release.yml` | `pnpm run build:artifacts --profile official` | None |
 | `build-preview-cloudflare.yml` | `pnpm run build:artifacts` | None |
-| CI node 24 / benchmarks | `run-ci-bench.ts` (`tsc -b --noCheck`) | None |
+| CI node 24 / benchmarks 1/2 and 2/2 | None: they restore the `node 24 / build` output and bundle only `benchmarks/.dsh-build/` workers | None |
+| `check:ci:bench` | `run-ci-bench.ts` (`tsc -b --noCheck`) | None |
 | PR rehearsal in `release-vendor.yml` | `compile-referenced-projects.ts host-libraries` | None |
 | Non-PR branch of `release-vendor.yml`, `release-vendor-publish.yml` | `build:lib:host` | Host aggregate root program only |
 

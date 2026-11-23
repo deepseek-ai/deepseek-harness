@@ -65,6 +65,16 @@ export class RemoteConnectionController {
   }
 
   /**
+   * Withdraw the old connection's login address until the Host confirms its deployment again.
+   * @returns after any outstanding QR gesture settles and the status read completes.
+   */
+  async reconnect(): Promise<void> {
+    this.store.update((state) => { state.deployment = null })
+    if (this.busy()) await Promise.all(this.pending)
+    await this.load()
+  }
+
+  /**
    * Refresh deployment availability and, when retained, the current invitation.
    * @returns After the read settles or immediately when another gesture owns the panel.
    */

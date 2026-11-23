@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-06-single-office-skill.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-06-single-office-skill.md
+/agent-note-one-office-skill-with-concise-inline-guidance:
+  en: 7976ef34c85b0c30
+  zh: 31e922a5fa4a4dcd
+/agent-note-one-office-skill-with-concise-inline-guidance/problem:
+  en: 51614d95431e9cb6
+  zh: 6b7d21db5afc93bd
+/agent-note-one-office-skill-with-concise-inline-guidance/decision:
+  en: 0aa578d6f76479e5
+  zh: 132c389f52861b58
+/agent-note-one-office-skill-with-concise-inline-guidance/alternatives-considered:
+  en: 9230a1d8d322cbc9
+  zh: 4797f419635c23b4
+/agent-note-one-office-skill-with-concise-inline-guidance/consequences:
+  en: 705b55367913ef34
+  zh: 7b0c3289eac5391e
+/agent-note-one-office-skill-with-concise-inline-guidance/testing:
+  en: 9d487a3226c29525
+  zh: d68ff77b7afe0ac4

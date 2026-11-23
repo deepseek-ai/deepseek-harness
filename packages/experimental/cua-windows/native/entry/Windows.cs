@@ -1,4 +1,4 @@
-// Window state belongs to one exact application identity and revalidates its own process and AUMID.
+// Window state trusts a valid HWND after its initial application association.
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,12 +12,10 @@ internal readonly record struct WindowGeometry(Win32.Rect Pixels, uint Dpi)
     internal Bounds Bounds => new(Pixels.Left, Pixels.Top, Pixels.Width, Pixels.Height);
 }
 
-internal sealed class WindowState(nint handle, int processId, long processStarted)
+internal sealed class WindowState(nint handle)
 {
     internal nint Id => Handle;
     internal nint Handle { get; } = handle;
-    internal int ProcessId { get; } = processId;
-    internal long ProcessStarted { get; } = processStarted;
     private WindowGeometry? observation;
 
     internal void RequireCurrent(AppState app, RequestContext context)
@@ -25,12 +23,6 @@ internal sealed class WindowState(nint handle, int processId, long processStarte
         context.Check();
         if (!Win32.IsWindow(Handle))
             throw Remove(app, "The selected window is no longer available; read fresh application state");
-        var current = DesktopWindows.ResolveWindow(Handle, context);
-        if (current is null)
-            throw Remove(app, "The selected window is no longer available; read fresh application state");
-        if (!string.Equals(app.AppId, current.AppId, StringComparison.Ordinal)
-            || ProcessId != current.ProcessId || ProcessStarted != current.ProcessStarted)
-            throw Remove(app, "The selected window no longer belongs to the authorized application; read fresh application state");
     }
 
     // A stale window and its snapshots must not remain selectable after a direct operation detects the change.
@@ -97,7 +89,7 @@ internal sealed class WindowState(nint handle, int processId, long processStarte
         Win32.GetWindowText(Handle, title, title.Capacity);
         return new
         {
-            windowId = Id.ToString(CultureInfo.InvariantCulture), pid = 4, appName = app.Name,
+            windowId = Id.ToString(CultureInfo.InvariantCulture), appName = app.Name,
             title = title.ToString(), bounds, isOnScreen = IsOnScreen(Handle), onCurrentSpace = (bool?)null,
         };
     }
@@ -110,37 +102,30 @@ internal static class Windows
 {
     internal static WindowState[] Refresh(AppState app, RequestContext context)
     {
-        var observation = DesktopWindows.Observe(context);
-        var current = new Dictionary<nint, WindowState>();
-        var added = new List<WindowState>();
+        context.Check();
+        foreach (var handle in app.Windows.Keys.ToArray())
+        {
+            context.Check();
+            if (Win32.IsWindow(handle)) continue;
+            app.Windows.Remove(handle);
+            app.Snapshots.Remove(handle);
+        }
+        var observation = DesktopWindows.Observe(context, app.Windows.Keys.ToHashSet());
         foreach (var window in observation.Windows)
         {
+            context.Check();
             if (!string.Equals(window.AppId, app.AppId, StringComparison.Ordinal)) continue;
-            if (app.Windows.TryGetValue(window.Handle, out var existing)
-                && existing.ProcessId == window.ProcessId && existing.ProcessStarted == window.ProcessStarted)
-                current[window.Handle] = existing;
-            else
-            {
-                var state = new WindowState(window.Handle, window.ProcessId, window.ProcessStarted);
-                current[window.Handle] = state;
-                added.Add(state);
-            }
+            app.Snapshots.Remove(window.Handle);
+            app.Windows[window.Handle] = new WindowState(window.Handle);
         }
-        foreach (var pair in app.Windows.ToArray())
-        {
-            if (current.TryGetValue(pair.Key, out var kept) && ReferenceEquals(kept, pair.Value)) continue;
-            app.Windows.Remove(pair.Key);
-            app.Snapshots.Remove(pair.Key);
-        }
-        foreach (var window in added) app.Windows[window.Handle] = window;
-        return current.Values.OrderBy(window => (long)window.Handle).ToArray();
+        return app.Windows.Values.OrderBy(window => (long)window.Handle).ToArray();
     }
 
     internal static WindowState Resolve(AppState app, nint id, RequestContext context)
     {
         if (app.Windows.TryGetValue(id, out var known))
         {
-            // A known target is revalidated in place; a changed or closed one is removed, never switched.
+            // Cached windows retain their initial application association while the HWND remains valid.
             known.Geometry(app, context);
             return known;
         }
@@ -152,7 +137,7 @@ internal static class Windows
             throw new NativeFailure("WINDOW_CHANGED", "The window does not belong to the authorized application; read fresh application state");
         // A newly appeared explicit window may join the application; no default target is inferred.
         app.Snapshots.Remove(id);
-        var window = new WindowState(observed.Handle, observed.ProcessId, observed.ProcessStarted);
+        var window = new WindowState(observed.Handle);
         app.Windows[id] = window;
         return window;
     }
@@ -241,8 +226,7 @@ internal static class Windows
         DesktopSession.RequireInteractive();
         target.Geometry(app, context);
         var foreground = Win32.GetForegroundWindow();
-        Win32.GetWindowThreadProcessId(foreground, out var pid);
-        if (pid != (uint)target.ProcessId || Win32.GetAncestor(foreground, 2) != target.Handle)
+        if (Win32.GetAncestor(foreground, 2) != target.Handle)
             throw new NativeFailure("FOREGROUND_REQUIRED", "This input needs the target in front; explain why, explicitly activate or raise it, then observe again");
     }
 }

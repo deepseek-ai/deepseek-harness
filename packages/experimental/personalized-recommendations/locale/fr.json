@@ -1,7 +1,0 @@
-{
-  "meta": {
-    "title": "Recommandations personnalisées",
-    "description": "Affiche des cartes de recommandation sous la réponse pour vos besoins personnalisés dans DSH : lorsque vous voulez une page ou un petit outil à conserver, propose une nouvelle page personnalisée, générée en arrière-plan après un clic sur Créer ; lorsque vous demandez comment faire quelque chose dans cette application ou signalez qu’une fonctionnalité manque, recommande le plugin intégré qui la fournit, activé lorsque vous cliquez sur Activer.",
-    "detail": "docs/DETAIL.md"
-  }
-}

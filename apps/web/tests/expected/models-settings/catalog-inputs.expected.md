@@ -62,6 +62,10 @@
             - text: 文本
             - checkbox "图片" [checked]
             - text: 图片
+          - group "推理等级 1":
+            - text: 推理等级
+            - button "推理等级说明": "?"
+            - switch "推理等级 1"
           - button "添加模型"
       - button "取消"
       - button "保存"

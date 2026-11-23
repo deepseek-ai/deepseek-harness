@@ -23,6 +23,22 @@ describe('request image dimensions', () => {
     expect(projected.width * projected.height).toBeLessThanOrEqual(640_000)
   })
 
+  it.each([
+    [1146, 3657, 4194304, 2000, 2000, 627, 2000],
+    [3657, 1146, 4194304, 2000, 2000, 2000, 627],
+    [4000, 800, 4194304, 3000, 300, 1500, 300],
+    [800, 4000, 4194304, 300, 3000, 300, 1500],
+    [4000, 4000, 1000000, 2000, 2000, 1000, 1000],
+    [320, 240, 4194304, 2000, 2000, 320, 240],
+    [1, 8192, 4194304, 2000, 2000, 1, 2000],
+  ])('fits %sx%s within %s pixels and %sx%s', (width, height, pixels, maxWidth, maxHeight, expectedWidth, expectedHeight) => {
+    const projected = requestImageDimensions(width, height, pixels, maxWidth, maxHeight)
+    expect(projected).toEqual({ width: expectedWidth, height: expectedHeight })
+    expect(projected.width * projected.height).toBeLessThanOrEqual(pixels)
+    expect(projected.width).toBeLessThanOrEqual(maxWidth)
+    expect(projected.height).toBeLessThanOrEqual(maxHeight)
+  })
+
   it('rounds a portrait inward when integer aspect rounding crosses the pixel cap', () => {
     expect(requestImageDimensions(2, 4, 5)).toEqual({ width: 1, height: 2 })
   })

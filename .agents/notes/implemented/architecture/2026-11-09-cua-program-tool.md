@@ -22,7 +22,7 @@ This partially supersedes the exclusion of a CUA program entry in [native CUA ob
 
 **A CUA-specific evaluator** duplicates execution lifecycle policy. Reusing the PTC factory and runtime keeps cancellation, limits, sandboxing, and result handling with their existing owners.
 
-**The profile's shared runtime** couples CUA state to unrelated PTC and workflow settings. Its default per-call mode cannot retain objects. A separate CUA runtime preserves the profile's chosen execution mode.
+**The profile's shared runtime** couples CUA state to unrelated PTC and workflow settings. A per-call mode selected there cannot retain objects. A separate CUA runtime preserves the profile's chosen execution mode.
 
 **Global registration of both tool forms** exposes a program runner inside PTC programs and exposes raw CUA calls to other presets. Selecting one form per Agent keeps each mode's intended tool list. Binding every session tool inside `cua_run_code` would duplicate ordinary direct calls and their declarations.
 

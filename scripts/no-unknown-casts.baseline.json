@@ -306,9 +306,6 @@
     "29e5ec01ee79a9c66e7c5755f8c629c193db226dc08b29f16b5967957ad8602c": 1,
     "4dd1f265ec710503bb27f057a582099a1e9d8b5db80fb45f148e32fd2afb5325": 2
   },
-  "packages/bundle/headless/src/index.ts": {
-    "971ec45a1146ab52f2fb13f75b782d5d35c0fb2ddba1fb9ccab14cc54f7291d5": 1
-  },
   "packages/bundle/headless/tests/headless.spec.ts": {
     "e1afcf3bd21c4348c25c31b75c3d96e12710fc3bb3165da6a77a48731cb7e737": 1
   },

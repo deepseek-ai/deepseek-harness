@@ -16,8 +16,10 @@ export type RemoteLoginState = 'none' | 'pending' | 'used' | 'expired' | 'cancel
 export interface RemoteConnectionStatus {
   /** Clean advertised application URL. */
   readonly url: string
-  /** Whether the advertised URL accepts remote browser requests. */
+  /** Whether the advertised URL is reachable and trusted for QR login. */
   readonly availability: 'available' | RemoteConnectionUnavailable
+  /** Whether the owner may request a login link from the Host's optional Token provider for this address. */
+  readonly loginUrlAllowed: boolean
   /** State of the requested invitation, or none when no identifier was supplied. */
   readonly ticket: RemoteLoginState
   /** Interval between settings-panel status reads, in milliseconds. */

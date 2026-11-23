@@ -1,4 +1,4 @@
-/** The Tencent Meeting section offers each state's next step, the guide download row, and failure guidance, in every shipped language. */
+/** The Tencent Meeting section offers each state's next step, the guide download step, and failure guidance, in every shipped language. */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { ConnectorAccountDisplay, ConnectorOperationId } from '@deepseek-ai/dsh-client-ui-connector-account/types'
 import { rm } from 'node:fs/promises'
@@ -37,8 +37,8 @@ afterAll(async () => {
 
 const presentAccount = (view: TencentMeetingState): ConnectorAccountDisplay => page.present(view)
 
-const SIGNED_OUT: TencentMeetingState = { account: { state: 'signed-out', skills: 'installed' } }
-const CONNECTED: TencentMeetingState = { account: { state: 'connected', userName: '测试用户', skills: 'installed' } }
+const SIGNED_OUT: TencentMeetingState = { account: { state: 'signed-out' } }
+const CONNECTED: TencentMeetingState = { account: { state: 'connected', userName: '测试用户' } }
 
 it('offers the next step while signing in', () => {
   let shown = presentAccount(SIGNED_OUT)
@@ -60,7 +60,7 @@ it('offers the next step while signing in', () => {
 
   for (const view of [
     { ...SIGNED_OUT, operation: { id: OP, kind: 'check', phase: 'checking', cancellable: false } },
-    { account: { state: 'unchecked', skills: 'installed' } },
+    { account: { state: 'unchecked' } },
   ] as const satisfies readonly TencentMeetingState[]) {
     shown = presentAccount(view)
     expect(shown).toMatchObject({ phase: 'checking', status: say('status.checking'), buttons: [] })
@@ -94,8 +94,8 @@ it('reports a failed sign-in with its diagnostic items, and no failure for a can
 
 it('retries an unconfirmed or unreadable sign-in by checking again', () => {
   for (const view of [
-    { account: { state: 'unverified', skills: 'installed' } },
-    { account: { state: 'unchecked', skills: 'installed' }, result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 2 } } },
+    { account: { state: 'unverified' } },
+    { account: { state: 'unchecked' }, result: { id: OP, kind: 'check', outcome: 'failed', failure: { command: 'auth-status', exitCode: 2 } } },
   ] as const satisfies readonly TencentMeetingState[]) {
     const shown = presentAccount(view)
     expect(shown).toMatchObject({ phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.unavailable') })
@@ -103,10 +103,16 @@ it('retries an unconfirmed or unreadable sign-in by checking again', () => {
   }
 })
 
-it('reports a guide that is downloading, and retries a failed download by checking again', () => {
-  expect(presentAccount({ account: { state: 'signed-out', skills: 'downloading' } }).notes).toMatchObject([{ text: say('skills.downloading') }])
-  const [note] = presentAccount({ account: { state: 'signed-out', skills: 'failed' } }).notes
-  expect(note).toMatchObject({ text: say('skills.failed'), button: { label: say('action.retry'), command: CHECK } })
+it('shows the guide\'s download with its cancel, and retries one that did not finish by checking again', () => {
+  let shown = presentAccount({ account: { state: 'unchecked' }, operation: { id: OP, kind: 'check', phase: 'downloading', cancellable: true } })
+  expect(shown).toMatchObject({ phase: 'checking', status: say('step.downloading'), notes: [] })
+  expect(shown.buttons).toMatchObject([{ label: say('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' }])
+
+  shown = presentAccount({ account: { state: 'not-installed' }, result: { id: OP, kind: 'check', outcome: 'failed' } })
+  expect(shown).toMatchObject({ phase: 'unavailable', status: say('status.unavailable'), badge: say('badge.unavailable'), detail: say('detail.missing') })
+  expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
+  expect(shown.failure).toMatchObject({ text: say('failed') })
+  expect(presentAccount({ account: { state: 'not-installed' }, result: { id: OP, kind: 'check', outcome: 'cancelled' } }).failure).toBeUndefined()
 })
 
 it('names the section, its activation prompt, and the notices of signing in and out', () => {

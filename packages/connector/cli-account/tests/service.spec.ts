@@ -9,9 +9,9 @@ import { cliPathContextText } from '../src/context.ts'
 import CliAccounts, { type CliAccountHandle, type CliAccountRegistration } from '../src/index.ts'
 import { EXECUTABLE, PROGRAM, ScriptedSubprocess, type ScriptedProcess } from './harness.ts'
 
-interface Account { readonly state: 'unchecked' | 'signed-out' | 'signed-in' }
+interface Account { readonly state: 'unchecked' | 'not-installed' | 'signed-out' | 'signed-in' }
 type Kind = 'check' | 'connect'
-type Phase = 'authorizing'
+type Phase = 'downloading' | 'authorizing'
 type Command = 'status' | 'login'
 
 const DICTIONARIES = {
@@ -92,6 +92,26 @@ function follow(ctx: Context): () => readonly ConnectorAccountEntry[] {
 
 async function requiredContext(ctx: Context) {
   return renderContextSections(await ctx.systemPrompt.assemble())
+}
+
+/**
+ * A registration with a prepare step that a test ends: `finish` puts everything in place, `fail` rejects the step, and
+ * an aborted signal rejects it with the signal's reason.
+ */
+function preparing() {
+  const step: PromiseWithResolvers<void> = Promise.withResolvers()
+  let ready = false
+  const run = vi.fn(async (signal: AbortSignal) => {
+    signal.addEventListener('abort', () => { step.reject(signal.reason) }, { once: true })
+    await step.promise
+    ready = true
+  })
+  const registration: Registration = {
+    ...REGISTRATION,
+    cancellable: ['downloading', 'authorizing'],
+    prepare: { phase: 'downloading', unprepared: { state: 'not-installed' }, ready: () => ready, run },
+  }
+  return { registration, run, finish: () => { step.resolve() }, fail: () => { step.reject(new Error('download failed')) } }
 }
 
 describe('Config', () => {
@@ -281,5 +301,133 @@ describe('register', () => {
     expect(handle.snapshot().operation).toBeUndefined()
     await fiber.dispose()
     expect(handle.dispose()).toBe(withdrawn)
+  })
+})
+
+describe('prepare', () => {
+  it('runs the step in its phase before a check while something is missing, then checks', async () => {
+    const { ctx, subprocess } = await host()
+    let status!: ScriptedProcess
+    subprocess.respond = (process) => { status = process }
+    const step = preparing()
+    const { handle } = await app(ctx, step.registration)
+
+    handle.refresh()
+
+    expect(handle.snapshot().operation).toMatchObject({ kind: 'check', phase: 'downloading', cancellable: true })
+    expect(subprocess.processes).toEqual([])
+    step.finish()
+    await vi.waitFor(() => { expect(status).toBeDefined() })
+    expect(handle.snapshot().operation).toMatchObject({ kind: 'check', phase: 'checking', cancellable: false })
+    status.reply({ stdout: 'in\n' })
+    await vi.waitFor(() => { expect(handle.snapshot().account).toEqual({ state: 'signed-in' }) })
+
+    subprocess.respond = (process) => { process.reply({ stdout: 'out\n' }) }
+    handle.refresh()
+    await vi.waitFor(() => { expect(handle.snapshot().account).toEqual({ state: 'signed-out' }) })
+    expect(step.run).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the CLI path out of required runtime context while something is missing', async () => {
+    const { ctx, subprocess } = await host()
+    subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
+    const step = preparing()
+    const { handle } = await app(ctx, step.registration)
+    expect(await requiredContext(ctx)).toEqual([])
+
+    handle.refresh()
+    step.finish()
+
+    await vi.waitFor(() => { expect(handle.snapshot().account).toEqual({ state: 'signed-in' }) })
+    expect(await requiredContext(ctx)).toEqual([CLI_CONTEXT])
+  })
+
+  it('reports the unprepared account and fails the check without performing it when the step throws', async () => {
+    const { ctx, subprocess } = await host()
+    const step = preparing()
+    const { handle } = await app(ctx, step.registration)
+    const page = follow(ctx)
+    await vi.waitFor(() => { expect(step.run).toHaveBeenCalledOnce() })
+    const id = handle.snapshot().operation?.id
+
+    step.fail()
+
+    await vi.waitFor(() => { expect(handle.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'failed' } }) })
+    await vi.waitFor(() => { expect(page()[0]?.display).toEqual({ ...DISCONNECTED, failure: { text: both('failed') } }) })
+    expect(subprocess.processes).toEqual([])
+  })
+
+  it('stops the step when the page cancels the check, and reports the unprepared account', async () => {
+    const { ctx, subprocess } = await host()
+    const step = preparing()
+    const { handle } = await app(ctx, step.registration)
+    const id = await ctx.connectorAccounts.start(PACKAGE, 'check')
+
+    await ctx.connectorAccounts.cancel(PACKAGE, id)
+
+    expect(step.run.mock.calls[0]?.[0].aborted).toBe(true)
+    expect(handle.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'cancelled' } })
+    expect(subprocess.processes).toEqual([])
+  })
+
+  it.each([
+    ['its step succeeded', 2],
+    ['what was missing arrived without the step', 1],
+  ])('reports the first account again, not the unprepared one, when a later check fails after %s', async (_path, runs) => {
+    const { ctx, subprocess } = await host()
+    subprocess.respond = (process) => { process.reply({ exitCode: 3 }) }
+    let ready = false
+    const run = vi.fn<(signal: AbortSignal) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('download failed'))
+      .mockImplementationOnce(() => {
+        ready = true
+        return Promise.resolve()
+      })
+    const prepare: Registration['prepare'] = { phase: 'downloading', unprepared: { state: 'not-installed' }, ready: () => ready, run }
+    const { handle } = await app(ctx, { ...REGISTRATION, prepare })
+    const first = await ctx.connectorAccounts.start(PACKAGE, 'check')
+    await vi.waitFor(() => { expect(handle.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id: first, kind: 'check', outcome: 'failed' } }) })
+
+    if (runs === 1) ready = true
+    const id = await ctx.connectorAccounts.start(PACKAGE, 'check')
+
+    await vi.waitFor(() => { expect(handle.snapshot().result).toMatchObject({ id, outcome: 'failed', failure: { command: 'status', exitCode: 3 } }) })
+    expect(handle.snapshot().account).toEqual({ state: 'unchecked' })
+    expect(run).toHaveBeenCalledTimes(runs)
+  })
+
+  it('starts the other operations without the step', async () => {
+    const { ctx, subprocess } = await host()
+    subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
+    const step = preparing()
+    const { handle } = await app(ctx, step.registration)
+
+    const id = await ctx.connectorAccounts.start(PACKAGE, 'connect')
+
+    await vi.waitFor(() => { expect(handle.snapshot().result).toEqual({ id, kind: 'connect', outcome: 'succeeded' }) })
+    expect(step.run).not.toHaveBeenCalled()
+  })
+
+  it('calls ready and run as methods of the step', async () => {
+    const { ctx, subprocess } = await host()
+    subprocess.respond = (process) => { process.reply({ stdout: 'in\n' }) }
+    const prepare: NonNullable<Registration['prepare']> & { installed: boolean } = {
+      phase: 'downloading',
+      unprepared: { state: 'not-installed' },
+      installed: false,
+      ready() {
+        return this.installed
+      },
+      run() {
+        this.installed = true
+        return Promise.resolve()
+      },
+    }
+    const { handle } = await app(ctx, { ...REGISTRATION, prepare })
+
+    handle.refresh()
+
+    await vi.waitFor(() => { expect(handle.snapshot().account).toEqual({ state: 'signed-in' }) })
+    expect(await requiredContext(ctx)).toEqual([CLI_CONTEXT])
   })
 })

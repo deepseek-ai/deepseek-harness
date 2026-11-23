@@ -4,7 +4,7 @@ import { resolveAdapterOptions } from '../src/config.ts'
 import { resolveListedCatalog } from '../src/listed-catalog.ts'
 import type { ModelOverride } from '../src/listed-catalog.ts'
 import { parseModelListing } from '../src/listing.ts'
-import { DEFAULT_REQUEST_IMAGE_MAX_BYTES } from '../src/request-pricing.ts'
+import { DEFAULT_REQUEST_IMAGE_TARGET_BYTES } from '../src/request-pricing.ts'
 
 const FLASH = {
   id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', context_window: 1_048_576, max_output_tokens: 393_216,
@@ -51,7 +51,7 @@ describe('with a listing', () => {
     expect(catalog.offered[1]).toEqual({
       id: 'deepseek-flash', name: 'DeepSeek-V4.1-Flash', contextWindow: 1_048_576, maxTokens: 256_000,
       inputModalities: ['text', 'image'], systemPromptUpdate: 'in-history', toolUpdate: 'addition-only',
-      imageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
+      imageTargetBytes: DEFAULT_REQUEST_IMAGE_TARGET_BYTES,
     })
     expect(catalog.offered[0]).not.toHaveProperty('systemPromptUpdate')
     expect(catalog.offered[0]?.description).toContain('agentic coding')
@@ -102,7 +102,7 @@ describe('with a listing', () => {
   it('drops inherited image limits from a model the listing makes text-only', () => {
     const [flash] = resolve([{ ...FLASH, input_modalities: ['text'] }]).offered
     expect(flash).toMatchObject({ inputModalities: ['text'] })
-    expect(flash).not.toHaveProperty('imageMaxBytes')
+    expect(flash).not.toHaveProperty('imageTargetBytes')
   })
 
   it.each([
@@ -128,7 +128,7 @@ describe('with a listing', () => {
   it('serves a vouched unknown model with listed metadata only', () => {
     const [model] = resolve([{ ...FLASH, id: 'deepseek-v5', ...requires('0.1.0') }]).offered
     expect(model).not.toHaveProperty('toolUpdate')
-    expect(model).toMatchObject({ id: 'deepseek-v5', contextWindow: 1_048_576, imageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES })
+    expect(model).toMatchObject({ id: 'deepseek-v5', contextWindow: 1_048_576, imageTargetBytes: DEFAULT_REQUEST_IMAGE_TARGET_BYTES })
   })
 
   it('reports unreadable requirements and unusable declarations, but not unknown models', () => {
@@ -166,14 +166,16 @@ describe('with a listing', () => {
     const catalog = resolve([FLASH, { ...PRO, id: 'deepseek-v5', ...requires('0.1.0') }], {
       'deepseek-flash': { inputModalities: ['text'] }, 'deepseek-v5': { contextWindow: 9 },
     })
-    expect(catalog.offered[0]).not.toHaveProperty('imageMaxBytes')
+    expect(catalog.offered[0]).not.toHaveProperty('imageTargetBytes')
     expect(catalog.offered[1]?.contextWindow).toBe(9)
     expect(catalog.overrideErrors).toEqual([])
   })
 
-  it.each([{ imagePixelBudget: 'low' as const }, { imageMaxBytes: 1 }])('reports an override %j that does not apply and a stale override id', (limits) => {
+  it.each([{ imagePixelBudget: 'low' as const }, {
+    imageTargetBytes: 1,
+  }])('reports an override %j that does not apply and a stale override id', (limits) => {
     const catalog = resolve([PRO], { 'deepseek-v4-pro': limits, 'retired': { contextWindow: 1 } })
-    expect(catalog.offered[0]).not.toHaveProperty('imageMaxBytes')
+    expect(catalog.offered[0]).not.toHaveProperty('imageTargetBytes')
     expect(catalog.overrideErrors).toEqual([
       expect.stringMatching(/^modelOverrides\.deepseek-v4-pro does not apply \(.*cannot declare image request limits/),
       'modelOverrides names "retired", which neither the model listing nor the built-in catalog describes',

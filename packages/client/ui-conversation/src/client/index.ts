@@ -91,7 +91,7 @@ export type {
   ConversationViewActionEntry, ConversationViewActionsOwnerProps, ConversationViewsProps,
   ConversationWidthControlsInputProps, ConversationWidthControlsProps,
   ConversationStore, ConvViewOwnerProps, ConvViewProps, EmptyWorkspaceOwnerProps,
-  HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, HeroFrameOwnerProps, InputControlOwnerProps, InputZone,
+  HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, HeroFrameOwnerProps, InputControlOwnerProps, InputPlaceholderOwnerProps, InputZone,
   MessageImageLabels, MessageImageLoader, MessageImageSource, MessageImagesContentInput, MessageImagesOwnerProps, UseConversation,
   UserTextInput, UserTextInjected, UserTextNodeOwnerProps, UserTextNodeProps,
   WorkspaceSelectedHandler, WorkspaceSessionAdopter,

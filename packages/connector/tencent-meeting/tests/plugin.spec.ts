@@ -54,15 +54,17 @@ describe('Tencent Meeting plugin', () => {
     expect(await ctx.skills.get('tmeet-skill')).toBeUndefined()
   })
 
-  it('reports the guide as downloading and then failed when no skills URL answers, and lists no skill', async () => {
+  it('gives no CLI path and lists no skill while the guide is missing, as when no skills URL answers', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-tencent-meeting-home-'))
     vi.stubEnv('DSH_HOME', home)
     try {
       await start({ skillsUrls: ['https://127.0.0.1:9'], skillsTimeoutMs: 5_000 })
       await ctx.plugin(TencentMeeting, { binDir })
-      const account = host.pages[0]!.source
-      expect(account.snapshot().account.skills).toBe('downloading')
-      await vi.waitFor(() => { expect(account.snapshot().account.skills).toBe('failed') }, { timeout: 10_000 })
+      expect(await runtimeContext()).toEqual([])
+      const warnings = (): unknown[] => ctx.logger.buffer.filter(message => message.type === 'warn').map((message): unknown => message.args[0])
+      await vi.waitFor(() => { expect(warnings()).toContain('tencent-meeting: the upstream skills are not available') }, { timeout: 10_000 })
+      expect(host.pages[0]!.source.snapshot()).toEqual({ account: { state: 'unchecked' } })
+      expect(await runtimeContext()).toEqual([])
       expect(await ctx.skills.list()).toEqual([])
     } finally {
       await rm(home, { recursive: true, force: true })
@@ -91,7 +93,7 @@ describe('Tencent Meeting plugin', () => {
     const fiber = await ctx.plugin(TencentMeeting, { binDir, skillsDir })
     expect(host.pages).toHaveLength(1)
     expect(host.pages[0]).toMatchObject({ key: TENCENT_MEETING_PACKAGE, packageName: TENCENT_MEETING_PACKAGE })
-    expect(host.pages[0]!.source.snapshot().account).toEqual({ state: 'unchecked', skills: 'installed' })
+    expect(host.pages[0]!.source.snapshot().account).toEqual({ state: 'unchecked' })
 
     await fiber.dispose()
 

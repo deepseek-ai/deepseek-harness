@@ -15,6 +15,11 @@
     - id: headless-startup
       name: '@deepseek-ai/dsh-headless/startup'
 
+    # Records the agent preset each Session currently runs under, which
+    # `--session-id` adoption reads. This bundle declares no preset.
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+
     # Reads its task and run options from the ordinary headlessStartup provider.
     - id: headless-runner
       name: '@deepseek-ai/dsh-headless'

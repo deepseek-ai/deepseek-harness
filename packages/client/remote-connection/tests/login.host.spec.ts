@@ -107,7 +107,9 @@ async function exchange(route: WebRoute, token: string, headers?: Record<string,
 
 it('issues a prefix-preserving one-use invitation and a Remote-owned browser cookie', async () => {
   const { ctx, route, service } = await mount()
-  expect(service.status(null)).toEqual({ url: 'https://login.example/ui/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 })
+  expect(service.status(null)).toEqual({
+    url: 'https://login.example/ui/', availability: 'available', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000,
+  })
   const ticket = service.create()
   expect(ticket.lifetimeMs).toBe(120_000)
   expect(ticket.url).toMatch(/^https:\/\/login\.example\/ui\/\?login=qr#[A-Za-z0-9_-]{43}$/)
@@ -312,20 +314,41 @@ it('requires an owner even when a caller bypasses the generated Remote gateway',
   expect(service.status(ticket.id).ticket).toBe('pending')
 })
 
+it.each(['http://127.0.0.1:4312/ui/', 'https://127.0.0.2/', 'https://localhost/', 'http://[::1]/'])(
+  'offers the owner a local Token link at %s and keeps QR login unavailable', async (url) => {
+    const { service } = await mount(url)
+    expect(service.status(null)).toMatchObject({ url, availability: 'unreachable-host', loginUrlAllowed: true })
+    const link = new URL(service.loginUrl())
+    expect(link.searchParams.get('token')).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+    link.searchParams.delete('token')
+    expect(link.href).toBe(url)
+    expect(() => service.create()).toThrow(expect.objectContaining({ code: 'remote-connection/unavailable' }))
+  },
+)
+
+it('requires source admission before returning a loopback Token link', async () => {
+  const { ctx, service } = await mount('http://127.0.0.1/')
+  ctx.on('webserver/authorize', () => ({ kind: 'deny', status: 403 }), { prepend: true })
+  expect(service.status(null).loginUrlAllowed).toBe(false)
+  expect(() => service.loginUrl()).toThrow(expect.objectContaining({ code: 'remote-connection/unavailable' }))
+})
+
+it('reports a missing Token provider for an admitted loopback address', async () => {
+  const { service } = await mount('http://127.0.0.1/', 'http:', false)
+  expect(service.status(null).loginUrlAllowed).toBe(true)
+  expect(() => service.loginUrl()).toThrow(expect.objectContaining({ code: 'remote-connection/token-unavailable' }))
+})
+
 it.each([
-  ['http://localhost/', 'unreachable-host'],
   ['http://unknown.example/', 'untrusted-host'],
-  ['https://localhost/', 'unreachable-host'],
   ['https://app.localhost/', 'unreachable-host'],
-  ['https://127.0.0.2/', 'unreachable-host'],
-  ['https://[::1]/', 'unreachable-host'],
   ['https://[::]/', 'unreachable-host'],
   ['https://0.0.0.0/', 'unreachable-host'],
   ['https://unknown.example/', 'untrusted-host'],
   ['https://127.unknown.example/', 'untrusted-host'],
 ] as const)('reports the unmet prerequisite for %s', async (url, availability) => {
   const { service } = await mount(url)
-  expect(service.status(null).availability).toBe(availability)
+  expect(service.status(null)).toMatchObject({ availability, loginUrlAllowed: false })
   expect(() => service.create()).toThrow(expect.objectContaining({ code: 'remote-connection/unavailable', details: { reason: availability } }))
   expect(() => service.loginUrl()).toThrow(expect.objectContaining({ code: 'remote-connection/unavailable', details: { reason: availability } }))
 })

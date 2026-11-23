@@ -1,6 +1,7 @@
 // Record synthesized events and desktop state queries without posting input to the user's desktop.
 import CoreGraphics
 import Darwin
+import Foundation
 import Testing
 @testable import CuaNative
 
@@ -67,15 +68,17 @@ import Testing
     var events: [CGEvent] = []
     var foreground = target.pid
     let system = SystemKeyboardInput(post: { events.append($0) }, keyState: { _ in false }, currentFlags: { [] }, foreground: { foreground })
-    let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, system: system)
-    try keyboard.keyDown("shift", app: "app", run: "run", useSystemInput: true, recipient: { target })
-    #expect(throws: NativeFailure.self) { try keyboard.keyUp("shift", app: "app", run: "run", recipientIfUnheld: { target }) }
+    let held = HeldInputs()
+    let connection = UUID()
+    let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, held: held, connection: connection, system: system)
+    try keyboard.keyDown("shift", app: "app", useSystemInput: true, recipient: { target })
+    #expect(throws: NativeFailure.self) { try keyboard.keyUp("shift", app: "app", recipientIfUnheld: { target }) }
     foreground = 99
-    #expect(try keyboard.keyUp("shift", app: "app", run: "run", useSystemInput: true, recipientIfUnheld: { target }))
+    #expect(try keyboard.keyUp("shift", app: "app", useSystemInput: true, recipientIfUnheld: { target }))
     foreground = target.pid
-    try keyboard.keyDown("w", app: "app", run: "run", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("w", app: "app", useSystemInput: true, recipient: { target })
     foreground = 99
-    try keyboard.releaseHeldKeys()
+    try held.release(connection: connection)
     #expect(events.map { $0.getIntegerValueField(.keyboardEventKeycode) } == [56, 56, 13, 13])
 }
 
@@ -89,16 +92,17 @@ import Testing
 @Test func systemDirectionalEventsPreserveExternalModifiers() throws {
     let target = try NativePlatform.identity(getpid())
     var ambient: CGEventFlags = .maskAlternate
-    let held = HeldKeys(systemFlags: { ambient })
+    let connection = UUID()
+    let held = HeldInputs(systemFlags: { ambient })
     var events: [CGEvent] = []
     let system = SystemKeyboardInput(post: { events.append($0) }, keyState: { _ in false }, currentFlags: { ambient }, foreground: { target.pid })
-    let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, held: held, system: system)
-    try keyboard.keyDown("w", app: "app", run: "run", useSystemInput: true, recipient: { target })
-    try keyboard.keyDown("w", app: "app", run: "run", useSystemInput: true, recipient: { target })
-    #expect(try keyboard.keyUp("w", app: "app", run: "run", useSystemInput: true, recipientIfUnheld: { target }))
+    let keyboard = KeyboardInput(post: { _, _ in Issue.record("System key used process delivery") }, textEventInterval: 0, held: held, connection: connection, system: system)
+    try keyboard.keyDown("w", app: "app", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("w", app: "app", useSystemInput: true, recipient: { target })
+    #expect(try keyboard.keyUp("w", app: "app", useSystemInput: true, recipientIfUnheld: { target }))
     #expect(events.allSatisfy { $0.flags.contains(.maskAlternate) })
-    try keyboard.keyDown("command", app: "app", run: "run", useSystemInput: true, recipient: { target })
+    try keyboard.keyDown("command", app: "app", useSystemInput: true, recipient: { target })
     ambient.formUnion(.maskCommand)
-    try keyboard.releaseHeldKeys()
+    try held.release(connection: connection)
     #expect(events.last?.flags == .maskAlternate)
 }

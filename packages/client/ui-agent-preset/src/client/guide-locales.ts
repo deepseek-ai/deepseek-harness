@@ -30,7 +30,7 @@ export const guideEn = {
     '### What reaches the model',
     'Tool results first reach the program, which can filter and combine them. The model receives what the program prints or returns; image results are attached separately. Nested tool calls are still recorded and remain subject to tool permissions.',
     '### Compared with Standard mode',
-    'Both modes can handle coding and batch tasks. Standard mode exposes individual tools directly; PTC organizes tool calls in code. The current PTC preset leaves the workflow and plugin management tools disabled. Speed and token use depend on the task and how the program handles its results.',
+    'Both modes can handle coding and batch tasks. Standard mode exposes individual tools directly; PTC organizes tool calls in code. The current PTC preset leaves the workflow tool disabled. Speed and token use depend on the task and how the program handles its results.',
   ].join('\n\n'),
   guidePtcUsage: [
     '### Check a set of configuration files',
@@ -109,7 +109,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
     '### 哪些结果交给模型',
     '工具返回的数据先交给程序，经过筛选、计算或合并，再通过输出或返回值交给模型；图片结果会另行附加。程序中的工具调用仍会被记录，也仍受工具权限约束。',
     '### 与标准模式的区别',
-    '两种模式都能编程、批量处理文件。标准模式直接向模型提供各个工具；PTC 让模型用代码组织工具调用。当前 PTC 预设未启用 workflow 和插件管理工具。速度和 token 用量取决于具体任务与结果处理方式。',
+    '两种模式都能编程、批量处理文件。标准模式直接向模型提供各个工具；PTC 让模型用代码组织工具调用。当前 PTC 预设未启用 workflow 工具。速度和 token 用量取决于具体任务与结果处理方式。',
   ].join('\n\n'),
   guidePtcUsage: [
     '### 批量检查配置文件',
@@ -166,7 +166,7 @@ export const guideJa = {
   'guideStandardExplanation': '### 仕組み\n\nエージェントはツールを直接呼び出してファイルの読み取りや編集、検索、ターミナルコマンドの実行を行います。スキル、計画、目標、サブエージェント、ワークフロー、プラグイン管理、読み取り専用のランタイム検査、コンテキストの圧縮に対応しています。\n\n### 選ぶべき場面\n\n日々のコーディング、ファイル作業、調査はまずここから始めてください。標準モードではスクリプトの作成やファイルの一括処理も行えます。PTC はツール呼び出しの構成を変えるものであり、一括処理に必須ではありません。',
   'guideStandardUsage': '### バグを修正する\n\n> 検索フォームを二度送信すると結果が消える原因を調べてください。修正して関連するテストを実行し、原因と変更内容を説明してください。\n\n期待される出力: コードの変更、関連するテスト結果、原因の説明。\n\n### プロジェクトのメモを整理する\n\n> このプロジェクト内の Markdown メモを読み、合意された決定と未解決の課題を、元ファイルへのリンク付きで要約してください。\n\n期待される出力: 元のメモと照合できる参照付きの要約。',
   'guidePtcIntro': '新しいタスクを始めるときは PTC モードを選びます。入力ファイル、処理ルール、出力形式を指定してください。コードはエージェントが書きます。',
-  'guidePtcExplanation': '### ツールの呼び出され方\n\nPTC は Programmatic Tool Calling の略です。この組み込みプリセットでは、エージェントは run_code を使い、生成された SDK 経由でツールを呼び出す TypeScript プログラムを書きます。プログラムではループ、条件分岐、エラー処理、必要に応じて並行呼び出しを利用できます。\n\n### モデルに届くもの\n\nツールの結果はまずプログラムに届き、そこでフィルタリングや結合ができます。モデルが受け取るのはプログラムが出力または返した内容です。画像の結果は別途添付されます。ネストされたツール呼び出しも記録され、ツール権限の対象のままです。\n\n### 標準モードとの比較\n\nどちらのモードもコーディングや一括処理のタスクを扱えます。標準モードは個々のツールを直接公開し、PTC はツール呼び出しをコードで整理します。現在の PTC プリセットではワークフローとプラグイン管理ツールが無効になっています。速度とトークン消費はタスクやプログラムの結果の扱い方によって変わります。',
+  'guidePtcExplanation': '### ツールの呼び出され方\n\nPTC は Programmatic Tool Calling の略です。この組み込みプリセットでは、エージェントは run_code を使い、生成された SDK 経由でツールを呼び出す TypeScript プログラムを書きます。プログラムではループ、条件分岐、エラー処理、必要に応じて並行呼び出しを利用できます。\n\n### モデルに届くもの\n\nツールの結果はまずプログラムに届き、そこでフィルタリングや結合ができます。モデルが受け取るのはプログラムが出力または返した内容です。画像の結果は別途添付されます。ネストされたツール呼び出しも記録され、ツール権限の対象のままです。\n\n### 標準モードとの比較\n\nどちらのモードもコーディングや一括処理のタスクを扱えます。標準モードは個々のツールを直接公開し、PTC はツール呼び出しをコードで整理します。現在の PTC プリセットではワークフローツールが無効になっています。速度とトークン消費はタスクやプログラムの結果の扱い方によって変わります。',
   'guidePtcUsage': '### 設定ファイルのセットを検証する\n\n> configs/ 内のすべての JSON ファイルを検査してください。schema.json に基づき、必須フィールドの欠落と無効な値を一覧にしてください。問題ごとに 1 行の CSV を保存してください。読み取れないファイルもレポートに含め、残りの検査は続けてください。元のファイルは変更しないでください。\n\n期待される出力: 問題の要約と CSV レポート。プログラムは同じ検査を繰り返し、個々の失敗に対処し、結果を集約できます。\n\n### エラーログを要約する\n\n> logs/ 内のログファイルを分析してください。エラーをサービスとエラー種別でグループ化し、頻度上位 10 グループと各 1 件の例を示してください。完全な件数を CSV に保存してください。\n\n期待される出力: 上位のエラーグループと完全な件数表。中間データは要約がモデルに届く前にプログラム内で集約できます。',
   'guideMinimalIntro': '新しいタスクには最小モードを選びます。比較を行う場合は、モデル、権限、入力、開始時のワークスペース状態を実行間で一定に保ってください。',
   'guideMinimalExplanation': '### 含まれるもの\n\n永続的なシェルツール 1 つ、read_image、固定のシステムプロンプト。画像の読み取りには画像対応モデルが必要です。古い履歴はコンテキストの負荷に応じて自動的に圧縮されます。エージェントがアイドル状態のときに /compact を使えば手動で圧縮できます。この組み込みプリセットはスキル、計画、標準のランタイムコンテキストを読み込みません。\n\n### 選ぶべき場面\n\n実験や比較のベースラインとして使用します。シェルコマンド経由でファイルの読み取りやスクリプトの実行はできますが、長いタスクを管理するための組み込み手段は少なくなります。ツールが少ないからといって、初心者にとって必ずしも簡単になるわけではありません。',
@@ -207,7 +207,7 @@ export const guideEs = {
     '### Lo que llega al modelo',
     'Los resultados de la herramienta llegan primero al programa, que puede filtrarlos y combinarlos. El modelo recibe lo que el programa imprime o devuelve; Los resultados de la imagen se adjuntan por separado. Las llamadas a herramientas anidadas aún se registran y permanecen sujetas a los permisos de la herramienta.',
     '### Comparado con el modo Estándar',
-    'Ambos modos pueden manejar tareas de codificación y por lotes. El modo estándar expone herramientas individuales directamente; PTC organiza llamadas a herramientas en código. El ajuste preestablecido actual PTC deja las herramientas de administración de complementos y flujo de trabajo deshabilitadas. La velocidad y el uso de tokens dependen de la tarea y de cómo el programa maneja sus resultados.',
+    'Ambos modos pueden manejar tareas de codificación y por lotes. El modo estándar expone herramientas individuales directamente; PTC organiza llamadas a herramientas en código. El ajuste preestablecido actual PTC deja deshabilitada la herramienta de flujo de trabajo. La velocidad y el uso de tokens dependen de la tarea y de cómo el programa maneja sus resultados.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Verifique un conjunto de archivos de configuración',
@@ -282,7 +282,7 @@ export const guideFr = {
     '### Ce qui arrive au modèle',
     "Les résultats des outils parviennent d’abord au programme, qui peut les filtrer et les combiner. Le modèle reçoit ce que le programme imprime ou renvoie ; les résultats des images sont joints séparément. Les appels d'outils imbriqués sont toujours enregistrés et restent soumis aux autorisations de l'outil.",
     '### Par rapport au mode Standard',
-    "Les deux modes peuvent gérer les tâches de codage et par lots. Le mode standard expose directement les outils individuels ; PTC organise les appels d'outils dans le code. Le préréglage PTC actuel laisse les outils de gestion de flux de travail et de plugins désactivés. La vitesse et l'utilisation des jetons dépendent de la tâche et de la manière dont le programme gère ses résultats.",
+    "Les deux modes peuvent gérer les tâches de codage et par lots. Le mode standard expose directement les outils individuels ; PTC organise les appels d'outils dans le code. Le préréglage PTC actuel laisse l’outil de flux de travail désactivé. La vitesse et l'utilisation des jetons dépendent de la tâche et de la manière dont le programme gère ses résultats.",
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Vérifier un ensemble de fichiers de configuration',
@@ -357,7 +357,7 @@ export const guideDe = {
     '### Was das Modell erreicht',
     'Werkzeugergebnisse gelangen zunächst in das Programm, das diese filtern und kombinieren kann. Das Modell empfängt, was das Programm ausgibt oder zurückgibt; Bildergebnisse sind separat beigefügt. Verschachtelte Werkzeugaufrufe werden weiterhin aufgezeichnet und unterliegen weiterhin den Werkzeugberechtigungen.',
     '### Im Vergleich zum Standardmodus',
-    'Beide Modi können Codierungs- und Batch-Aufgaben bewältigen. Im Standardmodus werden einzelne Tools direkt verfügbar gemacht. PTC organisiert Toolaufrufe im Code. Die aktuelle Voreinstellung PTC lässt die Workflow- und Plugin-Verwaltungstools deaktiviert. Geschwindigkeit und Token-Nutzung hängen von der Aufgabe ab und davon, wie das Programm mit seinen Ergebnissen umgeht.',
+    'Beide Modi können Codierungs- und Batch-Aufgaben bewältigen. Im Standardmodus werden einzelne Tools direkt verfügbar gemacht. PTC organisiert Toolaufrufe im Code. Die aktuelle Voreinstellung PTC lässt das Workflow-Tool deaktiviert. Geschwindigkeit und Token-Nutzung hängen von der Aufgabe ab und davon, wie das Programm mit seinen Ergebnissen umgeht.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Überprüfen Sie eine Reihe von Konfigurationsdateien',
@@ -432,7 +432,7 @@ export const guideRu = {
     '### Что достигает модели',
     'Результаты инструмента сначала поступают в программу, которая может их фильтровать и комбинировать. Модель получает то, что программа печатает или возвращает; Результаты изображения прилагаются отдельно. Вызовы вложенных инструментов по-прежнему записываются, и для них действуют разрешения инструмента.',
     '### По сравнению со стандартным режимом',
-    'Оба режима могут выполнять кодирование и пакетные задачи. Стандартный режим напрямую предоставляет доступ к отдельным инструментам; PTC организует вызовы инструментов в коде. Текущая предустановка PTC оставляет инструменты управления рабочим процессом и плагинами отключенными. Скорость и использование токенов зависят от задачи и того, как программа обрабатывает ее результаты.',
+    'Оба режима могут выполнять кодирование и пакетные задачи. Стандартный режим напрямую предоставляет доступ к отдельным инструментам; PTC организует вызовы инструментов в коде. Текущая предустановка PTC оставляет инструмент рабочего процесса отключенным. Скорость и использование токенов зависят от задачи и того, как программа обрабатывает ее результаты.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Проверка набора файлов конфигурации',
@@ -507,7 +507,7 @@ export const guidePt = {
     '### O que chega ao modelo',
     'Os resultados da ferramenta chegam primeiro ao programa, que pode filtrá-los e combiná-los. O modelo recebe o que o programa imprime ou retorna; os resultados da imagem são anexados separadamente. As chamadas de ferramentas aninhadas ainda são gravadas e permanecem sujeitas às permissões da ferramenta.',
     '### Comparado com o modo Padrão',
-    'Ambos os modos podem lidar com tarefas de codificação e em lote. O modo padrão expõe ferramentas individuais diretamente; PTC organiza chamadas de ferramentas em código. A predefinição PTC atual deixa o fluxo de trabalho e as ferramentas de gerenciamento de plug-ins desativados. A velocidade e o uso do token dependem da tarefa e de como o programa lida com seus resultados.',
+    'Ambos os modos podem lidar com tarefas de codificação e em lote. O modo padrão expõe ferramentas individuais diretamente; PTC organiza chamadas de ferramentas em código. A predefinição PTC atual deixa a ferramenta de fluxo de trabalho desativada. A velocidade e o uso do token dependem da tarefa e de como o programa lida com seus resultados.',
   ].join('\n\n\n\n'),
   guidePtcUsage: [
     '### Verifique um conjunto de arquivos de configuração',

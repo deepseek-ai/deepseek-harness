@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "macOS Computer Use 后端",
-    "description": "为共享 Computer Use 服务提供 macOS 原生应用与窗口对象。"
+    "title": "macOS 自动电脑操作后端",
+    "description": "为自动电脑操作服务提供 macOS 原生应用与窗口对象。"
   }
 }

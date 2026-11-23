@@ -138,9 +138,11 @@ describe('DeepSeek request-image pricing', () => {
 })
 
 it('exposes the same image dimensions and byte budget used by DeepSeek request preparation', () => {
-  const model = { ...VISION_MODEL, imagePixelBudget: 10_000, imageMaxBytes: 50_000 }
+  const model = { ...VISION_MODEL, imagePixelBudget: 10_000, imageTargetBytes: 50_000 }
   const source = ref('screenshot', 1000, 1000, 60_000)
   const provider = adapter({ models: [model] })
-  expect(provider.imageRequestTarget('deepseek', 'vision', source)).toEqual({ width: 100, height: 100, maxBytes: 50_000 })
+  expect(provider.imageRequestTarget('deepseek', 'vision', source)).toEqual({
+    width: 100, height: 100, maxImageBytes: 32 * 1024 * 1024, imageTargetBytes: 50_000,
+  })
   expect(() => provider.imageRequestTarget('deepseek', 'missing', source)).toThrow('no declared image projection')
 })

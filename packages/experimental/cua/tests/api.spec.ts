@@ -4,7 +4,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
 import { NativeError } from '../src/native-client.ts'
-import type { CuaApp, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
+import type { CuaApi, CuaApp, CuaAppInfo, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
@@ -26,7 +26,13 @@ function fixture() {
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
       case 'getCapabilities': return currentCapabilities
-      case 'listApps': return [selected, { id: 'utility-selector', name: 'Utility', isRunning: true }]
+      case 'listApps': return [{ ...selected, identity: '/Applications/Editor.app' },
+        { id: 'utility-selector', identity: 'utility-identity', name: 'Utility', isRunning: true }]
+      case 'findApps': return [
+        { id: 'test.editor', displayName: 'Editor', identity: '/Applications/Editor.app', isRunning: true, pid: 17 },
+        { id: 'utility-selector', displayName: 'Utility', identity: 'utility-identity', isRunning: true },
+        { id: 'stopped-editor', displayName: 'Stopped Editor', identity: '/Applications/Stopped Editor.app', isRunning: false },
+      ]
       case 'getApp': return selected
       case 'listWindows': return windows
       case 'mouseMove': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
@@ -54,23 +60,25 @@ function state(overrides: Record<string, JsonValue> = {}): JsonValue {
 }
 
 describe('application discovery', () => {
-  it('reports permissions and discovers provider-issued selectors without activating an app', async () => {
+  it('reports permissions and lists running applications without activating an app', async () => {
     const f = fixture()
     expect(await f.api.getCapabilities()).toEqual(capabilities)
     expect(await f.api.getState()).toEqual({ apps: [
-      { id: 'test.editor', displayName: 'Editor', isRunning: true, pid: 17 },
-      { id: 'utility-selector', displayName: 'Utility', isRunning: true },
+      { id: 'test.editor', displayName: 'Editor', identity: '/Applications/Editor.app', isRunning: true, pid: 17 },
+      { id: 'utility-selector', displayName: 'Utility', identity: 'utility-identity', isRunning: true },
     ], browsers: [] })
     expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'listApps'])
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'listApps', params: {} })
   })
 
   it.each([undefined, 'test.utility'])('selects either same-name macOS process with bundle ID %s', async (bundleId) => {
     const f = fixture()
     const pids = [101, 202]
-    f.dispatch.mockResolvedValueOnce(pids.map(pid => bundleId ? { name: 'Utility', isRunning: true, pid, bundleId } : { name: 'Utility', pid }))
+    const identity = '/Applications/Utility.app'
+    f.dispatch.mockResolvedValueOnce(pids.map(pid => bundleId ? { name: 'Utility', identity, isRunning: true, pid, bundleId } : { name: 'Utility', identity, pid }))
     const apps = await f.api.listApps()
     expect(f.dispatch).toHaveBeenCalledTimes(1)
-    expect(apps).toEqual(pids.map(pid => ({ id: bundleId ?? String(pid), displayName: 'Utility', isRunning: true, pid })))
+    expect(apps).toEqual(pids.map(pid => ({ id: bundleId ?? String(pid), identity, displayName: 'Utility', isRunning: true, pid })))
     for (const app of apps) await f.api.getApp(String(app.pid))
     expect(f.dispatch.mock.calls.flatMap(([call]) => call.method === 'getApp' ? [call.params.selector] : []))
       .toEqual(['101', '202'])
@@ -85,8 +93,8 @@ describe('application discovery', () => {
 
   it('uses the application name when discovery has no identifier', async () => {
     const f = fixture()
-    f.dispatch.mockResolvedValueOnce([{ pid: 18, name: 'Utility', isRunning: false }])
-    expect(await f.api.listApps()).toEqual([{ id: 'Utility', displayName: 'Utility', isRunning: false }])
+    f.dispatch.mockResolvedValueOnce([{ pid: 18, identity: 'Utility', name: 'Utility', isRunning: false }])
+    expect(await f.api.listApps()).toEqual([{ id: 'Utility', identity: 'Utility', displayName: 'Utility', isRunning: false }])
   })
 
   it('returns app handles and window records for the selected application', async () => {
@@ -105,21 +113,90 @@ describe('application discovery', () => {
     expect(await app.getWindows()).toEqual([windowInfo('23')])
   })
 
+  it.each(['macos', 'windows'])('requests a new %s instance without changing the selected app or reading a tree', async (platform) => {
+    const f = fixture()
+    f.setCapabilities({ ...capabilities, platform, appLevelAccessibility: platform === 'macos',
+      keyboard: platform === 'macos' ? ['app'] : ['window'], methods: ['getCapabilities', 'getApp', 'launchApp'] })
+    const app = await f.api.getApp('Editor')
+    const window = await app.getWindow('23')
+    f.dispatch.mockClear()
+    expect(await app.launch()).toEqual(delivered)
+    expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'launchApp', params: { appHandle: 'app-17' } })
+    expect(app.appHandle).toBe('app-17')
+    expect(window).not.toHaveProperty('launch')
+    expectTypeOf<CuaWindow>().not.toHaveProperty('launch')
+    f.dispatch.mockClear()
+    f.dispatch.mockRejectedValueOnce(new NativeError('LAUNCH_FAILED', 'Launch request failed'))
+    await expect(app.launch()).rejects.toMatchObject({ code: 'LAUNCH_FAILED' })
+    expect(f.dispatch).toHaveBeenCalledOnce()
+  })
+
   it('searches installed applications without turning ordinary discovery into an installed-app inventory', async () => {
     const f = fixture()
     const matches = [
-      { id: 'test.stopped', displayName: 'Stopped', path: '/Applications/Stopped.app', isRunning: false },
-      ...[101, 202].map(pid => ({ id: 'test.running', displayName: 'Running', path: `/fixture/${pid}/Running.app`, isRunning: true, pid })),
+      { id: 'test.stopped', displayName: 'Stopped', identity: '/Applications/Stopped.app', isRunning: false },
+      ...[101, 202].map(pid => ({ id: 'test.running', displayName: 'Running', identity: `/fixture/${pid}/Running.app`, isRunning: true, pid })),
     ]
     f.dispatch.mockResolvedValueOnce(matches)
     expect(await f.api.findApps('Editor')).toEqual(matches)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'findApps', params: { query: 'Editor' } })
-    await expect(f.api.findApps('   ')).rejects.toThrow()
   })
 
-  it.each(['', '   '])('names the invalid search parameter without exposing schema internals: %j', async (query) => {
+  it.each(['listApps', 'findApps'] as const)('%s preserves distinct identities for applications sharing an id', async (method) => {
+    expectTypeOf<Awaited<ReturnType<CuaApi['listApps']>>>().toEqualTypeOf<CuaAppInfo[]>()
+    expectTypeOf<Awaited<ReturnType<CuaApi['findApps']>>>().toEqualTypeOf<CuaAppInfo[]>()
+    expectTypeOf<CuaAppInfo['identity']>().toEqualTypeOf<string | null>()
     const f = fixture()
-    await expect(f.api.findApps(query)).rejects.toMatchObject({ name: 'Error', message: 'findApps query: Expected a non-empty search string' })
+    const matches = [
+      { id: 'shared-id', identity: 'opaque:first', displayName: 'Editor', isRunning: true, pid: 101 },
+      { id: 'shared-id', identity: 'opaque:second', displayName: 'Editor', isRunning: false },
+    ]
+    const native = method === 'findApps' ? matches : matches.map(({ displayName, ...app }) => ({ ...app, name: displayName }))
+    f.dispatch.mockResolvedValueOnce(native)
+    const apps = await f.api[method]('Editor')
+    expect(apps).toEqual(matches)
+    for (const app of apps) {
+      expect(app).not.toHaveProperty('path')
+      await f.api.getApp(app.identity!)
+    }
+    expect(f.dispatch.mock.calls.flatMap(([call]) => call.method === 'getApp' ? [call.params.selector] : []))
+      .toEqual(['opaque:first', 'opaque:second'])
+  })
+
+  it.each(['listApps', 'findApps'] as const)('%s preserves an unavailable identity as null', async (method) => {
+    const f = fixture()
+    const app = { id: 'editor', identity: null, isRunning: false }
+    f.dispatch.mockResolvedValueOnce([{ ...app, ...method === 'listApps' ? { name: 'Editor' } : { displayName: 'Editor' } }])
+    const apps = await f.api[method]('Editor')
+    expect(apps).toEqual([{ ...app, displayName: 'Editor' }])
+    await f.api.getApp(apps[0]!.id)
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getApp', params: { selector: 'editor' } })
+  })
+
+  it.each([undefined, '', 42])('rejects missing or invalid discovery identity %j', async (identity) => {
+    const f = fixture()
+    const fields = identity === undefined ? {} : { identity }
+    f.dispatch.mockResolvedValueOnce([{ id: 'editor', name: 'Editor', isRunning: true, ...fields }])
+    await expect(f.api.listApps()).rejects.toThrow()
+    f.dispatch.mockResolvedValueOnce([{ id: 'editor', displayName: 'Editor', path: '/Applications/Editor.app', isRunning: false, ...fields }])
+    await expect(f.api.findApps('Editor')).rejects.toThrow()
+  })
+
+  it.each(['', null, '   ', '\t\n'])('forwards application queries unchanged: %j', async (query) => {
+    const f = fixture()
+    const apps = Array.from({ length: 25 }, (_, index) => ({
+      id: `app-${index}`, displayName: `App ${index}`, identity: null, isRunning: index % 2 === 0,
+    }))
+    f.dispatch.mockResolvedValueOnce(apps)
+    expect(await f.api.findApps(query)).toEqual(apps)
+    expect(f.dispatch).toHaveBeenCalledExactlyOnceWith({ method: 'findApps', params: { query } })
+  })
+
+  it.each([42, false, {}])('names the invalid search parameter without exposing schema internals: %j', async (query) => {
+    const f = fixture()
+    const result = f.api.findApps(query as never)
+    await expect(result).rejects.toMatchObject({ name: 'Error' })
+    await expect(result).rejects.toThrow('findApps query:')
     expect(f.dispatch).not.toHaveBeenCalled()
   })
 
@@ -135,13 +212,15 @@ describe('application discovery', () => {
 })
 
 describe('background window restoration', () => {
-  it('shows an app or selected window without dispatching activation or AXRaise', async () => {
+  it('routes app and window show calls and preserves the resulting window ID', async () => {
     const f = fixture()
     f.setWindows(['23', '24'])
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow('24')
     f.dispatch.mockClear()
-    expect(await app.show()).toEqual({ ...delivered, windowId: '23', foregroundChanged: false })
+    f.dispatch.mockResolvedValueOnce({ ...delivered, windowId: '25', foregroundChanged: false })
+    expect(await app.show()).toEqual({ ...delivered, windowId: '25', foregroundChanged: false })
+    f.dispatch.mockResolvedValueOnce({ ...delivered, windowId: '24', foregroundChanged: false })
     expect(await window.show()).toEqual({ ...delivered, windowId: '24', foregroundChanged: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
       { method: 'show', params: { appHandle: 'app-17' } },
@@ -162,8 +241,10 @@ describe('background window restoration', () => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     f.dispatch.mockClear()
-    f.dispatch.mockRejectedValueOnce(new Error('UNSUPPORTED: Window cannot be restored'))
-    await expect(app.show()).rejects.toThrow('UNSUPPORTED')
+    const failure = new NativeError('BACKGROUND_RESTORE_UNAVAILABLE',
+      'The window is still minimized. Restoring it may take keyboard focus. Call app.activate(), then inspect the window.')
+    f.dispatch.mockRejectedValueOnce(failure)
+    await expect(app.show()).rejects.toBe(failure)
     expect(f.dispatch).toHaveBeenCalledTimes(1)
   })
 })
@@ -1153,6 +1234,20 @@ it('forwards bounded traversal limits on a window-only provider', async () => {
   expect(f.dispatch).toHaveBeenLastCalledWith({
     method: 'getState', params: { appHandle: app.appHandle, windowId: '23', maxDepth: 1, maxElements: 1 },
   })
+})
+
+it.each([true, false, undefined])('forwards showDiff=%s for app and window reads without retaining the option', async (showDiff) => {
+  const f = fixture()
+  const app = await f.api.getApp('Editor')
+  const window = await app.getWindow('23')
+  for (const [surface, target] of [[app, {}], [window, { windowId: '23' }]] as const) {
+    await surface.getAccessibilityTree(showDiff === undefined ? undefined : { showDiff })
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: {
+      appHandle: selected.appHandle, ...target, ...showDiff === undefined ? {} : { showDiff },
+    } })
+    await surface.getAccessibilityTree()
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'getState', params: { appHandle: selected.appHandle, ...target } })
+  }
 })
 
 it('forwards explicit system input for clicks and both keyboard operations', async () => {

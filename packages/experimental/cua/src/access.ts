@@ -149,7 +149,7 @@ export class CuaAccess extends TypertRemoteService {
  * @param options Native transport and profile persistence.
  * @returns Consent selection, guarded dispatch, and task cleanup capabilities.
  */
-export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<ApplicationAccess, 'select' | 'run' | 'forget' | 'dispose'> {
+export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<ApplicationAccess, 'select' | 'run' | 'readCached' | 'forget' | 'dispose'> {
   const policy = new ApplicationAccess(ctx, options)
   const lifetime = new AbortController()
   let client: NativeClient | undefined
@@ -176,5 +176,6 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await client?.dispose()
   }, 'cua-access.dispose')
   new CuaAccess(ctx, policy, control, options.permissionParameters)
-  return { select: policy.select.bind(policy), run: policy.run.bind(policy), forget: policy.forget.bind(policy), dispose }
+  return { select: policy.select.bind(policy), run: policy.run.bind(policy), readCached: policy.readCached.bind(policy),
+    forget: policy.forget.bind(policy), dispose }
 }

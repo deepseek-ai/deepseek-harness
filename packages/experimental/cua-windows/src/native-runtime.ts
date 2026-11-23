@@ -17,6 +17,7 @@ const Ready = z.object({
 const Started = Ready.extend({ endpoint: z.string().min(1), launcherId: z.string().min(1) })
 // Private transport control frames have fixed encoding; operation replies pass through unchanged.
 const closedFrame = Buffer.from('{"type":"closed"}\n')
+type WindowsClientConfig = NativeClientConfig & { maxDiffNotifications?: number | undefined }
 type Owner = { subprocess: Pick<SubprocessRuntime, 'spawn'> }
 
 function failure(error: unknown): Error { return error instanceof Error ? error : new Error(String(error)) }
@@ -210,7 +211,7 @@ class WindowsChannel implements NativeChannel {
   private closing = false
   private closeTimer: ReturnType<typeof setTimeout> | undefined
 
-  constructor(helper: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number, launchWaitMs: number,
+  constructor(helper: Promise<WindowsHelper>, config: WindowsClientConfig, pollIntervalMs: number, launchWaitMs: number,
     owner: Owner, transport: WindowsTransport) {
     this.logPath = join(dirname(config.helperPath), 'dsh-cua-windows.log')
     this.stdin = new Writable({
@@ -243,7 +244,7 @@ class WindowsChannel implements NativeChannel {
 
   waitForClose(): Promise<void> { return this.closed.promise }
 
-  private async run(helperPromise: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number, launchWaitMs: number,
+  private async run(helperPromise: Promise<WindowsHelper>, config: WindowsClientConfig, pollIntervalMs: number, launchWaitMs: number,
     owner: Owner, transport: WindowsTransport): Promise<void> {
     let helper: WindowsHelper | undefined
     let connection: WindowsConnection | undefined
@@ -282,9 +283,10 @@ class WindowsChannel implements NativeChannel {
         this.startup.signal.throwIfAborted()
         {
           const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs,
-            screenshotTimeoutMs, timeoutMs, graceMs, maxClickHoldMs } = config
+            screenshotTimeoutMs, timeoutMs, graceMs, maxClickHoldMs, maxDiffNotifications } = config
           socket.write(JSON.stringify({ type: 'hello', protocol: 1, runtimeKey: ready.runtimeKey,
-            config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs, graceMs, pollIntervalMs, launchWaitMs, maxClickHoldMs } }) + '\n')
+            config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs,
+              graceMs, pollIntervalMs, launchWaitMs, maxClickHoldMs, maxDiffNotifications } }) + '\n')
         }
         const response = await frame
         const accepted = Ready.parse(response.value)
@@ -378,7 +380,7 @@ export class WindowsNativeRuntime {
    * @param config Executable identity and per-connection limits.
    * @returns The byte stream used by the shared native request client.
    */
-  connect(config: NativeClientConfig): NativeChannel {
+  connect(config: WindowsClientConfig): NativeChannel {
     if (this.disposal) throw new NativeError('NATIVE_CLOSED', 'Windows Computer Use is disposed')
     const acquire = async () => {
       if (this.helper?.ended) await this.helper.done

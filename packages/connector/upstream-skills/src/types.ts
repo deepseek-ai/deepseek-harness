@@ -1,4 +1,4 @@
-/** The pinned upstream files of an entry skill, its registration, and the handle its plugin observes. */
+/** The pinned upstream files of an entry skill, its registration, and the handle its plugin waits for them through. */
 
 /** Which files of a GitHub repository an upstream skill set keeps. */
 export interface UpstreamSkillSelection {
@@ -22,9 +22,6 @@ export interface UpstreamSkillSet extends UpstreamSkillSelection {
   readonly sha256: string
 }
 
-/** Where an entry skill's upstream files stand: in place, being downloaded, or neither. */
-export type UpstreamSkillsState = 'installed' | 'downloading' | 'failed'
-
 /** One plugin's packaged entry skill and the upstream files it indexes. */
 export interface UpstreamSkillsRegistration {
   /** The skill provider's name, also the directory under `$DSH_HOME/cache` that receives the download. */
@@ -41,16 +38,21 @@ export interface UpstreamSkillsRegistration {
 export interface UpstreamSkillsHandle {
   /** The directory the entry skill resolves relative paths against: `skillsDir`, or the published cache directory. */
   readonly directory: string
-  /** `downloading` while a download runs, otherwise `installed` when `directory` exists and `failed` when it does not. */
-  readonly state: UpstreamSkillsState
   /**
-   * Call a listener each time a download starts and each time it settles.
-   * @param listener - receives the state after the change.
-   * @returns the disposer that removes the listener.
+   * Tell whether the upstream files are in place.
+   * @returns whether `directory` exists.
    */
-  watch(listener: (state: UpstreamSkillsState) => void): () => void
-  /** Start a download when the state is `failed`, unless `skillsDir` is set or the registration is withdrawn; return at once. */
-  retry(): void
+  installed(): boolean
+  /**
+   * Wait until the upstream files are in place: return at once when they are, otherwise wait for the running download,
+   * or start one when none runs. Aborting `signal` stops that download, also for every other caller that waits for it.
+   * @param signal - stops the download and the wait.
+   * @returns once `directory` exists.
+   * @throws the reason of `signal` after it aborts; the withdrawal reason after the registration is withdrawn; when the
+   *   configured `skillsDir` is no longer a directory, without a download; otherwise what failed the download, which
+   *   is also logged as a warning.
+   */
+  install(signal: AbortSignal): Promise<void>
   /** Withdraw the registration before the plugin unloads: abort a running download and remove the entry skill. */
   dispose(): void
 }

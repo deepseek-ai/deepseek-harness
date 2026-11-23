@@ -83,9 +83,15 @@ export interface TypeApiEntry {
 export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'actionCards',
-    summary: 'Kind registry, Session projection, user actions and status notices.',
-    description: 'Kind registry, Session projection, user actions and status notices.',
+    summary: 'Kind registry, skill switch, Session projection, user actions and status notices.',
+    description: 'Kind registry, skill switch, Session projection, user actions and status notices.',
     methods: [
+      {
+        signature: 'skillProvider(candidate: SkillCandidate, get: SkillProvider[\'get\']): (control: SkillProviderControl) => SkillProvider',
+        description: 'Build a kind\'s skill provider. It lists the skill while recommendations are enabled.',
+        parameters: [{ name: 'candidate', description: 'the skill\'s catalog entry.' }, { name: 'get', description: 'loads the skill\'s definition.' }],
+        returns: 'the factory the kind passes to `ctx.skills.registerProvider`.',
+      },
       {
         signature: 'register<Details>(kind: ActionCardKind<Details>): () => void',
         description: 'Register one action kind for the caller\'s lifetime.',
@@ -97,7 +103,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'record(agent: Agent, decision: ActionCardDecision): void',
         description: 'Record a card decision in the Session log; the next model request reports it.',
         parameters: [{ name: 'agent', description: 'agent whose Session owns the card.' }, { name: 'decision', description: 'the card\'s new state.' }],
-        throws: ['when no kind ever registered the decision\'s action with this service, or its phase is one the projection derives.'],
+        throws: ['when no kind ever registered the decision\'s action with this service.'],
       },
       {
         signature: 'view(session: Session): ActionCardView',
@@ -202,6 +208,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve an identity without starting an Agent.',
         parameters: [{ name: 'id', description: 'Explicit preset or the current default.' }],
         returns: 'Current metadata, including failure when activation failed.',
+        throws: ['when `id` is omitted and no default is configured.'],
       },
       {
         signature: '@Remote(\'read\') readDocument(agentPreset: string): Promise<AgentPresetDocument>',
@@ -510,8 +517,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'readImageRequest( ref: ImageAttachmentRef, target: ImageRequestTarget, signal?: AbortSignal, ): Promise<RequestImageAttachment>',
         description: 'Generate or read one deterministic model-request version from the stored normalized image.',
-        parameters: [{ name: 'ref', description: 'durable provider-independent normalized attachment reference.' }, { name: 'target', description: 'route-chosen dimensions and byte target; an unmet byte target yields the smallest ladder output.' }, { name: 'signal', description: 'optional cancellation.' }],
-        returns: 'request bytes and the cache/upload identity covering every transform input.',
+        parameters: [{ name: 'ref', description: 'durable provider-independent normalized attachment reference.' }, { name: 'target', description: 'route-chosen maximum dimensions, hard byte limit, and preferred byte target.' }, { name: 'signal', description: 'optional cancellation.' }],
+        returns: 'request bytes within the hard limit, actual encoded dimensions, and a cache/upload identity covering every transform input.',
       },
     ],
   },
@@ -599,7 +606,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'register<Account, Kind extends string, Phase extends string, Command extends string, Key extends string>( registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>, ): CliAccountHandle<Account, Kind, Phase, Command>',
-        description: 'Register the calling plugin\'s CLI and account: add the CLI\'s absolute path to required runtime context, run the plugin\'s account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.',
+        description: 'Register the calling plugin\'s CLI and account: add the CLI\'s absolute path to required runtime context, run the plugin\'s account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is loaded. With a `prepare` step, the path stays out of runtime context while the step reports that something is missing, and each check first runs the step; a check that starts with nothing missing replaces an account the step left `unprepared` with the registration\'s first account. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.',
         parameters: [{ name: 'registration', description: 'the plugin\'s CLI, account operations, and Plugins page text.' }],
         returns: 'the handle for the plugin\'s own reads and updates of the account.',
         throws: ['when the runtime-context name `<name>:cli` is already registered.'],
@@ -1050,10 +1057,16 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'release(agent: Agent): Promise<void>',
-        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
+        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. Held input is released. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
         parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
-        returns: 'Completion after the process has exited and its output has drained.',
-        throws: ['When the process cleanup fails.'],
+        returns: 'Completion after the process has exited, its output has drained, and held-input cleanup has settled.',
+        throws: ['When environment or input cleanup fails, reporting both causes if both fail.'],
+      },
+      {
+        signature: 'releaseInputs(agent: Agent): Promise<void>',
+        description: 'Release the Agent\'s tracked input while retaining its program variables and application grants. Providers without held-input state support retain their existing cancellation behavior.',
+        parameters: [{ name: 'agent', description: 'Owner of the input to release.' }],
+        returns: 'Completion after native acknowledgement, or rejection when cleanup is unconfirmed.',
       },
       {
         signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
@@ -2512,7 +2525,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget',
         description: 'Resolve the image projection for an exact registered model route.',
         parameters: [{ name: 'provider', description: 'registered provider route.' }, { name: 'model', description: 'exact model id.' }, { name: 'image', description: 'normalized image reference.' }],
-        returns: 'dimensions and byte target used by the adapter\'s request serializer.',
+        returns: 'maximum dimensions and byte budgets used by the request serializer; readImageRequest returns the actual encoded dimensions.',
       },
       {
         signature: 'fileRequestText(ref: FileAttachmentRef): string',
@@ -5023,9 +5036,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'register(registration: UpstreamSkillsRegistration): UpstreamSkillsHandle',
-        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and waits for `retry()`. In a profile, the files go to that profile\'s own directory for the plugin, and the registration deletes the other pins there once, the first time its own pin is in place. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
+        description: 'Register the calling plugin\'s entry skill and start downloading the upstream files unless they are in place. The download starts at load so that a session without a client also gets the skill; a failure is logged as a warning and the files stay missing until a call of `install()` downloads them. In a profile, the files go to that profile\'s own directory for the plugin, and the registration deletes the other pins there once, the first time its own pin is in place. The registration belongs to the calling plugin: unloading that plugin aborts the download and removes the entry skill.',
         parameters: [{ name: 'registration', description: 'the plugin\'s provider name, entry, pinned files, and optional skills directory.' }],
-        returns: 'the handle the plugin\'s view observes and its check retries.',
+        returns: 'the handle the plugin reads the files\' presence from and waits for the download through.',
         throws: ['when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a skill provider named `name` is already registered.'],
       },
     ],
@@ -6847,8 +6860,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface CliAccountHandle<Account, Kind extends string, Phase extends string, Command extends string> {\n    snapshot(): CliAccountView<Account, Kind, Phase, Command>;\n    publish(account: Account): void;\n    refresh(): void;\n    dispose(): Promise<void>;\n}',
   },
   {
+    name: 'CliAccountPreparation',
+    declaration: 'export interface CliAccountPreparation<Account, Phase extends string> {\n    readonly phase: Phase;\n    readonly unprepared: Account;\n    ready(): boolean;\n    run(signal: AbortSignal): Promise<void>;\n}',
+  },
+  {
     name: 'CliAccountRegistration',
-    declaration: 'export interface CliAccountRegistration<Account, Kind extends string, Phase extends string, Command extends string, Key extends string> {\n    readonly name: string;\n    readonly packageName: string;\n    readonly cli: CliPathContext;\n    readonly account: Account;\n    readonly check: Kind;\n    readonly cancellable: readonly Phase[];\n    readonly authorizationHosts: readonly string[];\n    perform(kind: Kind, control: CliOperationControl<Account, Phase, Command>, signal: AbortSignal): Promise<void>;\n    readonly dictionaries: CliAccountDictionaries<Key>;\n    operations(text: CliAccountText<Key>): readonly ConnectorAccountOperation<Kind>[];\n    copy(text: CliAccountText<Key>): ConnectorAccountCopy;\n    present(view: CliAccountView<Account, Kind, Phase, Command>, text: CliAccountText<Key>): ConnectorAccountDisplay;\n}',
+    declaration: 'export interface CliAccountRegistration<Account, Kind extends string, Phase extends string, Command extends string, Key extends string> {\n    readonly name: string;\n    readonly packageName: string;\n    readonly cli: CliPathContext;\n    readonly prepare?: CliAccountPreparation<Account, Phase>;\n    readonly account: Account;\n    readonly check: Kind;\n    readonly cancellable: readonly Phase[];\n    readonly authorizationHosts: readonly string[];\n    perform(kind: Kind, control: CliOperationControl<Account, Phase, Command>, signal: AbortSignal): Promise<void>;\n    readonly dictionaries: CliAccountDictionaries<Key>;\n    operations(text: CliAccountText<Key>): readonly ConnectorAccountOperation<Kind>[];\n    copy(text: CliAccountText<Key>): ConnectorAccountCopy;\n    present(view: CliAccountView<Account, Kind, Phase, Command>, text: CliAccountText<Key>): ConnectorAccountDisplay;\n}',
   },
   {
     name: 'CliAccountText',
@@ -6876,7 +6893,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CliPathContext',
-    declaration: 'export interface CliPathContext {\n    readonly product: string;\n    readonly program: string;\n    readonly executable: string;\n    readonly scripts?: boolean;\n    readonly ready?: () => boolean;\n}',
+    declaration: 'export interface CliPathContext {\n    readonly product: string;\n    readonly program: string;\n    readonly executable: string;\n    readonly scripts?: boolean;\n}',
   },
   {
     name: 'CliRunOptions',
@@ -8076,7 +8093,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImageRequestTarget',
-    declaration: 'export interface ImageRequestTarget {\n    width: number;\n    height: number;\n    maxBytes: number;\n}',
+    declaration: 'export interface ImageRequestTarget {\n    width: number;\n    height: number;\n    maxImageBytes: number;\n    imageTargetBytes: number;\n}',
   },
   {
     name: 'ImageUploadValue',
@@ -9428,7 +9445,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteConnectionStatus',
-    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
+    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly loginUrlAllowed: boolean;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
   },
   {
     name: 'RemoteConnectionUnavailable',
@@ -11548,15 +11565,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'UpstreamSkillsHandle',
-    declaration: 'export interface UpstreamSkillsHandle {\n    readonly directory: string;\n    readonly state: UpstreamSkillsState;\n    watch(listener: (state: UpstreamSkillsState) => void): () => void;\n    retry(): void;\n    dispose(): void;\n}',
+    declaration: 'export interface UpstreamSkillsHandle {\n    readonly directory: string;\n    installed(): boolean;\n    install(signal: AbortSignal): Promise<void>;\n    dispose(): void;\n}',
   },
   {
     name: 'UpstreamSkillsRegistration',
     declaration: 'export interface UpstreamSkillsRegistration {\n    readonly name: string;\n    readonly entry: string;\n    readonly set: UpstreamSkillSet;\n    readonly skillsDir?: string | undefined;\n}',
-  },
-  {
-    name: 'UpstreamSkillsState',
-    declaration: 'export type UpstreamSkillsState = \'installed\' | \'downloading\' | \'failed\';',
   },
   {
     name: 'UserMessage',

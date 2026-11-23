@@ -10,7 +10,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     var config: [String: JSONValue] = [
         "maxRequestBytes": .number(4096), "maxResponseBytes": .number(8192), "axTimeoutMs": .number(250),
         "textEventIntervalMs": .number(0.5), "maxClickHoldMs": .number(7000), "screenshotTimeoutMs": .number(2000),
-        "timeoutMs": .number(8000), "graceMs": .number(500),
+        "recentActivityWindowMs": .number(1001), "timeoutMs": .number(8000), "graceMs": .number(500),
     ]
     config.merge(overrides) { _, value in value }
     return try JSONEncoder().encode(JSONValue.object([
@@ -27,10 +27,18 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     #expect(configuration.maxClickHoldMs == 7000)
     #expect(configuration.screenshotTimeoutSeconds == 2)
     #expect(configuration.timeoutSeconds == 8)
+    #expect(configuration.recentActivityWindowMs == 1001)
     #expect(configuration.shutdownGraceSeconds == 0.5)
     #expect(throws: NativeFailure.self) {
         try HelperConfiguration(hello: hello(), runtimeKey: String(repeating: "b", count: 64))
     }
+}
+
+@Test func disablesRecentActivityOnlyForExplicitOff() throws {
+    let arguments = ["--recent-activity-window-ms", "off"]
+    let disabled = try hello(overrides: ["recentActivityWindowMs": .string("off")])
+    #expect(try HelperConfiguration(arguments: arguments).recentActivityWindowMs == nil)
+    #expect(try HelperConfiguration(hello: disabled, runtimeKey: runtimeKey).recentActivityWindowMs == nil)
 }
 
 @Test func resolvesClickHoldLimitFromHelperArguments() throws {
@@ -47,6 +55,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     ("maxRequestBytes", JSONValue.number(1023)), ("maxResponseBytes", .number(1.5)),
     ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
     ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
+    ("recentActivityWindowMs", .number(0)), ("recentActivityWindowMs", .bool(false)), ("recentActivityWindowMs", .string("disabled")),
     ("maxClickHoldMs", .number(-1)), ("maxClickHoldMs", .number(0.5)),
     ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)), ("systemPointerHover", .bool(true)),
 ])

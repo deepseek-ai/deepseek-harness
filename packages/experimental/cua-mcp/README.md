@@ -157,7 +157,7 @@ The connected harness's model sees `cua_get_api_reference`, the Agent's `cua_run
 
 #### Token effect
 
-The tool description carries the registration's execution rules, about 3,200 characters; a `cua_get_api_reference` result is the API reference, about 13,000 characters with the current macOS provider, about 3,300 tokens by the repository's four-character estimate, spent once per call. Screenshots are inline images at the provider's `screenshotTarget` size. Clients cap tool output; the documented Codex configuration raises the `cua_run_code` budget to 25,000 tokens. Clients also cap tool descriptions and server instructions: Claude Code 2.1.309 forwards the first 4,096 characters of either and appends `… [truncated]`; DSH's `dsh-mcp-client` forwards a 20,000-character description intact. The registration's description and the instructions, about 500 characters, fit that budget; the reference does not and travels as a tool result.
+The tool description carries the registration's execution rules, about 3,200 characters; a `cua_get_api_reference` result is the API reference, about 13,000 characters with the current macOS provider, about 3,300 tokens by the repository's four-character estimate, spent once per call. Screenshots are inline images at the provider's `screenshotTarget` size. Clients cap tool output; the documented Codex configuration raises the `cua_run_code` budget to 25,000 tokens. Clients also cap tool descriptions and server instructions: Claude Code 2.1.309 forwards the first 4,096 characters of either and appends `… [truncated]`; DSH's `dsh-mcp-client` forwards a 20,000-character description intact. The registration's description and the instructions, about 600 characters, fit that budget; the reference does not and travels as a tool result.
 
 #### KV Cache effect
 
@@ -167,6 +167,7 @@ The tool catalog and instructions are stable for one installation. The reference
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- Successful programs retain held keys and mouse buttons across calls and report them in a system reminder. Program failure, a received cancellation of an active cua_run_code request, reset and connection closure release owned input. If a call sends down and returns, and the client pauses while its model is thinking, this server receives no cancellation: that input can remain pressed until explicit up or later cleanup.
 - macOS and native Windows Hosts have a provider. Other Hosts, WSL included, list `cua_get_api_reference` and `cua_reset`, which both name the missing provider; a `cua_run_code` call fails as `unknown tool`.
 - On Windows the [provider's limits](../cua-windows/README.md#known-limitations-and-deferred-work) apply through MCP: it does not launch applications, grants no `Always allow`, and an npm installation needs `helperPath`.
 - Elicitation uses the 2025 MCP request model; a client that negotiates the 2026-07-28 revision receives an error for consent requests and should use `DSH_CUA_CONSENT=allow`.
