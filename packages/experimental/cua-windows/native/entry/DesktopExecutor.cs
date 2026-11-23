@@ -8,6 +8,7 @@ namespace DeepSeek.Cua.Windows;
 
 internal sealed class ClientState
 {
+    internal WindowNotifications? Notifications { get; set; }
     internal Guid Connection { get; } = Guid.NewGuid();
     internal Dictionary<string, AppState> Apps { get; } = new(StringComparer.Ordinal);
     internal AppState App(string handle) => Apps.GetValueOrDefault(handle)
@@ -74,8 +75,6 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         {
             context.Check();
             var parameters = request.Params;
-            if (request.Method == "getState" && Flag(parameters, "showDiff"))
-                throw new NativeFailure("UNSUPPORTED", "showDiff is not implemented on Windows yet. Omit it or pass false to read the full accessibility tree.");
             if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
             if (request.Method == "applicationIcons") return await sta.Invoke(_ => Applications.Icons(parameters, context), cancellation);
             if (request.Method == "getCapabilities")
@@ -149,8 +148,10 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 case "getState":
                 {
                     var target = Selected(app, parameters, context);
+                    var showDiff = Flag(parameters, "showDiff");
+                    if (showDiff) state.Notifications ??= new WindowNotifications(config.MaxDiffNotifications);
                     return await mta.Invoke(() => Accessibility.State(app, target.Id, parameters.GetProperty("maxElements").GetInt32(),
-                        parameters.GetProperty("maxDepth").GetInt32(), Flag(parameters, "includeMenus"), Flag(parameters, "details"), context), cancellation);
+                        parameters.GetProperty("maxDepth").GetInt32(), Flag(parameters, "includeMenus"), Flag(parameters, "details"), showDiff, state.Notifications, context), cancellation);
                 }
                 case "activate": Windows.Activate(app, null, context); return ActionResult(foreground);
                 case "show": return Windows.Show(app, WindowId(parameters), context);
@@ -293,8 +294,15 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
         finally { queue.Release(); }
     }
 
-    internal Task ReleaseConnection(ClientState state, int graceMs) =>
-        inputs.ReleaseOnDisconnect(state.Connection, queue, graceMs);
+    internal async Task ReleaseConnection(ClientState state, int graceMs)
+    {
+        await inputs.ReleaseOnDisconnect(state.Connection, queue, graceMs);
+        if (state.Notifications is { } notifications)
+        {
+            var removal = mta.Invoke(() => { notifications.Stop(); return true; }, CancellationToken.None);
+            _ = NotificationCleanup.ObserveRemovalAsync(removal, error => NativeServer.Report("NATIVE_CLEANUP", error));
+        }
+    }
 
     public ValueTask DisposeAsync()
     {

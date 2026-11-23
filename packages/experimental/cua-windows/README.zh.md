@@ -45,6 +45,7 @@ kind: "package-reference"
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口。已接纳的 HWND 在有效期间保留在列表中，包括隐藏窗口。
 - `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。Windows 首次接纳窗口时检查应用归属，此后只要 HWND 有效就信任它。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
+- 连续读取同一窗口时传入 `showDiff: true`，可查看 UI Automation 的结构、属性和文本通知。首次读取、取消读取后的下一次观察、更换窗口或读取选项、树被截断时，返回本次读到的树。Windows 提供方配置 `maxDiffNotifications` 限制两次读取之间的通知条数，默认 50 条，相同事件类型和 RuntimeId 只计一次。超过条数上限，或非空摘要的 UTF-8 字节数达到当前树的大小时，首行显示 `Diff too large. Showing the current tree instead.`，下一行起返回本次读取范围内的树。能定位到当前元素的通知会附上元素信息，删除通知可能带有旧元素的 ID。控件可能漏报变化，也可能只报告整个容器。省略该参数或传 `false` 可读取当前树并停止监听。关闭连接时，退订仍在 UIA 线程上排队也能收到关闭应答。退订抛错时，helper 记录一次诊断。
 - 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
 - `app.launch()` 请求启动应用的新实例，等待所选应用的 HWND 集合变化或启动等待时限到达。单例程序可能仅激活已有实例，启动的实例也可能归属于另一个应用 ID。
@@ -82,7 +83,6 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- `getAccessibilityTree` 或原始 `getState` 的 `showDiff: true` 返回 `UNSUPPORTED`，Windows 的 AX 差分输出暂未实现。省略该选项或传 `false` 可读取完整树。
 - 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。
 - 悬停、点击、滚动和拖拽使用系统指针。`requireSystemInputApproval` 不会为 Windows 操作弹出单独的指针授权提示。
 - 拖拽只检查起点处最上层的窗口。若其他应用遮住路径或终点，即使目标仍在前台，也可能把内容拖到其他应用。

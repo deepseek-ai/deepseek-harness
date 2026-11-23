@@ -23,12 +23,16 @@ internal static class Accessibility
     ];
 
     internal static object State(AppState app, nint selected, int maximumElements, int maximumDepth,
-        bool includeMenus, bool details, RequestContext context)
+        bool includeMenus, bool details, bool showDiff, WindowNotifications? notifications, RequestContext context)
     {
         var all = Windows.Refresh(app, context);
         var target = Windows.Resolve(app, selected, context);
         if (!all.Any(window => window.Id == target.Id)) all = [.. all, target];
         var targets = new[] { target };
+        var previous = app.Snapshots.GetValueOrDefault(selected);
+        NotificationBatch? batch = null;
+        var eventRows = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (!showDiff && notifications != null) context.Ax(() => { notifications.Stop(); return true; });
         var rows = new List<string>();
         var elements = new Dictionary<string, ElementReference>(StringComparer.Ordinal);
         var observations = new List<(WindowState Window, WindowGeometry Geometry)>();
@@ -51,6 +55,14 @@ internal static class Accessibility
             try
             {
                 var root = context.Ax(() => AutomationElement.FromHandle(window.Handle).GetUpdatedCache(cache));
+                if (showDiff)
+                {
+                    batch = context.Ax(() => notifications!.Begin(root,
+                        new(window, maximumElements, maximumDepth, includeMenus, details), previous?.Id, Properties));
+                    if (batch?.Notices is { } notices)
+                        foreach (var notice in notices)
+                            if (notice.Id is { } id) eventRows.TryAdd(id, null);
+                }
                 Walk(root, window, geometry, 0, 0);
             }
             catch (ElementNotAvailableException) { throw new NativeFailure("STALE_SNAPSHOT", "An accessibility element disappeared; read fresh state without repeating input"); }
@@ -65,14 +77,18 @@ internal static class Accessibility
         if (!descriptions.Windows.Any(window => window.Id == selected))
             throw new NativeFailure("WINDOW_CHANGED", "The selected window disappeared during observation; read fresh application state");
         var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), selected, targets, elements);
+        var tree = string.Join('\n', rows);
+        if (batch is { } changes)
+            tree = changes.Format(eventRows.GetValueOrDefault, id => previous!.Elements.ContainsKey(id), tree, truncated);
         var result = new
         {
             appHandle = app.Handle, windowId = selected.ToString(CultureInfo.InvariantCulture),
             focusedWindowId = Windows.Focused(app, descriptions.Windows)?.Id.ToString(CultureInfo.InvariantCulture),
-            snapshotId = snapshot.Id, tree = string.Join('\n', rows), windows = descriptions.Values, truncated,
+            snapshotId = snapshot.Id, tree, windows = descriptions.Values, truncated,
         };
         context.Check();
         app.Snapshots[selected] = snapshot;
+        if (showDiff && !truncated) notifications!.LastSnapshot = snapshot.Id;
         foreach (var observation in observations) observation.Window.Observe(observation.Geometry);
         return result;
 
@@ -81,15 +97,17 @@ internal static class Accessibility
             context.Check();
             if (count >= maximumElements || depth >= maximumDepth) { truncated = true; return; }
             count++;
-            var runtimeId = string.Join('/', context.Ax(element.GetRuntimeId)
-                .Select(component => component.ToString(CultureInfo.InvariantCulture)));
+            var runtimeId = WindowNotifications.Id(context.Ax(element.GetRuntimeId))
+                ?? throw new NativeFailure("STALE_SNAPSHOT", "An element has no RuntimeId; read fresh state");
             if (!visited.Add(runtimeId)) return;
             var node = Read(element, window, geometry, context);
             var retained = AccessibilityText.Retain(node);
             if (retained)
             {
                 elements.Add(runtimeId, new(element, window));
-                Add(new string(' ', indent * 2) + AccessibilityText.Format(node, runtimeId, details));
+                var row = AccessibilityText.Format(node, runtimeId, details);
+                Add(new string(' ', indent * 2) + row);
+                if (eventRows.ContainsKey(runtimeId)) eventRows[runtimeId] = row[2..];
             }
             if (!includeMenus && node.ControlType == nameof(ControlType.Menu))
             {

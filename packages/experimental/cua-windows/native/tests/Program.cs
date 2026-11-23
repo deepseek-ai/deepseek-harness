@@ -19,6 +19,25 @@ void Refuses(Action action, string code)
     catch (NativeFailure failure) { Check(failure.Code == code, "Unexpected refusal: " + failure.Code); }
 }
 
+var handshakeConfig = new JsonObject
+{
+    ["maxRequestBytes"] = 8192, ["maxResponseBytes"] = 8192, ["axTimeoutMs"] = 10, ["textEventIntervalMs"] = 0,
+    ["screenshotTimeoutMs"] = 10, ["timeoutMs"] = 50, ["graceMs"] = 10, ["pollIntervalMs"] = 1,
+    ["launchWaitMs"] = 10, ["maxClickHoldMs"] = 25,
+};
+NativeConfig ReadConfig() => NativeConfig.Parse(JsonSerializer.SerializeToElement(handshakeConfig));
+Check(ReadConfig().MaxDiffNotifications == 50, "An existing handshake defaults to 50 distinct notifications");
+handshakeConfig["maxDiffNotifications"] = 2;
+Check(ReadConfig().MaxDiffNotifications == 2, "The handshake overrides the diff limit independently of tree traversal");
+foreach (var invalid in new[] { "0", "-1", "1.5", "2147483648", "null", "\"2\"" })
+{
+    handshakeConfig["maxDiffNotifications"] = JsonNode.Parse(invalid);
+    Refuses(() => ReadConfig(), "INVALID_CONFIG");
+}
+
+NotificationChecks.Run(Check);
+await NotificationCleanupChecks.Run(Check);
+
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
 var fullTreeRequest = NativeRequest.Parse(WireJson.Parse("""{"id":"full","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5,"showDiff":false}}"""));
@@ -127,7 +146,7 @@ foreach (var parameters in new[] { "{}", "{\"appHandle\":\"\"}", "{\"selector\":
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"close"}"""), null) == NativeControl.Close, "Connection close needs no active operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one") == NativeControl.Cancel, "Cancellation matches the live operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one", completed: true) == NativeControl.CompletedCancel,
-    "Cancellation arriving after the matching response is a no-op");
+    "Cancellation can identify a discarded reply after the matching operation completes");
 foreach (var frame in new[] { "null", "[]", "{}", "{\"type\":1}",
     "{\"type\":\"close\",\"extra\":1}", "{\"type\":\"cancel\"}",
     "{\"type\":\"cancel\",\"id\":null}", "{\"type\":\"cancel\",\"id\":1}",

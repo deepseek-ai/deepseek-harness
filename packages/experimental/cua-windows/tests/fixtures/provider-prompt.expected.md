@@ -60,8 +60,6 @@ Explicit downs from sendKeyEvent and toggleMouse remain held across programs and
 
 click, drag, and pressKey are convenience operations; sendKeyEvent, mouseMove, and toggleMouse are primitive operations. For complex action combinations, decompose convenience operations into sequences of primitive operations supported by the current platform.
 
-showDiff: true is not implemented on Windows and returns UNSUPPORTED; omit it or pass false for the full tree.
-
 Accessibility tree defaults: maxElements=2000, maxDepth=25.
 
 Maximum click holdMs: 5000 ms.
