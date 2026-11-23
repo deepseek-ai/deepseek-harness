@@ -682,8 +682,16 @@ describe('CI workflow', () => {
     expect(aggregate.needs).toContain('node-24-bench')
     expect(node24Bench.name).toBe('node 24 / benchmarks ${{ matrix.shard }}/2')
     expect(node24Bench.env).toEqual({ DSH_BENCH_PHASE: '${{ matrix.phase }}' })
+    // Browser cases are serial files of phase `last`, so the CPU phase runner
+    // skips the install; the browser phase rewrites APT to HTTPS first.
+    expect(node24Bench.steps).toContainEqual({
+      name: 'Use HTTPS for Ubuntu archives',
+      if: "matrix.phase == 'last'",
+      run: 'bash scripts/prepare-ci-apt-https.sh',
+    })
     expect(node24Bench.steps).toContainEqual({
       name: 'Install benchmark browser and hosted dependencies',
+      if: "matrix.phase == 'last'",
       run: 'pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium',
     })
     expect(JSON.stringify(node24Bench.steps)).not.toContain('DSH_CI_FAILOVER_LINUX')
