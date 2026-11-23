@@ -90,6 +90,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "workspace-dependencies",
     "time-context",
     "tool-ask-user",
+    "tool-cordis",
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
