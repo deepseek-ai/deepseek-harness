@@ -5,7 +5,6 @@
 import type { ParityException } from './parity.ts'
 
 const modelSelection = 'Desktop enables subagent model selection and discovery; SDK delegation inherits the caller model by default.'
-const cordisInspect = 'Web exposes inspection of its Host and connected Client runtime; the SDK profile does not compose the Cordis inspection providers.'
 const webSurface = 'Desktop tells the model about the Web GUI that serves it; the SDK has no graphical surface.'
 const harnessSource = 'Desktop composes harness-dev-context to name the Harness checkout that serves its GUI; SDK embedders do not run the GUI.'
 
@@ -17,8 +16,6 @@ export const parityExceptions: readonly ParityException[] = [
   { kind: 'schema', key: 'subagent:/parameters/properties/reasoning_effort', reason: modelSelection },
   { kind: 'config', key: 'tool-subagent:/config/modelSelection', reason: modelSelection },
   { kind: 'config', key: 'tool-subagent:/config/modelDiscovery', reason: modelSelection },
-  { kind: 'tool', key: 'cordis_inspect', side: 'desktop', reason: cordisInspect },
-  { kind: 'config', key: 'tool-cordis', side: 'desktop', reason: cordisInspect },
   { kind: 'section', key: 'app:web-surface', side: 'desktop', reason: webSurface },
   { kind: 'section', key: 'runtime-context/app:web-surface', side: 'desktop', reason: webSurface },
   { kind: 'section', key: 'harness:source', side: 'desktop', reason: harnessSource },
