@@ -1,8 +1,7 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect, useState } from 'react'
 import { Button, IconChevronDownOutlineRegular, IconSettingsOutlineRegular, Menu, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
-import { presetDisplayText, requiresCodingTools } from '@deepseek-ai/dsh-agent-preset-registry/display'
-import type { BuiltInPresetCopyKey } from '@deepseek-ai/dsh-agent-preset-registry/types'
+import { presetDisplayName, requiresCodingTools } from '@deepseek-ai/dsh-agent-preset-registry/display'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -27,11 +26,10 @@ export type PermissionPanelProps = PermissionProps & InjectFace<{
     developerTools: ObservableSnapshot<boolean>
   }
   setDefaultPreset: (id: string) => Promise<boolean>
-  presetText: (key: BuiltInPresetCopyKey) => string
 }>
 
 function DefaultPresetSetting({
-  useCuaDefaultPreset, useCuaPermissions, useDeveloperTools, setDefaultPreset, presetText, refresh, t,
+  useCuaDefaultPreset, useCuaPermissions, useDeveloperTools, setDefaultPreset, refresh, t,
 }: PermissionPanelProps) {
   const preset = useCuaDefaultPreset(value => value)
   const roster = useCuaPermissions(value => value.presets)
@@ -43,9 +41,9 @@ function DefaultPresetSetting({
   const rows = roster.value?.presets ?? []
   const current = preset.value?.selectedDefault ?? rows.find(row => row.isDefault)?.id
   const selected = rows.find(row => row.id === current)
-  const label = selected ? presetDisplayText(selected, presetText).name : current ?? t('unknown')
+  const label = selected ? presetDisplayName(selected, t) : t('unknown')
   const items = rows.filter(row => row.broken === undefined && (codingTools || !requiresCodingTools(row)))
-    .map(row => ({ id: row.id, label: presetDisplayText(row, presetText).name }))
+    .map(row => ({ id: row.id, label: presetDisplayName(row, t) }))
   const disabled = changing || saving || preset.status !== 'ready' || !preset.writable || roster.error !== null || items.length === 0
   useEffect(() => { if (disabled) setOpen(false) }, [disabled])
   const select = async (id: string): Promise<void> => {
@@ -62,18 +60,18 @@ function DefaultPresetSetting({
   return <div className={css.defaultSetting} role="group" aria-label={t('defaultTitle')}>
     <div className={css.permission}>
       <div><strong>{t('defaultTitle')}</strong></div>
-      {preset.value === undefined && preset.status === 'loading' ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Menu open={open && !disabled} onClose={() => setOpen(false)} onSelect={(id) => { void select(id) }}
+      {((preset.value === undefined && preset.status === 'loading') || (roster.value === null && roster.error === null)) ? <span className={css.buttonPlaceholder} aria-hidden />
+        : <Menu open={open && !disabled} onClose={() => { setOpen(false) }} onSelect={(id) => { void select(id) }}
           items={items} selectedId={current} align="end" portal autoFocus className={css.modeMenu}
           anchor={<Button size="sm" variant="outline" className={css.modeButton} disabled={disabled}
-            aria-haspopup="menu" aria-expanded={open && !disabled} onClick={() => setOpen(value => !value)}>
+            aria-haspopup="menu" aria-expanded={open && !disabled} onClick={() => { setOpen(value => !value) }}>
             <span>{label}</span><IconChevronDownOutlineRegular size={14} />
           </Button>} />}
     </div>
     {preset.status === 'unavailable' ? <p className={css.error} role="alert">{t('defaultUnavailable')}</p>
       : preset.value !== undefined && !preset.writable && <p className={css.error} role="alert">{t('defaultReadOnly')}</p>}
     {roster.error !== null && <div className={css.notice} role="alert">
-      <span className={css.error}>{t('defaultFailed', { message: roster.error })}</span>
+      <span className={css.error}>{t('presetsFailed', { message: roster.error })}</span>
       <Button size="sm" variant="outline" onClick={refresh}>{t('retry')}</Button>
     </div>}
     {error !== null && <p className={css.error} role="alert">{error}</p>}

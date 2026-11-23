@@ -37,7 +37,7 @@ function fixture() {
   const codingTools = createSnapshotStore(true)
   const refresh = vi.fn()
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
-    useDeveloperTools: bindSnapshotSelector(codingTools), presetText: key => key,
+    useDeveloperTools: bindSnapshotSelector(codingTools),
     useCuaDefaultPreset: bindSnapshotSelector(preset), setDefaultPreset: vi.fn(async () => true),
     refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
@@ -72,7 +72,7 @@ it.each([en, zh])('changes the default from the detail page and retains a refuse
   f.publish({ ...observe(value) })
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const group = screen.getByRole('group', { name: dictionary.defaultTitle })
-  const button = within(group).getByRole('button', { name: 'presetStandardName' })
+  const button = within(group).getByRole('button', { name: dictionary.presetStandardName })
   const choose = () => {
     fireEvent.click(button)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Research' }))
@@ -89,25 +89,26 @@ it.each([en, zh])('changes the default from the detail page and retains a refuse
   act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: { selectedDefault: 'research' } }) })
   act(() => { f.codingTools.set(false) })
   fireEvent.click(within(group).getByRole('button', { name: 'Research' }))
-  expect(screen.queryByRole('menuitem', { name: 'presetPtcName' })).toBeNull()
+  expect(screen.queryByRole('menuitem', { name: dictionary.presetPtcName })).toBeNull()
   expect(screen.queryByRole('menuitem', { name: 'broken' })).toBeNull()
   fireEvent.click(screen.getByRole('menuitem', { name: 'Research' }))
   expect(f.props.setDefaultPreset).toHaveBeenCalledTimes(2)
 })
 
-it('keeps the saved preset visible while the roster is unavailable and closes the menu with Escape', () => {
+it('waits for the roster, offers a retry on failure, and closes a loaded menu with Escape', () => {
   const f = fixture()
-  f.publish({ presets: { value: null, busy: false, error: 'offline' } })
+  f.publish({ presets: { value: null, busy: true, error: null } })
   render(<PermissionPanel {...f.props} />)
   const group = screen.getByRole('group', { name: en.defaultTitle })
-  expect(within(group).getByRole('button', { name: 'ptc' }).hasAttribute('disabled')).toBe(true)
-  expect(within(group).getByRole('alert').textContent).toContain('offline')
+  expect(within(group).queryByRole('button')).toBeNull()
+  f.publish({ presets: { value: null, busy: false, error: 'offline' } })
+  expect(within(group).getByRole('alert').textContent).toContain(en.presetsFailed.replace('{message}', 'offline'))
   fireEvent.click(within(group).getByRole('button', { name: en.retry }))
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
   act(() => { f.preset.set({ ...f.preset.getSnapshot(), value: {} }) })
   expect(within(group).getByRole('button', { name: en.unknown }).hasAttribute('disabled')).toBe(true)
   f.publish({ presets: { value: { presets: [{ id: 'ptc', isDefault: true }] }, busy: false, error: null } })
-  fireEvent.click(within(group).getByRole('button', { name: 'presetPtcName' }))
+  fireEvent.click(within(group).getByRole('button', { name: en.presetPtcName }))
   expect(screen.getByRole('menu')).toBeTruthy()
   fireEvent.keyDown(document, { key: 'Escape' })
   expect(screen.queryByRole('menu')).toBeNull()
@@ -129,8 +130,8 @@ it.each([new Error('offline'), 'offline'])('reports a failed default-mode reques
   f.preset.set({ ...f.preset.getSnapshot(), value: {} })
   f.props.setDefaultPreset.mockRejectedValueOnce(error)
   render(<PermissionPanel {...f.props} />)
-  fireEvent.click(screen.getByRole('button', { name: 'presetStandardName' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: 'presetPtcName' }))
+  fireEvent.click(screen.getByRole('button', { name: en.presetStandardName }))
+  fireEvent.click(screen.getByRole('menuitem', { name: en.presetPtcName }))
   await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('offline') })
 })
 
@@ -140,7 +141,7 @@ it('waits for the settings document and reads the deployment default from the Ho
   render(<PermissionPanel {...f.props} />)
   expect(within(screen.getByRole('group', { name: en.defaultTitle })).queryByRole('button')).toBeNull()
   act(() => { f.preset.set({ ...f.preset.getSnapshot(), status: 'ready', value: {} }) })
-  expect(screen.getByRole('button', { name: 'presetStandardName' }).hasAttribute('disabled')).toBe(false)
+  expect(screen.getByRole('button', { name: en.presetStandardName }).hasAttribute('disabled')).toBe(false)
   expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
 })
 

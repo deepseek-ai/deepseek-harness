@@ -1,7 +1,10 @@
 /** Product copy for native permission onboarding and application revocation. */
+import { presetNames } from '@deepseek-ai/dsh-agent-preset-registry/display'
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
+  ...presetNames.en,
+  presetsFailed: 'Could not load modes: {message}',
   previewNotice: 'Computer use is an experimental preview. The agent may click the wrong button or type in the wrong window. Use caution in production environments. We recommend native PTC mode so the agent can operate apps and call other tools in the same program.',
   windowsHelperBuild: 'If you installed DSH through npm, build the Windows helper from the matching DSH source. In {directory}, run {x64} or {arm64} with the .NET 10 SDK for your architecture.',
   providerLookupFailed: 'Could not identify the computer use provider: {message}',
@@ -47,6 +50,8 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
+  ...presetNames.zh,
+  presetsFailed: '无法读取模式列表：{message}',
   previewNotice: '自动电脑操作目前为实验性预览功能。智能体可能点错按钮，或把内容输入错误的窗口，请谨慎在生产环境中使用。推荐使用原生 PTC 模式，让智能体在同一段代码中操作应用并调用其他工具。',
   windowsHelperBuild: '通过 npm 安装 DSH 后，请使用对应版本的 DSH 源码构建 Windows 辅助程序。在 {directory} 中使用 .NET 10 SDK，按电脑架构运行 {x64} 或 {arm64}。',
   providerLookupFailed: '无法识别自动电脑操作后端：{message}',
@@ -89,6 +94,8 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  ...presetNames.ja,
+  presetsFailed: 'モード一覧を読み込めませんでした：{message}',
   previewNotice: 'Computer Use は実験的なプレビュー機能です。エージェントが誤ったボタンをクリックしたり、別のウィンドウに入力したりする可能性があります。本番環境では慎重に使用してください。ネイティブ PTC モードでは、同じプログラムでアプリの操作と他のツールの呼び出しができるため、このモードを推奨します。',
   windowsHelperBuild: 'npm で DSH をインストールした場合は、同じバージョンの DSH のソースから Windows 用ヘルパーをビルドしてください。{directory} で .NET 10 SDK を使い、アーキテクチャに応じて {x64} または {arm64} を実行します。',
   providerLookupFailed: 'Computer Use のプロバイダーを特定できませんでした：{message}',
@@ -150,6 +157,8 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  ...presetNames.es,
+  presetsFailed: 'No se pudieron cargar los modos: {message}',
   previewNotice: 'Computer Use es una función experimental en fase de prueba. El agente puede pulsar el botón equivocado o escribir en otra ventana. Úsala con precaución en entornos de producción. Recomendamos el modo PTC nativo para que el agente pueda controlar aplicaciones y usar otras herramientas en el mismo programa.',
   windowsHelperBuild: 'Si instalaste DSH con npm, compila el programa auxiliar de Windows desde las fuentes de la misma versión de DSH. En {directory}, usa el SDK de .NET 10 y ejecuta {x64} o {arm64} según la arquitectura del equipo.',
   providerLookupFailed: 'No se pudo identificar el proveedor de Computer Use: {message}',
@@ -199,6 +208,8 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  ...presetNames.fr,
+  presetsFailed: 'Impossible de charger les modes : {message}',
   previewNotice: 'Computer Use est proposé en aperçu expérimental. L’agent peut cliquer sur le mauvais bouton ou saisir du texte dans la mauvaise fenêtre. Soyez prudent en production. Nous recommandons le mode PTC natif pour que l’agent puisse piloter des applications et utiliser d’autres outils dans le même programme.',
   windowsHelperBuild: 'Si vous avez installé DSH avec npm, compilez le programme auxiliaire Windows à partir des sources de la même version de DSH. Dans {directory}, utilisez le SDK .NET 10 et exécutez {x64} ou {arm64} selon votre architecture.',
   providerLookupFailed: 'Impossible d’identifier le fournisseur de Computer Use : {message}',
@@ -248,6 +259,8 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  ...presetNames.de,
+  presetsFailed: 'Modi konnten nicht geladen werden: {message}',
   previewNotice: 'Computer Use ist eine experimentelle Vorschau. Der Agent kann auf die falsche Schaltfläche klicken oder Text im falschen Fenster eingeben. Seien Sie in Produktionsumgebungen vorsichtig. Wir empfehlen den nativen PTC-Modus, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann.',
   windowsHelperBuild: 'Wenn Sie DSH über npm installiert haben, bauen Sie das Windows-Hilfsprogramm aus dem Quellcode der passenden DSH-Version. Führen Sie in {directory} mit dem .NET 10 SDK je nach Architektur {x64} oder {arm64} aus.',
   providerLookupFailed: 'Der Computer-Use-Anbieter konnte nicht ermittelt werden: {message}',
@@ -297,6 +310,8 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  ...presetNames.ru,
+  presetsFailed: 'Не удалось загрузить режимы: {message}',
   previewNotice: 'Управление компьютером доступно в режиме экспериментального предпросмотра. Агент может нажать не ту кнопку или ввести текст не в то окно. Используйте эту функцию в рабочей среде с осторожностью. Рекомендуем нативный режим PTC: в нём агент может управлять приложениями и вызывать другие инструменты в одной программе.',
   windowsHelperBuild: 'Если DSH установлен через npm, соберите вспомогательную программу для Windows из исходного кода той же версии DSH. В каталоге {directory} выполните {x64} или {arm64} с помощью .NET 10 SDK в зависимости от архитектуры компьютера.',
   providerLookupFailed: 'Не удалось определить поставщика Computer Use: {message}',
@@ -346,6 +361,8 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  ...presetNames.pt,
+  presetsFailed: 'Não foi possível carregar os modos: {message}',
   previewNotice: 'Computer Use é um recurso experimental em prévia. O agente pode clicar no botão errado ou digitar na janela errada. Use com cautela em ambientes de produção. Recomendamos o modo PTC nativo para que o agente possa controlar aplicativos e usar outras ferramentas no mesmo programa.',
   windowsHelperBuild: 'Se você instalou o DSH pelo npm, compile o auxiliar do Windows a partir do código-fonte da mesma versão do DSH. Em {directory}, use o SDK do .NET 10 e execute {x64} ou {arm64} conforme a arquitetura do computador.',
   providerLookupFailed: 'Não foi possível identificar o provedor do Computer Use: {message}',

@@ -9,8 +9,46 @@
 
 import type { BuiltInPresetCopyKey, PresetDisplaySource, PresetDisplayText } from './types.ts'
 
+type NameKey = Extract<BuiltInPresetCopyKey, `${string}Name`>
+
+/** Built-in mode names for each client to register in its own locale namespace. */
+export const presetNames = {
+  en: {
+    presetStandardName: 'Standard mode', presetPtcName: 'PTC mode',
+    presetMinimalName: 'Minimal mode', presetCordisName: 'Creator mode',
+  },
+  zh: {
+    presetStandardName: '标准模式', presetPtcName: 'PTC 模式',
+    presetMinimalName: '极简模式', presetCordisName: '创造模式',
+  },
+  ja: {
+    presetStandardName: '標準モード', presetPtcName: 'PTC モード',
+    presetMinimalName: '最小モード', presetCordisName: 'クリエイターモード',
+  },
+  es: {
+    presetStandardName: 'Modo estándar', presetPtcName: 'Modo PTC',
+    presetMinimalName: 'modo mínimo', presetCordisName: 'Modo creador',
+  },
+  fr: {
+    presetStandardName: 'Mode standard', presetPtcName: 'Mode PTC',
+    presetMinimalName: 'Mode minimal', presetCordisName: 'Mode Créateur',
+  },
+  de: {
+    presetStandardName: 'Standardmodus', presetPtcName: 'PTC-Modus',
+    presetMinimalName: 'Minimalmodus', presetCordisName: 'Erstellermodus',
+  },
+  ru: {
+    presetStandardName: 'Стандартный режим', presetPtcName: 'Режим PTC',
+    presetMinimalName: 'Минимальный режим', presetCordisName: 'Режим автора',
+  },
+  pt: {
+    presetStandardName: 'Modo padrão', presetPtcName: 'modo PTC',
+    presetMinimalName: 'Modo mínimo', presetCordisName: 'Modo criador',
+  },
+} satisfies Record<string, Record<NameKey, string>>
+
 interface PresetLocaleKeys {
-  readonly name: BuiltInPresetCopyKey
+  readonly name: NameKey
   readonly description: BuiltInPresetCopyKey
 }
 
@@ -40,6 +78,17 @@ export function requiresCodingTools(preset: PresetDisplaySource | undefined): bo
 }
 
 /**
+ * Resolve a name for menus that only display the selected mode.
+ * @param preset Roster entry.
+ * @param t Localized built-in preset names.
+ * @returns The published name, localized built-in name, or preset id.
+ */
+export function presetDisplayName(preset: PresetDisplaySource, t: (key: NameKey) => string): string {
+  const keys = BUILT_IN_PRESET_KEYS[preset.id]
+  return preset.name ?? (keys ? t(keys.name) : preset.id)
+}
+
+/**
  * Resolve preset display copy without making user-authored metadata translatable.
  * @param preset - roster row whose copy is being rendered.
  * @param t - active locale lookup covering {@link BuiltInPresetCopyKey}.
@@ -50,9 +99,10 @@ export function presetDisplayText(
   t: (key: BuiltInPresetCopyKey) => string,
 ): PresetDisplayText {
   const keys = isBuiltInPreset(preset) ? BUILT_IN_PRESET_KEYS[preset.id] : undefined
-  if (keys !== undefined) return { name: t(keys.name), description: t(keys.description) }
+  const name = presetDisplayName(preset, t)
+  if (keys !== undefined) return { name, description: t(keys.description) }
   return {
-    name: preset.name ?? preset.id,
+    name,
     ...preset.description === undefined ? {} : { description: preset.description },
   }
 }
