@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { StrictMode, useEffect, useState, type ReactNode } from 'react'
 import { act, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -137,6 +137,8 @@ function CustomView({ text, tag, t, useSuffix }: LocalProps) {
   return <i data-view="custom">{text}:{tag}:{useSuffix(value => value)}:{t('word')}</i>
 }
 
+function EmptyView() { return null }
+
 function CrashingView(): never {
   throw new Error('selected view crashed')
 }
@@ -147,7 +149,7 @@ function SessionCrashingView({ sessionId }: ScopedLocalProps) {
 }
 
 function NestedFactoryBody({ useFactorySlot }: NestedFactoryProps) {
-  const View = useFactorySlot('view', () => null)
+  const View = useFactorySlot('view', EmptyView)
   return <View />
 }
 
@@ -161,7 +163,7 @@ function FactoryBody({
   if (crash === true) throw new Error(`crash:${label}`)
   const View = useFactorySlot('view', DefaultView)
   return (
-    <section data-factory={label}>
+    <section data-counter-host={label}>
       <span data-count>{useStore(state => state.count)}</span>
       <button type="button" onClick={actions.increment}>increment {label}</button>
       <View text={label} />
@@ -231,12 +233,18 @@ describe('Factory rendering', () => {
     const view = runtime.renderRoot()
 
     expect(handles).toHaveLength(2)
-    expect(view.getByText('A:injected:suffix:renderer-factory:word').getAttribute('data-view')).toBe('custom')
-    expect(view.getByText('B:injected:suffix:renderer-factory:word').getAttribute('data-view')).toBe('default')
+    const custom = view.getByText('A:injected:suffix:renderer-factory:word')
+    const fallback = view.getByText('B:injected:suffix:renderer-factory:word')
+    expect(custom.getAttribute('data-view')).toBe('custom')
+    expect(fallback.getAttribute('data-view')).toBe('default')
+    expect(custom.parentElement?.matches('[data-counter-host="A"] > div[data-slot-factory-children="renderer.factory:view"]')).toBe(true)
+    expect(custom.parentElement?.style.display).toBe('contents')
+    expect(custom.parentElement?.hasAttribute('data-slot-factory-owner')).toBe(false)
+    expect(fallback.parentElement?.getAttribute('data-counter-host')).toBe('B')
     expect(view.getAllByText('child')).toHaveLength(2)
     fireEvent.click(view.getByRole('button', { name: 'increment A' }))
-    expect(view.container.querySelector('[data-factory="A"] [data-count]')?.textContent).toBe('1')
-    expect(view.container.querySelector('[data-factory="B"] [data-count]')?.textContent).toBe('0')
+    expect(view.container.querySelector('[data-counter-host="A"] [data-count]')?.textContent).toBe('1')
+    expect(view.container.querySelector('[data-counter-host="B"] [data-count]')?.textContent).toBe('0')
 
     fireEvent.click(view.getByRole('button', { name: /rerender/u }))
     expect(customMounts).toBe(1)
@@ -403,7 +411,7 @@ describe('Factory rendering', () => {
       scope: 'root',
       slots: { view: { scope: 'session' } },
     }, ({ useFactorySlot }) => {
-      const View = useFactorySlot('view', () => null)
+      const View = useFactorySlot('view', EmptyView)
       return <View />
     })
     await runtime.root.declare({}, ({ renderFactorySlot }: PropsRuntime<'root'> & PropsRenderFactories) => (
@@ -420,22 +428,45 @@ describe('Factory rendering', () => {
     const runtime = await SlotTestRuntime.create()
     installLocale(runtime)
     await runtime.root.declare({}, ({ renderFactorySlot }: PropsRuntime<'root'> & PropsRenderFactories) => (
-      <>{renderFactorySlot('renderer.factory', { label: 'A' }, { fallback: <b>missing</b> })}</>
+      <>
+        {renderFactorySlot('renderer.factory', { label: 'A' }, { fallback: <b>missing</b> })}
+        {renderFactorySlot('renderer.healthy-factory', {})}
+      </>
     ))
     const view = runtime.renderRoot()
-    expect(view.container.textContent).toBe('missing')
+    const root = view.container.querySelector('[data-slot="root"]')!
+    expect([...root.childNodes]).toEqual([view.getByText('missing')])
 
     let dispose = () => {}
     await act(async () => { dispose = registerFactory(runtime, counterHandle) })
-    expect(view.container.querySelector('[data-factory="A"]')).not.toBeNull()
+    const anchor = root.querySelector<HTMLElement>(':scope > div[data-slot-factory="renderer.factory"]:only-child')
+    expect(anchor?.style.display).toBe('contents')
+    expect(anchor?.firstElementChild?.getAttribute('data-counter-host')).toBe('A')
     await act(async () => { dispose() })
-    expect(view.container.textContent).toBe('missing')
+    expect([...root.childNodes]).toEqual([view.getByText('missing')])
 
     await act(async () => {
       registerFactory(runtime, counterHandle, props => <strong>replacement:{props.label}</strong>)
     })
     expect(view.container.textContent).toBe('replacement:A')
     await runtime.dispose()
+  })
+
+  it('keeps an empty registered root without mounting its fallback or its unused local selection', async () => {
+    const runtime = await SlotTestRuntime.create()
+    onTestFinished(() => runtime.dispose())
+    runtime.slots.registerFactory({
+      name: 'renderer.nested-factory', scope: 'root', slots: { view: { scope: 'root' } },
+    }, ({ useFactorySlot }) => {
+      useFactorySlot('view', EmptyView)
+      return null
+    })
+    await runtime.root.declare({}, ({ renderFactorySlot }) => renderFactorySlot('renderer.nested-factory', {}, {
+      slots: { view: CrashingView }, fallback: <b>missing</b>,
+    }))
+    const view = runtime.renderRoot()
+    expect(view.container.querySelector('[data-slot="root"] > div[data-slot-factory="renderer.nested-factory"]:only-child:empty')).not.toBeNull()
+    expect(view.queryByText('missing')).toBeNull()
   })
 
   it('contains a component crash to its occurrence', async () => {
@@ -455,8 +486,8 @@ describe('Factory rendering', () => {
     const definition = runtime.factoryOf('renderer.factory')
     spy.mockRestore()
 
-    expect(view.container.querySelector('[data-factory-error="renderer.factory"]')).not.toBeNull()
-    expect(view.container.querySelector('[data-factory="good"]')).not.toBeNull()
+    expect(view.container.querySelector('div[data-slot-factory="renderer.factory"] > div[data-factory-error="renderer.factory"]')).not.toBeNull()
+    expect(view.container.querySelector('[data-counter-host="good"]')).not.toBeNull()
     expect(reported).toHaveBeenCalledWith(
       'factory:renderer.factory', definition, expect.any(Error), { abdicated: false },
     )
@@ -491,7 +522,7 @@ describe('Factory rendering', () => {
     runtime.slots.registerFactory({
       name: 'renderer.scoped-local-factory',
       scope: 'root',
-      slots: { view: { scope: 'session' } },
+      slots: { view: { scope: 'session', inline: true } },
     }, ({ useFactorySlot }) => {
       const View = useFactorySlot('view', SessionCrashingView)
       return <View />
@@ -512,7 +543,7 @@ describe('Factory rendering', () => {
     const view = runtime.renderRoot()
     const definition = runtime.factoryOf('renderer.scoped-local-factory')
 
-    expect(view.container.querySelector('[data-factory-error="renderer.scoped-local-factory:view"]')).not.toBeNull()
+    expect(view.container.querySelector('div[data-slot-factory="renderer.scoped-local-factory"] > span[data-factory-error="renderer.scoped-local-factory:view"]')).not.toBeNull()
     expect(reported).toHaveBeenCalledWith(
       'factory:renderer.scoped-local-factory', definition, expect.any(Error),
       { abdicated: false },
@@ -530,7 +561,7 @@ describe('Factory rendering', () => {
     installLocale(runtime)
     registerFactory(runtime, counterHandle)
     runtime.slots.registerFactory({
-      name: 'renderer.nested-factory', scope: 'root', slots: { view: { scope: 'root' } },
+      name: 'renderer.nested-factory', scope: 'root', inline: true, slots: { view: { scope: 'root', inline: true } },
     }, NestedFactoryBody)
     const reported = vi.fn()
     runtime.slots.onEntryError(reported)
@@ -539,9 +570,15 @@ describe('Factory rendering', () => {
     ))
     const caller = runtime.slots.entries('root')[0]
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    runtime.renderRoot()
+    const view = runtime.renderRoot()
     spy.mockRestore()
 
+    const outer = view.container.querySelector('div[data-slot-factory-children="renderer.factory:view"]')
+    const nested = outer?.querySelector<HTMLElement>(':scope > span[data-slot-factory="renderer.nested-factory"]')
+    const inner = nested?.querySelector<HTMLElement>(':scope > span[data-slot-factory-children="renderer.nested-factory:view"]')
+    expect(nested?.style.display).toBe('contents')
+    expect(inner?.style.display).toBe('contents')
+    expect(inner?.firstElementChild?.matches('span[data-factory-error="renderer.nested-factory:view"]')).toBe(true)
     expect(reported).toHaveBeenCalledWith(
       'factory:renderer.nested-factory', caller, expect.any(Error),
       { abdicated: false },
@@ -577,7 +614,7 @@ describe('Factory rendering', () => {
     await runtime.sessions.add({ id: 'broken' })
     const broken = runtime.sessions.retainFor(runtime.ctx, sid('broken'))
     runtime.slots.registerFactory({
-      name: 'renderer.session-error-factory', scope: 'session',
+      name: 'renderer.session-error-factory', scope: 'session', inline: true,
     }, ({ crashIn, sessionId }) => {
       if (sessionId === crashIn) throw new Error(`crash:${sessionId}`)
       return <span>{sessionId}</span>
@@ -594,7 +631,7 @@ describe('Factory rendering', () => {
     })
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const view = runtime.renderRoot()
-    expect(view.container.querySelector('[data-factory-error="renderer.session-error-factory"]')).not.toBeNull()
+    expect(view.container.querySelector('span[data-slot-factory="renderer.session-error-factory"] > span[data-factory-error="renderer.session-error-factory"]')).not.toBeNull()
 
     await runtime.sessions.add({ id: 'healthy' })
     const healthy = runtime.sessions.retainFor(runtime.ctx, sid('healthy'))
