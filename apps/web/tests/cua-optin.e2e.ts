@@ -1,4 +1,4 @@
-/** CUA selects each Agent's tool form and changes the default only from its detail page. */
+/** CUA activation preserves the configured session preset and PTC execution mode. */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,7 +28,7 @@ it.skipIf(process.platform !== 'darwin').each([
     const patch = join(directory, 'native-fixture.yml')
     // Permission inspection fails against this non-helper executable; activation still permits dismissing setup.
     await writeFile(patch, JSON.stringify([{ id: 'cua-macos', config: { helperPath: process.execPath } }]))
-    // Both variants start without retained state so that the persistent-mode action has an effect.
+    // Explicit one-shot profiles retain their execution mode across bundle activation.
     const defaults = join(directory, 'ptc-defaults')
     await mkdir(defaults)
     await writeFile(join(defaults, 'package.json'), JSON.stringify({ name: 'cua-ptc-defaults', version: '1.0.0', dsh: { bundle: { patch: 'cordis.patch.yml' } } }))
@@ -106,7 +106,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/setup.expected.md', import.meta.url)),
       await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
-    expect(await setup.getByRole('button', { name: '设为 PTC', exact: true }).count()).toBe(0)
+    expect(await setup.getByRole('group', { name: '新会话默认模式', exact: true }).count()).toBe(0)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(selected()).toContain('@deepseek-ai/dsh-cua-bundle')
     expect(profileManifest().dependencies).toEqual(dependencies)
@@ -152,7 +152,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
     await setup.getByRole('button', { name: '稍后', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
-    let saved = await readFile(settingsPath, 'utf8')
+    const saved = await readFile(settingsPath, 'utf8')
     expect(saved).toBe(beforeEnable)
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })
     expect(saved).not.toContain('executionMode:')
@@ -184,12 +184,12 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(await guidance.textContent()).not.toContain('helperPath')
     expect(await detail.textContent()).not.toContain('PTC')
     toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 自动电脑操作', exact: true })
-    const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
+    const panel = page.locator('[data-cua-settings]')
+    await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+    for (const title of ['新会话默认模式', 'PTC 执行方式']) {
+      expect(await panel.getByText(title, { exact: true }).count()).toBe(0)
+    }
     if (!codingTools) {
-      const panel = page.locator('[data-cua-settings]')
-      await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
-      expect(await panel.textContent()).toContain('标准、创造和 PTC 模式均支持自动电脑操作')
-      expect(await persistent.textContent()).toContain('其他模式始终各自独立保留自动电脑操作的运行状态')
       for (const width of [1680, 390]) {
         await page.setViewportSize({ width, height: 1000 })
         for (const colorScheme of ['light', 'dark'] as const) {
@@ -206,25 +206,10 @@ it.skipIf(process.platform !== 'darwin').each([
       await page.emulateMedia({ colorScheme: null })
       await page.setViewportSize({ width: 1680, height: 1000 })
     }
-    const beforePersistent = scaffold.ctx.ptcRuntime
-    await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
-    await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'scoped-repl')
-    expect(scaffold.ctx.ptcRuntime.retainsState).toBe(true)
-    expect(scaffold.ctx.ptcRuntime === beforePersistent).toBe(false)
-    saved = await readFile(settingsPath, 'utf8')
-    expect(saved).toContain(`executionMode: ${script ? 'vm-script' : 'persistent-in-memory'}`)
-    expect(saved).toContain(`scriptPersistence: ${script}`)
-    expect(saved).toContain(`replScoped: ${!script}`)
-    const runtime = scaffold.ctx.ptcRuntime
-    const persistentRuntimeFiber = runtimeFiber()
-    const owner = {}
-    const program = 'globalThis.counter = (globalThis.counter ?? 0) + 1'
-    expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(1)
     await toggle.click()
     await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
     expect(scaffold.ctx.get('computerUse')).toBeUndefined()
-    expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
+    expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(scaffold.ctx.agents.get(ptcAgent.id) === ptcAgent).toBe(true)
     for (const agent of [originalAgent, freshDefault, ptcAgent, fresh]) {
@@ -234,7 +219,6 @@ it.skipIf(process.platform !== 'darwin').each([
       expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua')).toBe(false)
       expect((await scaffold.ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['run_code'])
     }
-    expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(2)
     expect(await readFile(settingsPath, 'utf8')).toBe(saved)
     await toggle.click()
     await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
@@ -244,45 +228,9 @@ it.skipIf(process.platform !== 'darwin').each([
     await setup.getByRole('button', { name: '前往设置', exact: true }).click()
     await setup.waitFor({ state: 'hidden' })
     await page.getByRole('region', { name: '系统权限与设置', exact: true }).getByRole('alert').waitFor()
-    if (!codingTools) {
-      expect(await readFile(settingsPath, 'utf8')).toBe(saved)
-      expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: false })
-      expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
-      expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(3)
-      await runtime.release(owner)
-      return
-    }
-    const defaultSetting = page.getByRole('group', { name: '新会话默认模式', exact: true })
-    await expect.poll(() => defaultSetting.getByRole('button', { name: '设为 PTC', exact: true }).isEnabled()).toBe(true)
-    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/default-mode.expected.md', import.meta.url)),
-      await captureStableAria(page, '[role="group"][aria-label="新会话默认模式"]', scaffold.workspaceCwd), webSnapshotMode())
-    await defaultSetting.getByRole('button', { name: '设为 PTC', exact: true }).click()
-    await expect.poll(() => scaffold.ctx.agentPresets.defaultId).toBe('ptc')
-    expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
-    expect(scaffold.ctx.agentPresets.composedPreset(freshDefault.ctx)).toBe(initialDefault)
-    const confirmed = (await scaffold.ctx.agents.create({
-      sessionId: brandString<SessionId>('cua-confirmed-default'),
-      setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx) },
-    })).agent
-    expect(scaffold.ctx.agentPresets.composedPreset(confirmed.ctx)).toBe('ptc')
-    expect(scaffold.ctx.tools.schemas(confirmed).some(tool => tool.name === 'cua')).toBe(true)
-    expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
-    expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(true)
-    expect((await runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))).value).toBe(3)
-    const confirmedSettings = await readFile(settingsPath, 'utf8')
-    expect(parseEntryYaml(confirmedSettings)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'agent-preset-registry', config: { default: 'standard', selectedDefault: 'ptc' } }),
-    ]))
-    await toggle.click()
-    await toggle.and(page.locator('[aria-checked="false"]')).waitFor({ state: 'visible' })
-    await toggle.click()
-    await toggle.and(page.locator('[aria-checked="true"]')).waitFor({ state: 'visible' })
-    await setup.waitFor()
-    expect(await setup.getByText('“自动电脑操作”插件已开启，但暂时无法检测系统权限。请前往插件详情页查看原因并重试。', { exact: true }).count()).toBe(1)
-    expect(await setup.getByRole('button', { name: '设为 PTC', exact: true }).count()).toBe(0)
-    expect(await readFile(settingsPath, 'utf8')).toBe(confirmedSettings)
+    expect(await readFile(settingsPath, 'utf8')).toBe(saved)
     expect(scaffold.ctx.settings.describe().find(row => row.ns === 'ui-settings')?.value).toMatchObject({ enabled: codingTools })
-    await runtime.release(owner)
+    expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
   } finally {
     try { await browser?.close() } finally {
       try { await ownedScaffold?.close() } finally { await rm(directory, { recursive: true, force: true }) }
