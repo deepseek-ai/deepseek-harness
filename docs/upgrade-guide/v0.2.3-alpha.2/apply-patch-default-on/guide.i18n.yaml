@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/apply-patch-default-on/guide.md
 /:
-  en: f36035bc559a1efe
-  zh: 8206ad2360bfe957
-/apply-patch-is-enabled-in-every-shipped-composition:
-  en: 6ccdc304bcd96512
-  zh: 0818d212909cf40d
-/apply-patch-is-enabled-in-every-shipped-composition/change:
-  en: ba02b426224cdf24
-  zh: bfd5a730c5ec81aa
-/apply-patch-is-enabled-in-every-shipped-composition/migration:
-  en: a54e43470d321787
-  zh: fc7609ab80475b60
+  en: 936ce660cce8d405
+  zh: 1e153f3cdc6bcc41
+/apply-patch-follows-edit-by-default:
+  en: fcec5f478a467dd8
+  zh: 40fdd006860a2282
+/apply-patch-follows-edit-by-default/change:
+  en: b849651a2e11d144
+  zh: 91ccd40d67084d2a
+/apply-patch-follows-edit-by-default/migration:
+  en: 9543e519e0dc0c07
+  zh: 2e7d44c802054044

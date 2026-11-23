@@ -10,7 +10,7 @@
 
 ## 决策
 
-- `dsh-base` 的 `tool-fs` 行（headless、SDK、ACP）与 Web 的 `standard`、`ptc`、`cordis` preset 写出 `applyPatch: true`。随发行版交付的 [PTC overlay](../../../../apps/cli/config/examples/ptc.yml) 不改 base 行，因此 SDK 与 Desktop 的 PTC 工具集保持一致，无需一致性例外。
+- 行内未写 `tool-fs.applyPatch` 时，它取解析后的 `edit` 值。`dsh-base` 的 `tool-fs` 行（headless、SDK、ACP）、Web 的 `standard`、`ptc`、`cordis` preset 与随发行版交付的 [PTC overlay](../../../../apps/cli/config/examples/ptc.yml) 都不写 `applyPatch`，因此都在 `edit` 旁提供该工具；Web 的 `minimal` preset 与 `sdk-minimal` 关闭 `edit`，也不提供它。SDK 与 Desktop 的 PTC 工具集保持一致，无需一致性例外。
 - `dsh-base` 的 `fs-observation-policy` 行以 `disabled: true` 交付。叠加 base 的 profile 中每个修改工具都直接作用于裸提供方：`write` 覆盖，`edit` 替换唯一的字面匹配，`apply_patch` 只凭上下文匹配应用 hunk。部署在该行上写 `disabled: false` 即可为三者恢复防护。`sdk-minimal` 不叠加 `dsh-base`，不受影响。
 - `write` 与 `edit` 的提示语仍要求先读，但不再点名该策略；`apply_patch` 的提示语要求给每个 hunk 足够的上下文以匹配唯一位置，而非先读。
 - 由于没有默认组合挂载策略包，它被归类为可选产品包。录的是策略拒绝的两个场景 `fs-policy-reject` 与 `apply-patch-rejected` 通过各自的 `runtime.cordis.yml` 把该行开回来；固定 token 预算的压缩场景在 live 与 replay patch 中都钉住 `applyPatch: false`，因为它们的阈值是按录制时的工具集调的。
@@ -21,11 +21,13 @@
 
 **只对 `apply_patch` 关闭策略。** 曾实现并评测过一个让补丁跳过 intent waterfall 的 `tool-fs` 开关，但它让 `write` 与 `edit` 继续受随发行版交付的组合已不需要的防护，并在策略行之外增加了第二个配置维度；禁用该行在一处决定三个工具，并为需要防护的部署完整保留策略包。
 
+**在每个内置行上写出 `applyPatch: true`。** Agent preset 列出完整的插件声明，没有共同的父级，因此每个 preset 和 base 行都要重复这个值，新的组合开启 `edit` 时也必须记得写上；在 `tool-fs` 内推导默认值，只需在一处决定。
+
 **在 PTC 与 `cordis` preset 中保持 `apply_patch` 关闭。** PTC 组合最初是在没有该工具的情况下评测的，但这样随发行版交付的各编码 preset 会对同一工作区提供不同的文件编辑工具。PTC 下该工具是 `run_code` 内的绑定而非 JSON schema，开启后每个请求增加的内容很少。
 
 ## 后果
 
-叠加 base 的 profile 的默认模型请求带有 `apply_patch` schema 与提示语，因此固定预算压缩场景之外的所有录制请求预期都变化了。模型可以覆盖或编辑从未读过的文件；[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/fs-observation-policy-default-off/guide.zh.md)给出恢复防护或去掉该工具的一行 patch。沙箱围栏、Review 采集与 `fs/observed` 事件不变。
+叠加 base 的 profile 的默认模型请求带有 `apply_patch` schema 与提示语，因此固定预算压缩场景之外的所有录制请求预期都变化了。第三方 `tool-fs` 行开启 `edit` 而未写 `applyPatch` 时，也会获得该工具。模型可以覆盖或编辑从未读过的文件；[升级指南](../../../../docs/upgrade-guide/v0.2.2-alpha.2/fs-observation-policy-default-off/guide.zh.md)给出恢复防护或去掉该工具的一行 patch。沙箱围栏、Review 采集与 `fs/observed` 事件不变。
 
 ## 测试
 
