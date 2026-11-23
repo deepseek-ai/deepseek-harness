@@ -9,8 +9,8 @@
   en: 5b26d6ad2128b454
   zh: 6d3ccfcdb716ef8d
 /deepseek-ai-dsh-feishu/summary:
-  en: a07d30fd633d14b8
-  zh: d78e326c5edcde47
+  en: b74aed7ca4215ed4
+  zh: 8e2a9c8b4af28a1b
 /deepseek-ai-dsh-feishu/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,20 +18,23 @@
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
 /deepseek-ai-dsh-feishu/use-this-package/install-into-a-profile:
-  en: 756d8e3c33815f24
-  zh: 7f6a3fcfef92c6b8
+  en: 10bdd68f45f9dfe9
+  zh: 9ea8d884ae12690a
+/deepseek-ai-dsh-feishu/use-this-package/download-of-a-missing-cli:
+  en: fbfb6ed23ce970cd
+  zh: ef94e59c8f37f4bf
 /deepseek-ai-dsh-feishu/use-this-package/what-you-get:
-  en: 55d9fdc4ef0be522
-  zh: 8063b8baa6c42776
+  en: 841b50c329791ac8
+  zh: 0ed710e724673e44
 /deepseek-ai-dsh-feishu/use-this-package/account-operations:
-  en: 4b5f07c32cac8141
-  zh: 473a23f50efa5947
+  en: 01d9b58b9bfcde43
+  zh: c1ca8d5ee256306b
 /deepseek-ai-dsh-feishu/use-this-package/configure:
-  en: 7791974428fc09cb
-  zh: 62bb720d2b4842be
+  en: 960f5688f8585fa2
+  zh: e54ad80f078936c5
 /deepseek-ai-dsh-feishu/understand-the-implementation:
-  en: f8f0f9cb9eb55960
-  zh: 05f09e2198565082
+  en: fd5411d227a46bcf
+  zh: 8fb29d0249350698
 /deepseek-ai-dsh-feishu/further-exploration:
   en: b25e4caa8c5b7116
   zh: 4976eddc4b3e5ec4
@@ -42,17 +45,17 @@
   en: a861712b6b65f49a
   zh: 3447e587c56a25d6
 /deepseek-ai-dsh-feishu/model-experience/skill-catalog-entry/what-the-model-sees:
-  en: 0a73c38722f334ac
-  zh: 56d0060443414c9a
+  en: ee4b4d90f5c598ba
+  zh: 41ac55fd0428f642
 /deepseek-ai-dsh-feishu/model-experience/skill-catalog-entry/what-the-model-sees/catalog-description:
   en: 8ff7f9b51a85c5b5
   zh: 55e58973015e27f7
 /deepseek-ai-dsh-feishu/model-experience/skill-catalog-entry/token-effect:
-  en: 7bd1792c4c56e682
-  zh: 94be77d208dddc69
+  en: 1da22c82cb1a2086
+  zh: 9939ba273214f65f
 /deepseek-ai-dsh-feishu/model-experience/skill-catalog-entry/kv-cache-effect:
-  en: 09346f854e96f385
-  zh: c2fa26fbcd1cd6f1
+  en: 0649c73c3c77b9b4
+  zh: f0e2d248e1bc0dd3
 /deepseek-ai-dsh-feishu/model-experience/loaded-skill-body:
   en: 8955ac196848e69f
   zh: 54aa7db097eafd3c
@@ -69,8 +72,8 @@
   en: b5fed52af6c0d771
   zh: 25b7aa5297583030
 /deepseek-ai-dsh-feishu/model-experience/cli-path/what-the-model-sees:
-  en: fb721433c0dec520
-  zh: 7b17e45979e2fdca
+  en: 30a329a50e111315
+  zh: dea504b45ffd80b3
 /deepseek-ai-dsh-feishu/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
   en: c91314832f78f460
   zh: aac156ea0b5b816a
@@ -81,11 +84,11 @@
   en: 2952585b710ffd05
   zh: 6e93e58b6256d534
 /deepseek-ai-dsh-feishu/model-experience/cli-path/kv-cache-effect:
-  en: 67398dd4e4b02db9
-  zh: a873eacd006fa656
+  en: e6d8593416cb392e
+  zh: eadd5d656866b7eb
 /deepseek-ai-dsh-feishu/known-limitations-and-deferred-work:
-  en: 95d813f5fe6e7cb2
-  zh: c65fcf992ac18b69
+  en: 049803c1630b278e
+  zh: c9540e99f1315005
 /deepseek-ai-dsh-feishu/known-limitations-and-deferred-work/dev-note:
-  en: be15f75bf32de641
-  zh: 85de42dc5e1d934b
+  en: 84119ac4f878e897
+  zh: 1a9c4f3f96cc9663

@@ -67,7 +67,7 @@ kind: "package-reference"
 
 Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边框，区块间距为 32px。应用名称徽标保留 l1 边框。
 
-[Computer Use 组合](../cua-bundle/README.zh.md)将本页与原生 provider 一起挂载。在 macOS 上，“给 Computer Use 授权”把新会话默认模式、PTC 执行方式、辅助功能和屏幕录制放在同一个边框内。每条权限要求显示责任应用的名称和图标。“申请权限”将所选权限和当前界面语言交给 provider；原生拖动引导由 [macOS provider](../cua-macos/README.zh.md)负责。“已允许”描边按钮打开设置以撤销权限；未知状态使用“未确认”。应用访问授权保持独立分组。
+[Computer Use 组合](../cua-bundle/README.zh.md)将本页与原生 provider 一起挂载。在 macOS 上，“系统权限与设置”把新会话默认模式、PTC 执行方式、辅助功能和屏幕录制放在同一个边框内。每条权限要求显示责任应用的名称和图标。“申请权限”将所选权限和当前界面语言交给 provider；原生拖动引导由 [macOS provider](../cua-macos/README.zh.md)负责。“已允许”描边按钮打开设置以撤销权限；未知状态使用“未确认”。应用访问授权保持独立分组。
 
 启用组合包后，PTC 设置上方显示预览提示。Windows 页面还提供 npm 安装所需的辅助程序构建和配置步骤，macOS 页面提供辅助功能和屏幕录制授权操作。
 

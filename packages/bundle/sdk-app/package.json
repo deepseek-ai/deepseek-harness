@@ -60,7 +60,9 @@
     "@deepseek-ai/dsh-tool-ask-user": "workspace:*",
     "@deepseek-ai/dsh-tool-present": "workspace:*",
     "@deepseek-ai/dsh-file-reference-local": "workspace:*",
-    "@deepseek-ai/dsh-deliverable-file-references": "workspace:*"
+    "@deepseek-ai/dsh-deliverable-file-references": "workspace:*",
+    "@deepseek-ai/dsh-cordis-host-runner": "workspace:*",
+    "@deepseek-ai/dsh-tool-cordis": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
