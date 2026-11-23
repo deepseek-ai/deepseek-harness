@@ -26,4 +26,4 @@
 
 ## 测试
 
-`tool-fs` 注册测试覆盖推导出的默认值和两种显式覆盖。`web-agent-presets.e2e.ts` 断言 `cordis` 工具集与 `ptc` 的 `run_code` 绑定中都有 `apply_patch`；keyless SDK smoke 检查原生工具和 PTC overlay 下的绑定；`desktop-tools.expected.e2e.ts` 比较 SDK 与 Desktop 的 `standard`、`ptc` 工具集。
+`tool-fs` 注册测试覆盖推导出的默认值和两种显式覆盖。`web-agent-presets.e2e.ts` 断言 `cordis` 工具集与 `ptc` 的 `run_code` 绑定中都有 `apply_patch`；keyless SDK smoke 检查原生工具和 PTC overlay 下的绑定；`desktop-tools.expected.e2e.ts` 比较 SDK profile 与 Desktop `standard` preset 的首个模型请求（含工具 schema）。

@@ -26,4 +26,4 @@ Every `tool-fs` row that keeps `edit` and states no `applyPatch` registers `appl
 
 ## Testing
 
-`tool-fs` registration tests cover the derived default and both explicit overrides. `web-agent-presets.e2e.ts` asserts `apply_patch` in the `cordis` tool set and in the `ptc` `run_code` bindings; the keyless SDK smoke checks the native tool and the PTC overlay binding; `desktop-tools.expected.e2e.ts` compares the SDK and Desktop `standard` and `ptc` tool sets.
+`tool-fs` registration tests cover the derived default and both explicit overrides. `web-agent-presets.e2e.ts` asserts `apply_patch` in the `cordis` tool set and in the `ptc` `run_code` bindings; the keyless SDK smoke checks the native tool and the PTC overlay binding; `desktop-tools.expected.e2e.ts` compares the SDK profile's first model request, tool schemas included, with the Desktop `standard` preset's.
