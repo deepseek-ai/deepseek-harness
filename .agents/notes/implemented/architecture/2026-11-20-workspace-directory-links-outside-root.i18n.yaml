@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-20-workspace-directory-links-outside-root.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-20-workspace-directory-links-outside-root.md
+/agent-note-list-and-watch-directories-through-links-that-leave-the-workspace-root:
+  en: a065e457add84e2a
+  zh: 403f54bf20f4804c
+/agent-note-list-and-watch-directories-through-links-that-leave-the-workspace-root/problem:
+  en: 2feccd9277388f3b
+  zh: 29aee108d0b4e96d
+/agent-note-list-and-watch-directories-through-links-that-leave-the-workspace-root/decision:
+  en: 0e1448825fa017b5
+  zh: 1c9454d353de2d57
+/agent-note-list-and-watch-directories-through-links-that-leave-the-workspace-root/alternatives-considered:
+  en: 3b38a1af8d54b2fb
+  zh: bea84fedb72fe6f7
+/agent-note-list-and-watch-directories-through-links-that-leave-the-workspace-root/consequences:
+  en: d69bb911e84ca427
+  zh: e255d20ccba1d062

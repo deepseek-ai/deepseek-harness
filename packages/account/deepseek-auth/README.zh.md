@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-deepseek-auth` 通过 `ctx.deepseekAuth` 为发往 DeepSeek API 的请求鉴权。消费方给出其 API 接受的凭据种类（API 密钥、账号登录，或两者）以及其设置选择的计费方式。服务排定种类的顺序，把每一种绑定到其凭据所属的部署，并释放第一个持有凭据的种类的请求头。DeepSeek 模型路由、Search 与 Fetch API、Messages 搜索都使用它。它不存储任何东西：密钥来自凭据存储或启动环境，登录凭据来自账号服务。
+`dsh-deepseek-auth` 通过 `ctx.deepseekAuth` 为发往 DeepSeek API 的请求鉴权。消费方给出其 API 接受的凭据种类（API 密钥、账号登录，或两者）以及其设置选择的计费方式。服务排定种类的顺序，把每一种绑定到其凭据所属的部署，并释放第一个持有凭据的种类的请求头。DeepSeek 模型路由、Search 与 Fetch API、Messages 搜索以及实验性的语音识别 Provider 都使用它。它不存储任何东西：密钥来自凭据存储或启动环境，登录凭据来自账号服务。
 
 ## 目录
 

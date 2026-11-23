@@ -112,7 +112,7 @@ it('explains download failures on the Host machine and retains an actionable ret
 })
 it('persists settings and reports disconnection in the detail card', async () => {
   const store = createSnapshotStore<SpeechReadiness>({ connected: true, error: null, catalog: {
-    selection: { providerId: id, language: 'auto' }, maxAudioBytes: 100, maxDurationSeconds: 120,
+    selection: { mode: 'explicit', providerId: id, language: 'auto' }, maxAudioBytes: 100, maxDurationSeconds: 120,
     providers: [{ id, name: 'SenseVoiceSmall', location: 'host-local', languages: ['auto', 'zh', 'en', 'ja'], preparation: { phase: 'ready' } },
       { id: 'cloud' as SpeechProviderId, name: 'Cloud', location: 'cloud', languages: ['auto', 'en', 'zh', 'ja', 'fr', 'it'], preparation: { phase: 'ready' } }],
   } })
@@ -120,17 +120,21 @@ it('persists settings and reports disconnection in the detail card', async () =>
   const props = { useSpeechReadiness: bindSnapshotSelector(store), configure, t,
     useMicrophoneDevice: bindSnapshotSelector(createSnapshotStore({ id: '', label: '' })),
     selectMicrophone: vi.fn(), createRecording: () => new Recording(() => {}),
-    prepare: vi.fn(async () => {}), cancelPreparation: vi.fn(async () => {}) }
+    prepare: vi.fn(async () => {}), cancelPreparation: vi.fn(async () => {}),
+    useAccountSignIn: bindSnapshotSelector(createSnapshotStore(false)), signIn: vi.fn() }
   const view = render(<VoicePreparation {...props} />)
   fireEvent.change(screen.getByLabelText(zh.provider), { target: { value: 'cloud' } })
   await waitFor(() => { expect(configure).toHaveBeenCalledWith({ providerId: 'cloud' }) })
   const current = store.getSnapshot()
-  act(() => { store.set({ ...current, catalog: { ...current.catalog!, selection: { providerId: 'cloud' as SpeechProviderId, language: 'en' } } }) })
+  act(() => { store.set({ ...current, catalog: { ...current.catalog!, selection: { mode: 'explicit', providerId: 'cloud' as SpeechProviderId, language: 'en' } } }) })
   expect(screen.getByText(zh.cloud)).toBeTruthy()
   expect(within(screen.getByLabelText(zh.language)).getAllByRole<HTMLOptionElement>('option').map(item => item.value))
-    .toEqual(['auto', 'en', 'zh', 'ja', 'fr', 'it'])
+    .toEqual(['auto', 'zh', 'en', 'ja', 'fr', 'it'])
   expect(within(screen.getByLabelText(zh.language)).getByRole('option', { name: zh.fr })).toBeTruthy()
   expect(within(screen.getByLabelText(zh.language)).getByRole('option', { name: 'it' })).toBeTruthy()
+  act(() => { store.set({ ...current, catalog: { ...current.catalog!, selection: { mode: 'explicit', providerId: id, language: 'it' } } }) })
+  expect(screen.getByText('本地识别不支持it，将自动识别')).toBeTruthy()
+  act(() => { store.set({ ...current, catalog: { ...current.catalog!, selection: { mode: 'explicit', providerId: 'cloud' as SpeechProviderId, language: 'en' } } }) })
   configure.mockRejectedValueOnce(new Error('settings are read-only'))
   fireEvent.change(screen.getByLabelText(zh.language), { target: { value: 'zh' } })
   await screen.findByText('语音识别失败：settings are read-only')

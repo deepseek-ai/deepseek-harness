@@ -14,7 +14,7 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import type { SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
 import type { ViewAnnotations } from '../src/client/annotations.ts'
@@ -34,7 +34,8 @@ import type {
   ForgeChangeRequestDiff, ForgeDiffFile, ForgeExtensionState, ForgeReviewChangeRequest, ForgeReviewFrame,
 } from '../src/types.ts'
 import { entry, ready, ref, snapshot } from './client-fixtures.client.ts'
-import { description, fed, frame, host, list, prUrl, reviewed, summary, type Fed } from './review-fixtures.client.ts'
+import { description, failedList, fed, frame, host, list, prUrl, reviewed, summary, type Fed } from './review-fixtures.client.ts'
+import type { ReviewRepository } from '../src/client/review-page/review-lists.ts'
 import { reviewThread } from './thread-fixtures.client.ts'
 
 const t = makeTranslate(en)
@@ -136,6 +137,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
     openInMain: vi.fn<ReviewChatFace['openInMain']>(),
     requestWorktree: vi.fn<ReviewChatFace['requestWorktree']>(),
   }
+  const pluginNavigation = createSnapshotStore(false)
   const conversations: ForgeReviewConversationProps[] = []
   const renderSlot = ((_key: string, owner: ForgeReviewConversationProps) => {
     conversations.push(owner)
@@ -146,8 +148,9 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
   }
   const props: ReviewPageProps = {
     useLocale: bindSnapshotSelector(createSnapshotStore('en')),
-    openLists: vi.fn((scope: string, signal: AbortSignal) => {
-      const stream = fed<ForgeReviewFrame>(scope, signal)
+    usePluginNavigation: bindSnapshotSelector(pluginNavigation),
+    openLists: vi.fn((repository: ReviewRepository | null, signal: AbortSignal) => {
+      const stream = fed<ForgeReviewFrame>(repository === null ? '' : `${repository.host} ${repository.owner}/${repository.name}`, signal)
       lists.push(stream)
       return stream
     }),
@@ -163,6 +166,9 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
       return refresh.promise
     }),
     readDescription: vi.fn(async () => ok(description('Body'))),
+    readActivity: vi.fn(async () => ok(null)),
+    addComment: vi.fn(async () => ok(undefined)),
+    openHostSettings: vi.fn(),
     actionsFor: vi.fn((_url: string, showChanges: () => void): ChangeRequestActions => {
       shown.push(showChanges)
       return { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), viewChanges: () => { showChanges() } }
@@ -190,7 +196,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
     return element
   }
   return {
-    view, props, store, lists, details, refreshes, shown, changes, chat, conversations, page,
+    view, props, store, lists, details, refreshes, shown, changes, chat, conversations, page, pluginNavigation,
     list: () => last(lists), detail: () => last(details),
   }
 }
@@ -228,7 +234,7 @@ async function quoteComment(section: HTMLElement, body: string): Promise<void> {
 describe('ReviewPage lists', () => {
   it('lists the change requests of every repository beside a placeholder until one is chosen', async () => {
     const b = renderPage()
-    expect(b.props.openLists).toHaveBeenCalledWith('', b.list().signal)
+    expect(b.props.openLists).toHaveBeenCalledWith(null, b.list().signal)
     expect(b.props.openChangeRequest).not.toHaveBeenCalled()
     expect(b.view.getByText('Select a change request')).toBeTruthy()
     b.list().push(frame(host({ authored: list([summary(7)]) })))
@@ -243,9 +249,9 @@ describe('ReviewPage lists', () => {
     fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(document.body).getByRole('menuitem', { name: /^Repository/ }))
     fireEvent.click(within(document.body).getByRole('menuitem', { name: 'octo/demo' }))
-    expect(b.store.getSnapshot().repository).toEqual({ owner: 'octo', name: 'demo' })
+    expect(b.store.getSnapshot().scope).toEqual({ host: 'github.com', owner: 'octo', name: 'demo' })
     expect(b.lists[0]?.disposed).toHaveBeenCalledOnce()
-    expect(b.list().key).toBe('octo/demo')
+    expect(b.props.openLists).toHaveBeenLastCalledWith({ host: 'github.com', owner: 'octo', name: 'demo' }, b.list().signal)
     fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Only requests made of me' }))
     expect(b.store.getSnapshot().directOnly).toBe(true)
@@ -277,14 +283,14 @@ describe('ReviewPage lists', () => {
     // A read under way adds what it has read so far; the settled read is the record.
     b.list().push({ ...frame(host({ 'review-requested': list([summary(7)]), 'authored': list(null) })), reading: true })
     await settle()
-    expect(b.store.getSnapshot().repositories).toEqual([{ owner: 'octo', name: 'demo' }])
+    expect(b.store.getSnapshot().repositories).toEqual([{ host: 'github.com', owner: 'octo', name: 'demo' }])
     b.list().push(frame(host({ 'review-requested': list([summary(7)]), 'authored': list([other]) })))
     await settle()
     expect(offered()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
     fireEvent.click(within(document.body).getByRole('menuitem', { name: 'acme/widgets' }))
 
     // The chosen repository's lists name only it, before and after its first frame.
-    expect(b.list().key).toBe('acme/widgets')
+    expect(b.list().key).toBe('github.com acme/widgets')
     expect(offered()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
@@ -298,7 +304,30 @@ describe('ReviewPage lists', () => {
     expect(b.store.getSnapshot().repositories).toHaveLength(2)
     b.list().push(frame(host({ 'review-requested': list([summary(7)]), 'authored': list([]) })))
     await settle()
-    expect(b.store.getSnapshot().repositories).toEqual([{ owner: 'octo', name: 'demo' }])
+    expect(b.store.getSnapshot().repositories).toEqual([{ host: 'github.com', owner: 'octo', name: 'demo' }])
+  })
+
+  it('narrows the lists to one host on the page, without another stream, and offers the settings from a host that failed while they can be opened', async () => {
+    const b = renderPage()
+    b.list().push(frame(
+      host({ 'review-requested': list([summary(7)]) }),
+      host({ authored: list([summary(8)]) }, { forge: 'gitlab', host: 'gitlab.example' }),
+      host({ involved: failedList('unauthenticated') }, { forge: 'gitlab', host: 'gitlab.com' }),
+    ))
+    await settle()
+    expect(b.view.getByRole('status').textContent).toBe('Sign in to gitlab.com to list your change requests')
+    act(() => { b.pluginNavigation.set(true) })
+    fireEvent.click(b.view.getByRole('button', { name: 'Open settings' }))
+    expect(b.props.openHostSettings).toHaveBeenCalledOnce()
+
+    fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^Repository/ }))
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'gitlab.example' }))
+    expect(b.store.getSnapshot().scope).toEqual({ host: 'gitlab.example' })
+    expect(b.lists).toHaveLength(1)
+    expect(b.lists[0]?.disposed).not.toHaveBeenCalled()
+    expect([...b.view.container.querySelectorAll('[data-forge-review-item]')].map(item => item.getAttribute('data-forge-review-item'))).toEqual([prUrl(8)])
+    expect(b.view.queryByRole('status')).toBeNull()
   })
 
   it('reads every list again once at a time, showing the refresh until it settles', async () => {
@@ -327,13 +356,29 @@ describe('ReviewPage lists', () => {
     b.list().push(frame(host({ authored: list([summary(7)]) })))
     await settle()
     const meta = (): string | null | undefined => b.view.container.querySelector(`.${css.itemMeta}`)?.textContent
-    expect(meta()).toBe('#7·octo·5 min ago')
+    expect(meta()).toBe('#7·octo5min')
     act(() => { vi.advanceTimersByTime(60_000) })
-    expect(meta()).toBe('#7·octo·6 min ago')
+    expect(meta()).toBe('#7·octo6min')
   })
 })
 
 describe('ReviewPage detail', () => {
+  it('offers the host lists for a link no provider serves only while the Plugins page can be opened', async () => {
+    const b = renderPage()
+    b.list().push(frame(host({ 'review-requested': list([summary(7)]) })))
+    await settle()
+    fireEvent.click(b.view.container.querySelector(`[data-forge-review-item="${URL7}"]`) ?? document.body)
+    b.detail().fail(new RemoteError('forgePanel/unrecognized-url', 'no provider serves it', {}))
+    await settle()
+    expect(b.view.getByText('Unknown code host')).toBeTruthy()
+    expect(b.view.queryByRole('button', { name: 'Add host…' })).toBeNull()
+
+    act(() => { b.pluginNavigation.set(true) })
+    fireEvent.click(b.view.getByRole('button', { name: 'Add host…' }))
+
+    expect(b.props.openHostSettings).toHaveBeenCalledOnce()
+  })
+
   it('shows the chosen change request with its card actions, and goes back to the list', async () => {
     const b = renderPage()
     await select(b)

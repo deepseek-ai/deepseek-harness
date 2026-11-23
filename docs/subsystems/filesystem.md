@@ -269,8 +269,6 @@ interface FsWriteBytesOutcome {
   operation: 'create' | 'update'
   /** Opaque version of the file after the write. */
   version: FsVersion
-  /** Exact number of bytes written. */
-  bytes: number
 }
 ```
 
@@ -583,7 +581,7 @@ abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent,
  * @param sandboxPolicy - the per-call mode and workspace root this write
  *   runs under; a sandboxing backend fences the write by it, the bare backend
  *   ignores it. Omit to leave the backend its own default.
- * @returns the outcome, including the version the write produced and its byte count.
+ * @returns the outcome, including the version the write produced.
  */
 writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>
 

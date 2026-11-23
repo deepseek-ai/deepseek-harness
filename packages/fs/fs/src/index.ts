@@ -304,7 +304,7 @@ export abstract class FileSystem extends Service {
    * @param sandboxPolicy - the per-call mode and workspace root this write
    *   runs under; a sandboxing backend fences the write by it, the bare backend
    *   ignores it. Omit to leave the backend its own default.
-   * @returns the outcome, including the version the write produced and its byte count.
+   * @returns the outcome, including the version the write produced.
    */
   writeBytes(
     target: FsTarget,

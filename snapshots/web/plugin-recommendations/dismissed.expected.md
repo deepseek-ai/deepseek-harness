@@ -2,5 +2,5 @@
   - text: Recommended plugin Official
   - 'button "View details: Voice input"':
     - strong: Voice input
-    - text: Transcribe recordings locally with SenseVoice; first use requires installing dependencies.
+    - text: Dictate with DeepSeek cloud recognition through a DeepSeek account or API key, or download the local SenseVoice model.
   - status: Dismissed

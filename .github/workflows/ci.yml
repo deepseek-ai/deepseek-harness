@@ -504,7 +504,16 @@ jobs:
             node -e 'process.dlopen({ exports: {} }, process.argv[1])' "$addon"
           fi
 
+      # Only the serial files of phase `last` drive a browser, so the CPU phase
+      # runner skips the browser install entirely. The install on this phase
+      # spent up to 13 minutes on hosted runners; the workspace install above
+      # already provides the `playwright` package itself.
+      - name: Use HTTPS for Ubuntu archives
+        if: matrix.phase == 'last'
+        run: bash scripts/prepare-ci-apt-https.sh
+
       - name: Install benchmark browser and hosted dependencies
+        if: matrix.phase == 'last'
         run: pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium
 
       - name: Run performance benchmarks
@@ -930,21 +939,7 @@ jobs:
       # ephemeral runner fetches the archive over HTTPS before Playwright's apt.
       - name: Use HTTPS for Ubuntu archives
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
-        run: |
-          sudo python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          apt = Path('/etc/apt')
-          sources = [apt / 'sources.list', apt / 'blacksmith-ubuntu-mirrors.txt',
-                     *(apt / 'sources.list.d').glob('*.list'),
-                     *(apt / 'sources.list.d').glob('*.sources')]
-          for source in sources:
-              if source.is_file():
-                  source.write_text(re.sub(
-                      r'http://(?:[a-z0-9-]+\.)*(archive|security)\.ubuntu\.com/',
-                      r'https://\1.ubuntu.com/', source.read_text()))
-          PY
+        run: bash scripts/prepare-ci-apt-https.sh
 
       # The browser install overlaps the artifact download and unpack. GitHub
       # runners keep a background process started in one step alive for the

@@ -28,6 +28,8 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/im': '@deepseek-ai/dsh-im',
   'packages/experimental/im-bundle': '@deepseek-ai/dsh-im-bundle',
   'packages/experimental/im-session-commands': '@deepseek-ai/dsh-im-session-commands',
+  'packages/experimental/speech-to-text-deepseek': '@deepseek-ai/dsh-speech-to-text-deepseek',
+  'packages/experimental/sandbox-policy-git': '@deepseek-ai/dsh-sandbox-policy-git',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
 /** Legacy npm namespace, allowed only in `LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES`. */

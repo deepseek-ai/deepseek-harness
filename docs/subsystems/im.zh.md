@@ -19,6 +19,7 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImOutcome` | 事件链的处理结果：由某个具名插件 `handled`（可附带目标会话 id 列表），或 `ignored`（可附带原因） |
 | `ImMessageEvent` | 事件链参数：已存消息、匹配的来源配置、机器人实例，以及绑定到该聊天的 `reply`、`send` 和幂等 `deliver` 方法 |
 | `ImButtonEvent` | 已接纳聊天中的按钮点击事件：按钮 id、附加数据、聊天、触发用户、机器人、按钮所属的已存消息、发布该消息的会话以及原始交互对象 |
+| `ImReactionEvent` | 已接纳聊天中对已存消息添加或移除的表情回应：动作、平台表情标识、聊天、触发用户、机器人、被回应的已存消息、已知时发布该消息的会话、时间戳以及可选的平台事件 id |
 | `ImComposition` | 托管会话的 agent 配置：agent 预设、工作目录、provider、model 以及可选的工具限制 |
 | `ImBinding` | 单个聊天的访问授权：是否允许发送消息、是否为默认（`home`）聊天，以及可选的话题线程限制 |
 | `ImSessionSpec` | 插件创建或更新会话的声明：稳定键、归属插件名、agent 配置、聊天绑定列表、输出渲染器、可选父会话、临时会话标记 `ephemeral` 以及插件自定义元数据 |
@@ -29,6 +30,7 @@ IM 保存每条被接纳规则接受的消息，并通过 `im/message` 事件链
 | `ImResetOptions` | 会话重置选项：持久化回执幂等键 `operationId` 与乐观并发代次校验 `expectedGeneration` |
 | `ImSendOptions` | 消息发送选项：回执幂等键 `operationId`、目标聊天已存的被引用消息键（否则抛出 `ImError('access')`）、目标话题线程，以及用于权限校验和归属记录的 `session` |
 | `ImSendResult` | 发送结果（`confirmed`、`failed`、`uncertain` 或 `partial`），附带平台消息句柄、渲染报告、已存自身消息与错误信息 |
+| `ImOutgoing` | `im/before-send` 瀑布流传递的可变草稿：目标聊天、调用方选项、调用方原始内容、将要发布的内容以及可选的 `drop` 原因 |
 | `ImHistory` | 按聊天内 `seq` 读取历史的接口：`after`、`before`、`get` 与 `latest` |
 | `ImFormatOptions` | 消息格式化选项：`xml` 或 `line` 格式、是否附带媒体图片块、可选头部文本与取消信号 |
 | `ImApi` | `ctx.im` 服务接口：`sessions`、`history`、`outputs`、`send`、`stream`、`readMessage`、`format`、`bot`、`chat` 与 `status` |
@@ -179,6 +181,25 @@ A hosted session's turn activity changed; output renderers subscribe to redraw t
 
 Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
 
+<a id="imbefore-send--waterfall"></a>
+
+#### `im/before-send` — waterfall
+
+One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.
+
+```ts cordis-catalog
+/**
+ * One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace
+ * `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.
+ * @param outgoing - the mutable draft: chat, caller options, the caller's original content and the current content.
+ * @param next - the rest of the waterfall.
+ * @mode waterfall
+ */
+'im/before-send'(outgoing: ImOutgoing, next: () => Promise<void>): Promise<void>
+```
+
+Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
+
 <a id="imbutton--emit"></a>
 
 #### `im/button` — emit
@@ -227,6 +248,23 @@ An admitted inbound message; listeners call `next()` to pass it on and the defau
  * @mode waterfall
  */
 'im/message'(event: ImMessageEvent, next: () => Promise<ImOutcome>): Promise<ImOutcome>
+```
+
+Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
+
+<a id="imreaction--emit"></a>
+
+#### `im/reaction` — emit
+
+A reaction was added to or removed from a stored message in an admitted chat.
+
+```ts cordis-catalog
+/**
+ * A reaction was added to or removed from a stored message in an admitted chat.
+ * @param event - the reaction, its target message, actor, and producing session when known.
+ * @mode emit
+ */
+'im/reaction'(event: ImReactionEvent): void
 ```
 
 Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)

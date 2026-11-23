@@ -147,39 +147,37 @@ function enabledFocusables(): HTMLElement[] {
   )).filter(element => !element.closest('[inert], [hidden]'))
 }
 
+/** The Relay authorization address the host mints for a sign-in. */
+const SIGN_IN_ADDRESS = 'https://relay.example.test/__liveshare/owner-authorize?state=s1&mode=poll'
+
 describe('Liveshare dialog product acceptance', () => {
   /**
    * Render the real dialog against a host that must verify its owner first, with the sign-in routes
-   * and the Relay's popup substituted.
+   * and the browser window substituted.
    * @param initialIdentity - What the host first reports about the owner.
-   * @returns The fetch double for the sign-in routes, the scripted Remote, the popup, and the ticket.
+   * @returns The fetch double for the sign-in routes, the scripted Remote, the window, and the timers.
    */
   async function showLoginDialog(
     initialIdentity: OwnerIdentityStatus = { state: 'unverified', relay: RELAY },
     options: {
-      /** Leave the browser refusing the popup, as a blocked-window browser does. */
-      readonly noPopup?: boolean
+      /** Leave the page without a window, as the Desktop shell does. */
+      readonly noWindow?: boolean
       /** Deadline the host names for the transaction. */
       readonly expiresAt?: string
-      /** Answer one redemption POST; the default verifies the owner. */
-      readonly redeem?: (code: string, state: string) => Response | Promise<Response>
-      /** Capture the attempt's polling timer instead of waiting for it. */
-      readonly interceptInterval?: boolean
+      /** Answer one status POST; the default reports the transaction as pending. */
+      readonly status?: () => Response | Promise<Response>
     } = {},
   ) {
     const intervals: (() => void)[] = []
-    if (options.interceptInterval === true) {
-      vi.stubGlobal('setInterval', (callback: () => void) => { intervals.push(callback); return 0 })
-    }
-    const popup = {
-      closed: false,
+    vi.stubGlobal('setInterval', (callback: () => void) => { intervals.push(callback); return 0 })
+    const browserWindow = {
       location: { href: '' },
-      postMessage: vi.fn((_message: unknown, _origin: string) => {}),
-      close: vi.fn(() => { popup.closed = true }),
+      close: vi.fn(() => {}),
     }
-    const open = vi.fn((_url: string, _name: string, _features: string) => options.noPopup === true ? null : popup)
+    const open = vi.fn((_url: string, _name: string, _features?: string) =>
+      options.noWindow === true ? null : browserWindow)
     vi.stubGlobal('open', open)
-    /** What the host reports about the owner; the redemption is what verifies it. */
+    /** What the host reports about the owner; a verified settlement is what changes it. */
     let identity: OwnerIdentityStatus = initialIdentity
     const host = ownerSharesDouble({
       list: async () => accepted({ shares: [] }),
@@ -188,26 +186,21 @@ describe('Liveshare dialog product acceptance', () => {
       testRelay: async () => accepted({ ok: true, httpReachable: true, blocking: false }),
       testPublish: async () => accepted({ ok: true, blocking: false }),
     })
-    const fetcher = vi.fn((input: string, _init?: RequestInit) => {
+    const fetcher = vi.fn(async (input: string, _init?: RequestInit) => {
       if (input === 'api/liveshare.ownerLoginStart') {
-        return Promise.resolve(Response.json({
-          authorizeUrl: 'https://relay.example.test/__liveshare/auth/start?state=s1',
+        return Response.json({
+          authorizeUrl: SIGN_IN_ADDRESS,
           state: 's1',
-          messageOrigin: RELAY,
           expiresAt: options.expiresAt ?? '2099-01-01T00:00:00Z',
-        }))
+        })
       }
-      if (input === 'api/liveshare.ownerLoginRedeem') {
-        if (options.redeem !== undefined) {
-          const body = typeof _init?.body === 'string'
-            ? JSON.parse(_init.body) as { readonly code?: string; readonly state?: string }
-            : {}
-          return Promise.resolve(options.redeem(body.code ?? '', body.state ?? ''))
-        }
-        identity = { state: 'verified', relay: RELAY, displayName: '许翰翔' }
-        return Promise.resolve(Response.json(identity))
+      if (input === 'api/liveshare.ownerLoginStatus') {
+        const answer = await (options.status?.() ?? Response.json({ status: 'pending' }))
+        const body = await answer.clone().json() as { readonly status?: string; readonly identity?: OwnerIdentityStatus }
+        if (body.status === 'verified' && body.identity !== undefined) identity = body.identity
+        return answer
       }
-      if (input === 'api/liveshare.ownerLoginCancel') return Promise.resolve(Response.json({ ok: true }))
+      if (input === 'api/liveshare.ownerLoginCancel') return Response.json({ ok: true })
       throw new Error(`Unexpected request: ${input}`)
     })
     vi.stubGlobal('fetch', fetcher)
@@ -221,135 +214,130 @@ describe('Liveshare dialog product acceptance', () => {
         t={translate}
       />)
     })
-    /** The body this page submitted to redeem a code, when it submitted one. */
-    const redeemed = (): Record<string, unknown> | undefined => {
-      const call = fetcher.mock.calls.find(([input]) => input === 'api/liveshare.ownerLoginRedeem')
-      const body = call?.[1]?.body
-      return typeof body !== 'string'
-        ? undefined
-        : JSON.parse(body) as Record<string, unknown>
+    /** Fire every timer the attempt armed, and let the answers it asked for land. */
+    const tick = async (): Promise<void> => {
+      await act(async () => { for (const fire of intervals) fire() })
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
     }
-    return { fetcher, host, popup, open, redeemed, intervals }
+    return { fetcher, host, browserWindow, open, tick }
   }
 
-  /**
-   * Deliver one window message the way the Relay's sign-in page would.
-   * @param options - Where the message says it came from, and what it carries.
-   */
-  function deliverMessage(options: {
-    readonly origin: string
-    readonly source: unknown
-    readonly data: unknown
-  }): void {
-    const event = new MessageEvent('message', { data: options.data, origin: options.origin })
-    Object.defineProperty(event, 'source', { value: options.source })
-    act(() => { window.dispatchEvent(event) })
-  }
-
-  it('[P1] verifies the owner through the Relay popup, and submits only the code it handed back', async () => {
-    const { popup, open, redeemed } = await showLoginDialog()
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    // The window is reserved inside the gesture, then navigated to exactly the sign-in the host named.
-    await screen.findByText('Finish signing in in the window that opened.')
-    expect(open).toHaveBeenCalledWith('', 'liveshare-owner-login', 'popup=yes,width=520,height=720')
-    expect(popup.location.href).toBe('https://relay.example.test/__liveshare/auth/start?state=s1')
-    // A message from another origin and another window is not this attempt's answer: it is dropped,
-    // nothing is submitted, and the dialog keeps waiting.
-    deliverMessage({
-      origin: 'https://evil.example.test',
-      source: popup,
-      data: { type: 'liveshare-auth-code', code: 'stolen', state: 's1' },
-    })
-    deliverMessage({
-      origin: RELAY,
-      source: {},
-      data: { type: 'liveshare-auth-code', code: 'stolen', state: 's1' },
-    })
-    deliverMessage({
-      origin: RELAY,
-      source: popup,
-      data: { type: 'liveshare-auth-code', code: 'stolen', state: 'stale' },
-    })
-    expect(redeemed()).toBeUndefined()
-    expect(screen.getByText('Finish signing in in the window that opened.')).toBeDefined()
-    // The popup's own message for the state the host minted is submitted, with its state, and the
-    // sign-in page is acknowledged on the origin the host bound.
-    deliverMessage({
-      origin: RELAY,
-      source: popup,
-      data: { type: 'liveshare-auth-code', code: 'one-time-code', state: 's1' },
-    })
-    await vi.waitFor(() => { expect(redeemed()).toEqual({ code: 'one-time-code', state: 's1' }) })
-    expect(popup.postMessage).toHaveBeenCalledWith(
-      { type: 'liveshare-auth-ack', state: 's1' }, RELAY,
-    )
-    // What the row states afterwards is the host's own answer, read back rather than assumed from the
-    // popup's message.
-    expect(await screen.findByText('许翰翔')).toBeDefined()
+  /** A status answer that settles the transaction with this verified owner. */
+  const settledAs = (displayName: string) => () => Response.json({
+    status: 'verified', identity: { state: 'verified', relay: RELAY, displayName },
   })
 
-  it('[P1] lets a verified owner verify again, and never re-issues a credential on its own', async () => {
-    const { fetcher, popup, open } = await showLoginDialog({
-      state: 'verified', relay: RELAY, displayName: '许翰翔',
+  it('[P1] signs the owner in through a browser and states the identity the host settled', async () => {
+    let settled = false
+    const { browserWindow, open, tick } = await showLoginDialog(undefined, {
+      status: () => settled ? settledAs('许翰翔')() : Response.json({ status: 'pending' }),
     })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await screen.findByText(en['dialog.identity.loginWaiting'])
+    // The window is reserved inside the gesture, then navigated to exactly the sign-in the host named.
+    expect(open.mock.calls[0]).toEqual(['', '_blank'])
+    expect(browserWindow.location.href).toBe(SIGN_IN_ADDRESS)
+    expect(screen.getByRole('textbox', { name: 'Sign-in link' })).toHaveProperty('value', SIGN_IN_ADDRESS)
+    expect(screen.getByText(en['dialog.identity.loginManual'])).toBeDefined()
+
+    await tick()
+    expect(screen.getByRole('textbox', { name: 'Sign-in link' })).toBeDefined()
+    settled = true
+    await tick()
+    // What the row states afterwards is the host's own answer, read back after the settlement.
+    expect(await screen.findByText('许翰翔')).toBeDefined()
+    expect(screen.queryByRole('textbox', { name: 'Sign-in link' })).toBeNull()
+  })
+
+  it('opens the address directly for a page that got no window, and offers it to copy', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    // The Desktop shell denies this page a window and opens the address in the system browser instead.
+    const { open } = await showLoginDialog(undefined, { noWindow: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    const field = await screen.findByRole('textbox', { name: 'Sign-in link' })
+    expect(open).toHaveBeenCalledWith(SIGN_IN_ADDRESS, '_blank', 'noopener')
+    expect(field).toHaveProperty('value', SIGN_IN_ADDRESS)
+    await act(async () => { fireEvent.focus(field) })
+    expect((field as HTMLInputElement).selectionEnd).toBe(SIGN_IN_ADDRESS.length)
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy link' })) })
+    expect(writeText).toHaveBeenCalledWith(SIGN_IN_ADDRESS)
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeDefined()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('does not mark a fresh sign-in link as copied after copying the previous one', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+    const { fetcher, tick } = await showLoginDialog(undefined, { status: settledAs('Owner') })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy link' }))
+    await screen.findByRole('button', { name: 'Copied' })
+    await tick()
+
+    const next = SIGN_IN_ADDRESS.replace('s1', 's2')
+    fetcher.mockResolvedValueOnce(Response.json({ authorizeUrl: next, state: 's2', expiresAt: '2099-01-01T00:00:00Z' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in again' }))
+    expect(await screen.findByRole('textbox', { name: 'Sign-in link' })).toHaveProperty('value', next)
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeDefined()
+  })
+
+  it('states a copy the clipboard refused on the sign-in address, and keeps the address', async () => {
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+    await showLoginDialog()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await screen.findByRole('textbox', { name: 'Sign-in link' })
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy link' })) })
+    // The share link keeps its own copy control, so the sign-in field states its own answer here.
+    expect(screen.getByRole('alert').textContent).toBe(en['dialog.copyFailed'])
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeDefined()
+    expect(screen.getByRole('textbox', { name: 'Sign-in link' })).toHaveProperty('value', SIGN_IN_ADDRESS)
+  })
+
+  it('[P1] lets a verified owner sign in again, and waits until the host settles that transaction', async () => {
+    // The credential already in force is verified, so only this transaction's settlement can end the
+    // new attempt: reading the identity alone would call it done before the owner signed in.
+    let settled = false
+    const { fetcher, browserWindow, tick } = await showLoginDialog(
+      { state: 'verified', relay: RELAY, displayName: '许翰翔' },
+      { status: () => settled ? settledAs('新账号')() : Response.json({ status: 'pending' }) },
+    )
     // A verified owner keeps the credential in force and is not signed in again behind their back.
     expect(await screen.findByText('许翰翔')).toBeDefined()
     expect(fetcher.mock.calls.some(([input]) => input === 'api/liveshare.ownerLoginStart')).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }))
-    // The same transaction an unverified owner gets, and the row still states the identity in force
-    // until the host redeems the new credential.
-    await screen.findByText('Finish signing in in the window that opened.')
-    expect(open).toHaveBeenCalledOnce()
-    expect(popup.location.href).toBe('https://relay.example.test/__liveshare/auth/start?state=s1')
+    await screen.findByRole('textbox', { name: 'Sign-in link' })
+    expect(browserWindow.location.href).toBe(SIGN_IN_ADDRESS)
+    await tick()
+    // The row still states the identity in force until the host settles the new one.
+    expect(screen.getByRole('textbox', { name: 'Sign-in link' })).toBeDefined()
     expect(screen.getByText('许翰翔')).toBeDefined()
-  })
 
-  it('states a verification window the browser refused to open', async () => {
-    const { open } = await showLoginDialog(undefined, { noPopup: true })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-
-    expect(await screen.findByRole('alert')).toHaveProperty(
-      'textContent', en['dialog.identity.loginBlocked'],
-    )
-    expect(open).toHaveBeenCalledOnce()
+    settled = true
+    await tick()
+    expect(await screen.findByText('新账号')).toBeDefined()
+    expect(screen.queryByRole('textbox', { name: 'Sign-in link' })).toBeNull()
   })
 
   it.each([
-    ['mismatch', 'dialog.identity.loginMismatch', () => new Response(
-      JSON.stringify({ error: 'owner-login-mismatch' }), { status: 403 })],
-    ['replayed', 'dialog.identity.loginReplayed', () => new Response(
-      JSON.stringify({ error: 'owner-login-replayed' }), { status: 409 })],
-    ['failed', 'dialog.identity.loginFailed', () => Response.json({ state: 'unverified', relay: RELAY })],
-    ['unavailable', 'dialog.identity.loginUnavailable', () => Promise.reject(new Error('offline'))],
-  ] as const)('states a %s verification answer', async (_name, copy, redeem) => {
-    const { popup } = await showLoginDialog(undefined, { redeem })
+    ['mismatch', 'dialog.identity.loginMismatch', 'owner-login-mismatch'],
+    ['replayed', 'dialog.identity.loginReplayed', 'owner-login-replayed'],
+    ['failed', 'dialog.identity.loginFailed', 'owner-login-failed'],
+    ['unavailable', 'dialog.identity.loginUnavailable', 'owner-login-unavailable'],
+  ] as const)('states a %s settlement', async (_name, copy, error) => {
+    const { tick } = await showLoginDialog(undefined, { status: () => Response.json({ status: 'failed', error }) })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await screen.findByText(en['dialog.identity.loginWaiting'])
-    deliverMessage({
-      origin: RELAY,
-      source: popup,
-      data: { type: 'liveshare-auth-code', code: 'one-time-code', state: 's1' },
-    })
-
+    await tick()
     expect(await screen.findByText(en[copy])).toBeDefined()
   })
 
-  it('states a verification the owner cancelled, and one whose transaction expired', async () => {
-    const cancelled = await showLoginDialog(undefined, { interceptInterval: true })
+  it('states a sign-in whose transaction expired', async () => {
+    const { tick } = await showLoginDialog(undefined, { expiresAt: '2000-01-01T00:00:00Z' })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await screen.findByText(en['dialog.identity.loginWaiting'])
-    cancelled.popup.closed = true
-    for (const fire of cancelled.intervals) fire()
-    expect(await screen.findByText(en['dialog.identity.loginCancelled'])).toBeDefined()
-    cleanup()
-
-    const expired = await showLoginDialog(undefined, {
-      interceptInterval: true,
-      expiresAt: '2000-01-01T00:00:00Z',
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    await screen.findByText(en['dialog.identity.loginWaiting'])
-    for (const fire of expired.intervals) fire()
+    await tick()
     expect(await screen.findByText(en['dialog.identity.loginExpired'])).toBeDefined()
   })
 
@@ -520,18 +508,17 @@ describe('Liveshare dialog product acceptance', () => {
   it('[P1] opens the sign-in the host minted, never this page\'s own address', async () => {
     history.replaceState(null, '', '/session?shareId=s1&ownerStartupToken=secret#/tab')
     try {
-      const { open, popup } = await showLoginDialog()
+      const { open, browserWindow } = await showLoginDialog()
       fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-      await screen.findByText('Finish signing in in the window that opened.')
+      await screen.findByText(en['dialog.identity.loginWaiting'])
       // The window this page reserved carries nothing of its own, and the sign-in it navigates to is
       // the one the host named: neither this page's address, its parameters, nor an Owner startup
       // token travels to the Relay.
       expect(open.mock.calls[0]?.[0]).toBe('')
-      expect(popup.location.href).toBe('https://relay.example.test/__liveshare/auth/start?state=s1')
-      expect(popup.location.href).not.toContain('ownerStartupToken')
-      expect(popup.location.href).not.toContain('secret')
-      expect(popup.location.href).not.toContain('shareId')
-      popup.close()
+      expect(browserWindow.location.href).toBe(SIGN_IN_ADDRESS)
+      expect(browserWindow.location.href).not.toContain('ownerStartupToken')
+      expect(browserWindow.location.href).not.toContain('secret')
+      expect(browserWindow.location.href).not.toContain('shareId')
     } finally {
       history.replaceState(null, '', '/')
     }
@@ -1062,12 +1049,17 @@ describe('Liveshare dialog stored-record branches', () => {
   })
 
   it('states an unreachable Relay and lets the owner test again', async () => {
-    const testRelay = vi.fn(async () => refused('gateway/internal', {}))
+    const testRelay = vi.fn(async () => accepted({ ok: true, httpReachable: true, blocking: false }))
+      .mockResolvedValueOnce(refused('gateway/internal', {}))
     await showControlled({ overrides: { testRelay } })
 
     expect(await screen.findByText(en['dialog.hostUnavailable'])).toBeDefined()
-    // Re-saving the address is the retry; there is no separate connectivity action.
-    expect(screen.queryByRole('button', { name: 'Save and check' })).toBeNull()
+    const signIn = screen.getByRole('button', { name: 'Sign in again' })
+    expect(signIn).toHaveProperty('disabled', true)
+    const input = screen.getByRole('textbox', { name: 'Share service address' })
+    await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }) })
+    expect(testRelay).toHaveBeenCalledTimes(2)
+    expect(signIn).toHaveProperty('disabled', false)
   })
 
   it('states an unreachable Relay with no cause, and one this page could not ask', async () => {
@@ -1157,31 +1149,28 @@ describe('Liveshare dialog stored-record branches', () => {
     expect(setRelay).toHaveBeenCalledWith({ relayUrl: 'https://relay2.example.test' })
   })
 
-  it('rechecks the address before creating when the Host names one after mount', async () => {
-    // The address the Host names arrives after the dialog mounted, so saving it starts the flow with
-    // the address the render before it held: connectivity stays idle until the create action asks.
+  it('enables sign-in only after the first saved Relay answers', async () => {
+    const probe = Promise.withResolvers<RelayConnectivityView>()
     const host = await showControlled({
       defaultRelay: '',
-      relayEffective: '',
-      identity: { state: 'unverified', relay: '' },
+      identity: { state: 'unverified', relay: RELAY },
       overrides: {
         relay: async () => accepted({}),
-        setRelay: async () => accepted({ effective: 'https://relay2.example.test' }),
-        identity: identityFor('https://relay2.example.test'),
-        testRelay: async () => refused('gateway/internal', {}),
+        testRelay: async () => accepted(await probe.promise),
       },
     })
-    fireEvent.change(screen.getByRole('textbox', { name: 'Share service address' }), {
-      target: { value: 'https://relay2.example.test' },
-    })
-    await saveAddress()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Share service address' }), { target: { value: RELAY } })
+    expect(probes(host)).toBe(0)
+    expect(screen.getByTitle(en['dialog.identity.verifyBlocked'])).toHaveProperty('disabled', true)
 
-    const create = screen.getByRole('button', { name: 'Create share' }) as HTMLButtonElement
-    await vi.waitFor(() => { expect(create.disabled).toBe(false) })
-    await act(async () => { fireEvent.click(create) })
-    // The address did not answer when the action re-checked it, so nothing was created.
-    expect(host.calls.some(call => call.method === 'create')).toBe(false)
-    expect(screen.getByText(en['dialog.hostUnavailable'])).toBeDefined()
+    await saveAddress()
+    expect(host.calls.filter(call => call.method === 'setRelay' || call.method === 'testRelay')).toEqual([
+      { method: 'setRelay', argument: { relayUrl: RELAY } }, { method: 'testRelay' },
+    ])
+    const signIn = screen.getByRole('button', { name: 'Sign in' })
+    expect(signIn).toHaveProperty('disabled', true)
+    await act(async () => { probe.resolve({ ok: true, httpReachable: true, blocking: false }) })
+    expect(signIn).toHaveProperty('disabled', false)
   })
 
   it('withholds creation when the permission check refuses after the address answers', async () => {
@@ -1200,12 +1189,9 @@ describe('Liveshare dialog stored-record branches', () => {
       target: { value: 'https://relay2.example.test' },
     })
     await saveAddress()
-    const create = screen.getByRole('button', { name: 'Create share' })
-    await vi.waitFor(() => { expect(create).toHaveProperty('disabled', false) })
-    await act(async () => { fireEvent.click(create) })
-
+    expect(await screen.findByText(en['dialog.permissionFailed'])).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Create share' })).toHaveProperty('disabled', true)
     expect(host.calls.some(call => call.method === 'create')).toBe(false)
-    expect(screen.getByText(en['dialog.permissionFailed'])).toBeDefined()
   })
 
   it('states a refused create and one the Host could not answer', async () => {

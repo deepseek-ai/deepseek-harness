@@ -219,6 +219,16 @@ export interface ForgeReviewList {
   readonly failure: ForgeFailure | null
 }
 
+/** One repository on one host, which the review page's lists can be read in. */
+export interface ForgeReviewRepository {
+  /** Host name of the provider that lists the repository, compared without case. */
+  readonly host: string
+  /** Owner or namespace; nested groups of a GitLab project stay in it. */
+  readonly owner: string
+  /** Repository name. */
+  readonly name: string
+}
+
 /** The review page's lists on one host of one provider. */
 export interface ForgeReviewHost {
   /** Forge family of the provider. */
@@ -227,6 +237,11 @@ export interface ForgeReviewHost {
   readonly host: string
   /** Login of the signed-in user the latest successful read named, or null before one. */
   readonly viewer: string | null
+  /**
+   * The command that signs the provider's CLI in to the host, while the latest read failed for lack of sign-in and the
+   * provider names one; null otherwise.
+   */
+  readonly signIn: string | null
   /** Each list the provider offers on the host; a list it does not offer is absent. */
   readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>
 }
@@ -648,7 +663,7 @@ export interface Config {
   reviewListIntervalMs?: number
   /** Milliseconds between two reads of the review page's navigation count while it is shown. */
   reviewCountIntervalMs?: number
-  /** Largest delay in milliseconds between two reads of the review page's lists or count after consecutive failures. */
+  /** Largest delay in milliseconds between two reads of the review page's lists or count on one host after its consecutive failed reads. */
   reviewMaxBackoffMs?: number
   /** Most change requests one review page list shows, capped by each provider's own limit. */
   reviewPageSize?: number
@@ -719,6 +734,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/reviewers-failed': Record<string, never>
     /** The code host did not provide a change request's description; the message says why. */
     'forgePanel/description-failed': Record<string, never>
+    /** The code host did not provide a change request's activity; the message says why. */
+    'forgePanel/activity-failed': Record<string, never>
     /** The code host's provider cannot read review threads, so the changes view shows none. */
     'forgePanel/review-unsupported': Record<string, never>
     /** The code host did not provide the change request's review threads, or its status has not been read yet; the message says why. */

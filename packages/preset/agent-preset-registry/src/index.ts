@@ -84,7 +84,9 @@ export class AgentPresetRegistry extends TypertRemoteService {
   private requested(id: string | undefined): string {
     const wanted = id ?? this.defaultId
     if (wanted === undefined) {
-      throw new Error('agent-preset-registry: no preset was requested and `default` is not configured')
+      throw new RemoteError('agent-preset/no-default', 'No default agent preset is configured. Specify a preset or configure `default`.', {
+        available: [...this.definitions.keys()],
+      })
     }
     return wanted
   }
@@ -224,7 +226,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
   /** Resolve an identity without starting an Agent.
    * @param id Explicit preset or the current default.
    * @returns Current metadata, including failure when activation failed.
-   * @throws when `id` is omitted and no default is configured.
+   * @throws RemoteError `agent-preset/no-default` when `id` is omitted and no default is configured.
    */
   async resolve(id?: string): Promise<AgentPreset> {
     const wanted = this.requested(id)

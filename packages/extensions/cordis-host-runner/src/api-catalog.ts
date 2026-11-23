@@ -208,7 +208,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve an identity without starting an Agent.',
         parameters: [{ name: 'id', description: 'Explicit preset or the current default.' }],
         returns: 'Current metadata, including failure when activation failed.',
-        throws: ['when `id` is omitted and no default is configured.'],
+        throws: ['RemoteError `agent-preset/no-default` when `id` is omitted and no default is configured.'],
       },
       {
         signature: '@Remote(\'read\') readDocument(agentPreset: string): Promise<AgentPresetDocument>',
@@ -1356,10 +1356,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Registry of forge providers. Watchers of one change request share a single polling loop, which reads its snapshot while a snapshot watcher remains and its brief otherwise. Each forge has at most one snapshot fetch and one brief fetch in flight; each batches every due change request of that forge at its level, and those past the midpoint of the wait after a status, so change requests that became due at different times come to share one fetch. A fetch calls a provider that names a batch size once per that many change requests of a host, and settles the results of each call when it returns.',
     methods: [
       {
-        signature: 'register(provider: ForgeProvider): () => Promise<void>',
+        signature: 'register(provider: ForgeProvider): ForgeRegistrationHandle',
         description: 'Register the provider of one forge family as an effect on the calling fiber. Watches of that forge receive an `unavailable` failure when the registration ends. Unregistering cancels and awaits its in-flight calls; results from the withdrawn registration are discarded.',
         parameters: [{ name: 'provider', description: 'provider to serve `provider.forge` on `provider.hosts`.' }],
-        returns: 'the disposer that unregisters the provider and waits for its calls to finish.',
+        returns: 'the disposer that unregisters the provider and waits for its calls to finish, carrying {@link ForgeRegistrationHandle.replace}.',
         throws: ['when another provider already serves the same forge or one of the same hosts, compared without case, and when the provider names a batch size that is not a positive safe integer.'],
       },
       {
@@ -1395,11 +1395,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the repository\'s forge or the lookup fails.'],
       },
       {
-        signature: 'async readiness(repository: ForgeRepository, signal: AbortSignal): Promise<ForgeReadiness>',
-        description: 'Report whether the provider can reach the repository\'s host with current credentials.',
-        parameters: [{ name: 'repository', description: 'repository served by a registered provider.' }, { name: 'signal', description: 'cancellation for the probe.' }],
+        signature: 'async readiness(repository: Pick<ForgeRepository, \'forge\' | \'host\'>, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether a provider can reach one host with current credentials.',
+        parameters: [{ name: 'repository', description: 'forge family of a registered provider and the host to probe; a repository names both.' }, { name: 'signal', description: 'cancellation for the probe.' }],
         returns: 'the provider\'s readiness for the host.',
-        throws: ['when no provider serves the repository\'s forge.'],
+        throws: ['when no provider serves the forge.'],
       },
       {
         signature: 'async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
@@ -1441,6 +1441,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Bring the base branch\'s new commits into a change request\'s head branch while its head is still `request.headSha`, then poll it at once when it is watched.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'update method and the head commit the user confirmed.' }, { name: 'signal', description: 'cancellation of the request.' }],
         returns: 'undefined once the host accepted the update, or why it did not; a provider that updates no branches fails.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async setAutoMerge( ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>',
+        description: 'Turn the host\'s automatic merge of a change request on, while its head is still the request\'s `headSha`, or off, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host accepted it, or why it did not; a provider that sets no automatic merge fails.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
@@ -1534,6 +1541,20 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>',
+        description: 'Read the activity of a change request: its comments, submitted reviews, commits, and changes of state.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the activity, or why the host did not provide it; `unsupported` when the provider reads no activity.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
+        description: 'Add a comment to a change request\'s conversation, then poll it at once when it is watched.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'body', description: 'Markdown source of the comment.' }, { name: 'signal', description: 'cancellation of the request.' }],
+        returns: 'undefined once the host saved the comment, or why it did not; a provider that adds no comments fails.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
         description: 'Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1602,9 +1623,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when the Host lacks the Session query, projection cache, storage, or Session store service.'],
       },
       {
-        signature: '@Remote({ mode: \'stream\' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>',
-        description: 'Stream the review page\'s lists of the signed-in user\'s open change requests on every host a provider lists them on: the lists read so far first, then a frame after each read settles. Readers of one repository scope share one reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.',
-        parameters: [{ name: 'repository', description: 'one repository to list in, or null for every repository the user can read.' }, { name: 'signal', description: 'ends the stream.' }],
+        signature: '@Remote({ mode: \'stream\' }) async *reviewLists( repository: ForgeReviewRepository | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>',
+        description: 'Stream the review page\'s lists of the signed-in user\'s open change requests on every host a provider lists them on: the lists read so far first, then a frame after each read settles. Readers of one repository scope share one reader, which reads each host every `reviewListIntervalMs` while some stream lasts and reads a host whose read failed again later each time, up to `reviewMaxBackoffMs`, without delaying the other hosts; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.',
+        parameters: [{ name: 'repository', description: 'one repository to list in, read on its host only, or null for every repository the user can read on every host.' }, { name: 'signal', description: 'ends the stream.' }],
         returns: 'frames, each complete.',
       },
       {
@@ -1617,6 +1638,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>',
         description: 'Read every streamed review page list and the count again at once.',
         parameters: [{ name: 'signal', description: 'request cancellation.' }],
+      },
+      {
+        signature: '@Remote async hostReadiness(forge: string, host: string, signal: AbortSignal): Promise<ForgeReadiness>',
+        description: 'Report whether a provider reaches one of its hosts with the Host\'s current credentials, for the host list on the Plugins page of that provider\'s row. The read names no Session, so, like the review page reads, only callers that may use the Host\'s code host credentials reach it.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider, such as `gitlab`.' }, { name: 'host', description: 'host name as the provider\'s configuration lists it.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the provider\'s readiness for the host; `unavailable` with the reason when no provider serves the family, the probe fails, or it runs past `readinessTimeoutMs`.',
       },
       {
         signature: '@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewPoll(url: string, signal: AbortSignal): Promise<void>',
@@ -1637,6 +1664,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the description.',
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/description-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewActivity(url: string, signal: AbortSignal): Promise<ChangeRequestActivity | null>',
+        description: 'Read the activity of a change request for the review page: its comments, submitted reviews, commits, and changes of state.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the activity, or null when the change request\'s provider reads none.',
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/activity-failed` with the host\'s reason when the host does not provide it.'],
+      },
+      {
+        signature: '@Remote async reviewComment(url: string, body: string, signal: AbortSignal): Promise<void>',
+        description: 'Add a comment to the conversation of a change request the review page shows.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'body', description: 'Markdown source of the comment.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` when `body` is blank, or with the host\'s reason; `forgePanel/action-unknown` when the host\'s answer did not confirm the comment.'],
       },
       {
         signature: '@Remote async reviewChecks(url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>',
@@ -1710,6 +1750,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>',
         description: 'Merge a change request the review page shows while its head is still `headSha`.',
         parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
+      },
+      {
+        signature: '@Remote async reviewSetAutoMerge(url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>',
+        description: 'Turn the code host\'s automatic merge of a change request the review page shows on, while its head is still the request\'s `headSha`, or off.',
+        parameters: [{ name: 'url', description: 'web URL of the change request.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`, `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host\'s reason.'],
       },
       {
@@ -1899,6 +1945,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Merge a change request of a Session while its head is still `headSha`; the change request is polled again once the host answers.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'method', description: 'how the commits enter the base branch.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise or cannot be reached.'],
+      },
+      {
+        signature: '@Remote async setAutoMerge(session: Session, url: string, request: AutoMergeRequest, signal: AbortSignal): Promise<void>',
+        description: 'Turn the code host\'s automatic merge of a change request of a Session on, while its head is still the request\'s `headSha`, or off; the change request is polled again once the host answers.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'request', description: 'on with the merge method and the head commit the user confirmed, or off.' }, { name: 'signal', description: 'request cancellation.' }],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past the request\'s `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses otherwise, cannot be reached, or sets no automatic merge; `forgePanel/action-unknown` when the host\'s answer did not confirm the change.'],
       },
       {
         signature: '@Remote async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>',
@@ -2099,7 +2151,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>',
         description: 'Atomically create or replace one file from exact bytes: no decoding, no newline normalization, no diff basis. The bytes are stored as given, which is how a consumer materializes content it already holds — a downloaded attachment, a rendered document — inside this execution world. Backends that cannot store arbitrary bytes keep this default rejection.',
         parameters: [{ name: 'target', description: 'the resolved target to write.' }, { name: 'data', description: 'the exact bytes to store.' }, { name: 'expected', description: 'the write intent guarding the write; omit for unconditional.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this write runs under; a sandboxing backend fences the write by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
-        returns: 'the outcome, including the version the write produced and its byte count.',
+        returns: 'the outcome, including the version the write produced.',
       },
       {
         signature: 'abstract editText( target: FsTarget, edit: FsEditRequest, expected?: { version: FsVersion }, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsEditOutcome>',
@@ -4378,8 +4430,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async configure(patch: SpeechSelectionPatch): Promise<void>',
-        description: 'Persist changed selection fields into this plugin\'s profile entry; the resulting language must be accepted by the selected provider.',
-        parameters: [{ name: 'patch', description: 'explicit provider or language changes.' }],
+        description: 'Persist changed selection fields into this plugin\'s profile entry. The language must be listed by at least one registered provider; a provider that does not list it receives `auto` when it transcribes.',
+        parameters: [{ name: 'patch', description: 'explicit provider, `auto`, or language changes.' }],
         returns: 'after the profile write and the live update it applies.',
       },
       {
@@ -4395,7 +4447,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SpeechRequest): SpeechSpec',
-        description: 'Apply composition defaults and capture the selected provider. Missing providers and unsupported languages fail explicitly.',
+        description: 'Apply the saved selection and capture the provider. Missing providers and requested hints no registered provider lists fail explicitly; a saved hint no registered provider lists becomes `auto`. The captured provider receives the hint when it lists it and `auto` otherwise.',
         parameters: [{ name: 'request', description: 'complete recording and optional selection.' }],
         returns: 'provider-pinned input for transcribe().',
       },
@@ -5501,7 +5553,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async list(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing>',
-        description: 'List the direct children of one directory inside the Session\'s workspace.',
+        description: 'List the direct children of one directory of the Session\'s workspace: one that resolves inside the workspace root, or one whose path, as the backend spells it before following links, descends from the root by child names through a link that resolves outside it.',
         parameters: [{ name: 'workspaceFileScope', description: 'header-derived workspace root for the Session identity on the wire.' }, { name: 'path', description: 'workspace path, absolute or relative to the workspace root.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'the directory\'s children in the backend\'s stable name order, bounded by the entry cap.',
       },
@@ -5514,10 +5566,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote({ mode: \'stream\' }) changes(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>',
-        description: 'Watch one file or a directory\'s direct entries in the Session\'s filesystem. Files use the backend\'s read authority; directories remain workspace-scoped.',
-        parameters: [{ name: 'workspaceFileScope', description: 'header-derived workspace root for the Session identity on the wire.' }, { name: 'path', description: 'target path; the Host determines its type and confines directories to the workspace.' }, { name: 'signal', description: 'generation cancellation.' }],
+        description: 'Watch one file or a directory\'s direct entries in the Session\'s filesystem. Files use the backend\'s read authority; a directory passes the same workspace check as `list`.',
+        parameters: [{ name: 'workspaceFileScope', description: 'header-derived workspace root for the Session identity on the wire.' }, { name: 'path', description: 'target path; the Host determines its type and applies the workspace check to a directory.' }, { name: 'signal', description: 'generation cancellation.' }],
         returns: '`ready` once the target watch is active, then current metadata for queued and live invalidations.',
-        throws: ['RemoteError when watching is unavailable or a directory is outside the workspace.'],
+        throws: ['RemoteError when watching is unavailable, or a directory neither resolves inside the workspace root nor has a path that descends from it.'],
       },
     ],
   },
@@ -5939,8 +5991,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'forge/providers-changed',
     mode: 'parallel',
     signature: '\'forge/providers-changed\'(forge: string): void | Promise<void>',
-    summary: 'Announces a provider registration or withdrawal after the registry changes.',
-    description: 'Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
+    summary: 'Announces a provider registration, replacement, or withdrawal after the registry changes.',
+    description: 'Announces a provider registration, replacement, or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
     parameters: [{ name: 'forge', description: 'family whose provider changed.' }],
   },
   {
@@ -6024,6 +6076,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'activity', description: 'the whole activity of the turn, with every segment so far.' }, { name: 'change', description: 'which part changed: start, a segment delta, a tool update, or the end.' }],
   },
   {
+    name: 'im/before-send',
+    mode: 'waterfall',
+    signature: '\'im/before-send\'(outgoing: ImOutgoing, next: () => Promise<void>): Promise<void>',
+    summary: 'One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace `outgoing.content` or set `outgoing.drop`, then call `next()`.',
+    description: 'One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.',
+    parameters: [{ name: 'outgoing', description: 'the mutable draft: chat, caller options, the caller\'s original content and the current content.' }, { name: 'next', description: 'the rest of the waterfall.' }],
+  },
+  {
     name: 'im/button',
     mode: 'emit',
     signature: '\'im/button\'(event: ImButtonEvent): void',
@@ -6046,6 +6106,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'An admitted inbound message; listeners call `next()` to pass it on and the default outcome ignores it.',
     description: 'An admitted inbound message; listeners call `next()` to pass it on and the default outcome ignores it.',
     parameters: [{ name: 'event', description: 'the admitted message with its chat, source and renderer state.' }, { name: 'next', description: 'the rest of the waterfall; call it to let the next listener decide the outcome.' }],
+  },
+  {
+    name: 'im/reaction',
+    mode: 'emit',
+    signature: '\'im/reaction\'(event: ImReactionEvent): void',
+    summary: 'A reaction was added to or removed from a stored message in an admitted chat.',
+    description: 'A reaction was added to or removed from a stored message in an admitted chat.',
+    parameters: [{ name: 'event', description: 'the reaction, its target message, actor, and producing session when known.' }],
   },
   {
     name: 'im/select',
@@ -6876,6 +6944,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
   },
   {
+    name: 'AutoMergeRequest',
+    declaration: 'export type AutoMergeRequest = {\n    readonly enabled: true;\n    readonly method: MergeMethod;\n    readonly headSha: string;\n} | {\n    readonly enabled: false;\n};',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -6936,6 +7008,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ButtonProps {\n    readonly label: string;\n    readonly hotkey?: string | undefined;\n    readonly disabled?: boolean | undefined;\n    readonly onPress?: (() => unknown) | undefined;\n}',
   },
   {
+    name: 'ChangeRequestActivity',
+    declaration: 'export interface ChangeRequestActivity {\n    readonly items: readonly ChangeRequestActivityItem[];\n    readonly truncated: boolean;\n    readonly viewerCanComment: boolean;\n}',
+  },
+  {
+    name: 'ChangeRequestActivityItem',
+    declaration: 'export type ChangeRequestActivityItem = {\n    readonly at: string;\n    readonly actor: ForgeCommentAuthor | null;\n} & ({\n    readonly kind: \'comment\';\n    readonly body: string;\n    readonly url: string | null;\n} | {\n    readonly kind: \'review\';\n    readonly verdict: ReviewVerdict;\n    readonly body: string;\n    readonly comments: number;\n    readonly url: string | null;\n} | {\n    readonly kind: \'commit\';\n    readonly sha: string;\n    readonly title: string;\n} | {\n    readonly kind: \'merged\' | \'closed\' | \'reopened\' | \'ready-for-review\' | \'converted-to-draft\' | \'force-pushed\';\n} | {\n    readonly kind: \'auto-merge-enabled\' | \'auto-merge-disabled\';\n} | {\n    readonly kind: \'review-requested\';\n    readonly reviewer: string | null;\n} | {\n    readonly kind: \'renamed\';\n    readonly from: string;\n    readonly to: string;\n} | {\n    readonly kind: \'other\';\n    readonly text: string;\n});',
+  },
+  {
+    name: 'ChangeRequestAutoMerge',
+    declaration: 'export interface ChangeRequestAutoMerge {\n    readonly enabled: boolean;\n    readonly method: MergeMethod | null;\n    readonly enabledBy: string | null;\n    readonly canEnable: boolean;\n    readonly canDisable: boolean;\n}',
+  },
+  {
     name: 'ChangeRequestBrief',
     declaration: 'export type ChangeRequestBrief = Pick<ChangeRequestSnapshot, \'ref\' | \'url\' | \'title\' | \'state\' | \'draft\' | \'mergeability\' | \'reviewDecision\' | \'checksRollup\'>;',
   },
@@ -6989,7 +7073,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSnapshot',
-    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly branchUpdates: readonly BranchUpdateMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly reviewers: readonly ChangeRequestReviewer[];\n    readonly reviewersTruncated: boolean;\n    readonly canRequestReviews: boolean;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly canRerunChecks: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly autoMerge?: ChangeRequestAutoMerge;\n    readonly branchUpdates: readonly BranchUpdateMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly reviewers: readonly ChangeRequestReviewer[];\n    readonly reviewersTruncated: boolean;\n    readonly canRequestReviews: boolean;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly canRerunChecks: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestState',
@@ -6997,7 +7081,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSummary',
-    declaration: 'export interface ChangeRequestSummary {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly draft: boolean;\n    readonly author: ForgeCommentAuthor | null;\n    readonly headSha: string;\n    readonly checksRollup: ChecksRollup;\n    readonly reviewDecision: ReviewDecision;\n    readonly viewerReview: ChangeRequestViewerReview | null;\n    readonly viewerRequest: {\n        readonly team: string | null;\n    } | null;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface ChangeRequestSummary {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly draft: boolean;\n    readonly author: ForgeCommentAuthor | null;\n    readonly headSha: string;\n    readonly checksRollup: ChecksRollup;\n    readonly reviewDecision: ReviewDecision;\n    readonly viewerReview: ChangeRequestViewerReview | null;\n    readonly viewerRequest: {\n        readonly team: string | null;\n    } | null;\n    readonly updatedAt: string;\n}',
   },
   {
     name: 'ChangeRequestUpdate',
@@ -7937,7 +8021,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBriefs?(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>;\n    readonly snapshotBatchSize?: number;\n    readonly briefBatchSize?: number;\n    fetchCh /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly hosts: readonly string[];\n    readonly label: string;\n    readonly changeRequestNoun: ChangeRequestNoun;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>;\n    addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchBrie /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
@@ -7946,6 +8030,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeRegisteredLens',
     declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
+  },
+  {
+    name: 'ForgeRegistrationHandle',
+    declaration: 'export interface ForgeRegistrationHandle {\n    (): Promise<void>;\n    replace(provider: ForgeProvider): void;\n}',
   },
   {
     name: 'ForgeRemoteBranches',
@@ -8001,7 +8089,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeReviewHost',
-    declaration: 'export interface ForgeReviewHost {\n    readonly forge: string;\n    readonly host: string;\n    readonly viewer: string | null;\n    readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>;\n}',
+    declaration: 'export interface ForgeReviewHost {\n    readonly forge: string;\n    readonly host: string;\n    readonly viewer: string | null;\n    readonly signIn: string | null;\n    readonly lists: Partial<Readonly<Record<ForgeViewerFilter, ForgeReviewList>>>;\n}',
   },
   {
     name: 'ForgeReviewId',
@@ -8010,6 +8098,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeReviewList',
     declaration: 'export interface ForgeReviewList {\n    readonly items: readonly ChangeRequestSummary[] | null;\n    readonly total: number;\n    readonly fetchedAt: number | null;\n    readonly failure: ForgeFailure | null;\n}',
+  },
+  {
+    name: 'ForgeReviewRepository',
+    declaration: 'export interface ForgeReviewRepository {\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
   },
   {
     name: 'ForgeReviewRequest',
@@ -8153,7 +8245,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'FsWriteBytesOutcome',
-    declaration: 'export interface FsWriteBytesOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n    bytes: number;\n}',
+    declaration: 'export interface FsWriteBytesOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n}',
   },
   {
     name: 'FsWriteIntent',
@@ -8432,6 +8524,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ImOutcome = {\n    kind: \'handled\';\n    by: string;\n    sessions?: SessionId[];\n} | {\n    kind: \'ignored\';\n    reason?: string;\n};',
   },
   {
+    name: 'ImOutgoing',
+    declaration: 'export interface ImOutgoing {\n    readonly chat: ImChatKey;\n    readonly options: Readonly<ImSendOptions>;\n    readonly original: Fragment;\n    content: Fragment;\n    drop?: string;\n}',
+  },
+  {
+    name: 'ImReactionEvent',
+    declaration: 'export interface ImReactionEvent {\n    readonly action: \'added\' | \'removed\';\n    readonly emoji: string;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly id?: string;\n}',
+  },
+  {
     name: 'ImResetOptions',
     declaration: 'export interface ImResetOptions {\n    operationId?: string;\n    expectedGeneration?: number;\n}',
   },
@@ -8445,7 +8545,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSender',
-    declaration: 'export class ImSender {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSenderDeps);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult>;\n    async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream>;\n    target(chat: ImChatKey, options: Pick<ImSendOptions, \'thread\' | \'quote\'> = {}): Target;\n    referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined, thread?: boolean | string): unknown;\n    sessionOf(message: ImMessageKey): SessionId | undefined;\n}',
+    declaration: 'export class ImSender {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSenderDeps);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult>;\n    async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream>;\n    target(chat: ImChatKey, options: Pick<ImSendOptions, \'thread\' | \'quote\' | \'referrer\'> = {}): Target;\n    referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined, thread?: boolean | string): unknown;\n    sessionOf(message: ImMessageKey): SessionId | undefined;\n}',
   },
   {
     name: 'ImSenderDeps',
@@ -8453,11 +8553,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSendOptions',
-    declaration: 'export interface ImSendOptions extends SendOptions {\n    operationId?: string;\n    quote?: ImMessageKey;\n    thread?: string | true;\n    session?: SessionId;\n}',
+    declaration: 'export interface ImSendOptions extends SendOptions {\n    operationId?: string;\n    quote?: ImMessageKey;\n    thread?: string | true;\n    referrer?: unknown;\n    session?: SessionId;\n}',
   },
   {
     name: 'ImSendResult',
-    declaration: 'export interface ImSendResult {\n    status: \'confirmed\' | \'failed\' | \'uncertain\' | \'partial\';\n    handle?: MessageHandle;\n    report?: RenderReport;\n    error?: string;\n    message?: ImMessage;\n}',
+    declaration: 'export interface ImSendResult {\n    status: \'confirmed\' | \'failed\' | \'uncertain\' | \'partial\';\n    handle?: MessageHandle;\n    report?: RenderReport;\n    error?: string;\n    message?: ImMessage;\n    dropped?: true;\n}',
   },
   {
     name: 'ImSessionFilter',
@@ -10456,6 +10556,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionLocation {\n    readonly kind: string;\n    readonly path: string;\n}',
   },
   {
+    name: 'SessionLogBatch',
+    declaration: 'export interface SessionLogBatch {\n    readonly sessionId: SessionId;\n    readonly formatVersion: number;\n    readonly afterSeq: number;\n    readonly throughSeq: number;\n    readonly cwd?: string;\n    readonly parentSessionId?: string;\n    readonly seedLength?: number;\n    readonly batchId: string;\n    readonly purpose: string;\n    readonly events: readonly SessionLogBatchEvent[];\n    readonly severityNumber?: SeverityNumber;\n}',
+  },
+  {
+    name: 'SessionLogBatchEvent',
+    declaration: 'export type SessionLogBatchEvent = Omit<SessionEvent, \'data\'> & {\n    data: unknown;\n};',
+  },
+  {
     name: 'SessionLogOffset',
     declaration: 'export type SessionLogOffset = BrandedNumber<\'SessionLogOffset\'>;',
   },
@@ -10473,7 +10581,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionLogReporter',
-    declaration: 'export class SessionLogReporter {\n    constructor(options: SessionLogOptions);\n    reportSessionLog(record: SessionLogRecord): void;\n    stopPending(): void;\n    shutdown(): Promise<void>;\n}',
+    declaration: 'export class SessionLogReporter {\n    constructor(options: SessionLogOptions);\n    reportSessionLog(record: SessionLogRecord): void;\n    reportSessionLogBatch(batch: SessionLogBatch): void;\n    stopPending(): void;\n    shutdown(): Promise<void>;\n}',
   },
   {
     name: 'SessionLogSnapshot',
@@ -11040,6 +11148,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SkillViewOptions extends SkillLookupOptions {\n    readonly scope?: ScopeKey | undefined;\n}',
   },
   {
+    name: 'SpeechAutomaticChoice',
+    declaration: 'export type SpeechAutomaticChoice = \'auto\';',
+  },
+  {
     name: 'SpeechCatalog',
     declaration: 'export interface SpeechCatalog extends SpeechSnapshot {\n    readonly maxAudioBytes: number;\n    readonly maxDurationSeconds: number;\n}',
   },
@@ -11061,7 +11173,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpeechPreparationState',
-    declaration: 'export type SpeechPreparationState = ({\n    readonly phase: \'unprepared\' | \'ready\' | \'standby\' | \'cancelled\';\n} | {\n    readonly phase: \'downloading\';\n    readonly resource: string;\n    readonly completedBytes: number;\n    readonly totalBytes?: number;\n} | {\n    readonly phase: \'checking\' | \'loading\' | \'waking\' | \'cancelling\';\n    readonly startedAt: number;\n} | {\n    readonly phase: \'failed\';\n    readonly message: string;\n    readonly download?: SpeechDownloadFailure;\n}) & {\n    readonly step?: SpeechPreparationStepKind;\n    readonly steps?: readonly SpeechPreparationStep[];\n};',
+    declaration: 'export type SpeechPreparationState = ({\n    readonly phase: \'unprepared\' | \'ready\' | \'standby\' | \'cancelled\';\n} | {\n    readonly phase: \'unavailable\';\n    readonly reason: SpeechUnavailableReason;\n} | {\n    readonly phase: \'downloading\';\n    readonly resource: string;\n    readonly completedBytes: number;\n    readonly totalBytes?: number;\n} | {\n    readonly phase: \'checking\' | \'loading\' | \'waking\' | \'cancelling\';\n    readonly startedAt: number;\n} | {\n    readonly phase: \'failed\';\n    readonly message: string;\n    readonly download?: SpeechDownloadFailure;\n}) & {\n    readonly step?: SpeechPreparationStepKind;\n    readonly steps?: readonly SpeechPreparationStep[];\n};',
   },
   {
     name: 'SpeechPreparationStep',
@@ -11093,11 +11205,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpeechSelection',
-    declaration: 'export interface SpeechSelection {\n    readonly providerId: SpeechProviderId;\n    readonly language: string;\n}',
+    declaration: 'export interface SpeechSelection {\n    readonly mode: \'auto\' | \'explicit\';\n    readonly providerId: SpeechProviderId;\n    readonly language: string;\n}',
   },
   {
     name: 'SpeechSelectionPatch',
-    declaration: 'export interface SpeechSelectionPatch {\n    readonly providerId?: SpeechProviderId;\n    readonly language?: string;\n}',
+    declaration: 'export interface SpeechSelectionPatch {\n    readonly providerId?: SpeechProviderId | SpeechAutomaticChoice;\n    readonly language?: string;\n}',
   },
   {
     name: 'SpeechSetupEstimate',
@@ -11110,6 +11222,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SpeechSpec',
     declaration: 'export interface SpeechSpec extends SpeechInput {\n    readonly provider: SpeechProvider;\n}',
+  },
+  {
+    name: 'SpeechUnavailableReason',
+    declaration: 'export type SpeechUnavailableReason = \'sign-in-required\';',
   },
   {
     name: 'SpillLocator',

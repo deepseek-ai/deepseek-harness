@@ -1,6 +1,6 @@
 /**
- * The review page's list column: the search box that also opens a pasted change request link, the repository filter,
- * and one foldable section per list with its items, empty state, and failure.
+ * The review page's list column: the search box that also opens a pasted change request link, the filter of hosts and
+ * repositories, one foldable section per list with its items and empty state, and one notice per host that could not be read.
  */
 
 import { useMemo, useRef, useState, type ReactNode } from 'react'
@@ -19,8 +19,8 @@ import { ChangeRequestGlyph } from '../glyphs.tsx'
 import type { ForgePanelKey, NS } from '../locales.ts'
 import { RefreshGlyph } from '../RefreshGlyph.tsx'
 import {
-  mergeRepositories, pastedUrl, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, summaryTone,
-  type ReviewItem, type ReviewRepository, type ReviewSection,
+  mergeRepositories, pastedUrl, reviewFailures, reviewHint, reviewRepositories, reviewSearchKeys, reviewSections, sameScope,
+  scopeRepository, summaryTone, type ReviewHostFailure, type ReviewItem, type ReviewRepository, type ReviewScope, type ReviewSection,
 } from './review-lists.ts'
 import type { ReviewView } from './review-store.ts'
 import loading from '../ChangesLoading.module.css'
@@ -44,8 +44,8 @@ export interface ReviewListProps {
   readonly selected: string | null
   /** Search text. */
   readonly query: string
-  /** Repository the lists are read in, or null for every repository. */
-  readonly repository: ReviewRepository | null
+  /** The host or repository the lists are narrowed to, or null for every repository of every host. */
+  readonly scope: ReviewScope | null
   /** Whether the review-requested list leaves out requests made only of the user's teams. */
   readonly directOnly: boolean
   /** Folded sections. */
@@ -60,8 +60,8 @@ export interface ReviewListProps {
   readonly onSearch: (query: string) => void
   /** Repositories the lists named while read in every repository, offered whatever repository the lists are read in now. */
   readonly repositories: readonly ReviewRepository[]
-  /** Read the lists in one repository, or in every repository. */
-  readonly onScope: (repository: ReviewRepository | null) => void
+  /** Narrow the lists to one host or one repository, or to nothing. */
+  readonly onScope: (scope: ReviewScope | null) => void
   /** Toggle whether the review-requested list leaves out team requests. */
   readonly onToggleDirect: () => void
   /** How list items show: two lines each, or one line each with the rest on hover. */
@@ -76,6 +76,8 @@ export interface ReviewListProps {
   readonly onRetry: () => void
   /** Copy text and report the outcome. */
   readonly copyText: (text: string) => void
+  /** Open the page where the providers' hosts and sign-in states are, or undefined while it cannot be opened. */
+  readonly onOpenSettings: (() => void) | undefined
   /** Forge panel copy. */
   readonly t: Translate
 }
@@ -84,27 +86,38 @@ export interface ReviewListProps {
  * A submenu row's label with the tick a chosen row shows, since a submenu does not mark its own choice.
  * @param text - the row's text.
  * @param chosen - whether the row is the current choice.
+ * @param nested - whether the row is a repository below the row of its host.
  * @returns the label.
  */
-function chosenLabel(text: string, chosen: boolean): ReactNode {
+function chosenLabel(text: string, chosen: boolean, nested = false): ReactNode {
   return (
     <span className={css.menuRow} data-chosen={chosen ? '' : undefined}>
-      <span>{text}</span>
+      <span className={nested ? css.menuNested : undefined}>{text}</span>
       {chosen && <IconCheckOutlineRegular size={14} className={css.menuCheck} />}
     </span>
   )
 }
 
-/** The view menu, laid out like the Session list's: the list view, the repository the lists are read in, and whether team requests show. */
-function FilterMenu({ frame, repository, repositories, directOnly, view, onScope, onToggleDirect, onView, t }: Pick<ReviewListProps,
-  'frame' | 'repository' | 'repositories' | 'directOnly' | 'view' | 'onScope' | 'onToggleDirect' | 'onView' | 't'>): ReactNode {
+/**
+ * The view menu, laid out like the Session list's: the list view, the host or repository the lists are narrowed to, and
+ * whether team requests show. Once the lists name repositories on more than one host, each host is a choice with its
+ * repositories below it.
+ */
+function FilterMenu({ frame, scope, repositories, directOnly, view, onScope, onToggleDirect, onView, t }: Pick<ReviewListProps,
+  'frame' | 'scope' | 'repositories' | 'directOnly' | 'view' | 'onScope' | 'onToggleDirect' | 'onView' | 't'>): ReactNode {
   const [open, setOpen] = useState(false)
-  const chosen = repository === null ? null : `${repository.owner}/${repository.name}`
+  const repository = scopeRepository(scope)
   // Lists read in one repository name only that one, so the menu offers the repositories remembered from the lists of
   // every repository, with those the shown lists name and the chosen one, which stays offered while its lists are empty.
   const offered = mergeRepositories(repositories, reviewRepositories(frame), repository === null ? [] : [repository])
+  const hosts = [...new Set(offered.map(item => item.host))]
   // Before any list of every repository was read, the offer is still growing.
   const reading = repositories.length === 0 && (frame === undefined || frame.reading)
+  // A row's id is its place among the choices, which the selection reads back.
+  const choices: ReviewScope[] = []
+  const choice = (value: ReviewScope, text: string, nested: boolean): MenuEntry =>
+    ({ id: `scope:${choices.push(value) - 1}`, label: chosenLabel(text, sameScope(value, scope), nested) })
+  const all = t('reviewPage.filter.allRepositories')
   const items: MenuEntry[] = [
     { type: 'label', id: 'view', text: t('reviewPage.filter.view') },
     { id: 'view:detailed', label: t('reviewPage.filter.detailed'), icon: <IconLayersOutlineRegular /> },
@@ -117,13 +130,16 @@ function FilterMenu({ frame, repository, repositories, directOnly, view, onScope
       label: (
         <span className={css.menuRow}>
           <span>{t('reviewPage.filter.repository')}</span>
-          <span className={css.menuValue}>{chosen ?? t('reviewPage.filter.allRepositories')}</span>
+          <span className={css.menuValue}>{scope === null ? all : repository === null ? scope.host : `${repository.owner}/${repository.name}`}</span>
         </span>
       ),
       submenu: [
-        { id: 'repo:', label: chosenLabel(t('reviewPage.filter.allRepositories'), chosen === null) },
+        { id: 'scope:', label: chosenLabel(all, scope === null) },
         { type: 'separator', id: 'repo-separator' },
-        ...offered.map(item => `${item.owner}/${item.name}`).map(name => ({ id: `repo:${name}`, label: chosenLabel(name, name === chosen) })),
+        ...hosts.flatMap(host => [
+          ...hosts.length > 1 ? [choice({ host }, host, false)] : [],
+          ...offered.filter(item => item.host === host).map(item => choice(item, `${item.owner}/${item.name}`, hosts.length > 1)),
+        ]),
         ...reading ? [{ type: 'label' as const, id: 'repo-reading', text: t('reviewPage.loading') }] : [],
       ],
     },
@@ -132,7 +148,7 @@ function FilterMenu({ frame, repository, repositories, directOnly, view, onScope
     { id: 'requests:all', label: t('reviewPage.filter.teamRequests'), icon: <IconUsersOutlineRegular /> },
     { id: 'requests:direct', label: t('reviewPage.filter.directOnly'), icon: <IconUserOutlineRegular /> },
   ]
-  const active = repository !== null || directOnly
+  const active = scope !== null || directOnly
   return (
     <Menu
       open={open}
@@ -150,36 +166,18 @@ function FilterMenu({ frame, repository, repositories, directOnly, view, onScope
         </Tooltip>
       )}
       items={items}
-      selectedIds={[`view:${view}`, `repo:${chosen ?? ''}`, directOnly ? 'requests:direct' : 'requests:all']}
+      selectedIds={[`view:${view}`, directOnly ? 'requests:direct' : 'requests:all']}
       onSelect={(id) => {
         setOpen(false)
         if (id === 'view:detailed' || id === 'view:compact') onView(id === 'view:compact' ? 'compact' : 'detailed')
         else if (id === 'requests:all' || id === 'requests:direct') {
           if ((id === 'requests:direct') !== directOnly) onToggleDirect()
         } else {
-          // Menu never selects a submenu parent, so every remaining row is a `repo:` row.
-          const [owner = '', name = ''] = id.slice('repo:'.length).split('/')
-          onScope(id === 'repo:' ? null : { owner, name })
+          // Menu never selects a submenu parent, so every remaining row is a `scope:` row.
+          onScope(choices[Number(id.slice('scope:'.length) || NaN)] ?? null)
         }
       }}
     />
-  )
-}
-
-/** The closing issues of an item: the first issue's number, and how many more. */
-function Issues({ item, t }: { readonly item: ReviewItem; readonly t: Translate }): ReactNode {
-  const [first] = item.summary.closingIssues
-  if (first === undefined) return null
-  const more = item.summary.closingIssues.length - 1 + (item.summary.closingIssuesTruncated ? 1 : 0)
-  return (
-    <>
-      <span aria-hidden="true">·</span>
-      <span className={css.itemIssues}>
-        <span aria-hidden="true">⊙</span>
-        {t('change.number', { number: first.number })}
-        {more > 0 && <span>{t(item.summary.closingIssuesTruncated ? 'reviewPage.issuesMoreTruncated' : 'reviewPage.issuesMore', { count: more })}</span>}
-      </span>
-    </>
   )
 }
 
@@ -191,39 +189,18 @@ interface ItemProps {
   readonly selected: boolean
   /** Whether the item names its repository, because the lists span more than one. */
   readonly qualified: boolean
+  /** Whether the item's hover card names its host, because the lists span more than one. */
+  readonly hosted: boolean
   readonly now: number
   readonly onSelect: (url: string) => void
   readonly t: Translate
 }
 
-/** The meta line of an item: its name, author, update time, the issues it closes, and what follows them. */
-function ItemMeta({ item, name, ago, children, t }: {
-  readonly item: ReviewItem
-  readonly name: string
-  readonly ago: string | undefined
-  readonly children?: ReactNode
-  readonly t: Translate
-}): ReactNode {
-  const { author } = item.summary
-  return (
-    <span className={css.itemMeta}>
-      <span>{name}</span>
-      {author !== null && <><span aria-hidden="true">·</span><span className={css.ellipsis}>{author.login}</span></>}
-      {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
-      <Issues item={item} t={t} />
-      {children}
-    </span>
-  )
-}
-
-/** What the hover card of a compact item shows: the full title and every fact the detailed item names. */
-function CompactDetails({ item, filter, qualified, now, t }: {
-  readonly item: ReviewItem
-  readonly filter: ForgeViewerFilter
-  readonly qualified: boolean
-  readonly now: number
-  readonly t: Translate
-}): ReactNode {
+/**
+ * What the hover card of a compact item shows: the full title, the host where the lists span several, and every fact the
+ * detailed item names.
+ */
+function CompactDetails({ item, filter, qualified, hosted, now, t }: Pick<ItemProps, 'item' | 'filter' | 'qualified' | 'hosted' | 'now' | 't'>): ReactNode {
   const { summary } = item
   const { repository, number } = summary.ref
   const hint = reviewHint(summary, filter)
@@ -231,15 +208,19 @@ function CompactDetails({ item, filter, qualified, now, t }: {
   return (
     <span className={css.compactCard}>
       <span className={css.compactCardTitle}>{summary.title}</span>
-      <ItemMeta item={item} name={qualified ? `${repository.owner}/${repository.name}#${number}` : t('change.number', { number })}
-        ago={ago} t={t} />
+      <span className={css.cardMeta}>
+        {hosted && <><span>{item.host}</span><span aria-hidden="true">·</span></>}
+        <span>{qualified ? `${repository.owner}/${repository.name}#${number}` : t('change.number', { number })}</span>
+        {summary.author !== null && <><span aria-hidden="true">·</span><span className={css.ellipsis}>{summary.author.login}</span></>}
+        {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
+      </span>
       {hint !== undefined && <span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span>}
     </span>
   )
 }
 
 /** One listed change request on one line: its glyph, its title, which marquees while hovered, and its update time. */
-function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: ItemProps): ReactNode {
+function CompactItem({ item, filter, selected, qualified, hosted, now, onSelect, t }: ItemProps): ReactNode {
   const { summary } = item
   const title = useRef<HTMLSpanElement>(null)
   const marquee = useHoverMarquee(title)
@@ -253,7 +234,7 @@ function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: It
         copyText={summary.title}
         copyLabel={t('reviewPage.copyTitle')}
         copiedLabel={t('toast.copied')}
-        content={<CompactDetails item={item} filter={filter} qualified={qualified} now={now} t={t} />}
+        content={<CompactDetails item={item} filter={filter} qualified={qualified} hosted={hosted} now={now} t={t} />}
         anchor={(
           <button type="button" className={css.compactItem} aria-current={selected ? 'true' : undefined} data-forge-review-item={summary.url}
             onPointerEnter={marquee.onPointerEnter} onPointerLeave={marquee.onPointerLeave} onClick={() => { onSelect(summary.url) }}>
@@ -267,12 +248,16 @@ function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: It
   )
 }
 
-/** One listed change request. */
+/**
+ * One listed change request: its title on at most two lines, then its small text on at most two. The small text names
+ * the repository where the lists span several, the number, and the author, with the update time at the end of that
+ * line; the hint follows the author where both fit, and takes the second line where they do not.
+ */
 function Item({ item, filter, selected, qualified, now, onSelect, t }: ItemProps): ReactNode {
   const { summary } = item
   const { repository, number } = summary.ref
   const hint = reviewHint(summary, filter)
-  const ago = formatAgo(summary.updatedAt, now, t)
+  const time = formatShortAgo(summary.updatedAt, now, t)
   const checks: Exclude<ChecksRollup, 'none'> | undefined = summary.checksRollup === 'none' ? undefined : summary.checksRollup
   return (
     <li>
@@ -281,39 +266,58 @@ function Item({ item, filter, selected, qualified, now, onSelect, t }: ItemProps
         <span className={css.itemGlyph}><ChangeRequestGlyph tone={summaryTone(summary)} checks={checks} size={16} /></span>
         <span className={css.itemText}>
           <span className={css.itemTitle}>{summary.title}</span>
-          <ItemMeta item={item} name={qualified ? `${repository.name}#${number}` : t('change.number', { number })} ago={ago} t={t}>
-            {hint !== undefined && <><span aria-hidden="true">·</span><span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span></>}
-          </ItemMeta>
+          <span className={css.itemMeta}>
+            <span className={css.itemFacts}>
+              <span className={css.itemLine}>
+                <span className={css.itemName}>
+                  {qualified && <span className={css.itemRepository}>{repository.name}</span>}
+                  <span className={css.itemNumber}>{t('change.number', { number })}</span>
+                </span>
+                {summary.author !== null && <><span aria-hidden="true">·</span><span className={css.itemAuthor}>{summary.author.login}</span></>}
+              </span>
+              {hint !== undefined && <span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span>}
+            </span>
+            {time !== undefined && <span className={css.itemTime}>{time}</span>}
+          </span>
         </span>
       </button>
     </li>
   )
 }
 
-/** A section's failure: the sign-in command for an unauthenticated GitHub host, otherwise the reason. */
-function SectionFailure({ section, copyText, t }: {
-  readonly section: ReviewSection
+/**
+ * One notice per host whose lists could not be read: what failed, the sign-in command for a host that needs sign-in
+ * when its provider names one, and the way to the providers' settings while that page can be opened.
+ */
+function HostFailures({ failures, copyText, onOpenSettings, t }: {
+  readonly failures: readonly ReviewHostFailure[]
   readonly copyText: (text: string) => void
+  readonly onOpenSettings: (() => void) | undefined
   readonly t: Translate
 }): ReactNode {
-  if (section.failure === null) return null
-  const { host, forge, failure } = section.failure
-  if (failure.code === 'unauthenticated') {
-    const command = forge === 'github' ? `gh auth login --hostname ${host}` : undefined
-    return (
-      <div className={css.notice} role="status">
-        <span>{t('reviewPage.signIn', { host })}</span>
-        {command !== undefined && (
-          <span className={css.noticeCommand}>
-            <code>{command}</code>
-            <Button size="sm" variant="outline" onClick={() => { copyText(command) }}>{t('signin.copy')}</Button>
-          </span>
-        )}
-      </div>
-    )
-  }
-  if (failure.code === 'rate-limited') return <div className={css.notice} role="status">{t('change.failure.rateLimited')}</div>
-  return <div className={css.notice} role="status">{t('reviewPage.listFailed', { host, message: failure.message })}</div>
+  if (failures.length === 0) return null
+  return (
+    <div className={css.notices}>
+      {failures.map(({ forge, host, failure, signIn }) => {
+        const command = failure.code === 'unauthenticated' ? signIn : null
+        return (
+          <div key={`${forge} ${host}`} className={css.notice} role="status" data-forge-review-failure={host}>
+            <span>
+              {failure.code === 'unauthenticated' ? t('reviewPage.signIn', { host })
+                : t('reviewPage.listFailed', { host, message: failure.code === 'rate-limited' ? t('change.failure.rateLimited') : failure.message })}
+            </span>
+            {command !== null && <span className={css.noticeCommand}><code>{command}</code></span>}
+            {(command !== null || onOpenSettings !== undefined) && (
+              <span className={css.noticeActions}>
+                {command !== null && <Button size="sm" variant="outline" onClick={() => { copyText(command) }}>{t('signin.copy')}</Button>}
+                {onOpenSettings !== undefined && <Button size="sm" variant="outline" onClick={onOpenSettings}>{t('reviewPage.hostSettings')}</Button>}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
@@ -366,14 +370,18 @@ function SkeletonItems({ view, count }: { readonly view: ReviewView; readonly co
  * @returns the column.
  */
 export function ReviewList(props: ReviewListProps): ReactNode {
-  const { frame, stopped, selected, query, folded, refreshing, now, view } = props
-  const { onSelect, onSearch, onFold, onRefresh, onRetry, copyText, t } = props
+  const { frame, stopped, selected, query, folded, refreshing, now, view, scope } = props
+  const { onSelect, onSearch, onFold, onRefresh, onRetry, copyText, onOpenSettings, t } = props
   const { directOnly } = props
+  const host = scope?.host ?? null
   // Each section with its search index, rebuilt when the lists change; a blank search returns a list as built.
-  const sections = useMemo(() => reviewSections(frame, directOnly).map(section =>
-    ({ section, index: new TextSearchIndex(section.items ?? [], reviewSearchKeys) })), [frame, directOnly])
+  const sections = useMemo(() => reviewSections(frame, directOnly, host).map(section =>
+    ({ section, index: new TextSearchIndex(section.items ?? [], reviewSearchKeys) })), [frame, directOnly, host])
+  const failures = useMemo(() => reviewFailures(frame, host), [frame, host])
   const pasted = pastedUrl(query)
-  const qualified = reviewRepositories(frame).length > 1
+  const named = reviewRepositories(frame).filter(item => host === null || item.host === host)
+  const qualified = named.length > 1
+  const hosted = new Set(named.map(item => item.host)).size > 1
   let body: ReactNode
   if (stopped !== null && frame === undefined) {
     body = (
@@ -397,39 +405,48 @@ export function ReviewList(props: ReviewListProps): ReactNode {
       </div>
     )
   } else {
-    body = sections.map(({ section, index }) => {
-      const title = t(SECTION[section.filter])
-      const open = folded[section.filter] !== true
-      const shown = index.search(query)
-      return (
-        <section key={section.filter} className={css.section} data-forge-review-section={section.filter}>
-          <button type="button" className={css.sectionHeader} aria-expanded={open} onClick={() => { onFold(section.filter) }}>
-            <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, !open && css.chevronClosed)} />
-            <span className={css.sectionTitle}>{title}</span>
-            {section.items !== null && <span className={css.sectionCount}>{section.total.toLocaleString()}</span>}
-          </button>
-          {open && <>
-            <SectionFailure section={section} copyText={copyText} t={t} />
-            {section.items === null
-              ? section.failure === null && <div aria-busy="true"><SkeletonItems view={view} count={3} /></div>
-              : shown.length === 0
-                ? <p className={css.sectionEmpty}>{t(query.trim() === '' ? 'reviewPage.empty.section' : 'reviewPage.empty.search')}</p>
-                : (
-                  <ul className={css.items} data-view={view}>
-                    {shown.map((item) => {
-                      const Row = view === 'compact' ? CompactItem : Item
-                      return <Row key={item.summary.url} item={item} filter={section.filter} selected={item.summary.url === selected}
-                        qualified={qualified} now={now} onSelect={onSelect} t={t} />
-                    })}
-                  </ul>
+    // A host whose first read of a list is still running: its rows are to come, so the count and the empty text wait.
+    const awaits = (section: ReviewSection): boolean => section.pending && frame.reading
+    // Where no host listed anything and none is still to answer, the notices of the hosts that failed are all there is to show.
+    const unread = failures.length > 0 && sections.every(({ section }) => section.items === null && !awaits(section))
+    body = (
+      <>
+        {!unread && sections.map(({ section, index }) => {
+          const title = t(SECTION[section.filter])
+          const open = folded[section.filter] !== true
+          const shown = index.search(query)
+          const awaited = awaits(section)
+          return (
+            <section key={section.filter} className={css.section} data-forge-review-section={section.filter}>
+              <button type="button" className={css.sectionHeader} aria-expanded={open} onClick={() => { onFold(section.filter) }}>
+                <IconChevronDownOutlineRegular size={12} className={clsx(css.chevron, !open && css.chevronClosed)} />
+                <span className={css.sectionTitle}>{title}</span>
+                {section.items !== null && !awaited && <span className={css.sectionCount}>{section.total.toLocaleString()}</span>}
+              </button>
+              {open && <>
+                {shown.length > 0
+                  ? (
+                    <ul className={css.items} data-view={view}>
+                      {shown.map((item) => {
+                        const Row = view === 'compact' ? CompactItem : Item
+                        return <Row key={item.summary.url} item={item} filter={section.filter} selected={item.summary.url === selected}
+                          qualified={qualified} hosted={hosted} now={now} onSelect={onSelect} t={t} />
+                      })}
+                    </ul>
+                  )
+                  : section.items !== null && !awaited
+                    && <p className={css.sectionEmpty}>{t(query.trim() === '' ? 'reviewPage.empty.section' : 'reviewPage.empty.search')}</p>}
+                {awaited && <div aria-busy="true"><SkeletonItems view={view} count={shown.length > 0 ? 1 : 3} /></div>}
+                {section.truncated && query.trim() === '' && (
+                  <p className={css.sectionMore}>{t('reviewPage.truncated', { count: section.total - shown.length })}</p>
                 )}
-            {section.truncated && query.trim() === '' && (
-              <p className={css.sectionMore}>{t('reviewPage.truncated', { count: section.total - shown.length })}</p>
-            )}
-          </>}
-        </section>
-      )
-    })
+              </>}
+            </section>
+          )
+        })}
+        <HostFailures failures={failures} copyText={copyText} onOpenSettings={onOpenSettings} t={t} />
+      </>
+    )
   }
   return (
     <div className={css.list} data-forge-review-list="">

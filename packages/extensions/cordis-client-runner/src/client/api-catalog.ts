@@ -849,7 +849,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RegisterFactoryOptions',
-    declaration: 'export type RegisterFactoryOptions<F extends keyof SlotFactoryMap & string> = {\n    name: F;\n    scope: FactoryDefOf<F>[\'scope\'];\n} & FactoryField<F, \'children\', FactoryChildrenOf<F>> & FactoryField<F, \'store\', FactoryStoreOf<F> | (() => FactoryStoreOf<F>)> & FactoryField<F, \'inject\', (...args: FactoryInjectParams<F>) => FactoryInjectOf<F>> & FactoryField<F, \'locale\', FactoryLocaleOf<F>> & FactoryField<F, \'slots\', RuntimeFactorySlots<F>> & FactoryCollisionCheck<F> & FactoryChildrenCheck<F>;',
+    declaration: 'export type RegisterFactoryOptions<F extends keyof SlotFactoryMap & string> = {\n    name: F;\n} & FactoryOutletSpec<FactoryDefOf<F>[\'scope\']> & FactoryField<F, \'children\', FactoryChildrenOf<F>> & FactoryField<F, \'store\', FactoryStoreOf<F> | (() => FactoryStoreOf<F>)> & FactoryField<F, \'inject\', (...args: FactoryInjectParams<F>) => FactoryInjectOf<F>> & FactoryField<F, \'locale\', FactoryLocaleOf<F>> & FactoryField<F, \'slots\', RuntimeFactorySlots<F>> & FactoryCollisionCheck<F> & FactoryChildrenCheck<F>;',
   },
   {
     name: 'RemoteHostFacts',
@@ -1053,7 +1053,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'StoredFactory',
-    declaration: 'export interface StoredFactory {\n    readonly name: string;\n    readonly component: unknown;\n    readonly scope: SlotScope;\n    readonly children?: Readonly<Record<string, SlotSpec<SlotEntryDef>>> | undefined;\n    readonly store?: StoreDecl | undefined;\n    readonly inject?: ((...args: never[]) => Record<string, unknown>) | undefined;\n    readonly locale?: string | undefined;\n    readonly slots?: Readonly<Record<string, {\n        scope: SlotScope;\n    }>> | undefined;\n    readonly registrant?: string | undefined;\n}',
+    declaration: 'export interface StoredFactory {\n    readonly name: string;\n    readonly component: unknown;\n    readonly scope: SlotScope;\n    readonly inline?: true;\n    readonly children?: Readonly<Record<string, SlotSpec<SlotEntryDef>>> | undefined;\n    readonly store?: StoreDecl | undefined;\n    readonly inject?: ((...args: never[]) => Record<string, unknown>) | undefined;\n    readonly locale?: string | undefined;\n    readonly slots?: Readonly<Record<string, FactoryOutletSpec>> | undefined;\n    readonly registrant?: string | undefined;\n}',
   },
   {
     name: 'StoreFactory',

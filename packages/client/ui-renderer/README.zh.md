@@ -35,6 +35,8 @@ kind: "package-reference"
 
 业务插件注册普通 Slot entry 或可复用 Component Factory；渲染器在渲染位置把运行时的会话与 Workspace observable source 绑定为 selector 钩子。插件通过推导出的 Component props 收到标准 scope props——它绝不导入渲染器，也不触碰 React 内部机制。每个由 renderer 创建的 Component 都能渲染 Factory occurrence，Factory 也能暴露由调用方选择的局部 Component，而无需在包之间共享实现值。
 
+当 [hoc 层](../../../docs/subsystems/slots.zh.md#hoc-layers)渲染 React 的 `children` 时，渲染器会用 `data-slot-children` 标记该位置。插件不需要自己添加包装元素或转发 DOM 属性。
+
 -----
 
 <a id="understand-the-implementation"></a>

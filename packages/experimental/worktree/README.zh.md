@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。模型需要此操作时，再添加工具包。
+将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。服务会挂载[链接工作树授权](../sandbox-policy-git/README.zh.md)，它在 macOS 和 Linux 上让在链接工作树中工作的 Session 能在 `workspace-write` 下写入其仓库的 Git 目录。模型需要此操作时，再添加工具包。
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-worktree'
@@ -54,7 +54,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略；归档清理不经沙箱执行。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
+Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略；归档清理不经沙箱执行。创建操作本身不会扩大目标目录或共享 Git 管理目录的写权限；在链接工作树中工作的 Session 通过链接工作树授权持有后者的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|
@@ -97,7 +97,7 @@ Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调�
 - **默认仅限本地提交**——创建操作只获取请求指定的那一个远程分支，不会获取其他远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
 - **过滤器处理前的内容**——检出时跳过已配置的过滤器，以避免执行仓库配置的程序或隐式下载。Git LFS 指针与加密 blob 保持存储时的形式；拉取实体内容或解密由用户另行执行。
 - **执行要求**——子进程提供方必须在与文件系统提供方相同的执行环境中提供 Git 与 Node。Git 必须识别 `GIT_NO_LAZY_FETCH`：Git 2.45 及 2.39.4、2.40.2、2.41.1、2.42.2、2.43.4、2.44.1 维护版本均支持；更早的版本会忽略该变量并继续执行而不报错，因此创建操作可能从 promisor 远程获取缺失的部分克隆对象。`git --no-lazy-fetch` 选项会拒绝这些版本，但它仅在 Git 2.45 及以后存在，也会拒绝上述已修补的维护版本。现有沙箱必须允许写入检出目录与共享 Git 元数据。
-- **在工作树内提交**——仓库的 Git 目录位于链接工作树之外，因此在 `workspace-write` 下，在其中工作的 Session 不能运行 `git add` 或 `git commit`，也不能从中再创建工作树，直到[沙箱策略](../../sandbox/sandbox-policy/README.zh.md#use-this-package)通过 `additionalWritableRoots` 或 `registerWritableRoot` 授权该目录。本服务不注册任何授权，Windows 的进程忽略这类授权。
+- **在工作树内提交**——仓库的 Git 目录位于链接工作树之外，因此在 `workspace-write` 下，在其中工作的 Session 只有在授权覆盖该目录时才能运行 `git add` 和 `git commit`，或从中再创建工作树。本服务挂载的[链接工作树授权](../sandbox-policy-git/README.zh.md)在 macOS 和 Linux 上注册该目录。在 Windows 上它不注册任何目录，那里的进程也忽略通过 `additionalWritableRoots` 或 `registerWritableRoot` 做出的授权。
 
 <a id="dev-note"></a>
 ### 开发备注

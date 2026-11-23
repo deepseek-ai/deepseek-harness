@@ -6,26 +6,26 @@
   en: 4f48d3f949d8e3eb
   zh: 4060f4e66c36439e
 /agent-note-workspace-file-service/problem:
-  en: 55d969715a48c9b3
-  zh: 755dab7523cd01c2
+  en: c73bcfaa20a793ca
+  zh: 4c8a29e8d9a59e9a
 /agent-note-workspace-file-service/decision:
-  en: 17137a4e49e56470
-  zh: ed08cf3d2d7348c8
+  en: 99ae4bb7b6af4d98
+  zh: 2f71c2bcf42d423c
 /agent-note-workspace-file-service/decision/package-topology:
-  en: 5a8d81c95c031663
-  zh: 5bdeebe3b5e759c9
+  en: d7c976eea9f0ba46
+  zh: d56fe8dbdca72fda
 /agent-note-workspace-file-service/decision/the-workspacefiles-file-operations:
-  en: 434a2f6b3fab4756
-  zh: ea83124d00c6a79c
+  en: ec6c2626c837dfb4
+  zh: 3d5dcd982e6ec64f
 /agent-note-workspace-file-service/decision/paths-on-the-wire:
   en: 7b5a96adc08177bc
   zh: ae4692e5e62e7de0
 /agent-note-workspace-file-service/decision/file-checks-and-workspace-containment:
-  en: 1b588f346590a0fd
-  zh: 1cdac02b967b157f
+  en: e0e1bd03d063d306
+  zh: bbfe08605b3e51f9
 /agent-note-workspace-file-service/decision/failures:
-  en: 0e419dd7bdcf38ba
-  zh: 6cb588a77593913c
+  en: 300dfdb0a6be6884
+  zh: 79d0ab01cdb0eb85
 /agent-note-workspace-file-service/decision/configuration:
   en: 796ee295af0895bd
   zh: 4dfa113ed19f5f9a
@@ -39,8 +39,8 @@
   en: ef015f605f7b00ab
   zh: eee9c79faebf3dff
 /agent-note-workspace-file-service/alternatives-considered:
-  en: c750d88e0e746a99
-  zh: 9e904ad4172fda49
+  en: d2b8b9fbd0c5f0cd
+  zh: b5064351042027b7
 /agent-note-workspace-file-service/consequences:
   en: 246bb7aed62f6c9b
   zh: debf6d4129ee477b

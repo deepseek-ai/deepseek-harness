@@ -9,7 +9,7 @@
  * @module @deepseek-ai/dsh-experimental-liveshare/src/client/owner-identity-login
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import { identitySubjectLabel } from '../owner-identity.ts'
 import type { NS } from './locales.ts'
@@ -24,6 +24,11 @@ import type { OwnerShares } from './owner-shares.ts'
 export interface OwnerLoginAttempt {
   readonly phase: OwnerLoginPhase
   readonly failure?: OwnerLoginFailure
+  /**
+   * Relay address the owner can open by hand in any browser, present while the attempt waits: the page
+   * cannot confirm that a browser opened it.
+   */
+  readonly link?: string
 }
 
 /** Inputs the share dialog supplies to its owner identity state. */
@@ -82,17 +87,21 @@ export function useOwnerIdentityLogin(options: OwnerIdentityLoginOptions): Owner
   const { shares, relay, t, onVerified } = options
   const [ownerIdentity, setOwnerIdentity] = useState<OwnerIdentityStatus>(UNKNOWN_OWNER_IDENTITY)
   const [identityRead, setIdentityRead] = useState(0)
-  /** What the one sign-in attempt this dialog started is doing; nothing while none was started. */
   const [login, setLogin] = useState<OwnerLoginAttempt>()
   const loginAttempt = useRef<{ cancel(): void }>()
-  const mounted = useRef(true)
+  const activeRelay = useRef<string>()
 
-  // Closing this dialog ends the one attempt it started: the Relay popup closes and the host drops
-  // the transaction, so no code or credential outlives the page that began it.
-  useEffect(() => () => {
-    mounted.current = false
-    loginAttempt.current?.cancel()
-  }, [])
+  // A saved address gets a fresh sign-in row before paint. Cancel reports synchronously, so retire
+  // the old address first, both when switching and when the dialog closes.
+  useLayoutEffect(() => {
+    activeRelay.current = relay
+    setLogin(undefined)
+    return () => {
+      activeRelay.current = undefined
+      loginAttempt.current?.cancel()
+      loginAttempt.current = undefined
+    }
+  }, [relay])
 
   useEffect(() => {
     if (relay === undefined) return
@@ -106,6 +115,8 @@ export function useOwnerIdentityLogin(options: OwnerIdentityLoginOptions): Owner
     const load = async (): Promise<void> => {
       try {
         const reported = await shares.identity({ relay })
+        /* v8 ignore next -- a late answer after this effect cleaned up no longer renders; the refused
+           host answer it would otherwise read is what the unreadable-answer branch above covers. */
         if (!cancelled) setOwnerIdentity(readOwnerIdentity(reported.ok ? reported.value : undefined, relay))
       } catch {
         if (!cancelled) setOwnerIdentity({ state: 'unknown', relay })
@@ -125,22 +136,25 @@ export function useOwnerIdentityLogin(options: OwnerIdentityLoginOptions): Owner
   }, [relay, identityRead, shares])
 
   /**
-   * Sign the owner in: the host mints one transaction, the Relay's popup hands back one code.
+   * Sign the owner in: the host mints one transaction, the owner signs in on the Relay in a browser.
    *
-   * The page submits that code only to its own host, which redeems it and stores the credential; this
-   * dialog reads the host's answer back the same way it reads any other identity status.
+   * The host collects and redeems the Relay's code and stores the credential; this dialog reads the
+   * transaction's settlement, then the host's identity answer the same way it reads any other status.
    */
   const begin = (): void => {
     /* v8 ignore next -- both sign-in controls are disabled until the Host named an address. */
     if (relay === undefined || relay === '') return
     loginAttempt.current?.cancel()
-    setLogin({ phase: 'opening' })
     loginAttempt.current = beginOwnerLogin({
       host: hostOwnerLogin(relay),
       page: window,
-      report: (phase, failure) => {
-        if (!mounted.current) return
-        setLogin({ phase, ...(failure === undefined ? {} : { failure }) })
+      report: (phase, failure, link) => {
+        if (activeRelay.current !== relay) return
+        setLogin({
+          phase,
+          ...(failure === undefined ? {} : { failure }),
+          ...(link === undefined ? {} : { link }),
+        })
         // The host's own answer is the fact this row states, so a finished attempt reads it again.
         // The permission result belonged to the credential that attempt replaced, so it is re-asked.
         if (phase === 'verified') {
@@ -195,13 +209,10 @@ export function useOwnerIdentityLogin(options: OwnerIdentityLoginOptions): Owner
   const line = (phase: OwnerLoginPhase, failure: OwnerLoginFailure | undefined): string => {
     if (phase === 'opening') return t('dialog.identity.loginOpening')
     if (phase === 'waiting') return t('dialog.identity.loginWaiting')
-    if (phase === 'verifying') return t('dialog.identity.loginVerifying')
-    if (failure === 'cancelled') return t('dialog.identity.loginCancelled')
     if (failure === 'expired') return t('dialog.identity.loginExpired')
     if (failure === 'mismatch') return t('dialog.identity.loginMismatch')
     if (failure === 'replayed') return t('dialog.identity.loginReplayed')
     if (failure === 'unavailable') return t('dialog.identity.loginUnavailable')
-    if (failure === 'blocked') return t('dialog.identity.loginBlocked')
     return t('dialog.identity.loginFailed')
   }
 

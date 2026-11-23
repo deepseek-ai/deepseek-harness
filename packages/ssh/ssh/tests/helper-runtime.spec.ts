@@ -53,12 +53,12 @@ describe.skipIf(process.platform === 'win32')('SSH helper runtime', () => {
       const created = await test.client.request('fs.writeBytes', {
         target, data: data.toString('base64'), policy: policy(test.root), expected: { kind: 'createIfAbsent' },
       }, writeBytesResultSchema)
-      expect(created).toMatchObject({ operation: 'create', bytes: 4 })
+      expect(created).toMatchObject({ operation: 'create' })
       expect(await readFile(`${test.root}/blob.bin`)).toEqual(data)
       await expect(test.client.request('fs.writeBytes', {
         target, data: data.toString('base64'), policy: { mode: 'read-only', workspaceRoot: test.root },
       }, writeBytesResultSchema)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
-      // One byte past the helper's 8 MiB frame budget for a single byte write.
+      // One byte past the helper's 8 MiB limit for a single byte write.
       const oversized = Buffer.alloc(8 * 1024 * 1024 + 1, 0x41).toString('base64')
       await expect(test.client.request('fs.writeBytes', {
         target, data: oversized, policy: policy(test.root),

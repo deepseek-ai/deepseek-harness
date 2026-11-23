@@ -42,6 +42,7 @@
 }
 
 /* Local Components can render nothing; empty wrappers must not take row space. */
+.accessory:has(> [data-slot-factory-children='sidebar.files.tree:accessory']:only-child:empty),
 .accessory:empty {
   display: none;
 }

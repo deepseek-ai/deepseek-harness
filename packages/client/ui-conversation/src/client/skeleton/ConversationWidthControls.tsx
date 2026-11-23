@@ -127,7 +127,7 @@ function WidthHandle(props: {
     callbacks.current.onEnd()
   }, [])
   const onWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    const body = event.currentTarget.parentElement
+    const body = event.currentTarget.closest('[data-conversation-content]')
     /* v8 ignore next -- a width handle renders only inside the Conversation body. */
     if (body === null) return
     const scrollport = body.querySelector<HTMLElement>('[data-conversation-scroll]')

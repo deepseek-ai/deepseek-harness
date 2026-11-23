@@ -1,0 +1,19 @@
+# The cloud dictation scenario points the shipped account service, the account model route, and therefore the
+# account deployment that `ctx.deepseekAuth` sends the cloud recognizer to, at one loopback double. The scenario
+# substitutes {{origin}} after the listener binds, so no port is ever committed here.
+- id: deepseek-account
+  config:
+    platformOrigin: "{{origin}}"
+    harnessOrigin: "{{origin}}"
+    inferenceOrigin: "{{origin}}"
+    allowLoopbackHttp: true
+- id: llm-deepseek-account
+  config:
+    baseURL: "{{origin}}/anthropic"
+- id: ui-settings-account
+  config:
+    step: done
+    completion: completed
+# Automatic selection then has only the cloud recognizer to choose.
+- id: speech-to-text-sensevoice
+  disabled: true

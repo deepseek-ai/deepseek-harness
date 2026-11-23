@@ -498,6 +498,8 @@ async function seedWorkspace(scenario: HeadlessScenario, cwd: string): Promise<v
 
 const WORKTREE_CHECKOUT_FILTER = "printf 'FILTERED CHECKOUT CONTENT\\n'"
 const WORKTREE_CHECKOUT_ATTRIBUTES = 'tracked.txt filter=dsh-snapshot-checkout\n'
+/** The `.git` file of a checkout in the default worktree pool. */
+const WORKTREE_GIT_POINTER = /^\.agents\/worktrees\/[^/]+\/\.git$/
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
   async 'readonly-patch-directory'(cwd) {
@@ -946,6 +948,15 @@ async function verifyWorktree(log: string, cwd: string): Promise<void> {
     `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(removed)}.`,
     `The working directory ${JSON.stringify(removed)} is unavailable. The working directory is now ${JSON.stringify(cwd)}.`,
   ])
+}
+
+/** Verify in Git that the Session's commit landed on the worktree's branch and left the source checkout's branch where it was. */
+function verifyWorktreeCommit(cwd: string): void {
+  const checkout = join(cwd, '.agents', 'worktrees', 'committing')
+  expect(snapshotGit(checkout, ['log', '-1', '--format=%s'])).toBe('Add note')
+  expect(snapshotGit(cwd, ['show', '--format=', '--name-only', 'refs/heads/committing'])).toBe('note.txt')
+  expect(snapshotGit(cwd, ['rev-parse', 'refs/heads/committing~1'])).toBe(snapshotGit(cwd, ['rev-parse', 'refs/heads/main']))
+  expect(snapshotGit(checkout, ['status', '--porcelain=v1'])).toBe('')
 }
 
 /** Exercise provider-cwd adoption through the shipped launcher without normalizing away the observation. */
@@ -1637,12 +1648,13 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name === 'worktree') {
               await verifyWorktree(actualLogs[0]!.content, await realpath(cwd))
             }
+            if (scenario.name === 'worktree-commit') verifyWorktreeCommit(await realpath(cwd))
             finalWorkspace = await captureWorkspaceSnapshot(cwd, {
               ignoredRootEntries: ignoredWorkspaceEntries,
             })
-            if (scenario.name === 'worktree') {
-              // The linked checkout's .git pointer contains the temporary source path; Git assertions verify it separately.
-              finalWorkspace = finalWorkspace.filter(entry => entry.path !== '.agents/worktrees/isolated/.git')
+            if (scenario.manifest.workspace?.setup === 'git-worktree') {
+              // A linked checkout's .git pointer contains the temporary source path; Git assertions verify it separately.
+              finalWorkspace = finalWorkspace.filter(entry => !WORKTREE_GIT_POINTER.test(entry.path))
             }
           },
         })

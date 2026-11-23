@@ -381,7 +381,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-files`
 
 - `inject`: `fs` · `sandboxPolicy` · `sessions` · `typert`
-- `source`: [`packages/api/workspace-files/src/index.ts:100`](../packages/api/workspace-files/src/index.ts)
+- `source`: [`packages/api/workspace-files/src/index.ts:104`](../packages/api/workspace-files/src/index.ts)
 
 ```ts config-catalog
 /** Deployment caps on one page, one listing, or one search. */
@@ -1325,7 +1325,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:587`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:602`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1393,7 +1393,7 @@ export interface Config {
   reviewListIntervalMs?: number
   /** Milliseconds between two reads of the review page's navigation count while it is shown. */
   reviewCountIntervalMs?: number
-  /** Largest delay in milliseconds between two reads of the review page's lists or count after consecutive failures. */
+  /** Largest delay in milliseconds between two reads of the review page's lists or count on one host after its consecutive failed reads. */
   reviewMaxBackoffMs?: number
   /** Most change requests one review page list shows, capped by each provider's own limit. */
   reviewPageSize?: number
@@ -1430,7 +1430,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:833`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:932`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1453,15 +1453,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-forge-github`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-github/src/index.ts:19`](../packages/experimental/forge-github/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/forge-github/src/index.ts:22`](../packages/experimental/forge-github/src/index.ts)
 
 ```ts config-catalog
 /** GitHub CLI executable, served hosts, and invocation limits. */
 export interface Config {
   /** GitHub CLI executable name or absolute host path. */
   ghCommand?: string
-  /** Host names this provider serves; list GitHub Enterprise hosts explicitly. */
-  hosts?: string[]
+  /**
+   * Host names this provider serves, at least one; list GitHub Enterprise hosts explicitly. Editable live: the
+   * provider registers again with the new list.
+   */
+  hosts: Volatile<string[]>
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
   /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read or review read. */
@@ -1580,13 +1584,15 @@ export interface InspectorOptions {
 ## `@deepseek-ai/dsh-experimental-speech-to-text`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/speech-to-text/src/index.ts:20`](../packages/experimental/speech-to-text/src/index.ts)
+- `source`: [`packages/experimental/speech-to-text/src/index.ts:31`](../packages/experimental/speech-to-text/src/index.ts)
 
 ```ts config-catalog
 /** Live selection read before a transcription starts; `configure()` writes it through the profile. */
 export interface Config {
-  /** Registered provider selected when the caller omits an id. */
+  /** Registered provider selected when the caller omits an id, or `auto` to follow `autoOrder`. */
   defaultProvider: Volatile<string>
+  /** Provider ids considered by automatic selection, in preference order; required while `defaultProvider` is `auto`. */
+  autoOrder: string[]
   /** Provider language hint selected when the caller omits one. */
   language: Volatile<string>
 }
@@ -1748,7 +1754,7 @@ export type PaidTranslationProvider = 'deepseek-account' | 'deepseek-official'
 
 - `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `sessionProjections`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/worktree/src/index.ts:45`](../packages/experimental/worktree/src/index.ts)
+- `source`: [`packages/experimental/worktree/src/index.ts:46`](../packages/experimental/worktree/src/index.ts)
 
 ```ts config-catalog
 /** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
@@ -1824,15 +1830,19 @@ export interface Config {
 ## `@deepseek-ai/dsh-forge-gitlab`
 
 - `inject`: `forge`
-- `source`: [`packages/experimental/forge-gitlab/src/index.ts:19`](../packages/experimental/forge-gitlab/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/forge-gitlab/src/index.ts:22`](../packages/experimental/forge-gitlab/src/index.ts)
 
 ```ts config-catalog
 /** GitLab CLI executable, served hosts, and read limits. */
 export interface Config {
   /** GitLab CLI executable name or absolute host path. */
   glabCommand?: string
-  /** Host names this provider serves; list self-managed GitLab hosts explicitly. */
-  hosts?: string[]
+  /**
+   * Host names this provider serves, at least one; list self-managed GitLab hosts explicitly. Editable live: the
+   * provider registers again with the new list.
+   */
+  hosts: Volatile<string[]>
   /** Deadline in milliseconds for one `glab` invocation. */
   timeoutMs?: number
   /** Maximum captured bytes per `glab` output stream and combined JSON bytes of one complete check read or review read. */
@@ -1841,7 +1851,11 @@ export interface Config {
   maxReviewThreads?: number
   /** Most commits one merge request commit listing returns, the oldest ones when there are more. */
   maxCommits?: number
-  /** Most merge requests one status query reads; GitLab refuses a query over its complexity limit, which halves the batch. */
+  /**
+   * Most merge requests one status query reads, 1 by default: in a query that reads several, GitLab 19.5 reports a
+   * mergeable merge request after the first as conflicting. GitLab refuses a query over its complexity limit, which
+   * halves the batch.
+   */
   statusBatchSize?: number
   /** Most `glab` processes one status fetch runs at once. */
   maxConcurrentRequests?: number
@@ -2220,7 +2234,7 @@ export interface TlsConfig {
 ## `@deepseek-ai/dsh-im`
 
 - `inject`: `satori` · `agents` · `sessions` · `sessionPersistence` · `storageDomain` · `attachments`
-- `source`: [`packages/experimental/im/src/api.ts:283`](../packages/experimental/im/src/api.ts)
+- `source`: [`packages/experimental/im/src/api.ts:314`](../packages/experimental/im/src/api.ts)
 
 ```ts config-catalog
 /**
@@ -3769,7 +3783,9 @@ export interface Config extends JsonlConfigOptions {
   /**
    * Maximum events stored per frame. One frame is the unit of compression and
    * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice; stored frames keep the size they were written with.
+   * reading a slice. When the Segment's newest frames that each hold fewer
+   * events reach this many together, an append re-encodes them as frames of up
+   * to this many events.
    */
   frameEvents?: number
 }
@@ -3879,7 +3895,7 @@ export interface Config {
 
 - `inject`: `sessions` · `otel`
 - `refs`: [`LogExporterOptions`](../packages/telemetry/otel/src/index.ts) · [`SessionLogProcessorOptions`](../packages/telemetry/otel/src/index.ts)
-- `source`: [`packages/session/session-telemetry-otel/src/index.ts:85`](../packages/session/session-telemetry-otel/src/index.ts)
+- `source`: [`packages/session/session-telemetry-otel/src/index.ts:180`](../packages/session/session-telemetry-otel/src/index.ts)
 
 ```ts config-catalog
 /**
@@ -3909,6 +3925,19 @@ export interface Config {
   shutdownTimeoutMillis?: number
   /** Uncompressed OTLP request byte limit, at most 4,000,000. */
   maxRequestBytes?: number
+  /**
+   * OTLP record granularity. `per-event` (default) reports one record per
+   * canonical Session event, preserving the existing collector format;
+   * `per-batch` reports one record per contiguous Session sequence range with
+   * a `delivery.*` attribute set and an `events` array body.
+   */
+  recordFormat?: SessionLogRecordFormat
+  /** `per-batch` only: maximum events per record. Defaults to 128. */
+  maxBatchEvents?: number
+  /** `per-batch` only: maximum record body JSON bytes; a larger single event still travels as its own batch. Defaults to 1,048,576. */
+  maxBatchBytes?: number
+  /** `per-batch` only: maximum age of the oldest buffered event before a record is emitted. Defaults to 1,000. */
+  batchDelayMillis?: number
 }
 
 /** Session-sharing policy selected by {@link Config.mode}. */
@@ -3916,6 +3945,9 @@ export enum SessionTelemetryMode {
   FEEDBACK_ONLY = 'FEEDBACK_ONLY',
   DISABLED = 'DISABLED',
 }
+
+/** OTLP record granularity selected by the recordFormat Config field. */
+export type SessionLogRecordFormat = 'per-event' | 'per-batch'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-telemetry-otel -->
 
@@ -4081,6 +4113,31 @@ export interface Config {
 export type PythonEnvironment = 'workspace-dependencies' | 'user'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->
+<a id="deepseek-aidsh-speech-to-text-deepseek"></a>
+
+## `@deepseek-ai/dsh-speech-to-text-deepseek`
+
+- `inject`: `speechToText` · `deepseekAuth`
+- `source`: [`packages/experimental/speech-to-text-deepseek/src/config.ts:7`](../packages/experimental/speech-to-text-deepseek/src/config.ts)
+
+```ts config-catalog
+/** Registration id and the limits of one recognition request; `ctx.deepseekAuth` supplies the endpoint and credential. */
+export interface Config {
+  /** Unique registration id; `speech-to-text` selects this exact id. */
+  providerId: string
+  /** Deadline for the request, including its response body. */
+  timeoutMs: number
+  /** Largest recording, in bytes, sent to the service; the service rejects files over 8 MiB. */
+  maxRequestBytes: number
+  /** Longest recording, in seconds, sent to the service; the service rejects recordings over 120 seconds. */
+  maxDurationSeconds: number
+  /** Maximum response body bytes read from the service. */
+  maxResponseBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-spill-local -->
 <a id="deepseek-aidsh-spill-local"></a>
@@ -4923,7 +4980,7 @@ export interface Config {
   write?: boolean
   /** Register `edit` and its guidance. Defaults to true. */
   edit?: boolean
-  /** Register `apply_patch` and its guidance beside `edit`. Defaults to false; shipped compositions set it on their `tool-fs` rows. */
+  /** Register `apply_patch` and its guidance. Defaults to the resolved `edit` value. */
   applyPatch?: boolean
   /** Default and maximum number of lines returned by one `read` call. */
   readLimit?: number
@@ -5888,6 +5945,7 @@ export interface Config {
 | `@deepseek-ai/dsh-message-quotes` | — | [`packages/session/message-quotes/src/index.ts`](../packages/session/message-quotes/src/index.ts) |
 | `@deepseek-ai/dsh-otel` | — | [`packages/telemetry/otel/src/index.ts`](../packages/telemetry/otel/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-recommendations` | `pluginManager` · `agents` · `skills` · `actionCards` | [`packages/extensions/plugin-recommendations/src/index.ts`](../packages/extensions/plugin-recommendations/src/index.ts) |
+| `@deepseek-ai/dsh-sandbox-policy-git` | `fs` · `sandboxPolicy` · `workingDirectory` | [`packages/experimental/sandbox-policy-git/src/index.ts`](../packages/experimental/sandbox-policy-git/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-ssh` | `ssh` | [`packages/ssh/sandbox-ssh/src/index.ts`](../packages/ssh/sandbox-ssh/src/index.ts) |
 | `@deepseek-ai/dsh-session` | — | [`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts) |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | `llm` · `sessionPersistence` · `sessions` · `tools` | [`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts) |

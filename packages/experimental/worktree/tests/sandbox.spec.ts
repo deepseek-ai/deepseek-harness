@@ -5,7 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
 import { runCommand } from '../src/process.ts'
-import { filterCommand, git, harness, repository, testAgent } from './harness.ts'
+import { announcedAgent, filterCommand, git, harness, repository, testAgent } from './harness.ts'
 
 let ctx: Context | undefined
 let root: string | undefined
@@ -93,27 +93,14 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(ctx.sandboxPolicy.resolve({ session: agent.session }).workspaceRoot).toBe(root)
   })
 
-  it('does not widen a linked-checkout grant to the shared Git administration directory', async () => {
-    root = await repository(process.cwd())
-    const linked = join(root, 'linked')
-    await git(root, 'worktree', 'add', '-b', 'linked', linked)
-    ctx = await harness(linked, {}, 'workspace-write')
-    const agent = testAgent(ctx, linked)
-    const confine = vi.spyOn(ctx.sandbox, 'confine')
-    await expect(ctx.worktrees.create(agent, { name: 'denied-admin' })).rejects.toThrow(/permission denied|operation not permitted|read-only file system/i)
-    expect(ctx.workingDirectory.get(agent.session)).toBe(linked)
-    expect(await git(root, 'branch', '--list', 'denied-admin')).toBe('')
-    expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === linked)).toBe(true)
-  })
-
-  it('creates and restores from a linked checkout once a registered grant covers its shared Git administration directory', async () => {
+  it('creates and restores from a linked checkout, whose shared Git administration directory the linked-worktree grant covers', async () => {
     root = await repository(process.cwd())
     const administration = join(root, '.git')
     const linked = join(root, 'linked')
     await git(root, 'worktree', 'add', '-b', 'linked', linked)
     ctx = await harness(linked, {}, 'workspace-write')
-    const agent = testAgent(ctx, linked)
-    ctx.sandboxPolicy.registerWritableRoot(agent.session, administration)
+    const agent = await announcedAgent(ctx, linked)
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).additionalWritableRoots).toEqual([administration])
     const created = await ctx.worktrees.create(agent, { name: 'shared-admin' })
     const checkout = join(linked, '.agents', 'worktrees', 'shared-admin')
 
@@ -133,25 +120,25 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(bounded).toBe(true)
   })
 
-  it('denies a commit inside the Session\'s worktree under workspace-write until a grant covers the repository\'s Git directory', async () => {
+  it('commits inside the worktree the Session created, and holds no grant after leaving it', async () => {
     root = await repository(process.cwd())
     ctx = await harness(root, {}, 'workspace-write')
-    const agent = testAgent(ctx, root)
+    const agent = await announcedAgent(ctx, root)
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).additionalWritableRoots).toBeUndefined()
     const created = await ctx.worktrees.create(agent, { name: 'committing' })
     const limits = { timeoutMs: 30_000, graceMs: 1_000, maxOutputBytes: 65_536 }
-    const commit = () => runCommand(
-      ctx!, limits, ctx!.sandboxPolicy.resolve({ session: agent.session }), created.path,
-      ['git', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'from the worktree'], new AbortController().signal,
-    )
 
     // The worktree's index and the repository's objects live in the source checkout's Git directory, outside the Session's root.
-    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).workspaceRoot).toBe(created.path)
-    await expect(commit()).rejects.toThrow(/permission denied|operation not permitted|read-only file system/i)
-    expect(await git(created.path, 'rev-parse', 'HEAD')).toBe(created.baseCommit)
-
-    ctx.sandboxPolicy.registerWritableRoot(agent.session, join(root, '.git'))
-    await commit()
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session })).toMatchObject({ workspaceRoot: created.path, additionalWritableRoots: [join(root, '.git')] })
+    await runCommand(
+      ctx, limits, ctx.sandboxPolicy.resolve({ session: agent.session }), created.path,
+      ['git', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'from the worktree'], new AbortController().signal,
+    )
     expect(await git(created.path, 'log', '-1', '--format=%s')).toBe('from the worktree')
+
+    await ctx.worktrees.exit(agent)
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session })).toMatchObject({ workspaceRoot: root })
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).additionalWritableRoots).toBeUndefined()
   })
 
   it('restores a removed worktree under the source checkout boundary while the Session root is the removed directory', async () => {

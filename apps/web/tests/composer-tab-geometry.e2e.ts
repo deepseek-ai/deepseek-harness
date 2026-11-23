@@ -305,6 +305,19 @@ describe('web e2e: input card position across view tabs', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('scrolls the Chat transcript when the wheel is over its width handle', async () => {
+    await setMeasuredViewport(page, WIDE_VIEWPORT, false)
+    await showTab(page, 'Chat')
+    const scrollport = page.locator('[data-conversation-scroll]')
+    const top = () => scrollport.evaluate(element => element.scrollTop)
+    await scrollport.evaluate((element) => { element.scrollTop = element.scrollHeight })
+    await page.locator('[data-width-handle="right"]').hover({ position: { x: 5, y: 100 } })
+    const before = await top()
+    expect(before).toBeGreaterThan(120)
+    await page.mouse.wheel(0, -120)
+    await expect.poll(top).toBe(before - 120)
+  })
+
   it('holds the input card in place when the tab changes', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-tab-geometry-wide'))
     await setMeasuredViewport(page, WIDE_VIEWPORT, false)

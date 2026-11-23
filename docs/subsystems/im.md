@@ -19,6 +19,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImOutcome` | Waterfall result: `handled` by a named plugin (with optional target session ids), or `ignored` (with optional reason) |
 | `ImMessageEvent` | Waterfall argument: the stored message, its source configuration, the bot, plus chat-bound `reply`, `send`, and idempotent `deliver` helpers |
 | `ImButtonEvent` | A button click in an admitted chat: button id, data, chat, user, bot, the stored message carrying the button, the session that published it, and the raw interaction |
+| `ImReactionEvent` | A reaction added to or removed from a stored message in an admitted chat: action, platform emoji identity, chat, user, bot, the stored message, the session that published it when known, timestamp, and optional platform event id |
 | `ImComposition` | Agent configuration for a hosted session: agent preset, working directory, provider, model, and optional tool restriction |
 | `ImBinding` | Access grant for one chat: whether the session may publish there, whether it is the default (`home`) chat, and an optional thread restriction |
 | `ImSessionSpec` | Session request from an owner plugin: stable key, owner name, composition, bindings, output renderer, optional parent session, `ephemeral` flag, and owner metadata |
@@ -29,6 +30,7 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 | `ImResetOptions` | Session reset options: durable receipt `operationId` and optimistic `expectedGeneration` guard |
 | `ImSendOptions` | Outbound publication options: receipt `operationId`, same-chat stored quoted message key (`ImError('access')` otherwise), target thread, and the session used for grant checks and attribution |
 | `ImSendResult` | Publication outcome (`confirmed`, `failed`, `uncertain`, or `partial`), with the platform handle, render report, stored own message, and error message |
+| `ImOutgoing` | Mutable draft that the `im/before-send` waterfall passes along: target chat, caller options, the caller's original content, the content to publish, and an optional `drop` reason |
 | `ImHistory` | Per-chat history queries by `seq`: `after`, `before`, `get`, and `latest` |
 | `ImFormatOptions` | Message formatting options: `xml` or `line` style, media attachment flag, optional header, and abort signal |
 | `ImApi` | Service interface on `ctx.im`: `sessions`, `history`, `outputs`, `send`, `stream`, `readMessage`, `format`, `bot`, `chat`, and `status` |
@@ -179,6 +181,25 @@ A hosted session's turn activity changed; output renderers subscribe to redraw t
 
 Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
 
+<a id="imbefore-send--waterfall"></a>
+
+#### `im/before-send` — waterfall
+
+One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.
+
+```ts cordis-catalog
+/**
+ * One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace
+ * `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.
+ * @param outgoing - the mutable draft: chat, caller options, the caller's original content and the current content.
+ * @param next - the rest of the waterfall.
+ * @mode waterfall
+ */
+'im/before-send'(outgoing: ImOutgoing, next: () => Promise<void>): Promise<void>
+```
+
+Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
+
 <a id="imbutton--emit"></a>
 
 #### `im/button` — emit
@@ -227,6 +248,23 @@ An admitted inbound message; listeners call `next()` to pass it on and the defau
  * @mode waterfall
  */
 'im/message'(event: ImMessageEvent, next: () => Promise<ImOutcome>): Promise<ImOutcome>
+```
+
+Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)
+
+<a id="imreaction--emit"></a>
+
+#### `im/reaction` — emit
+
+A reaction was added to or removed from a stored message in an admitted chat.
+
+```ts cordis-catalog
+/**
+ * A reaction was added to or removed from a stored message in an admitted chat.
+ * @param event - the reaction, its target message, actor, and producing session when known.
+ * @mode emit
+ */
+'im/reaction'(event: ImReactionEvent): void
 ```
 
 Source: [`packages/experimental/im/src/api.ts`](../../packages/experimental/im/src/api.ts)

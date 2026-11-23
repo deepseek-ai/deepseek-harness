@@ -706,7 +706,7 @@ describe('writeBytes', () => {
 
   it('stores exact bytes without decoding or newline normalization', async () => {
     const outcome = await fs.writeBytes(await fs.resolve('blob.bin'), BINARY)
-    expect(outcome).toMatchObject({ operation: 'create', bytes: BINARY.byteLength })
+    expect(outcome.operation).toBe('create')
     expect(new Uint8Array(await readFile(join(dir, 'blob.bin')))).toEqual(BINARY)
   })
 

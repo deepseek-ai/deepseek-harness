@@ -3828,6 +3828,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
       'experimental-client-ui-forge WorktreeSettings',
+      'experimental-client-ui-forge HostSettings',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.row.config\', () => ctx.slots.register(\n      { name: \'plugins.row.config\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -5918,7 +5919,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'hoc',
     scope: 'root',
     summary: 'HOC layer around the inner content of the New-session row — the Tooltip and button the shell passes as `children`, rendered only while the Peer may create Sessions.',
-    doc: 'HOC layer around the inner content of the New-session row — the Tooltip\nand button the shell passes as `children`, rendered only while the Peer\nmay create Sessions. An occupant receives that content and returns it,\npossibly wrapped, together with its own controls, so it decorates the\nrow without adding a wrapper element. Occupants nest around the content\ninstead of rendering beside it: one that adds nothing must return\n`children`, and with no occupant the content renders unchanged.\nDeclared by this package\'s \'sidebar\' entry.',
+    doc: 'HOC layer around the inner content of the New-session row — the Tooltip\nand button the shell passes as `children`, rendered only while the Peer\nmay create Sessions. Each occupant can render `children` with its own\ncontrols. Forwarded content sits in `[data-slot-children="sidebar.session.action"]`.\nAn occupant that adds nothing must return `children`; with no occupant\nthe content renders directly in the slot anchor.\nDeclared by this package\'s \'sidebar\' entry.',
     registerOptions: [
       {
         name: 'id',
@@ -5964,7 +5965,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'wraps-owner-content',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.session.action\', () => ctx.slots.register(\n      { name: \'sidebar.session.action\', id: \'my-layer\', order: 100 },\n      ({ children }) => React.createElement(\'div\', null, children),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:100',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:99',
   },
   {
     key: 'sidebar.session.row.hover',

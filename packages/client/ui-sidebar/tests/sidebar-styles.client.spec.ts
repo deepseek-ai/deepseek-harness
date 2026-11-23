@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
+import { transform } from 'lightningcss'
 import { describe, expect, it } from 'vitest'
 
 const css = readFileSync(fileURLToPath(new URL('../src/client/SidebarRoot.module.css', import.meta.url)), 'utf8')
@@ -25,28 +26,6 @@ function declarations(selector: string): Map<string, string> | undefined {
   }
   return undefined
 }
-
-/**
- * Every declared selector, including those inside at-rule blocks.
- * @returns the selector text of each comma-separated part.
- */
-function declaredSelectors(): string[] {
-  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
-  return [...withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-    .flatMap(([, selectorList = '']) => selectorList.split(',').map(value => value.trim()))
-}
-
-/** Declarations of the reduced-motion block, which disables every rail animation. */
-function reducedMotion(): string {
-  return css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\n\}/u)?.[1] ?? ''
-}
-
-/** The renderer's `display: contents` anchor for the sidebar session action HOC slot. */
-const SLOT_ANCHOR = ":global([data-slot='sidebar.session.action'])"
-/** The shell's New-session button and the occupant's controls: the anchor's children, each matched once. */
-const ROW_CONTENT = `.railIn .newSessionRow > ${SLOT_ANCHOR} > *`
-/** The rail rule as a plain selector a DOM can match, with the CSS-module escape removed. */
-const ROW_CONTENT_SELECTOR = ROW_CONTENT.replace(SLOT_ANCHOR, "[data-slot='sidebar.session.action']")
 
 describe('SidebarRoot.module.css', () => {
   it('uses a compact expanded navigation gap without shrinking the collapsed rail spacing', () => {
@@ -124,11 +103,7 @@ describe('SidebarRoot.module.css', () => {
 
   it('moves the upper controls while the settings seat only fades', () => {
     const animation = 'rail-in 150ms var(--ds-ease-in-out) backwards'
-    for (const selector of [
-      '.railIn .iconButton',
-      ROW_CONTENT,
-      '.railIn .regionArea',
-    ]) {
+    for (const selector of ['.railIn .iconButton', '.railIn .regionArea']) {
       expect(declarations(selector)?.get('animation')).toBe(animation)
     }
     expect(declarations('.railIn .footArea')?.get('animation')).toBe(
@@ -140,43 +115,32 @@ describe('SidebarRoot.module.css', () => {
     expect(css).toMatch(/@keyframes rail-fade-in\s*\{\s*from\s*\{\s*opacity: 0;\s*}\s*}/)
   })
 
-  it('fades the New Session row through its slot anchor without reaching into either button', () => {
-    // The row renders its content through the HOC slot, so the renderer's
-    // display:contents anchor is the row's only child; the shell's New-session
-    // button and the occupant's own controls are the anchor's children.
-    expect(declarations(ROW_CONTENT)?.get('animation')).toBe('rail-in 150ms var(--ds-ease-in-out) backwards')
-    expect(reducedMotion()).toContain(ROW_CONTENT)
-    for (const selector of declaredSelectors()) {
-      if (!selector.includes('.newSessionRow')) continue
-      // A bare star under the row matches the boxless anchor, so nothing animates.
-      expect(selector).not.toMatch(/\.newSessionRow\s*>\s*\*/u)
-      // A second bare star step also matches .newSessionLabelMask and
-      // .newSessionShortcut inside the button, which would run rail-in twice on it.
-      expect(selector).not.toMatch(/>\s*\*\s*>\s*\*/u)
-      expect(selector).not.toContain('.newSessionLabelMask')
-      expect(selector).not.toContain('.newSessionShortcut')
-    }
-  })
+  it('animates the session action outputs through HOC outlets but not their contents, except where motion is disabled', () => {
+    const sheet = transform({ filename: 'SidebarRoot.module.css', code: Buffer.from(css), cssModules: { pattern: '[local]' } }).code.toString()
+    const slot = 'sidebar.session.action'
+    const row = (content: string) => `<div class="newSessionRow"><div data-slot="${slot}" style="display:contents">${content}</div></div>`
+    const outlet = (content: string) => `<div data-slot-children="${slot}" style="display:contents">${content}</div>`
+    const owner = `<button class="newSession"><span class="newSessionLabelMask"><span class="newSessionContent"><svg></svg></span></span>
+      <span class="newSessionShortcut"></span></button>`
+    const trigger = '<button class="import"><svg></svg></button><span class="tooltip" role="tooltip">Import</span>'
+    const link = '<a class="link" href="/"><span>Action</span></a>'
+    const nested = outlet(outlet(owner) + trigger) + link
+    const wrapped = `<div class="customControl">${outlet(nested)}<label><input type="checkbox">Filter</label></div>`
+    const { document, getComputedStyle } = new JSDOM(`<style>${sheet}</style><div class="railIn" style="--ds-ease-in-out:ease-in-out">
+      ${row(owner)}${row(outlet(owner))}${row(outlet(owner) + trigger)}${row(nested)}${row(wrapped)}</div>`).window
+    const animated = () => [...document.querySelectorAll('.newSessionRow')].map(el => [el, ...el.querySelectorAll('*')]
+      .filter(child => getComputedStyle(child).animation.includes('rail-in')).map(child => child.getAttribute('class')))
 
-  it('matches exactly the two buttons the slot anchor holds', () => {
-    // The renderer's outlet anchor is a display:contents div; the shell's
-    // New-session button and the occupant's control are its element children.
-    const { document } = new JSDOM(`
-      <div class="railIn">
-        <div class="newSessionRow">
-          <div data-slot="sidebar.session.action" style="display: contents">
-            <button class="newSession">
-              <span class="newSessionLabelMask"><span class="newSessionContent"></span></span>
-              <span class="newSessionShortcut"></span>
-            </button>
-            <button class="trigger"></button>
-          </div>
-        </div>
-      </div>`).window
-    const matched = [...document.querySelectorAll<HTMLElement>(ROW_CONTENT_SELECTOR)]
-    expect(matched.map(element => element.className)).toEqual(['newSession', 'trigger'])
-    // A bare child step matches only the boxless anchor, so nothing would animate.
-    expect(document.querySelectorAll('.railIn .newSessionRow > *')).toHaveLength(1)
+    expect(animated()).toEqual([
+      ['newSession'], ['newSession'], ['newSession', 'import', 'tooltip'], ['newSession', 'import', 'tooltip', 'link'], ['customControl'],
+    ])
+    document.documentElement.setAttribute('data-windows-titlebar', '')
+    const [plain, ...layered] = animated()
+    expect(layered).toEqual([plain, [...plain!, 'import', 'tooltip'], [...plain!, 'import', 'tooltip', 'link'], ['customControl']])
+    document.documentElement.removeAttribute('data-windows-titlebar')
+    // jsdom has no reduced-motion preference; enable that media block in the same stylesheet cascade.
+    document.querySelector('style')!.textContent = sheet.replace('@media (prefers-reduced-motion: reduce)', '@media all')
+    expect(animated()).toEqual([[], [], [], [], []])
   })
 
   it('gives shell rail controls the same base anchor for their shared translation', () => {

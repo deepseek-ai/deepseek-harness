@@ -2,8 +2,8 @@
 import type { ChatNode } from './chat-nodes.ts'
 
 /**
- * Exclude system prompts, permission commands, and normal Team toggle receipts.
- * Failed Team toggles remain visible.
+ * Exclude complete system prompts, permission commands, and normal Team toggle receipts.
+ * Section-attributed in-history system prompt updates and failed Team toggles remain visible.
  * @param node - projected Chat node.
  * @returns whether the node contributes a visible Chat row.
  */
@@ -16,5 +16,5 @@ export function isVisibleChatNode(node: ChatNode): boolean {
     }
   }
   return node.visibility === 'visible'
-    && node.kind !== 'system-prompt'
+    && (node.kind !== 'system-prompt' || node.data.message !== undefined)
 }

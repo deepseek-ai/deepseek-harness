@@ -258,8 +258,9 @@ it('mounts without a default and fails only a caller that names no preset', asyn
   expect(await ctx.agentPresets.list()).toEqual([])
   const session = ctx.sessions.create(brandString<SessionId>('no-default'), { meta: { agentPreset: 'recorded' } })
   expect(ctx.agentPresets.presetForSession(session)).toBe('recorded')
-  await expect(ctx.agentPresets.resolve()).rejects.toThrow('no preset was requested and `default` is not configured')
-  await expect(ctx.agentPresets.acquireScope()).rejects.toThrow('no preset was requested and `default` is not configured')
+  for (const request of [() => ctx.agentPresets.resolve(), () => ctx.agentPresets.acquireScope()]) {
+    await expect(request()).rejects.toMatchObject({ code: 'agent-preset/no-default', details: { available: [] } })
+  }
   await expect(ctx.agentPresets.resolve('named')).rejects.toMatchObject({ code: 'agent-preset/not-found' })
 })
 

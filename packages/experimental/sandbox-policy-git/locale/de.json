@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Git-Zugriff für verknüpfte Arbeitsbäume",
+    "description": "Erlaubt einer Sitzung in einem verknüpften Git-Arbeitsbaum, unter workspace-write Änderungen vorzumerken und zu committen, indem das Git-Verzeichnis des Repositorys schreibbar wird."
+  }
+}

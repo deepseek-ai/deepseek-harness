@@ -263,7 +263,6 @@ export class LocalFileSystem extends FileSystem {
       return {
         operation: existing ? 'update' : 'create',
         version: this.versionAfterWrite(after, target),
-        bytes: data.byteLength,
       }
     })
   }

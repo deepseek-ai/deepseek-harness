@@ -49,7 +49,7 @@
     "@deepseek-ai/cordis-fetch-file": "workspace:~",
     "@deepseek-ai/cosmokit": "workspace:~",
     "@deepseek-ai/schemastery": "workspace:~",
-    "undici": "8.11.2"
+    "undici": "8.12.4"
   },
   "publishConfig": {
     "access": "public"

@@ -8,7 +8,7 @@
 
 调用方 Session 的当前目录决定源仓库。创建操作在分配检出目录前，将请求的本地提交、分支或标签固定为具体提交；省略时选择 `HEAD`。请求也可以要求先获取某个已配置远程的远程跟踪分支，此时只获取这一个分支，并固定获取到的提交。每个名称必须对应新分支与未使用的检出路径。操作既不获取其他提交或缺失对象，也不复制源检出目录中的暂存、未暂存、未跟踪或被忽略文件。
 
-默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才改变工作目录。
+默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录；在链接工作树中工作的 Session 通过[链接工作树授权](../../packages/experimental/sandbox-policy-git/README.zh.md)持有后者的写权限。Git 初始化成功后才改变工作目录。
 
 `ctx.worktrees.enter(agent, { name })` 把 Session 移入它所在检出的池中已有的工作树。`enter_worktree` 工具对带名称且不带起始修订的请求先调用它，只有它报告 `WORKTREE_NOT_FOUND` 时才调用 `create`。该目录必须位于池内，并且是仓库已登记的工作树：名称不存在、目录未登记、链接指向池外都以 `WORKTREE_NOT_FOUND` 失败。进入不改变 Git 状态和文件，并在 Session 日志中记录这次进入。
 

@@ -4,7 +4,7 @@
  * text-storage mechanics — resolve, stat, read/stream, list, the atomic
  * write and the read-match-write edit critical section — are the local
  * implementation's, verbatim; this package adds only the per-call POLICY fence
- * on all five mutations. Reads pass through untouched: every mode permits
+ * on all six mutations. Reads pass through untouched: every mode permits
  * reading.
  *
  * The fence is a policy check in TRUSTED code over a MODEL-CONTROLLED path,

@@ -241,7 +241,7 @@ function fakeFs(
     readBytes: async () => new Uint8Array(options.bytes ?? 4).fill(0x41),
     writeBytes: async (target: { targetKey: string }, data: Uint8Array) => {
       writes.push({ key: target.targetKey, data })
-      return { operation: 'create' as const, version: 'v1', bytes: data.byteLength }
+      return { operation: 'create' as const, version: 'v1' }
     },
   }
 }
@@ -250,6 +250,7 @@ function fakeFs(
 async function mount(options: { config?: Partial<ImConfig>; fs?: ReturnType<typeof fakeFs> } = {}): Promise<Mounted> {
   const ctx = new Context()
   contexts.push(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -925,6 +926,7 @@ describe('im_read_file', () => {
     const ctx = new Context()
     contexts.push(ctx)
     const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     ctx.provide('fs', { ...fakeFs(), sandboxMode: 'workspace-write' } as never)

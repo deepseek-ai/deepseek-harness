@@ -646,8 +646,7 @@
 # The preset selection registry. The shipped preset declarations follow as
 # separate patch files under `presets/`, listed after this file in
 # `package.json` `dsh.bundle.patch`.
-- insert:
-    - id: agent-preset-registry
-      name: '@deepseek-ai/dsh-agent-preset-registry'
-      config:
-        default: standard
+- id: agent-preset-registry
+  disabled: false
+  config:
+    default: standard

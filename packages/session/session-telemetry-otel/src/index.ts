@@ -1,9 +1,10 @@
 /**
  * OpenTelemetry Service Provider for the DeepSeek Harness telemetry capability.
  *
- * Authorizes feedback-bounded capture and hands complete event strings to the
- * Session-log reporter. This plugin owns resource identity and an outer
- * shutdown deadline; the reporter owns byte-bounded SDK delivery.
+ * Authorizes feedback-bounded capture and hands records to the Session-log
+ * reporter, either one OTLP record per event or one per contiguous delivery
+ * batch. This plugin owns resource identity, optional batch assembly, and an
+ * outer shutdown deadline; the reporter owns byte-bounded SDK delivery.
  *
  * @module @deepseek-ai/dsh-session-telemetry-otel
  */
@@ -25,7 +26,22 @@ import {
 import { APP_IDENTITY } from '@deepseek-ai/dsh-llm'
 import { getOrCreateAnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import type { LogExporterOptions, SessionLogProcessorOptions, SessionLogReporter } from '@deepseek-ai/dsh-otel'
+import { DEFAULT_RECORD_FORMAT, type SessionLogRecordFormat } from './record-format.ts'
 import { SeverityNumber } from '@opentelemetry/api-logs'
+import {
+  DEFAULT_BATCH_DELAY_MILLIS,
+  DEFAULT_MAX_BATCH_BYTES,
+  DEFAULT_MAX_BATCH_EVENTS,
+  SessionLogBatcher,
+  type SessionLogBatchOptions,
+} from './batch.ts'
+
+/** Request ceiling the OTel channel enforces, mirrored here for load-time validation. */
+const MAX_REQUEST_BYTES = 4_000_000
+/** Two-way JSON escaping can double a batch body on the wire. */
+const BATCH_BODY_ESCAPE_FACTOR = 2
+/** Fixed OTLP resource/scope envelope allowance when a batch body is escaped. */
+const BATCH_ENVELOPE_MARGIN_BYTES = 4_096
 
 /** Session-sharing policy selected by {@link Config.mode}. */
 export enum SessionTelemetryMode {
@@ -50,6 +66,39 @@ function isFeedback(session: Session, event: SessionEvent): boolean {
   }
 }
 
+/**
+ * Session format generation carried by a ledger record's identity attributes.
+ * Absence identifies generation 0, matching the accepted-upload watermark rule.
+ * @param attributes - the captured record's identity attributes.
+ * @returns the generation the event sequence belongs to.
+ */
+function formatVersionOf(attributes: Record<string, string | number>): number {
+  const version = attributes['session.format_version']
+  return typeof version === 'number' ? version : 0
+}
+
+/**
+ * Session-level facts a batch reports once instead of per event. They are the
+ * same identity attributes the per-event path carries, and the coordinator
+ * derives them from the Session header.
+ * @param attributes - the captured record's identity attributes.
+ * @returns the present Session facts, omitted when the header has none.
+ */
+function sessionDimensionsOf(attributes: Record<string, string | number>): {
+  cwd?: string
+  parentSessionId?: string
+  seedLength?: number
+} {
+  const cwd = attributes['session.cwd']
+  const parentSessionId = attributes['session.parent_id']
+  const seedLength = attributes['session.seed_length']
+  return {
+    ...typeof cwd === 'string' ? { cwd } : {},
+    ...typeof parentSessionId === 'string' ? { parentSessionId } : {},
+    ...typeof seedLength === 'number' ? { seedLength } : {},
+  }
+}
+
 /** Resolve the default and reject unknown runtime values before transport setup. */
 function resolveMode(mode: SessionTelemetryMode | undefined): SessionTelemetryMode {
   const resolved = mode ?? DEFAULT_TELEMETRY_MODE
@@ -58,13 +107,59 @@ function resolveMode(mode: SessionTelemetryMode | undefined): SessionTelemetryMo
     case SessionTelemetryMode.DISABLED:
       return resolved
     default:
-      return assertNever(resolved)
+      return assertNever(resolved, 'mode')
+  }
+}
+
+/** Resolve the default record granularity and reject unknown runtime values before transport setup. */
+function resolveRecordFormat(format: SessionLogRecordFormat | undefined): SessionLogRecordFormat {
+  const resolved = format ?? DEFAULT_RECORD_FORMAT
+  switch (resolved) {
+    case 'per-event':
+    case 'per-batch':
+      return resolved
+    default:
+      return assertNever(resolved, 'record format')
   }
 }
 
 /** Fail closed when direct construction bypasses the runtime config schema. */
-function assertNever(value: never): never {
-  throw new Error(`session-telemetry-otel: unsupported mode ${JSON.stringify(value)}`)
+function assertNever(value: never, what: string): never {
+  throw new Error(`session-telemetry-otel: unsupported ${what} ${JSON.stringify(value)}`)
+}
+
+/**
+ * Validate the batch ceilings against each other and against the request ceiling.
+ *
+ * A batch body travels as one JSON string value, so escaping can double its
+ * bytes; a batch that fits maxBatchBytes but not maxRequestBytes after escaping
+ * would be rejected whole, losing every event it carries. Rejecting that
+ * combination at load time keeps a legal configuration from discarding events
+ * at run time.
+ */
+function resolveBatchOptions(config: Config): SessionLogBatchOptions {
+  const maxBatchEvents = config.maxBatchEvents ?? DEFAULT_MAX_BATCH_EVENTS
+  const maxBatchBytes = config.maxBatchBytes ?? DEFAULT_MAX_BATCH_BYTES
+  const batchDelayMillis = config.batchDelayMillis ?? DEFAULT_BATCH_DELAY_MILLIS
+  if (!Number.isSafeInteger(maxBatchEvents) || maxBatchEvents < 1) {
+    throw new Error(`session-telemetry-otel: maxBatchEvents must be a positive integer, got ${String(maxBatchEvents)}`)
+  }
+  if (!Number.isSafeInteger(maxBatchBytes) || maxBatchBytes < 1) {
+    throw new Error(`session-telemetry-otel: maxBatchBytes must be a positive integer, got ${String(maxBatchBytes)}`)
+  }
+  if (!Number.isSafeInteger(batchDelayMillis) || batchDelayMillis < 1 || batchDelayMillis > MAX_TIMER_DELAY_MILLIS) {
+    throw new Error(`session-telemetry-otel: batchDelayMillis must be a positive integer no greater than ${MAX_TIMER_DELAY_MILLIS}, got ${String(batchDelayMillis)}`)
+  }
+  const maxRequestBytes = config.maxRequestBytes ?? MAX_REQUEST_BYTES
+  if (maxBatchBytes * BATCH_BODY_ESCAPE_FACTOR + BATCH_ENVELOPE_MARGIN_BYTES > maxRequestBytes) {
+    throw new Error(
+      'session-telemetry-otel: maxBatchBytes ' + String(maxBatchBytes)
+      + ' cannot fit maxRequestBytes ' + String(maxRequestBytes)
+      + ' after JSON escaping (x' + String(BATCH_BODY_ESCAPE_FACTOR)
+      + ' plus ' + String(BATCH_ENVELOPE_MARGIN_BYTES) + ' B envelope); lower maxBatchBytes',
+    )
+  }
+  return { maxBatchEvents, maxBatchBytes, batchDelayMillis }
 }
 
 /** Map the serialized mode onto the seam's backend-independent sharing vocabulary. */
@@ -73,7 +168,7 @@ function sharingStatusFor(mode: SessionTelemetryMode): SessionTelemetrySharingSt
     case SessionTelemetryMode.FEEDBACK_ONLY: return 'feedback-only'
     case SessionTelemetryMode.DISABLED: return 'disabled'
     /* v8 ignore next 2 -- resolveMode already rejected unknown values before this switch; the closed enum cannot reach the default. */
-    default: return assertNever(mode)
+    default: return assertNever(mode, 'mode')
   }
 }
 
@@ -104,14 +199,27 @@ export interface Config {
   shutdownTimeoutMillis?: number
   /** Uncompressed OTLP request byte limit, at most 4,000,000. */
   maxRequestBytes?: number
+  /**
+   * OTLP record granularity. `per-event` (default) reports one record per
+   * canonical Session event, preserving the existing collector format;
+   * `per-batch` reports one record per contiguous Session sequence range with
+   * a `delivery.*` attribute set and an `events` array body.
+   */
+  recordFormat?: SessionLogRecordFormat
+  /** `per-batch` only: maximum events per record. Defaults to 128. */
+  maxBatchEvents?: number
+  /** `per-batch` only: maximum record body JSON bytes; a larger single event still travels as its own batch. Defaults to 1,048,576. */
+  maxBatchBytes?: number
+  /** `per-batch` only: maximum age of the oldest buffered event before a record is emitted. Defaults to 1,000. */
+  batchDelayMillis?: number
 }
 
 /**
  * Schemastery validator for {@link Config}; cordis runs it before the plugin
- * starts. The constructor validates endpoint and shutdown requirements; the
- * reporter validates Session byte and queue limits. SDK transport and
- * processor settings use the reporter's accepted option types, which exclude
- * self-observability metering.
+ * starts. The constructor validates endpoint, shutdown, and batch-ceiling
+ * requirements; the reporter validates Session byte and queue limits. SDK
+ * transport and processor settings use the reporter's accepted option types,
+ * which exclude self-observability metering.
  */
 export const Config: z<Config> = z.object({
   mode: z.union(Object.values(SessionTelemetryMode)).default(DEFAULT_TELEMETRY_MODE),
@@ -119,6 +227,10 @@ export const Config: z<Config> = z.object({
   processor: z.any(),
   shutdownTimeoutMillis: z.number(),
   maxRequestBytes: z.number().step(1).min(1).max(4_000_000),
+  recordFormat: z.union(['per-event', 'per-batch'] as const).default(DEFAULT_RECORD_FORMAT),
+  maxBatchEvents: z.number().step(1).min(1),
+  maxBatchBytes: z.number().step(1).min(1),
+  batchDelayMillis: z.number().step(1).min(1).max(2_147_483_647),
 })
 
 /** Default outer allowance for the SDK's complete shutdown sequence. */
@@ -140,21 +252,26 @@ const SEVERITY: Record<SessionTelemetrySeverity, SeverityNumber> = {
  * the `sessionTelemetry` service (duplicate load throws). `FEEDBACK_ONLY` wires the SDK
  * pipeline and on-demand {@link SessionTelemetryCoordinator}; `DISABLED` constructs no
  * SDK state and listens only to warn when recorded feedback stays local.
+ * `recordFormat: 'per-batch'` assembles contiguous delivery batches before
+ * the same byte-bounded channel.
  */
 export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
   static inject = ['sessions', 'otel']
   static Config = Config
 
   private readonly provider: SessionLogReporter | undefined
+  private readonly batcher: SessionLogBatcher | undefined
   private readonly shutdownTimeoutMillis: number
   override readonly sharing: SessionTelemetrySharingStatus
 
   constructor(ctx: Context, config: Config) {
     const mode = resolveMode(config.mode)
+    const recordFormat = resolveRecordFormat(config.recordFormat)
     super(ctx)
     this.sharing = sharingStatusFor(mode)
     if (mode === SessionTelemetryMode.DISABLED) {
       this.provider = undefined
+      this.batcher = undefined
       this.shutdownTimeoutMillis = DEFAULT_SHUTDOWN_TIMEOUT_MILLIS
       ctx.on('session/event', (session, event) => {
         if (isFeedback(session, event)) ctx.logger.warn(DISABLED_FEEDBACK_WARNING)
@@ -186,6 +303,7 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
       throw new Error(`session-telemetry-otel: shutdownTimeoutMillis must be a positive finite number no greater than ${MAX_TIMER_DELAY_MILLIS}, got ${String(shutdownTimeoutMillis)}`)
     }
     this.shutdownTimeoutMillis = shutdownTimeoutMillis
+    const batchOptions = recordFormat === 'per-batch' ? resolveBatchOptions(config) : undefined
     const { version } = createRequire(import.meta.url)('../package.json') as { version: string }
     const reporter = ctx.otel.createSessionLogReporter({
       scope: { name: '@deepseek-ai/dsh-session-telemetry-otel', version },
@@ -200,14 +318,33 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
       onFailure: (message, error) => { ctx.logger.warn(message, error) },
     })
     this.provider = reporter
+    const batcher = batchOptions === undefined
+      ? undefined
+      : new SessionLogBatcher(
+        batchOptions,
+        (batch) => { reporter.reportSessionLogBatch(batch) },
+        (message) => { ctx.logger.warn(message) },
+      )
+    this.batcher = batcher
     const enqueue: SessionTelemetrySink['emit'] = (record) => {
       if (record.sourceEvent === undefined) {
         ctx.logger.warn('Session log record withheld: redaction removed sourceEvent')
         return
       }
+      const event = { ...record.sourceEvent.envelope, data: record.body }
+      if (batcher !== undefined) {
+        batcher.push({
+          sessionId: record.sourceEvent.sessionId,
+          formatVersion: formatVersionOf(record.attributes),
+          ...sessionDimensionsOf(record.attributes),
+          event,
+          severityNumber: SEVERITY[record.severity],
+        })
+        return
+      }
       reporter.reportSessionLog({
         sessionId: record.sourceEvent.sessionId,
-        event: { ...record.sourceEvent.envelope, data: record.body },
+        event,
         severityNumber: SEVERITY[record.severity],
         attributes: record.attributes,
       })
@@ -241,6 +378,15 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
       // fromRestore appends a lifecycle marker that this submission did not commit.
       if (isFeedback(session, committed)) coordinator.captureSession(session, committed.seq)
     })
+    if (batcher !== undefined) {
+      // A finished turn is the Session's idle boundary; a disposal closes it for good.
+      ctx.on('session/event', (session, event) => {
+        if (event.type === 'turn/end') batcher.flushSession(session.id)
+      })
+      ctx.on('session/disposed', (session) => {
+        batcher.closeSession(session.id)
+      })
+    }
   }
 
   /**
@@ -258,6 +404,7 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
    */
   async shutdown(): Promise<void> {
     if (this.provider === undefined) return
+    this.batcher?.shutdown()
     const providerShutdown = this.provider.shutdown()
     let timer: ReturnType<typeof setTimeout> | undefined
     const deadline = new Promise<never>((_resolve, reject) => {

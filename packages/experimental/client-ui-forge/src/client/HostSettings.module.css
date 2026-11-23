@@ -1,0 +1,194 @@
+/* A provider row page: the host list under the Plugins form's tokens. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+}
+
+/* The recheck button stands in the column of the rows' removal buttons. */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.iconButton:disabled,
+.iconButton[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .iconButton:hover:not(:disabled, [aria-disabled='true']) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.iconButton:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+/* The list is a group of read values, so it has the fields' edge without their fill. */
+.hosts {
+  margin: 0;
+  padding: 0;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  list-style: none;
+}
+
+.host {
+  padding: 8px 8px 8px 12px;
+}
+
+.host + .host {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+
+/* A host name wraps instead of being cut, so a long one stays readable where no pointer can hover it. */
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.state,
+.unsaved {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.unsaved {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The command and the reason end where the state text ends, short of the removal button's column. */
+.command {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 34px 2px 0;
+  padding: 4px 4px 4px 10px;
+  border-radius: var(--dsw-radius-sm);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.commandText {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  margin: 4px 34px 2px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.addRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+
+.input::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
+.input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.add {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.hint,
+.invalid {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.invalid {
+  color: var(--dsw-alias-state-error-primary);
+}

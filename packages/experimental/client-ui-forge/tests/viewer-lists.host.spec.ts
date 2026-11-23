@@ -22,8 +22,6 @@ function summary(number: number, repository = 'demo'): ChangeRequestSummary {
     reviewDecision: 'none',
     viewerReview: null,
     viewerRequest: null,
-    closingIssues: [],
-    closingIssuesTruncated: false,
     updatedAt: '2026-11-10T09:00:00Z',
   }
 }
@@ -32,9 +30,11 @@ function summary(number: number, repository = 'demo'): ChangeRequestSummary {
 interface RegistryFake extends ViewerListSources {
   readonly calls: ForgeViewerQuery[]
   readonly counts: string[]
+  readonly signIns: string[]
   readonly reported: unknown[]
   answer: (query: ForgeViewerQuery, signal: AbortSignal) => Promise<ForgeViewerList | ForgeFailure>
-  answerCount: (host: string) => Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
+  answerCount: (host: string, signal: AbortSignal) => Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
+  answerSignIn: (host: string, signal: AbortSignal) => Promise<string | null>
   sourcesNow: ForgeViewerSource[]
 }
 
@@ -42,20 +42,26 @@ function registry(sources: ForgeViewerSource[]): RegistryFake {
   const fake: RegistryFake = {
     calls: [],
     counts: [],
+    signIns: [],
     reported: [],
     sourcesNow: sources,
     answer: async (query: ForgeViewerQuery): Promise<ForgeViewerList | ForgeFailure> =>
       await Promise.resolve({ viewer: 'octo', items: [summary(query.filter === 'authored' ? 2 : 1)], total: 3 }),
     answerCount: async (): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure> =>
       await Promise.resolve(new Map([['review-requested', 7]])),
+    answerSignIn: async host => await Promise.resolve(`gh auth login --hostname ${host}`),
     sources: () => fake.sourcesNow,
     list: async (_forge: string, query: ForgeViewerQuery, signal: AbortSignal) => {
       fake.calls.push(query)
       return await fake.answer(query, signal)
     },
-    count: async (_forge: string, host: string) => {
+    count: async (_forge: string, host: string, signal: AbortSignal) => {
       fake.counts.push(host)
-      return await fake.answerCount(host)
+      return await fake.answerCount(host, signal)
+    },
+    signIn: async (_forge: string, host: string, signal: AbortSignal) => {
+      fake.signIns.push(host)
+      return await fake.answerSignIn(host, signal)
     },
     report: (error: unknown) => { fake.reported.push(error) },
   }
@@ -63,6 +69,14 @@ function registry(sources: ForgeViewerSource[]): RegistryFake {
 }
 
 const github: ForgeViewerSource = { forge: 'github', hosts: ['github.com'], filters: ALL, maxItems: 50 }
+
+const gitlab: ForgeViewerSource = { forge: 'gitlab', hosts: ['gitlab.example'], filters: ALL, maxItems: 10 }
+
+const refused = async (): Promise<ForgeFailure> => await Promise.resolve({ code: 'unauthenticated', message: 'sign in' })
+
+/** A read that settles only when its signal aborts, as a provider's read does. */
+const pending = async (_host: string, signal: AbortSignal): Promise<never> =>
+  await new Promise<never>((_resolve, reject) => { signal.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true }) })
 
 const hubs: ViewerLists[] = []
 
@@ -136,9 +150,9 @@ describe('ViewerLists', () => {
     const fake = registry([github])
     const lists = hub(fake, { ...timing, listIntervalMs: 60_000 })
     const controller = new AbortController()
-    const read = follow(lists.lists({ owner: 'octo', name: 'demo' }, controller.signal))
+    const read = follow(lists.lists({ host: 'github.com', owner: 'octo', name: 'demo' }, controller.signal))
     await until(read, frame => !frame.reading && frame.hosts[0]?.lists.involved?.items !== null)
-    fake.answer = async () => await Promise.resolve({ code: 'unauthenticated', message: 'sign in' })
+    fake.answer = refused
     fake.calls.length = 0
     lists.refresh()
     const failed = await until(read, frame => (frame.hosts[0]?.lists.involved?.failure ?? null) !== null)
@@ -194,7 +208,7 @@ describe('ViewerLists', () => {
     await read.done
   })
 
-  it('shares one reader per repository scope, waits between rounds, backs off after failures, and stops with its last stream', async () => {
+  it('shares one reader per repository scope, reads a failing host again later each time, and stops with its last stream', async () => {
     vi.useFakeTimers()
     const fake = registry([github])
     fake.answer = async () => await Promise.resolve({ code: 'not-found', message: 'gone' })
@@ -221,6 +235,152 @@ describe('ViewerLists', () => {
     await two.done
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fake.calls).toHaveLength(15)
+  })
+
+  it('keeps the cadence of the other hosts while it reads a failing host again later each time, and reads every host on a refresh', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github, { ...gitlab, filters: new Set(['authored']) }])
+    fake.answer = async query => await Promise.resolve(query.host === 'gitlab.example'
+      ? { code: 'unavailable', message: 'down' } : { viewer: 'octo', items: [], total: 0 })
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const read = follow(lists.lists(null, controller.signal))
+    const reads = (): number[] => ['github.com', 'gitlab.example'].map(host => fake.calls.filter(call => call.host === host).length)
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reads()).toEqual([3, 1])
+    // github.com is read every second; gitlab.example after two seconds, then four, then the largest delay of five.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(reads()).toEqual([6, 1])
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(reads()).toEqual([9, 2])
+    await vi.advanceTimersByTimeAsync(3_999)
+    expect(reads()).toEqual([18, 2])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(reads()).toEqual([21, 3])
+    lists.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reads()).toEqual([24, 4])
+    controller.abort()
+    await read.done
+  })
+
+  it('reads a repository scope only on the host the repository is on, whatever case names it', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github, gitlab])
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const read = follow(lists.lists({ host: 'GitLab.Example', owner: 'group/sub', name: 'app' }, controller.signal))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read.frames.at(-1)?.hosts.map(host => host.host)).toEqual(['gitlab.example'])
+    expect(fake.calls.map(call => [call.host, call.filter, call.repository])).toEqual([
+      ['gitlab.example', 'review-requested', { owner: 'group/sub', name: 'app' }],
+      ['gitlab.example', 'authored', { owner: 'group/sub', name: 'app' }],
+      ['gitlab.example', 'involved', { owner: 'group/sub', name: 'app' }],
+    ])
+    controller.abort()
+    await read.done
+  })
+
+  it('keeps the sign-in command of a host that refuses the viewer, without asking for it again, until a read succeeds', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github])
+    const accepted = fake.answer
+    fake.answer = refused
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const read = follow(lists.lists(null, controller.signal))
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read.frames.at(-1)?.hosts[0]).toEqual(expect.objectContaining({ signIn: 'gh auth login --hostname github.com', viewer: null }))
+    lists.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.signIns).toEqual(['github.com'])
+    fake.answer = accepted
+    lists.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read.frames.at(-1)?.hosts[0]).toEqual(expect.objectContaining({ signIn: null, viewer: 'octo' }))
+    controller.abort()
+    await read.done
+  })
+
+  it('lists a refused host without a sign-in command when its provider names none or cannot be asked', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github])
+    fake.answer = refused
+    fake.answerSignIn = async () => await Promise.resolve(null)
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const read = follow(lists.lists(null, controller.signal))
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read.frames.at(-1)?.hosts[0]?.signIn).toBeNull()
+    fake.answerSignIn = async () => await Promise.reject(new Error('no provider'))
+    lists.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read.frames.at(-1)?.hosts[0]?.signIn).toBeNull()
+    expect(fake.signIns).toEqual(['github.com', 'github.com'])
+    expect(fake.reported).toEqual([new Error('no provider')])
+    controller.abort()
+    await read.done
+  })
+
+  it('ends a stream whose sign-in command or count is still being read, without recording or reporting that read', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github])
+    fake.answer = refused
+    fake.answerSignIn = pending
+    fake.answerCount = pending
+    const lists = hub(fake)
+    const listing = new AbortController()
+    const counting = new AbortController()
+    const read = follow(lists.lists(null, listing.signal))
+    const counts = follow<ForgeReviewCountFrame>(lists.count(counting.signal))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.signIns).toEqual(['github.com'])
+    expect(fake.counts).toEqual(['github.com'])
+    listing.abort()
+    counting.abort()
+    await Promise.all([read.done, counts.done])
+    expect(read.frames.at(-1)?.hosts[0]?.signIn).toBeNull()
+    expect(counts.frames).toEqual([{ reviewRequested: null }])
+    expect(fake.reported).toEqual([])
+  })
+
+  it('lists a host whose provider offers no list with no lists and reads nothing on it', async () => {
+    vi.useFakeTimers()
+    const fake = registry([{ ...gitlab, filters: new Set() }])
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const read = follow(lists.lists(null, controller.signal))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(read.frames.at(-1)).toEqual({ hosts: [{ forge: 'gitlab', host: 'gitlab.example', viewer: null, signIn: null, lists: {} }], reading: false })
+    expect(fake.calls).toEqual([])
+    controller.abort()
+    await read.done
+  })
+
+  it('reads the count of a failing host again later each time while the other hosts keep their cadence', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github, gitlab])
+    fake.answerCount = async host => await Promise.resolve(host === 'gitlab.example'
+      ? { code: 'unavailable', message: 'down' } : new Map<ForgeViewerFilter, number>([['review-requested', 7]]))
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const counts = follow<ForgeReviewCountFrame>(lists.count(controller.signal))
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.counts).toEqual(['github.com', 'gitlab.example'])
+    expect(counts.frames.at(-1)).toEqual({ reviewRequested: 7 })
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(fake.counts).toEqual(['github.com', 'gitlab.example', 'github.com'])
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(fake.counts).toEqual(['github.com', 'gitlab.example', 'github.com', 'github.com', 'gitlab.example'])
+    lists.refresh()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fake.counts).toHaveLength(7)
+    controller.abort()
+    await counts.done
   })
 
   it('counts review requests from its own reads and from lists of every repository', async () => {
@@ -268,7 +428,7 @@ describe('ViewerLists', () => {
   })
 
   it('forgets hosts whose provider left, publishes that, and reads the hosts that remain', async () => {
-    const fake = registry([github, { forge: 'gitlab', hosts: ['gitlab.example'], filters: ALL, maxItems: 10 }])
+    const fake = registry([github, gitlab])
     const lists = hub(fake)
     const controller = new AbortController()
     const read = follow(lists.lists(null, controller.signal))

@@ -19,10 +19,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'spec.hoc.maybe': { kind: 'hoc'; scope: 'session-maybe' }
     'spec.hoc.session': { kind: 'hoc'; scope: 'session' }
     'spec.hoc.keyed': { kind: 'hoc'; scope: 'root'; owner: { tone: string } }
+    'spec.hoc.inline': { kind: 'hoc'; scope: 'root'; inline: true }
+    'spec.hoc.receiver': { kind: 'hoc'; scope: 'root' }
   }
 }
 
-type Frame = PropsRenderSlots<'spec.hoc' | 'spec.hoc.maybe' | 'spec.hoc.session' | 'spec.hoc.keyed'>
+type Frame = PropsRenderSlots<'spec.hoc' | 'spec.hoc.maybe' | 'spec.hoc.session' | 'spec.hoc.keyed' | 'spec.hoc.inline'>
 
 afterEach(() => {
   cleanup()
@@ -78,6 +80,11 @@ function layer(id: string) {
   )
 }
 
+/** A direct path through the children outlets of the given wrapping layers, outermost first. */
+function layerContent(...ids: string[]): string {
+  return ids.map(id => `section[data-layer="${id}"] > [data-slot-children]`).join(' > ')
+}
+
 let setTone: (tone: string) => void = () => {}
 
 /** Register the root declaring the hoc slots, render the root-scope hoc around Content, and mount. */
@@ -89,6 +96,7 @@ function mount(core: SlotCore, body?: (renderSlot: Frame['renderSlot']) => React
       'spec.hoc.maybe': { kind: 'hoc', scope: 'session-maybe' },
       'spec.hoc.session': { kind: 'hoc', scope: 'session' },
       'spec.hoc.keyed': { kind: 'hoc', scope: 'root' },
+      'spec.hoc.inline': { kind: 'hoc', scope: 'root', inline: true },
     },
   }, function Root(props: Frame) {
     const [tone, set] = useState('calm')
@@ -102,17 +110,80 @@ describe('hoc slots', () => {
   it('renders the content unchanged without layers, then nests layers lowest order outermost', async () => {
     const core = new SlotCore()
     const view = mount(core)
-    expect(view.getByTestId('content')).toBeTruthy()
-    expect(view.container.querySelector('section')).toBeNull()
+    const anchor = view.container.querySelector('[data-slot="spec.hoc"]')!
+    expect(anchor.firstElementChild).toBe(view.getByTestId('content'))
+    expect(anchor.querySelector('[data-slot-children]')).toBeNull()
 
     core.register({ name: 'spec.hoc', id: 'inner', order: 10 }, layer('inner') as never)
     core.register({ name: 'spec.hoc', id: 'outer' }, layer('outer') as never)
     await flush()
-    const outer = view.container.querySelector('section[data-layer="outer"]')
-    const inner = outer?.querySelector(':scope > section[data-layer="inner"]')
-    expect(inner?.querySelector(':scope > p')?.textContent).toBe('content')
+    const outer = anchor.querySelector(':scope > section[data-layer="outer"]')
+    const inner = outer?.querySelector(':scope > [data-slot-children="spec.hoc"] > section[data-layer="inner"]')
+    expect(inner?.querySelector(':scope > [data-slot-children="spec.hoc"] > p')).toBe(view.getByTestId('content'))
+    const outlets = Array.from(anchor.querySelectorAll<HTMLElement>('[data-slot-children]'))
+    expect(outlets.map(node => [node.tagName, node.style.display])).toEqual([['DIV', 'contents'], ['DIV', 'contents']])
     expect(outer?.getAttribute('data-tone')).toBe('calm')
     expect(inner?.getAttribute('data-tone')).toBe('calm')
+  })
+
+  it('keeps each supplying slot name when a layer forwards its children through another hoc slot', async () => {
+    const core = new SlotCore()
+    const view = mount(core)
+    core.register({
+      name: 'spec.hoc', id: 'bridge',
+      children: { 'spec.hoc.receiver': { kind: 'hoc', scope: 'root' } },
+    }, ({ renderSlot, children }) => renderSlot('spec.hoc.receiver', {}, {
+      children: <>{children}<p>Added for the receiver</p></>,
+    }))
+    core.register({ name: 'spec.hoc', id: 'pass', order: 1 }, ({ children }) => children)
+    core.register({ name: 'spec.hoc.receiver', id: 'pass' }, ({ children }) => children)
+    await flush()
+
+    const content = view.getByTestId('content')
+    const extra = view.getByText('Added for the receiver')
+    const receiver = view.container.querySelector('[data-slot="spec.hoc"] > [data-slot="spec.hoc.receiver"]')!
+    expect(content.closest('[data-slot]')).toBe(receiver)
+    expect(extra.closest('[data-slot]')).toBe(receiver)
+    expect(receiver.querySelector([
+      ':scope', '[data-slot-children="spec.hoc.receiver"]',
+      '[data-slot-children="spec.hoc"]', '[data-slot-children="spec.hoc"]', 'p',
+    ].join(' > '))).toBe(content)
+    expect([...receiver.querySelectorAll('[data-slot-children] > p')]).toEqual([content, extra])
+    expect([...receiver.querySelectorAll('[data-slot-children="spec.hoc"] > p')]).toEqual([content])
+    expect([...receiver.querySelectorAll('[data-slot-children="spec.hoc.receiver"] > p')]).toEqual([extra])
+  })
+
+  it('keeps the selected layers and their slot names separate when two slots share one declaration object', () => {
+    const core = new SlotCore()
+    const shared = { kind: 'hoc', scope: 'root' } as const
+    core.register({ name: 'root', children: { 'spec.hoc': shared, 'spec.hoc.keyed': shared } }, ({ renderSlot }) => <>
+      {renderSlot('spec.hoc', { tone: 'first' }, { entryKey: 'same', children: 'First' })}
+      {renderSlot('spec.hoc.keyed', { tone: 'second' }, { entryKey: 'same', children: 'Second' })}
+    </>)
+    core.register({ name: 'spec.hoc', key: 'same', id: 'wrap' }, layer('first'))
+    core.register({ name: 'spec.hoc.keyed', key: 'same', id: 'wrap' }, layer('second'))
+    const view = render(<>{createSlotRenderer().renderRoot(hostOver(core), {})}</>)
+
+    for (const [slot, id, text] of [['spec.hoc', 'first', 'First'], ['spec.hoc.keyed', 'second', 'Second']]) {
+      const outlet = view.container.querySelector(`[data-slot="${slot}"] > section[data-layer="${id}"] > [data-slot-children="${slot}"]`)
+      expect(outlet?.textContent).toBe(text)
+    }
+  })
+
+  it('groups inline owner content without enclosing the extra control returned by the layer', async () => {
+    const core = new SlotCore()
+    const view = mount(core, renderSlot => renderSlot('spec.hoc.inline', {}, {
+      children: <><em>First</em>Second</>,
+    }))
+    core.register({ name: 'spec.hoc.inline', id: 'action' }, ({ children }) => <>{children}<button>Action</button></>)
+    await flush()
+    const anchor = view.container.querySelector('[data-slot="spec.hoc.inline"]')!
+    const outlet = anchor.querySelector<HTMLElement>(':scope > [data-slot-children="spec.hoc.inline"]')
+    expect(outlet?.tagName).toBe('SPAN')
+    expect(outlet?.style.display).toBe('contents')
+    expect(outlet?.firstChild).toBe(view.getByText('First'))
+    expect(outlet?.lastChild?.textContent).toBe('Second')
+    expect([...anchor.children]).toEqual([outlet, view.getByRole('button', { name: 'Action' })])
   })
 
   it('updates owner props without remounting the content, and remounts it when the layer set changes', async () => {
@@ -157,10 +228,10 @@ describe('hoc slots', () => {
     await flush()
     await flush()
     const loud = view.getByTestId('loud-outlet')
-    expect(loud.querySelector('section[data-layer="outer"] > p')?.textContent).toBe('loud-content')
+    expect(loud.querySelector(`${layerContent('outer')} > [data-slot-children="spec.hoc"] > p`)?.textContent).toBe('loud-content')
     expect(loud.querySelector('section[data-layer="fragile"]')).toBeNull()
     const calm = view.getByTestId('calm-outlet')
-    expect(calm.querySelector('section[data-layer="outer"] > section[data-layer="fragile"] > p')?.textContent).toBe('calm-content')
+    expect(calm.querySelector(`${layerContent('outer', 'fragile')} > p`)?.textContent).toBe('calm-content')
     expect(view.container.querySelector('[data-slot-error]')).toBeNull()
     expect(core.entriesOfSlot('spec.hoc').map(entry => entry.options.id)).toEqual(['outer', 'fragile'])
     expect(reported).toHaveBeenCalledWith('spec.hoc', expect.anything(), expect.objectContaining({ message: 'layer failed' }), { abdicated: false })
@@ -200,7 +271,7 @@ describe('hoc slots', () => {
     shown = true
     act(() => { setTone('remounted') })
     expect(calls).toHaveBeenCalledWith('calm')
-    expect(view.container.querySelector('section[data-layer="fragile"] > p')?.textContent).toBe('retry-content')
+    expect(view.container.querySelector(`${layerContent('fragile')} > p`)?.textContent).toBe('retry-content')
   })
 
   it('passes content errors upward without blaming or removing any layer', async () => {
@@ -233,12 +304,14 @@ describe('hoc slots', () => {
     expect(core.entriesOfSlot('spec.hoc').map(entry => entry.options.id)).toEqual(['outer', 'inner'])
   })
 
-  it('renders its layers around nothing when the owner omits children', async () => {
+  it('keeps a forwarded children outlet empty when the owner supplies no content', async () => {
     const core = new SlotCore()
     const view = mount(core, renderSlot => renderSlot('spec.hoc', { tone: 'calm' }))
     core.register({ name: 'spec.hoc', id: 'outer' }, layer('outer') as never)
     await flush()
-    expect(view.container.querySelector('section[data-layer="outer"]')?.childNodes).toHaveLength(0)
+    const outer = view.container.querySelector('section[data-layer="outer"]')!
+    expect(outer.childNodes).toHaveLength(1)
+    expect(outer.firstElementChild?.matches('div[data-slot-children="spec.hoc"]:empty')).toBe(true)
   })
 
   it('wraps content in session-maybe and strict session layers', async () => {
@@ -252,8 +325,8 @@ describe('hoc slots', () => {
     core.register({ name: 'spec.hoc.maybe', id: 'maybe' }, layer('maybe') as never)
     core.register({ name: 'spec.hoc.session', id: 'session' }, layer('session') as never)
     await flush()
-    expect(view.container.querySelector('section[data-layer="maybe"] p')?.textContent).toBe('maybe-content')
-    expect(view.container.querySelector('section[data-layer="session"] p')?.textContent).toBe('session-content')
+    expect(view.getByTestId('maybe-content').parentElement?.getAttribute('data-slot-children')).toBe('spec.hoc.maybe')
+    expect(view.getByTestId('session-content').parentElement?.getAttribute('data-slot-children')).toBe('spec.hoc.session')
   })
 })
 
@@ -278,9 +351,9 @@ describe('keyed hoc slots', () => {
     core.register({ name: 'spec.hoc.keyed', id: 'ts', key: 'ts', order: 1 }, layer('ts') as never)
     await flush()
     const ts = view.getByTestId('ts-content-outlet')
-    expect(ts.querySelector('section[data-layer="w"] > section[data-layer="ts"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector(`${layerContent('w', 'ts')} > p`)?.textContent).toBe('ts-content')
     const md = view.getByTestId('md-content-outlet')
-    expect(md.querySelector('section[data-layer="w"] > p')?.textContent).toBe('md-content')
+    expect(md.querySelector(`${layerContent('w')} > p`)?.textContent).toBe('md-content')
     expect(md.querySelector('section[data-layer="ts"]')).toBeNull()
   })
 
@@ -290,7 +363,7 @@ describe('keyed hoc slots', () => {
     core.register({ name: 'spec.hoc.keyed', id: 'w' }, layer('w') as never)
     core.register({ name: 'spec.hoc.keyed', id: 'ts', key: 'ts', order: 1 }, layer('ts') as never)
     await flush()
-    expect(view.container.querySelector('section[data-layer="w"] > p')?.textContent).toBe('wild-content')
+    expect(view.container.querySelector(`${layerContent('w')} > p`)?.textContent).toBe('wild-content')
     expect(view.container.querySelector('section[data-layer="ts"]')).toBeNull()
   })
 
@@ -306,10 +379,10 @@ describe('keyed hoc slots', () => {
     core.register({ name: 'spec.hoc.keyed', id: 'x', key: 'ts' }, layer('exact') as never)
     await flush()
     const ts = view.getByTestId('ts-content-outlet')
-    expect(ts.querySelector('section[data-layer="exact"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector(`${layerContent('exact')} > p`)?.textContent).toBe('ts-content')
     expect(ts.querySelector('section[data-layer="wild"]')).toBeNull()
     const md = view.getByTestId('md-content-outlet')
-    expect(md.querySelector('section[data-layer="wild"] > p')?.textContent).toBe('md-content')
+    expect(md.querySelector(`${layerContent('wild')} > p`)?.textContent).toBe('md-content')
     expect(md.querySelector('section[data-layer="exact"]')).toBeNull()
   })
 
@@ -322,7 +395,8 @@ describe('keyed hoc slots', () => {
     outletShown = true
     act(() => { setTone('loud') })
     await flush()
-    expect(view.getByTestId('replaced')).toBeTruthy()
+    expect(view.getByTestId('replaced').parentElement?.getAttribute('data-slot')).toBe('spec.hoc.keyed')
+    expect(view.container.querySelector('[data-slot-children]')).toBeNull()
     expect(view.queryByTestId('skipped-content')).toBeNull()
     expect(mounts).not.toHaveBeenCalledWith('skipped-content')
   })
@@ -346,7 +420,7 @@ describe('keyed hoc slots', () => {
     await flush()
     expect(view.getByTestId('ts-content').textContent).toBe('ts-content')
     expect(view.getByTestId('ts-content-outlet').querySelector('section[data-layer="fragile"]')).toBeNull()
-    expect(view.getByTestId('calm-outlet').querySelector('section[data-layer="fragile"] > p')?.textContent).toBe('calm-content')
+    expect(view.getByTestId('calm-outlet').querySelector(`${layerContent('fragile')} > p`)?.textContent).toBe('calm-content')
     expect(core.entriesOfSlot('spec.hoc.keyed').map(entry => [entry.options.key, entry.options.id])).toEqual([['ts', 'fragile']])
   })
 
@@ -363,10 +437,10 @@ describe('keyed hoc slots', () => {
     core.register({ name: 'spec.hoc.keyed', id: 'w0', order: 0 }, layer('w0') as never)
     await flush()
     const ts = view.getByTestId('ts-content-outlet')
-    expect(ts.querySelector('section[data-layer="w0"] > section[data-layer="e1"] > section[data-layer="w2"] > p')?.textContent)
+    expect(ts.querySelector(`${layerContent('w0', 'e1', 'w2')} > p`)?.textContent)
       .toBe('ts-content')
     const md = view.getByTestId('md-content-outlet')
-    expect(md.querySelector('section[data-layer="w0"] > section[data-layer="w2"] > p')?.textContent).toBe('md-content')
+    expect(md.querySelector(`${layerContent('w0', 'w2')} > p`)?.textContent).toBe('md-content')
     expect(md.querySelector('section[data-layer="e1"]')).toBeNull()
   })
 
@@ -379,11 +453,11 @@ describe('keyed hoc slots', () => {
     const dispose = core.register({ name: 'spec.hoc.keyed', id: 'e1', key: 'ts', order: 1, priority: -1 }, layer('shadow') as never)
     await flush()
     const ts = view.getByTestId('ts-content-outlet')
-    expect(ts.querySelector('section[data-layer="w0"] > section[data-layer="shadow"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector(`${layerContent('w0', 'shadow')} > p`)?.textContent).toBe('ts-content')
     expect(ts.querySelector('section[data-layer="e1"]')).toBeNull()
     dispose()
     await flush()
-    expect(ts.querySelector('section[data-layer="w0"] > section[data-layer="e1"] > p')?.textContent).toBe('ts-content')
+    expect(ts.querySelector(`${layerContent('w0', 'e1')} > p`)?.textContent).toBe('ts-content')
     expect(ts.querySelector('section[data-layer="shadow"]')).toBeNull()
   })
 
@@ -396,7 +470,7 @@ describe('keyed hoc slots', () => {
     core.register({ name: 'spec.hoc.keyed', id: 'w2', order: 2 }, layer('w2') as never)
     await flush()
     const ts = view.getByTestId('ts-content-outlet')
-    expect(ts.querySelector('section[data-layer="w0"] > i[data-testid="replaced"]')).not.toBeNull()
+    expect(ts.querySelector(`${layerContent('w0')} > i[data-testid="replaced"]`)).not.toBeNull()
     expect(ts.querySelector('section[data-layer="w2"]')).toBeNull()
     expect(view.queryByTestId('ts-content')).toBeNull()
     expect(mounts).not.toHaveBeenCalledWith('ts-content')
@@ -415,7 +489,7 @@ describe('keyed hoc slots', () => {
     act(() => { core.register({ name: 'spec.hoc.keyed', id: 'ts2', key: 'ts' }, layer('ts2') as never) })
     await flush()
     expect(mounts).toHaveBeenCalledTimes(before + 1)
-    expect(view.container.querySelector('section[data-layer="ts2"] > p')?.textContent).toBe('ts-content')
+    expect(view.container.querySelector(`${layerContent('ts2')} > p`)?.textContent).toBe('ts-content')
   })
 
   it('keeps every outlet of a key mounted when another key registers', async () => {
@@ -433,8 +507,8 @@ describe('keyed hoc slots', () => {
     act(() => { core.register({ name: 'spec.hoc.keyed', id: 'md', key: 'md' }, layer('md') as never) })
     await flush()
     expect(mounts).toHaveBeenCalledTimes(before)
-    expect(view.getByTestId('first-content-outlet').querySelector('section[data-layer="w"] > p')?.textContent).toBe('first-content')
-    expect(view.getByTestId('second-content-outlet').querySelector('section[data-layer="w"] > p')?.textContent).toBe('second-content')
+    expect(view.getByTestId('first-content-outlet').querySelector(`${layerContent('w')} > p`)?.textContent).toBe('first-content')
+    expect(view.getByTestId('second-content-outlet').querySelector(`${layerContent('w')} > p`)?.textContent).toBe('second-content')
   })
 
   it('recompiles a key\'s chain for a redeclared slot', async () => {
@@ -449,14 +523,14 @@ describe('keyed hoc slots', () => {
     const view = render(<>{createSlotRenderer().renderRoot(hostOver(core), {})}</>)
     core.register({ name: 'spec.hoc.keyed', id: 'first', key: 'ts' }, layer('first') as never)
     await flush()
-    expect(view.container.querySelector('section[data-layer="first"] > p')?.textContent).toBe('ts-content')
+    expect(view.container.querySelector(`${layerContent('first')} > p`)?.textContent).toBe('ts-content')
     act(() => {
       undeclare()
       declare()
       core.register({ name: 'spec.hoc.keyed', id: 'second', key: 'ts' }, layer('second') as never)
     })
     await flush()
-    expect(view.container.querySelector('section[data-layer="second"] > p')?.textContent).toBe('ts-content')
+    expect(view.container.querySelector(`${layerContent('second')} > p`)?.textContent).toBe('ts-content')
     expect(view.container.querySelector('section[data-layer="first"]')).toBeNull()
   })
 })

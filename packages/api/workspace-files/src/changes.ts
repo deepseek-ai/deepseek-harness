@@ -8,6 +8,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Deque } from '@deepseek-ai/dsh-deque'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { FsObservation, FsTarget } from '@deepseek-ai/dsh-fs'
+import { workspaceDescent } from './descent.ts'
 import type { WorkspaceFileWatchFrame } from './types.ts'
 
 /** One target invalidation, optionally carrying its instrumented observation. */
@@ -30,7 +31,8 @@ export class WorkspaceChangeFeed {
   }
 
   /**
-   * Open one target watch; directory targets remain inside `workspaceRoot`.
+   * Open one target watch. A directory target resolves inside `workspaceRoot`,
+   * or the backend's unresolved spelling of its path descends from that root by child names.
    * @param workspaceRoot - the session's workspace root path.
    * @param path - target path, resolved relative to the workspace root; Host metadata determines its type.
    * @param signal - generation cancellation.
@@ -68,7 +70,7 @@ export class WorkspaceChangeFeed {
           if (aborted()) return undefined
           throw error
         })
-        if (info?.type === 'directory' && !this.ctx.fs.contains(root, target)) {
+        if (info?.type === 'directory' && !this.ctx.fs.contains(root, target) && workspaceDescent(root.displayPath, target.displayPath) === undefined) {
           throw new RemoteError('workspace-file/outside-workspace', 'Directory is outside the workspace', { path })
         }
         return info
