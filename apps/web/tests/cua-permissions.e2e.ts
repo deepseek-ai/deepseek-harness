@@ -348,12 +348,10 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   const scaffold = resources.scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: patch,
   })
-  if (process.platform === 'darwin') {
-    // The Host inventory reads this Loader flag; only the platform-specific input is substituted on macOS.
-    const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
-    if (!windows) throw new Error('CUA bundle has no Windows provider row')
-    vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false)
-  }
+  // Report a Windows provider to the page on macOS without activating it when a preset write recomposes the profile.
+  const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
+  if (!windows) throw new Error('CUA bundle has no Windows provider row')
+  const inventoryFlag = process.platform === 'darwin' ? vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false) : undefined
   const browser = resources.browser = await chromium.launch()
   const page = await newEnglishPage(browser)
   await page.goto(scaffold.authenticatedUrl)
@@ -366,17 +364,14 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   const preview = page.locator('[data-detail-document] img')
   await preview.evaluate(async (image) => { await (image as HTMLImageElement).decode() })
   const firstSetting = panel.getByRole('group', { name: 'Default mode for new sessions', exact: true })
-  await firstSetting.getByRole('button', { name: 'Standard mode' }).click()
-  const write = vi.spyOn(scaffold.ctx.settings, 'mutate')
-  await page.getByRole('menuitem', { name: 'Creator mode' }).click()
-  await expect.poll(() => write.mock.calls.some(([ns]) => ns === 'agent-preset-registry')).toBe(true)
-  const selection = write.mock.calls.findIndex(([ns]) => ns === 'agent-preset-registry')
-  await write.mock.results[selection]!.value
-  expect(scaffold.ctx.agentPresets.defaultId).toBe('cordis')
-  await firstSetting.getByRole('button', { name: 'Creator mode' }).waitFor()
-  expect(await panel.getByRole('group', { name: 'PTC execution mode' }).count()).toBe(0)
   const previewBox = await preview.boundingBox(), guidanceBox = await guidance.boundingBox(), settingBox = await firstSetting.boundingBox()
   expect(previewBox!.y + previewBox!.height).toBeLessThanOrEqual(guidanceBox!.y)
   expect(guidanceBox!.y + guidanceBox!.height).toBeLessThanOrEqual(settingBox!.y)
   expect(await panel.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(0)
+  expect(await panel.getByRole('group', { name: 'PTC execution mode' }).count()).toBe(0)
+  inventoryFlag?.mockRestore()
+  await firstSetting.getByRole('button', { name: 'Standard mode' }).click()
+  await page.getByRole('menuitem', { name: 'Creator mode' }).click()
+  await firstSetting.getByRole('button', { name: 'Creator mode' }).waitFor()
+  expect(scaffold.ctx.agentPresets.defaultId).toBe('cordis')
 })
