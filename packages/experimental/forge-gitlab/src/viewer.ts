@@ -5,7 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GitLabApi } from './api.ts'
-import { AWAITED_REVIEW_STATES, PEOPLE_PAGE, reviewDecision, reviewOf, rollup } from './status.ts'
+import { AWAITED_REVIEW_STATES, GIVEN_REVIEW_STATES, PEOPLE_PAGE, reviewDecision, reviewOf, rollup } from './status.ts'
 import { avatarUrlOf, isSegment, location, repositoryOf } from './urls.ts'
 
 /** The lists the provider reads on every host it serves. */
@@ -31,6 +31,9 @@ export interface ViewerCounts {
 /** The review states of a reviewer whose review is still awaited, as a GraphQL list. */
 const AWAITED = `[${[...AWAITED_REVIEW_STATES].join(', ')}]`
 
+/** The review states of a reviewer who gave a review, as a GraphQL list. */
+const GIVEN = `[${[...GIVEN_REVIEW_STATES].join(', ')}]`
+
 /** Arguments that select the open merge requests of a connection. */
 const OPEN = 'state: opened'
 
@@ -46,8 +49,10 @@ const PAGE = `${OPEN}, sort: UPDATED_DESC, first: $first, projectPath: $project`
 const CONNECTIONS = {
   awaited: (selected: string): string => `reviewRequestedMergeRequests(${selected}, reviewStates: ${AWAITED})`,
   authored: (selected: string): string => `authoredMergeRequests(${selected})`,
+  // The states of a given review are listed, since `reviewStates` reads the user's own state. GitLab 19.5.1 applies
+  // `not: { reviewStates }` to every reviewer, which leaves out a merge request another reviewer has yet to review.
   reviewed: (selected: string): string =>
-    `reviewRequestedMergeRequests(${selected}, not: { reviewStates: ${AWAITED}, authorUsername: $me })`,
+    `reviewRequestedMergeRequests(${selected}, reviewStates: ${GIVEN}, not: { authorUsername: $me })`,
   assigned: (selected: string): string => `assignedMergeRequests(${selected}, not: { authorUsername: $me, reviewerUsername: $me })`,
 }
 

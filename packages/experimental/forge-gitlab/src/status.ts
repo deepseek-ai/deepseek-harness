@@ -173,6 +173,17 @@ export function needsMergeCheck(node: MergeRequestNode): boolean {
 /** Review states of a reviewer whose review is still awaited. */
 export const AWAITED_REVIEW_STATES: ReadonlySet<string> = new Set(['UNREVIEWED', 'REVIEW_STARTED'])
 
+/** The outcome each review state of a reviewer who gave a review stands for. */
+const REVIEW_VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
+  REVIEWED: 'commented',
+  REQUESTED_CHANGES: 'changes-requested',
+  APPROVED: 'approved',
+  UNAPPROVED: 'dismissed',
+}
+
+/** Review states of a reviewer who gave a review; with the awaited ones, every state GitLab 19.5 defines. */
+export const GIVEN_REVIEW_STATES: ReadonlySet<string> = new Set(Object.keys(REVIEW_VERDICTS))
+
 /** One reviewer's review state as GitLab returns it with a merge request. */
 export interface ReviewerInteraction {
   /** The reviewer's interaction with the merge request, or null when GitLab reports none. */
@@ -349,13 +360,7 @@ export function reviewOf(reviewer: ReviewerInteraction): Pick<ChangeRequestRevie
 
 /** A reviewer state as the outcome of their latest review; states outside the documented set read as none. */
 function verdictOf(state: string): ReviewVerdict | null {
-  switch (state) {
-    case 'APPROVED': return 'approved'
-    case 'REQUESTED_CHANGES': return 'changes-requested'
-    case 'REVIEWED': return 'commented'
-    case 'UNAPPROVED': return 'dismissed'
-    default: return null
-  }
+  return REVIEW_VERDICTS[state] ?? null
 }
 
 /**

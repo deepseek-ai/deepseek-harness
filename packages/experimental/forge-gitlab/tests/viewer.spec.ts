@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GitLabApi } from '../src/api.ts'
 import type { GlabOutput } from '../src/glab.ts'
+import { AWAITED_REVIEW_STATES, GIVEN_REVIEW_STATES } from '../src/status.ts'
 import {
   countViewerLists, readInvolvedList, readViewerList, readViewerName, VIEWER_COUNT_QUERY, VIEWER_INVOLVED_QUERY, VIEWER_LIST_QUERIES,
   VIEWER_NAME_QUERY,
@@ -42,7 +43,7 @@ describe('GitLab viewer queries', () => {
   const page = 'state: opened, sort: UPDATED_DESC, first: $first, projectPath: $project'
   const rows = '{ count nodes { ...ViewerRow } }'
   const awaited = 'reviewStates: [UNREVIEWED, REVIEW_STARTED]'
-  const reviewed = `not: { ${awaited}, authorUsername: $me }`
+  const reviewed = 'reviewStates: [REVIEWED, REQUESTED_CHANGES, APPROVED, UNAPPROVED], not: { authorUsername: $me }'
   const assigned = 'not: { authorUsername: $me, reviewerUsername: $me }'
 
   it('selects the open merge requests of each list, most recently updated first', () => {
@@ -61,6 +62,14 @@ describe('GitLab viewer queries', () => {
     expect(VIEWER_COUNT_QUERY).toContain(`reviewed: reviewRequestedMergeRequests(state: opened, ${reviewed}) { count }`)
     expect(VIEWER_COUNT_QUERY).toContain(`assigned: assignedMergeRequests(state: opened, ${assigned}) { count }`)
     expect(VIEWER_COUNT_QUERY).not.toContain('nodes')
+  })
+
+  it('selects a reviewed merge request by the user\'s own review state, whatever the other reviewers\' states', () => {
+    // GitLab applies a negated review state to every reviewer, so no query negates one.
+    for (const query of [VIEWER_INVOLVED_QUERY, VIEWER_COUNT_QUERY]) expect(query).not.toContain('not: { reviewStates')
+    // Together the awaited and the given states are the six GitLab defines, and no state is in both lists.
+    expect([...AWAITED_REVIEW_STATES, ...GIVEN_REVIEW_STATES].sort())
+      .toEqual(['APPROVED', 'REQUESTED_CHANGES', 'REVIEWED', 'REVIEW_STARTED', 'UNAPPROVED', 'UNREVIEWED'])
   })
 })
 
