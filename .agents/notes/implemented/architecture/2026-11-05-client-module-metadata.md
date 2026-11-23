@@ -26,7 +26,7 @@ This decision refines the resource handling in the [loading model](2026-07-23-cl
 
 **Reuse the dynamic plugin's private-dependency bundling for static libraries.** It moves third-party lazy chunking and font delivery into package builds, changing the established shell dependency policy. Static libraries retain that policy instead.
 
-**Document Scope and an early Realm activation phase.** Neither is required when all modules use the existing Main carrier and all styles target the main document. Isolation requests, environment allocation, and multiple presentation destinations remain separate work.
+**Document Scope and an unconditional Realm activation phase.** Neither is required for stylesheet metadata: even when a package runs in an iframe Realm, the renderer installs its styles in the main document.
 
 ## Consequences
 

@@ -26,7 +26,7 @@ Modules 拥有 JavaScript 导出、模块身份、owner id 和观察到的依赖
 
 **静态库复用动态插件的私有依赖打包。** 这会把第三方惰性拆包和字体交付移到包构建，改变既有外壳依赖策略。静态库因此保留原策略。
 
-**Document Scope 与提前 Realm 激活阶段。** 所有模块使用原 Main 载体、所有样式装到主文档时，不需要这两者。隔离请求、环境分配和多个呈现目的地属于独立工作。
+**Document Scope 与无条件提前激活 Realm。** 样式表元信息不需要这两者：即使包在 iframe Realm 中运行，renderer 也会把它的样式安装到主文档。
 
 ## Consequences
 
