@@ -1133,8 +1133,14 @@ function hocLayer(
   entry: StoredEntry,
   renderInner: RenderHocInner,
 ): FC<HocLayerProps> {
-  const anchor: SlotAnchorTag = spec.inline === true ? 'span' : 'div'
+  const Anchor: SlotAnchorTag = spec.inline === true ? 'span' : 'div'
   const slotInjected = cachedSlotInject(spec.inject)
+  // This slot supplies these children even if the layer forwards them through another slot.
+  const forwardChildren: RenderHocInner = (owner, children) => (
+    <HocContentBoundary>
+      <Anchor data-slot-children={slotKey} style={ANCHOR_STYLE}>{renderInner(owner, children)}</Anchor>
+    </HocContentBoundary>
+  )
   // A layer's failure belongs to the occurrence it rendered; retiring it would strip every other occurrence too.
   const onEntryError = (error: unknown): void => {
     host.reportEntryError(slotKey, entry, error, { abdicate: false })
@@ -1143,10 +1149,10 @@ function hocLayer(
   switch (spec.scope) {
     case 'session':
       Layer = ({ owner, children }) => {
-        const inner = <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
+        const inner = forwardChildren(owner, children)
         return (
           <StrictSessionEntry
-            slotKey={slotKey} anchor={anchor} crashed={inner} onEntryError={onEntryError}
+            slotKey={slotKey} anchor={Anchor} crashed={inner} onEntryError={onEntryError}
             entry={entry} ownerProps={owner} slotInjected={slotInjected} hookContext={undefined} hasHookContext={false}
           >
             {inner}
@@ -1156,9 +1162,9 @@ function hocLayer(
       break
     case 'session-maybe':
       Layer = ({ owner, children }) => {
-        const inner = <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
+        const inner = forwardChildren(owner, children)
         return (
-          <SlotErrorBoundary slotKey={slotKey} anchor={anchor} crashed={inner} onEntryError={onEntryError}>
+          <SlotErrorBoundary slotKey={slotKey} anchor={Anchor} crashed={inner} onEntryError={onEntryError}>
             <SessionMaybeEntry
               entry={entry} ownerProps={owner} slotKey={slotKey} slotInjected={slotInjected} hookContext={undefined} hasHookContext={false}
             >
@@ -1170,9 +1176,9 @@ function hocLayer(
       break
     case 'root':
       Layer = ({ owner, children }) => {
-        const inner = <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
+        const inner = forwardChildren(owner, children)
         return (
-          <SlotErrorBoundary slotKey={slotKey} anchor={anchor} crashed={inner} onEntryError={onEntryError}>
+          <SlotErrorBoundary slotKey={slotKey} anchor={Anchor} crashed={inner} onEntryError={onEntryError}>
             <RootEntry
               entry={entry} ownerProps={owner} slotKey={slotKey} slotInjected={slotInjected} hookContext={undefined} hasHookContext={false}
             >
@@ -1237,13 +1243,11 @@ interface CompiledHoc {
   readonly render: RenderHocInner
 }
 
-/**
- * Compiled hoc chains per host, live declaration, and dispatch key. Every
- * outlet dispatching the same key shares one chain, so its layer Components,
- * the remount boundary of the content inside them, are created once; a
- * redeclared slot gets a new spec object and therefore an empty cache.
- */
-const hocChains = new WeakMap<SlotRendererHost, WeakMap<SlotSpec<SlotEntryDef>, Map<string, CompiledHoc>>>()
+/** Dispatch chains by slot name; distinct slots can share the same spec object but have independent ledger versions. */
+type HocChainsBySlot = Map<string, Map<string | undefined, CompiledHoc>>
+
+/** Outlets of one named slot and dispatch key share layer Component identities without retaining replaced specs. */
+const hocChains = new WeakMap<SlotRendererHost, WeakMap<SlotSpec<SlotEntryDef>, HocChainsBySlot>>()
 
 /**
  * Whether two layer lists hold the same entries in the same order.
@@ -1276,15 +1280,18 @@ function hocChainFor(
     bySpec = new WeakMap()
     hocChains.set(host, bySpec)
   }
-  let chains = bySpec.get(spec)
+  let bySlot = bySpec.get(spec)
+  if (bySlot === undefined) {
+    bySlot = new Map()
+    bySpec.set(spec, bySlot)
+  }
+  let chains = bySlot.get(slotKey)
   if (chains === undefined) {
     chains = new Map()
-    bySpec.set(spec, chains)
+    bySlot.set(slotKey, chains)
   }
-  // Key dispatches carry a prefix so none shares the wildcard dispatch's entry.
-  const cacheKey = entryKey === undefined ? '' : `=${entryKey}`
   const version = host.getVersion(slotKey)
-  const cached = chains.get(cacheKey)
+  const cached = chains.get(entryKey)
   if (cached !== undefined && cached.version === version) return cached.render
   const layers = hocLayersFor(host.entriesOfSlot(slotKey), entryKey)
   if (cached !== undefined && sameLayers(cached.layers, layers)) {
@@ -1292,7 +1299,7 @@ function hocChainFor(
     return cached.render
   }
   const render = layers.length === 0 ? renderHocContent : composeHocLayers(host, slotKey, spec, layers)
-  chains.set(cacheKey, { version, layers, render })
+  chains.set(entryKey, { version, layers, render })
   return render
 }
 

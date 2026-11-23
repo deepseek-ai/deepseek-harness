@@ -153,6 +153,9 @@ describe('official home whale in the default web profile', () => {
       hiddenFromAssistiveTech: node.getAttribute('aria-hidden'),
       pointerEvents: getComputedStyle(node).pointerEvents,
       nativeComposer: document.querySelectorAll('[data-composer-seat]').length,
+      scrollInChildrenOutlet: node.parentElement?.querySelector(
+        ':scope > [data-slot-children="conversation.hero.frame"] > [data-conversation-scroll]',
+      ) != null,
     }))
     expect(facts).toMatchInlineSnapshot(`
       {
@@ -160,6 +163,7 @@ describe('official home whale in the default web profile', () => {
         "hiddenFromAssistiveTech": "true",
         "nativeComposer": 1,
         "pointerEvents": "none",
+        "scrollInChildrenOutlet": true,
       }
     `)
     expect(consoleState.pageErrors).toEqual([])

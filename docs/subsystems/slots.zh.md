@@ -76,11 +76,28 @@ Slot 声明固定两个相互独立的维度。
 
 hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的层是通配层，作用于每次分派；带 `key` 的层只在 owner 向 `renderSlot` 传入相同 `entryKey` 时生效，省略 `entryKey` 的 owner 只得到通配层。每个 `(key, id)` 组合（通配视为单独的 key）是一个遮蔽 cell；同一 `id` 下，精确 key 的层替换该 key 的通配层。
 
-各层依次按 `order`、`priority`、注册顺序升序嵌套，最小者在最外层。每层收到同一份 owner props，并以 `children` 收到内一层（最内层是 owner 的内容），且至多渲染一次；不渲染 `children` 的层替换其内部的全部内容。owner props 不得使用 `children` 这个名字。省略 `children` 时各层包裹空内容；没有适用的层时原样渲染内容。
+各层依次按 `order`、`priority`、注册顺序升序嵌套，最小者在最外层。每层收到同一份 owner props。渲染器通过 React 的 `children` 传入下一层；最内层收到的是 owner 的内容。owner 可以省略内容，适用层仍会渲染。每层至多渲染一次 `children`。owner props 不得使用 `children` 这个名字。
 
-- 重新挂载：增减一个适用于本次分派的层会让其内部内容重新挂载；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载。分派同一 key 的 outlet 共享一条编译好的层链，因此为其他 key 注册的层不会让它们的内容重新挂载；outlet 切换 `entryKey` 时会换到另一条层链，即使生效的层相同，内容也会重新挂载。
-- 错误：崩溃的层照常上报错误，并在出错的那一处渲染它的 `children`，直到该处本次挂载结束，owner props 变化也不恢复。该层保持注册，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
-- 布局：outlet 会在 owner 与内容之间插入一个 `display: contents` 的 `[data-slot]` 元素，所以 owner 侧的选择器不能假定内容是直接子元素。包裹 `children` 的层自身不得产生盒子（其 slot 另有说明的除外）——例如应使用 `display: contents`——否则内容会脱离父元素的布局。
+外层 `[data-slot="key"]` 标记 slot `key` 的渲染位置。没有适用层时，owner 的内容在其中原样渲染，不产生 `children` 出口。某层渲染 `children` 时，渲染器就在该位置用一个 `[data-slot-children="key"]` 出口包住内层内容，即使内容为空也会生成该出口。多层转发 `children` 时，这些出口相互嵌套。某层省略 `children` 即替换其内部的全部内容：该层的 `children` 出口和内层内容都不会挂载。
+
+`data-slot-children` 的值是向该层提供这份 `children` 的 slot 名。即使该层把 `children` 交给另一个 slot 渲染，这个值也不变。同一 slot 的各层和各次渲染实例都使用同一个值；它不标识层、插件模块或分派用的 `entryKey`。
+
+假设 owner 向 `outer.frame` 传入一个按钮。`outer.frame` 的层将自己的 `children` 和紧随其后的第二个按钮放在同一个 React Fragment 中，传给它声明的 hoc slot `inner.frame`。若 `inner.frame` 的层原样返回自己收到的 `children`，DOM 如下：
+
+```text
+[data-slot="outer.frame"]
+  [data-slot="inner.frame"]
+    [data-slot-children="inner.frame"]
+      [data-slot-children="outer.frame"]
+        button
+      button
+```
+
+两个按钮最近的 `[data-slot]` 都是 `inner.frame`，`[data-slot-children] > button` 也会同时选中两者。在目标 `outer.frame` 实例内，`[data-slot-children="outer.frame"] > button` 只选中 owner 传入的按钮；`[data-slot-children="inner.frame"] > button` 只选中 `outer.frame` 的层添加的按钮。
+
+- 重新挂载：增减一个适用于本次分派的层会让其内部内容重新挂载；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载。同一具名 slot 中分派同一 key 的 outlet 共享一条编译好的层链，因此为其他 key 注册的层不会让它们的内容重新挂载；outlet 切换 `entryKey` 时会换到另一条层链，即使生效的层相同，内容也会重新挂载。
+- 错误：层自身崩溃时照常上报错误，出错处回退到同一份 `children`（含其出口），直到该处本次挂载结束，owner props 变化也不恢复。该层保持注册，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
+- 布局：两种出口都使用 `display: contents` 的 `div`（`inline: true` 时使用 `span`）。它们不产生布局盒，但仍参与子元素和兄弟元素选择器的匹配。应按属性识别出口，而非依赖嵌套深度。包裹 `children` 的层自身不得产生盒子，除非该 slot 另有说明。
 
 <a id="component-inputs"></a>
 
