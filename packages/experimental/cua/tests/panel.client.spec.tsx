@@ -95,6 +95,23 @@ it.each([en, zh])('changes the default from the detail page and retains a refuse
   expect(f.props.setDefaultPreset).toHaveBeenCalledTimes(2)
 })
 
+it('keeps the saved preset visible while the roster is unavailable and closes the menu with Escape', () => {
+  const f = fixture()
+  f.publish({ presets: { value: null, busy: false, error: 'offline' } })
+  render(<PermissionPanel {...f.props} />)
+  const group = screen.getByRole('group', { name: en.defaultTitle })
+  expect(within(group).getByRole('button', { name: 'ptc' }).hasAttribute('disabled')).toBe(true)
+  expect(within(group).getByRole('alert').textContent).toContain('offline')
+  fireEvent.click(within(group).getByRole('button', { name: en.retry }))
+  expect(f.props.refresh).toHaveBeenCalledTimes(2)
+  f.publish({ presets: { value: { presets: [{ id: 'ptc', isDefault: true }] }, busy: false, error: null } })
+  fireEvent.click(within(group).getByRole('button', { name: 'presetPtcName' }))
+  expect(screen.getByRole('menu')).toBeTruthy()
+  fireEvent.keyDown(document, { key: 'Escape' })
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(f.props.setDefaultPreset).not.toHaveBeenCalled()
+})
+
 it('dismisses activation when permissions are ready without changing the default', () => {
   const f = fixture(), onDismiss = vi.fn()
   f.preset.set({ ...f.preset.getSnapshot(), value: { default: 'standard', selectedDefault: 'minimal' } })
