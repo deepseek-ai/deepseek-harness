@@ -19,8 +19,7 @@ Additive `settings.general.item` contributions remain supported. Language, appea
 
 | Row ID | Target item slot |
 |---|---|
-| `permission` | `settings.general.group.permissions.item` |
-| `transcript-view`, `developer-tools`, `performance-usage` | `settings.general.group.display.item` |
+| `permission`, `action-cards`, `transcript-view`, `developer-tools`, `performance-usage` | `settings.general.group.display.item` |
 | `composer-enter`, `shortcuts`, `link-opening` | `settings.general.group.interaction.item` |
 | `session-log-deepseek` | `settings.general.group.data.item` |
 | `current-version`, `desktop-update-channel` | `settings.general.group.updates.item` |

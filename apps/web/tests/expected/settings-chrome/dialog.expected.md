@@ -9,10 +9,6 @@
   - button "打开配置文件"
   - button "关闭"
   - heading "通用设置" [level=2]
-  - region "权限":
-    - heading "权限" [level=3]
-    - text: 会话默认权限 选择新会话的默认权限模式
-    - button "工作区内修改"
   - region "常规":
     - heading "常规" [level=3]
     - text: 语言
@@ -26,8 +22,10 @@
     - button "减小字号"
     - text: px
     - button "更多字体设置"
-  - region "会话展示":
-    - heading "会话展示" [level=3]
+  - region "会话偏好":
+    - heading "会话偏好" [level=3]
+    - text: 会话默认权限 选择新会话的默认权限模式
+    - button "工作区内修改"
     - text: 工作步骤展示 选择希望看到多少工具调用细节
     - button "详细"
     - text: 工作步骤收起时机 选择何时自动收起工作步骤

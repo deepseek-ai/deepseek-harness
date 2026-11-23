@@ -4251,8 +4251,10 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'settings.general.group\' (client-ui-settings-general), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-action-cards SettingsRow id \'action-cards\'',
       'client-ui-chat PerformanceUsageRow id \'performance-usage\'',
       'client-ui-chat TranscriptViewRow id \'transcript-view\'',
+      'client-ui-permission-presets PermissionRow id \'permission\'',
       'client-ui-settings-general DeveloperToolsRow id \'developer-tools\'',
     ],
     replaceRisk: 'none',
@@ -4411,9 +4413,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'settings.general.group\' (client-ui-settings-general), so it exists while that entry is mounted',
-    occupants: [
-      'client-ui-permission-presets PermissionRow id \'permission\'',
-    ],
+    occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.general.group.permissions.item\', () => ctx.slots.register(\n      { name: \'settings.general.group.permissions.item\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-settings/src/client/contract/slots.ts:107',
@@ -4520,7 +4520,6 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'settings.general.group\' (client-ui-settings-general), so it exists while that entry is mounted',
     occupants: [
       'client-locale LanguageRow id \'language\'',
-      'client-ui-action-cards SettingsRow id \'action-cards\'',
       'client-ui-theme AppearanceRow id \'appearance\'',
       'client-ui-theme FontSettingsGroup id \'font-size\'',
     ],

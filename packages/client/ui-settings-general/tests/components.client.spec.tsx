@@ -163,10 +163,10 @@ describe('GeneralSection', () => {
   it('renders supplied group labels and each group slot in ledger order', () => {
     const { renderSlot } = mount([
       { id: 'custom', label: 'Custom preferences' },
-      { id: 'display', label: 'Session display' },
+      { id: 'display', label: 'Chat experience' },
     ])
     expect(screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent))
-      .toEqual(['Custom preferences', 'Session display'])
+      .toEqual(['Custom preferences', 'Chat experience'])
     expect(renderSlot).toHaveBeenNthCalledWith(1, 'settings.general.group', {}, { only: 'custom' })
     expect(renderSlot).toHaveBeenNthCalledWith(2, 'settings.general.group', {}, { only: 'display' })
     expect(screen.getByTestId('slot-settings.general.group-custom')).toBeTruthy()
@@ -176,13 +176,13 @@ describe('GeneralSection', () => {
     const { source } = mount([{ id: 'custom', label: 'Custom preferences' }])
     act(() => {
       source.set([
-        { id: 'display', label: '会话展示' },
+        { id: 'display', label: '会话偏好' },
         { id: 'custom', label: '扩展偏好' },
       ])
     })
     expect(screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent))
-      .toEqual(['会话展示', '扩展偏好'])
-    act(() => { source.set([{ id: 'display', label: '会话展示' }]) })
+      .toEqual(['会话偏好', '扩展偏好'])
+    act(() => { source.set([{ id: 'display', label: '会话偏好' }]) })
     expect(screen.queryByText('扩展偏好')).toBeNull()
     expect(screen.getByTestId('slot-settings.general.group-display')).toBeTruthy()
   })

@@ -36,8 +36,8 @@ const GROUP_OWNER = 'test-settings-group-owner'
 const ROW_OWNER = 'test-settings-group-rows'
 const CUSTOM_SLOT = 'settings.general.group.custom.item'
 const BUILTIN_IDS = ['permissions', 'general', 'display', 'interaction', 'notifications', 'data', 'updates']
-const ZH_LABELS = ['权限', '常规', '会话展示', '交互与快捷键', '通知', '数据管理', '版本与更新']
-const EN_LABELS = ['Permissions', 'Preferences', 'Session display', 'Interaction and shortcuts', 'Notifications', 'Data management', 'Version and updates']
+const ZH_LABELS = ['权限', '常规', '会话偏好', '交互与快捷键', '通知', '数据管理', '版本与更新']
+const EN_LABELS = ['Permissions', 'Preferences', 'Chat experience', 'Interaction and shortcuts', 'Notifications', 'Data management', 'Version and updates']
 
 function CustomGroup({ renderSlot }: PropsRuntime<'settings.general.group'> & PropsRenderSlots<typeof CUSTOM_SLOT>) {
   return renderSlot(CUSTOM_SLOT, {})
@@ -137,9 +137,9 @@ it('assembles ordered localized groups, legacy and targeted rows, and restores c
   const custom = screen.getByRole('region', { name: '扩展偏好' })
   expect(within(custom).getByText('Custom child preference')).toBeTruthy()
   expect(within(screen.getByRole('region', { name: '常规' })).getByText('Legacy general preference')).toBeTruthy()
-  expect(within(screen.getByRole('region', { name: '会话展示' })).getByText('Targeted display preference')).toBeTruthy()
+  expect(within(screen.getByRole('region', { name: '会话偏好' })).getByText('Targeted display preference')).toBeTruthy()
   expect(screen.getAllByRole('heading', { level: 3 }).map(row => row.textContent))
-    .toEqual(['权限', '常规', '扩展偏好', '会话展示', '交互与快捷键', '通知', '数据管理', '版本与更新'])
+    .toEqual(['权限', '常规', '扩展偏好', '会话偏好', '交互与快捷键', '通知', '数据管理', '版本与更新'])
 
   let removeShadow = () => {}
   act(() => {

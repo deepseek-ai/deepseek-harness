@@ -9,10 +9,6 @@
   - button "Open configuration file"
   - button "Close"
   - heading "General" [level=2]
-  - region "Permissions":
-    - heading "Permissions" [level=3]
-    - text: Default session permission Choose the default permission mode for new sessions
-    - button "Workspace Write"
   - region "Preferences":
     - heading "Preferences" [level=3]
     - text: Language
@@ -26,8 +22,10 @@
     - button "Decrease font size"
     - text: px
     - button "More font settings"
-  - region "Session display":
-    - heading "Session display" [level=3]
+  - region "Chat experience":
+    - heading "Chat experience" [level=3]
+    - text: Default session permission Choose the default permission mode for new sessions
+    - button "Workspace Write"
     - text: Work details Choose how much detail to show for tool calls
     - button "Detailed"
     - text: When to Collapse Work Details Choose when to automatically collapse work details
