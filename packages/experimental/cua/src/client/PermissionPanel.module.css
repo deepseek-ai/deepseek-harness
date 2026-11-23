@@ -9,11 +9,6 @@
 .permission, .apps li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .permission, .group, .emptyState, .notice { padding: 16px; }
 .permission { min-height: 80px; box-sizing: border-box; }
-.modeMenu { max-width: 100%; }
-.modeButton { width: 100%; justify-content: space-between; }
-.modeButton > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modeButton > svg { flex-shrink: 0; }
-.defaultSetting > p { margin: 0 16px 16px; }
 .permission > div:first-child, .apps li > div { flex: 1; min-width: 140px; }
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .group { display: grid; gap: 4px; }
@@ -46,7 +41,7 @@
 .skeletonCopy p { color: transparent; }
 .appPlaceholder { width: 160px; height: 1.6em; }
 .pendingHint { visibility: hidden; }
-.permissionAction, .modeMenu, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
+.permissionAction, .buttonPlaceholder { width: 168px; flex-shrink: 0; }
 .buttonPlaceholder, .appsPlaceholder {
   display: inline-block;
   max-width: 100%;

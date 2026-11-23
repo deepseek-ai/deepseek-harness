@@ -1,11 +1,7 @@
-import { presetNames } from '@deepseek-ai/dsh-agent-preset-registry/display'
-
 /** Product copy for native permission onboarding and application revocation. */
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
-  ...presetNames.en,
-  presetsFailed: 'Could not load modes: {message}',
   previewNotice: 'Computer use is an experimental preview. The agent may click the wrong button or type in the wrong window. Use caution in production environments. We recommend native PTC mode so the agent can operate apps and call other tools in the same program.',
   windowsHelperBuild: 'If you installed DSH through npm, build the Windows helper from the matching DSH source. In {directory}, run {x64} or {arm64} with the .NET 10 SDK for your architecture.',
   providerLookupFailed: 'Could not identify the computer use provider: {message}',
@@ -27,11 +23,6 @@ export const en = {
   setupTitle: 'Set up computer use before use',
   setupBody: 'Computer use is enabled. Before using it, grant Accessibility and Screen Recording permissions. Open the plugin details to complete setup.',
   setupQueryFailed: 'computer use is enabled, but system permissions could not be checked. Open the plugin details to see the error and retry.',
-  defaultTitle: 'Default mode for new sessions',
-  defaultUnavailable: 'Could not read the default mode. Check it in Settings.',
-  defaultReadOnly: 'Default-mode settings are read-only.',
-  defaultNotSaved: 'The default mode was not saved. Try again.',
-  defaultFailed: 'Could not change the default mode: {message}',
   openSetup: 'Open settings', later: 'Later', close: 'Close',
   accessibility: 'Accessibility', screenRecording: 'Screen Recording',
   accessibilityUse: 'Read interface controls, click, and type.', screenRecordingUse: 'Capture the selected application window.',
@@ -51,8 +42,6 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
-  ...presetNames.zh,
-  presetsFailed: '无法读取模式列表：{message}',
   previewNotice: '自动电脑操作目前为实验性预览功能。智能体可能点错按钮，或把内容输入错误的窗口，请谨慎在生产环境中使用。推荐使用原生 PTC 模式，让智能体在同一段代码中操作应用并调用其他工具。',
   windowsHelperBuild: '通过 npm 安装 DSH 后，请使用对应版本的 DSH 源码构建 Windows 辅助程序。在 {directory} 中使用 .NET 10 SDK，按电脑架构运行 {x64} 或 {arm64}。',
   providerLookupFailed: '无法识别自动电脑操作后端：{message}',
@@ -72,11 +61,6 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
   windowsDesktop: '交互桌面', windowsDesktopUse: '观察和输入需要已解锁的桌面。',
   windowsCapture: '窗口截图', available: '可用', unavailable: '不可用', locked: '已锁定或断开连接',
   elevated: '本机组件正以管理员权限运行。', standardPrivileges: '本机组件正以普通用户权限运行。',
-  defaultTitle: '新会话默认模式',
-  defaultUnavailable: '无法读取默认模式，请在设置中检查',
-  defaultReadOnly: '默认模式设置为只读',
-  defaultNotSaved: '默认模式未保存，请重试',
-  defaultFailed: '无法切换默认模式：{message}',
   openSetup: '前往设置', later: '稍后', close: '关闭',
   accessibility: '辅助功能', screenRecording: '屏幕录制',
   accessibilityUse: '读取界面控件、点击和输入文字', screenRecordingUse: '截取所选应用的窗口',
@@ -95,8 +79,6 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
-  ...presetNames.ja,
-  presetsFailed: 'モード一覧を読み込めませんでした：{message}',
   previewNotice: 'Computer Use は実験的なプレビュー機能です。エージェントが誤ったボタンをクリックしたり、別のウィンドウに入力したりする可能性があります。本番環境では慎重に使用してください。ネイティブ PTC モードでは、同じプログラムでアプリの操作と他のツールの呼び出しができるため、このモードを推奨します。',
   windowsHelperBuild: 'npm で DSH をインストールした場合は、同じバージョンの DSH のソースから Windows 用ヘルパーをビルドしてください。{directory} で .NET 10 SDK を使い、アーキテクチャに応じて {x64} または {arm64} を実行します。',
   providerLookupFailed: 'Computer Use のプロバイダーを特定できませんでした：{message}',
@@ -121,11 +103,6 @@ export const ja = {
   'setupTitle': '使用前にComputer Useを設定',
   'setupBody': 'Computer Use は有効です。使用前にアクセシビリティと画面収録の権限を許可してください。プラグインの詳細を開いて設定を完了してください。',
   'setupQueryFailed': 'Computer Useは有効ですが、システム権限を確認できませんでした。プラグインの詳細を開いてエラーを確認し、再試行してください。',
-  'defaultTitle': '新規セッションのデフォルトモード',
-  'defaultUnavailable': 'デフォルトモードを読み取れませんでした。設定で確認してください。',
-  'defaultReadOnly': 'デフォルトモードの設定は読み取り専用です。',
-  'defaultNotSaved': 'デフォルトモードは保存されませんでした。もう一度お試しください。',
-  'defaultFailed': 'デフォルトモードを変更できませんでした: {message}',
   'openSetup': '設定を開く',
   'later': '後で',
   'close': '閉じる',
@@ -158,8 +135,6 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
-  ...presetNames.es,
-  presetsFailed: 'No se pudieron cargar los modos: {message}',
   previewNotice: 'Computer Use es una función experimental en fase de prueba. El agente puede pulsar el botón equivocado o escribir en otra ventana. Úsala con precaución en entornos de producción. Recomendamos el modo PTC nativo para que el agente pueda controlar aplicaciones y usar otras herramientas en el mismo programa.',
   windowsHelperBuild: 'Si instalaste DSH con npm, compila el programa auxiliar de Windows desde las fuentes de la misma versión de DSH. En {directory}, usa el SDK de .NET 10 y ejecuta {x64} o {arm64} según la arquitectura del equipo.',
   providerLookupFailed: 'No se pudo identificar el proveedor de Computer Use: {message}',
@@ -186,11 +161,6 @@ export const es = {
   setupTitle: 'Configurar el uso de la computadora antes de usarla',
   setupBody: 'El uso de la computadora está habilitado. Antes de usarlo, otorgue permisos de Accesibilidad y Grabación de pantalla. Abra los detalles del complemento para completar la configuración.',
   setupQueryFailed: 'El uso de la computadora está habilitado, pero no se pudieron verificar los permisos del sistema. Abra los detalles del complemento para ver el error y vuelva a intentarlo.',
-  defaultTitle: 'Modo predeterminado para nuevas sesiones',
-  defaultUnavailable: 'No se pudo leer el modo predeterminado. Compruébalo en Configuración.',
-  defaultReadOnly: 'La configuración del modo predeterminado es de sólo lectura.',
-  defaultNotSaved: 'El modo predeterminado no se guardó. Intentar otra vez.',
-  defaultFailed: 'No se pudo cambiar el modo predeterminado: {message}',
   openSetup: 'Abrir configuración', later: 'Más tarde', close: 'Cerrar',
   accessibility: 'Accesibilidad', screenRecording: 'Grabación de pantalla',
   accessibilityUse: 'Lea los controles de la interfaz, haga clic y escriba.', screenRecordingUse: 'Capture la ventana de la aplicación seleccionada.',
@@ -209,8 +179,6 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
-  ...presetNames.fr,
-  presetsFailed: 'Impossible de charger les modes : {message}',
   previewNotice: 'Computer Use est proposé en aperçu expérimental. L’agent peut cliquer sur le mauvais bouton ou saisir du texte dans la mauvaise fenêtre. Soyez prudent en production. Nous recommandons le mode PTC natif pour que l’agent puisse piloter des applications et utiliser d’autres outils dans le même programme.',
   windowsHelperBuild: 'Si vous avez installé DSH avec npm, compilez le programme auxiliaire Windows à partir des sources de la même version de DSH. Dans {directory}, utilisez le SDK .NET 10 et exécutez {x64} ou {arm64} selon votre architecture.',
   providerLookupFailed: 'Impossible d’identifier le fournisseur de Computer Use : {message}',
@@ -237,11 +205,6 @@ export const fr = {
   setupTitle: "Configurer l'utilisation de l'ordinateur avant utilisation",
   setupBody: "L'utilisation de l'ordinateur est activée. Avant de l'utiliser, accordez les autorisations d'accessibilité et d'enregistrement d'écran. Ouvrez les détails du plugin pour terminer la configuration.",
   setupQueryFailed: "L'utilisation de l'ordinateur est activée, mais les autorisations système n'ont pas pu être vérifiées. Ouvrez les détails du plugin pour voir l'erreur et réessayez.",
-  defaultTitle: 'Mode par défaut pour les nouvelles sessions',
-  defaultUnavailable: 'Impossible de lire le mode par défaut. Vérifiez-le dans Paramètres.',
-  defaultReadOnly: 'Les paramètres du mode par défaut sont en lecture seule.',
-  defaultNotSaved: "Le mode par défaut n'a pas été enregistré. Essayer à nouveau.",
-  defaultFailed: 'Impossible de modifier le mode par défaut : {message}',
   openSetup: 'Ouvrir les paramètres', later: 'Plus tard', close: 'Fermer',
   accessibility: 'Accessibilité', screenRecording: "Enregistrement d'écran",
   accessibilityUse: 'Lisez les commandes de l’interface, cliquez et tapez.', screenRecordingUse: "Capturez la fenêtre de l'application sélectionnée.",
@@ -260,8 +223,6 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
-  ...presetNames.de,
-  presetsFailed: 'Modi konnten nicht geladen werden: {message}',
   previewNotice: 'Computer Use ist eine experimentelle Vorschau. Der Agent kann auf die falsche Schaltfläche klicken oder Text im falschen Fenster eingeben. Seien Sie in Produktionsumgebungen vorsichtig. Wir empfehlen den nativen PTC-Modus, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann.',
   windowsHelperBuild: 'Wenn Sie DSH über npm installiert haben, bauen Sie das Windows-Hilfsprogramm aus dem Quellcode der passenden DSH-Version. Führen Sie in {directory} mit dem .NET 10 SDK je nach Architektur {x64} oder {arm64} aus.',
   providerLookupFailed: 'Der Computer-Use-Anbieter konnte nicht ermittelt werden: {message}',
@@ -288,11 +249,6 @@ export const de = {
   setupTitle: 'Richten Sie die Computernutzung vor der Nutzung ein',
   setupBody: 'Die Computernutzung ist aktiviert. Erteilen Sie vor der Verwendung die Berechtigungen für Barrierefreiheit und Bildschirmaufzeichnung. Öffnen Sie die Plugin-Details, um die Einrichtung abzuschließen.',
   setupQueryFailed: 'Die Computernutzung ist aktiviert, aber die Systemberechtigungen konnten nicht überprüft werden. Öffnen Sie die Plugin-Details, um den Fehler anzuzeigen, und versuchen Sie es erneut.',
-  defaultTitle: 'Standardmodus für neue Sitzungen',
-  defaultUnavailable: 'Der Standardmodus konnte nicht gelesen werden. Überprüfen Sie es in den Einstellungen.',
-  defaultReadOnly: 'Die Standardmoduseinstellungen sind schreibgeschützt.',
-  defaultNotSaved: 'Der Standardmodus wurde nicht gespeichert. Versuchen Sie es erneut.',
-  defaultFailed: 'Der Standardmodus konnte nicht geändert werden: {message}',
   openSetup: 'Einstellungen öffnen', later: 'Später', close: 'Schließen',
   accessibility: 'Barrierefreiheit', screenRecording: 'Bildschirmaufzeichnung',
   accessibilityUse: 'Lesen Sie die Steuerelemente der Benutzeroberfläche, klicken Sie und geben Sie ein.', screenRecordingUse: 'Erfassen Sie das ausgewählte Anwendungsfenster.',
@@ -311,8 +267,6 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
-  ...presetNames.ru,
-  presetsFailed: 'Не удалось загрузить режимы: {message}',
   previewNotice: 'Управление компьютером доступно в режиме экспериментального предпросмотра. Агент может нажать не ту кнопку или ввести текст не в то окно. Используйте эту функцию в рабочей среде с осторожностью. Рекомендуем нативный режим PTC: в нём агент может управлять приложениями и вызывать другие инструменты в одной программе.',
   windowsHelperBuild: 'Если DSH установлен через npm, соберите вспомогательную программу для Windows из исходного кода той же версии DSH. В каталоге {directory} выполните {x64} или {arm64} с помощью .NET 10 SDK в зависимости от архитектуры компьютера.',
   providerLookupFailed: 'Не удалось определить поставщика Computer Use: {message}',
@@ -339,11 +293,6 @@ export const ru = {
   setupTitle: 'Настройте использование компьютера перед использованием',
   setupBody: 'Использование компьютера включено. Перед использованием предоставьте разрешения на универсальный доступ и запись экрана. Откройте сведения о плагине, чтобы завершить настройку.',
   setupQueryFailed: 'Использование компьютера разрешено, но системные разрешения проверить не удалось. Откройте сведения о плагине, чтобы увидеть ошибку, и повторите попытку.',
-  defaultTitle: 'Режим по умолчанию для новых сеансов',
-  defaultUnavailable: 'Не удалось прочитать режим по умолчанию. Проверьте это в настройках.',
-  defaultReadOnly: 'Настройки режима по умолчанию доступны только для чтения.',
-  defaultNotSaved: 'Режим по умолчанию не сохранился. Попробуйте еще раз.',
-  defaultFailed: 'Не удалось изменить режим по умолчанию: {message}.',
   openSetup: 'Открыть настройки', later: 'Позже', close: 'Закрыть',
   accessibility: 'Доступность', screenRecording: 'Запись экрана',
   accessibilityUse: 'Прочтите элементы управления интерфейсом, щелкните и введите текст.', screenRecordingUse: 'Захват выбранного окна приложения.',
@@ -362,8 +311,6 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
-  ...presetNames.pt,
-  presetsFailed: 'Não foi possível carregar os modos: {message}',
   previewNotice: 'Computer Use é um recurso experimental em prévia. O agente pode clicar no botão errado ou digitar na janela errada. Use com cautela em ambientes de produção. Recomendamos o modo PTC nativo para que o agente possa controlar aplicativos e usar outras ferramentas no mesmo programa.',
   windowsHelperBuild: 'Se você instalou o DSH pelo npm, compile o auxiliar do Windows a partir do código-fonte da mesma versão do DSH. Em {directory}, use o SDK do .NET 10 e execute {x64} ou {arm64} conforme a arquitetura do computador.',
   providerLookupFailed: 'Não foi possível identificar o provedor do Computer Use: {message}',
@@ -390,11 +337,6 @@ export const pt = {
   setupTitle: 'Configure o uso do computador antes de usar',
   setupBody: 'O uso do computador está ativado. Antes de usá-lo, conceda permissões de Acessibilidade e Gravação de tela. Abra os detalhes do plugin para concluir a configuração.',
   setupQueryFailed: 'O uso do computador está ativado, mas não foi possível verificar as permissões do sistema. Abra os detalhes do plugin para ver o erro e tente novamente.',
-  defaultTitle: 'Modo padrão para novas sessões',
-  defaultUnavailable: 'Não foi possível ler o modo padrão. Verifique em Configurações.',
-  defaultReadOnly: 'As configurações do modo padrão são somente leitura.',
-  defaultNotSaved: 'O modo padrão não foi salvo. Tente novamente.',
-  defaultFailed: 'Não foi possível alterar o modo padrão: {message}',
   openSetup: 'Abrir configurações', later: 'Mais tarde', close: 'Fechar',
   accessibility: 'Acessibilidade', screenRecording: 'Gravação de tela',
   accessibilityUse: 'Leia os controles da interface, clique e digite.', screenRecordingUse: 'Capture a janela do aplicativo selecionado.',

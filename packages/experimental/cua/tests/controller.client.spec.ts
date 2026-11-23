@@ -10,7 +10,6 @@ import { PermissionController } from '../src/client/controller.ts'
 const value: CuaSystemPermissionState = { platform: 'darwin' as const, accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
-type CuaListPresets = Context['remote']['agentPresets']['list']
 type CuaRemote = Context['remote']['cuaAccess']
 function fixture() {
   const actions = {
@@ -26,10 +25,9 @@ function fixture() {
   }
   let locale = 'zh'
   const windowsProvider = vi.fn(async () => ({ ok: true as const, value: true }))
-  const listPresets = vi.fn<CuaListPresets>(async () => ({ ok: true, value: { presets: [] } }))
-  const controller = new PermissionController(actions, () => locale, listPresets, windowsProvider)
+  const controller = new PermissionController(actions, () => locale, windowsProvider)
   onTestFinished(() => controller.dispose())
-  return { actions, controller, listPresets, windowsProvider, face: controller.face(), setLocale: (value: string) => { locale = value } }
+  return { actions, controller, windowsProvider, face: controller.face(), setLocale: (value: string) => { locale = value } }
 }
 
 it('identifies the enabled provider if the native helper cannot report its platform', async () => {
@@ -401,21 +399,20 @@ it.each(['requestPermission', 'openSettings', 'revoke', 'retryApproval'] as cons
 it('preserves settled failures and values while permission observations are paused', async () => {
   const f = fixture()
   const error = new Error('unavailable')
-  f.listPresets.mockRejectedValueOnce(error)
   f.actions.systemStatus.mockRejectedValueOnce(error)
   f.actions.applications.mockRejectedValueOnce(error)
   f.actions.applicationIcons.mockRejectedValueOnce(error)
   f.face.refresh()
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
   f.controller.setChanging(true)
-  for (const key of ['presets', 'system', 'applications', 'icons'] as const) {
+  for (const key of ['system', 'applications', 'icons'] as const) {
     expect(f.controller.state.getSnapshot()[key]).toMatchObject({ error: 'unavailable', busy: true })
   }
   f.face.refresh()
   expect(f.actions.systemStatus).toHaveBeenCalledOnce()
   f.controller.setChanging(false)
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  for (const key of ['presets', 'system', 'applications', 'icons'] as const) {
+  for (const key of ['system', 'applications', 'icons'] as const) {
     expect(f.controller.state.getSnapshot()[key].error).toBeNull()
   }
   await f.controller.dispose()

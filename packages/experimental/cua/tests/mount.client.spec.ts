@@ -39,18 +39,10 @@ async function fixture(fail = false) {
   new Remote()
   const list = vi.fn<Context['remote']['pluginInventory']['list']>()
   await ctx.plugin((scope) => { scope.provide('remote.pluginInventory', { list }) })
-  await ctx.plugin((scope) => { scope.provide('remote.agentPresets', { list: async () => ({ ok: true, value: { presets: [] } }) }) })
   const changes = createSnapshotStore(false)
   ctx.provide('pluginChanges', { bundle: (name) => {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
     return changes
-  } })
-  const setDefault = vi.fn(async () => true)
-  const preset = createSnapshotStore({ status: 'ready' as const, value: { default: 'standard' },
-    base: {}, user: {}, revision: 1, writable: true })
-  ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: (namespace: string) => {
-    expect(namespace).toBe('agent-preset-registry')
-    return { ...preset, set: setDefault }
   } })
   const status = vi.fn<() => Promise<RemoteResult<CuaApplicationState>>>().mockResolvedValue({ ok: true, value })
   const systemStatus = vi.fn<() => Promise<RemoteResult<CuaSystemPermissionState>>>().mockResolvedValue({ ok: true, value: value.system })
@@ -71,7 +63,7 @@ async function fixture(fail = false) {
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
   return { ctx, changes, unmount, status, systemStatus, applicationIcons, list,
-    requestPermission, openSettings, revoke, retryApproval, setDefault,
+    requestPermission, openSettings, revoke, retryApproval,
   }
 }
 
@@ -144,12 +136,6 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
       actionsOf(otherActions)
       expect(otherActions.hooks.cuaPermissions).toBe(actions.hooks.cuaPermissions)
     }
-    const settings = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
-    assert(typeof settings.setDefaultPreset === 'function')
-    expect(f.ctx.slots.entries('plugins.bundle.activation')[0]!.inject!()).not.toHaveProperty('setDefaultPreset')
-    expect(f.setDefault).not.toHaveBeenCalled()
-    await (settings.setDefaultPreset as (id: string) => Promise<boolean>)('cordis')
-    expect(f.setDefault).toHaveBeenCalledExactlyOnceWith('selectedDefault', 'cordis')
     await fiber.dispose()
     expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)

@@ -7,7 +7,6 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
@@ -22,7 +21,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Existing browser registries needed by the optional permission UI. */
-export const inject = ['remote', 'slots', 'locale', 'configForms']
+export const inject = ['remote', 'slots', 'locale']
 
 /**
  * Mount the optional permission Remote and its browser controls.
@@ -32,16 +31,13 @@ export const inject = ['remote', 'slots', 'locale', 'configForms']
  */
 export async function mountCuaPermissions(ctx: Context, contribution: TypertRemoteContribution): Promise<() => Promise<void>> {
   const transport = ctx.plugin(async (owner) => { await owner.remote.$mount(contribution) })
-  const ui = ctx.inject(['remote.cuaAccess', 'remote.agentPresets', 'remote.pluginInventory', 'slots', 'locale'], (ctx) => {
+  const ui = ctx.inject(['remote.cuaAccess', 'remote.pluginInventory', 'slots', 'locale'], (ctx) => {
     ctx.effect(() => ctx.locale.register(NS, { en, zh, ja, es, fr, de, ru, pt }))
-    const windowsProvider = async () => {
+    const controller = new PermissionController(ctx.remote.cuaAccess, () => ctx.locale.getSnapshot().active, async () => {
       const result = await ctx.remote.pluginInventory.list()
       if (!result.ok) return result
-      return { ok: true as const, value: result.value.entries.some(entry => entry.enabled && entry.moduleName === '@deepseek-ai/dsh-cua-windows') }
-    }
-    const controller = new PermissionController(
-      ctx.remote.cuaAccess, () => ctx.locale.getSnapshot().active, ctx.remote.agentPresets.list, windowsProvider,
-    )
+      return { ok: true, value: result.value.entries.some(entry => entry.enabled && entry.moduleName === '@deepseek-ai/dsh-cua-windows') }
+    })
     const face = controller.face()
     ctx.slots.inject('conversation.composer', () => ctx.slots.register({
       name: 'conversation.composer', priority: -1, locale: NS,
@@ -57,16 +53,10 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
         return () => { unsubscribe(); controller.setChanging(false) }
       })
     })
-    const preset = ctx.configForms.get<{ selectedDefault?: string }>('agent-preset-registry')
-    const settings = {
-      ...face,
-      hooks: { ...face.hooks, cuaDefaultPreset: preset, developerTools: ctx.configForms.developerTools.enabled },
-      setDefaultPreset: (id: string) => preset.set('selectedDefault', id),
-    }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
-      name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => settings,
+      name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => face,
     }, PermissionPanel))
     ctx.slots.inject('plugins.bundle.activation', () => ctx.slots.register({
       name: 'plugins.bundle.activation', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => face,

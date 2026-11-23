@@ -37,7 +37,7 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. PTC sessions receive the raw `cua` binding; other Agents, with or without a preset, receive `cua_run_code` with an automatically initialized `cua` object and separate persistent state. Enabling through its card or detail page offers setup guidance when system permissions need attention. Choose a preset for future sessions from **Default mode for new sessions** on the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. PTC sessions receive the raw `cua` binding; other Agents, with or without a preset, receive `cua_run_code` with an automatically initialized `cua` object and separate persistent state. Enabling through its card or detail page offers setup guidance when system permissions need attention. Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain.
 
@@ -55,7 +55,7 @@ Explicit activation runs a read-only permission check, which may start a helper 
 <details>
 <summary>Maintainer details</summary>
 
-The bundle patch mounts the native provider and permission UI with `agentPreset: ptc`. Using the exported `cordis.patch.yml` directly as an overlay bypasses bundle admission; its row-level conditions load the macOS provider only on macOS and the Windows provider only on native Windows. Shared entries alone do not provide computer control. Existing Agent scopes register the tools without changing preset documents. The detail page saves the selected preset ID to `agent-preset-registry.selectedDefault` through the settings form. [CUA](../cua/README.md) owns registration and disposal.
+The bundle patch mounts the native provider and permission UI with `agentPreset: ptc`. Using the exported `cordis.patch.yml` directly as an overlay bypasses bundle admission; its row-level conditions load the macOS provider only on macOS and the Windows provider only on native Windows. Shared entries alone do not provide computer control. Existing Agent scopes register the tools without changing preset documents. [CUA](../cua/README.md) owns registration and disposal.
 
 </details>
 

@@ -159,7 +159,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const panel = page.locator('[data-cua-settings]')
   const accessibility = panel.getByRole('group', { name: 'Accessibility', exact: true })
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).waitFor()
-  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(3)
+  expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(2)
   expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)
@@ -348,10 +348,12 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   const scaffold = resources.scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: patch,
   })
-  // Report a Windows provider to the page on macOS without activating it when a preset write recomposes the profile.
-  const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
-  if (!windows) throw new Error('CUA bundle has no Windows provider row')
-  const inventoryFlag = process.platform === 'darwin' ? vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false) : undefined
+  if (process.platform === 'darwin') {
+    // The Host inventory reads this Loader flag; only the platform-specific input is substituted on macOS.
+    const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
+    if (!windows) throw new Error('CUA bundle has no Windows provider row')
+    vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false)
+  }
   const browser = resources.browser = await chromium.launch()
   const page = await newEnglishPage(browser)
   await page.goto(scaffold.authenticatedUrl)
@@ -363,15 +365,11 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   await guidance.getByText(/helperPath/).waitFor()
   const preview = page.locator('[data-detail-document] img')
   await preview.evaluate(async (image) => { await (image as HTMLImageElement).decode() })
-  const firstSetting = panel.getByRole('group', { name: 'Default mode for new sessions', exact: true })
+  const firstSetting = panel.getByRole('heading', { name: 'Authorize computer use', exact: true })
   const previewBox = await preview.boundingBox(), guidanceBox = await guidance.boundingBox(), settingBox = await firstSetting.boundingBox()
   expect(previewBox!.y + previewBox!.height).toBeLessThanOrEqual(guidanceBox!.y)
   expect(guidanceBox!.y + guidanceBox!.height).toBeLessThanOrEqual(settingBox!.y)
   expect(await panel.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(0)
   expect(await panel.getByRole('group', { name: 'PTC execution mode' }).count()).toBe(0)
-  inventoryFlag?.mockRestore()
-  await firstSetting.getByRole('button', { name: 'Standard mode' }).click()
-  await page.getByRole('menuitem', { name: 'Creator mode' }).click()
-  await firstSetting.getByRole('button', { name: 'Creator mode' }).waitFor()
-  expect(scaffold.ctx.agentPresets.defaultId).toBe('cordis')
+  expect(await panel.getByText('Default mode for new sessions', { exact: true }).count()).toBe(0)
 })
