@@ -21,4 +21,6 @@ The `sdk` profile now mounts `cordis-host-runner`, `cordis-inspect-providers`, a
      disabled: true
    ```
 
+   This removes only the tool. To also remove the inspection registry and Host providers from the process, disable the `cordis-inspect-providers` and `cordis-host-runner` rows as well.
+
 3. Run a task and confirm that the first model request lists `cordis_inspect` exactly when the row is enabled.

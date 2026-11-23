@@ -90,7 +90,6 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "workspace-dependencies",
     "time-context",
     "tool-ask-user",
-    "tool-cordis",
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
@@ -285,8 +284,6 @@ def write_advanced_profile_patch(
         },
         {"insert": [
             {"id": "ptc-runtime", "name": "@deepseek-ai/dsh-ptc-runtime-node"},
-            {"id": "cordis-host-runner", "name": "@deepseek-ai/dsh-cordis-host-runner"},
-            {"id": "cordis-tool", "name": "@deepseek-ai/dsh-tool-cordis"},
         ]},
     ])
 

@@ -21,4 +21,6 @@ description: SDK profile 新增 cordis_inspect 运行时检查工具。
      disabled: true
    ```
 
+   这样只移除工具。如需同时从进程中移除检查注册表和 Host provider，还要禁用 `cordis-inspect-providers` 和 `cordis-host-runner` 行。
+
 3. 运行一个任务，确认首个模型请求只在该行启用时列出 `cordis_inspect`。
