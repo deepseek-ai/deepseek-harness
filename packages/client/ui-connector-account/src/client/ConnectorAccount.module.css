@@ -28,6 +28,13 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

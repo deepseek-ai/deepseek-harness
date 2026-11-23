@@ -1,7 +1,7 @@
 /**
  * The account surfaces the Plugins page shows for registered connector accounts: a bundle's section with the
- * confirmation a button asks for, the title tag, the activation prompt, and the notice. Each is the slot entry that reads
- * this browser's state and calls the Host through the injected callbacks.
+ * confirmation a button asks for, the title tag, the activation prompt, and the notice, plus the Factory that shows one
+ * account by key elsewhere. Each reads this browser's state and calls the Host through the injected callbacks.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, IconWarningOutlineRegular, Modal, StateDot, Tag, Toast, type StateDotState, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -12,7 +12,7 @@ import type { ConnectorAccountButton, ConnectorAccountCommand, ConnectorAccountE
 import css from './ConnectorAccount.module.css'
 import type { ConnectorAccountKey } from './locales.ts'
 import { openAuthorizationPage } from './state.ts'
-import type { ConnectorAccountFace, ConnectorAccountsState, ConnectorBundleAccountFace } from './types.ts'
+import type { ConnectorAccountFace, ConnectorAccountFactoryInput, ConnectorAccountsState, ConnectorBundleAccountFace } from './types.ts'
 
 type FaceProps = InjectFace<ConnectorAccountFace> & { t: Translate<ConnectorAccountKey> }
 type BundleFaceProps = InjectFace<ConnectorBundleAccountFace> & { t: Translate<ConnectorAccountKey> }
@@ -153,6 +153,28 @@ export function ConnectorAccountSectionEntry(props: BundleFaceProps): ReactNode 
       )}
     </div>
   )
+}
+
+/** An account's state dot and status line, as a list row outside its bundle page shows it. */
+function ConnectorAccountStatus({ useConnectorAccounts, account, resolveText }: BundleFaceProps): ReactNode {
+  const entry = useConnectorAccounts(state => state.accounts.get(account))
+  if (entry === undefined) return null
+  const { display } = entry
+  return (
+    <span className={css.row} data-connector-account={display.phase} data-connector-account-key={entry.key}>
+      <StateDot state={TONE[display.phase]} />
+      <span className={css.label}>{resolveText(display.status)}</span>
+    </span>
+  )
+}
+
+/**
+ * The `connector.account` Factory: one account by key, for a surface outside the account's bundle page.
+ * @param props - the account key, the presentation, the face, and the translator.
+ * @returns the account's section or its status line, or null before the Host lists the account.
+ */
+export function ConnectorAccountFactory(props: FaceProps & ConnectorAccountFactoryInput): ReactNode {
+  return props.presentation === 'status' ? <ConnectorAccountStatus {...props} /> : <ConnectorAccountSectionEntry {...props} />
 }
 
 function accountOf(state: ConnectorAccountsState, packageName: string): ConnectorAccountEntry | undefined {

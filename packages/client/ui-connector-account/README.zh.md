@@ -66,6 +66,8 @@ export function apply(ctx: Context): void {
 | 开启引导 | 插件包开启后，阶段为 `disconnected` 时打开；“连接”会打开插件包页面，并在 display 给出 `connect` 时启动该操作；Host 流中断时它不可用。账号检查中或连接中时继续等待，已连接或不可用时自动关闭 |
 | 提示 | 本浏览器的最新结果，不受插件面板生命周期限制：操作成功的文本，或带警告图标的共用失败文案 |
 
+没有包名的账号，或插件包页面之外的界面，渲染组件工厂 `connector.account` 并传入 `{ account, presentation }`：`section` 显示账号的完整区块，`status` 只显示状态点和状态行，用于列表行。在 Host 列出该账号之前它不渲染任何内容。[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)用它显示 Settings 中配置的 MCP 服务器。
+
 ### 跟随操作
 
 每个浏览器在 Web 应用加载时打开一条流，Host 为每条新流检查每个没有在运行操作的账号；流打开期间注册的账号会立即检查。浏览器跟随其最近一次启动返回的操作，从返回时起，直到流推送该操作的结果。被跟随的操作提供的每个页面只在新标签页中打开一次，只打开 HTTPS 页面或回环地址上的 HTTP 页面；其他浏览器显示同样的区块，但不打开页面，也不报告提示。第一次调用返回前的第二次点击不会启动任何操作。连接断开后流会自动重连；流永久失败时，区块保留最后的账号，按钮不可用，直到页面重新加载。卸载浏览器一半会关闭流；Host 持有的操作继续运行。
@@ -84,7 +86,7 @@ export function apply(ctx: Context): void {
 
 Host 一半 `ConnectorAccounts` 是一个 Remote 服务。`register()` 观察账号来源，每条 `watch` 流在每次变化后读取每个账号的条目，并合并在下一次读取前到达的变化：键和包、文案、`present(view)`、进行中的操作，以及带成功文本的最新结果。`start` 和 `cancel` 按键路由到该账号的来源。
 
-[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。各界面收到 `start` 和 `cancel` 两个回调：它们调用 Remote 并返回其结果；按钮把启动成功时返回的操作报告给 `BrowserAccounts`，结果为失败或调用被 reject 时报告失败提示。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
+[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间；另以同一个 face 注册组件工厂 `connector.account`。各界面收到 `start` 和 `cancel` 两个回调：它们调用 Remote 并返回其结果；按钮把启动成功时返回的操作报告给 `BrowserAccounts`，结果为失败或调用被 reject 时报告失败提示。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
 
 | 文件 | 职责 |
 |---|---|
