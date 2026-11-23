@@ -1,9 +1,10 @@
 /**
  * Keyless comparison of the first model request of the shipped SDK profile with native tool execution and the Desktop
  * standard agent preset: tool names and schemas, system prompt sections, runtime context values, the session skill
- * catalog and the other injected messages, for the top-level Agent with Team off and on. Paths, clock readings and the
- * time zone are normalized. Record differences in parity-exceptions.ts; unused exceptions fail. Teammate scopes, PTC
- * execution, SDK minimal, other presets, graphical context and optional runtime payloads are outside this comparison.
+ * catalog, the other injected messages, and the order of each sequence, for the top-level Agent with Team off and on.
+ * Paths, clock readings and the time zone are normalized. Record differences in parity-exceptions.ts; unused
+ * exceptions fail. Teammate scopes, PTC execution, SDK minimal, other presets, graphical context and optional runtime
+ * payloads are outside this comparison.
  */
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -16,7 +17,7 @@ import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
 import { expect, it, type TestContext } from 'vitest'
 import { profileEnvironment } from './fixtures/profile-environment.ts'
 import { messagesResponse } from './fixtures/messages-response.ts'
-import { assertParity, compareEntries, type ParityDifference } from './parity.ts'
+import { assertParity, compareEntries, compareOrder, type ParityDifference } from './parity.ts'
 
 const repo = fileURLToPath(new URL('../../../../../', import.meta.url))
 const observer = new URL('./fixtures/tool-parity.mjs', import.meta.url).href
@@ -30,7 +31,7 @@ const inventorySchema = z.object({
 type Observation = z.infer<typeof inventorySchema>
 /** One side's model context: the assembly observation and the injected messages of its first model request. */
 type Inventory = Observation & { skills: ReadonlyMap<string, string>; messages: ReadonlyMap<string, string> }
-const runtimeLayers = ['tool', 'schema', 'section', 'skill', 'message'] as const
+const runtimeLayers = ['tool', 'schema', 'section', 'skill', 'message', 'order'] as const
 /** Both sides run in UTC, and the Desktop user message reports it as the browser time zone, as the GUI client does. */
 const TIME_ZONE = 'UTC'
 const TIMESTAMP = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)/g
@@ -90,6 +91,10 @@ function differences(sdk: Inventory, desktop: Inventory): ParityDifference[] {
     ...compareEntries('section', 'section', prompt(sdk), prompt(desktop)),
     ...compareEntries('skill', 'skill', sdk.skills, desktop.skills),
     ...compareEntries('message', 'message', sdk.messages, desktop.messages),
+    ...compareOrder('section', sdk.sections.map(({ name }) => name), desktop.sections.map(({ name }) => name)),
+    ...compareOrder('runtime-context', sdk.contexts.map(({ name }) => name), desktop.contexts.map(({ name }) => name)),
+    ...compareOrder('message', [...sdk.messages.keys()], [...desktop.messages.keys()]),
+    ...compareOrder('tool', names(sdk), names(desktop)),
   ]
 }
 

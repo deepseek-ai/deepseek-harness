@@ -7,9 +7,10 @@ import { parityExceptions } from './parity-exceptions.ts'
 /**
  * Compared layer: `tool` is one-sided tool presence, `schema` a model-facing tool schema field, `section` a system
  * prompt section or runtime context entry, `skill` a session skill catalog entry, `message` another message injected
- * into the first request, keyed by its first line up to a colon, and `config` an agent-plane plugin row of the profile composition.
+ * into the first request, keyed by its first line up to a colon, `order` the relative order of the entries both sides
+ * have in one sequence, and `config` a plugin row of the profile composition.
  */
-export type ParityKind = 'tool' | 'schema' | 'section' | 'skill' | 'message' | 'config'
+export type ParityKind = 'tool' | 'schema' | 'section' | 'skill' | 'message' | 'order' | 'config'
 
 /** One observed difference between the SDK and Desktop sides. */
 export interface ParityDifference {
@@ -76,6 +77,19 @@ export function compareEntries(
     return jsonDifferences(sdk.get(name), desktop.get(name))
       .map(pointer => ({ kind: content, key: pointer === '' ? name : `${name}:${pointer}` }))
   })
+}
+
+/**
+ * Compare the relative order of the entries both sides have; entries only one side has are reported by the entry
+ * comparison, so they do not count here.
+ * @param sequence - name of the compared sequence, reported as the difference key.
+ * @param sdk - SDK entry names in model order.
+ * @param desktop - Desktop entry names in model order.
+ * @returns one `order` difference when the shared entries appear in a different order, otherwise none.
+ */
+export function compareOrder(sequence: string, sdk: readonly string[], desktop: readonly string[]): ParityDifference[] {
+  const shared = (names: readonly string[], other: readonly string[]) => names.filter(name => other.includes(name))
+  return JSON.stringify(shared(sdk, desktop)) === JSON.stringify(shared(desktop, sdk)) ? [] : [{ kind: 'order', key: sequence }]
 }
 
 function label(difference: ParityDifference): string {

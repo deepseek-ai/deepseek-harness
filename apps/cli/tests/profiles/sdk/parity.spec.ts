@@ -1,7 +1,7 @@
 /** Diagnostics and exact exception consumption for the SDK/Desktop model context comparison. */
 import { expect, it } from 'vitest'
 import { parityExceptions } from './parity-exceptions.ts'
-import { assertParity, compareEntries, jsonDifferences, type ParityException } from './parity.ts'
+import { assertParity, compareEntries, compareOrder, jsonDifferences, type ParityException } from './parity.ts'
 
 const toolOnly: ParityException = {
   kind: 'tool', key: 'desktop_only', side: 'desktop', reason: 'Requires a graphical client.',
@@ -24,6 +24,11 @@ it('separates one-sided entries from differing shared entries', () => {
   ])
   expect(compareEntries('section', 'section', new Map([['plan', 'a']]), new Map([['plan', 'b']])))
     .toEqual([{ kind: 'section', key: 'plan' }])
+})
+
+it('compares the relative order of shared entries only', () => {
+  expect(compareOrder('section', ['a', 'sdk_only', 'b'], ['desktop_only', 'a', 'b'])).toEqual([])
+  expect(compareOrder('section', ['a', 'b'], ['b', 'a'])).toEqual([{ kind: 'order', key: 'section' }])
 })
 
 it('accepts an exact exception and rejects it after the profiles converge', () => {
