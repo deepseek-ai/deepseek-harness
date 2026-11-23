@@ -113,6 +113,9 @@ describe('formatText — xml', () => {
       .toBe('<im-message seq="12" from="张三" time="14:07" quote="lark:cli_a|m_10" quote-from="李四" quote-text="原文 第二行">你好</im-message>')
     expect(formatText(message({ quote: { key: ImMessageKey('lark:cli_a', 'm_10') } }), 'xml'))
       .toBe('<im-message seq="12" from="张三" time="14:07" quote="lark:cli_a|m_10">你好</im-message>')
+    // A quote whose text is only whitespace carries no preview.
+    expect(formatText(message({ quote: { key: ImMessageKey('lark:cli_a', 'm_10'), text: ' \n\t ' } }), 'xml'))
+      .toBe('<im-message seq="12" from="张三" time="14:07" quote="lark:cli_a|m_10">你好</im-message>')
   })
 
   it('bounds and escapes quote-text in xml', () => {

@@ -16,7 +16,8 @@ import { ImOutputRegistry, NO_OUTPUT, type ImOutputDeps } from '../src/outputs.t
 import { ImSender } from '../src/send.ts'
 import { ImStore } from '../src/store.ts'
 import {
-  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, react, record, toggle,
+  activity, BOT, chatOf, click, flush, inbound, inboundDraft, noClick, OutputsHarness, pick, rawReaction, react, record,
+  toggle,
 } from './support/outputs-harness.ts'
 
 const open: OutputsHarness[] = []
@@ -546,6 +547,67 @@ describe('ImOutputRegistry reactions', () => {
     harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
 
     expect(harness.reactions).toEqual([])
+  })
+
+  it('ignores a reaction without a payload, an emoji, or an identified user', () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    harness.messages.set(inbound().key, inbound())
+
+    harness.registry.reaction(rawReaction(undefined), 'added')
+    harness.registry.reaction(rawReaction({ message: { id: 'm1' }, emoji: '', user: { id: 'user-1' } }), 'added')
+    harness.registry.reaction(rawReaction({ message: { id: 'm1' }, emoji: 'THUMBSUP' }), 'added')
+    harness.registry.reaction(rawReaction({ message: { id: 'm1' }, emoji: 'THUMBSUP', user: { id: '' } }), 'added')
+
+    expect(harness.reactions).toEqual([])
+    // The same message and user with an emoji is surfaced, so the refusals above are the payload's.
+    harness.registry.reaction(rawReaction({ message: { id: 'm1' }, emoji: 'THUMBSUP', user: { id: 'user-1' } }), 'added')
+    expect(harness.reactions).toHaveLength(1)
+  })
+
+  it('ignores a reaction whose chat is unknown, whose rule was removed, or whose rule no longer lists the chat', () => {
+    const harness = booted()
+    harness.messages.set(inbound().key, inbound())
+    // The stored message's chat is not admitted by this host.
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+
+    harness.host({ output: 'probe' })
+    harness.sources.delete('team')
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: ['elsewhere'] })
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+    expect(harness.reactions).toEqual([])
+
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all' })
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+    expect(harness.reactions).toHaveLength(1)
+  })
+
+  it('leaves a reaction without an event id or a producing session unattributed and undeduplicated', () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    harness.messages.set(inbound().key, inbound())
+
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+    harness.registry.reaction(react('m1', 'THUMBSUP'), 'added')
+
+    expect(harness.reactions).toHaveLength(2)
+    expect(harness.reactions[0]).not.toHaveProperty('session')
+    expect(harness.reactions[0]).not.toHaveProperty('id')
+  })
+
+  it('forgets the oldest event id once 1000 are remembered', () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    harness.messages.set(inbound().key, inbound())
+
+    for (let index = 0; index <= 1000; index++) harness.registry.reaction(react('m1', 'THUMBSUP', { id: `ev-${index}` }), 'added')
+    expect(harness.reactions).toHaveLength(1001)
+    // `ev-0` was evicted by `ev-1000`, so its redelivery surfaces again; `ev-1000` is still remembered.
+    harness.registry.reaction(react('m1', 'THUMBSUP', { id: 'ev-0' }), 'added')
+    harness.registry.reaction(react('m1', 'THUMBSUP', { id: 'ev-1000' }), 'added')
+    expect(harness.reactions).toHaveLength(1002)
   })
 })
 

@@ -220,8 +220,11 @@ export class ImOutputRegistry implements ImOutputs {
       const dedupeKey = `${session.bot.id}|${eventId}`
       if (this.seenReactions.has(dedupeKey)) return
       if (this.seenReactions.size >= MAX_REACTION_EVENTS) {
-        const oldest = this.seenReactions.values().next().value
-        if (oldest !== undefined) this.seenReactions.delete(oldest)
+        // A Set iterates in insertion order, so the first entry is the oldest event id.
+        for (const oldest of this.seenReactions) {
+          this.seenReactions.delete(oldest)
+          break
+        }
       }
       this.seenReactions.add(dedupeKey)
     }

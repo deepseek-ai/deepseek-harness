@@ -857,6 +857,11 @@ describe('ImIntake outbound', () => {
     const ownExplicit = await intake.outbound(bot, explicitReply)
     expect(ownExplicit?.thread).toEqual({ id: 'omt_1', root: 'om_root' })
 
+    // A platform that reports the thread of the sent part without its root keeps the thread id alone.
+    const rootlessResult = await bot.send({ ...target, thread: true }, content)
+    rootlessResult.handle.parts[0]!.thread = { id: 'omt_rootless' }
+    expect((await intake.outbound(bot, rootlessResult))?.thread).toEqual({ id: 'omt_rootless' })
+
     // When replying with `thread: true` to an unthreaded root message creates a new platform thread,
     // `SentPart.thread` and `SentPart.referrer` override the unthreaded quote/target defaults.
     const createdThreadResult = await bot.send({ ...target, thread: true, referrer: { messageId: 'om_root' } }, content)

@@ -294,6 +294,11 @@ describe('ImSender.send', () => {
     expect(result.error).toMatch(/too similar/)
     expect(stub.sends).toHaveLength(0)
     expect(receiptsOf(pool).get('op-drop')).toMatchObject({ status: 'failed' })
+    // Without an operation id the drop is reported the same way and leaves no receipt.
+    const unreceipted = await sender.send(STUB_CHAT, h.text('again'))
+    expect(unreceipted).toMatchObject({ status: 'failed', dropped: true })
+    expect(stub.sends).toHaveLength(0)
+    expect(receiptsOf(pool).size).toBe(1)
   })
 
   it('does not rewrite a replayed operation and keeps the caller digest', async () => {
@@ -572,6 +577,11 @@ describe('ImSender grants', () => {
       quote: ImMessageKey('fake:bot', 'm-t1-msg'),
     })
     expect(okQuote.status).toBe('confirmed')
+    // Quoting a message of another thread does not move a confined session there.
+    await expect(sender.send(CHAT, h.text('quote-other'), {
+      session: confined.sessionId,
+      quote: ImMessageKey('fake:bot', 'm-t2'),
+    })).rejects.toMatchObject({ code: 'access' })
 
     const rootConfined = sessions.add('root-confined', [{ chat: CHAT, writable: true, home: true, thread: 'r1' }])
     const okRootQuote = await sender.send(CHAT, h.text('reply-root'), {

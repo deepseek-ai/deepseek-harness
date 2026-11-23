@@ -532,6 +532,40 @@ describe('reset', () => {
     expect(second.ctx.agents.get(record.sessionId)).toBeUndefined()
   })
 
+  it('stops a recovery pass held while it finishes a pending reset, before admitting other deliveries', async () => {
+    const first = await booted()
+    const record = await first.host.ensure(spec())
+    const other = await first.host.ensure(spec({ key: 'conv:other' }))
+    // A delivery to another session that cannot be formatted yet stays pending across the restart.
+    first.failFormat()
+    await expect(first.host.deliver(other.key, messagesDelivery('followup', [message('later', 1)])))
+      .rejects.toThrow(/format offline/)
+    expect(first.host.pendingDeliveries()).toBe(1)
+    let failSessionWrite = true
+    first.ctx.on('domain/changed', (change) => {
+      if (failSessionWrite && change.domain === 'im_sessions' && change.table === 'resets') {
+        failSessionWrite = false
+        first.pool.failNextWrites = 1
+      }
+    })
+    await expect(first.host.reset(record.key, 'cmd', { operationId: 'op-held', expectedGeneration: 0 }))
+      .rejects.toThrow()
+    await first.close()
+    open.splice(open.indexOf(first), 1)
+
+    const second = await booted({ pool: first.pool, root: first.root, withoutStart: true })
+    // A hold that arrives while recovery finishes the reset ends the pass before the delivery loop.
+    second.ctx.on('im/session/reset', () => { second.host.hold() })
+    await second.host.start()
+    await recovered(second)
+    expect(second.host.get(record.key)?.generation).toBe(1)
+    expect(second.host.pendingDeliveries()).toBe(1)
+
+    second.host.release()
+    await recovered(second)
+    expect(second.host.pendingDeliveries()).toBe(0)
+  })
+
   it('serializes recover() behind an in-flight reset() without duplicating events or dropping concurrent bindings', async () => {
     const harness = await booted({ withoutStart: true })
     const origOpen = harness.ctx.storageDomain.open.bind(harness.ctx.storageDomain)

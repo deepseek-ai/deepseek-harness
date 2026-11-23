@@ -5,7 +5,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { h } from '@deepseek-ai/cordis-plugin-im-core'
 import type {
-  Bot, ChatRef, Fragment, MessageStream, Session, StreamOptions,
+  Bot, ChatRef, Fragment, MessageStream, Session, SessionEvent, StreamOptions,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -194,13 +194,24 @@ export function react(
     ? { id: messageId }
     : { id: messageId, chat: chatOf(patch.chat).ref }
   const user = patch.user ?? { id: 'user-1' }
-  const event = {
+  const event: SessionEvent = {
     type: 'reaction-added',
     timestamp,
     ...patch.id === undefined ? {} : { id: patch.id },
     reaction: { message, emoji, user },
   }
-  return { bot: BOT, timestamp, event, reaction: event.reaction } as unknown as Session
+  return { bot: BOT, timestamp, event, reaction: event.reaction } as Session
+}
+
+/** One reaction session with an arbitrary (possibly incomplete) payload, for malformed platform events. */
+export function rawReaction(reaction: SessionEvent['reaction'], id?: string): Session {
+  const event: SessionEvent = {
+    type: 'reaction-added',
+    timestamp: 1000,
+    ...id === undefined ? {} : { id },
+    ...reaction === undefined ? {} : { reaction },
+  }
+  return { bot: BOT, timestamp: 1000, event, reaction: event.reaction } as Session
 }
 
 /** Everything one registry test needs. */

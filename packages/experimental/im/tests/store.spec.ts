@@ -205,6 +205,8 @@ describe('ImStore write rules', () => {
     const { store } = await boot(new MemoryMediaPool(), { retentionMs: RETENTION })
     const pending = await store.put(draft('m1'), 'pending')
     const settled = await store.put(draft('m2'), 'none')
+    // Another chat whose only message is pending keeps its history untouched by the sweep.
+    const otherPending = await store.put(draft('m3', OTHER), 'pending')
     await store.remember('fake:bot|evt-1', { digest: 'd', receivedAt: Date.now() })
 
     await store.sweep(Date.now())
@@ -214,6 +216,7 @@ describe('ImStore write rules', () => {
     expect(store.get(pending.key)).toBeDefined()
     expect(store.get(settled.key)).toBeUndefined()
     expect(store.event('fake:bot|evt-1')).toBeUndefined()
+    expect(store.latest(OTHER.key)?.key).toBe(otherPending.key)
 
     await store.settle(pending.key, { kind: 'ignored' })
     await store.sweep(Date.now() + RETENTION + 1000)
