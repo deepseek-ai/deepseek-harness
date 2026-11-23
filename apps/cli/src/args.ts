@@ -57,13 +57,18 @@ interface PluginInvocation {
   args: string[]
 }
 
-/** {@link parseDshArgs} has printed the version. The caller can return and let the process exit naturally. */
-interface VersionInvocation {
-  mode: 'version'
+/**
+ * {@link parseDshArgs} has already printed help, the version, or usage
+ * diagnostics. The caller sets `process.exitCode` and returns so Node drains
+ * V8 background tasks instead of blocking in `process.exit`.
+ */
+interface ExitInvocation {
+  mode: 'exit'
+  exitCode: number
 }
 
-/** The resolved `dsh` invocation. Help and errors exit inside {@link parseDshArgs}. */
-export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation | VersionInvocation
+/** The resolved `dsh` invocation. */
+export type DshInvocation = ProfileInvocation | DumpConfigInvocation | DumpConfigSchemaInvocation | PluginInvocation | ExitInvocation
 
 /** Launcher flags for profile boot and configuration dumps. */
 interface BootOptions {
@@ -141,7 +146,8 @@ function resolveBoot(program: Command, profile: string, options: BootOptions, ar
 }
 
 /**
- * Resolve argv into one invocation, or print and exit for help or an error.
+ * Resolve argv into one invocation; help, version, and usage errors are printed
+ * before returning an `exit` invocation with the intended status code.
  * @param argv - arguments after the Node binary and script.
  * @param version - version string printed by `--version`.
  * @param manageDesktopProfile - permit Desktop's installed carrier to manage its reserved profile's plugins.
@@ -212,10 +218,12 @@ export function parseDshArgs(argv: readonly string[], version: string, manageDes
       : argv
     program.parse(expanded, { from: 'user' })
   } catch (error) {
-    if (error instanceof CommanderError && error.code === 'commander.version' && error.exitCode === 0) {
-      return { mode: 'version' }
-    }
-    return process.exit(error instanceof CommanderError ? error.exitCode : 1)
+    // `.exitOverride()` throws `CommanderError` after writing `--version`, `--help`,
+    // or usage diagnostics. Returning lets Node service foreground V8 GC requests
+    // from background compiler threads instead of deadlocking in `process.exit`.
+    /* v8 ignore next -- exitOverride turns every Commander exit into CommanderError */
+    if (!(error instanceof CommanderError)) throw error
+    return { mode: 'exit', exitCode: error.exitCode }
   }
   /* v8 ignore next -- an action resolves or Commander throws */
   if (resolved === undefined) throw new Error('dsh: no invocation resolved')
