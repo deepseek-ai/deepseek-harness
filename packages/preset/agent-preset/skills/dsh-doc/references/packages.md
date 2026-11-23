@@ -253,6 +253,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-forge-gitlab` | yes | GitLab provider for the experimental forge registry, read and written through the GitLab CLI on the host |
 | `@deepseek-ai/dsh-hooks-claude-code` | yes | Bridge plugin: run a Claude Code hooks.json / settings hook config on the DeepSeek Harness interception seams |
 | `@deepseek-ai/dsh-hooks-codex` | yes | Bridge plugin: run a Codex hooks.json hook config on the DeepSeek Harness interception seams |
+| `@deepseek-ai/dsh-sandbox-policy-git` | no | Grants a Session that works in a linked Git worktree write access to its repository's Git directory |
 | `@deepseek-ai/dsh-session-title-all-prompts-llm` | yes | All-user-messages LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-skill-badge` | no | Bundled dsh badge skill provider for DeepSeek Harness |
 | `@deepseek-ai/dsh-speech-to-text-deepseek` | yes | DeepSeek speech recognition through the /v1/tools/asr API, authenticated by the DeepSeek account or API key |

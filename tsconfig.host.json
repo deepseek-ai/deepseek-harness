@@ -471,6 +471,7 @@
     { "path": "./packages/session/tool-session-control" },
     { "path": "./packages/session/session-title" },
     { "path": "./packages/session/working-directory" },
+    { "path": "./packages/experimental/sandbox-policy-git" },
     { "path": "./packages/experimental/worktree" },
     { "path": "./packages/experimental/tool-worktree" },
     { "path": "./packages/experimental/forge" },

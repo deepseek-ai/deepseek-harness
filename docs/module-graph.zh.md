@@ -333,6 +333,7 @@ flowchart TD
     pkg_hook_protocol["hook-protocol"]
     pkg_hooks_claude_code["hooks-claude-code"]
     pkg_hooks_codex["hooks-codex"]
+    pkg_sandbox_policy_git["sandbox-policy-git"]
     pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
     pkg_skill_badge["skill-badge"]
     pkg_speech_to_text_deepseek["speech-to-text-deepseek"]
@@ -844,6 +845,11 @@ flowchart TD
   pkg_compaction --> pkg_commands
   pkg_compaction --> pkg_llm
   pkg_compaction --> pkg_session
+  pkg_sandbox_policy_git --> pkg_agent
+  pkg_sandbox_policy_git --> pkg_fs
+  pkg_sandbox_policy_git --> pkg_sandbox_policy
+  pkg_sandbox_policy_git --> pkg_session
+  pkg_sandbox_policy_git --> pkg_working_directory
   pkg_command_feedback --> pkg_anonymous_user_id
   pkg_command_feedback --> pkg_commands
   pkg_command_feedback --> pkg_session
@@ -1924,6 +1930,7 @@ flowchart TD
 | [`command-goal`](../packages/goal/command-goal) | `goal` | [`commands`](../packages/interaction/commands), [`goal`](../packages/goal/goal), [`llm`](../packages/llm/llm) |
 | [`fs-sandbox`](../packages/fs/fs-sandbox) | `fs` | [`fs`](../packages/fs/fs), [`fs-local`](../packages/fs/fs-local), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy) |
 | [`compaction`](../packages/compaction/compaction) | `compaction` | [`commands`](../packages/interaction/commands), [`llm`](../packages/llm/llm), [`session`](../packages/core/session) |
+| [`sandbox-policy-git`](../packages/experimental/sandbox-policy-git) | `experimental` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`working-directory`](../packages/session/working-directory) |
 | [`command-feedback`](../packages/feedback/command-feedback) | `feedback` | [`anonymous-user-id`](../packages/identity/anonymous-user-id), [`commands`](../packages/interaction/commands), [`session`](../packages/core/session), [`typert-protocol`](../packages/typert/protocol) |
 | [`permission-presets`](../packages/interaction/permission-presets) | `interaction` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`sandbox`](../packages/sandbox/sandbox), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell), [`typert-protocol`](../packages/typert/protocol), [`user-approval`](../packages/interaction/user-approval) |
 | [`jobs-local`](../packages/jobs/jobs-local) | `jobs` | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`scope`](../packages/core/scope), [`timeout`](../packages/util/timeout) |

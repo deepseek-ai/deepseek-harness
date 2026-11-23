@@ -37,6 +37,8 @@ const windowsUnsupportedPackages = process.platform === 'win32'
       'packages/experimental/hooks-codex',
       'packages/terminal/terminal-bash',
       'packages/sandbox/sandbox-local',
+      // Registers nothing on Windows, whose process confinement ignores additional writable directories.
+      'packages/experimental/sandbox-policy-git',
       // OpenSSH multiplexing and Unix-socket helper streams require POSIX endpoints.
       'packages/ssh/*',
     ]

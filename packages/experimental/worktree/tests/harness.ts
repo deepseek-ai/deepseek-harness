@@ -38,17 +38,28 @@ export class UnusedSandbox extends SandboxProvider {
   }
 }
 
-export function testAgent(ctx: Context, cwd: string, name = 'worktree-test'): Agent {
+function stubAgent(ctx: Context, cwd: string, name: string): Agent {
   const scope = ctx.plugin(() => {})
   const id = brandString<SessionId>(name)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
-  const agent: Agent = {
+  return {
     id, session, options: {}, status: 'idle', ctx: scope.ctx, model: unsupportedModel(),
     inbox: unsupportedInbox(),
     send() {}, followup() {}, steer() {}, inject() {}, cancel() {},
     whenIdle: async () => {}, runMaintenance: task => task(new AbortController().signal),
   }
+}
+
+export function testAgent(ctx: Context, cwd: string, name = 'worktree-test'): Agent {
+  const agent = stubAgent(ctx, cwd, name)
   ctx.agents.register(agent)
+  return agent
+}
+
+/** An Agent whose creation listeners have finished, the linked-worktree grant's first read of `cwd` among them. */
+export async function announcedAgent(ctx: Context, cwd: string, name = 'worktree-test'): Promise<Agent> {
+  const agent = stubAgent(ctx, cwd, name)
+  await ctx.agents.register(agent)
   return agent
 }
 

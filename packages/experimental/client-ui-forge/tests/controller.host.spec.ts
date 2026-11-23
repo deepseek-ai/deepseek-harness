@@ -70,10 +70,11 @@ const UNAVAILABLE = {
 }
 
 /**
- * The same facts once the Session works in its worktree: its root no longer contains the repository's Git
- * directory, which another worktree would have to write. The option that shows the blocker is hidden by then.
+ * The same facts once the Session works in its worktree. Its root no longer contains the repository's Git
+ * directory, which another worktree would have to write; the worktree service's linked-worktree grant covers that
+ * directory except on Windows. The option that shows the blocker is hidden by then.
  */
-const IN_WORKTREE = { ...UNAVAILABLE, blocker: 'outside-writable-root' as const }
+const IN_WORKTREE = { ...UNAVAILABLE, blocker: process.platform === 'win32' ? 'outside-writable-root' as const : null }
 
 /** Matches a generated branch name with the default prefix. */
 const GENERATED_BRANCH: unknown = expect.stringMatching(/^dsh-[0-9a-f]{8}$/)
@@ -998,6 +999,19 @@ describe('forgePanel worktree blockers', () => {
     expect(revoked.worktree.blocker).toBe('outside-writable-root')
   })
 
+  it('offers a worktree from a linked checkout when the worktree service is mounted, whose linked-worktree grant covers the shared Git directory', async () => {
+    const { root, repo } = await project()
+    const linked = join(root, 'linked')
+    await git(repo, 'worktree', 'add', '-b', 'feat', linked)
+    const opened = await open(linked, {}, { worktrees: true })
+
+    const state = await reader(opened).until(ready)
+
+    // The grant is registered at Agent creation, before the panel's first inspection; Windows gets none.
+    expect(state.checkout).toMatchObject({ state: 'ready', checkout: { root: linked, branch: 'feat', linked: true } })
+    expect(state.worktree.blocker).toBe(process.platform === 'win32' ? 'outside-writable-root' : null)
+  })
+
   it('shows no blocker after an inspection fails', async () => {
     const opened = await open(await plain())
     const follower = reader(opened)
@@ -1585,7 +1599,9 @@ describe('forgePanel removed worktrees', () => {
     // The Session's own root is the removed directory; the branch probe runs under the source repository's boundary
     // and keeps the Session's grants. Creation ran an earlier `show-ref`, before the grant.
     const probe = opened.sandbox.calls.findLast(call => call.argv.includes('show-ref'))
-    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: [granted] })
+    // The worktree service's linked-worktree grant registered the repository's Git directory when the Session entered the worktree.
+    const grants = process.platform === 'win32' ? [granted] : [join(repo, '.git'), granted]
+    expect(probe?.policy).toMatchObject({ mode: 'workspace-write', workspaceRoot: repo, additionalWritableRoots: grants })
     const pruning = hold(opened.sandbox, 'list')
     const resetting = hold(opened.sandbox, 'reset')
     const restoring = opened.ctx.forgePanel.restoreWorktree(opened.session, signal)

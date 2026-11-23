@@ -89,6 +89,7 @@ kind: "package-group"
 | [`webworker-packer`](webworker-packer/README.zh.md) | 构建浏览器 worker 预览所消费的 gzip 压缩虚拟文件系统（VFS）镜像 | 库与 CLI（命令行界面），不使用 ctx key |
 | [`webworker-runtime`](webworker-runtime/README.zh.md) | 在专用浏览器 worker 中运行 harness 插件树 | 库与 worker 入口，不使用 ctx key |
 | [`worktree`](worktree/README.zh.md) | 创建具名 Git 工作树并改变调用 Session 的当前目录 | `ctx.worktrees` |
+| [`sandbox-policy-git`](sandbox-policy-git/README.zh.md) | 为链接工作树中的 Session 授予仓库 Git 目录的写权限 | — |
 | [`forge`](forge/README.zh.md) | 代码托管提供方注册表，共享变更请求轮询 | `ctx.forge` |
 | [`forge-github`](forge-github/README.zh.md) | 通过宿主 GitHub CLI 读取 pull request 的 GitHub 提供方 | 在 `ctx.forge` 上注册提供方 |
 | [`forge-gitlab`](forge-gitlab/README.zh.md) | 通过宿主 GitLab CLI 读写合并请求的 GitLab 提供方 | 在 `ctx.forge` 上注册提供方 |

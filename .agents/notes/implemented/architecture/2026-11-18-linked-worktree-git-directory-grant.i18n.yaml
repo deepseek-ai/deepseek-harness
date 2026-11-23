@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-18-linked-worktree-git-directory-grant.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-18-linked-worktree-git-directory-grant.md
+/agent-note-linked-worktrees-get-a-validated-grant-of-the-repository-git-directory:
+  en: 1d8614c24434ab6e
+  zh: a635c9c615796ea0
+/agent-note-linked-worktrees-get-a-validated-grant-of-the-repository-git-directory/problem:
+  en: c3c2bfc6e4536d21
+  zh: ea8f8ad641bcc2db
+/agent-note-linked-worktrees-get-a-validated-grant-of-the-repository-git-directory/decision:
+  en: 2b2ca5a775bae2a4
+  zh: af6d45549e434672
+/agent-note-linked-worktrees-get-a-validated-grant-of-the-repository-git-directory/alternatives-considered:
+  en: 1c5640cc6b10c251
+  zh: 73102db4ea8a3086
+/agent-note-linked-worktrees-get-a-validated-grant-of-the-repository-git-directory/consequences:
+  en: 0d72487a0b23a853
+  zh: 2c6a7041ceb3e259

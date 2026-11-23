@@ -166,7 +166,7 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 - **一轮进行中的消息**——Agent 正在运行一轮或其他维护任务时进入的消息不会被暂留：所请求的 worktree 改为在第一步创建，失败时这一轮结束且不带这条消息；已删除的 worktree 不会被检查，工作目录服务会把 Session 移回项目目录。
 - **等待中的消息**——消息等待期间，Agent 以空闲状态处于维护任务中，输入框不提供停止；只有卡片上的操作、Agent 的取消或 Remote 的停止能放行它，等待 Agent 空闲的调用方也会一并等待。
 - **恢复**——恢复会从分支重新检出；分支也已删除时，从它开始时的提交重新创建。从未提交的修改随被删除的目录一起丢失。[worktree 服务](../worktree/README.zh.md#use-this-package)校验记录的目标，只移除该目标缺失且未锁定的登记。已有或未恢复完成的目录仍会阻止恢复；请先保存其中的文件并移除目录再重试，或在源项目继续。
-- **链接 worktree 项目**——项目本身是链接 worktree 时该选项不可用，除非沙箱策略授权了它的 Git 目录：在 workspace-write 下该目录位于可写根之外，新分支与之后的提交都无法写入。面板显示期间注册的授权在下一次检查时生效。Windows 的进程忽略这类授权，因此在 Windows 上该选项可用但创建会失败。在创建出的 worktree 内提交同样需要该授权，见 [worktree 服务](../worktree/README.zh.md#known-limitations-and-deferred-work)的说明。
+- **链接 worktree 项目**——项目本身是链接 worktree 时该选项不可用，除非沙箱策略授权了它的 Git 目录：在 workspace-write 下该目录位于可写根之外，新分支与之后的提交都无法写入。在 macOS 和 Linux 上，worktree 服务的[链接工作树授权](../sandbox-policy-git/README.zh.md)会为每个 Session 注册它，因此该选项在那里可用。面板显示期间注册的授权在下一次检查时生效。Windows 的进程忽略这类授权，因此在 Windows 上该选项可用但创建会失败。在创建出的 worktree 内提交同样需要该授权，见 [worktree 服务](../worktree/README.zh.md#known-limitations-and-deferred-work)的说明。
 - **变更范围**——待办：上一轮的范围。“分支”范围的“默认”需要一个默认分支与 HEAD 有共同历史的远端，或 Session 创建的 worktree；否则必须选择基准分支。
 - **分支极多**——基准分支菜单在筛选前读取全部引用，这样搜索才能找到任意分支。引用超过 `maxDiffBytes`（默认约 165,000 个）或列出时间超过 `gitTimeoutMs` 时，菜单提示无法读取分支；“默认”仍可使用。
 - **大型变更**——本地补丁超过 `maxDiffBytes` 时不显示任何文件；超过托管平台或其提供方大小上限的变更请求 diff 不显示任何文件，只提供“在代码托管平台中查看”。不自动换行时，左右对比会在栏边截断长行。
