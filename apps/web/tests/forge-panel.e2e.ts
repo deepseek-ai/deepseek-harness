@@ -1003,8 +1003,8 @@ it.skipIf(MODE === 'record')('keeps the link actions in the detail header, folds
   await page.setViewportSize({ width: 700, height: 900 })
   await more.waitFor()
   expect(await links.isVisible()).toBe(false)
-  const bar = await detail.locator('header > div').first().boundingBox()
-  expect(bar?.height).toBe(32)
+  // The sidebar leaves the page a frame after the window narrows; until then the detail is narrower and its bar has two rows.
+  await expect.poll(async () => (await detail.locator('header > div').first().boundingBox())?.height).toBe(32)
   await more.click()
   expect(await page.getByRole('menu').getByRole('menuitem').allTextContents()).toEqual(['在 GitHub 中打开', '复制变更请求链接', '刷新状态'])
   expect(tripwire.pageErrors).toEqual([])
