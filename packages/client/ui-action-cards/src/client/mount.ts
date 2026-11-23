@@ -57,7 +57,7 @@ export function apply(ctx: Context): void {
   const form = ctx.configForms.get<CardSettings>(SETTINGS_NAMESPACE)
   ctx.effect(() => ctx.configForms.whileServed([SETTINGS_NAMESPACE], () => ctx.slots.inject('settings.general.group.display.item', () =>
     ctx.slots.register({
-      name: 'settings.general.group.display.item', id: 'action-cards', order: 10, locale: 'actionCards',
+      name: 'settings.general.group.display.item', id: 'action-cards', order: 13, locale: 'actionCards',
       inject: (): SettingsRowInjected => ({ hooks: { cardSettings: form }, setEnabled: enabled => form.set('enabled', enabled) }),
     }, SettingsRow))), 'action-cards: settings row')
 }

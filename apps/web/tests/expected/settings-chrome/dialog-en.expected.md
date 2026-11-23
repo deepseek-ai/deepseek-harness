@@ -45,8 +45,8 @@
     - button "Edit shortcuts"
   - region "Data management":
     - heading "Data management" [level=3]
-    - text: Upload Session Log when using the official model API Help improve DeepSeek models and products.
-    - switch "Upload Session Log when using the official model API"
+    - text: Upload session log when using the official model API Help improve DeepSeek models and products.
+    - switch "Upload session log when using the official model API"
   - region "Version and updates":
     - heading "Version and updates" [level=3]
     - text: "Current version: {{version}}"

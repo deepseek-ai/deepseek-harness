@@ -106,7 +106,7 @@ it('adds the card switch to General settings while the Host serves action-cards,
   expect(configForms.get).toHaveBeenCalledWith('action-cards')
   expect(configForms.whileServed).toHaveBeenCalledWith(['action-cards'], expect.any(Function))
   const entry = slots.entries('settings.general.group.display.item')[0]!
-  expect(entry.options).toMatchObject({ id: 'action-cards', order: 10 })
+  expect(entry.options).toMatchObject({ id: 'action-cards', order: 13 })
   const resolve = entry.inject as (() => SettingsRowInjected) & NonNullable<typeof entry.inject>
   const injected = resolve()
   expect(injected.hooks.cardSettings).toBe(form)
