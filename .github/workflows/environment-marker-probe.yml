@@ -1,0 +1,101 @@
+# Temporary manual probe for GitHub Environment behavior. It has no
+# pull_request or push trigger, checks out no code, uses no action, and
+# requests no token permissions.
+#
+# workflow_dispatch requires this file on the default branch, so the first run
+# is possible only after this file is merged. Scenario a is then dispatched at
+# the default branch, and scenarios b and c at the probe branch, which contains
+# the same file.
+name: environment-marker-probe
+run-name: environment-marker-probe ${{ inputs.mode }} on ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: >-
+          Probe scenario. a is the protected job on the default branch, b is
+          the identical protected job on the probe branch, c is the identical
+          job without the environment on the probe branch.
+        required: true
+        type: choice
+        options:
+          - a
+          - b
+          - c
+      expected_marker_present:
+        description: >-
+          Expected presence of the DSH_ENV_PROBE_8722_ABC environment secret,
+          stated independently of the scenario selector.
+        required: true
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+# One dispatch per scenario. A run that waits for environment reviewers is not
+# cancelled by a later dispatch of another scenario.
+concurrency:
+  group: environment-marker-probe-${{ inputs.mode }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  dispatch-context:
+    name: validate dispatch context
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Match the scenario to the dispatch ref
+        env:
+          MODE: ${{ inputs.mode }}
+          EXPECTED_REF: ${{ inputs.mode == 'a' && 'master' || 'ci/env-probe-8722-abc' }}
+          ACTUAL_REF: ${{ github.ref_name }}
+        run: |
+          echo "mode: ${MODE}"
+          echo "expected ref: ${EXPECTED_REF}; dispatched ref: ${ACTUAL_REF}"
+          test "${ACTUAL_REF}" = "${EXPECTED_REF}"
+
+  protected-job:
+    name: protected probe job
+    needs: dispatch-context
+    # Scenario selection only. No branch condition can skip this job.
+    if: inputs.mode == 'a' || inputs.mode == 'b'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Literal environment. No input selects or overrides it.
+    environment: weighted-approval-probe-8722-abc
+    steps:
+      - name: Report marker presence
+        env:
+          MARKER_PRESENT: ${{ secrets.DSH_ENV_PROBE_8722_ABC != '' }}
+        run: |
+          echo "DSH_ENV_PROBE_8722_ABC present: ${MARKER_PRESENT}"
+      - name: Assert expected marker presence
+        env:
+          MARKER_PRESENT: ${{ secrets.DSH_ENV_PROBE_8722_ABC != '' }}
+          EXPECTED_MARKER_PRESENT: ${{ inputs.expected_marker_present }}
+        run: |
+          echo "observed marker presence: ${MARKER_PRESENT}; expected: ${EXPECTED_MARKER_PRESENT}"
+          test "${MARKER_PRESENT}" = "${EXPECTED_MARKER_PRESENT}"
+
+  unprotected-job:
+    name: unprotected probe job
+    needs: dispatch-context
+    if: inputs.mode == 'c'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Report marker presence
+        env:
+          MARKER_PRESENT: ${{ secrets.DSH_ENV_PROBE_8722_ABC != '' }}
+        run: |
+          echo "DSH_ENV_PROBE_8722_ABC present: ${MARKER_PRESENT}"
+      - name: Assert expected marker presence
+        env:
+          MARKER_PRESENT: ${{ secrets.DSH_ENV_PROBE_8722_ABC != '' }}
+          EXPECTED_MARKER_PRESENT: ${{ inputs.expected_marker_present }}
+        run: |
+          echo "observed marker presence: ${MARKER_PRESENT}; expected: ${EXPECTED_MARKER_PRESENT}"
+          test "${MARKER_PRESENT}" = "${EXPECTED_MARKER_PRESENT}"
