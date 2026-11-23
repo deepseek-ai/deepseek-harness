@@ -28,7 +28,8 @@ it.skipIf(webSnapshotMode() === 'record')('guides voice setup, records from stan
     }
   })
   const overlay = join(scratch, 'voice.patch.yml')
-  await writeFile(overlay, '- id: speech-to-text-sensevoice\n  disabled: true\n')
+  // Local recording only: the shipped cloud recognizer would change automatic selection and its setup guidance.
+  await writeFile(overlay, '- id: speech-to-text-sensevoice\n  disabled: true\n- id: speech-to-text-deepseek\n  disabled: true\n')
   const prompt = fixtureUserPrompts(await readFile(fixture, 'utf8'))[0]!
   const prefix = 'Use the bash tool to '
   const scaffold = await launchWebScaffold({ profile: { packages: [{ dir: bundle, enabled: true }] },

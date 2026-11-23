@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-experimental-voice-input-bundle",
-  "description": "Experimental voice input with local SenseVoice; downloads its runtime on first use",
+  "description": "Experimental voice input with DeepSeek cloud recognition through a DeepSeek account or API key, and optional local SenseVoice",
   "version": "0.2.3-alpha.2",
   "icon": "./icon.svg",
   "publishConfig": {
@@ -39,6 +39,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-experimental-speech-to-text": "workspace:*",
     "@deepseek-ai/dsh-experimental-speech-to-text-sensevoice": "workspace:*",
+    "@deepseek-ai/dsh-speech-to-text-deepseek": "workspace:*",
     "@deepseek-ai/dsh-experimental-api-speech-to-text": "workspace:*",
     "@deepseek-ai/dsh-experimental-client-ui-voice-input": "workspace:*"
   },

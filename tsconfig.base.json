@@ -80,6 +80,7 @@
       "@deepseek-ai/dsh-experimental-client-ui-cot-translation/client": ["./packages/experimental/client-ui-cot-translation/src/client/index.ts"],
       "@deepseek-ai/dsh-experimental-cot-translation-bundle": ["./packages/experimental/cot-translation-bundle/src/index.ts"],
       "@deepseek-ai/dsh-experimental-speech-to-text-sensevoice": ["./packages/experimental/speech-to-text-sensevoice/src/index.ts"],
+      "@deepseek-ai/dsh-speech-to-text-deepseek": ["./packages/experimental/speech-to-text-deepseek/src/index.ts"],
       "@deepseek-ai/dsh-experimental-api-speech-to-text": ["./packages/experimental/api-speech-to-text/src/index.ts"],
       "@deepseek-ai/dsh-experimental-client-ui-voice-input": ["./packages/experimental/client-ui-voice-input/src/index.ts"],
       "@deepseek-ai/dsh-experimental-voice-input-bundle": ["./packages/experimental/voice-input-bundle/src/index.ts"],

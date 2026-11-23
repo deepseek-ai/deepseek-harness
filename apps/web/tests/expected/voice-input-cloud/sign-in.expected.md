@@ -1,0 +1,6 @@
+- dialog "Cloud recognition requires a DeepSeek account or API key":
+  - heading "Cloud recognition requires a DeepSeek account or API key" [level=2]
+  - button "Cancel"
+  - paragraph: DeepSeek cloud recognition is selected. Sign in to DeepSeek, or configure an API key in model settings, to use it without downloading models.
+  - button "Later"
+  - button "Sign in to DeepSeek"

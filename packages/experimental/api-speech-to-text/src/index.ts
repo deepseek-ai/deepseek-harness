@@ -2,7 +2,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type {} from '@deepseek-ai/dsh-experimental-speech-to-text'
+import { SpeechTranscriptionError } from '@deepseek-ai/dsh-experimental-speech-to-text'
 import type { SpeechPreparationOptions, SpeechProviderId, SpeechSelectionPatch, Transcript } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
 import type { SpeechCatalog, TranscriptionRequest } from './types.ts'
 import { validateWave } from '@deepseek-ai/dsh-experimental-speech-to-text/wave'
@@ -105,7 +105,8 @@ export default class SpeechController extends TypertRemoteService {
     } catch (error) {
       signal.throwIfAborted()
       const reason = error instanceof Error ? error.message : String(error)
-      throw new RemoteError('speech/transcription-failed', reason, { reason })
+      throw new RemoteError('speech/transcription-failed', reason,
+        error instanceof SpeechTranscriptionError ? { reason, code: error.code } : { reason })
     }
   }
 }

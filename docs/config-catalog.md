@@ -1578,13 +1578,15 @@ export interface InspectorOptions {
 ## `@deepseek-ai/dsh-experimental-speech-to-text`
 
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/speech-to-text/src/index.ts:20`](../packages/experimental/speech-to-text/src/index.ts)
+- `source`: [`packages/experimental/speech-to-text/src/index.ts:31`](../packages/experimental/speech-to-text/src/index.ts)
 
 ```ts config-catalog
 /** Live selection read before a transcription starts; `configure()` writes it through the profile. */
 export interface Config {
-  /** Registered provider selected when the caller omits an id. */
+  /** Registered provider selected when the caller omits an id, or `auto` to follow `autoOrder`. */
   defaultProvider: Volatile<string>
+  /** Provider ids considered by automatic selection, in preference order; required while `defaultProvider` is `auto`. */
+  autoOrder: string[]
   /** Provider language hint selected when the caller omits one. */
   language: Volatile<string>
 }
@@ -3891,6 +3893,31 @@ export interface Config {
 export type PythonEnvironment = 'workspace-dependencies' | 'user'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-skill-office -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->
+<a id="deepseek-aidsh-speech-to-text-deepseek"></a>
+
+## `@deepseek-ai/dsh-speech-to-text-deepseek`
+
+- `inject`: `speechToText` · `deepseekAuth`
+- `source`: [`packages/experimental/speech-to-text-deepseek/src/config.ts:7`](../packages/experimental/speech-to-text-deepseek/src/config.ts)
+
+```ts config-catalog
+/** Registration id and the limits of one recognition request; `ctx.deepseekAuth` supplies the endpoint and credential. */
+export interface Config {
+  /** Unique registration id; `speech-to-text` selects this exact id. */
+  providerId: string
+  /** Deadline for the request, including its response body. */
+  timeoutMs: number
+  /** Largest recording, in bytes, sent to the service; the service rejects files over 8 MiB. */
+  maxRequestBytes: number
+  /** Longest recording, in seconds, sent to the service; the service rejects recordings over 120 seconds. */
+  maxDurationSeconds: number
+  /** Maximum response body bytes read from the service. */
+  maxResponseBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-speech-to-text-deepseek -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-spill-local -->
 <a id="deepseek-aidsh-spill-local"></a>

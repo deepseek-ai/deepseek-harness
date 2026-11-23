@@ -4266,8 +4266,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async configure(patch: SpeechSelectionPatch): Promise<void>',
-        description: 'Persist changed selection fields into this plugin\'s profile entry; the resulting language must be accepted by the selected provider.',
-        parameters: [{ name: 'patch', description: 'explicit provider or language changes.' }],
+        description: 'Persist changed selection fields into this plugin\'s profile entry. The language must be listed by at least one registered provider; a provider that does not list it receives `auto` when it transcribes.',
+        parameters: [{ name: 'patch', description: 'explicit provider, `auto`, or language changes.' }],
         returns: 'after the profile write and the live update it applies.',
       },
       {
@@ -4283,7 +4283,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SpeechRequest): SpeechSpec',
-        description: 'Apply composition defaults and capture the selected provider. Missing providers and unsupported languages fail explicitly.',
+        description: 'Apply the saved selection and capture the provider. Missing providers and requested hints no registered provider lists fail explicitly; a saved hint no registered provider lists becomes `auto`. The captured provider receives the hint when it lists it and `auto` otherwise.',
         parameters: [{ name: 'request', description: 'complete recording and optional selection.' }],
         returns: 'provider-pinned input for transcribe().',
       },
@@ -10644,6 +10644,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SkillViewOptions extends SkillLookupOptions {\n    readonly scope?: ScopeKey | undefined;\n}',
   },
   {
+    name: 'SpeechAutomaticChoice',
+    declaration: 'export type SpeechAutomaticChoice = \'auto\';',
+  },
+  {
     name: 'SpeechCatalog',
     declaration: 'export interface SpeechCatalog extends SpeechSnapshot {\n    readonly maxAudioBytes: number;\n    readonly maxDurationSeconds: number;\n}',
   },
@@ -10665,7 +10669,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpeechPreparationState',
-    declaration: 'export type SpeechPreparationState = ({\n    readonly phase: \'unprepared\' | \'ready\' | \'standby\' | \'cancelled\';\n} | {\n    readonly phase: \'downloading\';\n    readonly resource: string;\n    readonly completedBytes: number;\n    readonly totalBytes?: number;\n} | {\n    readonly phase: \'checking\' | \'loading\' | \'waking\' | \'cancelling\';\n    readonly startedAt: number;\n} | {\n    readonly phase: \'failed\';\n    readonly message: string;\n    readonly download?: SpeechDownloadFailure;\n}) & {\n    readonly step?: SpeechPreparationStepKind;\n    readonly steps?: readonly SpeechPreparationStep[];\n};',
+    declaration: 'export type SpeechPreparationState = ({\n    readonly phase: \'unprepared\' | \'ready\' | \'standby\' | \'cancelled\';\n} | {\n    readonly phase: \'unavailable\';\n    readonly reason: SpeechUnavailableReason;\n} | {\n    readonly phase: \'downloading\';\n    readonly resource: string;\n    readonly completedBytes: number;\n    readonly totalBytes?: number;\n} | {\n    readonly phase: \'checking\' | \'loading\' | \'waking\' | \'cancelling\';\n    readonly startedAt: number;\n} | {\n    readonly phase: \'failed\';\n    readonly message: string;\n    readonly download?: SpeechDownloadFailure;\n}) & {\n    readonly step?: SpeechPreparationStepKind;\n    readonly steps?: readonly SpeechPreparationStep[];\n};',
   },
   {
     name: 'SpeechPreparationStep',
@@ -10697,11 +10701,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SpeechSelection',
-    declaration: 'export interface SpeechSelection {\n    readonly providerId: SpeechProviderId;\n    readonly language: string;\n}',
+    declaration: 'export interface SpeechSelection {\n    readonly mode: \'auto\' | \'explicit\';\n    readonly providerId: SpeechProviderId;\n    readonly language: string;\n}',
   },
   {
     name: 'SpeechSelectionPatch',
-    declaration: 'export interface SpeechSelectionPatch {\n    readonly providerId?: SpeechProviderId;\n    readonly language?: string;\n}',
+    declaration: 'export interface SpeechSelectionPatch {\n    readonly providerId?: SpeechProviderId | SpeechAutomaticChoice;\n    readonly language?: string;\n}',
   },
   {
     name: 'SpeechSetupEstimate',
@@ -10714,6 +10718,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SpeechSpec',
     declaration: 'export interface SpeechSpec extends SpeechInput {\n    readonly provider: SpeechProvider;\n}',
+  },
+  {
+    name: 'SpeechUnavailableReason',
+    declaration: 'export type SpeechUnavailableReason = \'sign-in-required\';',
   },
   {
     name: 'SpillLocator',

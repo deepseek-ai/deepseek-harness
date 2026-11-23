@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Entrada de voz",
-    "description": "Transcribe grabaciones localmente con SenseVoice; El primer uso requiere instalar dependencias.",
+    "description": "Dicta con el reconocimiento en la nube de DeepSeek mediante una cuenta o una clave de API de DeepSeek, o descarga el modelo local SenseVoice.",
     "detail": "docs/DETAIL.md"
   }
 }

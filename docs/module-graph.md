@@ -333,6 +333,7 @@ flowchart TD
     pkg_hooks_codex["hooks-codex"]
     pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
     pkg_skill_badge["skill-badge"]
+    pkg_speech_to_text_deepseek["speech-to-text-deepseek"]
     pkg_terminal_panel["terminal-panel"]
     pkg_timeline["timeline"]
     pkg_tool_ralph["tool-ralph"]
@@ -773,6 +774,9 @@ flowchart TD
   pkg_tmux_context --> pkg_session
   pkg_tmux_context --> pkg_session_projection
   pkg_tmux_context --> pkg_shell
+  pkg_speech_to_text_deepseek --> pkg_credentials
+  pkg_speech_to_text_deepseek --> pkg_deepseek_auth
+  pkg_speech_to_text_deepseek --> pkg_experimental_speech_to_text
   pkg_commands --> pkg_agent
   pkg_commands --> pkg_attachment
   pkg_commands --> pkg_llm
@@ -1900,6 +1904,7 @@ flowchart TD
 | [`harness-dev-context`](../packages/context/harness-dev-context) | `context` | [`agent`](../packages/core/agent), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt) |
 | [`time-context`](../packages/context/time-context) | `context` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`util-time`](../packages/util/time) |
 | [`tmux-context`](../packages/context/tmux-context) | `context` | [`agent`](../packages/core/agent), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell) |
+| [`speech-to-text-deepseek`](../packages/experimental/speech-to-text-deepseek) | `experimental` | [`credentials`](../packages/credentials/credentials), [`deepseek-auth`](../packages/account/deepseek-auth), [`experimental-speech-to-text`](../packages/experimental/speech-to-text) |
 | [`commands`](../packages/interaction/commands) | `interaction` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`typert-protocol`](../packages/typert/protocol) |
 | [`user-approval`](../packages/interaction/user-approval) | `interaction` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt) |
 | [`user-questions`](../packages/interaction/user-questions) | `interaction` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`typert-protocol`](../packages/typert/protocol) |

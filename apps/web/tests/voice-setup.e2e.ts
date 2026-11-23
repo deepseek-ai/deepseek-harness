@@ -1,4 +1,4 @@
-/** Empty local caches guide explicit enablement to plugin setup without starting installation. */
+/** Signed out with empty local caches, enabling voice input offers DeepSeek sign-in or local setup without starting installation. */
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
@@ -8,7 +8,7 @@ import { newEnglishPage } from './support.ts'
 const bundle = fileURLToPath(new URL('../../../packages/experimental/voice-input-bundle', import.meta.url))
 const expected = fileURLToPath(new URL('./expected/voice-setup.expected.md', import.meta.url))
 
-it('guides a newly enabled voice plugin to installation and lets the user postpone it', async () => {
+it('offers sign-in or local setup when a signed-out user enables the voice plugin and lets the user postpone it', async () => {
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   onTestFinished(async () => {
     try { await resources.browser?.close() } finally { await resources.scaffold?.close() }
@@ -23,7 +23,7 @@ it('guides a newly enabled voice plugin to installation and lets the user postpo
   const toggle = page.getByRole('switch', { name: 'Enable Voice input', exact: true })
   await toggle.waitFor()
   expect(await toggle.getAttribute('aria-checked')).toBe('false')
-  const dialog = page.getByRole('dialog', { name: 'Set up voice input before recording', exact: true })
+  const dialog = page.getByRole('dialog', { name: 'Prepare speech recognition', exact: true })
   expect(await dialog.count()).toBe(0)
   await toggle.click()
   await dialog.waitFor()
@@ -35,7 +35,7 @@ it('guides a newly enabled voice plugin to installation and lets the user postpo
   expect(await card.getByRole('status').textContent()).toBe('')
   await toggle.click()
   await page.getByRole('switch', { name: 'Enable Voice input', exact: true, checked: false }).click()
-  await dialog.getByRole('button', { name: 'Go to setup', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Download local model', exact: true }).click()
   await page.getByRole('button', { name: 'Download and prepare', exact: true }).waitFor()
   expect(await dialog.count()).toBe(0)
   expect(await page.getByText('Local models will be downloaded to the machine running DSH. No Python or compiler is required.', { exact: true }).count()).toBe(1)
@@ -44,9 +44,9 @@ it('guides a newly enabled voice plugin to installation and lets the user postpo
   expect(await source.inputValue()).toBe('')
   expect(await source.getByRole('option').allTextContents()).toEqual(['Automatic (recommended)', 'Hugging Face', 'HF-Mirror (China mirror)'])
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/voice-source-auto.expected.md', import.meta.url)),
-    await captureStableAria(page, '[data-speech-provider]', scaffold.workspaceCwd), webSnapshotMode())
+    await captureStableAria(page, '[data-speech-provider="sensevoice-local"]', scaffold.workspaceCwd), webSnapshotMode())
   await source.selectOption('https://hf-mirror.com')
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/voice-source-manual.expected.md', import.meta.url)),
-    await captureStableAria(page, '[data-speech-provider]', scaffold.workspaceCwd), webSnapshotMode())
+    await captureStableAria(page, '[data-speech-provider="sensevoice-local"]', scaffold.workspaceCwd), webSnapshotMode())
   expect(tripwire.pageErrors).toEqual([])
 })
