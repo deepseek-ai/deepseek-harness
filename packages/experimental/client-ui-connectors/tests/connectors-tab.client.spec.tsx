@@ -5,6 +5,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { ConnectorsTab, type ConnectorsTabProps } from '../src/client/ConnectorsTab.tsx'
 import type { ConnectorsState } from '../src/client/connectors-store.ts'
+import type { CustomServersOwnerProps } from '../src/client/CustomServersSection.tsx'
 import { en, type ConnectorsLocaleKey } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -19,7 +20,11 @@ type TabState = Pick<ConnectorsState, 'status' | 'connectors'> & Partial<Connect
 function renderTab(state: TabState, version: string | undefined) {
   const full = (next: TabState): ConnectorsState => ({ busy: [], failed: null, ...next })
   const store = createSnapshotStore<ConnectorsState>(full(state))
-  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), setEnabled: vi.fn() }
+  // The custom servers section, reduced to a button that asks the tab for one server's page.
+  const renderSlot = vi.fn((_name: string, owner: CustomServersOwnerProps) => (
+    <button type="button" data-custom-servers-slot={owner.view.kind} onClick={() => { owner.setView({ kind: 'server', name: 'docs' }) }}>docs</button>
+  ))
+  const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), setEnabled: vi.fn(), renderSlot }
   const props = {
     t: translator(en), version, ...actions, useConnectors: bindSnapshotSelector(store),
   } as ConnectorsTabProps
@@ -30,8 +35,11 @@ function renderTab(state: TabState, version: string | undefined) {
 
 const row = (id: string): HTMLElement => document.querySelector(`[data-connector="${id}"]`) as HTMLElement
 
-it('lists every official connector with its brand icon before its state is known, and asks for the state once mounted', () => {
+it('lists every official connector with its brand icon before its state is known, asks for the state once mounted, and leaves room for custom servers', () => {
   const { actions } = renderTab({ status: 'loading', connectors: {} }, '1.2.3')
+  expect(actions.renderSlot.mock.calls.at(-1)?.[0]).toBe('connectors.custom')
+  expect(actions.renderSlot.mock.calls.at(-1)?.[1].view).toEqual({ kind: 'list' })
+  expect(document.querySelector('[data-connectors] [data-custom-servers-slot="list"]')).not.toBeNull()
   expect(actions.ensure).toHaveBeenCalledOnce()
   expect(screen.getByRole('heading', { name: en.official })).toBeTruthy()
   expect([...document.querySelectorAll('[data-connector]')].map(item => item.getAttribute('data-connector')))
@@ -41,7 +49,7 @@ it('lists every official connector with its brand icon before its state is known
   const icons = [...document.querySelectorAll('[data-connector] img')].map(icon => icon.getAttribute('src'))
   expect(icons).toHaveLength(7)
   expect(new Set(icons).size).toBe(7)
-  expect(screen.queryByRole('button')).toBeNull()
+  expect(document.querySelector('[data-connector] button')).toBeNull()
   expect(screen.queryByRole('switch')).toBeNull()
 })
 
@@ -95,4 +103,17 @@ it('reports a failed read with a retry and clears it once the state arrives', ()
   expect(actions.retry).toHaveBeenCalledOnce()
   set({ status: 'ready', connectors: {} })
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('shows only a custom server’s page below its Back button while the section asks for one', () => {
+  const { actions } = renderTab({ status: 'ready', connectors: {} }, '1.2.3')
+  expect(screen.queryByRole('button', { name: en['custom.back'] })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'docs' }))
+  expect(actions.renderSlot.mock.calls.at(-1)?.[1].view).toEqual({ kind: 'server', name: 'docs' })
+  expect(screen.queryByRole('heading', { name: en.official })).toBeNull()
+  expect(document.querySelectorAll('[data-connector]')).toHaveLength(0)
+  expect(document.querySelector('[data-connectors] [data-custom-servers-slot="server"]')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: en['custom.back'] }))
+  expect(screen.getByRole('heading', { name: en.official })).toBeTruthy()
+  expect(document.querySelector('[data-custom-servers-slot="list"]')).not.toBeNull()
 })

@@ -908,6 +908,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'connectors',
+    summary: 'Lists and changes the MCP manager\'s Settings servers for the Connectors tab, and shows each configured OAuth server\'s account.',
+    description: 'Lists and changes the MCP manager\'s Settings servers for the Connectors tab, and shows each configured OAuth server\'s account.',
+    methods: [
+      {
+        signature: '@Remote listServers(): CustomServersList',
+        description: 'List the servers of the MCP manager\'s Settings namespace with secrets redacted.',
+        parameters: [],
+        returns: 'the servers and the revision a change names, or that the profile has no Settings, credentials, or manager to keep custom servers with.',
+      },
+      {
+        signature: '@Remote async saveServer(draft: ServerDraft, revision: number): Promise<void>',
+        description: 'Save one server from the form: write the entry, store the secret values entered in it, then delete the secrets the entry stopped using. An edit that drops OAuth signs the server out first, because the manager deletes a grant only while the entry still configures OAuth. The first refused step stops the save, so a refused write stores nothing; the manager starts the written entry at once and connects it again when a secret it references is stored after that. A save is refused when a reference under the server\'s own prefix is used by another server\'s entry, and it never deletes a reference another entry still uses.',
+        parameters: [{ name: 'draft', description: 'the form\'s values, including newly entered secret values.' }, { name: 'revision', description: 'the namespace revision the list last read.' }],
+        throws: ['RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for a draft the form would not save or the first refused step.'],
+      },
+      {
+        signature: '@Remote async removeServer(name: string, revision: number): Promise<void>',
+        description: 'Remove one server: sign an OAuth server out, delete its entry, then delete the secrets it owned that no other entry uses. The first refused step stops the removal.',
+        parameters: [{ name: 'name', description: 'the server.' }, { name: 'revision', description: 'the namespace revision the list read.' }],
+        throws: ['RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for the first refused step.'],
+      },
+      {
+        signature: '@Remote async setServerEnabled(name: string, enabled: boolean, revision: number): Promise<void>',
+        description: 'Switch one server on or off.',
+        parameters: [{ name: 'name', description: 'the server.' }, { name: 'enabled', description: 'whether the manager runs it.' }, { name: 'revision', description: 'the namespace revision the list read.' }],
+        throws: ['RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` when the write is refused.'],
+      },
+    ],
+  },
+  {
     key: 'cotTranslation',
     summary: 'Optional reasoning translation delegates Session-bound storage to the translator.',
     description: 'Optional reasoning translation delegates Session-bound storage to the translator.',
@@ -7142,6 +7173,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n}',
   },
   {
+    name: 'AuthKind',
+    declaration: 'export type AuthKind = \'none\' | \'token\' | \'oauth\';',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
   },
@@ -7830,6 +7865,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'windows\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: Omit<CuaPermissionProcess, \'pid\'>;\n};',
   },
   {
+    name: 'CustomServersList',
+    declaration: 'export type CustomServersList = {\n    readonly available: false;\n} | {\n    readonly available: true;\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly servers: readonly CustomServerView[];\n};',
+  },
+  {
+    name: 'CustomServerView',
+    declaration: 'export interface CustomServerView {\n    readonly name: string;\n    readonly raw?: Readonly<Record<string, JsonValue>> | undefined;\n    readonly inherited: boolean;\n}',
+  },
+  {
     name: 'DailyInput',
     declaration: 'export interface DailyInput {\n    readonly time: string;\n    readonly time_zone: string;\n}',
   },
@@ -7992,6 +8035,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DomainTableSpec',
     declaration: 'export interface DomainTableSpec<K extends string = string, V = unknown> {\n    readonly valueSchema: ZodType<V>;\n    readonly __key?: K;\n}',
+  },
+  {
+    name: 'DraftRow',
+    declaration: 'export interface DraftRow {\n    readonly key: string;\n    readonly value: string;\n    readonly secret: boolean;\n    readonly ref?: string | undefined;\n}',
   },
   {
     name: 'DshEnvironment',
@@ -10702,6 +10749,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SerializedNode = SerializedElement | string;',
   },
   {
+    name: 'ServerDraft',
+    declaration: 'export interface ServerDraft {\n    readonly name: string;\n    readonly transport: Transport;\n    readonly url: string;\n    readonly headers: readonly DraftRow[];\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: readonly DraftRow[];\n    readonly cwd: string;\n    readonly auth: AuthKind;\n    readonly token: string;\n    readonly tokenRef?: string | undefined;\n    readonly clientId: string;\n    readonly scope: string;\n    readonly enabled: boolean;\n}',
+  },
+  {
     name: 'ServerResponse',
     declaration: 'export interface ServerResponse {\n    readonly type: \'server-response\';\n    readonly rpcId: RpcId;\n    readonly result: ConnectionRpcResult<unknown>;\n}',
   },
@@ -12376,6 +12427,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TranslationSpec',
     declaration: 'export type TranslationSpec = AnonymousTranslationSpec | PaidTranslationSpec;',
+  },
+  {
+    name: 'Transport',
+    declaration: 'export type Transport = \'streamable-http\' | \'stdio\';',
   },
   {
     name: 'TurnBoundaryProjection',

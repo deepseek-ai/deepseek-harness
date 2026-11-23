@@ -251,6 +251,57 @@ register<View extends AnyConnectorAccountView>(registration: ConnectorAccountReg
 
 Source: [`packages/client/ui-connector-account/src/index.ts`](../../packages/client/ui-connector-account/src/index.ts)
 
+<a id="ctxconnectors--connectors"></a>
+
+### `ctx.connectors` — `Connectors`
+
+Lists and changes the MCP manager's Settings servers for the Connectors tab, and shows each configured OAuth server's account.
+
+```ts cordis-catalog
+/**
+ * List the servers of the MCP manager's Settings namespace with secrets redacted.
+ * @returns the servers and the revision a change names, or that the profile has no Settings, credentials, or manager
+ *   to keep custom servers with.
+ */
+@Remote listServers(): CustomServersList
+
+/**
+ * Save one server from the form: write the entry, store the secret values entered in it, then delete the secrets the
+ * entry stopped using. An edit that drops OAuth signs the server out first, because the manager deletes a grant only
+ * while the entry still configures OAuth. The first refused step stops the save, so a refused write stores nothing;
+ * the manager starts the written entry at once and connects it again when a secret it references is stored after
+ * that. A save is refused when a reference under the server's own prefix is used by another server's entry, and it
+ * never deletes a reference another entry still uses.
+ * @param draft - the form's values, including newly entered secret values.
+ * @param revision - the namespace revision the list last read.
+ * @throws RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for a
+ *   draft the form would not save or the first refused step.
+ */
+@Remote async saveServer(draft: ServerDraft, revision: number): Promise<void>
+
+/**
+ * Remove one server: sign an OAuth server out, delete its entry, then delete the secrets it owned that no other entry
+ * uses. The first refused step stops the removal.
+ * @param name - the server.
+ * @param revision - the namespace revision the list read.
+ * @throws RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for the
+ *   first refused step.
+ */
+@Remote async removeServer(name: string, revision: number): Promise<void>
+
+/**
+ * Switch one server on or off.
+ * @param name - the server.
+ * @param enabled - whether the manager runs it.
+ * @param revision - the namespace revision the list read.
+ * @throws RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` when
+ *   the write is refused.
+ */
+@Remote async setServerEnabled(name: string, enabled: boolean, revision: number): Promise<void>
+```
+
+Source: [`packages/experimental/client-ui-connectors/src/index.ts`](../../packages/experimental/client-ui-connectors/src/index.ts)
+
 <a id="ctxheadlessstartup--headlessstartupvalues"></a>
 
 ### `ctx.headlessStartup` — `HeadlessStartupValues`

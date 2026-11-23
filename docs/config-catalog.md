@@ -687,6 +687,22 @@ export interface AccountNotificationsConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-account-notifications -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-connectors -->
+<a id="deepseek-aidsh-client-ui-connectors"></a>
+
+## `@deepseek-ai/dsh-client-ui-connectors`
+
+- `source`: [`packages/experimental/client-ui-connectors/src/index.ts:29`](../packages/experimental/client-ui-connectors/src/index.ts)
+
+```ts config-catalog
+/** Where the custom servers live. */
+export interface Config {
+  /** The MCP manager's Settings namespace: the id of its composition row. */
+  mcpManagerNamespace: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-connectors -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-ui-context-menu -->
 <a id="deepseek-aidsh-client-ui-context-menu"></a>
 
@@ -6124,7 +6140,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-chat` | — | [`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-connector-account` | — | [`packages/client/ui-connector-account/src/index.ts`](../packages/client/ui-connector-account/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-connectors` | — | [`packages/experimental/client-ui-connectors/src/index.ts`](../packages/experimental/client-ui-connectors/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/client/ui-creation-recommendations/src/index.ts`](../packages/client/ui-creation-recommendations/src/index.ts) |

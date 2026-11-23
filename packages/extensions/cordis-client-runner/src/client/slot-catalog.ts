@@ -84,6 +84,47 @@ export const CLIENT_NOTES: readonly string[] = [
 // detection is told to skip the data rather than the file.
 export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
   {
+    key: 'connectors.custom',
+    kind: 'single',
+    scope: 'root',
+    summary: 'The Connectors tab\'s section below the official connectors; this plugin registers the custom MCP servers section there once the manager\'s Remote exists.',
+    doc: 'The Connectors tab\'s section below the official connectors; this plugin registers the custom MCP servers\nsection there once the manager\'s Remote exists. The tab passes the section\'s view and shows only the section,\nbelow a Back button, while the view is a server\'s page; without an entry the tab shows only the official connectors.',
+    registerOptions: [],
+    ownerProps: [
+      '/** What the Connectors tab passes: the view it shows, and the change the section asks for. */\nexport interface CustomServersOwnerProps {\n  readonly view: CustomServersView\n  readonly setView: (view: CustomServersView) => void\n}',
+    ],
+    ownerPropsReferences: [
+      'CustomServersView',
+    ],
+    standardProps: [
+      'useRemoteAccess: (action: RemoteEndpoint) => boolean',
+      'useResource: UseResource',
+      'useContextMenu: UseContextMenu',
+      'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
+      'usePanelInfo: UsePanelInfo',
+      'useDocumentPortal: () => FC<DocumentPortalProps>',
+      'useDocumentViewport: () => DocumentViewport',
+      'useMediaQuery: (query: string) => boolean',
+      'useMobile: () => boolean',
+      'useSessionStatus: UseSessionStatus',
+      'useSessions: UseSessions',
+      'useSessionRetainInfo: UseSessionRetainInfo',
+      'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
+      'useTheme: SnapshotSelectorHook<ThemeSnapshot>',
+      'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'plugins.tab\' (client-ui-connectors), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-connectors CustomServersSection',
+    ],
+    replaceRisk: 'shadows-shipped-ui',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'connectors.custom\', () => ctx.slots.register(\n      { name: \'connectors.custom\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/experimental/client-ui-connectors/src/client/index.ts:25',
+  },
+  {
     key: 'contextMenu.content',
     kind: 'keyed',
     scope: 'root',
@@ -4256,7 +4297,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
       'client-ui-plugin-market DiscoverSection id \'discover\'',
-      'client-ui-connectors ConnectorsTab id \'connectors\'',
+      'client-ui-connectors ConnectorsTab',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'plugins.tab\', () => ctx.slots.register(\n      { name: \'plugins.tab\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',

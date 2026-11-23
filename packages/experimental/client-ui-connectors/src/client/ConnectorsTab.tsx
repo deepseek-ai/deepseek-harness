@@ -1,7 +1,10 @@
-/** The Connectors tab: the official connectors with their brand icons, each with an Install action or its enable switch. */
-import { useEffect, type ReactNode } from 'react'
-import { Button, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
+/**
+ * The Connectors tab: the official connectors with their brand icons, each with an Install action or its enable switch,
+ * above the custom servers section.
+ */
+import { useEffect, useState, type ReactNode } from 'react'
+import { Button, IconChevronLeftOutlineMedium, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PluginTabProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import dingtalk from './assets/dingtalk.svg'
 import feishu from './assets/feishu.svg'
@@ -12,6 +15,7 @@ import tencentMeeting from './assets/tencent-meeting.svg'
 import wecom from './assets/wecom.svg'
 import { CONNECTORS, type Connector, type ConnectorId } from './connectors.ts'
 import type { ConnectorsFace, ConnectorStatus } from './connectors-store.ts'
+import type { CustomServersView } from './CustomServersSection.tsx'
 import type { ConnectorsLocaleKey } from './locales.ts'
 import css from './ConnectorsTab.module.css'
 
@@ -21,19 +25,36 @@ const ICONS: Readonly<Record<ConnectorId, string>> = {
   'tencent-docs': tencentDocs, 'linear': linear,
 }
 
-/** Tab props: the Plugins page's install and open callbacks, the dictionary, and the injected face. */
-export type ConnectorsTabProps = PropsRuntime<'plugins.tab'> & PropsLocale<'connectors'> & InjectFace<ConnectorsFace>
+/** Tab props: the Plugins page's install and open callbacks, the custom servers section, the dictionary, and the injected face. */
+export type ConnectorsTabProps = PropsRuntime<'plugins.tab'> & PropsRenderSlots<'connectors.custom'> & PropsLocale<'connectors'>
+  & InjectFace<ConnectorsFace>
 
 /**
- * List every official connector; a missing one installs at the running release through the page's install dialog, and
- * an installed one carries its enable switch and opens its page from anywhere else on its row.
- * @param props - the owner's callbacks, the dictionary, and the connectors' states.
+ * List every official connector above the custom servers section; a missing one installs at the running release through
+ * the page's install dialog, and an installed one carries its enable switch and opens its page from anywhere else on its
+ * row. While the section shows a server's page, the tab shows only that page below a Back button.
+ * @param props - the owner's callbacks, the section's slot, the dictionary, and the connectors' states.
  * @returns the tab's content.
  */
 export function ConnectorsTab(props: ConnectorsTabProps): ReactNode {
   const { t, install, openPackage, ensure, retry, setEnabled, version } = props
   const state = props.useConnectors(snapshot => snapshot)
+  // The view starts from the lists whenever the tab mounts again.
+  const [customView, setCustomView] = useState<CustomServersView>({ kind: 'list' })
   useEffect(() => { ensure() }, [ensure])
+  const custom = props.renderSlot('connectors.custom', { view: customView, setView: setCustomView })
+  // A custom server's page replaces the tab's lists; the tab keeps the way back even when the section leaves.
+  if (customView.kind !== 'list') {
+    return (
+      <section className={css.section} data-connectors>
+        <button type="button" className={css.back} onClick={() => { setCustomView({ kind: 'list' }) }}>
+          <IconChevronLeftOutlineMedium className={css.backIcon} aria-hidden="true" />
+          <span>{t('custom.back')}</span>
+        </button>
+        {custom}
+      </section>
+    )
+  }
   const failed = CONNECTORS.find(connector => connector.packageName === state.failed)
   return (
     <section className={css.section} data-connectors>
@@ -56,6 +77,7 @@ export function ConnectorsTab(props: ConnectorsTabProps): ReactNode {
             openPackage={openPackage} setEnabled={setEnabled} />
         ))}
       </ul>
+      {custom}
     </section>
   )
 }

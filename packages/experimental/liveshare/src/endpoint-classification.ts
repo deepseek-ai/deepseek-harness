@@ -187,6 +187,10 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'connectorAccounts/cancel': 'owner-only', // owner connector accounts on the Plugins page
   'connectorAccounts/start': 'owner-only', // owner connector accounts on the Plugins page
   'connectorAccounts/watch': 'owner-only', // owner connector accounts on the Plugins page
+  'connectors/listServers': 'owner-only', // owner custom MCP servers in the Connectors tab
+  'connectors/removeServer': 'owner-only', // owner custom MCP servers in the Connectors tab
+  'connectors/saveServer': 'owner-only', // owner custom MCP servers in the Connectors tab
+  'connectors/setServerEnabled': 'owner-only', // owner custom MCP servers in the Connectors tab
   'officeKit/generation': 'owner-only', // owner document export
   'officeKit/render': 'owner-only', // owner document export
   'speech/configure': 'owner-only', // owner voice input

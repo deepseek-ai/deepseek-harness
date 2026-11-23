@@ -81,7 +81,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/plugin-market-bundle': { kind: 'indirect', reason: 'Mounts the pluginMarket service, which lets the Creator preset register the plugin_market tool documented in packages/boot/plugin-market.' },
   'packages/client/ui-action-cards': { kind: 'indirect', reason: 'Card actions go to the Host card service, which owns the logged tool, decisions and status notice.' },
   'packages/client/ui-creation-recommendations': { kind: 'indirect', reason: 'The page card body starts a Creator through the Host page kind; the Host owns its logged task.' },
-  'packages/experimental/client-ui-connectors': { kind: 'indirect', reason: 'The tab installs connector bundles through the Plugins page; each installed connector owns its model-facing contributions.' },
+  'packages/experimental/client-ui-connectors': { kind: 'indirect', reason: 'The tab installs connector bundles through the Plugins page and saves custom MCP servers; each installed connector and the MCP manager own their model-facing contributions.' },
   'packages/client/ui-plugin-recommendations': { kind: 'indirect', reason: 'The plugin card body enables through the Host plugin kind; the Host card service owns the logged tool, decisions and status notice.' },
   'packages/experimental/voice-input-bundle': { kind: 'none', reason: 'Composes dictation and preparation plugins without adding any model-facing contribution.' },
   'packages/telemetry/otel': { kind: 'none', reason: 'The service delivers caller-selected records without changing model context.' },

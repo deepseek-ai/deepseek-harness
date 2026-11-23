@@ -22,3 +22,7 @@
   - listitem:
     - text: Linear 在对话中使用 Linear 的议题、项目与评论。
     - button "安装 Linear": 安装
+- heading "自定义 MCP 服务器" [level=3]
+- button "添加 MCP 服务器"
+- paragraph: 还没有自定义服务器。
+- list

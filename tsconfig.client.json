@@ -59,7 +59,7 @@
   "references": [
     { "path": "./packages/client/ui-action-cards" },
     { "path": "./packages/client/ui-creation-recommendations" },
-    { "path": "./packages/experimental/client-ui-connectors" },
+    { "path": "./packages/experimental/client-ui-connectors/tsconfig.client.json" },
     { "path": "./packages/client/ui-plugin-recommendations" },
     { "path": "./packages/client/ui-file-drag" },
     { "path": "./packages/session/message-quotes" },
