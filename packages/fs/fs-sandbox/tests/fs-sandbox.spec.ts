@@ -168,7 +168,7 @@ describe('workspace-write containment', () => {
   it('a byte write under the workspace lands, and one outside it is denied', async () => {
     const inside = join(workspace, 'nested', 'ok.bin')
     const outcome = await fs.writeBytes(await target(inside), new Uint8Array([0x00, 0xff]))
-    expect(outcome).toMatchObject({ operation: 'create', bytes: 2 })
+    expect(outcome).toMatchObject({ operation: 'create' })
     expect(new Uint8Array(await readFile(inside))).toEqual(new Uint8Array([0x00, 0xff]))
     const denied = join(outside, 'escape.bin')
     await expect(fs.writeBytes(await target(denied), new Uint8Array([1]))).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })

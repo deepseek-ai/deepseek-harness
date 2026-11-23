@@ -120,7 +120,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 These limits define when the contract is a poor fit or needs special operational care. They are current package constraints, not a general filesystem comparison or a task backlog.
 
 - Literal edits, patches, and moves require UTF-8 text; deletion also accepts binary regular files and returns `before: null` for them.
-- **A byte write carries no diff basis.** `writeBytes` reports the produced version and byte count only, so a consumer that needs the previous content reads it first. A backend that cannot store arbitrary bytes keeps the base rejection instead of degrading the write.
+- **A byte write carries no diff basis.** `writeBytes` reports only the operation and the produced version, so a consumer that needs the previous content reads it first. A backend that cannot store arbitrary bytes keeps the base rejection instead of degrading the write.
 - Moves are two effects, not a transaction: `sourceDeleted: false` means the destination is published and the source remains.
 - Resolved targets follow symlinks; callers that reject symlink sources use `lstat` before `resolve`. Copying and recursive directory operations are outside this API.
 - **No I/O deadline** — the seam arms no timeout; cancellation is a best-effort optional `AbortSignal` per primitive ([fs family stance](../README.md)).

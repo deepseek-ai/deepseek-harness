@@ -7,7 +7,7 @@ import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandb
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-ssh'
 import { RemoteOperationError } from '@deepseek-ai/dsh-ssh/protocol'
-import { deleteResultSchema, moveResultSchema, editResultSchema, entriesSchema, infoSchema, pathInfoSchema, targetSchema, textStreamIdSchema, writeBytesResultSchema, writeResultSchema } from '@deepseek-ai/dsh-ssh/schemas'
+import { MAX_BYTE_WRITE_BYTES, deleteResultSchema, moveResultSchema, editResultSchema, entriesSchema, infoSchema, pathInfoSchema, targetSchema, textStreamIdSchema, writeBytesResultSchema, writeResultSchema } from '@deepseek-ai/dsh-ssh/schemas'
 import { z } from 'zod'
 
 const errorCodes = new Set<string>(FS_ERROR_CODES)
@@ -85,6 +85,8 @@ export class SshFileSystem extends FileSystem {
   override async writeBytes(
     target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsWriteBytesOutcome> {
+    // Checked before encoding: an oversized payload would otherwise fail at the transport frame as FS_IO_ERROR.
+    if (data.byteLength > MAX_BYTE_WRITE_BYTES) throw new FsError('SSH byte write exceeds the 8 MiB limit', 'FS_TOO_LARGE')
     const policy = sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const content = Buffer.from(data).toString('base64')
     return await this.call('fs.writeBytes', { target, data: content, expected, policy }, writeBytesResultSchema, signal) as FsWriteBytesOutcome

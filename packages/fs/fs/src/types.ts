@@ -153,8 +153,6 @@ export interface FsWriteBytesOutcome {
   operation: 'create' | 'update'
   /** Opaque version of the file after the write. */
   version: FsVersion
-  /** Exact number of bytes written. */
-  bytes: number
 }
 
 /** A literal-replacement edit request. */

@@ -256,7 +256,7 @@ interface FsWriteOutcome {
 
 `editText` 是提供方级别的变更操作，而非在别处组合的 `read` 加 `write`。带守卫时，它在字面匹配之前先验证预期版本（因此对陈旧内容的编辑报 `FS_STALE_VERSION`，而非对更新内容的匹配失败）；不带守卫时，它编辑当前内容。无论哪种路径，它都应用替换并原子写入——将匹配、行尾处理、陈旧检查和原子替换保持在一个变更临界区内——目标缺失时两条路径都报 `FS_STALE_VERSION`。
 
-`writeBytes` 按原样存储字节：不解码、不做换行归一化、也不带 diff 基础。调用方因此能把已持有的内容——下载的附件、渲染出的文档——落进执行环境；它接受与 `writeText` 相同的可选意图守卫和逐次调用策略。无法存储任意字节的提供方保留基类拒绝（`FS_IO_ERROR`，并指明缺少的能力），而不是把写入降级。
+`writeBytes` 按原样存储字节：不解码、不做换行归一化、也不带 diff 基础。调用方因此能把已持有的内容——下载的附件、渲染出的文档——写入执行环境中的文件；它接受与 `writeText` 相同的可选意图守卫和逐次调用策略。无法存储任意字节的提供方保留基类拒绝（`FS_IO_ERROR`，并指明缺少的能力），而不是把写入降级。
 
 ```ts type-equiv
 /**
@@ -269,8 +269,6 @@ interface FsWriteBytesOutcome {
   operation: 'create' | 'update'
   /** Opaque version of the file after the write. */
   version: FsVersion
-  /** Exact number of bytes written. */
-  bytes: number
 }
 ```
 
@@ -583,7 +581,7 @@ abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent,
  * @param sandboxPolicy - the per-call mode and workspace root this write
  *   runs under; a sandboxing backend fences the write by it, the bare backend
  *   ignores it. Omit to leave the backend its own default.
- * @returns the outcome, including the version the write produced and its byte count.
+ * @returns the outcome, including the version the write produced.
  */
 writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>
 
