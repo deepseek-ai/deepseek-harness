@@ -546,6 +546,7 @@
   width: 82px;
   height: 22px;
   border-radius: 999px;
+  corner-shape: round;
 }
 
 .skeletonRepository {
@@ -621,6 +622,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
+  corner-shape: round;
 }
 
 .skeletonSummary {
@@ -1062,6 +1064,7 @@ button.activityLine:focus-visible,
 .activityTag {
   padding: 0 6px;
   border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-alias-card-fill);
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;

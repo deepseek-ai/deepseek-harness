@@ -354,11 +354,16 @@
 }
 
 /* A merge the host would refuse now: the button stays reachable so it can say why, and looks and acts disabled. */
-.primaryAction.mergeAction.unavailable,
-.primaryAction.mergeAction.unavailable:hover:not(:disabled) {
+.primaryAction.mergeAction.unavailable {
   background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 92%, var(--dsw-alias-label-primary));
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .primaryAction.mergeAction.unavailable:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--dsw-alias-button-info-fill) 92%, var(--dsw-alias-label-primary));
+  }
 }
 
 /* A solid caret that points down, and up while the menu is open. */
