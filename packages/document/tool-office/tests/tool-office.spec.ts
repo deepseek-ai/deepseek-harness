@@ -104,7 +104,8 @@ function fakeOfficeKit() {
   return {
     renderImages: vi.fn(async (request: OfficeImagesRequest, _signal?: AbortSignal): Promise<OfficeImagesResult> => {
       await readSource(request.source)
-      return { images: [{ png: PNG, width: 1, height: 1, page: 2 }], pageCount: 3, dpi: request.dpi ?? 144, missingFonts: [] }
+      return { images: [{ png: PNG, width: 1, height: 1, page: 2 }], pageCount: 3, dpi: request.dpi ?? 144, missingFonts: [],
+        renderer: request.renderer ?? 'libreoffice' }
     }),
     outputDirectory: join(home, 'outputs'),
     convertTo: vi.fn(async (
@@ -216,14 +217,17 @@ describe('office schema', () => {
     const schemas = ctx.tools.schemas()
     expect(schemas.map(schema => schema.name)).toEqual(['office_render', 'office_convert', 'office_recalculate'])
     expect(schemas.map(schema => Object.keys(schema.parameters.properties ?? {}))).toEqual([
-      ['input', 'pages', 'sheet', 'range', 'dpi'], ['input', 'format', 'sheet'], ['input', 'format'],
+      ['input', 'pages', 'sheet', 'range', 'dpi', 'renderer'], ['input', 'format', 'sheet'], ['input', 'format'],
     ])
     expect(schemas.map(schema => schema.parameters.required)).toEqual([['input'], ['input', 'format'], ['input', 'format']])
     expect(schemas[0]?.description).toBe('Render document pages, slides, or worksheet areas as images you can view.')
+    expect(schemas[0]?.parameters).toMatchObject({ properties: { renderer: { type: 'string', enum: ['libreoffice', 'poppler'],
+      description: 'Rendering backend; omit to use the first available for this file type. poppler renders pdf only.' } } })
     expect(schemas[1]?.parameters).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(schemas[2]?.parameters).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
     const outputs = ctx.tools.definitions().map(definition => definition.output.schema)
-    expect(outputs[0]).toMatchObject({ properties: { images: { items: { properties: { mediaType: { enum: ['image/png', 'image/jpeg', 'image/webp'] } } } } } })
+    expect(outputs[0]).toMatchObject({ properties: { images: { items: { properties: { mediaType: { enum: ['image/png', 'image/jpeg', 'image/webp'] } } } },
+      renderer: { type: 'string', enum: ['libreoffice', 'poppler'] } }, required: expect.arrayContaining(['renderer']) as string[] })
     expect(outputs[1]).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(outputs[2]).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
     for (const definition of ctx.tools.definitions()) {
@@ -278,11 +282,11 @@ describe('render', () => {
     expect(kit.renderImages).toHaveBeenCalledWith(expect.objectContaining({
       extension: 'pptx', pages: [2], dpi: 96, maxImages: 5, maxPixels: 1000, maxDimension: 100, maxBytes: 4096,
     }), expect.any(AbortSignal))
-    expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'deck.pptx')} (3 in the document) at 96 DPI.\nPage 2: 1x1 px`)
+    expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'deck.pptx')} (3 in the document) at 96 DPI with libreoffice.\nPage 2: 1x1 px`)
     expect(result.content[2]).toMatchObject({ type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } })
     if (result.isError) throw new Error('render failed')
     expect(result.value).toMatchObject({ operation: 'render', path: join(dir, 'deck.pptx'), pageCount: 3, dpi: 96,
-      images: [{ page: 2, mediaType: 'image/png', width: 1, height: 1 }], missingFonts: [] })
+      images: [{ page: 2, mediaType: 'image/png', width: 1, height: 1 }], missingFonts: [], renderer: 'libreoffice' })
     expect(result.meta).toEqual({ path: join(dir, 'deck.pptx') })
   })
 
@@ -300,10 +304,10 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [
       { png: PNG, width: 1, height: 1, sheet: 'Data', range: 'A1:B2' }, { png: PNG, width: 1, height: 1, sheet: 'Data' },
-    ], pageCount: 2, dpi: 144, missingFonts: ['Aptos'] })
+    ], pageCount: 2, dpi: 144, missingFonts: ['Aptos'], renderer: 'libreoffice' })
     const result = await office(ctx, { operation: 'render', input: 'book.xlsx', sheet: 'Data', range: 'A1:B2' })
     expect(kit.renderImages.mock.calls[0]![0]).toMatchObject({ extension: 'xlsx', sheet: 'Data', range: 'A1:B2' })
-    expect(text(result)).toBe(`Rendered 2 images of ${join(dir, 'book.xlsx')} (2 in the document) at 144 DPI.\n`
+    expect(text(result)).toBe(`Rendered 2 images of ${join(dir, 'book.xlsx')} (2 in the document) at 144 DPI with libreoffice.\n`
       + 'Fonts not installed and substituted: Aptos.\nSheet "Data" A1:B2: 1x1 px\nSheet "Data": 1x1 px')
   })
 
@@ -349,7 +353,7 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     const limit = ctx.get('attachments')!.imageLimits.maxImageBytes
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: new Uint8Array(limit + 1), width: 1, height: 1, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [] })
+      pageCount: 1, dpi: 144, missingFonts: [], renderer: 'libreoffice' })
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     expect(text(result)).toContain(`exceeds the ${limit}-byte image limit`)
     expect(errorInfo(result)).toEqual(officeToolError('OFFICE_OUTPUT_TOO_LARGE'))
@@ -358,7 +362,7 @@ describe('render', () => {
   it('reports attachment refusals and passes other storage failures through', async () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: Buffer.from('not a png'), width: 1, height: 1, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [] })
+      pageCount: 1, dpi: 144, missingFonts: [], renderer: 'libreoffice' })
     const refused = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     expect(text(refused)).toContain(`cannot render "${join(dir, 'deck.pptx')}": `)
     expect(errorInfo(refused)).toEqual({ name: 'AttachmentError', code: 'INVALID_IMAGE' })
@@ -391,8 +395,28 @@ describe('render', () => {
     expect(kit.renderImages.mock.calls[0]![0].source).not.toHaveProperty('bytes')
   })
 
+  it('passes the requested renderer and reports the renderer the Office service used', async () => {
+    const { ctx, kit } = await setup()
+    await writeFile(join(dir, 'scan.pdf'), '%PDF-1.7\n%%EOF\n')
+    const result = await office(ctx, { operation: 'render', input: 'scan.pdf', renderer: 'poppler' })
+    expect(kit.renderImages.mock.calls[0]![0]).toMatchObject({ extension: 'pdf', renderer: 'poppler' })
+    expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'scan.pdf')} (3 in the document) at 144 DPI with poppler.\nPage 2: 1x1 px`)
+    if (result.isError) throw new Error('render failed')
+    expect(result.value).toMatchObject({ renderer: 'poppler' })
+    await office(ctx, { operation: 'render', input: 'scan.pdf' })
+    expect(kit.renderImages.mock.calls[1]![0]).not.toHaveProperty('renderer')
+  })
+
+  it.each(['deck.pptx', 'book.xlsx', 'report.docx'])('refuses the poppler renderer for %s before reading it', async (input) => {
+    const { ctx, kit } = await setup()
+    const result = await office(ctx, { operation: 'render', input, renderer: 'poppler' })
+    expect(text(result)).toContain('renderer poppler renders only pdf; omit renderer or choose libreoffice')
+    expect(errorInfo(result)).toEqual(invalidArgs)
+    expect(kit.renderImages).not.toHaveBeenCalled()
+  })
+
   it('records the normalized dimensions of a reduced image', () => {
-    const blocks = renderImagesContent({ operation: 'render', path: '/a.pdf', pageCount: 1, dpi: 72, missingFonts: [],
+    const blocks = renderImagesContent({ operation: 'render', path: '/a.pdf', pageCount: 1, dpi: 72, missingFonts: [], renderer: 'poppler',
       images: [{ attachmentId: 'a', mediaType: 'image/png', bytes: 1, width: 1, height: 1, originalDimensions: { width: 2, height: 2 } }] })
     expect(blocks[1]).toEqual({ type: 'text', text: 'Image: 1x1 px' })
     expect(blocks[2]).toMatchObject({ attachment: { originalDimensions: { width: 2, height: 2 } } })
@@ -404,7 +428,7 @@ describe('render', () => {
   ] as const)('returns the stored encoding when attachment normalization re-encodes %s', async (_label, translucent, mediaType) => {
     const { ctx, kit } = await setup({ attachments: { normalizedImageMaxPixels: 16 } })
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: solidPng(8, translucent), width: 8, height: 8, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [] })
+      pageCount: 1, dpi: 144, missingFonts: [], renderer: 'libreoffice' })
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     if (result.isError) throw new Error('render failed')
     expect(result.value).toMatchObject({ images: [{ mediaType, width: 4, height: 4, originalDimensions: { width: 8, height: 8 } }] })
@@ -480,6 +504,18 @@ describe('Office service failures', () => {
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(expected)
     expect(errorInfo(result)).toEqual(officeToolError(toolCode))
+  })
+
+  it.each([
+    ['poppler', ' Omit renderer, or choose libreoffice.'],
+    ['libreoffice', unavailableHint],
+  ] as const)('reports an unavailable explicit %s renderer with its next step', async (renderer, hint) => {
+    const { ctx, kit } = await setup()
+    await writeFile(join(dir, 'scan.pdf'), '%PDF-1.7\n%%EOF\n')
+    kit.renderImages.mockRejectedValueOnce(officeError('unavailable', 'The renderer is unavailable.'))
+    const result = await office(ctx, { operation: 'render', input: 'scan.pdf', renderer })
+    expect(text(result)).toBe(`Error: cannot render "${join(dir, 'scan.pdf')}": The renderer is unavailable.${hint}`)
+    expect(errorInfo(result)).toEqual(officeToolError('OFFICE_UNAVAILABLE'))
   })
 
   it.each<[OfficeKitErrorCode, string]>([

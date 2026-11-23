@@ -20,7 +20,7 @@ import type {} from '@deepseek-ai/dsh-skill'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { OfficeSourceKey } from '@deepseek-ai/dsh-office-kit/types'
 import { OfficeKitError, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
-  type OfficeKitSource, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
+  type OfficeKitSource, type OfficeRenderer, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
 import { defineTool, ToolContextUnavailableError, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { checkParameterNames, checkRenderArguments, checkConversionArguments, extensionOf, inputFamily, OUTPUT_FORMATS,
@@ -86,6 +86,7 @@ const IMAGE_SCHEMA = {
 } as const
 
 const MISSING_FONTS_SCHEMA = { type: 'array', required: true, items: { type: 'string' } } as const
+const RENDERERS = ['libreoffice', 'poppler'] as const satisfies readonly OfficeRenderer[]
 const OFFICE_TOOL_NAMES: readonly string[] = ['office_render', 'office_convert', 'office_recalculate']
 
 const RENDER_PARAMETERS = {
@@ -100,6 +101,10 @@ const RENDER_PARAMETERS = {
   },
   range: { type: 'string', description: 'A1 range, such as A1:H40; requires sheet. Omit for the used area.' },
   dpi: { type: 'integer', description: 'Resolution from 24 to 600; default 144.' },
+  renderer: {
+    type: 'string', enum: RENDERERS,
+    description: 'Rendering backend; omit to use the first available for this file type. poppler renders pdf only.',
+  },
 } as const
 
 const CONVERT_PARAMETERS = {
@@ -178,6 +183,7 @@ export function apply(ctx: Context, config: Config): void {
           dpi: { type: 'integer', required: true },
           images: { type: 'array', required: true, items: IMAGE_SCHEMA },
           missingFonts: MISSING_FONTS_SCHEMA,
+          renderer: { type: 'string', enum: RENDERERS, required: true },
         },
       },
       render: (_args, value) => renderImagesContent(value),
@@ -293,12 +299,14 @@ function codeOf(error: unknown): unknown {
 
 /**
  * Model-facing failure for a classified Office service error, with the matching `OfficeToolError` code and the
- * service error as `cause`; other failures pass through unchanged.
+ * service error as `cause`; other failures pass through unchanged. An unavailable explicitly requested `poppler`
+ * renderer points to the other renderer instead of reporting the operation unavailable.
  */
-function officeFailure(verb: string, path: string, error: unknown): unknown {
+function officeFailure(verb: string, path: string, error: unknown, renderer?: OfficeRenderer): unknown {
   if (!(error instanceof OfficeKitError)) return error
   const hint = error.code === 'unavailable'
-    ? ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
+    ? renderer === 'poppler' ? ' Omit renderer, or choose libreoffice.'
+      : ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
     : error.code === 'busy' ? ' Retry after other document operations finish.'
       : error.code === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
   return new OfficeToolError(`cannot ${verb} "${path}": ${error.message}${hint}`, OFFICE_KIT_FAILURE_CODES[error.code], { cause: error })
@@ -343,12 +351,13 @@ async function render(
       ...args.sheet === undefined ? {} : { sheet: args.sheet },
       ...args.range === undefined ? {} : { range: args.range },
       ...args.dpi === undefined ? {} : { dpi: args.dpi },
+      ...args.renderer === undefined ? {} : { renderer: args.renderer },
       maxImages: Math.min(config.maxImages, limits.maxImagesPerMessage),
       maxPixels: Math.min(config.maxImagePixels, limits.maxImagePixels),
       maxDimension: Math.min(config.maxImageDimension, limits.maxImageDimension),
       maxBytes: Math.min(config.maxImageBytes, limits.maxMessageImageBytes),
     }, signal)
-  } catch (error) { throw officeFailure('render', target.displayPath, error) }
+  } catch (error) { throw officeFailure('render', target.displayPath, error, args.renderer) }
   const oversized = result.images.find(image => image.png.byteLength > limits.maxImageBytes)
   if (oversized !== undefined) {
     throw new OfficeToolError(`cannot render "${target.displayPath}": an image exceeds the ${limits.maxImageBytes}-byte image limit; select a smaller range or a lower dpi`, 'OFFICE_OUTPUT_TOO_LARGE')
@@ -365,6 +374,7 @@ async function render(
   }
   return {
     operation: 'render', path, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
+    renderer: result.renderer,
     images: result.images.map((image, index) => {
       // saveImages returns one reference per input, in input order.
       const ref = refs[index] as ImageAttachmentRef

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 激活只匹配 `activationSkills` 中列出的技能名，因此须同时挂载 [`@deepseek-ai/dsh-skill-office`](../../skill/skill-office/README.zh.md)，或其他注册了同名技能的 provider；否则三个工具永远不会出现。
 
-工具在每次调用时读取 Office 套件服务。Kit 缺失时，调用以该服务的 `unavailable` 消息失败；服务不存在时，调用以 `The document converter is unavailable.` 失败。每个 `unavailable` 失败都提示模型告知用户；原因可能是暂时的（例如输出存储已满或服务正在卸载）时稍后重试，并且不改用系统 soffice、npx 或其他转换工具。
+工具在每次调用时读取 Office 套件服务。Kit 缺失时，调用以该服务的 `unavailable` 消息失败；服务不存在时，调用以 `The document converter is unavailable.` 失败。每个 `unavailable` 失败都提示模型告知用户；原因可能是暂时的（例如输出存储已满或服务正在卸载）时稍后重试，并且不改用系统 soffice、npx 或其他转换工具。调用指定了 `renderer: poppler` 时，提示改为 `Omit renderer, or choose libreoffice.`
 
 ```yaml
 - name: '@deepseek-ai/dsh-office-kit'
@@ -48,7 +48,7 @@ kind: "package-reference"
 
 渲染对每个字段取其与附件存储对应图片上限（`maxImagesPerMessage`、`maxImagePixels`、`maxImageDimension`、`maxMessageImageBytes`）中的较小值，并拒绝超过存储 `maxImageBytes` 的单张图片。超出上限的选择直接失败，不会被截断。渲染要求挂载附件存储，且调用方模型路由声明支持图片输入。工具从会话最近一次模型请求读取该路由，首次请求之前则读取 agent 选项；模型的输入模态不含图片或未声明时，在开始任何渲染工作之前就会被拒绝。
 
-输入相对 Session 工作目录解析，并沿用文件系统后端的读取权限，与 `read` 和 Office 预览一致，因此可以读取工作区外的文件。输入扩展名决定文档类别。`office_convert` 接受 Word、Excel 和 PowerPoint 文档：Word 可导出 pdf、docx、odt 或 txt；Excel 可导出 pdf、xlsx、ods 或 csv；PowerPoint 可导出 pdf、pptx 或 odp。多工作表工作簿导出 CSV 时必须指定工作表名。`office_recalculate` 接受 xls、xlsx 和 ods 工作簿，输出必须为 xlsx 或 ods。`office_render` 还接受 PDF。
+输入相对 Session 工作目录解析，并沿用文件系统后端的读取权限，与 `read` 和 Office 预览一致，因此可以读取工作区外的文件。输入扩展名决定文档类别。`office_convert` 接受 Word、Excel 和 PowerPoint 文档：Word 可导出 pdf、docx、odt 或 txt；Excel 可导出 pdf、xlsx、ods 或 csv；PowerPoint 可导出 pdf、pptx 或 odp。多工作表工作簿导出 CSV 时必须指定工作表名。`office_recalculate` 接受 xls、xlsx 和 ods 工作簿，输出必须为 xlsx 或 ods。`office_render` 还接受 PDF。其可选参数 `renderer` 指定只使用 `libreoffice` 或 `poppler`；`poppler` 只渲染 PDF，因此工具对其他输入在访问文件系统前即以 `INVALID_ARGS` 拒绝。未指定 `renderer` 时，Office 套件按其 [`renderers`](../office-kit/README.zh.md#use-this-package) 中该输入类型的顺序使用第一个可用的后端，PDF 默认先用 Poppler，再用 LibreOffice。结果记录实际使用的后端。
 
 转换和重算结果给出 Office 套件私有[输出存储](../office-kit/README.zh.md#use-this-package)中位于 Harness 主目录下的一个文件；模型用 shell 复制它，因此文件落在哪里由 shell 的沙箱和审批决定。文件系统后端无法读取 Host 文件时（例如 SSH 工作区），这两个工具在转换前即失败；渲染不受影响。
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-三个工具的声明见[工具目录](../../../docs/tool-catalog.zh.md)。渲染结果以 `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI.` 开头，缺少字体时追加 `Fonts not installed and substituted: <families>.`，随后每张图片先给出 `Page <n>: <width>x<height> px` 或 `Sheet "<name>" <range>: <width>x<height> px` 标签，再给出图片。转换时报告 `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>`（或 `Recalculated …`），随后是 `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.` 和相同的字体行。失败为 `cannot <operation> "<path>": <reason>`；文件系统无法读取输入时为 `cannot read "<path>": <reason>`。schema 无法表达的参数规则不满足时为 `invalid arguments: <violations>`。
+三个工具的声明见[工具目录](../../../docs/tool-catalog.zh.md)。渲染结果以 `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI with <renderer>.` 开头（`<renderer>` 为 `libreoffice` 或 `poppler`），缺少字体时追加 `Fonts not installed and substituted: <families>.`，随后每张图片先给出 `Page <n>: <width>x<height> px` 或 `Sheet "<name>" <range>: <width>x<height> px` 标签，再给出图片。转换时报告 `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>`（或 `Recalculated …`），随后是 `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.` 和相同的字体行。失败为 `cannot <operation> "<path>": <reason>`；文件系统无法读取输入时为 `cannot read "<path>": <reason>`。schema 无法表达的参数规则不满足时为 `invalid arguments: <violations>`。
 
 #### Token 影响
 
@@ -108,11 +108,11 @@ kind: "package-reference"
 - **远程工作区不支持转换** — Office 套件运行在 Host 上，远程 shell 读不到其输出存储。
 - **渲染不保存图片文件** — `office_render` 只返回供模型查看的图片，不写出 PNG 或其他图片文件。需要以文件形式获得页面的用户，通过 `office_convert` 并设置 `format: "pdf"` 获得 PDF。
 - **Web GUI 不显示渲染图片** — [ui-tool](../../client/ui-tool/README.zh.md) 的 Office 行显示 `office_render` 结果的文本块并略去其中的图片，因此用户看不到模型检查过的页面。模型仍会收到每张图片。
-- **原生引擎在 Host 进程内运行** — 由模型发起的渲染、转换和重算通过 `ctx.officeKit` 在 Host 进程内运行原生 LibreOffice Kit 引擎，因此不受 shell 沙箱和 PTC 权限约束。输入仍受文件系统后端读取权限的约束。原生解析器以 Host 用户的权限处理不可信的文档。
+- **原生引擎在 Host 进程内运行** — 由模型发起的渲染、转换和重算通过 `ctx.officeKit` 在 Host 进程内运行原生 LibreOffice Kit 引擎，Poppler 则在 subprocess 提供方的子进程中渲染 PDF，因此不受 shell 沙箱和 PTC 权限约束。输入仍受文件系统后端读取权限的约束。原生解析器以 Host 用户的权限处理不可信的文档。
 - **PTC 激活状态不跨恢复和分叉保留** — PTC 请求头只记录 `run_code`，因此恢复或分叉后的 PTC Agent 在模型重新加载 Office 技能前不提供 Office 绑定；移除和重新加入各重写一次系统提示，缓存影响见 KV Cache 影响一节。
 - **插件重载会清除激活状态** — 热重载、或停用后再启用插件，会清空内存中的标记。如果期间运行过一步，该步的请求头不再包含这三个工具，模型须重新加载 Office 技能才能恢复。
 - **直接调用从下一步起激活** — 一步的工具集在用户调用的技能（如 `/office`）内容注入前就已确定，因此调用后的第一个模型请求不声明 Office 工具。这些工具从模型的下一步起出现。
-- 渲染保真度、字体和分页取决于 LibreOffice Kit，可能与 Microsoft Office 不同。
+- 渲染保真度、字体和分页取决于 LibreOffice Kit，可能与 Microsoft Office 不同。Poppler 渲染的 PDF 页面可能与 LibreOffice 渲染的同一页面不同。
 
 <a id="dev-note"></a>
 ### 开发备注

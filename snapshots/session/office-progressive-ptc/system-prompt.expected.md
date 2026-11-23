@@ -623,6 +623,8 @@ interface ToolArgsMap {
     range?: string;
     /** Resolution from 24 to 600; default 144. */
     dpi?: number;
+    /** Rendering backend; omit to use the first available for this file type. poppler renders pdf only. */
+    renderer?: "libreoffice" | "poppler";
   } & Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {
@@ -923,6 +925,7 @@ interface ToolOutputMap {
       };
     })[];
     missingFonts: string[];
+    renderer: "libreoffice" | "poppler";
   };
   read: {
     /** Canonical absolute path in the filesystem execution world. */

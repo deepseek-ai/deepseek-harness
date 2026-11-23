@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-tool-office/formats
  */
 
-import type { OfficeConversionFormat, OfficeRecalculationFormat } from '@deepseek-ai/dsh-office-kit'
+import type { OfficeConversionFormat, OfficeRecalculationFormat, OfficeRenderer } from '@deepseek-ai/dsh-office-kit'
 import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 
 /** Operation requested by one Office tool call. */
@@ -39,6 +39,8 @@ export interface OfficeRenderArgs {
   sheet?: string
   range?: string
   dpi?: number
+  /** Backend to use exclusively; omission lets the Office service choose. */
+  renderer?: OfficeRenderer
 }
 
 /** Arguments for converting a document. */
@@ -127,6 +129,7 @@ export function checkRenderArguments(args: OfficeRenderArgs, family: OfficeFamil
   if (args.dpi !== undefined && (!Number.isSafeInteger(args.dpi) || args.dpi < 24 || args.dpi > 600)) {
     throw new ToolArgsError(['dpi must be an integer from 24 to 600'])
   }
+  if (args.renderer === 'poppler' && family !== 'pdf') throw new ToolArgsError(['renderer poppler renders only pdf; omit renderer or choose libreoffice'])
 }
 
 /**

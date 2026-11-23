@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-[`tool-office` 包](../../../../packages/document/tool-office/README.zh.md)提供三个按需激活的 Host 工具：`office_render`、`office_convert` 和 `office_recalculate`。每个工具在各自的 JSON Schema 中直接声明参数规则：`office_render` 接受文档路径、页码或幻灯片 `pages`、工作表 `sheet` 与 `range` 选择以及 `dpi`；`office_convert` 保留全部九种输出格式（Word 支持 `pdf`、`docx`、`odt`、`txt`，Excel 支持 `pdf`、`xlsx`、`ods`、`csv`，PowerPoint 支持 `pdf`、`pptx`、`odp`）以及仅用于 CSV 输出的 `sheet`（工作簿含多个工作表时必填）；`office_recalculate` 接受 `xlsx` 和 `ods`。三个工具声明共约 1,813 个字符，仅在加载了 Office 技能的 Session 中付出。它们调用 [Office 套件](../../../../packages/document/office-kit/README.zh.md)服务；该服务通过 `src/locate.ts` 在 Host 进程中加载 Kit，并让每个操作经过 Office 预览所用的队列、并发上限、字节预留和缓存。工具请求使用 `foreground` 优先级，即打开的预览所属的类别，因此后台预热不会饿死它们。SDK 组合在 `office-kit` 旁挂载 `tool-office`，Web bundle 的标准和 PTC Agent 预设挂载它，minimal 预设保持其固定工具列表；Kit 缺失时三个工具仍然注册，每次调用都返回服务的 `unavailable` 消息。每个工具在每次调用时读取该服务而不是注入它，因此省略或禁用 `office-kit` 的组合仍能带着这些工具创建 Session，每次调用以 `unavailable` 失败；之后加载的服务会处理下一次调用。标准模式与 PTC 模式使用同一组注册；PTC 嵌套调用重新进入普通执行管线。
+[`tool-office` 包](../../../../packages/document/tool-office/README.zh.md)提供三个按需激活的 Host 工具：`office_render`、`office_convert` 和 `office_recalculate`。每个工具在各自的 JSON Schema 中直接声明参数规则：`office_render` 接受文档路径、页码或幻灯片 `pages`、工作表 `sheet` 与 `range` 选择、`dpi` 以及可选的 `renderer`（[Poppler PDF 渲染后端](2026-11-23-poppler-pdf-renderer.zh.md)）；`office_convert` 保留全部九种输出格式（Word 支持 `pdf`、`docx`、`odt`、`txt`，Excel 支持 `pdf`、`xlsx`、`ods`、`csv`，PowerPoint 支持 `pdf`、`pptx`、`odp`）以及仅用于 CSV 输出的 `sheet`（工作簿含多个工作表时必填）；`office_recalculate` 接受 `xlsx` 和 `ods`。三个工具声明共约 1,988 个字符，仅在加载了 Office 技能的 Session 中付出。它们调用 [Office 套件](../../../../packages/document/office-kit/README.zh.md)服务；该服务通过 `src/locate.ts` 在 Host 进程中加载 Kit，并让每个操作经过 Office 预览所用的队列、并发上限、字节预留和缓存。工具请求使用 `foreground` 优先级，即打开的预览所属的类别，因此后台预热不会饿死它们。SDK 组合在 `office-kit` 旁挂载 `tool-office`，Web bundle 的标准和 PTC Agent 预设挂载它，minimal 预设保持其固定工具列表；Kit 缺失时三个工具仍然注册，每次调用都返回服务的 `unavailable` 消息。每个工具在每次调用时读取该服务而不是注入它，因此省略或禁用 `office-kit` 的组合仍能带着这些工具创建 Session，每次调用以 `unavailable` 失败；之后加载的服务会处理下一次调用。标准模式与 PTC 模式使用同一组注册；PTC 嵌套调用重新进入普通执行管线。
 
 `office_render` 在工具结果中返回 PNG 图片；Web Client 的 Office 行只显示结果的文本块，不显示这些图片。工具在结果写入日志之前通过附件存储提交图片，因此模型可见的图片可以从 Session 日志还原，恢复和分叉会还原它们，图片卸载也适用于它们。完整结果受图片数量、单图像素与尺寸以及 PNG 总字节数约束，每项取工具配置与附件存储上限中的较小值；超出上限的选择直接失败，不会被截断。不支持图片输入的路由在渲染前即被拒绝。
 
@@ -40,7 +40,7 @@ Status: implemented
 
 ## 影响
 
-加载 Office 技能后，视觉检查只需一次 `office_render` 调用且无需清理，图片遵循 Session 的附件、卸载和回放规则。未加载 Office 技能的 Session 不消耗任何 Office 工具声明 token；加载了 Office 技能的 Session 激活约 1,813 个字符的专用 schema，支持 `toolUpdate` 的模型保留现有请求前缀，不支持 `toolUpdate` 的模型只开启一次新的请求序列。标准模式的恢复、分叉和压缩通过已记录的请求头保留工具声明，PTC 恢复或分叉以及在记录下一条请求头前崩溃的场景则通过再次加载 `office` 恢复。激活后，Office 操作在标准模式与 PTC 模式之间、在不同部署之间行为一致，各部署专用的 Node、CLI 和约束代码已经删除。
+加载 Office 技能后，视觉检查只需一次 `office_render` 调用且无需清理，图片遵循 Session 的附件、卸载和回放规则。未加载 Office 技能的 Session 不消耗任何 Office 工具声明 token；加载了 Office 技能的 Session 激活约 1,988 个字符的专用 schema，支持 `toolUpdate` 的模型保留现有请求前缀，不支持 `toolUpdate` 的模型只开启一次新的请求序列。标准模式的恢复、分叉和压缩通过已记录的请求头保留工具声明，PTC 恢复或分叉以及在记录下一条请求头前崩溃的场景则通过再次加载 `office` 恢复。激活后，Office 操作在标准模式与 PTC 模式之间、在不同部署之间行为一致，各部署专用的 Node、CLI 和约束代码已经删除。
 
 转换后的文件需要 shell 复制；没有 shell 工具的组合可以渲染，但无法交付转换后的文件，远程工作区则完全不能转换。临时输出在保留期满或根 Session 卸载后消失，恢复的 Session 需要重新转换。不提供把页面图片保存为文件。
 

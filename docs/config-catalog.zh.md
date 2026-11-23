@@ -3142,7 +3142,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-office-kit`
 
-- `source`: [`packages/document/office-kit/src/index.ts:38`](../packages/document/office-kit/src/index.ts)
+- `source`: [`packages/document/office-kit/src/index.ts:43`](../packages/document/office-kit/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -3169,7 +3169,7 @@ export interface Config {
   outputRetentionMs: number
   /** Maximum bytes across retained converted and recalculated files; the oldest leave first. */
   maxOutputStoreBytes: number
-  /** Conversion deadline in milliseconds; excludes the DSH queue. */
+  /** Deadline in milliseconds of one conversion, or of all Poppler processes of one rendering; excludes the DSH queue. */
   timeoutMs: number
   /** Maximum authorized source bytes. */
   maxInputBytes: number
@@ -3191,7 +3191,30 @@ export interface Config {
   maxFontFileBytes: number
   /** Maximum original font bytes loaded for a conversion. */
   maxLoadedFontBytes: number
+  /**
+   * Image rendering backends tried in order for requests without `renderer`, per input type. Each list is nonempty
+   * and duplicate-free.
+   */
+  renderers: {
+    /** Order for every input except PDF; excludes `poppler`, which renders only PDF. */
+    office: OfficeRenderer[]
+    /** Order for PDF input. */
+    pdf: OfficeRenderer[]
+  }
+  /** Poppler executables used by the `poppler` renderer. */
+  poppler: {
+    /** `pdftoppm` executable: a bare name looked up on the subprocess provider's PATH, or an absolute path there. */
+    pdftoppm: string
+    /** `pdfinfo` executable: a bare name looked up on the subprocess provider's PATH, or an absolute path there. */
+    pdfinfo: string
+  }
 }
+
+/**
+ * Image rendering backend: `libreoffice` renders every image input in the provider's LibreOffice Kit converter;
+ * `poppler` renders PDF only, through short-lived `pdfinfo` and `pdftoppm` subprocesses.
+ */
+export type OfficeRenderer = 'libreoffice' | 'poppler'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
 
