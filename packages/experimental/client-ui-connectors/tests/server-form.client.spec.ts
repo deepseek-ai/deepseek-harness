@@ -1,6 +1,6 @@
 /** The server form reads a Settings entry into a draft, validates it, and writes it back with credential references. */
 import { describe, expect, it } from 'vitest'
-import { credentialRef, draftFromEntry, emptyDraft, entryFromDraft, ownedRefs, validateDraft, type ServerDraft } from '../src/server-form.ts'
+import { credentialRef, draftFromEntry, emptyDraft, entryFromDraft, entryRefs, ownedRefs, validateDraft, type ServerDraft } from '../src/server-form.ts'
 
 const remote = (change: Partial<ServerDraft> = {}): ServerDraft => ({ ...emptyDraft(), name: 'docs', url: 'https://docs.example/mcp', ...change })
 const local = (change: Partial<ServerDraft> = {}): ServerDraft => ({ ...emptyDraft(), name: 'files', transport: 'stdio', command: 'npx', ...change })
@@ -121,4 +121,15 @@ it('names credential references after the server and field, and lists the refere
     env: { A: '${credential:MCP_DOCS_ENV_A}' },
   })).toEqual(['MCP_DOCS_TOKEN', 'MCP_DOCS_ENV_A'])
   expect(ownedRefs('docs', {})).toEqual([])
+})
+
+it('lists the references of every value the MCP manager expands, each once', () => {
+  expect(entryRefs({
+    url: 'https://docs.example/${credential:MCP_DOCS_PATH}/mcp',
+    headers: { 'X-Pair': '${credential:TEAM_ID}:${credential:MCP_DOCS_HEADER_X_PAIR}' },
+    command: '${credential:MCP_DOCS_BIN}',
+    args: ['--token', '${credential:MCP_DOCS_ENV_A}', 7],
+    env: { A: '${credential:MCP_DOCS_ENV_A}' },
+    cwd: '/work/${credential:MCP_DOCS_DIR}',
+  })).toEqual(['MCP_DOCS_PATH', 'TEAM_ID', 'MCP_DOCS_HEADER_X_PAIR', 'MCP_DOCS_BIN', 'MCP_DOCS_ENV_A', 'MCP_DOCS_DIR'])
 })

@@ -169,6 +169,34 @@ it('refuses a save whose own credential references another server\'s entry uses,
   expect(c.calls).toEqual([`mutate ${JSON.stringify([{ op: 'unset', path: ['servers', 'a-env'] }])} @3`, 'unset MCP_A_ENV_HEADER_X_OWN'])
 })
 
+it('counts a reference as used wherever the manager expands it: in a URL, command, argument, working directory, or beside another reference', async () => {
+  const b = await bench({ files: { transport: 'stdio', command: 'npx', args: ['--token=${credential:MCP_WIKI_TOKEN}'] } })
+  await expect(b.service.saveServer({ ...TOKEN, name: 'wiki' }, 3)).rejects.toMatchObject({
+    code: 'connectors/refused', message: 'the server would share the credential reference MCP_WIKI_TOKEN with another server', details: { server: 'wiki' },
+  })
+  expect(b.calls).toEqual([])
+
+  const header = (key: string) => `\${credential:MCP_DOCS_HEADER_${key}}`
+  const c = await bench({
+    docs: { ...DOCS, headers: { A: header('A'), B: header('B'), C: header('C'), D: header('D'), E: header('E'), F: header('F') } },
+    files: {
+      transport: 'stdio', command: header('A'), args: ['--token', header('B')], env: { PAIR: `\${credential:TEAM_ID}:${header('C')}` }, cwd: header('D'),
+    },
+    wiki: { transport: 'streamable-http', url: `https://wiki.example/${header('E')}/mcp`, headers: {} },
+  })
+  await c.service.removeServer('docs', 3)
+  expect(c.calls).toEqual([`mutate ${JSON.stringify([{ op: 'unset', path: ['servers', 'docs'] }])} @3`, 'unset MCP_DOCS_HEADER_F'])
+})
+
+it('keeps a secret the saved entry still uses in an argument after its environment row is removed', async () => {
+  const args = ['--key=${credential:MCP_LOCAL_ENV_KEY}']
+  const b = await bench({
+    local: { transport: 'stdio', command: 'npx', args, env: { KEY: '${credential:MCP_LOCAL_ENV_KEY}', OLD: '${credential:MCP_LOCAL_ENV_OLD}' } },
+  })
+  await b.service.saveServer({ ...emptyDraft(), name: 'local', transport: 'stdio', command: 'npx', args }, 3)
+  expect(b.calls).toEqual([expect.stringMatching(/^mutate /), 'unset MCP_LOCAL_ENV_OLD'])
+})
+
 it('signs out before an edit drops OAuth, and keeps the entry when signing out fails', async () => {
   const b = await bench({ docs: OAUTH })
   const plain: ServerDraft = { ...emptyDraft(), name: 'docs', url: 'https://docs.example/mcp' }

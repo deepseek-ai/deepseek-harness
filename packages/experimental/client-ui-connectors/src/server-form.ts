@@ -9,6 +9,7 @@ const SERVER_NAME = /^[A-Za-z0-9_-]{1,32}$/
 const OAUTH_NAME = /^[a-z][a-z0-9-]*$/
 const SECRET_VALUE = /^\$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}$/
 const BEARER_VALUE = /^Bearer \$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}$/
+const CREDENTIAL_TOKEN = /\$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}/g
 const FORM_FIELDS = ['transport', 'url', 'headers', 'command', 'args', 'env', 'cwd', 'enabled', 'oauth']
 
 /**
@@ -161,21 +162,24 @@ export function entryFromDraft(draft: ServerDraft, raw: Readonly<Record<string, 
 }
 
 /**
- * List the credential references an entry's header and environment values use, a bearer token's included.
+ * List the credential references an entry uses in the values the MCP manager expands: the URL, each header value, the
+ * command, each argument, each environment value, and the working directory, with every reference of a value.
  * @param raw - the entry.
- * @returns the references.
+ * @returns the references, each once.
  */
 export function entryRefs(raw: Readonly<Record<string, JsonValue>>): string[] {
-  return [...Object.values(record(raw.headers)), ...Object.values(record(raw.env))]
-    .map(value => /\$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}/.exec(text(value))?.[1])
-    .filter((ref): ref is string => ref !== undefined)
+  const values = [
+    raw.url, ...Object.values(record(raw.headers)),
+    raw.command, ...Array.isArray(raw.args) ? raw.args : [], ...Object.values(record(raw.env)), raw.cwd,
+  ]
+  return [...new Set(values.flatMap(value => [...text(value).matchAll(CREDENTIAL_TOKEN)].map(token => token[1] as string)))]
 }
 
 /**
  * List the credential references a server's entry uses under the server's own prefix.
  * @param name - the server name.
  * @param raw - the entry.
- * @returns the references in header and environment values.
+ * @returns the references, each once.
  */
 export function ownedRefs(name: string, raw: Readonly<Record<string, JsonValue>>): string[] {
   const prefix = credentialRef(name, '')
