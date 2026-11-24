@@ -28,7 +28,7 @@ The voice is a saved preference. The synthesis API offers two voices; the bundle
 
 Submitting the whole reply in one request is the simplest use of the API and is the case the pacing exists to avoid.
 
-Feeding one WebSocket session sentence by sentence was rejected. The session ends after 60 seconds without text, so a wait between sentences has a deadline. With the service's Markdown filter a paragraph is released only at a blank line, and fragments without punctuation wait for later text. The chat backend keeps this drip mode only as a fallback behind segment dispatch.
+Feeding one WebSocket session sentence by sentence was rejected. The session ends after 60 seconds without text, so a wait between sentences has a deadline. With the service's Markdown filter a paragraph is released only at a blank line, and fragments without punctuation wait for later text. The chat backend itself keeps continuous submission into one session only as a fallback that configuration enables per vendor.
 
 Pacing in the Host was rejected because the playback position exists only in the browser; it would need the progress reports that the chat protocol carries and the public API was not given.
 

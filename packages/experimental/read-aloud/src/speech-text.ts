@@ -8,9 +8,11 @@ import { gfm } from 'micromark-extension-gfm'
 const INLINE_MATH_LIMIT = 20
 /**
  * A block formula between `$$` pairs, or an inline formula between two `$` on one line; a backslash-escaped dollar
- * is no delimiter. The math syntax packages are not used here: they install KaTeX into the Host runtime.
+ * is no delimiter. An inline formula follows Pandoc's rule, so that amounts of money stay text: its opening dollar
+ * precedes a non-space character, and its closing dollar follows a non-space character and precedes no digit. The
+ * math syntax packages are not used here: they install KaTeX into the Host runtime.
  */
-const FORMULA = /(?<!\\)\$\$[\s\S]+?\$\$|(?<!\\)\$([^$\n]+?)\$/g
+const FORMULA = /(?<!\\)\$\$[\s\S]+?\$\$|(?<!\\)\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/g
 /** ASCII punctuation, each of which Markdown reads literally after a backslash. */
 const PUNCTUATION = /[!-/:-@[-`{-~]/g
 

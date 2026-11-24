@@ -37,6 +37,16 @@ it('reads a dollar as a formula delimiter only outside code and HTML, and only i
   expect(speechText('<div>\n$x$\n</div>\n\n之后 $y$ 照读。')).toBe('之后 y 照读。')
 })
 
+it('keeps amounts of money as text and still finds a formula beside them', () => {
+  const plans = 'Plan A costs $20 per month while plan B costs $35.'
+  expect(speechText(plans)).toBe(plans)
+  expect(speechText('套餐 A 每月 $20，套餐 B 每月 $35。')).toBe('套餐 A 每月 $20，套餐 B 每月 $35。')
+  expect(speechText('Between $5-$10 each, or US$5 and CA$7.')).toBe('Between $5-$10 each, or US$5 and CA$7.')
+  expect(speechText('It costs $5 and the formula $x$ shows it.')).toBe('It costs $5 and the formula x shows it.')
+  // Dollars padded with spaces on the inside delimit no formula.
+  expect(speechText('写成 $ x + y $ 时照原样读。')).toBe('写成 $ x + y $ 时照原样读。')
+})
+
 it('treats a source line break as spacing and a hard break as a new line', () => {
   expect(speechText('第一行\n第二行')).toBe('第一行 第二行')
   expect(speechText('第一行  \n第二行')).toBe('第一行\n第二行')
