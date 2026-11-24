@@ -1586,7 +1586,7 @@ describe('headless recorded-session snapshots', () => {
               const log = actualLogs[0]!.content
               const results = parseSessionLog(log).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
               if (scenario.name === 'office-progressive-native') {
-                // office_render refuses a render for a model route without image input.
+                // document_render refuses a render for a model route without image input.
                 const render = results.pop()
                 expect(render?.isError).toBe(true)
                 expect(render?.content).toEqual([{

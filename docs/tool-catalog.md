@@ -15,6 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-im` | `im_history`, `im_members`, `im_read`, `im_read_file`, `im_read_image`, `im_reply`, `im_send`, `im_send_file` | `ctx.tools`, `ctx.im`, `ctx.systemPrompt`, `ctx.fs + ctx.workingDirectory (im_send_file)` | `tool/call`, `IM send receipts for publication`, `tool/result` | - | Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated. |
 | `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`, `ctx.sessionController`, `ctx.workspaceRegistry`, `a calling Agent` | `tool/call`, `agent/inbox/spliced in the recipient`, `tool/result` | - | The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target. |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
@@ -24,7 +25,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-executor-ptc` | `run_code` | `ctx.workingDirectory (Agent executions)`, `ctx.tools`, `ctx.ptcRuntime`, `ctx.systemPrompt` | `tool/call`, `one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`, `tool/result` | - | The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated TypeScript SDK. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agents`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.workingDirectory`, `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`, `tool/result` | - | The bash tool is the model-facing consumer of the bash executor seam. With a job registry composed every call registers with the generic `ctx.jobs` runtime as it starts, collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; without one, or with `enableRunInBackground: false`, the tool registers a foreground-only schema without the `run_in_background` parameter. |
-| `@deepseek-ai/dsh-tool-office` | `office_convert`, `office_recalculate`, `office_render` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents`, `ctx.officeKit`, `ctx.attachments and ctx.llm for office_render` | `tool/call`, `tool/result with rendered image attachments`, `temporary converted files in the Office kit output store` | - | Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed. |
+| `@deepseek-ai/dsh-tool-document` | `document_convert`, `document_recalculate`, `document_render` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents`, `ctx.officeKit`, `ctx.attachments and ctx.llm for document_render` | `tool/call`, `tool/result with rendered image attachments`, `temporary converted files in the Office kit output store` | - | Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed. |
 | `@deepseek-ai/dsh-tool-present` | `present` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents` | `tool/call`, `deliverables/presented after a successful final result`, `tool/result` | - | Deliveries belong to the calling Session; Web ui-deliverables supplies source-file opening and cards. |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.workingDirectory`, `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | The Desktop Standard and Creator modes and the SDK profile provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager. |
@@ -52,6 +53,231 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-im"></a>
+
+## `@deepseek-ai/dsh-im`
+
+### `im_history`
+
+Read a bounded page of one IM chat you may read. Page older messages with before or newer ones with after, both cursors being seq numbers.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "before": {
+      "type": "integer",
+      "description": "Only messages with a lower seq than this cursor."
+    },
+    "after": {
+      "type": "integer",
+      "description": "Only messages with a higher seq than this cursor."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Page size, within the operator-configured history limit."
+    }
+  }
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_members`
+
+List the people a chat you may read has as members, each with the markdown that mentions them: a mention addresses the platform user id and shows the name. Filter with query rather than paging by hand.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "query": {
+      "type": "string",
+      "description": "Keep only members whose name carries this text; use it instead of paging a large chat by hand."
+    }
+  }
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read`
+
+Read one message of an IM chat you may read: its sender, time, text, quote and media labels.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Message key (bot|id) or the per-chat seq number shown as #12."
+    },
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    }
+  },
+  "required": [
+    "message"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read_file`
+
+Save the file of one media label such as [文件 #12.2 report.pdf] into your workspace and get the path to open with your file tools.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable media id such as 12.2 from [文件 #12.2 report.pdf]."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read_image`
+
+Read the image of one media label such as [图片 #12.1] and see it.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable media id such as 12.1 from [图片 #12.1]."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_reply`
+
+Publish one markdown reply to a message of an IM chat you may write; a reply to a message inside a thread or topic stays there.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "message": {
+      "type": "string",
+      "description": "Message to answer, by key (bot|id) or seq."
+    },
+    "text": {
+      "type": "string",
+      "description": "Complete markdown reply."
+    },
+    "thread": {
+      "type": "boolean",
+      "description": "Also answer inside that message thread."
+    }
+  },
+  "required": [
+    "message",
+    "text"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_send`
+
+Publish one markdown message into an IM chat you may write. Returns the delivery status: confirmed, failed, uncertain or partial.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "text": {
+      "type": "string",
+      "description": "Complete markdown to publish as one message."
+    },
+    "thread": {
+      "type": "string",
+      "description": "Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none."
+    }
+  },
+  "required": [
+    "text"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_send_file`
+
+Publish one local file into an IM chat you may write as an image, video, audio or file message; the extension picks the platform message kind.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "path": {
+      "type": "string",
+      "description": "Local path of the file to publish."
+    },
+    "quote": {
+      "type": "string",
+      "description": "Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.
 
 <a id="deepseek-aidsh-tool-session-control"></a>
 
@@ -725,11 +951,11 @@ Source: [`packages/shell/tool-bash/src/index.ts`](../packages/shell/tool-bash/sr
 
 The bash tool is the model-facing consumer of the bash executor seam. With a job registry composed every call registers with the generic `ctx.jobs` runtime as it starts, collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; without one, or with `enableRunInBackground: false`, the tool registers a foreground-only schema without the `run_in_background` parameter.
 
-<a id="deepseek-aidsh-tool-office"></a>
+<a id="deepseek-aidsh-tool-document"></a>
 
-## `@deepseek-ai/dsh-tool-office`
+## `@deepseek-ai/dsh-tool-document`
 
-### `office_convert`
+### `document_convert`
 
 Convert a document to another format. Return a temporary file to copy to its destination with the shell.
 
@@ -768,9 +994,9 @@ Convert a document to another format. Return a temporary file to copy to its des
 }
 ```
 
-Source: [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+Source: [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
-### `office_recalculate`
+### `document_recalculate`
 
 Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.
 
@@ -798,9 +1024,9 @@ Recalculate spreadsheet formulas. Return a temporary workbook to copy to its des
 }
 ```
 
-Source: [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+Source: [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
-### `office_render`
+### `document_render`
 
 Render document pages, slides, or worksheet areas as images you can view.
 
@@ -830,6 +1056,14 @@ Render document pages, slides, or worksheet areas as images you can view.
     "dpi": {
       "type": "integer",
       "description": "Resolution from 24 to 600; default 144."
+    },
+    "renderer": {
+      "type": "string",
+      "description": "Rendering backend; omit to use the first available for this file type. poppler renders pdf only.",
+      "enum": [
+        "libreoffice",
+        "poppler"
+      ]
     }
   },
   "required": [
@@ -838,7 +1072,7 @@ Render document pages, slides, or worksheet areas as images you can view.
 }
 ```
 
-Source: [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+Source: [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
 Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed.
 

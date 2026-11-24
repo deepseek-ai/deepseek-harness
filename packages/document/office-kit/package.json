@@ -58,13 +58,15 @@
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
     "@deepseek-ai/dsh-api-workspace-files": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*"
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-subprocess-local": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/libreoffice-kit": "0.2.3",
     "@deepseek-ai/schemastery": "workspace:~",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-subprocess": "workspace:*",
     "zod": "4.6.6",
     "@deepseek-ai/dsh-home-paths": "workspace:*"
   }

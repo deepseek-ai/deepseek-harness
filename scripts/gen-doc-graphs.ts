@@ -146,6 +146,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Supplies parsed task and run options to the headless runner and its sandbox-policy configuration.',
   },
   {
+    key: 'im',
+    pkg: 'im',
+    title: 'Persistent IM automation',
+    mode: 'service',
+    consumers: ['im-session-commands'],
+    note: 'Owns durable intake, the hosted sessions of every admitted chat, and explicitly authorized reads and publications.',
+  },
+  {
     key: 'cotTranslation',
     pkg: 'experimental-client-ui-cot-translation',
     title: 'Reasoning translation Remote',
@@ -312,7 +320,7 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
-    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
+    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-document'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
   },
   {

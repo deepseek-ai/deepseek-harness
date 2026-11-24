@@ -44,6 +44,14 @@ interface Rename {
 
 /** The mapping this codemod applies; `vendor/README.md` carries the same table. */
 const RENAMES: readonly Rename[] = [
+  { directory: 'plugin-im-core', upstream: '@satorijs/core', scoped: '@deepseek-ai/cordis-plugin-im-core' },
+  { directory: 'plugin-im-adapter-lark', upstream: '@satorijs/adapter-lark', scoped: '@deepseek-ai/cordis-plugin-im-adapter-lark' },
+  { directory: 'plugin-im-adapter-qq', upstream: '@satorijs/adapter-qq', scoped: '@deepseek-ai/cordis-plugin-im-adapter-qq' },
+  { directory: 'plugin-im-markdown', upstream: '@satorijs/markdown', scoped: '@deepseek-ai/cordis-plugin-im-markdown' },
+  { directory: 'satori-element', upstream: '@satorijs/element', scoped: '@deepseek-ai/satori-element' },
+  { directory: 'element', upstream: '@cordisjs/element', scoped: '@deepseek-ai/cordis-element' },
+  { directory: 'http', upstream: '@cordisjs/plugin-http', scoped: '@deepseek-ai/cordis-plugin-http' },
+  { directory: 'fetch-file', upstream: '@cordisjs/fetch-file', scoped: '@deepseek-ai/cordis-fetch-file' },
   { directory: 'cordis', upstream: 'cordis', scoped: '@deepseek-ai/cordis' },
   { directory: 'cosmokit', upstream: 'cosmokit', scoped: '@deepseek-ai/cosmokit' },
   { directory: 'schemastery', upstream: 'schemastery', scoped: '@deepseek-ai/schemastery' },
@@ -78,6 +86,11 @@ interface GenericSkip {
 }
 
 const GENERIC_SKIPS: readonly GenericSkip[] = [
+  // Preserve the Cordis plugin metadata key and keyword; dependency keys have exact edits below.
+  { file: 'vendor/element/package.json', upstream: ['cordis'] },
+  { file: 'vendor/http/package.json', upstream: ['cordis'] },
+  { file: 'vendor/plugin-im-core/package.json', upstream: ['cordis'] },
+  { file: 'vendor/plugin-im-markdown/package.json', upstream: ['cordis'] },
   // `Symbol.for('schemastery')` and the `vendor:` metadata field are upstream identifiers.
   { file: 'vendor/schemastery/src/index.ts', upstream: ['schemastery'] },
   // Narrows a Standard Schema by the same upstream `vendor:` identifier.
@@ -85,6 +98,8 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   // Native schema detection and its fixture share the vendored runtime's Symbol.for identifier.
   { file: 'packages/boot/app-boot/src/config-schema/native.ts', upstream: ['schemastery'] },
   { file: 'packages/boot/app-boot/tests/config-schema.spec.ts', upstream: ['schemastery'] },
+  // Directory name under `node_modules/@deepseek-ai`, not an unscoped package reference.
+  { file: 'apps/web/tests/client-config-sync.e2e.ts', upstream: ['schemastery'] },
   // The codemod's positive and negative fixtures contain both package spellings.
   { file: 'scripts/rescope-vendor.spec.ts', upstream: RENAMES.map(rename => rename.upstream), fixture: true },
   // Asserts the vendored-manifest table, which gains an upstream-name column.
@@ -103,6 +118,7 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'apps/web/tests/agent-preset-authoring.e2e.ts', upstream: ['cordis'] },
   { file: 'apps/web/tests/creator-persona.e2e.ts', upstream: ['cordis'] },
   { file: 'packages/preset/agent-preset-registry/tests/session.spec.ts', upstream: ['cordis'] },
+  // Preset selection, reminder policy and UI copy use the same product id.
   { file: 'packages/experimental/cua/tests/agent-scopes.spec.ts', upstream: ['cordis'] },
   { file: 'packages/extensions/creation-recommendations/src/index.ts', upstream: ['cordis'] },
   { file: 'packages/extensions/creation-recommendations/tests/creation.spec.ts', upstream: ['cordis'] },
@@ -110,6 +126,7 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   // Preset selection, reminder policy and UI copy use the same product id.
   { file: 'apps/cli/tests/optional-bundle-transitions.e2e.ts', upstream: ['cordis'] },
   { file: 'apps/web/tests/agent-preset-selection.e2e.ts', upstream: ['cordis'] },
+  { file: 'apps/web/tests/creator-persona.e2e.ts', upstream: ['cordis'] },
   { file: 'apps/web/tests/developer-tools-settings.e2e.ts', upstream: ['cordis'] },
   { file: 'docs/tool-catalog.md', upstream: ['cordis'] },
   { file: 'docs/tool-catalog.zh.md', upstream: ['cordis'] },
@@ -212,6 +229,20 @@ const POSTCONDITIONS: readonly PostCondition[] = [
  */
 const EXACT_EDITS: readonly ExactEdit[] = [
   {
+    id: 'http-framework-dependencies',
+    file: 'vendor/http/package.json',
+    find: '"cordis": "workspace:~"',
+    replace: '"@deepseek-ai/cordis": "workspace:~"',
+    expect: 2,
+  },
+  {
+    id: 'im-core-framework-dependencies',
+    file: 'vendor/plugin-im-core/package.json',
+    find: '"cordis": "workspace:~"',
+    replace: '"@deepseek-ai/cordis": "workspace:~"',
+    expect: 2,
+  },
+  {
     id: 'loader-diff-schemastery-import',
     file: 'vendor/loader/src/config/diff.ts',
     find: "import type Schema from 'schemastery'",
@@ -285,7 +316,7 @@ const EXACT_EDITS: readonly ExactEdit[] = [
     id: 'root-agents-vendored-name-contract',
     file: 'AGENTS.md',
     find: 'vendored packages keep upstream names and are `private: true`. `cordis` is a peerDependency (+ dev) of every harness package.',
-    replace: 'vendor is [rescoped](docs/rescope.md) and `private: true`. Harness packages declare `@deepseek-ai/cordis` in `peerDependencies`/`devDependencies`.',
+    replace: 'vendor is [rescoped](docs/rescope.md) and published. Harness packages declare `@deepseek-ai/cordis` in `peerDependencies`/`devDependencies`.',
     expect: 1,
   },
   {

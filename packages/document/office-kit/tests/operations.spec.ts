@@ -98,7 +98,7 @@ it('renders selected images in document order with their locations and passes th
       { png: Uint8Array.from(PNG), width: 10, height: 20, sheet: 'Data', range: 'A1:B2' },
       { png: Uint8Array.from(PNG), width: 11, height: 20, page: 3 },
     ],
-    pageCount: 3, dpi: 96, missingFonts: ['Missing Sans'],
+    pageCount: 3, dpi: 96, missingFonts: ['Missing Sans'], renderer: 'libreoffice',
   })
   const [request] = converter.renderImages.mock.calls[0]!
   expect(request).toMatchObject({ pages: [3, 1], dpi: 96, maxPages: 4, maxPixels: 1_000_000, maxDimension: 4096 })

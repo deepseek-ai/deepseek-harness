@@ -33,6 +33,8 @@ kind: "package-library"
 
 Factory `children` 仍是普通全局 Slots 且必须与 `SlotMap` 匹配，而局部 `slots` 为每个 occurrence 选择一个 Component。occurrence 继承其渲染位置的 scope；`renderFactorySlot()` 不接受 Session identity。共享 Store handle 使用普通 scope 解析。Store factory 保持 lazy，直到 occurrence 首次物化时才为该渲染位置创建一个 handle；若持久化 Store spec 会让 persistence key 在 occurrences 之间冲突，renderer 会拒绝它。
 
+在 DOM 查询中，`[data-slot-factory]` 标记已渲染的 Factory，`[data-slot-factory-children]` 标记调用方显式选中且已挂载的局部组件。选择器示例与行内根元素的声明方式见 [Factory DOM 迁移指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/factory-content-roots/guide.zh.md)。
+
 ### 五个框架 props share
 
 每个已注册组件都会收到由五个框架 share 组合而成的 props：运行时 share（父级 render 调用点的 `owner`，加上会话标准工具包与全局席位）、child render share（静态缩窄到已声明 children 的 `renderSlot`）、Factory render share（`renderFactorySlot`）、store share（已声明 handle 的 selector 钩子与移除 draft 的 actions），以及业务 share（从 `inject` 推导）。组件引用推导出的 props 别名；它们绝不在本地重新定义任何 share 的类型。

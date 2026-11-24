@@ -1816,6 +1816,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/unrecognized-url` when no registered provider serves the URL.'],
       },
       {
+        signature: '@Remote async recognize(url: string, signal: AbortSignal): Promise<string | null>',
+        description: 'Read a web URL as a change request, without binding it.',
+        parameters: [{ name: 'url', description: 'web URL, which may name one page of a change request.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the provider\'s canonical URL of the change request, which its Session binding and changes view use, or null when no registered provider serves the URL.',
+      },
+      {
         signature: '@Remote async dismiss(session: Session, url: string, signal: AbortSignal): Promise<void>',
         description: 'Hide a visible binding of a Session; other URLs leave the Session unchanged.',
         parameters: [{ name: 'session', description: 'Session that owns the binding.' }, { name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -2148,6 +2154,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the outcome, including the version the write produced.',
       },
       {
+        signature: 'writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>',
+        description: 'Atomically create or replace one file from exact bytes: no decoding, no newline normalization, no diff basis. The bytes are stored as given, which is how a consumer materializes content it already holds — a downloaded attachment, a rendered document — inside this execution world. Backends that cannot store arbitrary bytes keep this default rejection.',
+        parameters: [{ name: 'target', description: 'the resolved target to write.' }, { name: 'data', description: 'the exact bytes to store.' }, { name: 'expected', description: 'the write intent guarding the write; omit for unconditional.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this write runs under; a sandboxing backend fences the write by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
+        returns: 'the outcome, including the version the write produced.',
+      },
+      {
         signature: 'abstract editText( target: FsTarget, edit: FsEditRequest, expected?: { version: FsVersion }, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsEditOutcome>',
         description: 'Atomically edit literal text. When supplied, the version guard is checked before matching so stale content reports `FS_STALE_VERSION`; omission edits the current content without a freshness precondition.',
         parameters: [{ name: 'target', description: 'the resolved target to edit.' }, { name: 'edit', description: 'the literal search/replace request.' }, { name: 'expected', description: 'the version guard; omit for an unconditional edit.' }, { name: 'signal', description: 'aborts before atomic publication takes effect.' }, { name: 'sandboxPolicy', description: 'the per-call mode and workspace root this edit runs under; a sandboxing backend fences the edit by it, the bare backend ignores it. Omit to leave the backend its own default.' }],
@@ -2318,6 +2330,112 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'requiredIds', description: 'Entry ids whose inactive state is reported as a failure even when it predates this call.' }],
         returns: 'Inactive-entry diagnostics, the changed modules that load after a restart, and a profile-wide restart reason.',
         throws: ['The patch read, publication, preparation, apply, or activation failure of the recomposition, including a replacement plugin that fails to load or start, whose previous code no longer runs.'],
+      },
+    ],
+  },
+  {
+    key: 'im',
+    summary: 'Single-process IM host; module wiring only — behaviour lives in the per-concern modules.',
+    description: 'Single-process IM host; module wiring only — behaviour lives in the per-concern modules.',
+    methods: [
+      {
+        signature: 'readonly store: ImStore',
+        description: 'Durable message store and the `ctx.im.history` read side.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly media: ImMediaStore',
+        description: 'Media references and bounded download into attachments (`im_read_image`, `im_read_file`).',
+        parameters: [],
+      },
+      {
+        signature: 'readonly formatter: ImFormatter',
+        description: '`ctx.im.format` renderer of stored messages.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly agentHost: ImAgentHost',
+        description: 'Live agents of hosted sessions, created/resumed from their stored composition.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly sessions: ImSessionHost',
+        description: '`ctx.im.sessions` records, bindings and durable deliveries.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly sender: ImSender',
+        description: '`ctx.im.send`/`stream` outbound sender with durable receipts and own-message attribution.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly intake: ImIntake',
+        description: '`satori/receive` intake and the `im/message` dispatch loop.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly dispatcher: ImDispatcher | undefined',
+        description: 'The default dispatcher behind every other `im/message` listener; undefined when `config.defaultDispatch` is absent.',
+        parameters: [],
+      },
+      {
+        signature: 'readonly activity: ImActivityTracker',
+        description: 'Per-turn activity of hosted sessions, emitted as `im/activity`.',
+        parameters: [],
+      },
+      {
+        signature: 'source(id: string): ImSourceConfig | undefined',
+        description: 'Configured admission rule by id.',
+        parameters: [{ name: 'id', description: 'the operator id of the source.' }],
+        returns: 'the source, or undefined when no source carries that id.',
+      },
+      {
+        signature: 'send(chat: ImChatKey, content: Fragment, options?: ImSendOptions): Promise<ImSendResult>',
+        description: 'Publish content into one admitted chat, recording a durable receipt when `operationId` is provided.',
+        parameters: [{ name: 'chat', description: 'the target chat key.' }, { name: 'content', description: 'the message content, normalized by the adapter\'s mode.' }, { name: 'options', description: 'quote, thread, operation id and delivery overrides.' }],
+        returns: 'the published handle and the render report of every part.',
+      },
+      {
+        signature: 'stream(chat: ImChatKey, options?: ImSendOptions & StreamOptions): Promise<MessageStream>',
+        description: 'Open a streaming publication into one admitted chat.',
+        parameters: [{ name: 'chat', description: 'the target chat key.' }, { name: 'options', description: 'quote, thread and the stream strategy options.' }],
+        returns: 'the message stream the caller drives with updates.',
+      },
+      {
+        signature: 'format(messages: readonly ImMessage[], options?: ImFormatOptions): Promise<UserMessage[\'content\']>',
+        description: 'Format stored messages as model-facing user-message content.',
+        parameters: [{ name: 'messages', description: 'the messages to format, in chat order.' }, { name: 'options', description: 'style, media admission and header options.' }],
+        returns: 'the text (and admitted images) the model receives.',
+      },
+      {
+        signature: 'bot(chat: ImChatKey): Bot',
+        description: 'The mounted bot that serves one chat.',
+        parameters: [{ name: 'chat', description: 'the chat key, whose bot segment names the bot.' }],
+        returns: 'the bot serving that chat.',
+      },
+      {
+        signature: 'chat(key: ImChatKey): ImChat | undefined',
+        description: 'The retained record of one admitted chat.',
+        parameters: [{ name: 'key', description: 'the chat key.' }],
+        returns: 'the chat record, or undefined when the chat was never admitted.',
+      },
+      {
+        signature: 'async readMessage(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMessage>',
+        description: 'One message of one chat: the stored message when this deployment received it, and a platform read otherwise, so a reference to a message that never reached this deployment still resolves. A platform read is admitted and stored like any other message, which gives it a sequence number and keeps later reads of it local.',
+        parameters: [{ name: 'chat', description: 'chat to read in; its bot serves the platform request.' }, { name: 'id', description: 'platform message id.' }, { name: 'signal', description: 'optional cancellation signal from the caller.' }],
+        returns: 'the message as the store holds it, with a merged forward\'s entries filled in when the platform has them.',
+      },
+      {
+        signature: 'async members(chat: ImChatKey, cursor?: string, limit?: number, signal?: AbortSignal): Promise<MembersPage>',
+        description: 'One page of the people a chat lists as its members: the id a mention addresses and the name to show.',
+        parameters: [{ name: 'chat', description: 'chat whose members are listed; its bot answers the platform request.' }, { name: 'cursor', description: '`page_token` of the previous page.' }, { name: 'limit', description: 'page-size hint; the platform bounds it.' }, { name: 'signal', description: 'optional cancellation signal from the caller.' }],
+        returns: 'the page the adapter read.',
+      },
+      {
+        signature: 'status(): ImStatus',
+        description: 'A snapshot of the deployment: bots, sources, sessions, pending work and recent messages.',
+        parameters: [],
+        returns: 'the current status.',
       },
     ],
   },
@@ -2790,8 +2908,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'officeKit',
-    summary: 'A provider lifetime owns all converters, queued calls, and temporary files.',
-    description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
+    summary: 'A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.',
+    description: 'A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.',
     methods: [
       {
         signature: 'readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())',
@@ -2812,10 +2930,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>',
-        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.',
-        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
-        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.',
-        throws: ['{OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
+        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority. The backend is chosen before admission: `request.renderer` exclusively, otherwise the first available entry of the configured `renderers` order, where the last entry is used without an availability check. A backend that fails after it starts rejects without trying another. Poppler renders without a LibreOffice converter slot.',
+        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, backend, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits, with the backend that rendered them.',
+        throws: ['{OfficeKitError} `unsupported-format` for `poppler` with non-PDF input, `unavailable` when the requested or last configured backend cannot run, `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
       },
       {
         signature: 'async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>',
@@ -5962,6 +6080,86 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'reloads', description: 'Replaced plugins and their module locations.' }],
   },
   {
+    name: 'im/activity',
+    mode: 'emit',
+    signature: '\'im/activity\'(activity: ImActivity, change: ImActivityChange): void',
+    summary: 'A hosted session\'s turn activity changed; output renderers subscribe to redraw their message.',
+    description: 'A hosted session\'s turn activity changed; output renderers subscribe to redraw their message.',
+    parameters: [{ name: 'activity', description: 'the whole activity of the turn, with every segment so far.' }, { name: 'change', description: 'which part changed: start, a segment delta, a tool update, or the end.' }],
+  },
+  {
+    name: 'im/before-send',
+    mode: 'waterfall',
+    signature: '\'im/before-send\'(outgoing: ImOutgoing, next: () => Promise<void>): Promise<void>',
+    summary: 'One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace `outgoing.content` or set `outgoing.drop`, then call `next()`.',
+    description: 'One `ctx.im.send` publication is about to be dispatched (grants already checked): listeners may replace `outgoing.content` or set `outgoing.drop`, then call `next()`. Not run for streams or for replayed operations.',
+    parameters: [{ name: 'outgoing', description: 'the mutable draft: chat, caller options, the caller\'s original content and the current content.' }, { name: 'next', description: 'the rest of the waterfall.' }],
+  },
+  {
+    name: 'im/button',
+    mode: 'emit',
+    signature: '\'im/button\'(event: ImButtonEvent): void',
+    summary: 'A button of a published message was clicked, with the chat, sender and producing session.',
+    description: 'A button of a published message was clicked, with the chat, sender and producing session.',
+    parameters: [{ name: 'event', description: 'the click, its message and the raw platform interaction.' }],
+  },
+  {
+    name: 'im/check',
+    mode: 'emit',
+    signature: '\'im/check\'(event: ImCheckEvent): void',
+    summary: 'A checkbox of a published message was toggled, with the chat, sender, new state and producing session.',
+    description: 'A checkbox of a published message was toggled, with the chat, sender, new state and producing session.',
+    parameters: [{ name: 'event', description: 'the toggle, its message and the raw platform interaction.' }],
+  },
+  {
+    name: 'im/message',
+    mode: 'waterfall',
+    signature: '\'im/message\'(event: ImMessageEvent, next: () => Promise<ImOutcome>): Promise<ImOutcome>',
+    summary: 'An admitted inbound message; listeners call `next()` to pass it on and the default outcome ignores it.',
+    description: 'An admitted inbound message; listeners call `next()` to pass it on and the default outcome ignores it.',
+    parameters: [{ name: 'event', description: 'the admitted message with its chat, source and renderer state.' }, { name: 'next', description: 'the rest of the waterfall; call it to let the next listener decide the outcome.' }],
+  },
+  {
+    name: 'im/reaction',
+    mode: 'emit',
+    signature: '\'im/reaction\'(event: ImReactionEvent): void',
+    summary: 'A reaction was added to or removed from a stored message in an admitted chat.',
+    description: 'A reaction was added to or removed from a stored message in an admitted chat.',
+    parameters: [{ name: 'event', description: 'the reaction, its target message, actor, and producing session when known.' }],
+  },
+  {
+    name: 'im/select',
+    mode: 'emit',
+    signature: '\'im/select\'(event: ImSelectEvent): void',
+    summary: 'A `<select>` of a published message was used, with the chat, sender, picked values and producing session.',
+    description: 'A `<select>` of a published message was used, with the chat, sender, picked values and producing session.',
+    parameters: [{ name: 'event', description: 'the pick, its message and the raw platform interaction.' }],
+  },
+  {
+    name: 'im/session/created',
+    mode: 'emit',
+    signature: '\'im/session/created\'(record: ImSessionRecord): void',
+    summary: 'A hosted session record was created, including the new record a reset creates.',
+    description: 'A hosted session record was created, including the new record a reset creates.',
+    parameters: [{ name: 'record', description: 'the created record with its session id and generation.' }],
+  },
+  {
+    name: 'im/session/reset',
+    mode: 'emit',
+    signature: '\'im/session/reset\'(record: ImSessionRecord, reason: string): void',
+    summary: 'A hosted session was reset: its generation advanced and a fresh session id was issued.',
+    description: 'A hosted session was reset: its generation advanced and a fresh session id was issued.',
+    parameters: [{ name: 'record', description: 'the record that was just replaced; the new record arrives through `im/session/created`.' }, { name: 'reason', description: 'why the reset happened, as the caller reported it.' }],
+  },
+  {
+    name: 'im/stored',
+    mode: 'emit',
+    signature: '\'im/stored\'(message: ImMessage): void',
+    summary: 'A message was stored: an admitted inbound message or an own outbound publication.',
+    description: 'A message was stored: an admitted inbound message or an own outbound publication.',
+    parameters: [{ name: 'message', description: 'the stored record with its per-chat sequence number.' }],
+  },
+  {
     name: 'llm-pi-ai/request-headers',
     mode: 'waterfall',
     signature: '\'llm-pi-ai/request-headers\'(request: PiAiRequestHeaderContext, headers: Headers, next: () => Headers): Headers',
@@ -7490,6 +7688,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
   },
   {
+    name: 'DocumentRenderer',
+    declaration: 'export type DocumentRenderer = \'libreoffice\' | \'poppler\';',
+  },
+  {
     name: 'Domain',
     declaration: 'export interface Domain<S extends DomainSpec> {\n    readonly name: string;\n    readonly global: DomainGlobalHandleOf<S>;\n    table<N extends keyof S[\'tables\'] & string>(name: N): KvTable<TableKeyOf<S, N>, TableValueOf<S, N>>;\n    close(): Promise<void>;\n}',
   },
@@ -8058,6 +8260,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type FsVersion = Branded<\'FsVersion\'>;',
   },
   {
+    name: 'FsWriteBytesOutcome',
+    declaration: 'export interface FsWriteBytesOutcome {\n    operation: \'create\' | \'update\';\n    version: FsVersion;\n}',
+  },
+  {
     name: 'FsWriteIntent',
     declaration: 'export type FsWriteIntent = {\n    kind: \'createIfAbsent\';\n} | {\n    kind: \'replaceIfVersion\';\n    version: FsVersion;\n};',
   },
@@ -8158,6 +8364,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface HostConnectionRpc {\n    handle(channel: string, handler: ConnectionRpcHandler): () => Promise<void>;\n    intercept(channel: \'/api\', matches: ConnectionRpcEndpointMatcher, handler: ConnectionRpcHandler): () => Promise<void>;\n}',
   },
   {
+    name: 'HostResolver',
+    declaration: 'export type HostResolver = (hostname: string) => Promise<readonly string[]>;',
+  },
+  {
+    name: 'ImActivity',
+    declaration: 'export interface ImActivity {\n    session: ImSessionRecord;\n    turn: number;\n    status: \'running\' | \'done\' | \'cancelled\' | \'error\';\n    segments: readonly ImSegment[];\n    trigger?: ImMessage;\n    error?: string;\n    startedAt: number;\n    updatedAt: number;\n}',
+  },
+  {
+    name: 'ImActivityChange',
+    declaration: 'export type ImActivityChange = \'start\' | \'delta\' | \'tool\' | \'end\';',
+  },
+  {
+    name: 'ImActivityDeps',
+    declaration: 'export interface ImActivityDeps {\n    hosted(sessionId: SessionId): ImSessionRecord | undefined;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
+  },
+  {
+    name: 'ImActivityTracker',
+    declaration: 'export class ImActivityTracker {\n    constructor(readonly ctx: Context, readonly deps: ImActivityDeps);\n    start(): void;\n    current(sessionId: SessionId): ImActivity | undefined;\n    running(sessionId: SessionId): boolean;\n}',
+  },
+  {
     name: 'ImageAttachmentLimits',
     declaration: 'export interface ImageAttachmentLimits {\n    maxImageBytes: number;\n    maxImagesPerMessage: number;\n    maxMessageImageBytes: number;\n    maxImagePixels: number;\n    maxImageDimension: number;\n    mediaTypes: readonly ImageMediaType[];\n}',
   },
@@ -8174,6 +8400,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ImageMediaType = \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'image/gif\';',
   },
   {
+    name: 'ImAgentHost',
+    declaration: 'export class ImAgentHost {\n    constructor(readonly ctx: Context);\n    open(record: ImSessionRecord): Promise<Agent>;\n    live(sessionId: SessionId): Agent | undefined;\n    dispose(sessionId: SessionId): Promise<void>;\n    async disposeAll(): Promise<void>;\n}',
+  },
+  {
     name: 'ImageRequestTarget',
     declaration: 'export interface ImageRequestTarget {\n    width: number;\n    height: number;\n    maxImageBytes: number;\n    imageTargetBytes: number;\n}',
   },
@@ -8184,6 +8414,206 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ImageVariantId',
     declaration: 'export type ImageVariantId = Branded<\'ImageVariantId\'>;',
+  },
+  {
+    name: 'ImBinding',
+    declaration: 'export interface ImBinding {\n    chat: ImChatKey;\n    writable: boolean;\n    home?: boolean;\n    thread?: string;\n}',
+  },
+  {
+    name: 'ImButtonEvent',
+    declaration: 'export interface ImButtonEvent {\n    readonly id: string;\n    readonly data?: unknown;\n    readonly values?: ButtonEvent[\'values\'];\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: ButtonEvent;\n}',
+  },
+  {
+    name: 'ImChat',
+    declaration: 'export interface ImChat {\n    key: ImChatKey;\n    bot: string;\n    ref: ChatRef;\n    source: ImSourceId;\n}',
+  },
+  {
+    name: 'ImChatKey',
+    declaration: 'export type ImChatKey = Branded<\'ImChatKey\'>;',
+  },
+  {
+    name: 'ImCheckEvent',
+    declaration: 'export interface ImCheckEvent {\n    readonly id: string;\n    readonly checked: boolean;\n    readonly data?: unknown;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: CheckEvent;\n}',
+  },
+  {
+    name: 'ImCommand',
+    declaration: 'export interface ImCommand {\n    name: string;\n    rawInput: string;\n}',
+  },
+  {
+    name: 'ImComposition',
+    declaration: 'export interface ImComposition {\n    agentPreset: string;\n    cwd: string;\n    provider: string;\n    model: string;\n    restrict?: ToolRestriction;\n}',
+  },
+  {
+    name: 'ImConfig',
+    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    platformTimeoutMs: number;\n    compositionWarnMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n        timeoutMs: number;\n        source: {\n            file: boolean;\n            internal: boolean;\n        };\n    };\n    send: {\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        maxMembers: number;\n        maxMemberPages: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
+  },
+  {
+    name: 'ImDelivery',
+    declaration: 'export interface ImDelivery {\n    id: string;\n    mode: ImDeliveryMode;\n    content: UserMessage[\'content\'] | readonly ImMessage[];\n    trigger?: ImMessage;\n    media?: boolean;\n    header?: string;\n}',
+  },
+  {
+    name: 'ImDeliveryMode',
+    declaration: 'export type ImDeliveryMode = \'steer\' | \'followup\' | \'inject\';',
+  },
+  {
+    name: 'ImDispatcher',
+    declaration: 'export class ImDispatcher {\n    constructor(readonly config: ImDispatcherConfig, readonly sessions: Pick<ImSessions, \'ensure\' | \'get\' | \'of\' | \'deliveredTo\'>);\n    async handle(event: ImMessageEvent): Promise<ImOutcome>;\n    guidance(agent: Agent | undefined): string;\n}',
+  },
+  {
+    name: 'ImDispatcherConfig',
+    declaration: 'export interface ImDispatcherConfig {\n    agentPreset: string;\n    provider: string;\n    model: string;\n    cwd: string;\n    output: string;\n    delivery: ImDeliveryMode;\n    restrict?: {\n        allow?: string[];\n        deny?: string[];\n    } | undefined;\n    prompt: {\n        name: string;\n        order: number;\n        text: string;\n    };\n}',
+  },
+  {
+    name: 'ImDispatchState',
+    declaration: 'export interface ImDispatchState {\n    message: ImMessage;\n    dispatch: \'pending\' | \'done\' | \'none\';\n    outcome?: ImOutcome;\n}',
+  },
+  {
+    name: 'ImDomain',
+    declaration: 'export type ImDomain = Domain<typeof imDomain>;',
+  },
+  {
+    name: 'ImEventDelivery',
+    declaration: 'export type ImEventDelivery = Omit<ImDelivery, \'id\' | \'content\'> & {\n    id?: string;\n    content?: ImDelivery[\'content\'];\n};',
+  },
+  {
+    name: 'ImFormatOptions',
+    declaration: 'export interface ImFormatOptions {\n    style?: \'xml\' | \'line\';\n    media?: boolean;\n    header?: string;\n    signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'ImFormatter',
+    declaration: 'export class ImFormatter {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly history: ImHistory, readonly media: Pick<ImMediaStore, \'admit\'>);\n    async format(messages: readonly ImMessage[], options: ImFormatOptions = {}): Promise<UserMessage[\'content\']>;\n}',
+  },
+  {
+    name: 'ImHistory',
+    declaration: 'export interface ImHistory {\n    after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    get(key: ImMessageKey): ImMessage | undefined;\n    latest(chat: ImChatKey): ImMessage | undefined;\n}',
+  },
+  {
+    name: 'ImIntake',
+    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    async drainAnnouncements(): Promise<void>;\n    hold(): void;\n    release(): void;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'ImIntakeHost',
+    declaration: 'export interface ImIntakeHost {\n    event(message: ImMessage, source: ImSourceConfig): ImMessageEvent;\n    readonly unhandled?: (event: ImMessageEvent) => Promise<ImOutcome>;\n}',
+  },
+  {
+    name: 'ImMediaFileItem',
+    declaration: 'export interface ImMediaFileItem extends ImMediaItem {\n    data?: Uint8Array;\n}',
+  },
+  {
+    name: 'ImMediaItem',
+    declaration: 'export interface ImMediaItem {\n    ref: ImMediaRef;\n    image?: ImageBlock;\n    file?: FileBlock;\n    mime?: string;\n    bytes?: number;\n    skipped?: string;\n}',
+  },
+  {
+    name: 'ImMediaKind',
+    declaration: 'export type ImMediaKind = \'image\' | \'file\' | \'audio\' | \'video\';',
+  },
+  {
+    name: 'ImMediaRef',
+    declaration: 'export interface ImMediaRef {\n    message: ImMessageKey;\n    chat: ImChatKey;\n    seq: number;\n    index: number;\n    kind: ImMediaKind;\n    src: string;\n    name?: string;\n    mime?: string;\n}',
+  },
+  {
+    name: 'ImMediaStore',
+    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig, options: ImMediaStoreOptions = {});\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal, allow?: (message: ImMessage) => boolean): Promise<ImMediaItem>;\n    async readFile(chat: ImChatKey, id: string, signal?: AbortSignal, allow?: (message: ImMessage) => boolean): Promise<ImMediaFileItem>;\n}',
+  },
+  {
+    name: 'ImMediaStoreOptions',
+    declaration: 'export interface ImMediaStoreOptions {\n    resolveHost?: HostResolver;\n}',
+  },
+  {
+    name: 'ImMessage',
+    declaration: 'export interface ImMessage {\n    key: ImMessageKey;\n    aliases?: readonly string[];\n    seq: number;\n    chat: ImChat;\n    thread?: {\n        id: string;\n        root?: string;\n    };\n    sender: UserRef & {\n        self: boolean;\n    };\n    content: Element<\'message\'>;\n    text: string;\n    quote?: {\n        key: ImMessageKey;\n        sender?: UserRef;\n        text?: string;\n    };\n    mentions: InboundMessage[\'mentions\'];\n    addressed: boolean;\n    command?: ImCommand;\n    time: number;\n    via: \'platform\' | \'self\';\n    referrer?: unknown;\n}',
+  },
+  {
+    name: 'ImMessageDraft',
+    declaration: 'export type ImMessageDraft = Omit<ImMessage, \'seq\'>;',
+  },
+  {
+    name: 'ImMessageEvent',
+    declaration: 'export interface ImMessageEvent {\n    readonly message: ImMessage;\n    readonly source: ImSourceConfig;\n    readonly bot: Bot;\n    reply(content: Fragment, options?: ImSendOptions): Promise<ImSendResult>;\n    send(content: Fragment, options?: ImSendOptions): Promise<ImSendResult>;\n    deliver(target: SessionId | string, options: ImEventDelivery): Promise<void>;\n}',
+  },
+  {
+    name: 'ImMessageKey',
+    declaration: 'export type ImMessageKey = Branded<\'ImMessageKey\'>;',
+  },
+  {
+    name: 'ImOutcome',
+    declaration: 'export type ImOutcome = {\n    kind: \'handled\';\n    by: string;\n    sessions?: SessionId[];\n} | {\n    kind: \'ignored\';\n    reason?: string;\n};',
+  },
+  {
+    name: 'ImOutgoing',
+    declaration: 'export interface ImOutgoing {\n    readonly chat: ImChatKey;\n    readonly options: Readonly<ImSendOptions>;\n    readonly original: Fragment;\n    content: Fragment;\n    drop?: string;\n}',
+  },
+  {
+    name: 'ImReactionEvent',
+    declaration: 'export interface ImReactionEvent {\n    readonly action: \'added\' | \'removed\';\n    readonly emoji: string;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly id?: string;\n}',
+  },
+  {
+    name: 'ImResetOptions',
+    declaration: 'export interface ImResetOptions {\n    operationId?: string;\n    expectedGeneration?: number;\n}',
+  },
+  {
+    name: 'ImSegment',
+    declaration: 'export type ImSegment = {\n    kind: \'reasoning\';\n    text: string;\n} | {\n    kind: \'text\';\n    text: string;\n} | {\n    kind: \'tool\';\n    callId: string;\n    name: string;\n    args: string;\n    status: \'running\' | \'done\' | \'error\';\n    result?: string;\n};',
+  },
+  {
+    name: 'ImSelectEvent',
+    declaration: 'export interface ImSelectEvent {\n    readonly id: string;\n    readonly values: string[];\n    readonly data?: unknown;\n    readonly chat: ImChat;\n    readonly user: UserRef;\n    readonly bot: Bot;\n    readonly message?: ImMessage;\n    readonly session?: SessionId;\n    readonly time: number;\n    readonly raw: SelectEvent;\n}',
+  },
+  {
+    name: 'ImSender',
+    declaration: 'export class ImSender {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSenderDeps);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult>;\n    async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream>;\n    target(chat: ImChatKey, options: Pick<ImSendOptions, \'thread\' | \'quote\' | \'referrer\'> = {}): Target;\n    referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined, thread?: boolean | string): unknown;\n    sessionOf(message: ImMessageKey): SessionId | undefined;\n}',
+  },
+  {
+    name: 'ImSenderDeps',
+    declaration: 'export interface ImSenderDeps {\n    store: ImStore;\n    sessions: Pick<ImSessions, \'of\' | \'get\' | \'trigger\'>;\n    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>;\n    onResult?: (bot: Bot, result: SendResult) => void;\n}',
+  },
+  {
+    name: 'ImSendOptions',
+    declaration: 'export interface ImSendOptions extends SendOptions {\n    operationId?: string;\n    quote?: ImMessageKey;\n    thread?: string | true;\n    referrer?: unknown;\n    session?: SessionId;\n}',
+  },
+  {
+    name: 'ImSendResult',
+    declaration: 'export interface ImSendResult {\n    status: \'confirmed\' | \'failed\' | \'uncertain\' | \'partial\';\n    handle?: MessageHandle;\n    report?: RenderReport;\n    error?: string;\n    message?: ImMessage;\n    dropped?: true;\n}',
+  },
+  {
+    name: 'ImSessionFilter',
+    declaration: 'export interface ImSessionFilter {\n    owner?: string;\n    chat?: ImChatKey;\n    parent?: SessionId;\n}',
+  },
+  {
+    name: 'ImSessionHost',
+    declaration: 'export class ImSessionHost implements ImSessions {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSessionHostDeps);\n    async start(): Promise<void>;\n    hold(): void;\n    release(): void;\n    retry(): void;\n    async whenRecovered(): Promise<void>;\n    async dispose(): Promise<void>;\n    hosted(sessionId: SessionId): ImSessionRecord | undefined;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n    pendingDeliveries(): number;\n    async ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter: ImSessionFilter = {}): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliveredTo(key: string, deliveryId: string): SessionId | undefined;\n    async deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    async reset(key: string, reason: string, options: ImResetOptions = {}): Promise<SessionId | undefined>;\n    async bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    async agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    async stop(target: SessionId | string): Promise<boolean>;\n    admit(sessionId: SessionId, id: string, fresh: boolean = false): Promise<void>;\n}',
+  },
+  {
+    name: 'ImSessionHostDeps',
+    declaration: 'export interface ImSessionHostDeps {\n    agents: ImAgentHost;\n    formatter: Pick<ImFormatter, \'format\'>;\n}',
+  },
+  {
+    name: 'ImSessionRecord',
+    declaration: 'export interface ImSessionRecord extends ImSessionSpec {\n    sessionId: SessionId;\n    generation: number;\n    createdAt: number;\n    lastActiveAt: number;\n}',
+  },
+  {
+    name: 'ImSessions',
+    declaration: 'export interface ImSessions {\n    ensure(spec: ImSessionSpec): Promise<ImSessionRecord>;\n    get(keyOrId: string | SessionId): ImSessionRecord | undefined;\n    list(filter?: ImSessionFilter): ImSessionRecord[];\n    forChat(chat: ImChatKey): ImSessionRecord[];\n    deliver(target: SessionId | string, delivery: ImDelivery): Promise<void>;\n    deliveredTo(key: string, deliveryId: string): SessionId | undefined;\n    reset(key: string, reason: string, options?: ImResetOptions): Promise<SessionId | undefined>;\n    bind(target: SessionId | string, bindings: ImBinding[]): Promise<void>;\n    agent(target: SessionId | string): Promise<Agent>;\n    of(sessionId: SessionId): ImSessionRecord | undefined;\n    stop(target: SessionId | string): Promise<boolean>;\n    trigger(sessionId: SessionId): ImMessage | undefined;\n}',
+  },
+  {
+    name: 'ImSessionSpec',
+    declaration: 'export interface ImSessionSpec {\n    key: string;\n    owner: string;\n    composition: ImComposition;\n    bindings: ImBinding[];\n    output?: string;\n    parent?: SessionId;\n    ephemeral?: boolean;\n    meta?: Record<string, unknown>;\n}',
+  },
+  {
+    name: 'ImSourceConfig',
+    declaration: 'export interface ImSourceConfig {\n    id: string;\n    bot: string;\n    chats?: string[];\n    users?: string[];\n    writable: boolean;\n    store: \'all\' | \'addressed\';\n}',
+  },
+  {
+    name: 'ImSourceId',
+    declaration: 'export type ImSourceId = Branded<\'ImSourceId\'>;',
+  },
+  {
+    name: 'ImStatus',
+    declaration: 'export interface ImStatus {\n    bots: {\n        id: string;\n        platform: string;\n        sid: string;\n        status: number;\n    }[];\n    sources: ImSourceConfig[];\n    sessions: ImSessionRecord[];\n    pendingDeliveries: number;\n    pendingMessages: number;\n    recent: {\n        key: ImMessageKey;\n        outcome: ImOutcome;\n        at: number;\n    }[];\n}',
+  },
+  {
+    name: 'ImStore',
+    declaration: 'export class ImStore implements ImHistory {\n    domain: ImDomain | undefined;\n    constructor(readonly ctx: Context, readonly config: ImConfig);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    async touchChat(chat: ImChat): Promise<void>;\n    chat(key: ImChatKey): ImChat | undefined;\n    put(draft: ImMessageDraft, dispatch: \'pending\' | \'none\'): Promise<ImMessage>;\n    settle(key: ImMessageKey, outcome: ImOutcome): Promise<void>;\n    pending(): ImDispatchState[];\n    state(key: ImMessageKey): ImDispatchState | undefined;\n    recent(limit: number): {\n        key: ImMessageKey;\n        outcome: ImOutcome;\n        at: number;\n    }[];\n    event(key: string): StoredEvent | undefined;\n    remember(key: string, event: StoredEvent): Promise<void>;\n    sweep(now: number): Promise<void>;\n    after(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    before(chat: ImChatKey, seq: number, limit: number, keep?: (message: ImMessage) => boolean): ImMessage[];\n    get(key: ImMessageKey): ImMessage | undefined;\n    latest(chat: ImChatKey): ImMessage | undefined;\n}',
   },
   {
     name: 'IncompatiblePlugin',
@@ -8919,11 +9349,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OfficeImagesRequest',
-    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
+    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly renderer?: DocumentRenderer;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
   },
   {
     name: 'OfficeImagesResult',
-    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n}',
+    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n    readonly renderer: DocumentRenderer;\n}',
   },
   {
     name: 'OfficeKitGeneration',
@@ -10142,6 +10572,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionLocation {\n    readonly kind: string;\n    readonly path: string;\n}',
   },
   {
+    name: 'SessionLogBatch',
+    declaration: 'export interface SessionLogBatch {\n    readonly sessionId: SessionId;\n    readonly formatVersion: number;\n    readonly afterSeq: number;\n    readonly throughSeq: number;\n    readonly cwd?: string;\n    readonly parentSessionId?: string;\n    readonly seedLength?: number;\n    readonly batchId: string;\n    readonly purpose: string;\n    readonly events: readonly SessionLogBatchEvent[];\n    readonly severityNumber?: SeverityNumber;\n}',
+  },
+  {
+    name: 'SessionLogBatchEvent',
+    declaration: 'export type SessionLogBatchEvent = Omit<SessionEvent, \'data\'> & {\n    data: unknown;\n};',
+  },
+  {
     name: 'SessionLogOffset',
     declaration: 'export type SessionLogOffset = BrandedNumber<\'SessionLogOffset\'>;',
   },
@@ -10159,7 +10597,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionLogReporter',
-    declaration: 'export class SessionLogReporter {\n    constructor(options: SessionLogOptions);\n    reportSessionLog(record: SessionLogRecord): void;\n    stopPending(): void;\n    shutdown(): Promise<void>;\n}',
+    declaration: 'export class SessionLogReporter {\n    constructor(options: SessionLogOptions);\n    reportSessionLog(record: SessionLogRecord): void;\n    reportSessionLogBatch(batch: SessionLogBatch): void;\n    stopPending(): void;\n    shutdown(): Promise<void>;\n}',
   },
   {
     name: 'SessionLogSnapshot',
@@ -10844,6 +11282,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StorageForms',
     declaration: 'export interface StorageForms {\n}',
+  },
+  {
+    name: 'StoredEvent',
+    declaration: 'export interface StoredEvent {\n    digest: string;\n    message?: ImMessageKey;\n    receivedAt: number;\n}',
   },
   {
     name: 'StoredImageAttachment',

@@ -28,7 +28,7 @@ Office 预览和显式文档检查可能请求相同转换。仅缓存已完成�
 
 **另建预热或 QA 转换器。** 独立队列重复拥有资源，无法优先调度共享前台工作。
 
-**为唯一的 LibreOffice 实现拆分服务定义和提供方包。** 两者共同演化，没有独立的替代实现。单个 `office-kit` 包直接提供可挂载服务，避免重复维护包、依赖和发布配置。原生与 WASM 引擎选择仍由 kit 负责；若出现独立的第二种实现，再根据实际消费者提取接口。
+**拆分服务定义和提供方包。** 该服务只有一种实现；其 LibreOffice Kit 转换器和 [Poppler PDF 渲染后端](2026-11-23-poppler-pdf-renderer.zh.md)都是该提供方内部的后端，共用其队列、缓存和准入，因此与服务一同演化。单个 `office-kit` 包直接提供可挂载服务，避免重复维护包、依赖和发布配置。原生与 WASM 引擎选择仍由 kit 负责；若出现独立的第二种服务实现，再根据实际消费者提取接口。
 
 ## 后果
 
@@ -40,4 +40,4 @@ Office 预览通过 Workspace Files 检查源文件授权与版本，再使用 `
 
 ## 相关记录
 
-[后台调度提案](../../proposed/simplification/2026-09-17-defer-office-background-scheduling.zh.md) 质疑没有生产调用方时保留推测性优先级的必要性；本记录仍定义已实现的行为。
+[后台调度提案](../../proposed/simplification/2026-09-17-defer-office-background-scheduling.zh.md) 质疑没有生产调用方时保留推测性优先级的必要性；本记录仍定义已实现的行为。[Poppler PDF 渲染后端记录](2026-11-23-poppler-pdf-renderer.zh.md)说明图片渲染如何在此队列内选择后端。

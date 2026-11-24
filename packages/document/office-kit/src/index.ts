@@ -1,4 +1,7 @@
-/** Host LibreOffice Kit provider with reusable converters, shared admission, and private disk input/output. */
+/**
+ * Host Office provider: reusable LibreOffice Kit converters, Poppler PDF rasterization through short-lived
+ * subprocesses, shared admission, and private disk input/output.
+ */
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,11 +19,13 @@ import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typer
 import { OfficeKitError } from './errors.ts'
 import type { OfficeKitGeneration, OfficeSourceKey } from './identity.ts'
 import type {
-  OfficeConversionRequest, OfficeFileResult, OfficeImagesRequest, OfficeImagesResult, OfficeKitRequest, OfficeKitResult,
-  OfficeKitPriority, OfficeOutputTarget, OfficeRecalculationRequest, RenderedDocumentBytes,
+  OfficeConversionRequest, OfficeFileResult, OfficeImageInputExtension, OfficeImagesRequest, OfficeImagesResult,
+  OfficeKitRequest, OfficeKitResult, OfficeKitPriority, OfficeOutputTarget, OfficeRecalculationRequest, DocumentRenderer,
+  RenderedDocumentBytes,
 } from './types.ts'
 import { readOutput, readPdf, readPng } from './output.ts'
 import { OutputStore } from './outputs.ts'
+import { locatePoppler, renderPdf } from './poppler.ts'
 import { ConversionQueue, type OfficeOperation, type OfficeOperationOutput, type QueueRequest } from './queue.ts'
 
 export * from './errors.ts'
@@ -58,7 +63,7 @@ export interface Config {
   outputRetentionMs: number
   /** Maximum bytes across retained converted and recalculated files; the oldest leave first. */
   maxOutputStoreBytes: number
-  /** Conversion deadline in milliseconds; excludes the DSH queue. */
+  /** Deadline in milliseconds of one conversion, or of all Poppler processes of one rendering; excludes the DSH queue. */
   timeoutMs: number
   /** Maximum authorized source bytes. */
   maxInputBytes: number
@@ -80,7 +85,26 @@ export interface Config {
   maxFontFileBytes: number
   /** Maximum original font bytes loaded for a conversion. */
   maxLoadedFontBytes: number
+  /**
+   * Image rendering backends tried in order for requests without `renderer`, per input type. Each list is nonempty
+   * and duplicate-free.
+   */
+  renderers: {
+    /** Order for every input except PDF; excludes `poppler`, which renders only PDF. */
+    office: DocumentRenderer[]
+    /** Order for PDF input. */
+    pdf: DocumentRenderer[]
+  }
+  /** Poppler executables used by the `poppler` renderer. */
+  poppler: {
+    /** `pdftoppm` executable: a bare name looked up on the subprocess provider's PATH, or an absolute path there. */
+    pdftoppm: string
+    /** `pdfinfo` executable: a bare name looked up on the subprocess provider's PATH, or an absolute path there. */
+    pdfinfo: string
+  }
 }
+
+const RENDERER = z.union(['libreoffice', 'poppler'] as const)
 
 /** Deployment defaults resolved before provider construction. */
 export const Config: z<Partial<Config>, Config> = z.object({
@@ -106,6 +130,14 @@ export const Config: z<Partial<Config>, Config> = z.object({
   maxFontFiles: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(20_000),
   maxFontFileBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(256 * 1024 * 1024),
   maxLoadedFontBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(512 * 1024 * 1024),
+  renderers: z.object({
+    office: z.array(RENDERER).min(1).default(['libreoffice']),
+    pdf: z.array(RENDERER).min(1).default(['poppler', 'libreoffice']),
+  }),
+  poppler: z.object({
+    pdftoppm: z.string().min(1).default('pdftoppm'),
+    pdfinfo: z.string().min(1).default('pdfinfo'),
+  }),
 })
 
 /** Kit operations loaded from the provider's Kit entry. */
@@ -123,7 +155,7 @@ interface Slot {
   converter?: Promise<Converter>
 }
 
-/** A provider lifetime owns all converters, queued calls, and temporary files. */
+/** A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files. */
 export class OfficeKit extends TypertRemoteService {
   static Config = Config
   /** Changes whenever engine, font, or conversion configuration is replaced. */
@@ -148,6 +180,10 @@ export class OfficeKit extends TypertRemoteService {
     if (config.fontDirectories?.some(path => !isAbsolute(path))) throw new Error('fontDirectories must contain absolute paths.')
     if (config.maxSourceBytes < config.maxInputBytes) throw new Error('maxSourceBytes must be at least maxInputBytes.')
     if (!isAbsolute(config.outputDirectory)) throw new Error('outputDirectory must be an absolute path.')
+    for (const [type, renderers] of Object.entries(config.renderers)) {
+      if (new Set(renderers).size !== renderers.length) throw new Error(`renderers.${type} must not repeat a renderer.`)
+    }
+    if (config.renderers.office.includes('poppler')) throw new Error('renderers.office must not include poppler, which renders only pdf.')
     const { fontDirectories, fontFallbacks, timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
       maxArchiveEntries, maxUncompressedBytes, maxFontFiles, maxFontFileBytes, maxLoadedFontBytes } = config
     this.options = { timeoutMs, maxInputBytes, maxOutputBytes, maxImageResolution,
@@ -189,24 +225,71 @@ export class OfficeKit extends TypertRemoteService {
 
   /**
    * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
-   * queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.
-   * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
+   * queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority. The backend
+   * is chosen before admission: `request.renderer` exclusively, otherwise the first available entry of the configured
+   * `renderers` order, where the last entry is used without an availability check. A backend that fails after it
+   * starts rejects without trying another. Poppler renders without a LibreOffice converter slot.
+   * @param request - authorized metadata, deferred bounded source read, selection, backend, and complete-result limits.
    * @param signal - caller cancellation; provider disposal also stops active work.
-   * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
-   * @throws {OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the
-   * selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
+   * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits,
+   * with the backend that rendered them.
+   * @throws {OfficeKitError} `unsupported-format` for `poppler` with non-PDF input, `unavailable` when the requested
+   * or last configured backend cannot run, `invalid-request` for a selection the engine rejects, `output-too-large`
+   * when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
    */
   async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult> {
     const { extension, source, pages, sheet, range, dpi, maxImages, maxPixels, maxDimension, maxBytes } = request
+    const renderer = await this.resolveRenderer(extension, request.renderer, signal)
     const result = await this.queue.read({ extension, priority: 'foreground', source, operation: {
       kind: 'images',
+      renderer,
       ...(pages === undefined ? {} : { pages: [...pages] }),
       ...(sheet === undefined ? {} : { sheet }),
       ...(range === undefined ? {} : { range }),
       ...(dpi === undefined ? {} : { dpi }),
       maxImages, maxPixels, maxDimension, maxBytes,
     } }, signal)
-    return { images: result.images, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts }
+    return { images: result.images, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts, renderer }
+  }
+
+  /** Select the rendering backend for one request; see {@link renderImages}. */
+  private async resolveRenderer(
+    extension: OfficeImageInputExtension, requested: DocumentRenderer | undefined, signal: AbortSignal | undefined,
+  ): Promise<DocumentRenderer> {
+    signal?.throwIfAborted()
+    if (requested !== undefined) {
+      if (requested === 'poppler' && extension !== 'pdf') {
+        throw new OfficeKitError('unsupported-format', 'The poppler renderer accepts only pdf input.')
+      }
+      const unavailable = await this.unavailableRenderer(requested, signal)
+      if (unavailable !== undefined) throw unavailable
+      return requested
+    }
+    const candidates = extension === 'pdf' ? this.config.renderers.pdf : this.config.renderers.office
+    for (const candidate of candidates.slice(0, -1)) {
+      if (await this.unavailableRenderer(candidate, signal) === undefined) return candidate
+    }
+    // Validated configuration lists are nonempty.
+    return candidates[candidates.length - 1] as DocumentRenderer
+  }
+
+  /**
+   * Check whether `renderer` can start on this Host.
+   * @returns undefined when it can, otherwise the `unavailable` failure; cancellation rejects with its reason.
+   */
+  private async unavailableRenderer(renderer: DocumentRenderer, signal: AbortSignal | undefined): Promise<OfficeKitError | undefined> {
+    try {
+      switch (renderer) {
+        case 'libreoffice': await this.loadKit(); return undefined
+        case 'poppler': await locatePoppler(this.ctx, this.config.poppler, signal); return undefined
+        /* v8 ignore next -- DocumentRenderer is a closed union */
+        default: throw new Error(`Unexpected Office renderer: ${JSON.stringify(renderer satisfies never)}`)
+      }
+    } catch (error) {
+      signal?.throwIfAborted()
+      // loadKit and locatePoppler reject only with an `unavailable` OfficeKitError apart from cancellation.
+      return error as OfficeKitError
+    }
   }
 
   /**
@@ -370,6 +453,8 @@ export class OfficeKit extends TypertRemoteService {
     bytes: Uint8Array, request: Pick<QueueRequest, 'extension' | 'operation'>, signal: AbortSignal,
   ): Promise<OfficeOperationOutput> {
     signal.throwIfAborted()
+    const { operation } = request
+    if (operation.kind === 'images' && operation.renderer === 'poppler') return this.runPoppler(bytes, operation, signal)
     let slot = this.slots.find(candidate => !candidate.busy)
     if (slot === undefined) { slot = { busy: false }; this.slots.push(slot) }
     slot.busy = true
@@ -405,6 +490,23 @@ export class OfficeKit extends TypertRemoteService {
     } finally {
       try { if (directory !== undefined) await rm(directory, { recursive: true, force: true }) }
       finally { slot.busy = false }
+    }
+  }
+
+  /**
+   * Render PDF pages with Poppler subprocesses through stdin and stdout, without a converter slot. Cancellation and
+   * provider disposal terminate the running process; the call settles after it exits.
+   */
+  private async runPoppler(
+    bytes: Uint8Array, operation: Extract<OfficeOperation, { kind: 'images' }>, signal: AbortSignal,
+  ): Promise<OfficeOperationOutput> {
+    try {
+      const tools = await locatePoppler(this.ctx, this.config.poppler, signal)
+      return await renderPdf(tools, bytes, operation, this.config.timeoutMs, signal)
+    } catch (cause) {
+      signal.throwIfAborted()
+      if (cause instanceof OfficeKitError) throw cause
+      throw new OfficeKitError('failed', 'Poppler rendering failed.', { cause })
     }
   }
 

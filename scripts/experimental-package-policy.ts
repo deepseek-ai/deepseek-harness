@@ -25,8 +25,12 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/webhook-github': '@deepseek-ai/dsh-webhook-github',
   'packages/experimental/forge-gitlab': '@deepseek-ai/dsh-forge-gitlab',
   'packages/experimental/deepseek-chat-import': '@deepseek-ai/dsh-deepseek-chat-import',
+  'packages/experimental/im': '@deepseek-ai/dsh-im',
+  'packages/experimental/im-bundle': '@deepseek-ai/dsh-im-bundle',
+  'packages/experimental/im-session-commands': '@deepseek-ai/dsh-im-session-commands',
   'packages/experimental/speech-to-text-deepseek': '@deepseek-ai/dsh-speech-to-text-deepseek',
   'packages/experimental/sandbox-policy-git': '@deepseek-ai/dsh-sandbox-policy-git',
+  'packages/experimental/client-ui-connectors': '@deepseek-ai/dsh-client-ui-connectors',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
 /** Legacy npm namespace, allowed only in `LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES`. */

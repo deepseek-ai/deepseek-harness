@@ -58,5 +58,44 @@ describe('SystemPromptNodeView', () => {
     const disclosure = screen.getByRole('button', { name: 'System prompt update' })
     fireEvent.click(disclosure)
     expect(container.querySelector('[data-context-text]')?.textContent).toBe('# Updated rules')
+    expect(container.querySelector('[data-system-sources]')).toBeNull()
+  })
+
+  it('names the sources of a section-attributed update and splits its body by source', () => {
+    const update = (changes: readonly { name: string; change: 'updated' | 'removed' | 'added'; text: string; notices: readonly string[] }[], reset = false) => {
+      const node: ChatNode<'system-prompt'> = {
+        key: 'system-message:10', kind: 'system-prompt', id: '10', target: 'chat', anchorSeq: 10,
+        location: { kind: 'unresolved' }, visibility: 'visible',
+        data: { text: 'joined', update: true, message: { reset, notices: reset ? ['Earlier guidance is superseded.'] : [], changes } },
+      }
+      return render(<SystemPromptNodeView node={node} t={makeTranslate(en)} />)
+    }
+    const two = update([
+      { name: 'plan:status', change: 'updated', text: 'Plan mode is off.', notices: ['The plan status changed.'] },
+      { name: 'tool:bash', change: 'removed', text: '', notices: [] },
+    ])
+    expect(two.container.querySelector('[data-system-sources]')?.textContent).toBe('plan:status, tool:bash')
+    fireEvent.click(screen.getByRole('button', { name: /System prompt update/ }))
+    expect(two.container.querySelector('[data-system-sources]')).not.toBeNull()
+    expect(two.container.querySelector('[data-context-text]')).toBeNull()
+    expect(two.container.querySelector('[data-system-reset]')).toBeNull()
+    expect([...two.container.querySelectorAll('[data-system-section]')].map(section => [
+      section.getAttribute('data-system-section'), ...[...section.children].map(child => child.textContent),
+    ])).toEqual([
+      ['updated', 'Updated plan:status', 'The plan status changed.', 'Plan mode is off.'],
+      ['removed', 'Removed tool:bash'],
+    ])
+    cleanup()
+
+    const many = update([
+      { name: 'a', change: 'added', text: 'A', notices: [] },
+      { name: 'b', change: 'added', text: 'B', notices: [] },
+      { name: 'c', change: 'added', text: 'C', notices: [] },
+    ], true)
+    expect(many.container.querySelector('[data-system-sources]')?.textContent).toBe('3 sections')
+    fireEvent.click(screen.getByRole('button', { name: /System prompt update/ }))
+    expect(many.container.querySelector('[data-system-reset]')?.textContent).toBe('Replaces all earlier instructions')
+    expect([...many.container.querySelectorAll('p[data-system-notice]')].map(notice => notice.textContent))
+      .toEqual(['Earlier guidance is superseded.'])
   })
 })

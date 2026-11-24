@@ -44,9 +44,11 @@ it('composes independent local accessories and preserves their state across inpu
   fireEvent.click(view.getByRole('button', { name: 'pr/a: 0' }))
   expect(view.getByRole('button', { name: 'pr/a: 1' })).toBeTruthy()
   expect(onOpen).not.toHaveBeenCalled()
-  for (const variant of ['default', 'empty']) {
-    expect(view.container.querySelector(`[data-case="${variant}"] [data-files-path] button`)?.nextElementSibling?.childNodes).toHaveLength(0)
-  }
+  const accessory = (variant: string) => view.container.querySelector(`[data-case="${variant}"] [data-files-path] button`)?.nextElementSibling
+  expect(accessory('default')?.childNodes).toHaveLength(0)
+  const empty = accessory('empty')
+  expect(empty?.childNodes).toHaveLength(1)
+  expect(empty?.firstElementChild?.matches('[data-slot-factory-children="sidebar.files.tree:accessory"]:empty')).toBe(true)
   input = { ...input, entries: [{ path: 'pr/a', name: 'renamed' }] }
   act(() => { rerender() })
   expect(view.getByRole('button', { name: 'pr/a: 1' })).toBeTruthy()

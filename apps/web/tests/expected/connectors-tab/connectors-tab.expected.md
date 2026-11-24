@@ -1,0 +1,24 @@
+- heading "官方连接器" [level=3]
+- list:
+  - listitem:
+    - button "打开 飞书插件": 飞书插件
+    - text: 在对话中使用飞书文档、消息及其他已授权的功能。
+    - switch "飞书插件" [checked]
+  - listitem:
+    - text: 企业微信插件 在对话中使用企业微信的文档、日程、会议、待办和消息。
+    - button "安装 企业微信插件": 安装
+  - listitem:
+    - text: 钉钉插件 在对话中使用钉钉的日程、待办、文档、AI 表格、群聊和通讯录。
+    - button "安装 钉钉插件": 安装
+  - listitem:
+    - text: 腾讯会议插件 在对话中使用腾讯会议的会议、录制、纪要和会议报告。
+    - button "安装 腾讯会议插件": 安装
+  - listitem:
+    - text: Notion 插件 在对话中使用 Notion 页面、数据库及其他已授权的内容。
+    - button "安装 Notion 插件": 安装
+  - listitem:
+    - text: 腾讯文档插件 在对话中使用你有权限的腾讯文档内容。
+    - button "安装 腾讯文档插件": 安装
+  - listitem:
+    - text: Linear 插件 在对话中使用 Linear 的议题、项目与评论。
+    - button "安装 Linear 插件": 安装

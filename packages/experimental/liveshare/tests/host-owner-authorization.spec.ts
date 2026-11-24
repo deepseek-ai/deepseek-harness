@@ -20,6 +20,9 @@ function store(ttlMs = 5 * 60 * 1000) {
 /** The bindings one environment states when a completion arrives. */
 const bound = { relay: 'https://relay.example', instanceKey: 'instance-one', origin: 'https://dsh.example.test' }
 
+/** The Relay and instance in force when a collected code completes a transaction. */
+const completion = { relay: bound.relay, instanceKey: bound.instanceKey }
+
 describe('owner authorization transactions', () => {
   it('hands one completion the verifier and its bindings, and consumes the transaction', () => {
     const { authorizations } = store()
@@ -31,18 +34,18 @@ describe('owner authorization transactions', () => {
     expect(transaction.verifier).not.toBe(transaction.challenge)
     expect(transaction.challenge).toMatch(/^[A-Za-z0-9_-]+$/u)
 
-    expect(authorizations.complete({ state: transaction.state, ...bound })).toEqual({
+    expect(authorizations.complete({ state: transaction.state, ...completion })).toEqual({
       ok: true,
       completed: { relay: bound.relay, instanceKey: bound.instanceKey, verifier: transaction.verifier },
     })
     // A state is single-use: the same code cannot be redeemed twice.
-    expect(authorizations.complete({ state: transaction.state, ...bound }))
+    expect(authorizations.complete({ state: transaction.state, ...completion }))
       .toEqual({ ok: false, code: 'unknown-transaction' })
   })
 
   it('refuses a state this host never began', () => {
     const { authorizations } = store()
-    expect(authorizations.complete({ state: 'never-issued', ...bound }))
+    expect(authorizations.complete({ state: 'never-issued', ...completion }))
       .toEqual({ ok: false, code: 'unknown-transaction' })
   })
 
@@ -51,20 +54,10 @@ describe('owner authorization transactions', () => {
     const transaction = authorizations.begin(bound)
     advance(1_001)
 
-    expect(authorizations.complete({ state: transaction.state, ...bound })).toEqual({ ok: false, code: 'expired' })
+    expect(authorizations.complete({ state: transaction.state, ...completion })).toEqual({ ok: false, code: 'expired' })
     // The expired transaction is dropped, so a retry reads as one that never existed.
-    expect(authorizations.complete({ state: transaction.state, ...bound }))
+    expect(authorizations.complete({ state: transaction.state, ...completion }))
       .toEqual({ ok: false, code: 'unknown-transaction' })
-  })
-
-  it('refuses a completion from another origin, and keeps the attempt pending', () => {
-    const { authorizations } = store()
-    const transaction = authorizations.begin(bound)
-
-    expect(authorizations.complete({ state: transaction.state, ...bound, origin: 'https://elsewhere.test' }))
-      .toEqual({ ok: false, code: 'origin-mismatch' })
-    // The owner can retry the same attempt from the page that began it.
-    expect(authorizations.complete({ state: transaction.state, ...bound })).toMatchObject({ ok: true })
   })
 
   it('refuses a completion reported under another Relay address or host instance', () => {
@@ -72,11 +65,11 @@ describe('owner authorization transactions', () => {
     const transaction = authorizations.begin(bound)
 
     expect(authorizations.complete({
-      state: transaction.state, ...bound, relay: 'https://other-relay.example',
+      state: transaction.state, ...completion, relay: 'https://other-relay.example',
     })).toEqual({ ok: false, code: 'relay-changed' })
-    expect(authorizations.complete({ state: transaction.state, ...bound, instanceKey: 'instance-two' }))
+    expect(authorizations.complete({ state: transaction.state, ...completion, instanceKey: 'instance-two' }))
       .toEqual({ ok: false, code: 'instance-changed' })
-    expect(authorizations.complete({ state: transaction.state, ...bound })).toMatchObject({ ok: true })
+    expect(authorizations.complete({ state: transaction.state, ...completion })).toMatchObject({ ok: true })
   })
 
   it('states the Relay entry the browser opens, with the challenge and every binding it carries', () => {
@@ -87,7 +80,7 @@ describe('owner authorization transactions', () => {
       instanceKey: 'instance-one',
       origin: 'https://dsh.example.test',
     })).toBe('https://relay.example/__liveshare/owner-authorize?state=state-one&code_challenge=challenge-one'
-      + '&instance=instance-one&origin=https%3A%2F%2Fdsh.example.test')
+      + '&instance=instance-one&origin=https%3A%2F%2Fdsh.example.test&mode=poll')
   })
 
   it('gives a transaction the production lifetime and clock when the host passes neither', () => {
@@ -110,7 +103,7 @@ describe('owner authorization transactions', () => {
 
     expect(authorizations.cancel(transaction.state)).toBe(true)
     expect(authorizations.cancel(transaction.state)).toBe(false)
-    expect(authorizations.complete({ state: transaction.state, ...bound }))
+    expect(authorizations.complete({ state: transaction.state, ...completion }))
       .toEqual({ ok: false, code: 'unknown-transaction' })
   })
 
@@ -125,9 +118,75 @@ describe('owner authorization transactions', () => {
     // transaction is still within its own and must survive the sweep.
     const fresh = authorizations.begin(bound)
 
-    expect(authorizations.complete({ state: stale.state, ...bound }))
+    expect(authorizations.complete({ state: stale.state, ...completion }))
       .toEqual({ ok: false, code: 'unknown-transaction' })
-    expect(authorizations.complete({ state: live.state, ...bound })).toMatchObject({ ok: true })
-    expect(authorizations.complete({ state: fresh.state, ...bound })).toMatchObject({ ok: true })
+    expect(authorizations.complete({ state: live.state, ...completion })).toMatchObject({ ok: true })
+    expect(authorizations.complete({ state: fresh.state, ...completion })).toMatchObject({ ok: true })
+  })
+})
+
+describe('owner authorization settlement', () => {
+  const verified = { state: 'verified', relay: bound.relay } as const
+
+  it('reports a transaction from awaiting its code through redeeming to its settlement', () => {
+    const { authorizations } = store()
+    const transaction = authorizations.begin(bound)
+    expect(authorizations.read(transaction.state, bound.origin)).toEqual({ status: 'awaiting-code', transaction })
+
+    authorizations.complete({ state: transaction.state, ...completion })
+    expect(authorizations.read(transaction.state, bound.origin)).toEqual({ status: 'redeeming' })
+
+    authorizations.settle(transaction.state, { ok: true, identity: verified })
+    expect(authorizations.read(transaction.state, bound.origin))
+      .toEqual({ status: 'settled', settlement: { ok: true, identity: verified } })
+    // A settlement is read, not consumed, and a later settlement does not replace it.
+    authorizations.settle(transaction.state, { ok: false, error: 'owner-login-failed' })
+    expect(authorizations.read(transaction.state, bound.origin))
+      .toEqual({ status: 'settled', settlement: { ok: true, identity: verified } })
+  })
+
+  it('reads a transaction only for the page it was bound to, at every point of its life', () => {
+    const { authorizations } = store()
+    const other = 'https://other.example.test'
+    const transaction = authorizations.begin(bound)
+    expect(authorizations.read(transaction.state, other)).toBeUndefined()
+    authorizations.complete({ state: transaction.state, ...completion })
+    expect(authorizations.read(transaction.state, other)).toBeUndefined()
+    authorizations.settle(transaction.state, { ok: true, identity: verified })
+    expect(authorizations.read(transaction.state, other)).toBeUndefined()
+    expect(authorizations.read('unknown', bound.origin)).toBeUndefined()
+    // Settling a transaction this host never began records nothing.
+    authorizations.settle('unknown', { ok: false, error: 'owner-login-failed' })
+    expect(authorizations.read('unknown', bound.origin)).toBeUndefined()
+  })
+
+  it('settles a transaction still awaiting its code only as a refusal', () => {
+    const { authorizations } = store()
+    const transaction = authorizations.begin(bound)
+    authorizations.settle(transaction.state, { ok: true, identity: verified })
+    expect(authorizations.read(transaction.state, bound.origin)).toMatchObject({ status: 'awaiting-code' })
+
+    authorizations.settle(transaction.state, { ok: false, error: 'owner-login-expired' })
+    expect(authorizations.read(transaction.state, bound.origin))
+      .toEqual({ status: 'settled', settlement: { ok: false, error: 'owner-login-expired' } })
+    // The refused transaction can no longer be completed.
+    expect(authorizations.complete({ state: transaction.state, ...completion }))
+      .toEqual({ ok: false, code: 'unknown-transaction' })
+  })
+
+  it('drops a settlement on cancel or once one lifetime passed', () => {
+    const { authorizations, advance } = store(1_000)
+    const cancelled = authorizations.begin(bound)
+    authorizations.complete({ state: cancelled.state, ...completion })
+    expect(authorizations.cancel(cancelled.state)).toBe(true)
+    expect(authorizations.read(cancelled.state, bound.origin)).toBeUndefined()
+
+    const lapsed = authorizations.begin(bound)
+    authorizations.complete({ state: lapsed.state, ...completion })
+    authorizations.settle(lapsed.state, { ok: true, identity: verified })
+    advance(999)
+    expect(authorizations.read(lapsed.state, bound.origin)).toMatchObject({ status: 'settled' })
+    advance(1)
+    expect(authorizations.read(lapsed.state, bound.origin)).toBeUndefined()
   })
 })

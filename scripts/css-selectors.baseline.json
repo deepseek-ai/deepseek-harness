@@ -46,8 +46,7 @@
   "packages/client/ui-session-panel/src/client/SessionPanel.module.css": {
     "has-outside-subject": {
       ".head:hover:has(:scope > .grip) > .actions": 1,
-      ".panel :where([data-session-panel-row] > [data-row-part=\"body\"]:has([data-row-part=\"detail\"]) > [data-row-part=\"icon\"])": 1,
-      ".section:not(:has(:scope > .body > [data-slot]:empty), :has(:scope > .body > [data-slot] > [data-slot]:only-child:empty)) ~ .section:not(:has(:scope > .body > [data-slot]:empty), :has(:scope > .body > [data-slot] > [data-slot]:only-child:empty))": 1
+      ".panel :where([data-session-panel-row] > [data-row-part=\"body\"]:has([data-row-part=\"detail\"]) > [data-row-part=\"icon\"])": 1
     }
   },
   "packages/client/ui-shortcuts/src/client/Reference.module.css": {
@@ -63,11 +62,6 @@
   "packages/client/ui-sidebar-documentpreview/src/client/pdf/PdfBody.module.css": {
     "unkeyed-costly-subject": {
       ".text :global(.textLayer) > :not(:global(.markedContent))": 1
-    }
-  },
-  "packages/client/ui-sidebar-files/src/client/FilesBody.module.css": {
-    "unkeyed-costly-subject": {
-      "[data-files-navigator-row] > :not(.navigator)": 1
     }
   },
   "packages/client/ui-sidebar/src/client/SidebarRoot.module.css": {
@@ -86,9 +80,6 @@
   "packages/client/ui-workspace/src/client/rows/Rows.module.css": {
     "has-outside-subject": {
       ".sessionRow:has(.pinnedAction) .pinIndicator": 1
-    },
-    "unkeyed-costly-subject": {
-      ".sessionRow .rowQuickActions > :global([data-slot]) > :not(.pinnedAction)": 1
     }
   },
   "packages/experimental/client-ui-forge/src/client/ChangedFiles.module.css": {

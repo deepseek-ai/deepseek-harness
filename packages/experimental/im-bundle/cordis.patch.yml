@@ -1,0 +1,84 @@
+# Experimental IM automation as a Host layer of any profile. Admission sources
+# and the shared session's composition are operator-owned configuration in a
+# user patch (see README.md).
+- insert:
+    # `timeout` bounds every platform request up to its response headers. A
+    # read the IM host stops waiting for (`platformTimeoutMs`) is abandoned,
+    # not cancelled, because `Bot.getMessage` takes no signal; this deadline
+    # is what eventually ends such a request. It is generous so a large upload
+    # still finishes, and `isolate: { http: im }` confines this `http` service
+    # (and `im-core`'s `satori:` fetch hook) to the IM rows so the rest of the
+    # profile keeps its own `http` defaults.
+    - id: im-http
+      name: '@deepseek-ai/cordis-plugin-http'
+      isolate:
+        http: im
+      config:
+        timeout: 120000
+
+    # The `satori` service: every adapter below registers its bot here.
+    - id: im-core
+      name: '@deepseek-ai/cordis-plugin-im-core'
+      isolate:
+        http: im
+
+    # Registers the `<markdown>` element and the `markdown` factory every
+    # answer the model writes is built from, so each mode receives ordinary
+    # elements and serializes them in its own dialect. Without this plugin an
+    # answer reaches the chat as its literal markdown source.
+    - id: im-markdown
+      name: '@deepseek-ai/cordis-plugin-im-markdown'
+
+    # The Feishu / Lark long connection. There is no mode to configure: core
+    # publishes each message in the mode that renders it with the fewest
+    # degradations (card before post on a tie). `cardStreaming: true` edits the
+    # card message in place as states stream; with `false` the states are
+    # buffered and one final `PATCH` is sent, and a stream falls back to `post`
+    # mode. `callbacks` accepts `card.action.trigger` so card buttons work.
+    # Leaving `allowAtAll` unset already declares `@所有人` mentions; only an
+    # explicit `false` renders them as text, for a tenant that forbids @all.
+    # `inject: [im]` holds the platform connection until durable intake has
+    # opened its stores and registered `satori/receive`.
+    - id: im-feishu
+      name: '@deepseek-ai/cordis-plugin-im-adapter-lark'
+      inject:
+        - im
+      isolate:
+        http: im
+      config:
+        appId: !!js process.env.DSH_FEISHU_APP_ID
+        appSecret: !!js process.env.DSH_FEISHU_APP_SECRET
+        cardStreaming: true
+        callbacks: true
+
+    # The QQ official bot (groups and C2C). Switched off: it needs its own
+    # application, a gateway intent grant and a `qq:` admission source; enable
+    # this row together with such a source.
+    - id: im-qq
+      name: '@deepseek-ai/cordis-plugin-im-adapter-qq'
+      disabled: true
+      inject:
+        - im
+      isolate:
+        http: im
+      config:
+        appId: !!js process.env.DSH_QQ_APP_ID
+        secret: !!js process.env.DSH_QQ_APP_SECRET
+
+    # Durable intake, the `im/message` waterfall, hosted sessions and outbound
+    # publication; the IM tools (`im_read`, `im_send`, …) are mounted globally.
+    # An operator patch sets `sources` and `defaultDispatch`: every admitted
+    # message that addresses the bot then reaches one session shared by every
+    # chat.
+    - id: im
+      name: '@deepseek-ai/dsh-im'
+      isolate:
+        http: im
+      config:
+        sources: []
+
+    # `/stop`, `/clear`, `/new`, `/status`, `/help` and passthrough commands
+    # (`/compact`). First in the waterfall, so a command never reaches the
+    # shared session as model input.
+    - id: im-session-commands
+      name: '@deepseek-ai/dsh-im-session-commands'

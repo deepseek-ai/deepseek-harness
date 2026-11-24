@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-21-im-bot-commands.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-21-im-bot-commands.md
+/agent-note-im-bot-commands:
+  en: 8e7e215633745034
+  zh: b17422155fb623cf
+/agent-note-im-bot-commands/problem:
+  en: 87776cae5af4ef65
+  zh: 5a8c8156868a3c28
+/agent-note-im-bot-commands/decision:
+  en: 6fc1119b845db7c3
+  zh: d86f99e6a033f42f
+/agent-note-im-bot-commands/alternatives-considered:
+  en: 326d4198f6de332a
+  zh: a160cb242c70609e
+/agent-note-im-bot-commands/consequences:
+  en: 2aaa582de95f5662
+  zh: b7d4de897991bd52
+/agent-note-im-bot-commands/testing:
+  en: bc6bd2aab348ca25
+  zh: 2f90cc1d70fe1963

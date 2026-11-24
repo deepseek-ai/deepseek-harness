@@ -105,7 +105,7 @@ describe('Assembled liveshare viewer page prompting an unprepared branch', () =>
       )
     }, { timeout: 15_000 })
     expect(screen.queryByRole('button', { name: '停止生成' })).toBeNull()
-    expect(document.querySelectorAll('[data-slot="sidebar.session.row.leading"] span')).toHaveLength(1)
+    expect(document.querySelectorAll('[data-slot="sidebar.session.row.leading"] [data-liveshare-fork-marker]')).toHaveLength(1)
     expect(document.querySelector('[role="treeitem"][aria-selected="true"]')).toBe(childRow)
     expect(composer.textContent).toContain('hello')
   }, 180_000)

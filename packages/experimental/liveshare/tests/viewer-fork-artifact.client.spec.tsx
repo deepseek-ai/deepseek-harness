@@ -143,7 +143,7 @@ describe('Assembled liveshare viewer page branching a share', () => {
     }, { timeout: 15_000 })
     const childRow = document.querySelector<HTMLElement>('[role="treeitem"][aria-selected="true"]')
     if (childRow === null) throw new Error('fork child sidebar row is not selected')
-    const mark = childRow.querySelector<HTMLElement>('[data-slot="sidebar.session.row.leading"] span')
+    const mark = childRow.querySelector<HTMLElement>('[data-slot="sidebar.session.row.leading"] [data-liveshare-fork-marker]')
     if (mark === null) throw new Error('fork child lineage marker is missing')
     // The shipped Tooltip listens for pointer events; a hover dispatched as a mouse event never raises
     // its bubble, so the ceiling statement would stay unread.

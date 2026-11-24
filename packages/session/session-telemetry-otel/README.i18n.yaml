@@ -21,14 +21,17 @@
   en: bc7e598148a7f8c3
   zh: 0209c6aa258ec134
 /deepseek-ai-dsh-session-telemetry-otel/use-this-package/minimal-configuration:
-  en: 11845fd50dc0a494
-  zh: ee990bfca3621bd3
+  en: bb5d467582fe6894
+  zh: c3056fb1840568d1
+/deepseek-ai-dsh-session-telemetry-otel/use-this-package/rolling-out-per-batch:
+  en: c18541849fa2b060
+  zh: e70303beabe3d7a8
 /deepseek-ai-dsh-session-telemetry-otel/use-this-package/what-leaves-the-machine:
   en: 2a5ddd227e400455
   zh: 74b7bd9b9161b054
 /deepseek-ai-dsh-session-telemetry-otel/use-this-package/failures-and-shutdown:
-  en: a66831cb9de57e04
-  zh: 3ada28bb868e0932
+  en: 9c88ad1d082199ef
+  zh: aa2ea792d4a7cbd7
 /deepseek-ai-dsh-session-telemetry-otel/understand-the-implementation:
   en: ee672a6a6f0fa02d
   zh: c3bab8e6b60e768c
@@ -36,14 +39,14 @@
   en: 34f8a88224a1f6cf
   zh: 40839dabaea39602
 /deepseek-ai-dsh-session-telemetry-otel/understand-the-implementation/source-map:
-  en: 0b99d2e5c27213cd
-  zh: 3cbdaa7f6a45d81a
+  en: f4aa1ced4f1365bb
+  zh: 3285ecdc0f146555
 /deepseek-ai-dsh-session-telemetry-otel/understand-the-implementation/capture-wiring:
   en: 5c85eb0992eb5b2b
   zh: a19cdd5814c0e2b9
 /deepseek-ai-dsh-session-telemetry-otel/understand-the-implementation/field-mapping:
-  en: a42e9e081fb93bee
-  zh: b8e817c2455278b9
+  en: 474e76e8ff93567b
+  zh: 89d75b2546381465
 /deepseek-ai-dsh-session-telemetry-otel/further-exploration:
   en: 155b75490ec65d86
   zh: 07d37d6e4ac90c89
@@ -54,8 +57,8 @@
   en: 7593cf5d0d2cedd6
   zh: f57cc48a1b5cbfa9
 /deepseek-ai-dsh-session-telemetry-otel/known-limitations-and-deferred-work:
-  en: 5d0b88f8256bd782
-  zh: 36b8d64645ed6c2e
+  en: 6aaa644d23cd4360
+  zh: d4fe7d878daf65f3
 /deepseek-ai-dsh-session-telemetry-otel/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

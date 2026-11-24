@@ -7,34 +7,45 @@
     - button "Agent 预设"
   - button "打开配置文件"
   - button "关闭"
-  - text: 权限 选择新会话的默认权限模式
-  - button "工作区内修改"
-  - text: 语言
-  - button "中文"
-  - text: 外观
-  - button "浅色"
-  - button "深色"
-  - button "跟随系统" [pressed]
-  - text: 字号大小 仅影响会话内容的字号 14
-  - button "增大字号"
-  - button "减小字号"
-  - text: px
-  - button "更多字体设置"
-  - text: 工作步骤展示 选择希望看到多少工具调用细节
-  - button "标准"
-  - text: 工作步骤收起时机 选择何时自动收起工作步骤
-  - button "回答结束后"
-  - text: 收起后显示的回复 工作步骤收起后，保留哪些助手回复
-  - button "全部回复"
-  - text: 显示代码工作视图 开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换
-  - switch "显示代码工作视图" [checked]
-  - text: 快捷键
-  - paragraph: 查看和编辑当前可用的快捷键和输入操作
-  - button "编辑快捷键"
-  - text: 繁忙时的发送行为 智能体运行时 Enter 键和发送按钮的行为；Cmd/Ctrl+Enter 使用另一行为
-  - button "排队发送"
-  - text: 性能与用量 选择性能与用量信息展示的详细程度
-  - button "详细"
-  - text: 在使用官方模型 API 时上传 Session Log 帮助改进 DeepSeek 模型与产品
-  - switch "在使用官方模型 API 时上传 Session Log"
-  - text: 当前版本：{{version}}
+  - heading "通用设置" [level=2]
+  - region "常规":
+    - heading "常规" [level=3]
+    - text: 语言
+    - button "中文"
+    - text: 外观
+    - button "浅色"
+    - button "深色"
+    - button "跟随系统" [pressed]
+    - text: 字号大小 仅影响会话内容的字号 14
+    - button "增大字号"
+    - button "减小字号"
+    - text: px
+    - button "更多字体设置"
+  - region "会话偏好":
+    - heading "会话偏好" [level=3]
+    - text: 会话默认权限 选择新会话的默认权限模式
+    - button "工作区内修改"
+    - text: 工作步骤展示 选择希望看到多少工具调用细节
+    - button "标准"
+    - text: 工作步骤收起时机 选择何时自动收起工作步骤
+    - button "回答结束后"
+    - text: 收起后显示的回复 工作步骤收起后，保留哪些助手回复
+    - button "全部回复"
+    - text: 显示代码工作视图 开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换
+    - switch "显示代码工作视图" [checked]
+    - text: 性能与用量 选择性能与用量信息展示的详细程度
+    - button "详细"
+  - region "交互与快捷键":
+    - heading "交互与快捷键" [level=3]
+    - text: 繁忙时的发送行为 智能体运行时 Enter 键和发送按钮的行为；Cmd/Ctrl+Enter 使用另一行为
+    - button "排队发送"
+    - text: 快捷键
+    - paragraph: 查看和编辑当前可用的快捷键和输入操作
+    - button "编辑快捷键"
+  - region "数据管理":
+    - heading "数据管理" [level=3]
+    - text: 在使用官方模型 API 时上传 Session Log 帮助改进 DeepSeek 模型与产品
+    - switch "在使用官方模型 API 时上传 Session Log"
+  - region "版本与更新":
+    - heading "版本与更新" [level=3]
+    - text: 当前版本：{{version}}

@@ -18,6 +18,8 @@ The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.
 
 [ui-session-panel](../../packages/client/ui-session-panel/README.md#contribute-a-section) documents the Session panel's section, title-control, row, and toggle-indicator extension positions.
 
+General Settings declares the root-scoped list `settings.general.group`; each group entry owns its child item-list declaration. The settings base declares the six built-in grouped item keys and exports their union as `SettingsGeneralGroupItemSlot`; custom groups declaration-merge their exact `settings.general.group.<id>.item` key into `SlotMap`. The default Preferences group owns the compatible `settings.general.item` key. [ui-settings-general](../../packages/client/ui-settings-general/README.md#the-general-section) documents group labels, ordering, shared cards, and registration examples.
+
 ## Declaration and lifecycle
 
 `SlotMap` is the compile-time registry. A package declaration-merges the key, cardinality, scope, owner props, keyed props, and optional slot-level inject face. The runtime declaration is the matching `children` entry on the component that owns the render location.
@@ -70,6 +72,14 @@ The slot declaration fixes two independent axes.
 
 `priority` is a shadowing rank for `single`, `list`, `keyed`, and `hoc` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list or hoc `id`, or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
 
+<a id="list-item-roots"></a>
+
+### List item roots
+
+A `list` outlet (`[data-slot="key"]`) has one direct `[data-slot-item]` child for the winning registration of each selected `id`, even when `only` selects a single `id`. The attribute has an empty value; it does not identify the registration or the render instance. The outlet and its item roots are `div`s by default or `span`s when the list declares `inline: true`. Both use `display: contents` and have no layout box of their own.
+
+A winner that returns `null` leaves an empty item. Text and all local nodes of a React Fragment stay inside one item; portal content stays at its destination. Counting item roots does not tell you how many controls are visible. If the list has no registrations or `only` matches no `id`, the owner's `fallback` renders directly inside the outlet (nothing if omitted). If all registrations for a matching `id` have failed, its `[data-slot-error="key"]` placeholder is a direct child of the outlet instead of an item.
+
 <a id="hoc-layers"></a>
 
 ### Hoc layers
@@ -100,6 +110,8 @@ Both buttons have `inner.frame` as their nearest `[data-slot]`, and `[data-slot-
 - Layout: both outlet elements are `div`s (`span`s for `inline: true`) with `display: contents`. They create no layout boxes, but child and sibling selectors still see them. Identify the outlets by their attributes, not by depth. A layer that wraps `children` must not create a box of its own unless its slot documents otherwise.
 
 The [context-menu plugin](../../packages/client/ui-context-menu/README.md) contributes `useContextMenu` through `provideRoot`; every scope receives the same plugin-owned trigger factory. Its prop and retained handlers retire when the provider unloads. Its root-scoped keyed `contextMenu.icon` Slot renders business-owned icons from action metadata.
+
+<a id="component-inputs"></a>
 
 ## Component inputs
 
@@ -247,6 +259,8 @@ Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 All four image Slots default to `MessageImages`, which calls `conversation.images.content` with the caller's image references and authorized loader. User and output image replacements are independent. The `conversation.user.text` Factory is shared by user content, Queue, and Goal; its `inline: true` keyed Slot renders span anchors and inline error placeholders rather than block wrappers.
 
 The generated [Client inspect catalog](../../packages/extensions/cordis-client-runner/src/client/slot-catalog.ts) covers all shell branches and is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
+
+<a id="extension-rules"></a>
 
 ## Extension rules
 

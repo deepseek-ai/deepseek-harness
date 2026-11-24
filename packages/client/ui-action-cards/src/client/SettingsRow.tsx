@@ -27,7 +27,7 @@ export interface SettingsRowInjected {
  * @returns the General settings row.
  */
 export function SettingsRow({ useCardSettings, setEnabled, t }:
-  PropsRuntime<'settings.general.item'> & PropsLocale<'actionCards'> & InjectFace<SettingsRowInjected>) {
+  PropsRuntime<'settings.general.group.display.item'> & PropsLocale<'actionCards'> & InjectFace<SettingsRowInjected>) {
   const settings = useCardSettings(value => value)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)

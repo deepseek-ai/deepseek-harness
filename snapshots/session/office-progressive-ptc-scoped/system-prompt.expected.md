@@ -540,6 +540,37 @@ interface ToolArgsMap {
     /** Optional positive safe-integer limit on automatic continuation rounds. */
     max_goal_rounds?: number;
   } & Record<string, JsonValue>;
+  /** Convert a document to another format. Return a temporary file to copy to its destination with the shell. */
+  document_convert: {
+    /** Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, or odp; not modified. */
+    input: string;
+    /** Word: pdf, docx, odt, txt. Excel: pdf, xlsx, ods, csv. PowerPoint: pdf, pptx, odp. */
+    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
+    /** Exact worksheet name for CSV only; required when the workbook has several sheets. */
+    sheet?: string;
+  } & Record<string, JsonValue>;
+  /** Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell. */
+  document_recalculate: {
+    /** Path to an xls, xlsx, or ods workbook; not modified. */
+    input: string;
+    /** Output workbook format. */
+    format: "xlsx" | "ods";
+  } & Record<string, JsonValue>;
+  /** Render document pages, slides, or worksheet areas as images you can view. */
+  document_render: {
+    /** Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified. */
+    input: string;
+    /** Distinct one-based pages or slides; omit for all. Spreadsheets use sheet and range instead. */
+    pages?: number[];
+    /** Exact worksheet name; omit to render every visible sheet. */
+    sheet?: string;
+    /** A1 range, such as A1:H40; requires sheet. Omit for the used area. */
+    range?: string;
+    /** Resolution from 24 to 600; default 144. */
+    dpi?: number;
+    /** Rendering backend; omit to use the first available for this file type. poppler renders pdf only. */
+    renderer?: "libreoffice" | "poppler";
+  } & Record<string, JsonValue>;
   /** Edit an existing UTF-8 text file by replacing literal text. */
   edit: {
     /** Path to edit, resolved by the filesystem backend. Provide `file_path` before `old_string` and `new_string` in the arguments. */
@@ -595,35 +626,6 @@ interface ToolArgsMap {
   list_agents: Record<string, JsonValue>;
   /** Get absolute paths to bundled Python and library directories, plus bundled Python distribution versions. Node.js and pnpm paths are included when the payload provides them. Python includes numpy, pandas, python-docx, python-pptx, openpyxl, Pillow, lxml, and XlsxWriter. Use these libraries for Office files unless the user or workspace instructions select another environment. When Node.js and pnpm paths are returned, run pnpm with that Node executable and pnpm script path. This does not change PATH or package-manager settings. */
   load_workspace_dependencies: Record<string, JsonValue>;
-  /** Convert a document to another format. Return a temporary file to copy to its destination with the shell. */
-  office_convert: {
-    /** Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, or odp; not modified. */
-    input: string;
-    /** Word: pdf, docx, odt, txt. Excel: pdf, xlsx, ods, csv. PowerPoint: pdf, pptx, odp. */
-    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
-    /** Exact worksheet name for CSV only; required when the workbook has several sheets. */
-    sheet?: string;
-  } & Record<string, JsonValue>;
-  /** Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell. */
-  office_recalculate: {
-    /** Path to an xls, xlsx, or ods workbook; not modified. */
-    input: string;
-    /** Output workbook format. */
-    format: "xlsx" | "ods";
-  } & Record<string, JsonValue>;
-  /** Render document pages, slides, or worksheet areas as images you can view. */
-  office_render: {
-    /** Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified. */
-    input: string;
-    /** Distinct one-based pages or slides; omit for all. Spreadsheets use sheet and range instead. */
-    pages?: number[];
-    /** Exact worksheet name; omit to render every visible sheet. */
-    sheet?: string;
-    /** A1 range, such as A1:H40; requires sheet. Omit for the used area. */
-    range?: string;
-    /** Resolution from 24 to 600; default 144. */
-    dpi?: number;
-  } & Record<string, JsonValue>;
   /** Read a UTF-8 text file and return line-numbered content. */
   read: {
     /** Path to read, resolved by the filesystem backend. */
@@ -789,6 +791,54 @@ interface ToolOutputMap {
     };
     activation: "armed" | "disarmed";
   };
+  document_convert: {
+    operation: "convert";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Absolute path of the temporary output file. */
+    file: string;
+    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
+    bytes: number;
+    /** Page count the converter reports for the output. */
+    pageCount?: number;
+    missingFonts: string[];
+  };
+  document_recalculate: {
+    operation: "recalculate";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Absolute path of the temporary output file. */
+    file: string;
+    format: "xlsx" | "ods";
+    bytes: number;
+    /** Page count the converter reports for the output. */
+    pageCount?: number;
+    missingFonts: string[];
+  };
+  document_render: {
+    operation: "render";
+    /** Canonical absolute input path. */
+    path: string;
+    /** Pages or slides of a document, or visible worksheets. */
+    pageCount: number;
+    dpi: number;
+    images: ({
+      page?: number;
+      sheet?: string;
+      range?: string;
+      attachmentId: string;
+      mediaType: "image/png" | "image/jpeg" | "image/webp";
+      bytes: number;
+      width: number;
+      height: number;
+      originalDimensions?: {
+        width: number;
+        height: number;
+      };
+    })[];
+    missingFonts: string[];
+    renderer: "libreoffice" | "poppler";
+  };
   edit: {
     /** Canonical absolute path in the filesystem execution world. */
     path: string;
@@ -876,53 +926,6 @@ interface ToolOutputMap {
     nodePackages?: string;
     /** Bundled distribution names and versions recorded in runtime.json; excludes user-installed additions. */
     pythonDistributions: Record<string, JsonValue>;
-  };
-  office_convert: {
-    operation: "convert";
-    /** Canonical absolute input path. */
-    path: string;
-    /** Absolute path of the temporary output file. */
-    file: string;
-    format: "pdf" | "docx" | "odt" | "txt" | "xlsx" | "ods" | "csv" | "pptx" | "odp";
-    bytes: number;
-    /** Page count the converter reports for the output. */
-    pageCount?: number;
-    missingFonts: string[];
-  };
-  office_recalculate: {
-    operation: "recalculate";
-    /** Canonical absolute input path. */
-    path: string;
-    /** Absolute path of the temporary output file. */
-    file: string;
-    format: "xlsx" | "ods";
-    bytes: number;
-    /** Page count the converter reports for the output. */
-    pageCount?: number;
-    missingFonts: string[];
-  };
-  office_render: {
-    operation: "render";
-    /** Canonical absolute input path. */
-    path: string;
-    /** Pages or slides of a document, or visible worksheets. */
-    pageCount: number;
-    dpi: number;
-    images: ({
-      page?: number;
-      sheet?: string;
-      range?: string;
-      attachmentId: string;
-      mediaType: "image/png" | "image/jpeg" | "image/webp";
-      bytes: number;
-      width: number;
-      height: number;
-      originalDimensions?: {
-        width: number;
-        height: number;
-      };
-    })[];
-    missingFonts: string[];
   };
   read: {
     /** Canonical absolute path in the filesystem execution world. */

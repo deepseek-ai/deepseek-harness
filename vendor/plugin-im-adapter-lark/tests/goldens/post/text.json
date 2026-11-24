@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "Hello world, 你好，世界 🚀 — plain text stays plain."
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

@@ -93,7 +93,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-fs",
     "tool-fs-search",
     "tool-goal",
-    "tool-office",
+    "tool-document",
     "tool-plugin-manager",
     "tool-schedule",
     "tool-skill",

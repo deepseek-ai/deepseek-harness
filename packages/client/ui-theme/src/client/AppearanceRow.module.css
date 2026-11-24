@@ -1,7 +1,8 @@
-/* Appearance row (figma 'Frame 2117131228': title + cube row, column gap 8,
- * pad 16/0, hairline separator; the section column strips it when last). */
+/* Appearance cards share one row or stack together, based on row width. */
 
 .group {
+  container: appearance / inline-size;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -17,27 +18,29 @@
 }
 
 .cubeRow {
-  display: flex;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
 }
 
-/* Appearance cube (figma '.Selector Cube' 276x82, pad 20/32, centered
- * icon-over-label column, gap 4); flexed down from the figma width so all
- * three sit on one row at the panel's default width, wrapping when narrower. */
+@container appearance (max-width: 359px) {
+  .cubeRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .themeCube {
   box-sizing: border-box;
-  flex: 1 1 180px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 20px 32px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
+  padding: 20px 12px;
+  border: 0.5px solid transparent;
   border-radius: var(--dsw-radius-xl);
-  background: transparent;
+  background: var(--dsw-alias-bg-module-platform);
   font: inherit;
   font-size: 14px;
   line-height: 22px;
@@ -51,18 +54,7 @@
   }
 }
 
-/* Selected cube: platform fill + the selected border. */
 .selected {
-  background: var(--dsw-alias-bg-module-platform);
-  border-color: var(--dsw-alias-border-selected);
-}
-
-/* Narrow settings panel: all three cubes share one row instead of wrapping to
-   two. The equal basis and the tighter horizontal padding keep a four-glyph
-   label ("跟随系统") on one line at a 390px viewport. */
-@media (max-width: 767px) {
-  :global(html:not([data-windows-titlebar]):not([data-platform='darwin'])) .themeCube {
-    flex: 1 1 0;
-    padding: 12px 6px;
-  }
+  background: var(--dsw-alias-appearance-selected-fill);
+  border-color: var(--dsw-alias-appearance-selected-border);
 }

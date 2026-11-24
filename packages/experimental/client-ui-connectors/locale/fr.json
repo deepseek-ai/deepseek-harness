@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Connecteurs",
+    "description": "Ajoute aux Plugins un onglet Connecteurs pour afficher, installer et ouvrir les connecteurs officiels.",
+    "detail": "docs/DETAIL.md"
+  }
+}

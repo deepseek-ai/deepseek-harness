@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-28-im-fallback-alternatives-replace-capabilities.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-28-im-fallback-alternatives-replace-capabilities.md
+/agent-note-fallback-alternatives-replaced-the-im-capability-layer:
+  en: 3d9781a91b72777f
+  zh: b8dd45d77aad30b1
+/agent-note-fallback-alternatives-replaced-the-im-capability-layer/problem:
+  en: 0396e84086598eab
+  zh: d851b99cba361545
+/agent-note-fallback-alternatives-replaced-the-im-capability-layer/decision:
+  en: d514f78ebca1f125
+  zh: a0b8994e4468b39a
+/agent-note-fallback-alternatives-replaced-the-im-capability-layer/alternatives-considered:
+  en: 01dc0b64d0c2f957
+  zh: 278f7b33e13f4636
+/agent-note-fallback-alternatives-replaced-the-im-capability-layer/consequences:
+  en: 2a67d6ce76d7852c
+  zh: d512af265f406271

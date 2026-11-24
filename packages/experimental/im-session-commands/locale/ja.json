@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM セッションコマンド",
+    "description": "IM チャットで送られた /clear、/new、/stop、/status、/help を、メッセージがエージェントに届く前に処理します。"
+  }
+}

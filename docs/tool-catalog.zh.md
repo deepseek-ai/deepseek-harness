@@ -19,6 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-im` | `im_history`, `im_members`, `im_read`, `im_read_file`, `im_read_image`, `im_reply`, `im_send`, `im_send_file` | `ctx.tools`, `ctx.im`, `ctx.systemPrompt`, `ctx.fs + ctx.workingDirectory (im_send_file)` | `tool/call`, `IM send receipts for publication`, `tool/result` | - | 读取调用方可使用的聊天中的消息、历史页与媒体，显式发布 markdown 消息、回复或文件，并读取消息中的一张图片或一个文件。`tools.readOnly` 只注册读取工具。除非会话以流式方式回复，否则助手输出保持私有；结果不确定的发送绝不会自动重试。 |
 | `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`、`ctx.sessionController`、`ctx.workspaceRegistry`、调用 Agent | `tool/call`、接收方的 `agent/inbox/spliced`、`tool/result` | - | dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。 |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
@@ -28,7 +29,7 @@
 | `@deepseek-ai/dsh-tool-executor-ptc` | `run_code` | `ctx.workingDirectory (Agent executions)`、`ctx.tools`、`ctx.ptcRuntime`、`ctx.systemPrompt` | `tool/call`、`one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`、`tool/result` | - | PTC 执行器只向模型公开 run_code，并在生成的 TypeScript SDK 中声明其他可见能力。程序绑定按提交顺序进入共享的受守卫工具流水线；并行安全的函数体最多重叠 maxParallelSubCalls 个，嵌套结果保持与外层程序关联。最终超时时间与 maxSubCallsPerMinute 决定调用总额度；超限会终止程序。 |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`、`ctx.systemPrompt`、`ctx.agents`、`ctx.userQuestions (execution time, opportunistic)` | `tool/call`、`plan/mode inactive on an approved review`、`tool/result` | - | 规划未激活时，exit_plan_mode 仍保留在面向模型的 schema 中，这样状态转换不会在规划策略变更之外额外造成工具目录变动。其执行路径会拒绝规划模式之外的调用；在规划模式下，它通过用户交互 seam 提交计划（批准／根据反馈继续规划），批准后会在步骤边界记录规划模式已停用。 |
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.workingDirectory`、`ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`、`tool/result` | - | bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job 注册表时，每次调用一启动就注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具（来自 `@deepseek-ai/dsh-tool-jobs`）收集／停止；没有注册表或 `enableRunInBackground: false` 时，工具注册不带 `run_in_background` 参数的纯前台 schema。 |
-| `@deepseek-ai/dsh-tool-office` | `office_convert`、`office_recalculate`、`office_render` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.agents`、`ctx.officeKit`、`ctx.attachments and ctx.llm for office_render` | `tool/call`、`tool/result with rendered image attachments`、`temporary converted files in the Office kit output store` | - | Agent 成功加载 Office 技能后，从下一步起向其声明这些工具；上一次请求头已声明 Office 工具时继续保留。未安装 LibreOffice Kit 时，已声明工具的调用以 Office 服务的 unavailable 错误失败。 |
+| `@deepseek-ai/dsh-tool-document` | `document_convert`、`document_recalculate`、`document_render` | `ctx.workingDirectory`、`ctx.tools`、`ctx.fs`、`ctx.agents`、`ctx.officeKit`、`ctx.attachments and ctx.llm for document_render` | `tool/call`、`tool/result with rendered image attachments`、`temporary converted files in the Office kit output store` | - | Agent 成功加载 Office 技能后，从下一步起向其声明这些工具；上一次请求头已声明 Office 工具时继续保留。未安装 LibreOffice Kit 时，已声明工具的调用以 Office 服务的 unavailable 错误失败。 |
 | `@deepseek-ai/dsh-tool-present` | `present` | `ctx.workingDirectory`、`ctx.tools`, `ctx.fs`, `ctx.agents` | `tool/call`, `deliverables/presented 在成功的最终结果之后`, `tool/result` | - | 交付归调用方 Session 所有；Web ui-deliverables 提供源文件打开与卡片。 |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.workingDirectory`、`ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | Desktop 标准模式、创造模式和 SDK profile 提供一个只读运行时检查工具。省略 query 获取 provider 目录；传入 query 查询已声明的方法。Cordis host runner 提供检查注册表；Client 查询需要已连接页面。持久化变更编写为组合包，再通过 plugin_manager 安装。 |
@@ -56,6 +57,231 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-im"></a>
+
+## `@deepseek-ai/dsh-im`
+
+### `im_history`
+
+Read a bounded page of one IM chat you may read. Page older messages with before or newer ones with after, both cursors being seq numbers.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "before": {
+      "type": "integer",
+      "description": "Only messages with a lower seq than this cursor."
+    },
+    "after": {
+      "type": "integer",
+      "description": "Only messages with a higher seq than this cursor."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Page size, within the operator-configured history limit."
+    }
+  }
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_members`
+
+List the people a chat you may read has as members, each with the markdown that mentions them: a mention addresses the platform user id and shows the name. Filter with query rather than paging by hand.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "query": {
+      "type": "string",
+      "description": "Keep only members whose name carries this text; use it instead of paging a large chat by hand."
+    }
+  }
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read`
+
+Read one message of an IM chat you may read: its sender, time, text, quote and media labels.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Message key (bot|id) or the per-chat seq number shown as #12."
+    },
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    }
+  },
+  "required": [
+    "message"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read_file`
+
+Save the file of one media label such as [文件 #12.2 report.pdf] into your workspace and get the path to open with your file tools.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable media id such as 12.2 from [文件 #12.2 report.pdf]."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read_image`
+
+Read the image of one media label such as [图片 #12.1] and see it.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable media id such as 12.1 from [图片 #12.1]."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_reply`
+
+Publish one markdown reply to a message of an IM chat you may write; a reply to a message inside a thread or topic stays there.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "message": {
+      "type": "string",
+      "description": "Message to answer, by key (bot|id) or seq."
+    },
+    "text": {
+      "type": "string",
+      "description": "Complete markdown reply."
+    },
+    "thread": {
+      "type": "boolean",
+      "description": "Also answer inside that message thread."
+    }
+  },
+  "required": [
+    "message",
+    "text"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_send`
+
+Publish one markdown message into an IM chat you may write. Returns the delivery status: confirmed, failed, uncertain or partial.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "text": {
+      "type": "string",
+      "description": "Complete markdown to publish as one message."
+    },
+    "thread": {
+      "type": "string",
+      "description": "Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none."
+    }
+  },
+  "required": [
+    "text"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_send_file`
+
+Publish one local file into an IM chat you may write as an image, video, audio or file message; the extension picks the platform message kind.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "path": {
+      "type": "string",
+      "description": "Local path of the file to publish."
+    },
+    "quote": {
+      "type": "string",
+      "description": "Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+Read messages, history pages and images of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.
 
 <a id="deepseek-aidsh-tool-session-control"></a>
 
@@ -729,11 +955,11 @@ PTC 执行器只向模型公开 run_code，并在生成的 TypeScript SDK 中声
 
 bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job 注册表时，每次调用一启动就注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具（来自 `@deepseek-ai/dsh-tool-jobs`）收集／停止；没有注册表或 `enableRunInBackground: false` 时，工具注册不带 `run_in_background` 参数的纯前台 schema。
 
-<a id="deepseek-aidsh-tool-office"></a>
+<a id="deepseek-aidsh-tool-document"></a>
 
-## `@deepseek-ai/dsh-tool-office`
+## `@deepseek-ai/dsh-tool-document`
 
-### `office_convert`
+### `document_convert`
 
 将文档转换为另一种格式。返回一个临时文件，用 shell 将其复制到目标位置。
 
@@ -772,9 +998,9 @@ bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job �
 }
 ```
 
-来源： [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+来源： [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
-### `office_recalculate`
+### `document_recalculate`
 
 重算电子表格公式。返回一个临时工作簿，用 shell 将其复制到目标位置。
 
@@ -802,9 +1028,9 @@ bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job �
 }
 ```
 
-来源： [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+来源： [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
-### `office_render`
+### `document_render`
 
 将文档页面、幻灯片或工作表区域渲染为你可以查看的图片。
 
@@ -834,6 +1060,14 @@ bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job �
     "dpi": {
       "type": "integer",
       "description": "Resolution from 24 to 600; default 144."
+    },
+    "renderer": {
+      "type": "string",
+      "description": "Rendering backend; omit to use the first available for this file type. poppler renders pdf only.",
+      "enum": [
+        "libreoffice",
+        "poppler"
+      ]
     }
   },
   "required": [
@@ -842,7 +1076,7 @@ bash 工具是 bash 执行器 seam 面向模型的消费方。组合中有 job �
 }
 ```
 
-来源： [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+来源： [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
 Agent 成功加载 Office 技能后，从下一步起向其声明这些工具；上一次请求头已声明 Office 工具时继续保留。未安装 LibreOffice Kit 时，已声明工具的调用以 Office 服务的 unavailable 错误失败。
 

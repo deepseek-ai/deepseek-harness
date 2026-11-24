@@ -1,0 +1,20 @@
+[
+  {
+    "msg_type": "audio",
+    "content": {
+      "file_key": "fake:fake:test:audio:679dc6bc0bc9"
+    }
+  },
+  {
+    "msg_type": "media",
+    "content": {
+      "file_key": "fake:fake:test:video:336d52e2eddb"
+    }
+  },
+  {
+    "msg_type": "file",
+    "content": {
+      "file_key": "fake:fake:test:file:e4de5288fb5a"
+    }
+  }
+]

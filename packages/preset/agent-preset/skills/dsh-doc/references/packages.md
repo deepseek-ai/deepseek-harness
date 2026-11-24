@@ -214,12 +214,13 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-office-kit` | yes | Shared Office rendering, conversion, and recalculation with bounded queues and caching |
-| `@deepseek-ai/dsh-tool-office` | yes | Model-facing Office tools for rendering, converting, and recalculating documents |
+| `@deepseek-ai/dsh-tool-document` | yes | Model-facing Office tools for rendering, converting, and recalculating documents |
 
 ## experimental
 
 | Package | Config | Description |
 |---|---|---|
+| `@deepseek-ai/dsh-client-ui-connectors` | no | Plugins page tab that lists, installs, and opens the official connectors |
 | `@deepseek-ai/dsh-cua` | no | Shared Computer Use application objects, authorization, and logged tool execution |
 | `@deepseek-ai/dsh-cua-macos` | yes | macOS native provider for shared Computer Use application and window objects |
 | `@deepseek-ai/dsh-cua-mcp` | yes | Computer Use as an MCP stdio server: a dsh profile bundle that exposes cua_run_code to external agent harnesses |
@@ -253,6 +254,8 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-forge-gitlab` | yes | GitLab provider for the experimental forge registry, read and written through the GitLab CLI on the host |
 | `@deepseek-ai/dsh-hooks-claude-code` | yes | Bridge plugin: run a Claude Code hooks.json / settings hook config on the DeepSeek Harness interception seams |
 | `@deepseek-ai/dsh-hooks-codex` | yes | Bridge plugin: run a Codex hooks.json hook config on the DeepSeek Harness interception seams |
+| `@deepseek-ai/dsh-im` | yes | Platform-neutral IM host: intake, message store, im/message waterfall, hosted sessions, send funnel and output renderers |
+| `@deepseek-ai/dsh-im-session-commands` | yes | Slash-command handling at the head of the dsh-im message waterfall |
 | `@deepseek-ai/dsh-sandbox-policy-git` | no | Grants a Session that works in a linked Git worktree write access to its repository's Git directory |
 | `@deepseek-ai/dsh-session-title-all-prompts-llm` | yes | All-user-messages LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-skill-badge` | no | Bundled dsh badge skill provider for DeepSeek Harness |

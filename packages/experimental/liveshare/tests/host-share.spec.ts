@@ -36,7 +36,7 @@ describe('liveshare owner host routes', () => {
       // routes the browser still posts to, and nothing else stays same-origin.
       '/api/liveshare.ownerCredential',
       '/api/liveshare.ownerLoginStart',
-      '/api/liveshare.ownerLoginRedeem',
+      '/api/liveshare.ownerLoginStatus',
       '/api/liveshare.ownerLoginCancel',
     ])
     expect(register).toHaveBeenCalledTimes(4)

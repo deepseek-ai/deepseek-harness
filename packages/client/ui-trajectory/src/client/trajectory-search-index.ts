@@ -69,6 +69,7 @@ function recordSources(
     searchableJson(cell.messageSource),
     searchableJson(cell.promptDetail),
     searchableJson(cell.previousPromptDetail),
+    searchableJson(cell.promptMessageDetail),
   ]
 }
 

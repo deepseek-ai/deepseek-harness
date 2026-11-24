@@ -107,6 +107,7 @@
     "apps/web/tests/entry-customization.e2e.ts",
     "apps/web/tests/cua-optin.e2e.ts",
     "apps/web/tests/bundle-platform.e2e.ts",
+    "apps/web/tests/connectors-tab.e2e.ts",
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/cua-run-code.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",
@@ -289,6 +290,10 @@
     "apps/desktop-host/tests/**/*.ts",
     "benchmarks/**/*.ts",
     "packages/*/*/tests/**/*.ts",
+    // Vendor suites run under vitest, which never type-checks: these type tests
+    // (`@ts-expect-error` on wrong element attributes, capability keys, …) only
+    // mean something inside a compiler program, so the Host aggregate holds them.
+    "vendor/*/tests/**/*.ts",
     "packages/experimental/cua-macos/native/generate-protocol.ts",
     "packages/experimental/cua-windows/native/generate-protocol.ts",
     "packages/experimental/claude-code-mods/examples/*/index.ts",
@@ -318,6 +323,17 @@
     "scripts/client-bundle-purity.spec.ts"
   ],
   "references": [
+    { "path": "./packages/experimental/im-bundle" },
+    { "path": "./packages/experimental/im" },
+    { "path": "./packages/experimental/im-session-commands" },
+    { "path": "./vendor/plugin-im-core" },
+    { "path": "./vendor/plugin-im-adapter-lark" },
+    { "path": "./vendor/plugin-im-adapter-qq" },
+    { "path": "./vendor/plugin-im-markdown" },
+    { "path": "./vendor/satori-element" },
+    { "path": "./vendor/element" },
+    { "path": "./vendor/http" },
+    { "path": "./vendor/fetch-file" },
     { "path": "./packages/interaction/action-cards" },
     { "path": "./packages/extensions/creation-recommendations" },
     { "path": "./packages/extensions/plugin-recommendations" },
@@ -375,7 +391,7 @@
     { "path": "./packages/client/ui-sidebar-browser/tsconfig.host.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.host.json" },
     { "path": "./packages/document/office-kit" },
-    { "path": "./packages/document/tool-office" },
+    { "path": "./packages/document/tool-document" },
 
     { "path": "./packages/account/deepseek-account" },
     { "path": "./packages/account/deepseek-auth" },

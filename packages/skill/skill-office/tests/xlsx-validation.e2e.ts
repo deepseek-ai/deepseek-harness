@@ -127,7 +127,7 @@ else:
         assert load_workbook('result.xlsx', data_only=True)['Revenue']['B4'].value == 38
 `], { cwd })
         expect(verified.exitCode).toBe(0)
-        if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'office_recalculate')).toBe(true)
+        if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'document_recalculate')).toBe(true)
       },
     })
     const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data] : event.type === 'tool/ptc-dispatch' ? [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments), callId: event.data.rootCallId }] : [])
@@ -142,8 +142,8 @@ else:
     expect(calls.some(call => call.name === 'load_workspace_dependencies'), diagnostic).toBe(true)
     if (kind === 'layout') {
       const office = officeCalls(events)
-      expect(office.some(call => call.name === 'office_render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
-      expect(office.some(call => call.name === 'office_convert'), diagnostic).toBe(false)
+      expect(office.some(call => call.name === 'document_render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
+      expect(office.some(call => call.name === 'document_convert'), diagnostic).toBe(false)
     }
   })
 })

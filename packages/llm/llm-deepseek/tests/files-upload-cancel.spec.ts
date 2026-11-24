@@ -1,4 +1,10 @@
-/** Cancelling a turn while its Files upload starts, through the real `fetch` and a loopback server. */
+/**
+ * Cancelling a turn while its Files upload starts, through the real `fetch` and a loopback server.
+ *
+ * `upload()` gives `fetch` a `FormData`. undici 7.30.1 and 8.11.2 reject without a handler when that body is cancelled
+ * as the upload starts, and the launcher treats an unhandled rejection as fatal; the supported Node.js range bundles
+ * undici 7.30.2 or 8.12.4 and later, which do not.
+ */
 import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -94,8 +100,8 @@ describe('a turn cancelled while its Files upload starts', () => {
 
     await expect(files.resolveAll(new Map([[version.attachment.attachmentId, version]]))).rejects.toBe(cancelled)
     await transport.promise
-    // Node reports an unhandled rejection only after a later event-loop turn; with a FormData body it arrived in the
-    // first turn after the transport settled. The bound only ends the wait when nothing is reported.
+    // Node reports an unhandled rejection only after a later event-loop turn; an affected undici reports it in the
+    // first turn after the transport settles. The bound only ends the wait when nothing is reported.
     for (let turns = 0; turns < 50 && unhandled.length === 0; turns += 1) {
       await new Promise<void>((resolve) => { setImmediate(resolve) })
     }

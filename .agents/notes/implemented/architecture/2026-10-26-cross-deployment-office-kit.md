@@ -18,9 +18,9 @@ The bundled Python environment ([`tool-workspace-dependencies`](../../../../pack
 
 [`@deepseek-ai/dsh-office-kit`](../../../../packages/document/office-kit/README.md) owns Kit location and the shared conversion service. Kit location is an internal implementation of the provider and is not exported: the provider passes its own `import.meta.resolve` lookup, and native engine paths use ASAR-unpacked mapping. Location reads no environment variables. The [on-demand Office tools](2026-10-31-native-office-tool.md) run Kit operations inside the Host, so no deployment publishes Kit CLI paths or Office executable variables.
 
-An absent Kit degrades instead of failing a load. The conversion service registers and rejects conversions with code `unavailable`, retaining only a successful Kit import and reporting each distinct failure once; the `office_render`, `office_convert`, and `office_recalculate` tools stay registered and return that message when called.
+An absent Kit degrades instead of failing a load. The conversion service registers and rejects conversions with code `unavailable`, retaining only a successful Kit import and reporting each distinct failure once; the `document_render`, `document_convert`, and `document_recalculate` tools stay registered and return that message when called.
 
-`office-to-pdf` became `office-kit` so that later Kit consumers, such as native rendering (PR #5374) and the `tool-office` package, take Kit from one package. LibreOffice Kit dependencies declare one exact version in every manifest, so the converter and packaged engine come from the same Kit release.
+`office-to-pdf` became `office-kit` so that later Kit consumers, such as native rendering (PR #5374) and the `tool-document` package, take Kit from one package. LibreOffice Kit dependencies declare one exact version in every manifest, so the converter and packaged engine come from the same Kit release.
 
 ## Alternatives considered
 

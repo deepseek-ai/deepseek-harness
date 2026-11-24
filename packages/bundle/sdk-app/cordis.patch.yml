@@ -49,8 +49,8 @@
         outputDirectory: !!js dshHomePath('office-kit', 'outputs')
 
     # The Office tools stay registered without Kit; calls report the service's unavailable error.
-    - id: tool-office
-      name: '@deepseek-ai/dsh-tool-office'
+    - id: tool-document
+      name: '@deepseek-ai/dsh-tool-document'
 
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
