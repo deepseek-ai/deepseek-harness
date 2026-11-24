@@ -438,25 +438,31 @@ describe('reconnect supervisor', () => {
     expect(mockCallTool.mock.contexts).toEqual([instances[0], instances[1]])
   })
 
-  it('sends again the calls the server had rejected when the connection closed, and no call still awaiting its answer', async () => {
-    const { client: expired } = await connectWithSession(quickReconnect())
-    const answered: PromiseWithResolvers<void> = Promise.withResolvers()
+  it('sends again every call the server rejects before the reconnect delay ends, and no call still awaiting its answer then', async () => {
+    const { cell, client: expired } = await connectWithSession(quickReconnect())
+    const first: PromiseWithResolvers<void> = Promise.withResolvers()
+    const later: PromiseWithResolvers<void> = Promise.withResolvers()
+    // The other answers arrive after the first rejection, in a later turn of the event loop.
+    cell.onChange((value) => { if (value.state === 'reconnecting') setImmediate(() => { later.resolve() }) })
     let sent = 0
     mockCallTool.mockImplementation(async function (this: unknown, _params, options) {
-      if (this !== expired) return { content: [{ type: 'text', text: 'ok' }] }
-      if (++sent > 2) return await unanswered(options)
-      await answered.promise
-      return await rejected(expired)()
+      if (this !== expired) return { content: [{ type: 'text', text: 'sent again' }] }
+      const order = ++sent
+      if (order === 5) return await unanswered(options)
+      await (order === 1 ? first : later).promise
+      return order === 4 ? { content: [{ type: 'text', text: 'answered' }] } : await rejected(expired)()
     })
     const calls = Array.from({ length: 5 }, () => callRemote())
     await vi.waitFor(() => { expect(mockCallTool).toHaveBeenCalledTimes(5) })
-    answered.resolve()
+    first.resolve()
 
     const results = await Promise.all(calls)
-    expect(results.filter(result => !result.isError)).toHaveLength(2)
-    const failures = results.filter(result => result.isError).map(result => result.error)
-    expect(failures).toEqual([SESSION_EXPIRED, SESSION_EXPIRED, SESSION_EXPIRED])
-    expect(mockCallTool.mock.contexts.slice(5)).toEqual([instances[1], instances[1]])
+    expect(results.filter(result => result.isError).map(result => result.error)).toEqual([SESSION_EXPIRED])
+    const answers = results.filter(result => !result.isError).map(result => result.content)
+    expect(answers).toHaveLength(4)
+    // The server accepted this call; its result arrived while the expired connection stayed open.
+    expect(answers).toContainEqual([{ type: 'text', text: 'answered' }])
+    expect(mockCallTool.mock.contexts.slice(5)).toEqual([instances[1], instances[1], instances[1]])
 
     // An answer that arrives on the closed connection changes nothing.
     expired.onerror?.(postRejected(404, 'Session not found'))
@@ -479,6 +485,17 @@ describe('reconnect supervisor', () => {
     await vi.waitFor(() => { expect(instances).toHaveLength(2) })
     await sleep(30)
     expect(mockCallTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('reconnects once when the expired connection also reports that it closed', async () => {
+    const { cell, client } = await connectWithSession(quickReconnect())
+    client.onerror?.(postRejected(404, 'Session not found'))
+    client.transport?.onclose?.()
+
+    await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'connected' }) })
+    await sleep(30)
+    expect(instances).toHaveLength(2)
+    expect(mockConnect).toHaveBeenCalledTimes(2)
   })
 
   it('reports a resource request the server rejected for its session as not run, and reconnects', async () => {
@@ -585,6 +602,40 @@ describe('reconnect supervisor', () => {
       expect((await pending).error).toEqual(SESSION_EXPIRED_NOT_RUN)
       expect(mockCallTool).toHaveBeenCalledTimes(1)
     })
+
+    it('sends a call that starts meanwhile to the expired connection, and again on the new one', async () => {
+      const { cell, expired } = await refuseFirstCall(waiting())
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      onTestFinished(() => { vi.useRealTimers() })
+      const waited = callRemote()
+      await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'reconnecting' }) })
+      rejectNextCall(expired)
+      const meanwhile = callRemote()
+      await vi.waitFor(() => { expect(mockCallTool).toHaveBeenCalledTimes(2) })
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect((await waited).isError).toBe(false)
+      expect((await meanwhile).isError).toBe(false)
+      expect(mockCallTool.mock.contexts).toEqual([instances[0], instances[0], instances[1], instances[1]])
+    })
+
+    it('keeps the call waiting when the expired connection lists its tools meanwhile', async () => {
+      const { cell } = await refuseFirstCall(waiting())
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      onTestFinished(() => { vi.useRealTimers() })
+      const waited = callRemote()
+      await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'reconnecting' }) })
+      const states: string[] = []
+      cell.onChange((value) => { states.push(value.state) })
+      const notify = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+      notify()
+      await vi.waitFor(() => { expect(mockListTools).toHaveBeenCalledTimes(2) })
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect((await waited).isError).toBe(false)
+      expect(states).toEqual(['connecting', 'connected'])
+      expect(mockCallTool.mock.contexts).toEqual([instances[0], instances[1]])
+    })
   })
 
   it('does not send a rejected call again after its caller cancelled it', async () => {
@@ -682,6 +733,8 @@ describe('reconnect supervisor', () => {
       expect(errors.some(line => line.includes('connection lost and reconnect is disabled'))).toBe(true)
       expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
       expect(mockConnect).toHaveBeenCalledTimes(1)
+      // The expired connection is closed although no reconnect follows.
+      await vi.waitFor(() => { expect(mockClose).toHaveBeenCalledTimes(1) })
     } finally {
       await handle.dispose()
     }
@@ -704,6 +757,7 @@ describe('reconnect supervisor', () => {
         expect(cell.current()).toEqual({ state: 'failed', reason: 'gave-up', lastError: 'server session expired' })
       })
       await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined() })
+      await vi.waitFor(() => { expect(mockClose).toHaveBeenCalledTimes(2) })
       expect(instances).toHaveLength(2)
     } finally {
       await handle.dispose()

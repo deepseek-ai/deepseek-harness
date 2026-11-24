@@ -154,12 +154,11 @@ export function startConnection(
   type Generation = {
     wire: McpGeneration
     connectedAt?: number
-    /** Present once the server refused a request for this generation's session. */
-    expired?: {
-      /** The SDK errors of the refused requests; each request rejects with its own. */
-      refused: Set<unknown>
-      replacement: McpSessionRefused['replacement']
-    }
+    /**
+     * Present once the server refused a request for this generation's session. The generation then stays current
+     * and open until `reconnectTimer` closes it.
+     */
+    expired?: McpSessionRefused['replacement']
   }
   let current: Generation | undefined
   let bindingValue: { config?: Config; grantId?: string } | undefined
@@ -273,18 +272,30 @@ export function startConnection(
       nextRetryAtMs: Date.now() + delayMs, lastError: error })
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined
-      settling = connectGeneration()
+      // Only a generation whose session expired stays current during the delay.
+      const expired = current
+      settling = expired === undefined ? connectGeneration() : release(expired).then(connectGeneration)
     }, delayMs)
     reconnectTimer.unref()
   }
 
   function lost(record: Generation, error: string, reason?: Error): void {
-    if (!isCurrent(record)) return
+    // `reconnectTimer` closes a generation whose session expired.
+    if (!isCurrent(record) || record.expired !== undefined) return
     current = undefined
     settling = close(record, reason).then((confirmed) => {
       readiness.resolve({ error: new Error(error) })
       if (confirmed) scheduleReconnect(error, record.connectedAt)
     })
+  }
+
+  /**
+   * Close a generation whose session expired. Its requests still awaiting an answer fail with
+   * {@link SESSION_EXPIRED}.
+   */
+  async function release(record: Generation): Promise<void> {
+    current = undefined
+    await close(record, new McpLocalError(SESSION_EXPIRED, 'MCP_CONNECTION_CLOSED'))
   }
 
   /**
@@ -315,8 +326,7 @@ export function startConnection(
    * @returns the failure to report when the server refused that request for its session; undefined otherwise.
    */
   function refusal(record: Generation, error: unknown): McpSessionRefused | undefined {
-    const expired = record.expired
-    return expired?.refused.has(error) === true ? new McpSessionRefused(expired.replacement) : undefined
+    return record.expired !== undefined && sessionRejected(error) ? new McpSessionRefused(record.expired) : undefined
   }
 
   function isStopped(): boolean { return disposed || closureFailure !== undefined }
@@ -387,16 +397,17 @@ export function startConnection(
       // Before startup completes, and on a connection without a session id, these statuses are ordinary answers.
       if (record.connectedAt !== undefined && client.transport?.sessionId !== undefined) {
         if (sessionRejected(error)) {
-          if (!isCurrent(record)) return
-          if (record.expired === undefined) {
-            record.expired = { refused: new Set(), replacement: replacement() }
-            // The refused request rejects with `error` in a later microtask. Closing before that would reject it
-            // with the closure reason, like the requests still awaiting an answer.
-            setImmediate(() => {
-              lost(record, 'server session expired', new McpLocalError(SESSION_EXPIRED, 'MCP_CONNECTION_CLOSED'))
-            })
-          }
-          record.expired.refused.add(error)
+          if (!isCurrent(record) || record.expired !== undefined) return
+          record.expired = replacement()
+          // The generation stays open for the reconnect delay: each request the server refuses receives its own
+          // rejection, and a request the server accepted can still return its result.
+          scheduleReconnect('server session expired', record.connectedAt)
+          // No reconnect follows: the timer only closes the generation, after the refused request has rejected
+          // with its own error instead of the closure reason.
+          reconnectTimer ??= setTimeout(() => {
+            reconnectTimer = undefined
+            settling = release(record)
+          })
           return
         }
         if (eventStreamRefused(error)) {
@@ -417,7 +428,8 @@ export function startConnection(
       ctx.logger.info(`${label}: tool list changed, re-syncing`)
       try {
         await enqueueSync(record)
-        if (isCurrent(record) && record.connectedAt !== undefined) {
+        // An expired generation stays `reconnecting`: calls the server rejected wait for the next `connected`.
+        if (isCurrent(record) && record.expired === undefined && record.connectedAt !== undefined) {
           status.update({ state: 'connected', toolCount: loader?.size ?? disposers.size, connectedAt: record.connectedAt })
         }
       } catch (error) {
