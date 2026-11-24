@@ -94,5 +94,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,
     disposeNative: () => runtime.dispose(), heldInputState: true,
     permissionParameters: (_method, permission) => ({ permission }),
+    applicationMetadata: true,
   })
 }

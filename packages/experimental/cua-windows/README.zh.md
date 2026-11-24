@@ -33,7 +33,7 @@ kind: "package-reference"
 
 `cua.listApps()` 从当前 Windows 会话中符合条件的可见顶层窗口聚合应用。名称搜索和空查询的 `cua.findApps` 返回通过 AppsFolder 枚举的 StartApps 目录中的已安装应用。窗口观察用于补充这些目录条目的运行状态和已知可执行文件路径。目录可能不完整；找不到应用时，可以询问用户其位置。
 
-每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是 AUMID；Windows 没有提供窗口或进程 AUMID 时，使用完整可执行文件路径。只有完全相同的 ID 字符串才按区分大小写的相等关系合并。将返回的 ID 原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。
+每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是不透明的选择标识；将返回值原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。应用展示使用 Shell 名称和图标；未注册程序使用文件说明或文件名。同名或声明相同 AUMID 的不同应用仍然分开。
 
 `listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
 
@@ -43,11 +43,15 @@ kind: "package-reference"
 
 在当前会话中首次选择尚未授权的应用时，审批窗口提供“拒绝”和“本会话允许”。如果当前 profile 可以保存授权，窗口还会显示“始终允许”，并将它作为主按钮高亮。选择“始终允许”后，同一 profile 的其他会话可以访问该应用，直到用户在自动电脑操作插件页撤销授权。在审批详情区按 Enter 只允许当前会话访问。
 
-授权按区分大小写的 AUMID 保存，通过可执行文件路径选择时则按解析后的实际路径保存。声明相同 AUMID 的窗口和进程共用授权，即使它们来自不同的发布者。替换已授权路径上的可执行文件会沿用授权，将文件移到其他路径则需另行授权。
+打包应用的授权依据 Windows 提供的进程 AUMID，包含包系列及包内的具体应用。包版本更新沿用授权，同包的其他应用不共享授权。桌面程序的授权依据规范化的可执行文件路径，以及窗口声明的 AUMID（如果存在）。其他可执行文件不能通过声明相同 AUMID 继承权限。在同一规范路径替换桌面程序且应用身份不变时沿用授权，移到其他路径则需重新授权。搜索与路径选择解析为同一身份时复用决定。一个路径承载多个已标识应用时返回 `AMBIGUOUS_APP`，不会一次授权所有应用。
+
+审批卡片和权限列表展示应用名称、图标，以及可获取的可执行文件路径。展示信息更新不会再次询问授权。旧版 Windows 决定需要重新确认，并在选择应用时撤销，不会自动转移。启动器的权限不会扩展到另一个可执行文件；启动后若应用身份不同，需要重新发现并选择该应用。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
+
+身份区分遵循 Windows 的[包身份](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/package-identity-overview)与 [Shell AUMID 语义](https://learn.microsoft.com/en-us/windows/win32/shell/appids)。[PowerToys 程序启动器](https://github.com/microsoft/PowerToys/blob/main/src/modules/launcher/Plugins/Microsoft.Plugin.Program/Programs/Win32Program.cs)区分快捷方式展示和实际可执行目标；[simplewall](https://github.com/henrypp/simplewall/blob/master/src/wfp.c)使用可执行文件或包身份进行访问决策。
 
 - `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。尚未运行的应用在授权后通过 Explorer 启动。
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口。已接纳的 HWND 在有效期间保留在列表中，包括隐藏窗口。
-- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。Windows 首次接纳窗口时检查应用归属，此后只要 HWND 有效就信任它。
+- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。每次观察和输入均检查所属进程、进程启动时间及应用身份。句柄复用或身份改变会使窗口及其快照失效。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
 - 连续读取同一窗口时传入 `showDiff: true`，可查看 UI Automation 的结构、属性和文本通知。首次读取、取消读取后的下一次观察、更换窗口或读取选项、树被截断时，返回本次读到的树。Windows 提供方配置 `maxDiffNotifications` 限制两次读取之间的通知条数，默认 50 条，相同事件类型和 RuntimeId 只计一次。超过条数上限，或非空摘要的 UTF-8 字节数达到当前树的大小时，首行显示 `Diff too large. Showing the current tree instead.`，下一行起返回本次读取范围内的树。能定位到当前元素的通知会附上元素信息，删除通知可能带有旧元素的 ID。控件可能漏报变化，也可能只报告整个容器。省略该参数或传 `false` 可读取当前树并停止监听。关闭连接时，退订仍在 UIA 线程上排队也能收到关闭应答。退订抛错时，helper 记录一次诊断。
 - 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
@@ -93,7 +97,7 @@ kind: "package-reference"
 - 持有提醒和清理只依据 helper 自己派发的输入。如果你也按住同一个键或按钮，helper 之后发送的 up 可能打断你的按压。
 - Windows 通过桌面派发输入。焦点变化或原窗口关闭后，确认释放表示桌面接受了 up，原窗口可能收不到该事件。释放时直接发送保存的 up 事件，无需检查当前前台窗口或锁屏状态。显式 up 返回 `foregroundChanged: null`。若 Windows 在处理显式清理请求时拒绝 up，本任务不能继续使用 CUA。请先检查桌面，再开始新任务。
 - 清理完整动作内的临时输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
-- helper 的身份摘要只覆盖 exe。同一 apphost 搭配不同 DLL 时可能复用旧服务。重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。
+- 重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。共享服务身份包含 apphost、应用与协议 DLL，以及运行时清单；实现变化后会启动独立服务。
 - Windows 握手要求 `maxClickHoldMs` 为正整数。设为 0 会使连接以 `INVALID_CONFIG` 失败，连普通点击和状态查询也不可用。
 - 不支持应用级辅助功能；读取树前必须明确选择窗口。
 - 如果启动后 `getWindows()` 仍为空，请让用户打开所需窗口。

@@ -1,7 +1,7 @@
 /** Opt-in real desktop admission through the shipped managed subprocess provider. */
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
-import { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
+import { NativeClient, NativeError } from '@deepseek-ai/dsh-cua/native-client'
 import { AppResult, AppsResult, NativeAppsResult, StateResult } from '@deepseek-ai/dsh-cua/protocol'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
@@ -49,6 +49,25 @@ it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or n
   for (const query of ['', null]) {
     const all = AppsResult.parse(await client.request('findApps', { query, maxAppMatches: 1 }, new AbortController().signal))
     expect(all.length).toBeGreaterThan(0)
+  }
+  const selectedSchema = z.object({ authorization: z.object({
+    id: z.string(), name: z.string(), executablePath: z.string().optional(), iconPath: z.string(),
+  }),
+  applicationIcon: z.string().optional() })
+  for (const app of installed.filter(app => app.isRunning)) {
+    if (app.id === undefined) throw new Error('A running application lacks a selector')
+    const selected = selectedSchema.parse(await client.request('getApp', { selector: app.id }, signal))
+    expect(selected.authorization.name).toBe(app.displayName)
+    if (selected.authorization.executablePath === undefined) continue
+    const found = AppsResult.parse(await client.request('findApps', { query: selected.authorization.executablePath, maxAppMatches: 1000 }, signal)
+      .catch((error: unknown) => {
+        // Several hosted apps may intentionally share one executable; the path must then refuse selection.
+        if (error instanceof NativeError && error.code === 'AMBIGUOUS_APP') return []
+        throw error
+      }))
+    if (found.length !== 1) continue
+    const same = selectedSchema.parse(await client.request('getApp', { selector: selected.authorization.executablePath }, signal))
+    expect(same.authorization.id).toBe(selected.authorization.id)
   }
 }, 60_000)
 
@@ -114,7 +133,15 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     if (first.done) throw new Error('The desktop fixture exited before reporting its window')
     const { state: { window: windowId } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
     const { client, channel } = await connect()
-    const { appHandle } = AppResult.parse(await client.request('getApp', { selector: fixturePath! }, signal))
+    const selected = await client.request('getApp', { selector: fixturePath! }, signal)
+    const { appHandle } = AppResult.parse(selected)
+    const authorization = z.object({ authorization: z.object({
+      id: z.string(), name: z.string(), executablePath: z.string(), iconPath: z.string(),
+    }) })
+    const original = authorization.parse(selected).authorization
+    const sameFile = authorization.parse(await client.request('getApp', { selector: fixturePath!.toUpperCase() }, signal)).authorization
+    expect(sameFile.id).toBe(original.id)
+    expect(original.name).not.toBe(original.executablePath)
     const params = { appHandle, windowId, maxElements: 200, maxDepth: 20 }
     const read = async (showDiff: boolean) => StateResult.parse(await client.request('getState', { ...params, showDiff }, signal))
     // Interrupt after the helper produces its baseline, before the client consumes the reply.
@@ -134,4 +161,23 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     expect(await client.request('listActions', { appHandle, windowId, ...target }, signal)).toEqual(expect.any(Array))
     expect((await read(false)).tree).toContain('CUA notification sample')
     expect((await read(true)).tree).toContain('CUA test text')
+    const changed = once(reader, 'line')
+    fixture.stdin.write('identity-a\n')
+    await changed
+    await expect(read(false)).rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
+    const named = authorization.parse(await client.request('getApp', { selector: fixturePath! }, signal)).authorization
+    expect(named.id).not.toBe(original.id)
+    const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
+    const discovered = listed.find(app => app.id === `windows-app:${named.id}`)
+    if (discovered?.id === undefined) throw new Error('The selected application was not returned by discovery')
+    expect(authorization.parse(await client.request('getApp', { selector: discovered.id }, signal)).authorization.id).toBe(named.id)
+    const iconResult = z.record(z.string(), z.string()).parse(await client.request('applicationIcons', { paths: [named.iconPath] }, signal))
+    expect(iconResult[named.iconPath]).toMatch(/^data:image\/png;base64,/)
+    const legacy = z.object({ authorization: z.object({ supersedes: z.array(z.string()) }) })
+      .parse(await client.request('getApp', { selector: fixturePath! }, signal)).authorization.supersedes[0]
+    if (legacy === undefined) throw new Error('The helper did not identify the legacy application grant')
+    const metadata = z.array(z.object({ id: z.string(), name: z.string(), iconPath: z.string(), needsReview: z.boolean() }))
+      .parse(await client.request('applicationMetadata', { applications: [named, { id: legacy, name: fixturePath! }] }, signal))
+    expect(metadata[0]).toMatchObject({ id: named.id, needsReview: false })
+    expect(metadata[1]).toMatchObject({ id: legacy, name: named.name, iconPath: named.iconPath, needsReview: true })
   }, 60_000)

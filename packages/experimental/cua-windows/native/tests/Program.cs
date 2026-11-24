@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeepSeek.Cua.Protocol;
 using DeepSeek.Cua.Windows;
+using ApplicationIdentity = DeepSeek.Cua.Windows.ApplicationIdentity;
 using Json.Schema;
 
 var checks = 0;
@@ -20,18 +21,22 @@ void Refuses(Action action, string code)
 }
 
 var editorId = "Fixture.Editor!App";
-var editor = ApplicationAuthorization.Create(editorId, "Editor", null);
 var originalPath = Path.GetFullPath("Editor.exe");
 var movedPath = Path.GetFullPath(Path.Combine("moved", "Editor.exe"));
-var fileGrant = ApplicationAuthorization.Create(originalPath, "Editor", originalPath);
-Check(editor.Persistable && fileGrant.Persistable, "Both AUMID and executable selections offer profile consent");
-Check(editor.Id == "21862b004156dda19d73095999bd1e37dd539d0eb199555a45ac707b1f036010", "Existing Windows session decisions retain their key");
-Check(editor.Id == ApplicationAuthorization.Create(editorId, "Renamed editor", movedPath).Id,
-    "Display name and installation changes retain AUMID consent");
-Check(editor.Id != ApplicationAuthorization.Create("Fixture.editor!App", "Editor", null).Id,
-    "Different ordinal AUMIDs with the same display name require separate consent");
-Check(fileGrant.Id != editor.Id && fileGrant.Id != ApplicationAuthorization.Create(movedPath, "Editor", movedPath).Id,
-    "An executable grant applies only to the selected path");
+var editor = ApplicationIdentity.Package(editorId, originalPath);
+var desktop = ApplicationIdentity.Desktop(originalPath, editorId);
+var fileGrant = ApplicationAuthorization.Create(desktop, editorId, "Editor", originalPath);
+Check(fileGrant.Persistable, "Desktop application consent can be saved");
+Check(editor.Matches(ApplicationIdentity.Package(editorId, movedPath)), "Package updates preserve the application grant");
+Check(!editor.Matches(ApplicationIdentity.Package("Fixture.Editor!Other", originalPath)), "Sibling package apps require separate consent");
+Check(!editor.Matches(desktop), "A desktop window cannot impersonate an OS package AUMID");
+Check(!desktop.Matches(ApplicationIdentity.Desktop(movedPath, editorId)), "A different executable cannot inherit a declared AUMID grant");
+Check(!desktop.Matches(ApplicationIdentity.Desktop(originalPath, "Fixture.Other")), "Hosted applications sharing an executable remain separate");
+Check(!desktop.Matches(ApplicationIdentity.Desktop(originalPath, null)), "An unscoped executable grant cannot include an explicitly identified window");
+Check(fileGrant.Id == ApplicationAuthorization.Create(desktop, "search-alias", "Renamed editor", "new-icon").Id,
+    "Selectors and presentation metadata do not change authorization");
+Check(fileGrant.Supersedes.Contains(ApplicationIdentity.Digest("windows-aumid\0" + editorId))
+    && !fileGrant.Supersedes.Contains(fileGrant.Id), "Legacy AUMID decisions are retired separately from new permission decisions");
 Check(ApplicationAuthorization.AsAumid(originalPath) is null && ApplicationAuthorization.AsAumid(editorId) == editorId,
     "Window and process AUMIDs cannot claim executable-path grants");
 

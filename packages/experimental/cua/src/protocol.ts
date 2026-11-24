@@ -122,6 +122,9 @@ export const NativeResourceParameters = {
 export const NativeOnlyOperations = [
   operation('permissionStatus', {}),
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
+  operation('applicationMetadata', { applications: z.array(z.object({
+    id: z.string().regex(/^[a-f0-9]{64}$/), name: z.string(), executablePath: z.string().optional(), iconPath: z.string().optional(),
+  }).strict()) }),
   operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('getHeldInputs', {}), operation('releaseHeldInputs', {}),

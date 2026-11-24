@@ -31,5 +31,7 @@ export interface CuaApplicationState {
   allowedApps: readonly CuaApplicationGrant[]
   /** Refusals from any session, excluding saved grants; other sessions may still hold session access. */
   blockedApps: readonly CuaApplicationGrant[]
+  /** Obsolete saved identities that cannot authorize the current provider; absent when none require review. */
+  reviewApps?: readonly CuaApplicationGrant[] | undefined
   persistentAvailable: boolean
 }

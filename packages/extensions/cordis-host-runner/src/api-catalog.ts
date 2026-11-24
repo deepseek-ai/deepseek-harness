@@ -1007,10 +1007,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Completion after the shared runtime reload; already-persistent runtimes are left intact.',
       },
       {
-        signature: '@Remote applications(): Promise<CuaApplicationState>',
-        description: 'Read fresh stored application decisions without issuing a native request.',
+        signature: '@Remote async applications(): Promise<CuaApplicationState>',
+        description: 'Read saved decisions with provider metadata when supported, without requesting application access.',
         parameters: [],
-        returns: 'Saved grants, refused applications and durable-storage availability.',
+        returns: 'Current grants, refusals, obsolete identities requiring review, and durable-storage availability.',
       },
       {
         signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
@@ -1022,7 +1022,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
         description: 'Load presentation icons separately from application decisions.',
         parameters: [],
-        returns: 'Optional native PNG icons keyed by executable path; applications without paths are skipped.',
+        returns: 'Optional native PNG icons keyed by icon target or executable path; applications without either are skipped.',
       },
       {
         signature: '@Remote async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState>',
@@ -6944,7 +6944,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AskUserQuestionIntent',
-    declaration: 'export type AskUserQuestionIntent = {\n    kind: \'plan-review\';\n    approve: string;\n    callId?: ToolCallId;\n} | {\n    kind: \'approval\';\n    approve: string;\n    reject: string;\n    always?: string;\n    subject?: {\n        name: string;\n        icon?: string;\n    };\n    display?: {\n        question: {\n            en: string;\n            [locale: string]: string;\n        };\n        detail?: {\n            en: string;\n            [locale: string]: string;\n        };\n        approve?: {\n            en: string;\n            [locale: string]: string;\n        };\n    };\n};',
+    declaration: 'export type AskUserQuestionIntent = {\n    kind: \'plan-review\';\n    approve: string;\n    callId?: ToolCallId;\n} | {\n    kind: \'approval\';\n    approve: string;\n    reject: string;\n    always?: string;\n    subject?: {\n        name: string;\n        icon?: string;\n        detail?: string;\n    };\n    display?: {\n        question: {\n            en: string;\n            [locale: string]: string;\n        };\n        detail?: {\n            en: string;\n            [locale: string]: string;\n        };\n        approve?: {\n            en: string;\n            [locale: string]: string;\n        };\n    };\n};',
   },
   {
     name: 'AskUserQuestionItem',
@@ -7684,7 +7684,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaApplicationGrant',
-    declaration: 'export interface CuaApplicationGrant {\n    id: CuaApplicationId;\n    name: string;\n    executablePath?: string | undefined;\n}',
+    declaration: 'export interface CuaApplicationGrant {\n    id: CuaApplicationId;\n    name: string;\n    executablePath?: string | undefined;\n    iconPath?: string | undefined;\n}',
   },
   {
     name: 'CuaApplicationId',
@@ -7692,7 +7692,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaApplicationState',
-    declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
+    declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    reviewApps?: readonly CuaApplicationGrant[] | undefined;\n    persistentAvailable: boolean;\n}',
   },
   {
     name: 'CuaPermissionProcess',

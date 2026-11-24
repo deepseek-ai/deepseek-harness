@@ -200,6 +200,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
+  /** Resolve saved presentation and obsolete grants through applicationMetadata; omission retains stored labels. */
+  applicationMetadata?: boolean
   /** Opt in to connection-scoped getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
   heldInputState?: boolean
   /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */
@@ -242,6 +244,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const access = installCuaAccess(ctx, {
     native, createChannel: backend.createChannel,
     permissionParameters: backend.permissionParameters,
+    applicationMetadata: backend.applicationMetadata,
     store: new CuaPermissionStore(ctx, config.allowedApps.map(grant => ({ ...grant, id: grant.id as CuaApplicationId })), config.timeoutMs),
   })
   const clients = new Map<Agent, NativeClient>()

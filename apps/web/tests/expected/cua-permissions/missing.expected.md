@@ -16,4 +16,5 @@
   - list:
     - listitem:
       - strong: Fixture
+      - text: /fixture/app
       - button "Revoke"

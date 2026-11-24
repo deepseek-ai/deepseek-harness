@@ -12,6 +12,7 @@ import type { CuaApplicationGrant, CuaApplicationId } from './application-types.
 const identity = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId),
   name: z.string(), executablePath: z.string().min(1).optional(),
+  iconPath: z.string().min(1).optional(),
 })
 const sessionDecision = z.object({
   identity, decision: z.enum(['allow', 'deny', 'ask']), revision: z.number().int().nonnegative(),

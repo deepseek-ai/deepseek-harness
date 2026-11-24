@@ -1430,6 +1430,59 @@
         },
         "method": {
           "type": "string",
+          "const": "applicationMetadata"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "applications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "executablePath": {
+                    "type": "string"
+                  },
+                  "iconPath": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "applications"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
           "const": "requestPermission"
         },
         "params": {

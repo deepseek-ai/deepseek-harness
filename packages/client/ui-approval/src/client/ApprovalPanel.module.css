@@ -188,6 +188,9 @@
   object-fit: contain;
 }
 
+.subjectText { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.subjectText small { font-size: 12px; color: var(--dsw-alias-label-secondary); }
+
 .description {
   margin: 0;
   color: var(--dsw-alias-label-secondary);

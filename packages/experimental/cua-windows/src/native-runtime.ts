@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { closeSync, createReadStream, fstatSync, openSync, readSync } from 'node:fs'
 import { addAbortListener } from 'node:events'
-import { realpath } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { PassThrough, Writable, type Readable, type Duplex } from 'node:stream'
 import assert from 'node:assert/strict'
@@ -134,6 +134,13 @@ class WindowsHelper {
       this.logPath = join(dirname(helperPath), 'dsh-cua-windows.log')
       const digest = createHash('sha256')
       for await (const chunk of createReadStream(helperPath, { signal: this.startup.signal })) digest.update(chunk as Buffer)
+      // The apphost EXE can stay byte-identical when its managed application changes.
+      for (const name of ['dsh-cua-windows.dll', 'CuaProtocol.dll', 'dsh-cua-windows.deps.json', 'dsh-cua-windows.runtimeconfig.json']) {
+        let hash = '-'
+        try { hash = createHash('sha256').update(await readFile(join(dirname(helperPath), name), { signal: this.startup.signal })).digest('hex') }
+        catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error }
+        digest.update(`\0${name}\0${hash}`)
+      }
       const runtimeKey = digest.digest('hex')
       const instanceId = randomUUID().replaceAll('-', '')
       this.startup.signal.throwIfAborted()

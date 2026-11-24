@@ -10,13 +10,14 @@ namespace DeepSeek.Cua.Windows;
 internal sealed record RunningApplication(int Pid, long Started, string Path, string Name);
 
 internal sealed class AppState(string handle, string appId, string name, ApplicationAuthorization authorization,
-    bool isRunning) : IDisposable
+    bool isRunning, ApplicationIdentity identity) : IDisposable
 {
     internal string Handle { get; } = handle;
     internal string AppId { get; } = appId;
     internal string Name { get; } = name;
     internal bool IsRunning { get; } = isRunning;
     internal ApplicationAuthorization Authorization { get; } = authorization;
+    internal ApplicationIdentity Identity { get; } = identity;
     internal Dictionary<nint, WindowState> Windows { get; } = [];
     internal Dictionary<nint, Snapshot> Snapshots { get; } = [];
 
@@ -37,28 +38,14 @@ internal static class Applications
         var paths = parameters.GetProperty("paths");
         if (paths.ValueKind != JsonValueKind.Array)
             throw new NativeFailure("INVALID_ARGUMENT", "paths must be an array");
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var element in paths.EnumerateArray())
         {
             context.Check();
             if (element.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(element.GetString()))
                 throw new NativeFailure("INVALID_ARGUMENT", "paths must contain nonempty strings");
             var path = element.GetString()!;
-            try
-            {
-                using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (icon is null) continue;
-                using var original = icon.ToBitmap();
-                using var bitmap = new System.Drawing.Bitmap(original, new System.Drawing.Size(64, 64));
-                using var stream = new MemoryStream();
-                bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
-                result[path] = "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
-            }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
-                or System.ComponentModel.Win32Exception)
-            {
-                // Missing or unreadable executable metadata has no icon; application access is unchanged.
-            }
+            if (ApplicationIcons.Read(path) is { } icon) result[path] = icon;
         }
         return result;
     }
@@ -116,10 +103,39 @@ internal static class Applications
         }
     }
 
+    internal static string DisplayName(string path)
+    {
+        try
+        {
+            var description = FileVersionInfo.GetVersionInfo(path).FileDescription;
+            if (!string.IsNullOrWhiteSpace(description)) return description;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            // File metadata is optional; the canonical file name remains visible with its full path.
+        }
+        return Path.GetFileNameWithoutExtension(path);
+    }
+
     internal static string Digest(string path)
     {
         using var file = File.OpenRead(path);
-        return Convert.ToHexStringLower(SHA256.HashData(file));
+        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[65536];
+        int count;
+        while ((count = file.Read(buffer)) != 0) digest.AppendData(buffer, 0, count);
+        foreach (var name in new[] { "dsh-cua-windows.dll", "CuaProtocol.dll", "dsh-cua-windows.deps.json", "dsh-cua-windows.runtimeconfig.json" })
+        {
+            var hash = "-";
+            try
+            {
+                using var assembly = File.OpenRead(Path.Combine(Path.GetDirectoryName(path)!, name));
+                hash = Convert.ToHexStringLower(SHA256.HashData(assembly));
+            }
+            catch (FileNotFoundException) { /* Single-file helpers have no managed sidecars. */ }
+            digest.AppendData(Encoding.UTF8.GetBytes($"\0{name}\0{hash}"));
+        }
+        return Convert.ToHexStringLower(digest.GetHashAndReset());
     }
 
     internal static RunningApplication Running(int pid)

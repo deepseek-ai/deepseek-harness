@@ -22,7 +22,7 @@ Inspect and operate applications through retained objects: select an application
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
-Application consent supplies English, Chinese, and Japanese display text from `src/locales.ts`. It uses the fixed approval presentation of User Questions and remains independent of the session tool-approval policy. Native icons accompany the prompt and permission-page observations, but remain outside saved identities and model results. System checks, saved grants and refusals, and icons use separate queries so each result can appear without waiting for the others.
+Application consent supplies English, Chinese, and Japanese display text from `src/locales.ts`. It uses the fixed approval presentation of User Questions and remains independent of the session tool-approval policy. Native icons accompany the prompt and permission page; saved grants retain only icon lookup targets, never image data. Names and paths remain visible before approval. System checks, application decisions, and icons use separate queries. Providers opting into `applicationMetadata` refresh display metadata and identify obsolete grants for review without granting access.
 
 -----
 

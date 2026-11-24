@@ -158,16 +158,34 @@ it('keeps permission guidance open while a fresh observation is pending', () => 
   expect(screen.getByRole('dialog')).toBe(dialog)
 })
 
-it('shows application icons and names while keeping the executable path in the tooltip', () => {
+it('shows application icons, names, and the executable path before revocation', () => {
   const f = fixture()
   render(<PermissionPanel {...f.props} />)
   f.publish({ ...observe({ ...value, allowedApps: [{ id: 'a'.repeat(64) as CuaApplicationId,
     name: 'Calculator', executablePath: '/Applications/Calculator.app/Contents/MacOS/Calculator' }] }),
   icons: { value: { '/Applications/Calculator.app/Contents/MacOS/Calculator': 'data:image/png;base64,aWNvbg==' }, busy: false, error: null }, busy: false })
   expect(screen.getByText('Calculator')).toBeTruthy()
-  expect(screen.queryByText('/Applications/Calculator.app/Contents/MacOS/Calculator')).toBeNull()
+  expect(screen.getByText('/Applications/Calculator.app/Contents/MacOS/Calculator')).toBeTruthy()
   const identity = screen.getByTitle('/Applications/Calculator.app/Contents/MacOS/Calculator')
   expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+})
+
+it('uses a Shell icon for a packaged application without an executable path', () => {
+  const f = fixture(), iconPath = 'shell:AppsFolder\\Package!App'
+  render(<PermissionPanel {...f.props} />)
+  f.publish({ ...observe({ ...value, allowedApps: [{ id: 'b'.repeat(64) as CuaApplicationId, name: 'Notepad', iconPath }] }),
+    icons: { value: { [iconPath]: 'data:image/png;base64,aWNvbg==' }, busy: false, error: null } })
+  expect(screen.getByText('Notepad').closest('li')?.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+})
+
+it('separates obsolete saved permissions from applications that are allowed', () => {
+  const f = fixture()
+  render(<PermissionPanel {...f.props} />)
+  f.publish({ ...observe({ ...value, reviewApps: [{ id: 'c'.repeat(64) as CuaApplicationId, name: 'Legacy application' }] }) })
+  expect(screen.getByText(en.reviewApps)).toBeTruthy()
+  expect(screen.getByText(en.reviewHint)).toBeTruthy()
+  expect(screen.queryByText(en.allowedApps)).toBeNull()
+  expect(screen.queryByText(en.noApps)).toBeNull()
 })
 
 it.each([en, zh])('shows system permissions with the target application beside each system permission', (dictionary) => {

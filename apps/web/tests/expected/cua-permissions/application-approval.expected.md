@@ -1,6 +1,7 @@
 - text: Waiting for approval
 - group "Approval details":
   - strong: Fixture
+  - text: /fixture/app
   - text: Allow agent to control this application via computer use?
   - button "Risks"
   - paragraph: Manage app permissions for all sessions on the plugin page.

@@ -523,11 +523,13 @@ it.each(['allow', 'reject', 'always', 'keyboard'] as const)('settles a fixed app
   const actions = { allow: onAllow, reject: onReject, always: onAlways }
   render(<ApprovalCard {...{
     requestKey: 'app-approval', title: 'Control this app?', description: 'Only for this task.',
-    subject: { name: 'Calculator', ...choice === 'keyboard' ? {} : { icon: 'data:image/png;base64,aWNvbg==' } }, allowLabel: 'Allow for this task',
+    subject: { name: 'Calculator', detail: 'C:\\Applications\\Calculator.exe',
+      ...choice === 'keyboard' ? {} : { icon: 'data:image/png;base64,aWNvbg==' } }, allowLabel: 'Allow for this task',
     canAnswer: () => true, onAllow, onReject, onAlways, renderSlot: vi.fn(() => null),
     t: (key: string) => ({ reject: 'Reject', allowAlways: 'Always allow' })[key] ?? key,
   } as FactoryComponentPropsOf<'conversation.approval.card'>} />)
   expect(screen.getByText('Calculator')).toBeTruthy()
+  expect(screen.getByText('C:\\Applications\\Calculator.exe')).toBeTruthy()
   if (choice === 'keyboard') expect(document.querySelector('img')).toBeNull()
   else expect(document.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
   expect(screen.queryByRole('textbox')).toBeNull()

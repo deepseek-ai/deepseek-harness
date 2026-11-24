@@ -44,7 +44,12 @@ const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
 
-async function setup(choice = 'Allow for this session', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
+async function setup(choice = 'Allow for this session', options: {
+  writable?: boolean
+  questions?: boolean
+  initial?: readonly CuaApplicationGrant[]
+  applicationMetadata?: boolean
+} = {}) {
   native.instances.length = 0
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
@@ -56,6 +61,7 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
   const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
+    applicationMetadata: options.applicationMetadata,
     permissionParameters: (method, permission, locale) => ({ method, permission, locale }) })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
@@ -384,6 +390,30 @@ it('skips native icon work for an empty application list and propagates icon fai
   await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', accessibility: false })
+})
+
+it('loads a saved Shell icon without requiring an executable path', async () => {
+  const f = await setup('Always allow'), iconPath = 'shell:AppsFolder\\Package!App'
+  await f.save([{ id: identity.id, name: identity.name, iconPath }])
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  control.request.mockResolvedValueOnce({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [iconPath] }, expect.any(AbortSignal))
+})
+
+it('shows obsolete Windows permissions for review without copying them to a new identity', async () => {
+  const f = await setup('Always allow', { applicationMetadata: true })
+  await f.save([{ id: identity.id, name: 'C:\\App.exe', executablePath: 'C:\\App.exe' }])
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  control.request.mockResolvedValueOnce([{ id: identity.id, name: 'Application', executablePath: 'C:\\App.exe',
+    iconPath: 'shell:AppsFolder\\Application', needsReview: true }])
+  const current = await f.ctx.cuaAccess.applications()
+  expect(current.allowedApps).toEqual([])
+  expect(current.reviewApps).toEqual([expect.objectContaining({ id: identity.id, name: 'Application' })])
+  expect(f.grants()).toEqual([{ id: identity.id, name: 'C:\\App.exe', executablePath: 'C:\\App.exe' }])
+  expect(f.answer).not.toHaveBeenCalled()
 })
 
 it('keeps pathless grants manageable without requesting their icons', async () => {

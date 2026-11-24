@@ -93,10 +93,10 @@ Browser controls for provider-owned native permission and application decisions.
 @Remote async enablePersistentPtc(): Promise<void>
 
 /**
- * Read fresh stored application decisions without issuing a native request.
- * @returns Saved grants, refused applications and durable-storage availability.
+ * Read saved decisions with provider metadata when supported, without requesting application access.
+ * @returns Current grants, refusals, obsolete identities requiring review, and durable-storage availability.
  */
-@Remote applications(): Promise<CuaApplicationState>
+@Remote async applications(): Promise<CuaApplicationState>
 
 /**
  * Inspect system privileges independently of application decisions and icons.
@@ -106,7 +106,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Load presentation icons separately from application decisions.
- * @returns Optional native PNG icons keyed by executable path; applications without paths are skipped.
+ * @returns Optional native PNG icons keyed by icon target or executable path; applications without either are skipped.
  */
 @Remote async applicationIcons(): Promise<Record<string, string>>
 

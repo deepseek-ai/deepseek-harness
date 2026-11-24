@@ -204,6 +204,20 @@ it('starts a fresh helper after process loss and makes the old client unusable',
   expect(f.spawn).toHaveBeenCalledTimes(2)
 })
 
+it('changes the shared runtime identity when a managed DLL changes without replacing the EXE', async () => {
+  const f = await fixture(), signal = new AbortController().signal
+  await writeFile(join(f.directory, 'dsh-cua-windows.dll'), 'first implementation')
+  const first = f.client()
+  await first.request('first', {}, signal)
+  const key = (request: SubprocessSpawnSpec) => request.argv[request.argv.indexOf('--runtime-key') + 1]
+  const before = key(f.spawn.mock.calls[0]![0])
+  await first.dispose()
+  await f.generations[0]!.stop()
+  await writeFile(join(f.directory, 'dsh-cua-windows.dll'), 'second implementation')
+  await f.client().request('updated', {}, signal)
+  expect(key(f.spawn.mock.calls[1]![0])).not.toBe(before)
+})
+
 it.each(['wrong-runtime', 'wrong-instance', 'extra', 'malformed', 'oversized', 'invalid-utf8', 'exit'] as const)(
   'rejects %s startup before sending any desktop request', async (startup) => {
     const f = await fixture({ startup })

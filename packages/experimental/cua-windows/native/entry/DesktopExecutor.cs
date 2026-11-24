@@ -36,7 +36,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     private static nint? WindowId(JsonElement value) => value.TryGetProperty("windowId", out var id) ? ParseWindowId(id) : null;
     private static string[] Modifiers(JsonElement value) => value.TryGetProperty("modifiers", out var items) ? items.EnumerateArray().Select(item => item.GetString()!).ToArray() : [];
 
-    // Window-scoped operations revalidate the explicit target against the authorized exact AUMID.
+    // Window-scoped operations revalidate the target's process and authorized application identity.
     private static WindowState Selected(AppState app, JsonElement parameters, RequestContext context)
     {
         if (!parameters.TryGetProperty("windowId", out var raw))
@@ -77,6 +77,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             var parameters = request.Params;
             if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
             if (request.Method == "applicationIcons") return await sta.Invoke(_ => Applications.Icons(parameters, context), cancellation);
+            if (request.Method == "applicationMetadata") return await DesktopWindows.Metadata(parameters, context);
             if (request.Method == "getCapabilities")
             {
                 var locked = DesktopSession.Locked();
@@ -110,15 +111,18 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 return ActionResult(before, dispatched);
             }
             DesktopSession.RequireInteractive();
-            if (request.Method == "listApps") return DesktopWindows.ListApps(context);
+            if (request.Method == "listApps") return await DesktopWindows.ListApps(context);
             if (request.Method == "findApps")
                 return await DesktopWindows.FindApps(parameters.GetProperty("query").GetString(), parameters.GetProperty("maxAppMatches").GetInt32(), context);
             if (request.Method == "getApp")
             {
                 var selected = await DesktopWindows.Select(String(parameters, "selector"), context);
                 state.Apps[selected.Handle] = selected;
-                return new { appHandle = selected.Handle, name = selected.Name,
-                    running = selected.IsRunning, authorization = selected.Authorization };
+                var result = new Dictionary<string, object> { ["appHandle"] = selected.Handle, ["name"] = selected.Name,
+                    ["running"] = selected.IsRunning, ["authorization"] = selected.Authorization };
+                var icon = await sta.Invoke(_ => ApplicationIcons.Read(selected.Authorization.IconPath), cancellation);
+                if (icon is not null) result["applicationIcon"] = icon;
+                return result;
             }
             var app = state.App(String(parameters, "appHandle"));
             var foreground = Win32.GetForegroundWindow();
