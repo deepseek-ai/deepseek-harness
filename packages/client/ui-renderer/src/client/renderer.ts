@@ -49,6 +49,7 @@ function mountApp(container: HTMLElement, app: () => ReactNode): Root {
 
 /** Resources belonging to one mount, retained so stale cleanup cannot affect a later mount. */
 interface RendererMount {
+  readonly document: Document
   readonly styles: DocumentStyles
   root?: Root
   releasing?: boolean
@@ -61,10 +62,13 @@ export class UiRenderer implements UiRendererService {
 
   constructor(private readonly ctx: Context) {}
 
+  get mountDocument(): Document | undefined { return this.current?.document }
+
   mount(container: HTMLElement): () => void {
     if (this.disposed) throw new Error('renderer: cannot mount a disposed renderer')
     if (this.current !== undefined) throw new Error('renderer: application is already mounted')
     const mounted: RendererMount = {
+      document: container.ownerDocument,
       styles: new DocumentStyles(container.ownerDocument.head, this.ctx.modules),
     }
     this.current = mounted

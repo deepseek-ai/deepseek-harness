@@ -19,6 +19,8 @@ export type {
 
 /** Mount operation exposed to the framework-free boot kernel. */
 export interface UiRendererService {
+  /** Document containing the active application root; absent before mount and after unmount. */
+  readonly mountDocument?: Document | undefined
   /**
    * Mount the assembled application into the supplied element.
    * @param container - Application mount point.
