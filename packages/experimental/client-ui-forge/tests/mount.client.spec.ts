@@ -8,7 +8,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { makeTranslate, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import { IconFilesDiffOutlineRegular, type QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
@@ -223,10 +223,6 @@ async function base() {
     worktreeCleanup: vi.fn(async (_sessionId: SessionId, _revision: number | null): Promise<RemoteResult<WorktreeCleanup | null>> =>
       ({ ok: true, value: null })),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
-    // GitHub pull request URLs are served, and any page of one is read as its overview URL.
-    recognize: vi.fn(async (url: string, _signal: AbortSignal): Read<string | null> => ({
-      ok: true, value: /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/u.exec(url)?.[0] ?? null,
-    })),
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     merge: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
@@ -379,7 +375,6 @@ async function base() {
       'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
       'sidebar.session.row.hover': { kind: 'list', scope: 'root' },
       'plugins.row.config': { kind: 'keyed', scope: 'root' },
-      'contextMenu.icon': { kind: 'keyed', scope: 'root', inline: true },
       'main': { kind: 'keyed', scope: 'root' },
       'sidebar.panellist': { kind: 'list', scope: 'root' },
       'sidebar.panellist.trailing': { kind: 'list', scope: 'root' },
@@ -1593,83 +1588,6 @@ describe('archive notices', () => {
     } finally { await f.ctx.fiber.dispose() }
   })
 
-})
-
-describe('mountForgePanel URL context menu', () => {
-  const url = 'https://github.com/octo/demo/pull/7'
-  const signal = new AbortController().signal
-
-  /** What the panel registers with the context menu service. */
-  interface UrlMenu {
-    readonly id: string
-    readonly target: string
-    readonly order: number
-    readonly resolve: (target: { sessionId: SessionId; url: string }, signal: AbortSignal) => Promise<readonly {
-      readonly id: string
-      readonly label: string
-      readonly icon?: { readonly key: string }
-      readonly failureLabel?: string
-      readonly run: () => Promise<void>
-    }[]>
-  }
-
-  /** Provide the context menu service and wait for the panel's URL contribution. */
-  async function urlMenu(f: Awaited<ReturnType<typeof fixture>>): Promise<{ menu: UrlMenu; withdraw: ReturnType<typeof vi.fn> }> {
-    const registered: UrlMenu[] = []
-    const withdraw = vi.fn()
-    f.ctx.provide('contextMenus', { register: (contribution: UrlMenu) => { registered.push(contribution); return withdraw } } as never)
-    await vi.waitFor(() => { expect(registered).toHaveLength(1) })
-    const [menu] = registered
-    assert(menu !== undefined)
-    return { menu, withdraw }
-  }
-
-  it('offers Open in code review for a URL a provider serves, binds the change request, and opens its changes view', async () => {
-    const f = await fixture()
-    const { menu } = await urlMenu(f)
-    expect(menu).toMatchObject({ id: 'forge-panel.url', target: 'url', order: 50 })
-    expect(f.entry('contextMenu.icon', IconFilesDiffOutlineRegular)?.options).toMatchObject({ key: 'forge-panel.review' })
-    const [item, ...rest] = await menu.resolve({ sessionId: S1, url: `${url}/files` }, signal)
-    assert(item !== undefined)
-    expect(rest).toEqual([])
-    expect(f.forgePanel.recognize).toHaveBeenLastCalledWith(`${url}/files`, signal)
-    expect(item).toMatchObject({ id: 'review', icon: { key: 'forge-panel.review' } })
-    expect([en['menu.openInReview'], zh['menu.openInReview']]).toContain(item.label)
-    expect([en['menu.openInReviewFailed'], zh['menu.openInReviewFailed']]).toContain(item.failureLabel)
-    await item.run()
-    expect(f.forgePanel.track).toHaveBeenLastCalledWith(S1, url)
-    expect(f.sidebarRight.openResourceIn).toHaveBeenLastCalledWith(S1, changesAddress({ sessionId: S1, source: { kind: 'change', url } }))
-    await f.dispose()
-  })
-
-  it('adds no entry for a URL no provider serves or when the lookup fails', async () => {
-    const f = await fixture()
-    const { menu } = await urlMenu(f)
-    expect(await menu.resolve({ sessionId: S1, url: 'https://example.com/a' }, signal)).toEqual([])
-    f.forgePanel.recognize.mockResolvedValueOnce({ ok: false, error: new RemoteError('forgePanel/session-busy', 'busy', {}) })
-    expect(await menu.resolve({ sessionId: S1, url }, signal)).toEqual([])
-    await f.dispose()
-  })
-
-  it('rejects when the Host refuses the binding and leaves the sidebar as it is', async () => {
-    const f = await fixture()
-    const { menu } = await urlMenu(f)
-    const [item] = await menu.resolve({ sessionId: S1, url }, signal)
-    assert(item !== undefined)
-    f.forgePanel.track.mockResolvedValueOnce({ ok: false, error: new RemoteError('forgePanel/unrecognized-url', 'No provider', {}) })
-    await expect(item.run()).rejects.toThrow('No provider')
-    expect(f.sidebarRight.openResourceIn).not.toHaveBeenCalled()
-    await f.dispose()
-  })
-
-  it('withdraws the URL menu entry and its icon with the panel', async () => {
-    const f = await fixture()
-    const { withdraw } = await urlMenu(f)
-    expect(withdraw).not.toHaveBeenCalled()
-    await f.dispose()
-    expect(withdraw).toHaveBeenCalledOnce()
-    expect(f.entry('contextMenu.icon', IconFilesDiffOutlineRegular)).toBeUndefined()
-  })
 })
 
 describe('mountForgePanel review page', () => {

@@ -109,11 +109,6 @@
   margin-inline-start: 0;
 }
 
-/* A change request reference reads its number at link weight and its repository at text weight. */
-.changeRequestRepository {
-  font-weight: 400;
-}
-
 .markdown :where(ul, ol) {
   margin: 16px 0;
   padding-left: 18px;
