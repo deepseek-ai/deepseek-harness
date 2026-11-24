@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "DingTalk プラグイン",
+    "title": "DingTalk",
     "description": "会話の中で DingTalk のカレンダー、ToDo、ドキュメント、AI テーブル、グループチャット、連絡先を使用します。",
     "detail": "docs/DETAIL.md"
   }
