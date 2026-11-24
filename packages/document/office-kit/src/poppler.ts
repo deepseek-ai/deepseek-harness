@@ -7,7 +7,7 @@
 import { dirname } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 import type { Context } from '@deepseek-ai/cordis'
-import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
+import { SubprocessExecutableNotFoundError, type SubprocessOutcome, type SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import { OfficeKitError } from './errors.ts'
 import type { OfficeOperation, OfficeOperationOutput } from './queue.ts'
 import type { OfficeImage } from './types.ts'
@@ -41,12 +41,14 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 
 /**
  * Locate Poppler where the subprocess provider runs processes: the provider must exist and resolve both executables.
+ * Only a completed lookup that found no executable makes Poppler unavailable; every other lookup failure, such as an
+ * unreachable provider, keeps its own error so the caller can report the real cause.
  * @param ctx - provider context holding the optional `subprocess` service.
  * @param executables - configured executable names or absolute paths.
  * @param signal - cancellation of executable lookup.
  * @returns the resolved executables and their subprocess provider.
- * @throws {OfficeKitError} `unavailable` when the provider is absent or an executable is not found; cancellation
- * rejects with its reason.
+ * @throws {OfficeKitError} `unavailable` when the provider is absent or an executable is not found; other lookup
+ * failures pass through unchanged, and cancellation rejects with its reason.
  */
 export async function locatePoppler(ctx: Context, executables: PopplerExecutables, signal?: AbortSignal): Promise<PopplerTools> {
   const subprocess = ctx.get('subprocess')
@@ -59,7 +61,8 @@ export async function locatePoppler(ctx: Context, executables: PopplerExecutable
     return { subprocess, pdftoppm, pdfinfo }
   } catch (cause) {
     signal?.throwIfAborted()
-    throw new OfficeKitError('unavailable', 'Poppler pdftoppm or pdfinfo was not found; install Poppler or configure poppler executable paths.', { cause })
+    if (!(cause instanceof SubprocessExecutableNotFoundError)) throw cause
+    throw new OfficeKitError('unavailable', `Poppler was not found: ${cause.message} Install Poppler or configure poppler executable paths.`, { cause })
   }
 }
 

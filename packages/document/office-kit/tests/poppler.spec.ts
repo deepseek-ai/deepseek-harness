@@ -8,8 +8,8 @@ import type { Converter, RenderImagesRequest } from '@deepseek-ai/libreoffice-ki
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import {
-  SubprocessRuntime, type SubprocessCollectedOutputs, type SubprocessHandle, type SubprocessOutcome,
-  type SubprocessSpawnSpec,
+  SubprocessError, SubprocessExecutableNotFoundError, SubprocessRuntime, type SubprocessCollectedOutputs,
+  type SubprocessHandle, type SubprocessOutcome, type SubprocessSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
 import OfficeKit, { Config, type OfficeImagesRequest, type OfficeKitSource, type OfficeSourceKey } from '../src/index.ts'
 import { resolveKitModule } from '../src/locate.ts'
@@ -120,6 +120,8 @@ class FakeHandle implements SubprocessHandle {
 class FakeSubprocess extends SubprocessRuntime {
   static pages: Page[] = []
   static missing = new Set<string>()
+  /** Executable lookup failures other than a missing executable. */
+  static lookupFailure: Error | undefined
   static script: ((spec: SubprocessSpawnSpec, input: Promise<Buffer>) => Promise<Run | undefined>) | undefined
   static stdinMode: (spec: SubprocessSpawnSpec) => StdinMode = () => 'read'
   /** Piped stdout is delivered in reads of this many bytes. */
@@ -131,7 +133,8 @@ class FakeSubprocess extends SubprocessRuntime {
   override spawnTerminal(): Promise<never> { throw new Error('Poppler never spawns terminals') }
 
   override async resolveExecutable(command: string): Promise<string> {
-    if (FakeSubprocess.missing.has(command)) throw new Error(`${command} not found`)
+    if (FakeSubprocess.lookupFailure !== undefined) throw FakeSubprocess.lookupFailure
+    if (FakeSubprocess.missing.has(command)) throw new SubprocessExecutableNotFoundError(`${command} was not found`)
     return `/poppler/${command}`
   }
 
@@ -191,6 +194,7 @@ beforeEach(() => {
   ctx = new Context()
   FakeSubprocess.pages = [{ width: 72, height: 144 }, { width: 72, height: 144 }, { width: 72, height: 144 }]
   FakeSubprocess.missing = new Set()
+  FakeSubprocess.lookupFailure = undefined
   FakeSubprocess.script = undefined
   FakeSubprocess.stdinMode = () => 'read'
   FakeSubprocess.readBytes = Number.POSITIVE_INFINITY
@@ -569,5 +573,30 @@ describe('renderer configuration', () => {
     expect(resolve.mock.calls.map(([command]) => command)).toContain('pdfinfo-custom')
     expect(Config({})).toMatchObject({ renderers: { office: ['libreoffice'], pdf: ['poppler', 'libreoffice'] },
       poppler: { pdftoppm: 'pdftoppm', pdfinfo: 'pdfinfo' } })
+  })
+
+  it('reports a lookup that found no executable as unavailable and names it', async () => {
+    const provider = await mount()
+    FakeSubprocess.missing = new Set(['pdfinfo'])
+    await expect(provider.renderImages(pdfRequest({ renderer: 'poppler' }))).rejects.toMatchObject({
+      code: 'unavailable', message: expect.stringContaining('pdfinfo was not found') as string,
+    })
+  })
+
+  it('passes a lookup failure other than a missing executable through, so the real cause survives', async () => {
+    const provider = await mount()
+    const failure = new SubprocessError('the provider channel closed', 'SUBPROCESS_RUNNER_IPC_FAILED')
+    FakeSubprocess.lookupFailure = failure
+    await expect(provider.renderImages(pdfRequest({ renderer: 'poppler' }))).rejects.toBe(failure)
+  })
+
+  it('rejects with the cancellation reason instead of reporting a lookup failure', async () => {
+    const provider = await mount()
+    FakeSubprocess.lookupFailure = new SubprocessExecutableNotFoundError('pdftoppm was not found')
+    const controller = new AbortController()
+    const reason = new Error('stop')
+    const rendering = provider.renderImages(pdfRequest({ renderer: 'poppler' }), controller.signal)
+    controller.abort(reason)
+    await expect(rendering).rejects.toBe(reason)
   })
 })
