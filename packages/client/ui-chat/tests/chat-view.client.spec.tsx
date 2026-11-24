@@ -1357,6 +1357,67 @@ describe('ChatView', () => {
     expect(translate.mock.calls.filter(([key]) => key.startsWith('message.stepProcess.'))).toHaveLength(0)
   })
 
+  it.each([
+    { counts: [], title: '正在分析请求' },
+    { counts: [{ kind: 'context', count: 2 }], title: '正在分析请求' },
+    { counts: [{ kind: 'read', count: 3 }, { kind: 'search', count: 1 }], title: '已读取文件并搜索代码，正在思考下一步' },
+    {
+      counts: [{ kind: 'read', count: 3 }, { kind: 'search', count: 2 }, { kind: 'write', count: 1 }, { kind: 'commands', count: 1 }],
+      title: '已读取文件，已搜索代码，已写入文件等，正在思考下一步',
+    },
+  ] as const)('titles a running group without a live tool from its completed work: $title', ({ counts, title }) => {
+    const snapshot = chatSnapshotFixture({ nodes: [user(1, 'inside')] })
+    const h = makeHarness({}, {}, snapshot)
+    const key = 'thinking-process' as GroupKey
+    const groups = new ConversationGroupStore<ProcessGroupData>()
+    groups.prepareAndInstall({
+      entries: [{ kind: 'group', key }],
+      groups: { kind: 'replace', snapshots: [{
+        key, members: [{ kind: 'node', key: snapshot.order[0] as NodeKey }],
+        data: { turn: 1, closed: false, summary: { counts, running: undefined, runningDetail: 'weighing results' } },
+      }] },
+    }, key => snapshot.nodes.get(key))
+    h.setGrouped(groups)
+    h.setTranscriptView('compact')
+    const view = render(<h.ChatView {...h.props} />)
+    const header = view.container.querySelector<HTMLButtonElement>('[data-process-activity]')!
+    expect(header.getAttribute('data-process-activity')).toBe('thinking')
+    expect(header.textContent).toBe(title)
+    act(() => { h.setTranscriptView('standard') })
+    expect(header.textContent).toBe(`${title}${h.props.t('message.turnProcess.separator')}weighing results`)
+  })
+
+  it('holds the completed-work thinking title for its minimum time when a tool starts', () => {
+    vi.useFakeTimers()
+    try {
+      const snapshot = chatSnapshotFixture({ nodes: [user(1, 'inside')] })
+      const h = makeHarness({}, {}, snapshot)
+      const key = 'thinking-then-tool' as GroupKey
+      const groups = new ConversationGroupStore<ProcessGroupData>()
+      const install = (summary: ProcessGroupData['summary']): void => {
+        groups.prepareAndInstall({
+          entries: [{ kind: 'group', key }],
+          groups: { kind: 'replace', snapshots: [{
+            key, members: [{ kind: 'node', key: snapshot.order[0] as NodeKey }], data: { turn: 1, closed: false, summary },
+          }] },
+        }, key => snapshot.nodes.get(key))
+        groups.publish()
+      }
+      install({ counts: [{ kind: 'read', count: 1 }], running: undefined, runningDetail: '' })
+      h.setGrouped(groups)
+      h.setTranscriptView('compact')
+      const view = render(<h.ChatView {...h.props} />)
+      const header = view.container.querySelector<HTMLButtonElement>('[data-process-activity]')!
+      expect(header.textContent).toBe('已读取文件，正在思考下一步')
+      act(() => { install({ counts: [{ kind: 'read', count: 1 }, { kind: 'commands', count: 1 }], running: 'commands', runningDetail: 'pwd' }) })
+      expect(header.textContent).toBe('已读取文件，正在思考下一步')
+      act(() => { vi.advanceTimersByTime(150) })
+      expect(header.textContent).toBe('正在运行命令')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('passes independently keyed group parts to business Node renderers', () => {
     const snapshot = chatSnapshotFixture({ nodes: [assistant(1, 'answer')] })
     const h = makeHarness({}, {}, snapshot)
