@@ -17,14 +17,14 @@ allowedApps: [], blockedApps: [], persistentAvailable: true }
 function observe(value: CuaApplicationState & { system: CuaSystemPermissionState }) {
   return { system: { value: value.system, busy: false, error: null },
     applications: { value, busy: false, error: null },
-    presentation: { value: { applications: [], icons: {} }, busy: false, error: null }, busy: false }
+    icons: { value: {}, busy: false, error: null }, busy: false }
 }
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
     windowsProvider: { value: null, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
-    presentation: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
+    icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
   })
   const refresh = vi.fn()
   const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
@@ -165,7 +165,7 @@ it.each(['/Applications/Calculator.app/Contents/MacOS/Calculator', 'C:\\Applicat
     render(<PermissionPanel {...f.props} />)
     f.publish({ ...observe({ ...value, allowedApps: [{ id: 'a'.repeat(64) as CuaApplicationId,
       name: 'Calculator', executablePath }] }),
-    presentation: { value: { applications: [], icons: { [executablePath]: 'data:image/png;base64,aWNvbg==' } }, busy: false, error: null }, busy: false })
+    icons: { value: { [executablePath]: 'data:image/png;base64,aWNvbg==' }, busy: false, error: null }, busy: false })
     expect(screen.getByText('Calculator')).toBeTruthy()
     expect(screen.queryByText(executablePath)).toBeNull()
     const identity = screen.getByTitle(executablePath)
@@ -176,7 +176,7 @@ it('uses a Shell icon for a packaged application without an executable path', ()
   const f = fixture(), iconPath = 'shell:AppsFolder\\Package!App'
   render(<PermissionPanel {...f.props} />)
   f.publish({ ...observe({ ...value, allowedApps: [{ id: 'b'.repeat(64) as CuaApplicationId, name: 'Notepad', iconPath }] }),
-    presentation: { value: { applications: [], icons: { [iconPath]: 'data:image/png;base64,aWNvbg==' } }, busy: false, error: null } })
+    icons: { value: { [iconPath]: 'data:image/png;base64,aWNvbg==' }, busy: false, error: null } })
   expect(screen.getByText('Notepad').closest('li')?.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
 })
 
@@ -290,7 +290,7 @@ it('fills application names, system permissions, and icons as their observations
   expect(within(requirements).getByRole('button', { name: en.request }).hasAttribute('disabled')).toBe(false)
   expect(within(access).getByTitle(app.executablePath)).toBe(identity)
   expect(identity.querySelector('[aria-hidden]')).toBe(placeholder)
-  f.publish({ presentation: { value: { applications: [], icons: { [app.executablePath]: 'data:image/png;base64,aWNvbg==' } }, busy: false, error: null } })
+  f.publish({ icons: { value: { [app.executablePath]: 'data:image/png;base64,aWNvbg==' }, busy: false, error: null } })
   expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
   expect(identity.querySelector('[aria-hidden]')).toBeNull()
   expect(screen.getByRole('region', { name: en.title })).toBe(requirements)
@@ -310,25 +310,26 @@ it('shows and revokes an application whose executable path is unavailable', () =
   expect(f.props.revoke).toHaveBeenCalledWith(app.id)
 })
 
-it('enriches only current decisions and keeps newly granted apps visible while presentation loads', () => {
+it('keeps new grants visible and revoked apps absent while icons load', () => {
   const f = fixture()
-  const old = { id: 'a'.repeat(64) as CuaApplicationId, name: 'Revoked application' }
-  const app = { id: 'b'.repeat(64) as CuaApplicationId, name: 'New application' }
+  const old = { id: 'a'.repeat(64) as CuaApplicationId, name: 'Revoked application', executablePath: '/old/app' }
+  const app = { id: 'b'.repeat(64) as CuaApplicationId, name: 'New application', iconPath: 'shell:AppsFolder\\Package!App' }
   f.publish({ ...observe({ ...value, allowedApps: [old] }) })
   render(<PermissionPanel {...f.props} />)
   f.publish({ applications: { value: { ...value, allowedApps: [app] }, busy: false, error: null },
-    presentation: { value: { applications: [old], icons: {} }, busy: true, error: null } })
+    icons: { value: {}, busy: true, error: null } })
   expect(screen.queryByText(old.name)).toBeNull()
   expect(screen.getByText(app.name)).toBeTruthy()
   expect(screen.getByRole('button', { name: en.revoke }).hasAttribute('disabled')).toBe(false)
-  f.publish({ presentation: { value: { applications: [old, { ...app, name: 'Localized application' }], icons: {} }, busy: false, error: null } })
+  f.publish({ icons: { value: { [old.executablePath]: 'data:image/png;base64,b2xk' }, busy: false, error: null } })
   expect(screen.queryByText(old.name)).toBeNull()
-  expect(screen.getByText('Localized application')).toBeTruthy()
+  expect(screen.getByText(app.name)).toBeTruthy()
+  expect(screen.getByText(app.name).parentElement?.querySelector('img')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: en.revoke }))
   expect(f.props.revoke).toHaveBeenCalledWith(app.id)
 })
 
-it.each(['applications', 'presentation'] as const)('contains a failed %s query in the application section', (key) => {
+it.each(['applications', 'icons'] as const)('contains a failed %s query in the application section', (key) => {
   const f = fixture()
   f.publish({ ...observe(value), [key]: { value: null, busy: false, error: 'offline' } })
   const view = render(<PermissionPanel {...f.props} />)
@@ -350,7 +351,7 @@ it('finishes activation guidance without waiting for application icons', () => {
   f.publish({ system: { value: { ...value.system, accessibility: true }, busy: false, error: null } })
   expect(onDismiss).toHaveBeenCalledOnce()
   expect(screen.queryByRole('dialog')).toBeNull()
-  expect(f.state.getSnapshot().presentation.busy).toBe(true)
+  expect(f.state.getSnapshot().icons.busy).toBe(true)
 })
 
 it('retains uncertainty and the diagnostic until a refresh succeeds', () => {

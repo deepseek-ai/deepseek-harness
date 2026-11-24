@@ -37,7 +37,7 @@ export const en = {
   retryAllowed: 'The next application selection will ask again; access has not been granted',
   noApps: 'No always-allowed or blocked applications.',
   revoke: 'Revoke', revoked: 'Application access revoked', requested: 'Follow the guide at the bottom of System Settings', opened: 'System Settings opened',
-  applicationsFailed: 'Could not load application access: {message}', presentationFailed: 'Could not load application details and icons: {message}',
+  applicationsFailed: 'Could not load application access: {message}', iconsFailed: 'Could not load application icons: {message}',
   failed: 'Could not update permissions: {message}', queryFailed: 'Could not check permissions: {message}',
 }
 /** Keys shared by all supported locale dictionaries. */
@@ -77,7 +77,7 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
   retryAllowed: '下次选择此应用时将重新询问，当前尚未授权',
   noApps: '暂无始终允许或不允许访问的应用。',
   revoke: '撤销', revoked: '已撤销应用访问权限', requested: '请按系统设置底部的引导完成授权', opened: '已打开系统设置',
-  applicationsFailed: '无法读取应用授权：{message}', presentationFailed: '无法读取应用信息和图标：{message}',
+  applicationsFailed: '无法读取应用授权：{message}', iconsFailed: '无法读取应用图标：{message}',
   failed: '无法更新权限：{message}', queryFailed: '无法检测权限：{message}',
 }
 
@@ -134,7 +134,7 @@ export const ja = {
   'requested': 'システム設定の下部にあるガイドに従ってください。',
   'opened': 'システム設定を開きました',
   'applicationsFailed': 'アプリケーションのアクセスを読み込めませんでした: {message}',
-  'presentationFailed': 'アプリケーションの情報とアイコンを読み込めませんでした: {message}',
+  'iconsFailed': 'アプリケーションのアイコンを読み込めませんでした: {message}',
   'failed': '権限を更新できませんでした: {message}',
   'queryFailed': '権限を確認できませんでした: {message}',
 } satisfies Record<keyof typeof en, string>
@@ -181,7 +181,7 @@ export const es = {
   retryAllowed: 'La siguiente selección de aplicación le preguntará nuevamente; el acceso no ha sido concedido',
   noApps: 'No hay aplicaciones siempre permitidas o bloqueadas.',
   revoke: 'Revocar', revoked: 'Acceso a la aplicación revocado', requested: 'Siga la guía en la parte inferior de Configuración del sistema', opened: 'Configuración del sistema abierta',
-  applicationsFailed: 'No se pudo cargar el acceso a la aplicación: {message}', presentationFailed: 'No se pudieron cargar los detalles e íconos de la aplicación: {message}',
+  applicationsFailed: 'No se pudo cargar el acceso a la aplicación: {message}', iconsFailed: 'No se pudieron cargar los íconos de la aplicación: {message}',
   failed: 'No se pudieron actualizar los permisos: {message}', queryFailed: 'No se pudieron verificar los permisos: {message}',
 } satisfies Record<keyof typeof en, string>
 
@@ -227,7 +227,7 @@ export const fr = {
   retryAllowed: "La prochaine sélection de candidatures demandera à nouveau ; l'accès n'a pas été accordé",
   noApps: 'Aucune application toujours autorisée ou bloquée.',
   revoke: 'Révoquer', revoked: "Accès à l'application révoqué", requested: 'Suivez le guide en bas des réglages système.', opened: 'Paramètres système ouverts',
-  applicationsFailed: "Impossible de charger l'accès à l'application : {message}", presentationFailed: "Impossible de charger les informations et les icônes d'application : {message}",
+  applicationsFailed: "Impossible de charger l'accès à l'application : {message}", iconsFailed: "Impossible de charger les icônes d'application : {message}",
   failed: 'Impossible de mettre à jour les autorisations : {message}', queryFailed: 'Impossible de vérifier les autorisations : {message}',
 } satisfies Record<keyof typeof en, string>
 
@@ -273,7 +273,7 @@ export const de = {
   retryAllowed: 'Bei der nächsten Anwendungsauswahl werden Sie erneut gefragt; Der Zugriff wurde nicht gewährt',
   noApps: 'Keine immer erlaubten oder blockierten Anwendungen.',
   revoke: 'Widerrufen', revoked: 'Anwendungszugriff widerrufen', requested: 'Folgen Sie der Anleitung unten in den Systemeinstellungen', opened: 'Systemeinstellungen geöffnet',
-  applicationsFailed: 'Anwendungszugriff konnte nicht geladen werden: {message}', presentationFailed: 'Anwendungsinformationen und Symbole konnten nicht geladen werden: {message}',
+  applicationsFailed: 'Anwendungszugriff konnte nicht geladen werden: {message}', iconsFailed: 'Anwendungssymbole konnten nicht geladen werden: {message}',
   failed: 'Berechtigungen konnten nicht aktualisiert werden: {message}', queryFailed: 'Berechtigungen konnten nicht überprüft werden: {message}',
 } satisfies Record<keyof typeof en, string>
 
@@ -319,7 +319,7 @@ export const ru = {
   retryAllowed: 'При следующем выборе приложения запрос будет повторен; доступ не предоставлен',
   noApps: 'Никаких всегда разрешенных или заблокированных приложений.',
   revoke: 'Отозвать', revoked: 'Доступ к приложению отозван', requested: 'Следуйте инструкциям внизу окна «Системные настройки».', opened: 'Системные настройки открыты',
-  applicationsFailed: 'Не удалось загрузить доступ к приложению: {message}.', presentationFailed: 'Не удалось загрузить сведения и значки приложений: {message}.',
+  applicationsFailed: 'Не удалось загрузить доступ к приложению: {message}.', iconsFailed: 'Не удалось загрузить значки приложений: {message}.',
   failed: 'Не удалось обновить разрешения: {message}.', queryFailed: 'Не удалось проверить разрешения: {message}',
 } satisfies Record<keyof typeof en, string>
 
@@ -365,6 +365,6 @@ export const pt = {
   retryAllowed: 'A próxima seleção de aplicativos perguntará novamente; o acesso não foi concedido',
   noApps: 'Nenhum aplicativo sempre permitido ou bloqueado.',
   revoke: 'Revogar', revoked: 'Acesso ao aplicativo revogado', requested: 'Siga o guia na parte inferior das Configurações do sistema', opened: 'Configurações do sistema abertas',
-  applicationsFailed: 'Não foi possível carregar o acesso ao aplicativo: {message}', presentationFailed: 'Não foi possível carregar os detalhes e ícones do aplicativo: {message}',
+  applicationsFailed: 'Não foi possível carregar o acesso ao aplicativo: {message}', iconsFailed: 'Não foi possível carregar os ícones do aplicativo: {message}',
   failed: 'Não foi possível atualizar as permissões: {message}', queryFailed: 'Não foi possível verificar as permissões: {message}',
 } satisfies Record<keyof typeof en, string>

@@ -77,7 +77,6 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             var parameters = request.Params;
             if (request.Method == "permissionStatus") return DesktopSession.Status(WindowCapture.IsSupported);
             if (request.Method == "applicationIcons") return await sta.Invoke(_ => Applications.Icons(parameters, context), cancellation);
-            if (request.Method == "applicationMetadata") return await DesktopWindows.Metadata(parameters, context);
             if (request.Method == "getCapabilities")
             {
                 var locked = DesktopSession.Locked();

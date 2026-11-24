@@ -4,17 +4,17 @@ import type {} from '@deepseek-ai/dsh-config-editor'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import { resolvePersistentExecution } from '@deepseek-ai/dsh-ptc-runtime-node/configuration'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import { ApplicationAccess, ApplicationAuthorizationResult, type AccessOptions } from './application-access.ts'
+import { ApplicationAccess, type AccessOptions } from './application-access.ts'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { ApplicationIcon } from './protocol.ts'
 import { NativeClient, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
-import type { CuaApplicationId, CuaApplicationState, CuaApplicationMetadata, CuaApplicationPresentation, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaApplicationReview, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
 export { ApplicationAuthorizationResult } from './application-access.ts'
 export type * from './access-types.ts'
 
 interface ControlOptions extends AccessOptions {
-  applicationMetadata?: CuaApplicationMetadata | undefined
+  applicationReview?: CuaApplicationReview | undefined
   native: NativeClientConfig
   createChannel: NativeChannelFactory
   permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
@@ -45,11 +45,11 @@ export class CuaAccess extends TypertRemoteService {
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
    * @param permissionParameters Provider-owned native parameters for the selected action and Client language.
-   * @param applicationMetadata Provider classification of obsolete identities and support for native display lookup.
+   * @param applicationReview Provider classification of obsolete identities requiring renewed consent.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
     private readonly control: Control, private readonly permissionParameters: ControlOptions['permissionParameters'],
-    private readonly applicationMetadata?: CuaApplicationMetadata) {
+    private readonly applicationReview?: CuaApplicationReview) {
     super(ctx, 'cuaAccess')
   }
 
@@ -84,12 +84,12 @@ export class CuaAccess extends TypertRemoteService {
   @Remote
   async applications(): Promise<CuaApplicationState> {
     const stored = await this.policy.status()
-    const metadata = this.applicationMetadata
-    if (!metadata) return stored
+    const review = this.applicationReview
+    if (!review) return stored
     return { ...stored,
-      allowedApps: stored.allowedApps.filter(app => !metadata.needsReview(app)),
-      blockedApps: stored.blockedApps.filter(app => !metadata.needsReview(app)),
-      reviewApps: stored.allowedApps.filter(app => metadata.needsReview(app)),
+      allowedApps: stored.allowedApps.filter(app => !review.needsReview(app)),
+      blockedApps: stored.blockedApps.filter(app => !review.needsReview(app)),
+      reviewApps: stored.allowedApps.filter(app => review.needsReview(app)),
     }
   }
 
@@ -103,26 +103,15 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Load native labels and icons separately from application decisions; presentation never establishes consent.
-   * @returns Display metadata keyed by application identity and PNG icons keyed by native lookup target.
+   * Load presentation icons separately from application decisions.
+   * @returns Optional native PNG icons keyed by saved icon target or executable path; applications without either are skipped.
    */
   @Remote
-  async applicationPresentation(): Promise<CuaApplicationPresentation> {
-    const state = await this.applications()
-    let applications = [...state.allowedApps, ...state.blockedApps, ...state.reviewApps ?? []]
-    if (this.applicationMetadata && applications.length) {
-      applications = z.array(ApplicationAuthorizationResult.pick({ id: true, name: true, executablePath: true, iconPath: true }))
-        .parse(await this.control('applicationMetadata', {
-          applications: applications.map(app => ({ id: app.id, name: app.name,
-            ...(app.executablePath === undefined ? {} : { executablePath: app.executablePath }),
-            ...(app.iconPath === undefined ? {} : { iconPath: app.iconPath }),
-          })),
-        }))
-    }
-    const paths = [...new Set(applications
+  async applicationIcons(): Promise<Record<string, string>> {
+    const state = await this.policy.status()
+    const paths = [...new Set([...state.allowedApps, ...state.blockedApps]
       .flatMap(app => app.iconPath !== undefined ? [app.iconPath] : app.executablePath === undefined ? [] : [app.executablePath]))]
-    const icons = paths.length === 0 ? {} : z.record(z.string(), ApplicationIcon).parse(await this.control('applicationIcons', { paths }))
-    return { applications, icons }
+    return paths.length === 0 ? {} : z.record(z.string(), ApplicationIcon).parse(await this.control('applicationIcons', { paths }))
   }
 
   /**
@@ -198,7 +187,7 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control, options.permissionParameters, options.applicationMetadata)
+  new CuaAccess(ctx, policy, control, options.permissionParameters, options.applicationReview)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), readCached: policy.readCached.bind(policy),
     forget: policy.forget.bind(policy), dispose }
 }

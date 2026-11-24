@@ -4,7 +4,7 @@ import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, Modal, To
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type { CuaApplicationGrant, CuaApplicationPresentation, CuaSystemPermissionState } from '../access-types.ts'
+import type { CuaApplicationGrant, CuaSystemPermissionState } from '../access-types.ts'
 import type { PermissionFace } from './controller.ts'
 import type { NS } from './locales.ts'
 import css from './PermissionPanel.module.css'
@@ -16,20 +16,19 @@ export type PermissionProps = InjectFace<PermissionFace> & PropsLocale<typeof NS
 export type PermissionSetupProps = PermissionProps
   & Pick<PropsRuntime<'plugins.bundle.activation'>, 'onDismiss' | 'onOpenDetails'>
 
-function Applications({ title, apps, presentation, onAction, label, disabled }: {
+function Applications({ title, apps, icons, onAction, label, disabled }: {
   title: string
   apps: readonly CuaApplicationGrant[]
-  presentation: CuaApplicationPresentation | null
+  icons: Record<string, string> | null
   disabled: boolean
   label: string
   onAction: PermissionProps['revoke']
 }) {
   return <section className={css.group}>
     <h4>{title}</h4>
-    <ul className={css.apps}>{apps.map((saved) => {
-      const app = presentation?.applications.find(app => app.id === saved.id) ?? saved
+    <ul className={css.apps}>{apps.map((app) => {
       const iconPath = app.iconPath ?? app.executablePath
-      const icon = iconPath === undefined ? undefined : presentation?.icons[iconPath]
+      const icon = iconPath === undefined ? undefined : icons?.[iconPath]
       return <li key={app.id}>
         <div className={css.application} title={app.executablePath}>
           {icon !== undefined ? <img src={icon} alt="" width={32} height={32} draggable={false} />
@@ -173,8 +172,8 @@ export function PermissionPanel(props: PermissionProps) {
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
       <div className={css.card}>
-        {(['applications', 'presentation'] as const).map(key => state[key].error !== null && <div className={css.notice} role="alert" key={key}>
-          <span className={css.error}>{t(key === 'applications' ? 'applicationsFailed' : 'presentationFailed', { message: state[key].error })}</span>
+        {(['applications', 'icons'] as const).map(key => state[key].error !== null && <div className={css.notice} role="alert" key={key}>
+          <span className={css.error}>{t(key === 'applications' ? 'applicationsFailed' : 'iconsFailed', { message: state[key].error })}</span>
           <Button size="sm" variant="outline" disabled={transitioning || state[key].busy} onClick={refresh}>{t('retry')}</Button>
         </div>)}
         {apps === null ? <p className={css.emptyState}><span className={css.appsPlaceholder} aria-hidden>{t('noApps')}</span></p> : <>
@@ -182,12 +181,12 @@ export function PermissionPanel(props: PermissionProps) {
             && <p className={css.emptyState}>{t('noApps')}</p>}
           {!!apps.reviewApps?.length && <>
             <p className={css.notice}>{t('reviewHint')}</p>
-            <Applications title={t('reviewApps')} apps={apps.reviewApps} presentation={state.presentation.value}
+            <Applications title={t('reviewApps')} apps={apps.reviewApps} icons={state.icons.value}
               onAction={props.revoke} label={t('revoke')} disabled={appsBusy || !apps.persistentAvailable} />
           </>}
-          {apps.allowedApps.length > 0 && <Applications title={t('allowedApps')} apps={apps.allowedApps} presentation={state.presentation.value}
+          {apps.allowedApps.length > 0 && <Applications title={t('allowedApps')} apps={apps.allowedApps} icons={state.icons.value}
             onAction={props.revoke} label={t('revoke')} disabled={appsBusy || !apps.persistentAvailable} />}
-          {apps.blockedApps.length > 0 && <Applications title={t('blockedApps')} apps={apps.blockedApps} presentation={state.presentation.value}
+          {apps.blockedApps.length > 0 && <Applications title={t('blockedApps')} apps={apps.blockedApps} icons={state.icons.value}
             onAction={props.retryApproval} label={t('retryApproval')} disabled={appsBusy} />}
         </>}
       </div>
@@ -217,7 +216,7 @@ export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOp
   </Modal>
 }
 
-/** @param props Shared operation outcome, independent of page lifetime. @returns The existing global toast presentation. */
+/** @param props Shared operation outcome, independent of page lifetime. @returns The existing global toast icons. */
 export function PermissionToast(props: PermissionProps) {
   const toast = props.useCuaPermissions(value => value.toast)
   if (!toast) return null

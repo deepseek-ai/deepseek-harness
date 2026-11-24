@@ -392,7 +392,6 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   CuaApplicationGrant: 'computer-use.md',
   CuaPermissionProcess: 'computer-use.md',
   CuaApplicationState: 'computer-use.md',
-  CuaApplicationPresentation: 'computer-use.md',
   CuaSystemPermission: 'computer-use.md',
   CuaSystemPermissionState: 'computer-use.md',
   RenderedDocumentBytes: 'office-kit.md',

@@ -120,29 +120,6 @@ internal static class DesktopWindows
         return applications;
     }
 
-    internal static async Task<object[]> Metadata(System.Text.Json.JsonElement parameters, RequestContext context)
-    {
-        var catalog = await Discover(context, includeWindowOnly: true);
-        return parameters.GetProperty("applications").EnumerateArray().Select(saved =>
-        {
-            context.Check();
-            var id = saved.GetProperty("id").GetString()!;
-            var matches = catalog.Where(app => app.Identity is { } identity && (identity.Id == id
-                || ApplicationAuthorization.Create(identity, app.Alias, app.DisplayName, app.IconPath).Supersedes.Contains(id)))
-                .DistinctBy(app => app.Identity!.Id).ToArray();
-            var match = matches.Length == 1 ? matches[0] : null;
-            var name = match?.DisplayName ?? saved.GetProperty("name").GetString()!;
-            var path = match?.ExecutablePath ?? (saved.TryGetProperty("executablePath", out var executable) ? executable.GetString() : null);
-            if (path is not null && name == path) name = Path.GetFileNameWithoutExtension(path);
-            var result = new Dictionary<string, object> { ["id"] = id, ["name"] = name,
-                ["needsReview"] = !catalog.Any(app => app.Identity?.Id == id) && !saved.TryGetProperty("iconPath", out _) };
-            if (path is not null) result["executablePath"] = path;
-            var icon = match?.IconPath ?? (saved.TryGetProperty("iconPath", out var iconPath) ? iconPath.GetString() : path);
-            if (icon is not null) result["iconPath"] = icon;
-            return (object)result;
-        }).ToArray();
-    }
-
     private static void ReportWindowOmissions(WindowObservation observation)
     {
         if (observation.Denied > 0)

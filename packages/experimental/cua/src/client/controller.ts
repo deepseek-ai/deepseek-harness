@@ -4,13 +4,13 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-cua/remote'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { CuaApplicationId, CuaApplicationState, CuaApplicationPresentation, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
 
 interface PermissionData {
   windowsProvider: boolean
   system: CuaSystemPermissionState
   applications: CuaApplicationState
-  presentation: CuaApplicationPresentation
+  icons: Record<string, string>
 }
 /** Query failures retain the last observation without presenting it as current. */
 interface Query<T> {
@@ -42,7 +42,7 @@ export class PermissionController {
     windowsProvider: { value: null, busy: false, error: null },
     system: { value: null, busy: false, error: null },
     applications: { value: null, busy: false, error: null },
-    presentation: { value: null, busy: false, error: null },
+    icons: { value: null, busy: false, error: null },
     busy: false, changing: false, toast: null,
   })
   private tail: Promise<void> = Promise.resolve()
@@ -87,7 +87,7 @@ export class PermissionController {
       state.changing = changing
       state.busy = true
       state.windowsProvider.busy = false
-      for (const key of ['system', 'applications', 'presentation'] as const) state[key].busy = true
+      for (const key of ['system', 'applications', 'icons'] as const) state[key].busy = true
     })
     if (!changing) this.enqueue()
   }
@@ -101,7 +101,7 @@ export class PermissionController {
     this.state.update((state) => {
       state.busy = true
       state.windowsProvider.busy = false
-      for (const key of ['system', 'applications', 'presentation'] as const) state[key].busy = true
+      for (const key of ['system', 'applications', 'icons'] as const) state[key].busy = true
     })
     this.tail = this.tail.then(async () => {
       if (!current()) return
@@ -127,7 +127,7 @@ export class PermissionController {
           }
         }),
         this.read('applications', this.remote.applications, latest),
-        this.read('presentation', this.remote.applicationPresentation, latest),
+        this.read('icons', this.remote.applicationIcons, latest),
       ]).then(() => {
         if (latest()) this.state.update((state) => { state.busy = false })
       })

@@ -173,11 +173,4 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     expect(authorization.parse(await client.request('getApp', { selector: discovered.id }, signal)).authorization.id).toBe(named.id)
     const iconResult = z.record(z.string(), z.string()).parse(await client.request('applicationIcons', { paths: [named.iconPath] }, signal))
     expect(iconResult[named.iconPath]).toMatch(/^data:image\/png;base64,/)
-    const legacy = z.object({ authorization: z.object({ supersedes: z.array(z.string()) }) })
-      .parse(await client.request('getApp', { selector: fixturePath! }, signal)).authorization.supersedes[0]
-    if (legacy === undefined) throw new Error('The helper did not identify the legacy application grant')
-    const metadata = z.array(z.object({ id: z.string(), name: z.string(), iconPath: z.string(), needsReview: z.boolean() }))
-      .parse(await client.request('applicationMetadata', { applications: [named, { id: legacy, name: fixturePath! }] }, signal))
-    expect(metadata[0]).toMatchObject({ id: named.id, needsReview: false })
-    expect(metadata[1]).toMatchObject({ id: legacy, name: named.name, iconPath: named.iconPath, needsReview: true })
   }, 60_000)
