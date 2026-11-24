@@ -144,7 +144,8 @@ export function ModelRow(props: ModelRowProps): ReactNode {
               <span className={styles['modelSummaryId']} data-unnamed={id.length === 0 || undefined}>
                 {id.length === 0 ? t('modelId') : id}
               </span>
-              {name.length === 0 ? null : <span className={styles['modelSummaryName']}>{name}</span>}
+              {/* The space separates the two values as text; the flex gap alone spaces them on screen. */}
+              {name.length === 0 ? null : <>{' '}<span className={styles['modelSummaryName']}>{name}</span></>}
             </div>
           )}
         <button

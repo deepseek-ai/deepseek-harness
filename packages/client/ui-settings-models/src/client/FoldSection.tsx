@@ -1,7 +1,9 @@
 /**
  * A titled part of a provider editor that folds: the model catalog and the
  * advanced settings. The body stays mounted while folded, so a draft, an
- * unfolded model row, or a request in flight inside it survives the fold.
+ * unfolded model row, or a request in flight inside it survives the fold. The
+ * heading row and the notice under it stay in view while folded, so an action
+ * in the heading row reports its outcome there.
  */
 
 import { useId, useState } from 'react'
@@ -20,6 +22,8 @@ interface FoldSectionProps {
   status?: ReactNode
   /** Section actions, placed at the end of the heading row. */
   actions?: ReactNode
+  /** The outcome of a heading-row action, placed under the heading row and shown whether or not the section is folded. */
+  notice?: ReactNode
   /** Called with the new state after each fold or unfold. */
   onToggle?: (open: boolean) => void
   /** Section content. */
@@ -57,6 +61,7 @@ export function FoldSection(props: FoldSectionProps): ReactNode {
         {props.status}
         {props.actions === undefined ? null : <span className={styles['foldActions']}>{props.actions}</span>}
       </div>
+      {props.notice}
       <div id={body} className={styles['foldBody']} hidden={!shown}>{props.children}</div>
     </section>
   )

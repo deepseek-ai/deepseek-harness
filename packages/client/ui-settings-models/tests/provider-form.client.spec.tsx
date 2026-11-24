@@ -729,7 +729,7 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
     // An adopted model joins the list folded, named by its ID and display name.
-    expect(modelRow(2).textContent).toBe('freshFresh')
+    expect(modelRow(2).textContent).toBe('fresh Fresh')
     expect(modelRow(2).querySelector('input')).toBeNull()
     expandModel(2)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('fresh')
@@ -855,6 +855,24 @@ describe('endpoint interrogation', () => {
     await screen.findByText(en.fetchEmpty)
   })
 
+  it('reports a failed fetch while the model section is folded', async () => {
+    const empty = vi.fn(() => Promise.resolve(ok([])))
+    await mountSection({ discover: empty })
+    openEditor('openai')
+    fireEvent.click(screen.getByRole('button', { name: en.models }))
+    expect(screen.getByRole('button', { name: en.addModel, hidden: true }).closest('[hidden]')).not.toBeNull()
+
+    fireEvent.click(screen.getByText(en.fetchModels))
+    const failure = await screen.findByText(en.fetchEmpty)
+    expect(failure.closest('[hidden]')).toBeNull()
+
+    // Unfolding leaves it where it is: under the heading, above the rows.
+    fireEvent.click(screen.getByRole('button', { name: en.models }))
+    expect(failure.isConnected).toBe(true)
+    expect(failure.compareDocumentPosition(screen.getByRole('button', { name: en.addModel }))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('can be asked for a configured route even with no endpoint', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([{ id: 'from-registry' }])))
     await mountSection({ discover, providers: { openai: {} } })
@@ -905,7 +923,7 @@ describe('endpoint interrogation', () => {
     // display name is named by its ID alone.
     const toggle = screen.getByLabelText(`${en.modelAdvanced} 1`)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(modelRow(1).textContent).toBe('onlyOnly model')
+    expect(modelRow(1).textContent).toBe('only Only model')
     expect(modelRow(2).textContent).toBe('bare')
     expect(screen.getByRole('region', { name: en.models }).querySelector('input')).toBeNull()
 

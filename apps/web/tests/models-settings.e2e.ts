@@ -585,8 +585,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       await page.mouse.up()
       await page.locator('body > div[inert][aria-hidden="true"]:has(button[aria-label^="模型选项 "])').waitFor({ state: 'detached' })
       await expect.poll(rowTexts).toEqual(save
-        ? ['order-secondorder-second', 'order-thirdorder-third', 'acme-large']
-        : ['order-secondorder-second', 'acme-large', 'order-thirdorder-third'])
+        ? ['order-second order-second', 'order-third order-third', 'acme-large']
+        : ['order-second order-second', 'acme-large', 'order-third order-third'])
       await expect.poll(() => rows.evaluateAll(rows => rows.flatMap(row => row.getAnimations()).length)).toBe(0)
       expect(await readFile(path, 'utf8')).toBe(document)
       await dialog.getByRole('button', { name: save ? '保存' : '取消', exact: true }).click()
@@ -604,7 +604,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       'minimax-cn': { apiKeyEnv: 'MINIMAX_CN_API_KEY', baseURL: 'https://gateway.minimax.example/v1' },
     } })
     await edit.click()
-    expect(await rowTexts()).toEqual(['order-secondorder-second', 'order-thirdorder-third', 'acme-large'])
+    expect(await rowTexts()).toEqual(['order-second order-second', 'order-third order-third', 'acme-large'])
     const viewport = page.viewportSize()
     if (viewport === null) throw new Error('Model ordering checks require an explicit viewport')
     try {
@@ -637,7 +637,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       await toggle.click()
       await name.waitFor({ state: 'hidden' })
       // The folded row keeps the drafted name; a narrow row shows only the ID.
-      expect((await rowTexts())[0]).toBe('order-second手机上的完整显示名称')
+      expect((await rowTexts())[0]).toBe('order-second 手机上的完整显示名称')
       expect(await rows.first().getByText('手机上的完整显示名称', { exact: true }).isVisible()).toBe(false)
       await toggle.click()
       expect(await name.inputValue()).toBe('手机上的完整显示名称')

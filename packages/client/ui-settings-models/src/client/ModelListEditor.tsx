@@ -14,8 +14,9 @@
  * that would empty the list is refused.
  *
  * A provider that cannot be interrogated (an unreachable endpoint, a protocol
- * with no readable listing) is not a dead end: the failure is shown next to the
- * rows the user can still fill in by hand.
+ * with no readable listing) is not a dead end: the failure is shown under the
+ * section heading, beside the action that asked and whether or not the list is
+ * folded, above the rows the user can still fill in by hand.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -345,6 +346,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           {busy ? t('fetching') : t('fetchModels')}
         </Button>
       )}
+      notice={failure !== undefined ? <p className={styles['error']}>{failure}</p> : undefined}
     >
       {/* An installed catalog route with no list of its own serves the whole
           catalog; a route the adapter does not ship has nothing to inherit,
@@ -397,7 +399,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         <IconPlusOutlineRegular size={14} />
         {t('addModel')}
       </button>
-      {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
       <Modal
         open={candidates !== undefined}
         onClose={closePicker}

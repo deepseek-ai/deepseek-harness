@@ -219,7 +219,7 @@ describe.each(['deepseek', 'pi-ai'] as const)('%s model ordering', (family) => {
     expect(preview.inert).toBe(true)
     expect(preview.getAttribute('aria-hidden')).toBe('true')
     expect(preview.querySelector('[data-row-key]')).toBeNull()
-    expect(preview.textContent).toBe('firstFirst')
+    expect(preview.textContent).toBe('first First')
     expect(within(preview).getByLabelText(`${en.modelAdvanced} 1`).tabIndex).toBe(-1)
     fireEvent.dragEnd(source)
     expect(preview.isConnected).toBe(false)
