@@ -98,11 +98,12 @@ describe('Open in Session menus', () => {
     const page = await context.newPage()
     await openSeed(page, isolated.authenticatedUrl)
     const more = page.getByRole('button', { name: 'More actions', exact: true })
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Copy Session ID', exact: true }).waitFor()
     if (!enabled) {
-      expect(await more.count()).toBe(0)
+      expect(await page.getByRole('menuitem', { name: 'Open in', exact: true }).count()).toBe(0)
       return
     }
-    await more.click()
     await page.getByRole('menuitem', { name: 'Open in', exact: true }).waitFor()
     expect(await page.getByRole('menuitem', { name: 'Download session log', exact: true }).count()).toBe(0)
     expect(await page.getByRole('menuitem', { name: 'Copy Session as Markdown', exact: true }).count()).toBe(0)
