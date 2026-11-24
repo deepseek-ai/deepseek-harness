@@ -49,12 +49,12 @@ it('installs a missing connector at the running release, and opens an installed 
   const { actions } = renderTab({ status: 'ready', connectors: {
     '@deepseek-ai/dsh-notion': 'enabled', '@deepseek-ai/dsh-tencent-docs': 'installed', '@deepseek-ai/dsh-linear': 'missing',
   } }, '1.2.3')
-  fireEvent.click(within(row('linear')).getByRole('button', { name: 'Install Linear plugin' }))
-  expect(actions.install).toHaveBeenCalledExactlyOnceWith({ spec: '@deepseek-ai/dsh-linear@1.2.3', title: 'Linear plugin', version: '1.2.3' })
+  fireEvent.click(within(row('linear')).getByRole('button', { name: 'Install Linear' }))
+  expect(actions.install).toHaveBeenCalledExactlyOnceWith({ spec: '@deepseek-ai/dsh-linear@1.2.3', title: 'Linear', version: '1.2.3' })
   expect(within(row('linear')).getAllByRole('button')).toHaveLength(1)
   expect(within(row('linear')).queryByRole('switch')).toBeNull()
-  expect(within(row('notion')).getByRole('button', { name: 'Open Notion plugin' }).textContent).toBe(en['notion.title'])
-  fireEvent.click(within(row('tencent-docs')).getByRole('button', { name: 'Open Tencent Docs plugin' }))
+  expect(within(row('notion')).getByRole('button', { name: 'Open Notion' }).textContent).toBe(en['notion.title'])
+  fireEvent.click(within(row('tencent-docs')).getByRole('button', { name: 'Open Tencent Docs' }))
   expect(actions.openPackage).toHaveBeenCalledExactlyOnceWith('@deepseek-ai/dsh-tencent-docs')
   expect(within(row('tencent-docs')).getAllByRole('button')).toHaveLength(1)
 })
@@ -78,7 +78,7 @@ it('shows an installed connector\'s switch on or off, switches it without openin
 it('names the connector whose switch did not take effect until the failure clears', () => {
   const connectors = { '@deepseek-ai/dsh-notion': 'installed' } as const
   const { set } = renderTab({ status: 'ready', connectors, failed: '@deepseek-ai/dsh-notion' }, '1.2.3')
-  expect(screen.getByRole('alert').textContent).toBe('Couldn’t switch Notion plugin on or off.')
+  expect(screen.getByRole('alert').textContent).toBe('Couldn’t switch Notion on or off.')
   set({ status: 'ready', connectors })
   expect(screen.queryByRole('alert')).toBeNull()
 })

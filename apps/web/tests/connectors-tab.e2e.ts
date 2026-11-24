@@ -70,8 +70,8 @@ it('lists the official connectors, opens and switches an installed one, and inst
 
   await tab.click()
   const feishu = panel.locator('[data-connector="feishu"]')
-  await feishu.getByRole('button', { name: '打开 飞书插件', exact: true }).waitFor()
-  const feishuSwitch = (checked: boolean) => feishu.getByRole('switch', { name: '飞书插件', exact: true, checked })
+  await feishu.getByRole('button', { name: '打开 飞书', exact: true }).waitFor()
+  const feishuSwitch = (checked: boolean) => feishu.getByRole('switch', { name: '飞书', exact: true, checked })
   await feishuSwitch(true).waitFor()
   await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[data-connectors]', scaffold.workspaceCwd), webSnapshotMode())
   // The switch changes the bundle and leaves the tab open; the row shows the state the Host answers after each change.
@@ -91,15 +91,15 @@ it('lists the official connectors, opens and switches an installed one, and inst
 
   // Install hands the page's dialog the connector at the running DSH version; the dialog names it by the tab's title.
   const wecomRow = panel.locator('[data-connector="wecom"]')
-  await wecomRow.getByRole('button', { name: '安装 企业微信插件', exact: true }).click()
+  await wecomRow.getByRole('button', { name: '安装 企业微信', exact: true }).click()
   const dialog = page.getByRole('dialog')
   const enableNow = dialog.getByRole('button', { name: '立即启用', exact: true })
   await enableNow.waitFor({ timeout: 20_000 })
-  await dialog.getByText('企业微信插件', { exact: true }).waitFor()
+  await dialog.getByText('企业微信', { exact: true }).waitFor()
   expect(JSON.parse(await readFile(join(profile, '.added'), 'utf8'))).toContain(`${WECOM}@${version}`)
   await enableNow.click()
-  await wecomRow.getByRole('button', { name: '打开 企业微信插件', exact: true }).waitFor()
-  await wecomRow.getByRole('switch', { name: '企业微信插件', exact: true, checked: true }).waitFor()
+  await wecomRow.getByRole('button', { name: '打开 企业微信', exact: true }).waitFor()
+  await wecomRow.getByRole('switch', { name: '企业微信', exact: true, checked: true }).waitFor()
 
   // Switching the bundle off removes only the tab: the connectors stay installed and listed.
   await panel.getByRole('tab', { name: '已安装', exact: true }).click()

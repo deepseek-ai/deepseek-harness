@@ -113,7 +113,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: DingTalk plugin account'
     onTestFailed(() => saveFailureShot(page, 'web-e2e-dingtalk-connection'))
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
-    await panel.getByRole('button', { name: '查看 钉钉插件', exact: true }).click({ timeout: 20_000 })
+    await panel.getByRole('button', { name: '查看 钉钉', exact: true }).click({ timeout: 20_000 })
     const section = panel.locator('[data-connector-account-key="@deepseek-ai/dsh-dingtalk"]')
     await expect.poll(() => section.getAttribute('data-connector-account'), { timeout: 20_000 }).toBe('disconnected')
     expect(await panel.locator('[data-plugin-detail]').getByText('未连接', { exact: true }).count()).toBe(2)
