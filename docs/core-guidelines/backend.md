@@ -81,3 +81,69 @@ A loop that polls Agent state is a `while`, `for`, or self-rescheduling callback
 ### Enforcement
 
 Review: flag a new or changed loop in package source that awaits `whenIdle()` or reads Agent or Session runtime state on each iteration to decide whether to act.
+
+<a id="b2"></a>
+## B.2: Register independent entries through a registry instead of listing them in one plugin's config
+
+### Reason
+
+- A bundle patch replaces a row's `config` wholesale. Another bundle cannot add, override, or remove one entry of a list; it must restate the whole list, and two bundles that each do so overwrite each other.
+- `disabled`, including a `!!js` condition on it, applies to a whole Loader row. An entry inside `config` has no `disabled` field, so it cannot be turned off on its own.
+- Editing one entry reloads the plugin that owns the list, and one invalid entry fails every entry. Avoiding this requires the plugin to implement per-entry diffing, validation, diagnostics, and teardown itself, as `dsh-llm-pi-ai` does for `providers`.
+
+### Example, bad
+
+```yaml
+- id: llm-router
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      openai:
+        apiKeyEnv: OPENAI_API_KEY
+      acme-gateway:
+        api: openai-completions
+        baseURL: https://gateway.acme.example/v1
+        models:
+          - id: acme-large
+```
+
+A bundle that adds one gateway must restate `openai`, and an invalid `acme-gateway` entry rejects the whole `providers` update.
+
+### Example
+
+```yaml
+- id: agent-preset-registry
+  name: '@deepseek-ai/dsh-agent-preset-registry'
+  config:
+    default: standard
+- id: preset-standard
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: standard
+    plugins: []
+- id: preset-review
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: review
+    plugins: []
+```
+
+Presets follow this rule. Each preset is its own row. A bundle adds a preset with an `insert` patch, or overrides one with a patch keyed by its row id that restates only that row's `config`. Each row registers its definition with `ctx.agentPresets.register()` and yields the disposer from `[Service.init]`, so removing, disabling, or failing one row affects only that preset.
+
+### Alternative
+
+Declare a registry service whose `register(entry)` returns the disposer. Ship a plugin that takes one entry as its `config` and registers it as an effect. The registry owns lookup, ordering, duplicate-identity failures, and per-entry diagnostics; the registry's own `config` holds only settings about the whole set, such as a default entry id.
+
+### Exception
+
+- Values without their own identity that together form one setting, such as a set of retryable failure codes or a list of allowed hosts.
+- Fields that describe one entry, such as the `models` list of one provider route.
+- The entry list of a `group: true` row. Each child is its own Loader row, and patches insert, override, or disable a child by id.
+
+### Note
+
+An independent entry is a value with its own identity, such as a provider route, preset, server, or account, that a deployment, bundle, or user adds, replaces, or removes without changing the others.
+
+### Enforcement
+
+Review: flag a new or changed `Config` field whose array or dictionary values are independent entries.
