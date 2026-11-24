@@ -25,9 +25,9 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-The [read-aloud bundle](../read-aloud-bundle/README.md) enables this row with `defaultProvider: deepseek-tts`. `defaultProvider` is required and names the provider that speaks every request; a request made while that provider is not registered fails as `service-unavailable`.
+The [read-aloud bundle](../read-aloud-bundle/README.md) enables this row with `defaultProvider: deepseek-tts`. `defaultProvider` is required and names the provider that speaks every request; a request made while that provider is not registered fails as `service-unavailable`. `voice` is the saved voice preference, written by `configure()`; while it is absent or names a voice the provider does not offer, the provider's first voice speaks.
 
-A provider calls `register()` with its `info` (id, display name, `host-local` or `cloud`, the sample rate of its 16-bit mono PCM, and `maxCharacters`), an optional `availability` source, and `synthesize(input, signal)`. A consumer calls `resolve({ text })`, which captures the configured provider and rejects a text longer than its `maxCharacters`, then `synthesize(spec, signal)`, which returns the provider's audio as an async iterator. `snapshot()` and `follow(signal)` report every provider's availability with the configured id.
+A provider calls `register()` with its `info` (id, display name, `host-local` or `cloud`, the sample rate of its 16-bit mono PCM, `maxCharacters`, and its `voices`, a non-empty list of ids whose first is the default), an optional `availability` source, and `synthesize(input, signal)`. A consumer calls `resolve({ text, voice })`, which captures the configured provider and the voice, rejects a text longer than its `maxCharacters` and a named voice the provider does not offer, and applies the saved voice when none is named; then `synthesize(spec, signal)` returns the provider's audio as an async iterator. `snapshot()` and `follow(signal)` report every provider's availability and applied voice with the configured id. `configure({ voice })` saves a voice the configured provider offers into this row's profile entry through the `settings` service and applies it without a restart.
 
 A provider reports a classified failure by throwing `SpeechSynthesisError` with one `SynthesisFailureCode`: `sign-in-required`, `api-key-invalid`, `rate-limited`, `quota-exceeded`, `service-unavailable`, `text-rejected`, `timeout`, or `service-error`. Consumers localize the code and keep the message as a Host diagnostic.
 
@@ -69,7 +69,7 @@ No effect; no model request, message, or Session event changes.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- One configured provider speaks every request; there is no per-request provider choice and no fallback. Voices are a provider's own configuration, so the service lists none. Audio is 16-bit mono PCM only.
+- One configured provider speaks every request; there is no per-request provider choice and no fallback. One voice preference is saved for the row, not one per provider. Audio is 16-bit mono PCM only.
 
 -----
 

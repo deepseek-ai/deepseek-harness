@@ -27,7 +27,7 @@ This optional bundle adds a Read aloud control under assistant replies. It compo
 
 Turn the bundle on in **Plugins**. With a DeepSeek account sign-in or a DeepSeek API key, a speaker control appears under each finished assistant reply; without either, the bundle's details explain what is missing and offer sign-in.
 
-A reply is submitted for synthesis one segment at a time as playback advances, so a reading stopped early is billed only for the segments already requested. The `read-aloud` row sets the segment length (`segmentSeconds`, 30) and when the next segment is requested (`dispatchBelowSeconds`, 15); the `text-to-speech-deepseek` row sets the voice (`voice`, `stella` or `tide`).
+A reply is submitted for synthesis one segment at a time as playback advances, so a reading stopped early is billed only for the segments already requested. The `read-aloud` row sets the segment length (`segmentSeconds`, 30) and when the next segment is requested (`dispatchBelowSeconds`, 15); the voice is chosen in the bundle's details and saved in the `text-to-speech` row (`voice`, `stella` or `tide`).
 
 -----
 

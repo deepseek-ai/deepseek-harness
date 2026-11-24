@@ -34,6 +34,7 @@ function registerUi(ctx: Context): void {
       return result.value
     },
     synthesize: (request, signal) => ctx.remote.readAloud.synthesize(request, signal),
+    sample: (request, signal) => ctx.remote.readAloud.sample(request, signal),
     createPlayer: () => createPcmPlayer(),
   })
   ctx.effect(() => () => { reader.dispose() })
@@ -60,12 +61,20 @@ function registerUi(ctx: Context): void {
       dismissNotice: (seq) => { reader.dismissNotice(seq) },
     }),
   }, ReadAloudNotice))
+  // One set of verbs for every rendering of the details, so the section's exit effect runs once per mount.
+  const settings: ReadAloudSettingsInjected = {
+    hooks: { readAloudStatus: status.state, reader: reader.state, accountSignIn },
+    signIn: () => { ctx.get('accountSignIn')?.open() },
+    configure: async (voice) => {
+      const result = await ctx.remote.readAloud.configure({ voice })
+      if (!result.ok) throw result.error
+    },
+    toggleSample: (sample) => { reader.toggleSample(sample) },
+    stopSample: () => { reader.stopSample() },
+    dismissSampleNotice: (seq) => { reader.dismissSampleNotice(seq) },
+  }
   ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
-    name: 'plugins.bundle.config', key: BUNDLE, locale: NS,
-    inject: (): ReadAloudSettingsInjected => ({
-      hooks: { readAloudStatus: status.state, accountSignIn },
-      signIn: () => { ctx.get('accountSignIn')?.open() },
-    }),
+    name: 'plugins.bundle.config', key: BUNDLE, locale: NS, inject: () => settings,
   }, ReadAloudSettings))
 }
 

@@ -14,7 +14,9 @@ import { pcmFrames } from './frames.ts'
 import { findReply, replyAt, type StoredReply } from './message.ts'
 import { segmentSpeech, type SegmentRule } from './segments.ts'
 import { speechText } from './speech-text.ts'
-import type { AudioFrame, ReadAloudStatus, ReadingPlan, ReadingTarget, SegmentRequest } from './types.ts'
+import type {
+  AudioFrame, ReadAloudStatus, ReadingPlan, ReadingTarget, SampleRequest, SegmentRequest, VoiceSelection,
+} from './types.ts'
 
 export type * from './types.ts'
 
@@ -37,15 +39,30 @@ export interface Config {
 const FRAME_MS = 200
 /** Bytes per sample of 16-bit mono PCM. */
 const SAMPLE_BYTES = 2
+/** The sentence `sample` speaks, by language. The Host owns the text, so a Client cannot have other text spoken. */
+const SAMPLE_TEXT: ReadonlyMap<string, string> = new Map([
+  ['zh', '你好，这是语音朗读的试听。'],
+  ['en', 'Hello, this is how read aloud sounds.'],
+  ['ja', 'こんにちは、読み上げの試聴です。'],
+])
+/** Spoken for a language without a sentence of its own. */
+const FALLBACK_SAMPLE = 'Hello, this is how read aloud sounds.'
 
 function selected(snapshot: SynthesisSnapshot): SynthesisProviderView | undefined {
   return snapshot.providers.find(provider => provider.id === snapshot.selected)
 }
 
-function statusOf(snapshot: SynthesisSnapshot): ReadAloudStatus['state'] {
-  const availability = selected(snapshot)?.availability
-  if (availability?.phase === 'ready') return 'ready'
-  return availability?.phase === 'unavailable' ? 'sign-in-required' : 'unavailable'
+function stateOf(provider: SynthesisProviderView): ReadAloudStatus['state'] {
+  if (provider.availability.phase === 'ready') return 'ready'
+  return provider.availability.phase === 'unavailable' ? 'sign-in-required' : 'unavailable'
+}
+
+function statusOf(snapshot: SynthesisSnapshot): ReadAloudStatus {
+  const provider = selected(snapshot)
+  return provider === undefined ? { state: 'unavailable' } : {
+    state: stateOf(provider),
+    synthesis: { voices: provider.voices, voice: provider.voice, sampleRate: provider.audio.sampleRate },
+  }
 }
 
 /** Read-aloud calls never activate, read from, or submit to an Agent, and append no Session event. */
@@ -61,26 +78,36 @@ export default class ReadAloudController extends TypertRemoteService {
   }
 
   /**
-   * Follow whether a reading can start, so the Client offers the action only while it can.
+   * Follow whether a reading can start and which voices exist, so the Client offers the action only while it can and
+   * shows the saved voice.
    * @param signal - Client observation lifetime.
-   * @returns the current state, then each change of it.
+   * @returns the current status, then each change of it.
    */
   @Remote({ mode: 'stream' })
   async *follow(signal: AbortSignal): AsyncIterable<ReadAloudStatus> {
-    let last: ReadAloudStatus['state'] | undefined
+    let last: string | undefined
     for await (const snapshot of this.ctx.textToSpeech.follow(signal)) {
-      const state = statusOf(snapshot)
-      if (state === last) continue
-      last = state
-      yield { state }
+      const status = statusOf(snapshot), key = JSON.stringify(status)
+      if (key === last) continue
+      last = key
+      yield status
     }
+  }
+
+  /**
+   * Save the voice that readings started afterwards use.
+   * @param selection - one of the voices `follow()` reports.
+   */
+  @Remote
+  async configure(selection: VoiceSelection): Promise<void> {
+    await this.ctx.textToSpeech.configure({ voice: selection.voice })
   }
 
   /**
    * Locate one finalized assistant message and cut its readable text into segments.
    * @param target - Session and message to read.
    * @param signal - Client cancellation.
-   * @returns the message's log position, its segments, and the pacing and audio facts; no text leaves the Host.
+   * @returns the message's log position, its segments, the voice, and the pacing and audio facts; no text leaves the Host.
    */
   @Remote({ resources: { session: target => target.sessionId } })
   async plan(target: ReadingTarget, signal: AbortSignal): Promise<ReadingPlan> {
@@ -92,13 +119,14 @@ export default class ReadAloudController extends TypertRemoteService {
       segments: segmentSpeech(speechText(reply.markdown), this.rule(provider)),
       dispatchBelowMs: this.config.dispatchBelowSeconds * 1000,
       sampleRate: provider.audio.sampleRate,
+      voice: provider.voice,
     }
   }
 
   /**
-   * Synthesize one planned segment. The range must be a segment of the message under the current configuration, so a
-   * Client cannot have other text spoken.
-   * @param request - message position and one segment of its plan.
+   * Synthesize one planned segment in the plan's voice. The range must be a segment of the message under the current
+   * configuration, so a Client cannot have other text spoken.
+   * @param request - message position, one segment of its plan, and the plan's voice.
    * @param signal - Client cancellation; it ends the provider request.
    * @returns frames of whole PCM samples in playback order.
    */
@@ -110,9 +138,29 @@ export default class ReadAloudController extends TypertRemoteService {
     if (!segmentSpeech(text, this.rule(provider)).some(segment => segment.start === request.start && segment.end === request.end)) {
       throw new RemoteError('readAloud/stale-plan', 'The range is not a segment of this message', { reason: 'range-mismatch' })
     }
+    if (!provider.voices.includes(request.voice)) {
+      throw new RemoteError('readAloud/stale-plan', 'The provider does not offer the voice of this plan', { reason: 'voice-not-offered' })
+    }
+    yield* this.speak(provider, text.slice(request.start, request.end), request.voice, signal)
+  }
+
+  /**
+   * Speak the Host's sample sentence in one voice, so a listener can choose between voices.
+   * @param request - voice to hear and the language of the sentence.
+   * @param signal - Client cancellation; it ends the provider request.
+   * @returns frames of whole PCM samples in playback order, at `SynthesisFacts.sampleRate`.
+   */
+  @Remote({ mode: 'stream' })
+  async *sample(request: SampleRequest, signal: AbortSignal): AsyncIterable<AudioFrame> {
+    signal.throwIfAborted()
+    yield* this.speak(this.provider(), SAMPLE_TEXT.get(request.language) ?? FALLBACK_SAMPLE, request.voice, signal)
+  }
+
+  /** One synthesis as frames; every failure but the caller's cancellation is reported as a synthesis failure. */
+  private async *speak(provider: SynthesisProviderView, text: string, voice: string, signal: AbortSignal): AsyncIterable<AudioFrame> {
     const frameBytes = Math.round(provider.audio.sampleRate * FRAME_MS / 1000) * SAMPLE_BYTES
     try {
-      const spec = this.ctx.textToSpeech.resolve({ text: text.slice(request.start, request.end) })
+      const spec = this.ctx.textToSpeech.resolve({ text, voice })
       for await (const frame of pcmFrames(this.ctx.textToSpeech.synthesize(spec, signal), frameBytes)) {
         yield { pcm: Buffer.from(frame.buffer, frame.byteOffset, frame.byteLength).toString('base64') }
       }
@@ -126,7 +174,7 @@ export default class ReadAloudController extends TypertRemoteService {
     return { targetMs: this.config.segmentSeconds * 1000, maxCharacters: provider.maxCharacters }
   }
 
-  /** The configured provider's facts; segmentation and audio decoding depend on them. */
+  /** The configured provider's facts and current voice; segmentation and audio decoding depend on the facts. */
   private provider(): SynthesisProviderView {
     const snapshot = this.ctx.textToSpeech.snapshot(), provider = selected(snapshot)
     if (provider === undefined) {

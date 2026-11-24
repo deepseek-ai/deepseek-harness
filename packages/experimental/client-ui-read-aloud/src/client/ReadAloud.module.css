@@ -23,10 +23,15 @@
 }
 
 @media (hover: hover) {
-  .action:hover {
+  .action:hover:not(:disabled) {
     background: var(--dsw-alias-interactive-bg-hover);
     color: var(--dsw-alias-label-secondary);
   }
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* The waveform keeps the business color with and without hover, so a reading
@@ -106,7 +111,7 @@
   }
 }
 
-/* Bundle detail: availability, cost, and the guide link. */
+/* Bundle detail: availability, the voice preference, cost, and the guide link. */
 .settings {
   display: grid;
   gap: 12px;
@@ -123,6 +128,37 @@
   align-items: center;
   gap: 8px 12px;
   color: var(--dsw-alias-label-secondary);
+}
+
+/* The voice row follows the preference rows of the voice-input details: a 100px label column, then the field. */
+.voice {
+  display: grid;
+  grid-template-columns: 100px minmax(120px, 280px) auto;
+  align-items: center;
+  justify-content: start;
+  gap: 12px;
+}
+
+.voice select {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.voice select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.voiceError {
+  grid-column: 2 / -1;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .billing {

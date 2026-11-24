@@ -634,12 +634,8 @@ flowchart TD
   pkg_experimental_translator --> pkg_session_persistence
   pkg_experimental_translator --> pkg_timeout
   pkg_experimental_translator --> pkg_util_values
-  pkg_read_aloud --> pkg_llm
-  pkg_read_aloud --> pkg_session
-  pkg_read_aloud --> pkg_session_persistence
-  pkg_read_aloud --> pkg_text_to_speech
-  pkg_read_aloud --> pkg_typert_protocol
   pkg_skill_badge --> pkg_skill
+  pkg_text_to_speech --> pkg_settings
   pkg_host_product_telemetry_otel --> pkg_otel
   pkg_ptc_runtime --> pkg_attachment
   pkg_ptc_runtime --> pkg_error
@@ -719,6 +715,11 @@ flowchart TD
   pkg_experimental_speech_to_text_sensevoice --> pkg_subprocess
   pkg_hook_protocol --> pkg_session
   pkg_hook_protocol --> pkg_shell
+  pkg_read_aloud --> pkg_llm
+  pkg_read_aloud --> pkg_session
+  pkg_read_aloud --> pkg_session_persistence
+  pkg_read_aloud --> pkg_text_to_speech
+  pkg_read_aloud --> pkg_typert_protocol
   pkg_lsp_stdio --> pkg_error
   pkg_lsp_stdio --> pkg_fs
   pkg_lsp_stdio --> pkg_llm
@@ -1832,7 +1833,6 @@ flowchart TD
 | [`experimental-webworker-packer`](../packages/experimental/webworker-packer) | `experimental` | — |
 | [`im-bundle`](../packages/experimental/im-bundle) | `experimental` | — |
 | [`read-aloud-bundle`](../packages/experimental/read-aloud-bundle) | `experimental` | — |
-| [`text-to-speech`](../packages/experimental/text-to-speech) | `experimental` | — |
 | [`client-ui-cordis`](../packages/extensions/ui-cordis) | `extensions` | — |
 | [`cordis-client-runner`](../packages/extensions/cordis-client-runner) | `extensions` | — |
 | [`host-directory-picker`](../packages/host/directory-picker) | `host` | — |
@@ -1908,8 +1908,8 @@ flowchart TD
 | [`upstream-skills`](../packages/connector/upstream-skills) | `connector` | [`skill`](../packages/skill/skill) |
 | [`experimental-speech-to-text`](../packages/experimental/speech-to-text) | `experimental` | [`settings`](../packages/settings/settings) |
 | [`experimental-translator`](../packages/experimental/translator) | `experimental` | [`credentials`](../packages/credentials/credentials), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |
-| [`read-aloud`](../packages/experimental/read-aloud) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`text-to-speech`](../packages/experimental/text-to-speech), [`typert-protocol`](../packages/typert/protocol) |
 | [`skill-badge`](../packages/experimental/skill-badge) | `experimental` | [`skill`](../packages/skill/skill) |
+| [`text-to-speech`](../packages/experimental/text-to-speech) | `experimental` | [`settings`](../packages/settings/settings) |
 | [`host-product-telemetry-otel`](../packages/host/product-telemetry-otel) | `host` | [`otel`](../packages/telemetry/otel) |
 | [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime) | `ptc-runtime` | [`attachment`](../packages/attachment/attachment), [`error`](../packages/util/error), [`sandbox`](../packages/sandbox/sandbox) |
 | [`sandbox-local`](../packages/sandbox/sandbox-local) | `sandbox` | [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox), [`session`](../packages/core/session) |
@@ -1935,6 +1935,7 @@ flowchart TD
 | [`experimental-client-ui-cot-translation`](../packages/experimental/client-ui-cot-translation) | `experimental` | [`experimental-translator`](../packages/experimental/translator) |
 | [`experimental-speech-to-text-sensevoice`](../packages/experimental/speech-to-text-sensevoice) | `experimental` | [`experimental-speech-to-text`](../packages/experimental/speech-to-text), [`subprocess`](../packages/subprocess/subprocess) |
 | [`hook-protocol`](../packages/experimental/hook-protocol) | `experimental` | [`session`](../packages/core/session), [`shell`](../packages/shell/shell) |
+| [`read-aloud`](../packages/experimental/read-aloud) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`text-to-speech`](../packages/experimental/text-to-speech), [`typert-protocol`](../packages/typert/protocol) |
 | [`lsp-stdio`](../packages/lsp/lsp-stdio) | `lsp` | [`error`](../packages/util/error), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`lsp`](../packages/lsp/lsp), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |
 | [`persona`](../packages/preset/persona) | `preset` | [`system-prompt`](../packages/core/system-prompt) |
 | [`bash-local`](../packages/shell/bash-local) | `shell` | [`shell`](../packages/shell/shell), [`subprocess`](../packages/subprocess/subprocess), [`timeout`](../packages/util/timeout) |

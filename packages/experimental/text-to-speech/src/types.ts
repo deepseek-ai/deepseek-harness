@@ -19,6 +19,8 @@ export interface SynthesisProviderInfo {
   readonly audio: SynthesisAudioFormat
   /** Longest text, in UTF-16 code units, that one synthesis call accepts. */
   readonly maxCharacters: number
+  /** Ids of the voices the provider speaks with, in menu order; never empty, and the first is its default. */
+  readonly voices: readonly string[]
 }
 
 /**
@@ -41,9 +43,11 @@ export interface SynthesisAvailabilitySource {
   subscribe(listener: () => void): () => void
 }
 
-/** Provider facts and its current availability. */
+/** Provider facts, its current availability, and the voice preference applied to it. */
 export interface SynthesisProviderView extends SynthesisProviderInfo {
   readonly availability: SynthesisAvailability
+  /** Voice of a synthesis through this provider that names none: the saved voice while the provider offers it, else its default. */
+  readonly voice: string
 }
 
 /** One consistent observation of the provider roster and the configured selection. */
@@ -51,6 +55,11 @@ export interface SynthesisSnapshot {
   readonly providers: readonly SynthesisProviderView[]
   /** Configured provider id; it may name no registered provider. */
   readonly selected: SynthesisProviderId
+}
+
+/** A saved preference change; the voice must be one the selected provider offers. */
+export interface SynthesisSelectionPatch {
+  readonly voice: string
 }
 
 /**
@@ -62,9 +71,11 @@ export interface SynthesisSnapshot {
 export type SynthesisFailureCode = 'sign-in-required' | 'api-key-invalid' | 'rate-limited' | 'quota-exceeded'
   | 'service-unavailable' | 'text-rejected' | 'timeout' | 'service-error'
 
-/** Plain text to speak; markup is spoken as written. */
+/** Plain text to speak and the voice that speaks it; markup is spoken as written. */
 export interface SynthesisInput {
   readonly text: string
+  /** One of the provider's `info.voices`. */
+  readonly voice: string
 }
 
 /** One replaceable synthesizer. It owns its availability, execution, and cancellation. */
@@ -74,16 +85,18 @@ export interface SynthesisProvider {
   /**
    * Speak one text as a stream of audio in `info.audio`. Chunks split the byte stream at arbitrary positions, and
    * audio already yielded stays valid when a later pull fails.
-   * @param input - text of at most `info.maxCharacters` code units.
+   * @param input - text of at most `info.maxCharacters` code units and one of `info.voices`.
    * @param signal - caller or registration cancellation; it ends the provider's I/O even while no pull is waiting.
    * @returns audio bytes in playback order; a pull rejects with a `SpeechSynthesisError` for a classified failure.
    */
   synthesize(input: SynthesisInput, signal: AbortSignal): AsyncIterable<Uint8Array>
 }
 
-/** Caller input before the configured provider is applied. */
+/** Caller input before the configured provider and the saved voice are applied. */
 export interface SynthesisRequest {
   readonly text: string
+  /** Voice of the configured provider; absent selects that provider's `voice` in the snapshot. */
+  readonly voice?: string
 }
 
 /** Resolved input pins the exact registered provider, including its lifetime. */

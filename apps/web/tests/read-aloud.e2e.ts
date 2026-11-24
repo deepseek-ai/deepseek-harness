@@ -1,7 +1,8 @@
 // Real-composition acceptance for paced read-aloud. The scaffold boots the shipped Web Loader tree with the read-aloud
 // bundle and a cold-seeded reply of four sentences; one loopback double plays the API-key deployment's `/v1/tools/tts`.
 // The real DeepSeek authentication, synthesis registry, cloud synthesizer, Remote, pacing loop and Web Audio output run
-// end to end, so the requests the double receives are what a listener would be billed for.
+// end to end, so the requests the double receives are what a listener would be billed for. The voice preference is
+// saved through the real Settings service into the scaffold profile.
 import { createServer, type Server } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -212,4 +213,45 @@ describe.skipIf(MODE === 'record')('web e2e: paced read-aloud of a settled reply
     expect(await page.getByRole('button', { name: 'Sign in to DeepSeek', exact: true }).count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('plays a sample of the saved voice, saves another voice on the Host, and reads the reply in it', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-read-aloud-voice'))
+    // The bundle details of the previous case are still open.
+    const voice = page.getByRole('combobox', { name: 'Voice', exact: true })
+    await voice.waitFor({ timeout: 15_000 })
+    expect(await voice.inputValue()).toBe('stella')
+    expect(await voice.locator('option').allInnerTexts()).toEqual(['Stella (female)', 'Tide (male)'])
+    const before = services.requests.length
+    const listen = page.getByRole('button', { name: 'Listen', exact: true })
+    await listen.click()
+    await expect.poll(() => services.requests.length, { timeout: 15_000 }).toBe(before + 1)
+    // The sentence is the Host's own; the page sent only the voice and its language.
+    expect(services.requests[before]!.body)
+      .toEqual({ text: 'Hello, this is how read aloud sounds.', voice_id: 'stella', format: 'pcm', filter_markdown: false })
+    const stop = page.getByRole('button', { name: 'Stop', exact: true })
+    await stop.waitFor({ timeout: 10_000 })
+    await expect.poll(() => stop.getAttribute('data-read-aloud'), { timeout: 10_000 }).toBe('playing')
+    // The sample ends by itself once its two seconds of audio played out.
+    await listen.waitFor({ timeout: 15_000 })
+
+    // The field shows what the Host holds, so the new value appears only after the Host saved and reported it.
+    await voice.selectOption('tide')
+    await expect.poll(() => voice.inputValue(), { timeout: 15_000 }).toBe('tide')
+    await expect.poll(() => voice.isDisabled(), { timeout: 10_000 }).toBe(false)
+    expect(await page.getByRole('alert').count()).toBe(0)
+    await listen.click()
+    await expect.poll(() => services.requests.length, { timeout: 15_000 }).toBe(before + 2)
+    expect(services.requests[before + 1]!.body.voice_id).toBe('tide')
+
+    // Leaving the details stops the sample; a reading started afterwards uses the saved voice.
+    await page.locator('[role="treeitem"]').nth(1).click()
+    const read = page.getByRole('button', { name: 'Read aloud', exact: true })
+    await read.waitFor({ timeout: 15_000 })
+    await read.click()
+    await expect.poll(() => services.requests.length, { timeout: 15_000 }).toBe(before + 3)
+    expect(services.requests[before + 2]!.body).toMatchObject({ text: SENTENCES[0], voice_id: 'tide' })
+    await page.getByRole('button', { name: 'Stop reading', exact: true }).click()
+    await read.waitFor({ timeout: 10_000 })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
 })

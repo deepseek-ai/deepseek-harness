@@ -1,8 +1,9 @@
-/** Registration lifetime, availability observation, explicit routing, and stream ownership of the synthesis registry. */
+/** Registration lifetime, availability observation, explicit routing, the voice preference, and stream ownership of the registry. */
 import { Context } from '@deepseek-ai/cordis'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import TextToSpeech, { SpeechSynthesisError } from '../src/index.ts'
 import type { SynthesisAvailability, SynthesisProvider, SynthesisProviderId, SynthesisSnapshot } from '../src/types.ts'
+import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 
 const id = 'tone' as SynthesisProviderId
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text)
@@ -10,7 +11,10 @@ const never = new AbortController().signal
 
 function provider(overrides: Partial<SynthesisProvider> = {}): SynthesisProvider {
   return {
-    info: { id, name: 'Tone', location: 'host-local', audio: { encoding: 'pcm-s16le', sampleRate: 8000 }, maxCharacters: 10 },
+    info: {
+      id, name: 'Tone', location: 'host-local', audio: { encoding: 'pcm-s16le', sampleRate: 8000 }, maxCharacters: 10,
+      voices: ['low', 'high'],
+    },
     async* synthesize(input) { yield bytes(input.text) },
     ...overrides,
   }
@@ -24,6 +28,16 @@ async function registry(defaultProvider: string = id) {
   return { ctx, fiber, tts: ctx.get('textToSpeech')! }
 }
 
+/** Mount the service behind Loader with a settings stub that writes patches back into its live entry config. */
+async function mounted(config: object) {
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  const live = await liveConfig(ctx, TextToSpeech, config)
+  const writes: object[] = []
+  ctx.provide('settings', { update: async (_entry: string, patch: Record<string, unknown>) => { writes.push(patch); await live.update(patch) } } as never)
+  return { tts: ctx.get('textToSpeech')!, writes }
+}
+
 async function collect(audio: AsyncIterable<Uint8Array>): Promise<string> {
   const chunks: Uint8Array[] = []
   for await (const chunk of audio) chunks.push(chunk)
@@ -34,8 +48,10 @@ it('registers a provider once, reports it ready by default, and withdraws it ide
   const { tts } = await registry()
   expect(tts.snapshot()).toEqual({ providers: [], selected: id })
   const dispose = tts.register(provider())
-  expect(tts.snapshot().providers).toEqual([{ ...provider().info, availability: { phase: 'ready' } }])
+  expect(tts.snapshot().providers).toEqual([{ ...provider().info, availability: { phase: 'ready' }, voice: 'low' }])
   expect(() => tts.register(provider())).toThrow('Speech synthesis provider already registered: tone')
+  const voiceless = provider({ info: { ...provider().info, id: 'mute' as SynthesisProviderId, voices: [] } })
+  expect(() => tts.register(voiceless)).toThrow('Speech synthesis provider lists no voice: mute')
   await dispose()
   await dispose()
   expect(tts.snapshot().providers).toEqual([])
@@ -77,7 +93,7 @@ it('resolves the configured provider and refuses a missing provider or a text ov
   expect(missing).toMatchObject({ name: 'SpeechSynthesisError', code: 'service-unavailable', message: 'Speech synthesis provider is unavailable: tone' })
   const registered = provider()
   tts.register(registered)
-  expect(tts.resolve({ text: 'hi' })).toEqual({ provider: registered, text: 'hi' })
+  expect(tts.resolve({ text: 'hi' })).toEqual({ provider: registered, text: 'hi', voice: 'low' })
   expect(() => tts.resolve({ text: 'x'.repeat(11) })).toThrow('Speech synthesis provider tone accepts at most 10 characters, got 11')
 })
 
@@ -156,4 +172,47 @@ it('ends followers, withdraws providers, and refuses registration once the servi
   await following
   expect(tts.snapshot().providers).toEqual([])
   expect(() => tts.register(provider())).toThrow('Speech synthesis service disposed')
+})
+
+it('speaks in the saved voice while the provider offers it, in its default otherwise, and in a named voice it offers', async () => {
+  const { tts } = await mounted({ defaultProvider: id, voice: 'high' })
+  const voiced = provider({ async* synthesize(input) { yield bytes(`${input.voice}:${input.text}`) } })
+  tts.register(voiced)
+  expect(tts.snapshot().providers[0]?.voice).toBe('high')
+  expect(await collect(tts.synthesize(tts.resolve({ text: 'a' }), never))).toBe('high:a')
+  expect(await collect(tts.synthesize(tts.resolve({ text: 'b', voice: 'low' }), never))).toBe('low:b')
+  expect(() => tts.resolve({ text: 'c', voice: 'nasal' })).toThrow('Speech synthesis provider tone offers no voice nasal')
+  // A saved voice that the provider does not offer, as after the provider was replaced, selects the provider's default.
+  const other = await mounted({ defaultProvider: id, voice: 'nasal' })
+  other.tts.register(voiced)
+  expect(other.tts.snapshot().providers[0]?.voice).toBe('low')
+  expect(other.tts.resolve({ text: 'd' }).voice).toBe('low')
+})
+
+it('saves an offered voice into the profile entry and reports it to followers', async () => {
+  const { tts, writes } = await mounted({ defaultProvider: id })
+  await expect(tts.configure({ voice: 'high' })).rejects.toMatchObject({ code: 'service-unavailable' })
+  tts.register(provider())
+  const stop = new AbortController()
+  const seen: (string | undefined)[] = []
+  const following = (async () => { for await (const snapshot of tts.follow(stop.signal)) seen.push(snapshot.providers[0]?.voice) })()
+  await expect.poll(() => seen).toEqual(['low'])
+  await expect(tts.configure({ voice: 'nasal' })).rejects.toThrow('Speech synthesis provider tone offers no voice nasal')
+  expect(writes).toEqual([])
+  await tts.configure({ voice: 'high' })
+  expect(writes).toEqual([{ voice: 'high' }])
+  expect(tts.resolve({ text: 'hi' }).voice).toBe('high')
+  await expect.poll(() => seen.at(-1)).toBe('high')
+  stop.abort()
+  await following
+})
+
+it('refuses to save a voice without the settings service or a profile entry', async () => {
+  const { ctx, tts } = await registry()
+  tts.register(provider())
+  await expect(tts.configure({ voice: 'high' })).rejects.toThrow('settings service and a profile entry')
+  const update = vi.fn()
+  ctx.provide('settings', { update } as never)
+  await expect(tts.configure({ voice: 'high' })).rejects.toThrow('settings service and a profile entry')
+  expect(update).not.toHaveBeenCalled()
 })

@@ -18,7 +18,12 @@ import { apply as hostApply } from '../src/index.ts'
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-read-aloud', descriptors: [] }
 const sessionId = 's1' as SessionId, messageId = 'm1' as MessageId
 
-vi.mock('../src/client/status.ts', () => ({ observeStatus: () => ({ state: createSnapshotStore('ready'), dispose: async () => {} }) }))
+vi.mock('../src/client/status.ts', () => ({
+  observeStatus: () => ({
+    state: createSnapshotStore({ state: 'ready', synthesis: { voices: ['low', 'high'], voice: 'low', sampleRate: 8000 } }),
+    dispose: async () => {},
+  }),
+}))
 afterEach(() => { vi.unstubAllGlobals() })
 
 /** Check that one erased registry payload carries hooks and the named verbs. */
@@ -40,7 +45,14 @@ async function fixture(plan: () => Promise<unknown>, fail = false) {
   new Remote()
   const requested: object[] = []
   const synthesize = vi.fn((request: object) => { requested.push(request); return (async function* () { yield { pcm: 'AAAA' } })() })
-  ctx.provide('remote.readAloud', { plan, synthesize })
+  type Saved = { ok: true; value: undefined } | { ok: false; error: Error }
+  const configure = vi.fn(async (_selection: object): Promise<Saved> => ({ ok: true, value: undefined }))
+  const audio = async function* (failure?: Error): AsyncGenerator<{ pcm: string }, void, undefined> {
+    if (failure !== undefined) throw failure
+    yield { pcm: 'AAAA' }
+  }
+  const sample = vi.fn((_request: object, _signal: AbortSignal) => audio())
+  ctx.provide('remote.readAloud', { plan, synthesize, configure, sample })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
@@ -66,12 +78,14 @@ async function fixture(plan: () => Promise<unknown>, fail = false) {
   const faces = () => ({
     action: face(injected('conversation.chat.assistant-actions', ReadAloudAction), 'toggle') as Record<string, unknown> & ReadAloudActionInjected,
     notice: face(injected('conversation.input.overlay', ReadAloudNotice), 'leave', 'dismissNotice') as Record<string, unknown> & ReadAloudNoticeInjected,
-    settings: face(injected('plugins.bundle.config', ReadAloudSettings), 'signIn') as Record<string, unknown> & ReadAloudSettingsInjected,
+    settings: face(
+      injected('plugins.bundle.config', ReadAloudSettings), 'signIn', 'configure', 'toggleSample', 'stopSample', 'dismissSampleNotice',
+    ) as Record<string, unknown> & ReadAloudSettingsInjected,
   })
-  return { ctx, unmount, synthesize, requested, closed, faces }
+  return { ctx, unmount, synthesize, configure, sample, audio, requested, closed, faces }
 }
 
-const PLAN: ReadingPlan = { seq: 4, segments: [{ start: 0, end: 5 }], dispatchBelowMs: 1000, sampleRate: 8000 }
+const PLAN: ReadingPlan = { seq: 4, segments: [{ start: 0, end: 5 }], dispatchBelowMs: 1000, sampleRate: 8000, voice: 'low' }
 
 it('registers the control, the notice, and the bundle details, and reads through the mounted Remote', async () => {
   hostApply()
@@ -83,12 +97,12 @@ it('registers the control, the notice, and the bundle details, and reads through
     expect(b.ctx.slots.entries('plugins.bundle.config').find(entry => entry.component === ReadAloudSettings))
       .toMatchObject({ options: { key: '@deepseek-ai/dsh-read-aloud-bundle' }, locale: 'read-aloud' })
     const { action, notice, settings } = b.faces()
-    expect(action.hooks.readAloudStatus.getSnapshot()).toBe('ready')
+    expect(action.hooks.readAloudStatus.getSnapshot().state).toBe('ready')
     expect(settings.hooks.readAloudStatus).toBe(action.hooks.readAloudStatus)
     expect(notice.hooks.reader).toBe(action.hooks.reader)
     action.toggle(messageId)
     expect(action.hooks.reader.getSnapshot().reading).toEqual({ sessionId, messageId, phase: 'loading' })
-    await vi.waitFor(() => { expect(b.requested).toEqual([{ sessionId, messageId, seq: 4, start: 0, end: 5 }]) })
+    await vi.waitFor(() => { expect(b.requested).toEqual([{ sessionId, messageId, seq: 4, voice: 'low', start: 0, end: 5 }]) })
     await vi.waitFor(() => { expect(action.hooks.reader.getSnapshot().reading?.phase).toBe('playing') })
     notice.leave()
     expect(action.hooks.reader.getSnapshot().reading).toBeNull()
@@ -109,6 +123,36 @@ it('turns a refused plan into a notice the Session can retire', async () => {
     notice.dismissNotice(1)
     expect(action.hooks.reader.getSnapshot().notice).toBeNull()
     expect(b.synthesize).not.toHaveBeenCalled()
+  } finally {
+    await b.ctx.fiber.dispose()
+  }
+})
+
+it('saves the voice and plays the audition through the mounted Remote', async () => {
+  const b = await fixture(async () => ({ ok: true, value: PLAN }))
+  try {
+    await b.ctx.plugin({ inject: [...inject], apply: ctx => mountReadAloud(ctx, REMOTE) })
+    const { action, settings } = b.faces()
+    // Every rendering of the details receives the same verbs.
+    expect(b.faces().settings).toBe(settings)
+    expect(settings.hooks.reader).toBe(action.hooks.reader)
+    await settings.configure('high')
+    expect(b.configure).toHaveBeenCalledExactlyOnceWith({ voice: 'high' })
+    const refused = new Error('offers no voice')
+    b.configure.mockResolvedValueOnce({ ok: false, error: refused })
+    await expect(settings.configure('nasal')).rejects.toBe(refused)
+    settings.toggleSample({ voice: 'high', language: 'zh', sampleRate: 8000 })
+    expect(settings.hooks.reader.getSnapshot().sample).toEqual({ voice: 'high', phase: 'loading' })
+    await vi.waitFor(() => { expect(settings.hooks.reader.getSnapshot().sample?.phase).toBe('playing') })
+    expect(b.sample.mock.calls[0]?.[0]).toEqual({ voice: 'high', language: 'zh' })
+    settings.stopSample()
+    expect(settings.hooks.reader.getSnapshot().sample).toBeNull()
+    expect(b.closed).toHaveBeenCalledOnce()
+    b.sample.mockImplementationOnce(() => b.audio(new Error('socket closed')))
+    settings.toggleSample({ voice: 'high', language: 'zh', sampleRate: 8000 })
+    await vi.waitFor(() => { expect(settings.hooks.reader.getSnapshot().sampleNotice).toMatchObject({ kind: 'failed' }) })
+    settings.dismissSampleNotice(settings.hooks.reader.getSnapshot().sampleNotice!.seq)
+    expect(settings.hooks.reader.getSnapshot().sampleNotice).toBeNull()
   } finally {
     await b.ctx.fiber.dispose()
   }

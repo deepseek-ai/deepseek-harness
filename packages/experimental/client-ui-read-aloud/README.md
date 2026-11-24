@@ -31,7 +31,7 @@ The control appears only while the Host reports synthesis `ready` and the curren
 
 A failure ends the reading after the audio already received has played, and a toast over the composer names the cause. After a failure that may pass (a busy or unreachable service, a timeout, an interrupted reply), the next click on the same reply continues at the failed segment. Leaving the Session stops its reading and discards its notice.
 
-The bundle's details state that synthesis is billed per submitted character, link DeepSeek's speech synthesis guide in the UI language, and offer sign-in while no credential is available.
+The bundle's details hold the voice preference: a field lists the provider's voices, and choosing one saves it on the Host for readings started afterwards; a choice that was not saved is reported under the field. The speaker beside the field plays a short sample sentence in the saved voice with the same three states as the control, and its failure is reported as a toast; it is disabled while no credential is available, and leaving the details stops it. A reading and a sample replace each other. The details also state that synthesis is billed per submitted character, link DeepSeek's speech synthesis guide in the UI language, and offer sign-in while no credential is available.
 
 -----
 

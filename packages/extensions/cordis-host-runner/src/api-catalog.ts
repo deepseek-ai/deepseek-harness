@@ -3328,21 +3328,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<ReadAloudStatus>',
-        description: 'Follow whether a reading can start, so the Client offers the action only while it can.',
+        description: 'Follow whether a reading can start and which voices exist, so the Client offers the action only while it can and shows the saved voice.',
         parameters: [{ name: 'signal', description: 'Client observation lifetime.' }],
-        returns: 'the current state, then each change of it.',
+        returns: 'the current status, then each change of it.',
+      },
+      {
+        signature: '@Remote async configure(selection: VoiceSelection): Promise<void>',
+        description: 'Save the voice that readings started afterwards use.',
+        parameters: [{ name: 'selection', description: 'one of the voices `follow()` reports.' }],
       },
       {
         signature: '@Remote({ resources: { session: target => target.sessionId } }) async plan(target: ReadingTarget, signal: AbortSignal): Promise<ReadingPlan>',
         description: 'Locate one finalized assistant message and cut its readable text into segments.',
         parameters: [{ name: 'target', description: 'Session and message to read.' }, { name: 'signal', description: 'Client cancellation.' }],
-        returns: 'the message\'s log position, its segments, and the pacing and audio facts; no text leaves the Host.',
+        returns: 'the message\'s log position, its segments, the voice, and the pacing and audio facts; no text leaves the Host.',
       },
       {
         signature: '@Remote({ mode: \'stream\', resources: { session: request => request.sessionId } }) async *synthesize(request: SegmentRequest, signal: AbortSignal): AsyncIterable<AudioFrame>',
-        description: 'Synthesize one planned segment. The range must be a segment of the message under the current configuration, so a Client cannot have other text spoken.',
-        parameters: [{ name: 'request', description: 'message position and one segment of its plan.' }, { name: 'signal', description: 'Client cancellation; it ends the provider request.' }],
+        description: 'Synthesize one planned segment in the plan\'s voice. The range must be a segment of the message under the current configuration, so a Client cannot have other text spoken.',
+        parameters: [{ name: 'request', description: 'message position, one segment of its plan, and the plan\'s voice.' }, { name: 'signal', description: 'Client cancellation; it ends the provider request.' }],
         returns: 'frames of whole PCM samples in playback order.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *sample(request: SampleRequest, signal: AbortSignal): AsyncIterable<AudioFrame>',
+        description: 'Speak the Host\'s sample sentence in one voice, so a listener can choose between voices.',
+        parameters: [{ name: 'request', description: 'voice to hear and the language of the sentence.' }, { name: 'signal', description: 'Client cancellation; it ends the provider request.' }],
+        returns: 'frames of whole PCM samples in playback order, at `SynthesisFacts.sampleRate`.',
       },
     ],
   },
@@ -4953,9 +4964,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'snapshot(): SynthesisSnapshot',
-        description: 'Read provider availability and the configured selection together.',
+        description: 'Read provider availability, the configured selection, and the voice preference together.',
         parameters: [],
         returns: 'one detached complete observation.',
+      },
+      {
+        signature: 'async configure(patch: SynthesisSelectionPatch): Promise<void>',
+        description: 'Persist the voice preference into this plugin\'s profile entry. The configured provider must be registered and offer the voice.',
+        parameters: [{ name: 'patch', description: 'voice that later syntheses use when they name none.' }],
+        returns: 'after the profile write and the live update it applies.',
       },
       {
         signature: 'async *follow(caller: AbortSignal): AsyncIterable<SynthesisSnapshot>',
@@ -4965,8 +4982,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'resolve(request: SynthesisRequest): SynthesisSpec',
-        description: 'Apply the configured provider and capture it. A missing provider and a text over the provider\'s limit fail explicitly.',
-        parameters: [{ name: 'request', description: 'complete text to speak.' }],
+        description: 'Apply the configured provider and the voice preference, and capture both. A missing provider, a text over the provider\'s limit, and a named voice the provider does not offer fail explicitly.',
+        parameters: [{ name: 'request', description: 'complete text to speak and optionally its voice.' }],
         returns: 'provider-pinned input for synthesize().',
       },
       {
@@ -9905,7 +9922,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ReadAloudStatus',
-    declaration: 'export interface ReadAloudStatus {\n    readonly state: \'ready\' | \'sign-in-required\' | \'unavailable\';\n}',
+    declaration: 'export interface ReadAloudStatus {\n    readonly state: \'ready\' | \'sign-in-required\' | \'unavailable\';\n    readonly synthesis?: SynthesisFacts;\n}',
   },
   {
     name: 'ReadFileLine',
@@ -9913,7 +9930,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ReadingPlan',
-    declaration: 'export interface ReadingPlan {\n    readonly seq: number;\n    readonly segments: readonly ReadingSegment[];\n    readonly dispatchBelowMs: number;\n    readonly sampleRate: number;\n}',
+    declaration: 'export interface ReadingPlan {\n    readonly seq: number;\n    readonly segments: readonly ReadingSegment[];\n    readonly dispatchBelowMs: number;\n    readonly sampleRate: number;\n    readonly voice: string;\n}',
   },
   {
     name: 'ReadingSegment',
@@ -10184,6 +10201,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RunnerFailureRule {\n    allowedExitCodes?: readonly number[];\n    fatalSignatures: readonly string[];\n    informationalLines?: readonly string[];\n}',
   },
   {
+    name: 'SampleRequest',
+    declaration: 'export interface SampleRequest {\n    readonly voice: string;\n    readonly language: string;\n}',
+  },
+  {
     name: 'SandboxEnforcement',
     declaration: 'export type SandboxEnforcement = \'full\' | \'partial\';',
   },
@@ -10361,7 +10382,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SegmentRequest',
-    declaration: 'export interface SegmentRequest extends ReadingTarget, ReadingSegment {\n    readonly seq: number;\n}',
+    declaration: 'export interface SegmentRequest extends ReadingTarget, ReadingSegment {\n    readonly seq: number;\n    readonly voice: string;\n}',
   },
   {
     name: 'SerializedElement',
@@ -11588,8 +11609,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SynthesisAvailabilitySource {\n    snapshot(): SynthesisAvailability;\n    subscribe(listener: () => void): () => void;\n}',
   },
   {
+    name: 'SynthesisFacts',
+    declaration: 'export interface SynthesisFacts {\n    readonly voices: readonly string[];\n    readonly voice: string;\n    readonly sampleRate: number;\n}',
+  },
+  {
     name: 'SynthesisInput',
-    declaration: 'export interface SynthesisInput {\n    readonly text: string;\n}',
+    declaration: 'export interface SynthesisInput {\n    readonly text: string;\n    readonly voice: string;\n}',
   },
   {
     name: 'SynthesisProvider',
@@ -11601,15 +11626,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SynthesisProviderInfo',
-    declaration: 'export interface SynthesisProviderInfo {\n    readonly id: SynthesisProviderId;\n    readonly name: string;\n    readonly location: \'host-local\' | \'cloud\';\n    readonly audio: SynthesisAudioFormat;\n    readonly maxCharacters: number;\n}',
+    declaration: 'export interface SynthesisProviderInfo {\n    readonly id: SynthesisProviderId;\n    readonly name: string;\n    readonly location: \'host-local\' | \'cloud\';\n    readonly audio: SynthesisAudioFormat;\n    readonly maxCharacters: number;\n    readonly voices: readonly string[];\n}',
   },
   {
     name: 'SynthesisProviderView',
-    declaration: 'export interface SynthesisProviderView extends SynthesisProviderInfo {\n    readonly availability: SynthesisAvailability;\n}',
+    declaration: 'export interface SynthesisProviderView extends SynthesisProviderInfo {\n    readonly availability: SynthesisAvailability;\n    readonly voice: string;\n}',
   },
   {
     name: 'SynthesisRequest',
-    declaration: 'export interface SynthesisRequest {\n    readonly text: string;\n}',
+    declaration: 'export interface SynthesisRequest {\n    readonly text: string;\n    readonly voice?: string;\n}',
+  },
+  {
+    name: 'SynthesisSelectionPatch',
+    declaration: 'export interface SynthesisSelectionPatch {\n    readonly voice: string;\n}',
   },
   {
     name: 'SynthesisSnapshot',
@@ -12246,6 +12275,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ViewerPluginPolicy',
     declaration: 'export interface ViewerPluginPolicy {\n    readonly plugin: string;\n    readonly mode: \'all\' | \'none\' | \'selected\';\n    readonly endpoints?: readonly string[];\n}',
+  },
+  {
+    name: 'VoiceSelection',
+    declaration: 'export interface VoiceSelection {\n    readonly voice: string;\n}',
   },
   {
     name: 'WebAdmission',

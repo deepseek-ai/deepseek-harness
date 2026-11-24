@@ -27,7 +27,7 @@ kind: "package-reference"
 
 [朗读 Bundle](../read-aloud-bundle/README.zh.md) 启用这一行。`segmentSeconds`（30，范围 5 到 300）是一次合成请求所带文本的估算朗读时长。`dispatchBelowSeconds`（15，范围 1 到 300）是 Client 请求下一段时，已收到的音频最多还可以有多少没有播放。段越短，提前停止后已付费却没听到的音频越少，但请求更多，语调重新起头的次数也更多。
 
-`follow(signal)` 流式给出 `ready`、`sign-in-required` 或 `unavailable`，每次变化给出一次。`plan({ sessionId, messageId })` 返回消息在日志中的位置、以朗读文本区间表示的各段、`dispatchBelowMs` 和采样率；文本不离开 Host。`synthesize({ sessionId, messageId, seq, start, end })` 为一个已规划的段流式返回帧，每帧是 200 毫秒的 base64 编码 16 位单声道 PCM。
+`follow(signal)` 在每次变化时流式给出状态：`ready`、`sign-in-required` 或 `unavailable`，以及在配置的 Provider 已注册时它的音色 id、保存的音色和采样率。`configure({ voice })` 保存之后朗读使用的音色。`plan({ sessionId, messageId })` 返回消息在日志中的位置、以朗读文本区间表示的各段、`dispatchBelowMs`、采样率和当时保存的音色；文本不离开 Host。`synthesize({ sessionId, messageId, seq, voice, start, end })` 用计划中的音色为一个已规划的段流式返回帧，每帧是 200 毫秒的 base64 编码 16 位单声道 PCM，所以一次朗读只用一个音色。`sample({ voice, language })` 为 Host 固定的一句话（中文、英文或日文；其他语言使用英文那一句）流式返回同样的帧，供听者比较音色。
 
 段落、标题、引用和列表项各读作一行。强调、链接和行内代码保留文字。代码块、表格、图片、HTML、分隔线、块级公式和脚注不读，行内公式只有不超过 20 个字符时才读。块级公式是成对 `$$` 之间的文字，行内公式是同一行里两个 `$` 之间的文字；代码和 HTML 里的美元符号不算分隔符。剩余内容里没有任何字母或数字的回复没有段。
 

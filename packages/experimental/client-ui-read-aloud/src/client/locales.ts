@@ -24,6 +24,15 @@ export const zh = {
   'settings.billing': '朗读使用 DeepSeek 云端语音合成，按提交合成的字符计费，由 DeepSeek 账号或 API Key 支付。回复按段提交，停止朗读后不再提交后面的段落。',
   'settings.guide': '语音合成指南',
   'settings.guideUrl': 'https://api-docs.deepseek.com/zh-cn/guides/tts',
+  'settings.voice': '音色',
+  'settings.sample': '试听',
+  'settings.sampleStop': '停止试听',
+  'settings.sampleLanguage': 'zh',
+  'settings.voiceFailed': '音色没有保存，请稍后再试',
+  'voice.stella': '海星（女声）',
+  'voice.tide': '暗潮（男声）',
+  'sample.unavailable': '试听失败，语音合成服务暂时不可用',
+  'sample.credential': '试听失败，请检查 DeepSeek 账号登录、API Key 或账户余额',
 }
 
 /** Every dictionary key. */
@@ -49,6 +58,15 @@ export const en: Record<ReadAloudKey, string> = {
   'settings.billing': 'Reading aloud uses DeepSeek cloud speech synthesis, billed per submitted character to your DeepSeek account or API key. A reply is submitted one segment at a time, and stopping a reading submits no further segments.',
   'settings.guide': 'Speech synthesis guide',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': 'Voice',
+  'settings.sample': 'Listen',
+  'settings.sampleStop': 'Stop',
+  'settings.sampleLanguage': 'en',
+  'settings.voiceFailed': 'The voice was not saved. Try again in a moment',
+  'voice.stella': 'Stella (female)',
+  'voice.tide': 'Tide (male)',
+  'sample.unavailable': 'The sample could not be played. Speech synthesis is unavailable right now',
+  'sample.credential': 'The sample could not be played. Check your DeepSeek sign-in, API key, or balance',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -78,6 +96,15 @@ export const ja = {
   'settings.billing': '読み上げは DeepSeek のクラウド音声合成を使用し、送信した文字数に応じて DeepSeek アカウントまたは API Key に課金されます。返信は区間ごとに送信され、読み上げを停止すると以降の区間は送信されません。',
   'settings.guide': '音声合成ガイド',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': '音声',
+  'settings.sample': '試聴',
+  'settings.sampleStop': '試聴を停止',
+  'settings.sampleLanguage': 'ja',
+  'settings.voiceFailed': '音声を保存できませんでした。しばらくしてからもう一度お試しください',
+  'voice.stella': 'Stella（女性）',
+  'voice.tide': 'Tide（男性）',
+  'sample.unavailable': '試聴できませんでした。音声合成サービスは現在利用できません',
+  'sample.credential': '試聴できませんでした。DeepSeek のサインイン、API Key、残高を確認してください',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish copy, checked against the English keys. */
@@ -100,6 +127,15 @@ export const es = {
   'settings.billing': 'La lectura en voz alta usa la síntesis de voz en la nube de DeepSeek y se factura por carácter enviado a tu cuenta de DeepSeek o API Key. La respuesta se envía por segmentos, y al detener la lectura no se envían más segmentos.',
   'settings.guide': 'Guía de síntesis de voz',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': 'Voz',
+  'settings.sample': 'Escuchar',
+  'settings.sampleStop': 'Detener',
+  'settings.sampleLanguage': 'en',
+  'settings.voiceFailed': 'No se guardó la voz. Inténtalo de nuevo en un momento',
+  'voice.stella': 'Stella (femenina)',
+  'voice.tide': 'Tide (masculina)',
+  'sample.unavailable': 'No se pudo reproducir la muestra. La síntesis de voz no está disponible en este momento',
+  'sample.credential': 'No se pudo reproducir la muestra. Comprueba tu inicio de sesión en DeepSeek, la API Key o el saldo',
 } satisfies Record<keyof typeof en, string>
 
 /** French copy, checked against the English keys. */
@@ -122,6 +158,15 @@ export const fr = {
   'settings.billing': 'La lecture à voix haute utilise la synthèse vocale cloud de DeepSeek, facturée par caractère envoyé à votre compte DeepSeek ou à votre API Key. La réponse est envoyée segment par segment, et l’arrêt de la lecture n’envoie aucun autre segment.',
   'settings.guide': 'Guide de la synthèse vocale',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': 'Voix',
+  'settings.sample': 'Écouter',
+  'settings.sampleStop': 'Arrêter',
+  'settings.sampleLanguage': 'en',
+  'settings.voiceFailed': 'La voix n’a pas été enregistrée. Réessayez dans un instant',
+  'voice.stella': 'Stella (féminine)',
+  'voice.tide': 'Tide (masculine)',
+  'sample.unavailable': 'Impossible de lire l’extrait. La synthèse vocale est indisponible pour le moment',
+  'sample.credential': 'Impossible de lire l’extrait. Vérifiez votre connexion à DeepSeek, votre API Key ou votre solde',
 } satisfies Record<keyof typeof en, string>
 
 /** German copy, checked against the English keys. */
@@ -144,6 +189,15 @@ export const de = {
   'settings.billing': 'Vorlesen nutzt die Cloud-Sprachsynthese von DeepSeek und wird pro übermitteltem Zeichen über dein DeepSeek-Konto oder deinen API Key abgerechnet. Eine Antwort wird abschnittsweise übermittelt, und nach dem Beenden werden keine weiteren Abschnitte übermittelt.',
   'settings.guide': 'Leitfaden zur Sprachsynthese',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': 'Stimme',
+  'settings.sample': 'Anhören',
+  'settings.sampleStop': 'Stoppen',
+  'settings.sampleLanguage': 'en',
+  'settings.voiceFailed': 'Die Stimme wurde nicht gespeichert. Versuche es gleich noch einmal',
+  'voice.stella': 'Stella (weiblich)',
+  'voice.tide': 'Tide (männlich)',
+  'sample.unavailable': 'Die Hörprobe konnte nicht abgespielt werden. Die Sprachsynthese ist gerade nicht verfügbar',
+  'sample.credential': 'Die Hörprobe konnte nicht abgespielt werden. Prüfe deine DeepSeek-Anmeldung, den API Key oder dein Guthaben',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian copy, checked against the English keys. */
@@ -166,6 +220,15 @@ export const ru = {
   'settings.billing': 'Чтение вслух использует облачный синтез речи DeepSeek и оплачивается за каждый отправленный символ с аккаунта DeepSeek или по API Key. Ответ отправляется по сегментам, и после остановки чтения следующие сегменты не отправляются.',
   'settings.guide': 'Руководство по синтезу речи',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': 'Голос',
+  'settings.sample': 'Прослушать',
+  'settings.sampleStop': 'Остановить',
+  'settings.sampleLanguage': 'en',
+  'settings.voiceFailed': 'Голос не сохранён. Повторите попытку чуть позже',
+  'voice.stella': 'Stella (женский)',
+  'voice.tide': 'Tide (мужской)',
+  'sample.unavailable': 'Не удалось воспроизвести образец. Синтез речи сейчас недоступен',
+  'sample.credential': 'Не удалось воспроизвести образец. Проверьте вход в DeepSeek, API Key или баланс',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese copy, checked against the English keys. */
@@ -188,4 +251,13 @@ export const pt = {
   'settings.billing': 'A leitura em voz alta usa a síntese de voz na nuvem da DeepSeek e é faturada por carácter enviado à sua conta DeepSeek ou API Key. A resposta é enviada segmento a segmento, e parar a leitura não envia mais segmentos.',
   'settings.guide': 'Guia de síntese de voz',
   'settings.guideUrl': 'https://api-docs.deepseek.com/guides/tts',
+  'settings.voice': 'Voz',
+  'settings.sample': 'Ouvir',
+  'settings.sampleStop': 'Parar',
+  'settings.sampleLanguage': 'en',
+  'settings.voiceFailed': 'A voz não foi guardada. Tente novamente dentro de momentos',
+  'voice.stella': 'Stella (feminina)',
+  'voice.tide': 'Tide (masculina)',
+  'sample.unavailable': 'Não foi possível reproduzir a amostra. A síntese de voz está indisponível neste momento',
+  'sample.credential': 'Não foi possível reproduzir a amostra. Verifique o início de sessão na DeepSeek, a API Key ou o saldo',
 } satisfies Record<keyof typeof en, string>

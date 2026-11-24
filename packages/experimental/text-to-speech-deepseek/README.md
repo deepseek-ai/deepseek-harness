@@ -25,7 +25,7 @@ This provider registers `deepseek-tts` with `text-to-speech` and sends each text
 <a id="use-this-package"></a>
 ## Use this package
 
-The [read-aloud bundle](../read-aloud-bundle/README.md) enables this row. `voice` selects `stella` (the default, a female voice) or `tide` (a male voice) for every request. `idleTimeoutMs` (30,000) is the longest wait for the next audio bytes while a consumer is asking, the first bytes included. `providerId` (`deepseek-tts`) is the registration id that `text-to-speech` selects.
+The [read-aloud bundle](../read-aloud-bundle/README.md) enables this row. The provider offers the voices `stella` (the default, a female voice) and `tide` (a male voice); `text-to-speech` chooses between them for each request. `idleTimeoutMs` (30,000) is the longest wait for the next audio bytes while a consumer is asking, the first bytes included. `providerId` (`deepseek-tts`) is the registration id that `text-to-speech` selects.
 
 The provider asks `ctx.deepseekAuth` for the account sign-in first and for the API key second, both bound to `/v1/tools/tts` under the origin of that credential's deployment. It is `ready` while either credential is configured and `unavailable` with `sign-in-required` while neither is. A deployment whose base URL points at a service without `/v1/tools/tts` fails each request as `service-unavailable`.
 
@@ -71,7 +71,7 @@ No effect; no model request, message, or Session event changes.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- A reply that ends cleanly before all audio was sent cannot be told from a complete one, because the PCM stream carries no length. The voice is fixed per deployment, and the service detects the language itself. Speech rate cannot be changed.
+- A reply that ends cleanly before all audio was sent cannot be told from a complete one, because the PCM stream carries no length. The service detects the language from the text and accepts no language choice. Speech rate cannot be changed.
 
 -----
 

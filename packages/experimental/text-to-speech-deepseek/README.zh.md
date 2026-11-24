@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-[朗读 Bundle](../read-aloud-bundle/README.zh.md) 启用这一行。`voice` 为所有请求选择 `stella`（默认，女声）或 `tide`（男声）。`idleTimeoutMs`（30,000）是使用方等待下一段音频字节的最长时间，首段字节也计入。`providerId`（`deepseek-tts`）是 `text-to-speech` 选择的注册 id。
+[朗读 Bundle](../read-aloud-bundle/README.zh.md) 启用这一行。Provider 提供 `stella`（默认，女声）和 `tide`（男声）两个音色；每次请求用哪一个由 `text-to-speech` 决定。`idleTimeoutMs`（30,000）是使用方等待下一段音频字节的最长时间，首段字节也计入。`providerId`（`deepseek-tts`）是 `text-to-speech` 选择的注册 id。
 
 Provider 先向 `ctx.deepseekAuth` 请求账号登录凭据，再请求 API Key，两者都绑定到该凭据所属部署 origin 下的 `/v1/tools/tts`。任一凭据已配置时为 `ready`，都没有时为带 `sign-in-required` 的 `unavailable`。部署的 base URL 指向没有 `/v1/tools/tts` 的服务时，每次请求以 `service-unavailable` 失败。
 
@@ -71,7 +71,7 @@ HTTP 401 只按状态码分类：账号登录凭据通过授权对象的 `reject
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 响应在音频没有发完时正常结束，无法与完整的响应区分，因为 PCM 流不带长度。音色按部署固定，语种由服务自动识别。不能调节语速。
+- 响应在音频没有发完时正常结束，无法与完整的响应区分，因为 PCM 流不带长度。语种由服务根据文本识别，不接受语种选择。不能调节语速。
 
 -----
 

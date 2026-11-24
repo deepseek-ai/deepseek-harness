@@ -3532,7 +3532,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-read-aloud`
 
 - `inject`: `textToSpeech` · `typert` · `sessions` · `sessionPersistence`
-- `source`: [`packages/experimental/read-aloud/src/index.ts:29`](../packages/experimental/read-aloud/src/index.ts)
+- `source`: [`packages/experimental/read-aloud/src/index.ts:31`](../packages/experimental/read-aloud/src/index.ts)
 
 ```ts config-catalog
 /** Pacing of one reading; both values trade cost after an early stop against the number of requests. */
@@ -4760,13 +4760,16 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-text-to-speech`
 
-- `source`: [`packages/experimental/text-to-speech/src/index.ts:20`](../packages/experimental/text-to-speech/src/index.ts)
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/text-to-speech/src/index.ts:24`](../packages/experimental/text-to-speech/src/index.ts)
 
 ```ts config-catalog
-/** Composition choice read when a synthesis is resolved. */
+/** Composition choice and the live voice preference, both read when a synthesis is resolved. */
 export interface Config {
   /** Id of the registered provider that speaks every request. */
   defaultProvider: string
+  /** Saved voice id, written by `configure()`; absent, or a voice the provider does not offer, selects the provider's default. */
+  voice: Volatile<string | undefined>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech -->
@@ -4777,21 +4780,16 @@ export interface Config {
 ## `@deepseek-ai/dsh-text-to-speech-deepseek`
 
 - `inject`: `textToSpeech` · `deepseekAuth`
-- `source`: [`packages/experimental/text-to-speech-deepseek/src/config.ts:10`](../packages/experimental/text-to-speech-deepseek/src/config.ts)
+- `source`: [`packages/experimental/text-to-speech-deepseek/src/config.ts:8`](../packages/experimental/text-to-speech-deepseek/src/config.ts)
 
 ```ts config-catalog
-/** Registration id, voice, and the wait bound of one synthesis request; `ctx.deepseekAuth` supplies the endpoint and credential. */
+/** Registration id and the wait bound of one synthesis request; `ctx.deepseekAuth` supplies the endpoint and credential. */
 export interface Config {
   /** Unique registration id; `text-to-speech` selects this exact id. */
   providerId: string
-  /** Voice that speaks every request. */
-  voice: Voice
   /** Longest wait, in milliseconds, for the next audio bytes while a consumer is asking, the first bytes included. */
   idleTimeoutMs: number
 }
-
-/** Voices of the speech synthesis API: `stella` is the female default, `tide` the male voice. */
-export type Voice = 'stella' | 'tide'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech-deepseek -->
 

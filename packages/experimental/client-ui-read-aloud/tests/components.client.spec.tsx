@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** The message control, the Session notice, and the bundle details as the user sees them. */
+/** The message control, the Session notice, and the bundle details with the voice preference as the user sees them. */
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { MessageId } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -17,11 +17,12 @@ afterEach(() => { cleanup(); vi.useRealTimers() })
 
 const sessionId = 's1' as SessionId, messageId = 'm1' as MessageId
 const mine = { sessionId, messageId }
-const IDLE: ReaderState = { reading: null, notice: null }
+const IDLE: ReaderState = { reading: null, notice: null, sample: null, sampleNotice: null }
+const SYNTHESIS = { voices: ['stella', 'tide'], voice: 'stella', sampleRate: 24_000 }
 
 function action(access = true) {
   const reader = createSnapshotStore<ReaderState>(IDLE, { flush: 'sync' })
-  const status = createSnapshotStore<ReadAloudStatus['state']>('ready', { flush: 'sync' })
+  const status = createSnapshotStore<ReadAloudStatus>({ state: 'ready', synthesis: SYNTHESIS }, { flush: 'sync' })
   const toggle = vi.fn()
   const props = {
     sessionId, messageId, toggle, t: makeTranslate(zh), useAccess: () => access,
@@ -31,7 +32,7 @@ function action(access = true) {
   return {
     toggle, view,
     read: (state: ReaderState) => { act(() => { reader.set(state) }) },
-    report: (state: ReadAloudStatus['state']) => { act(() => { status.set(state) }) },
+    report: (state: ReadAloudStatus['state']) => { act(() => { status.set({ state, synthesis: SYNTHESIS }) }) },
   }
 }
 
@@ -110,19 +111,29 @@ it('has a sentence for every notice kind and ends the Session reading when it le
   expect(b.leave).toHaveBeenCalledOnce()
 })
 
-function settings(state: ReadAloudStatus['state'], account: boolean) {
-  const signIn = vi.fn()
+function settings(initial: ReadAloudStatus, account = true) {
+  const status = createSnapshotStore<ReadAloudStatus>(initial, { flush: 'sync' })
+  const reader = createSnapshotStore<ReaderState>(IDLE, { flush: 'sync' })
+  const signIn = vi.fn(), toggleSample = vi.fn(), stopSample = vi.fn(), dismissSampleNotice = vi.fn()
+  let settle = Promise.withResolvers<undefined>()
+  const configure = vi.fn(() => { settle = Promise.withResolvers<undefined>(); return settle.promise.then(() => {}) })
   const props: ReadAloudSettingsProps = {
-    signIn, t: makeTranslate(zh),
-    useReadAloudStatus: bindSnapshotSelector(createSnapshotStore<ReadAloudStatus['state']>(state, { flush: 'sync' })),
+    signIn, configure, toggleSample, stopSample, dismissSampleNotice, t: makeTranslate(zh),
+    useReadAloudStatus: bindSnapshotSelector(status), useReader: bindSnapshotSelector(reader),
     useAccountSignIn: bindSnapshotSelector(createSnapshotStore(account, { flush: 'sync' })),
   }
-  render(<ReadAloudSettings {...props} />)
-  return { signIn }
+  const view = render(<ReadAloudSettings {...props} />)
+  return {
+    signIn, configure, toggleSample, stopSample, dismissSampleNotice, view,
+    report: (next: ReadAloudStatus) => { act(() => { status.set(next) }) },
+    read: (next: ReaderState) => { act(() => { reader.set(next) }) },
+    saved: async () => { await act(async () => { settle.resolve(undefined); await settle.promise }) },
+    refused: async () => { await act(async () => { settle.reject(new Error('Host unreachable')); await settle.promise.catch(() => {}) }) },
+  }
 }
 
 it('states the billing and links the speech synthesis guide when reading is available', () => {
-  settings('ready', true)
+  settings({ state: 'ready', synthesis: SYNTHESIS })
   expect(screen.getByText(zh['settings.billing'])).toBeTruthy()
   const link = screen.getByRole('link', { name: '语音合成指南' })
   expect([link.getAttribute('href'), link.getAttribute('target'), link.getAttribute('rel')])
@@ -131,15 +142,77 @@ it('states the billing and links the speech synthesis guide when reading is avai
 })
 
 it('explains a hidden control and offers sign-in only while the account entry exists', () => {
-  const signedOut = settings('sign-in-required', true)
+  const signedOut = settings({ state: 'sign-in-required', synthesis: SYNTHESIS })
   expect(screen.getByRole('status').textContent).toContain(zh['settings.signInRequired'])
   fireEvent.click(screen.getByRole('button', { name: '登录 DeepSeek' }))
   expect(signedOut.signIn).toHaveBeenCalledOnce()
+  // The voice can be chosen before a credential exists; hearing it cannot.
+  expect(screen.getByRole<HTMLSelectElement>('combobox', { name: '音色' }).disabled).toBe(false)
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: '试听' }).disabled).toBe(true)
   cleanup()
-  settings('sign-in-required', false)
-  expect(screen.queryByRole('button')).toBeNull()
+  settings({ state: 'sign-in-required', synthesis: SYNTHESIS }, false)
+  expect(screen.queryByRole('button', { name: '登录 DeepSeek' })).toBeNull()
   cleanup()
-  settings('unavailable', true)
+  settings({ state: 'unavailable' })
   expect(screen.getByRole('status').textContent).toBe(zh['settings.unavailable'])
   expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.queryByRole('combobox')).toBeNull()
+})
+
+it('lists the voices by name, saves a choice, and says when a choice was not saved', async () => {
+  const b = settings({ state: 'ready', synthesis: { ...SYNTHESIS, voices: ['stella', 'tide', 'nova'] } })
+  const select = screen.getByRole<HTMLSelectElement>('combobox', { name: '音色' })
+  expect([...select.options].map(option => [option.value, option.textContent])).toEqual([
+    ['stella', '海星（女声）'], ['tide', '暗潮（男声）'], ['nova', 'nova'],
+  ])
+  expect(select.value).toBe('stella')
+  fireEvent.change(select, { target: { value: 'tide' } })
+  expect(b.configure).toHaveBeenCalledExactlyOnceWith('tide')
+  expect(select.disabled).toBe(true)
+  await b.saved()
+  expect(select.disabled).toBe(false)
+  expect(screen.queryByRole('alert')).toBeNull()
+  // The Host reports the saved voice; the field shows what the Host holds.
+  b.report({ state: 'ready', synthesis: { ...SYNTHESIS, voice: 'tide' } })
+  expect(select.value).toBe('tide')
+  fireEvent.change(select, { target: { value: 'stella' } })
+  await b.refused()
+  expect(screen.getByRole('alert').textContent).toBe('音色没有保存，请稍后再试')
+  expect([select.disabled, select.value]).toEqual([false, 'tide'])
+  fireEvent.change(select, { target: { value: 'stella' } })
+  expect(screen.queryByRole('alert')).toBeNull()
+  await b.saved()
+})
+
+it('auditions the saved voice with the three states of the control and stops when the details leave the screen', () => {
+  const b = settings({ state: 'ready', synthesis: SYNTHESIS })
+  const button = screen.getByRole('button', { name: '试听' })
+  expect(button.dataset['readAloud']).toBe('idle')
+  fireEvent.click(button)
+  expect(b.toggleSample).toHaveBeenCalledExactlyOnceWith({ voice: 'stella', language: 'zh', sampleRate: 24_000 })
+  b.read({ ...IDLE, sample: { voice: 'stella', phase: 'loading' } })
+  expect([button.getAttribute('aria-label'), button.dataset['readAloud'], button.querySelectorAll('i').length]).toEqual(['停止试听', 'loading', 4])
+  b.read({ ...IDLE, sample: { voice: 'stella', phase: 'playing' } })
+  expect([button.dataset['readAloud'], button.querySelectorAll('i').length]).toEqual(['playing', 5])
+  expect(b.stopSample).not.toHaveBeenCalled()
+  b.view.unmount()
+  expect(b.stopSample).toHaveBeenCalledOnce()
+})
+
+it('reports an audition failure as a toast that names what to check and retires it after it faded', () => {
+  vi.useFakeTimers()
+  const b = settings({ state: 'ready', synthesis: SYNTHESIS })
+  expect(screen.queryByRole('alert')).toBeNull()
+  for (const [index, kind] of (['sign-in-required', 'api-key-invalid', 'quota-exceeded'] as const).entries()) {
+    b.read({ ...IDLE, sampleNotice: { seq: index + 1, kind } })
+    expect(screen.getByRole('alert').textContent).toBe(zh['sample.credential'])
+  }
+  for (const [index, kind] of (['failed', 'rate-limited', 'service-unavailable', 'timeout', 'service-error', 'text-rejected'] as const).entries()) {
+    b.read({ ...IDLE, sampleNotice: { seq: index + 4, kind } })
+    expect(screen.getByRole('alert').textContent).toBe(zh['sample.unavailable'])
+  }
+  act(() => { vi.advanceTimersByTime(6999) })
+  expect(b.dismissSampleNotice).not.toHaveBeenCalled()
+  act(() => { vi.advanceTimersByTime(1) })
+  expect(b.dismissSampleNotice).toHaveBeenCalledExactlyOnceWith(9)
 })

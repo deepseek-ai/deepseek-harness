@@ -27,7 +27,7 @@ kind: "package-bundle"
 
 在 **插件** 中开启这个 Bundle。登录 DeepSeek 账号或配置 DeepSeek API Key 后，每条已完成的助手回复下方会出现喇叭按钮；两者都没有时，Bundle 详情会说明缺少什么，并提供登录入口。
 
-回复随播放进度逐段提交合成，所以提前停止的朗读只为已经请求的段计费。`read-aloud` 行设置段长（`segmentSeconds`，30）和请求下一段的时机（`dispatchBelowSeconds`，15）；`text-to-speech-deepseek` 行设置音色（`voice`，`stella` 或 `tide`）。
+回复随播放进度逐段提交合成，所以提前停止的朗读只为已经请求的段计费。`read-aloud` 行设置段长（`segmentSeconds`，30）和请求下一段的时机（`dispatchBelowSeconds`，15）；音色在 Bundle 详情里选择，保存在 `text-to-speech` 行（`voice`，`stella` 或 `tide`）。
 
 -----
 

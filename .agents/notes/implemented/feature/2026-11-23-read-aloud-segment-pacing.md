@@ -22,6 +22,8 @@ The Host owns text and credentials. It finds the reply by message identity in th
 
 The interface is one control in the message action row, as in the chat app: a speaker, a loading mark until sound, and a waveform while reading. It appears only while a credential is available. Failures are reported in a toast, and a failure that may pass leaves the reading resumable at the failed segment, so the listener does not pay again for what was already heard.
 
+The voice is a saved preference. The synthesis API offers two voices; the bundle's details list them beside a control that plays a fixed sample sentence. The choice is saved in the registry's profile entry, as voice input saves its language, and a plan fixes the voice for its whole reading, so a reply is never read in two voices.
+
 ## Alternatives considered
 
 Submitting the whole reply in one request is the simplest use of the API and is the case the pacing exists to avoid.
@@ -34,4 +36,4 @@ Automatic reconnection and resumption after a network drop, which the chat backe
 
 ## Consequences
 
-A segment border is a new synthesis request, so intonation restarts there. A reading makes several requests, each counted against the account's concurrency limit of the synthesis API one at a time. The segment estimate is not measured audio; real segment lengths differ by voice and language. A reply that the service ends cleanly before all audio was sent cannot be detected, because the PCM stream carries no length. Reading while a reply is still streaming, automatic reading of new replies, pause, speed and voice selection in the interface are not part of this decision.
+A segment border is a new synthesis request, so intonation restarts there. A reading makes several requests, each counted against the account's concurrency limit of the synthesis API one at a time. The segment estimate is not measured audio; real segment lengths differ by voice and language. A reply that the service ends cleanly before all audio was sent cannot be detected, because the PCM stream carries no length. Reading while a reply is still streaming, automatic reading of new replies, pause and speed are not part of this decision. The API accepts neither a language nor a speech rate, so the interface offers neither.

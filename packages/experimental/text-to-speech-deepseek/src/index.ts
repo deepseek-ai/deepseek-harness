@@ -35,6 +35,8 @@ const ORDER: readonly DeepSeekAuthKind[] = ['account', 'api-key']
 const MAX_CHARACTERS = 5_000
 /** Sample rate of the API's `pcm` format. */
 const SAMPLE_RATE = 24_000
+/** `voice_id` values of the API: `stella` is its female default, `tide` its male voice. */
+const VOICES: readonly string[] = ['stella', 'tide']
 const IDLE = 'TTS_AUDIO_IDLE'
 const LOG_TAG = '[text-to-speech-deepseek]'
 
@@ -54,7 +56,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => ctx.textToSpeech.register({
     info: {
       id: options.providerId, name: 'DeepSeek', location: 'cloud',
-      audio: { encoding: 'pcm-s16le', sampleRate: SAMPLE_RATE }, maxCharacters: MAX_CHARACTERS,
+      audio: { encoding: 'pcm-s16le', sampleRate: SAMPLE_RATE }, maxCharacters: MAX_CHARACTERS, voices: VOICES,
     },
     availability,
     synthesize: (input, signal) => synthesize(ctx, options, input, signal),
@@ -105,7 +107,7 @@ async function authorize(ctx: Context, signal: AbortSignal): Promise<DeepSeekAut
 async function* synthesize(ctx: Context, options: ResolvedOptions, input: SynthesisInput, caller: AbortSignal): AsyncGenerator<Uint8Array> {
   const consumer = new AbortController()
   using watchdog = idleWatchdog(AbortSignal.any([consumer.signal, caller]), options.idleTimeoutMs, IDLE)
-  const audio = request(ctx, options, input, watchdog.signal)
+  const audio = request(ctx, input, watchdog.signal)
   try {
     for (;;) {
       const next = await watchdog.next(audio)
@@ -129,7 +131,7 @@ async function* synthesize(ctx: Context, options: ResolvedOptions, input: Synthe
 }
 
 /** One authorized request: its classified head, then the audio body. The request ends with its credential. */
-async function* request(ctx: Context, options: ResolvedOptions, input: SynthesisInput, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+async function* request(ctx: Context, input: SynthesisInput, signal: AbortSignal): AsyncGenerator<Uint8Array> {
   const authorization = await authorize(ctx, signal)
   const live = authorization.revoked === undefined ? signal : AbortSignal.any([signal, authorization.revoked])
   const signedOut = (error: unknown): never => {
@@ -139,7 +141,7 @@ async function* request(ctx: Context, options: ResolvedOptions, input: Synthesis
     throw error
   }
   const { endpoint, headers } = authorization
-  const opened = await openSynthesis({ endpoint, headers, text: input.text, voice: options.voice }, live).catch(signedOut)
+  const opened = await openSynthesis({ endpoint, headers, text: input.text, voice: input.voice }, live).catch(signedOut)
   const path = new URL(endpoint).pathname
   switch (opened.kind) {
     case 'audio': {

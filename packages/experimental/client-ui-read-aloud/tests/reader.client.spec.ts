@@ -1,9 +1,9 @@
-/** Pacing, stop, failure, and continuation of one reading, driven by a fake audio clock. */
+/** Pacing, stop, failure, and continuation of one reading, and the audition of a voice, driven by a fake audio clock. */
 import type { MessageId } from '@deepseek-ai/dsh-api-remotes/client'
-import type { AudioFrame, ReadingPlan, ReadingTarget, SegmentRequest } from '@deepseek-ai/dsh-read-aloud/types'
+import type { AudioFrame, ReadingPlan, ReadingTarget, SampleRequest, SegmentRequest } from '@deepseek-ai/dsh-read-aloud/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { Reader, type PcmPlayer } from '../src/client/reader.ts'
+import { Reader, type PcmPlayer, type ReaderState, type SampleTarget } from '../src/client/reader.ts'
 
 beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => { vi.useRealTimers() })
@@ -12,7 +12,10 @@ const target: ReadingTarget = { sessionId: 's1' as SessionId, messageId: 'm1' as
 const other: ReadingTarget = { sessionId: 's2' as SessionId, messageId: 'm2' as MessageId }
 const PLAN: ReadingPlan = {
   seq: 7, segments: [{ start: 0, end: 10 }, { start: 10, end: 20 }, { start: 20, end: 30 }], dispatchBelowMs: 1000, sampleRate: 100,
+  voice: 'low',
 }
+const IDLE: ReaderState = { reading: null, notice: null, sample: null, sampleNotice: null }
+const HIGH: SampleTarget = { voice: 'high', language: 'zh', sampleRate: 100 }
 /** One second of audio at 100 samples per second. */
 const SECOND: AudioFrame = { pcm: Buffer.alloc(200).toString('base64') }
 const settle = async (ms = 0): Promise<void> => { await vi.advanceTimersByTimeAsync(ms) }
@@ -23,7 +26,7 @@ function remoteFailure(code: string, details: object): Error {
 }
 
 /** One synthesis stream the test feeds by hand; a `deaf` one keeps delivering after its request was cancelled. */
-function channel(request: SegmentRequest, signal: AbortSignal, deaf: boolean) {
+function channel<Request>(request: Request, signal: AbortSignal, deaf: boolean) {
   const queue: (IteratorResult<AudioFrame> | Error)[] = []
   let wake = (): void => {}
   const put = (item: IteratorResult<AudioFrame> | Error): void => { queue.push(item); wake() }
@@ -47,7 +50,8 @@ function channel(request: SegmentRequest, signal: AbortSignal, deaf: boolean) {
 }
 
 function fixture(plan: ReadingPlan | Error = PLAN, deaf = false) {
-  const channels: ReturnType<typeof channel>[] = []
+  const channels: ReturnType<typeof channel<SegmentRequest>>[] = []
+  const samples: ReturnType<typeof channel<SampleRequest>>[] = []
   const players: { end: number; frames: number; closed: boolean }[] = []
   const planned: ReadingTarget[] = []
   const createPlayer = (): PcmPlayer => {
@@ -73,18 +77,23 @@ function fixture(plan: ReadingPlan | Error = PLAN, deaf = false) {
       channels.push(next)
       return next.frames
     },
+    sample: (request, signal) => {
+      const next = channel(request, signal, deaf)
+      samples.push(next)
+      return next.frames
+    },
     createPlayer,
   })
-  return { reader, channels, players, planned, state: () => reader.state.getSnapshot() }
+  return { reader, channels, samples, players, planned, state: () => reader.state.getSnapshot() }
 }
 
 it('requests each segment only when a second or less of received audio is unplayed, and ends after the last one plays out', async () => {
   const b = fixture()
   b.reader.toggle(target)
-  expect(b.state()).toEqual({ reading: { ...target, phase: 'loading' }, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: { ...target, phase: 'loading' }, notice: null })
   expect(b.players).toHaveLength(1)
   await settle()
-  expect(b.channels.map(open => open.request)).toEqual([{ ...target, seq: 7, start: 0, end: 10 }])
+  expect(b.channels.map(open => open.request)).toEqual([{ ...target, seq: 7, voice: 'low', start: 0, end: 10 }])
   b.channels[0]!.push(SECOND, SECOND, SECOND)
   b.channels[0]!.end()
   await settle()
@@ -102,7 +111,7 @@ it('requests each segment only when a second or less of received audio is unplay
   await settle(1500)
   expect(b.state().reading?.phase).toBe('playing')
   await settle(600)
-  expect(b.state()).toEqual({ reading: null, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: null })
   expect(b.players[0]).toMatchObject({ frames: 6, closed: true })
   expect(b.planned).toEqual([target])
 })
@@ -138,7 +147,7 @@ it('stops while the last audio plays out without reporting anything', async () =
   await settle(500)
   b.reader.toggle(target)
   await settle(5000)
-  expect(b.state()).toEqual({ reading: null, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: null })
 })
 
 it('replaces the reading in progress when another message is started', async () => {
@@ -186,7 +195,7 @@ it('reports a reply without readable text and opens no synthesis request', async
   const b = fixture({ ...PLAN, segments: [] })
   b.reader.toggle(target)
   await settle()
-  expect(b.state()).toEqual({ reading: null, notice: { ...target, seq: 1, kind: 'no-text' } })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: { ...target, seq: 1, kind: 'no-text' } })
   expect(b.channels).toHaveLength(0)
   expect(b.players[0]!.closed).toBe(true)
 })
@@ -202,9 +211,9 @@ it('plays the received audio out after a passing failure and continues at the fa
   await settle()
   expect(b.state().reading?.phase).toBe('playing')
   await settle(1000)
-  expect(b.state()).toEqual({ reading: null, notice: { ...target, seq: 1, kind: 'rate-limited' } })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: { ...target, seq: 1, kind: 'rate-limited' } })
   b.reader.toggle(target)
-  expect(b.state()).toEqual({ reading: { ...target, phase: 'loading' }, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: { ...target, phase: 'loading' }, notice: null })
   await settle()
   expect(b.planned).toHaveLength(1)
   expect(b.channels[2]!.request.start).toBe(10)
@@ -216,14 +225,14 @@ it('does not offer continuation after a failure that will not pass or before a p
   await settle()
   rejected.channels[0]!.fail(remoteFailure('readAloud/synthesis-failed', { reason: 'HTTP 400', code: 'text-rejected' }))
   await settle()
-  expect(rejected.state()).toEqual({ reading: null, notice: { ...target, seq: 1, kind: 'text-rejected' } })
+  expect(rejected.state()).toEqual({ ...IDLE, reading: null, notice: { ...target, seq: 1, kind: 'text-rejected' } })
   rejected.reader.toggle(target)
   await settle()
   expect(rejected.planned).toHaveLength(2)
   const unplanned = fixture(new Error('offline'))
   unplanned.reader.toggle(target)
   await settle()
-  expect(unplanned.state()).toEqual({ reading: null, notice: { ...target, seq: 1, kind: 'failed' } })
+  expect(unplanned.state()).toEqual({ ...IDLE, reading: null, notice: { ...target, seq: 1, kind: 'failed' } })
   unplanned.reader.toggle(target)
   await settle()
   expect(unplanned.planned).toHaveLength(2)
@@ -256,7 +265,7 @@ it('forgets an interrupted reading when another message is read', async () => {
   b.reader.toggle(other)
   await settle()
   b.reader.toggle(other)
-  expect(b.state()).toEqual({ reading: null, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: null })
   b.reader.toggle(target)
   await settle()
   expect(b.planned).toEqual([target, other, target])
@@ -269,7 +278,7 @@ it('drops the reading, the interrupted reading, and the notice of a Session the 
   b.reader.leave(other.sessionId)
   expect(b.state().reading).toMatchObject(target)
   b.reader.leave(target.sessionId)
-  expect(b.state()).toEqual({ reading: null, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: null })
   expect(b.players[0]!.closed).toBe(true)
   b.reader.toggle(target)
   await settle()
@@ -283,7 +292,7 @@ it('drops the reading, the interrupted reading, and the notice of a Session the 
   b.reader.leave(target.sessionId)
   expect(b.state()).toMatchObject({ notice: other })
   b.reader.leave(other.sessionId)
-  expect(b.state()).toEqual({ reading: null, notice: null })
+  expect(b.state()).toEqual({ ...IDLE, reading: null, notice: null })
   b.reader.toggle(other)
   await settle()
   expect(b.planned).toHaveLength(4)
@@ -307,4 +316,94 @@ it('retires only the notice that was shown and releases everything on disposal',
   expect(busy.state().reading).toBeNull()
   expect(busy.players.every(audio => audio.closed)).toBe(true)
   busy.reader.dispose()
+})
+
+it('plays an audition through its own output, shows its phases, and ends once its audio played out', async () => {
+  const b = fixture()
+  b.reader.toggleSample(HIGH)
+  expect(b.state()).toEqual({ ...IDLE, sample: { voice: 'high', phase: 'loading' } })
+  expect(b.players).toHaveLength(1)
+  await settle()
+  expect(b.samples.map(open => open.request)).toEqual([{ voice: 'high', language: 'zh' }])
+  b.samples[0]!.push(SECOND, SECOND)
+  await settle()
+  expect(b.state().sample).toEqual({ voice: 'high', phase: 'playing' })
+  // Playback catches up while more audio is still expected.
+  await settle(2100)
+  expect(b.state().sample).toEqual({ voice: 'high', phase: 'loading' })
+  b.samples[0]!.push(SECOND)
+  b.samples[0]!.end()
+  await settle(900)
+  expect(b.state().sample?.phase).toBe('playing')
+  await settle(200)
+  expect(b.state()).toEqual(IDLE)
+  expect(b.players[0]).toMatchObject({ frames: 3, closed: true })
+  expect(b.planned).toEqual([])
+})
+
+it('stops an audition on a second click of its voice, replaces it for another voice, and ignores what arrives afterwards', async () => {
+  const b = fixture(PLAN, true)
+  b.reader.toggleSample(HIGH)
+  await settle()
+  b.reader.toggleSample(HIGH)
+  expect(b.state()).toEqual(IDLE)
+  expect(b.samples[0]!.signal.aborted).toBe(true)
+  expect(b.players[0]!.closed).toBe(true)
+  // The cancelled request still delivers audio and then fails: neither is played or reported.
+  b.samples[0]!.push(SECOND)
+  await settle()
+  expect(b.players[0]!.frames).toBe(0)
+  b.reader.toggleSample(HIGH)
+  await settle()
+  b.reader.toggleSample({ ...HIGH, voice: 'low' })
+  expect(b.state().sample).toEqual({ voice: 'low', phase: 'loading' })
+  expect(b.players.map(audio => audio.closed)).toEqual([true, true, false])
+  await settle()
+  b.samples[1]!.fail(remoteFailure('readAloud/synthesis-failed', { reason: 'late', code: 'timeout' }))
+  await settle()
+  expect(b.state().sampleNotice).toBeNull()
+  b.reader.stopSample()
+  expect(b.state()).toEqual(IDLE)
+  b.reader.stopSample()
+})
+
+it('lets a reading and an audition replace each other, and keeps an audition when a Session is left', async () => {
+  const b = fixture()
+  b.reader.toggle(target)
+  await settle()
+  // Stopping auditions leaves a reading alone.
+  b.reader.stopSample()
+  expect(b.state().reading).toMatchObject(target)
+  b.reader.toggleSample(HIGH)
+  expect(b.state()).toEqual({ ...IDLE, sample: { voice: 'high', phase: 'loading' } })
+  expect(b.channels[0]!.signal.aborted).toBe(true)
+  b.reader.leave(target.sessionId)
+  expect(b.state().sample).toEqual({ voice: 'high', phase: 'loading' })
+  b.reader.toggle(target)
+  expect(b.state()).toEqual({ ...IDLE, reading: { ...target, phase: 'loading' } })
+  expect(b.players.map(audio => audio.closed)).toEqual([true, true, false])
+})
+
+it('reports an audition failure after the received audio played out and retires it by its sequence', async () => {
+  const b = fixture()
+  b.reader.toggleSample(HIGH)
+  await settle()
+  b.samples[0]!.push(SECOND)
+  b.samples[0]!.fail(remoteFailure('readAloud/synthesis-failed', { reason: 'HTTP 402', code: 'quota-exceeded' }))
+  await settle(900)
+  expect(b.state().sample?.phase).toBe('playing')
+  await settle(200)
+  expect(b.state()).toEqual({ ...IDLE, sampleNotice: { seq: 1, kind: 'quota-exceeded' } })
+  b.reader.dismissSampleNotice(9)
+  expect(b.state().sampleNotice?.seq).toBe(1)
+  b.reader.dismissSampleNotice(1)
+  expect(b.state()).toEqual(IDLE)
+  // A failure outside the Remote face is reported too, and the next audition clears it.
+  b.reader.toggleSample(HIGH)
+  await settle()
+  b.samples[1]!.fail(new Error('socket closed'))
+  await settle()
+  expect(b.state().sampleNotice).toEqual({ seq: 2, kind: 'failed' })
+  b.reader.toggleSample(HIGH)
+  expect(b.state().sampleNotice).toBeNull()
 })

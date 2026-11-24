@@ -71,11 +71,12 @@ async function host(setup: Setup) {
   await fiber
   const tts = ctx.get('textToSpeech')!
   const state = (): SynthesisAvailability | undefined => tts.snapshot().providers.find(row => row.id === id)?.availability
-  const audioOf = (text = '你好', signal = new AbortController().signal) => tts.synthesize(tts.resolve({ text }), signal)
+  const audioOf = (text = '你好', signal = new AbortController().signal, voice?: string) =>
+    tts.synthesize(tts.resolve(voice === undefined ? { text } : { text, voice }), signal)
   const speak = (text?: string, signal?: AbortSignal) => audioOf(text, signal)[Symbol.asyncIterator]()
-  const spoken = async (text?: string, signal?: AbortSignal): Promise<Uint8Array> => {
+  const spoken = async (text?: string, signal?: AbortSignal, voice?: string): Promise<Uint8Array> => {
     const chunks: Uint8Array[] = []
-    for await (const chunk of audioOf(text, signal)) chunks.push(chunk)
+    for await (const chunk of audioOf(text, signal, voice)) chunks.push(chunk)
     return new Uint8Array(Buffer.concat(chunks))
   }
   return { ctx, tts, state, audioOf, speak, spoken, stored, fiber }
@@ -87,15 +88,16 @@ function quietErrors() {
   return errors
 }
 
-it('sends the text to /v1/tools/tts with the account sign-in first and streams the audio back', async () => {
+it('sends the text and the named voice to /v1/tools/tts with the account sign-in first and streams the audio back', async () => {
   const { baseURL, requests } = await serviceDouble(audio(pcm(1, 2), pcm(3, 4)))
-  const setup = { baseURL, account: account(true).service, stored: { [KEY]: 'sk-key' }, config: { voice: 'tide' as const } }
+  const setup = { baseURL, account: account(true).service, stored: { [KEY]: 'sk-key' } }
   const { tts, state, spoken } = await host(setup)
   await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
   expect(tts.snapshot().providers[0]).toMatchObject({
     name: 'DeepSeek', location: 'cloud', audio: { encoding: 'pcm-s16le', sampleRate: 24_000 }, maxCharacters: 5000,
+    voices: ['stella', 'tide'], voice: 'stella',
   })
-  expect(await spoken('朗读这一段')).toEqual(pcm(1, 2, 3, 4))
+  expect(await spoken('朗读这一段', undefined, 'tide')).toEqual(pcm(1, 2, 3, 4))
   const [sent] = requests
   expect(sent!.path).toBe('/v1/tools/tts')
   expect(sent!.headers['x-dsh-auth-token']).toBe('account-token')
@@ -103,7 +105,7 @@ it('sends the text to /v1/tools/tts with the account sign-in first and streams t
   expect(sent!.body).toEqual({ text: '朗读这一段', voice_id: 'tide', format: 'pcm', filter_markdown: false })
 })
 
-it('falls back to the API key without a signed-in account and speaks with the default voice', async () => {
+it('falls back to the API key without a signed-in account and speaks in its first voice when none is saved', async () => {
   const { baseURL, requests } = await serviceDouble(audio(pcm(9, 9)))
   const { state, spoken } = await host({ baseURL, account: account(false).service, stored: { [KEY]: 'sk-key' } })
   await vi.waitFor(() => { expect(state()).toEqual({ phase: 'ready' }) })
