@@ -166,9 +166,10 @@ Shared management service; reads and management writes never activate a Session,
 /**
  * Deliver an observation to an existing task without consuming its scheduled occurrence.
  * @param id - Task to deliver to.
- * @param candidate - Observed text to send alongside the task's stored instruction.
+ * @param candidate - Observed text to send alongside the stored instruction; its JSON string must fit in 10 MiB of UTF-8.
  * @returns Resolves when the Session inbox and task receipt are both persisted, not when the model responds.
- * @throws If the caller is disposed, the runtime or task is unavailable, or delivery fails.
+ * @throws SOURCE_INPUT_TOO_LARGE before delivery if the encoded text exceeds the limit.
+ * Submission also rejects if the caller is disposed, the runtime or task is unavailable, or delivery fails.
  * A receipt write can fail after the inbox is persisted; submission does not retry.
  */
 async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>

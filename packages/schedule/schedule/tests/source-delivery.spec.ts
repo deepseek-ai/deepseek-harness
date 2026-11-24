@@ -200,6 +200,44 @@ it('delivers source input beside the stored prompt and commits a receipt without
   }
 })
 
+const SOURCE_JSON_LIMIT = 10 * 1024 * 1024
+
+it('limits source input to 10 MiB of UTF-8 JSON including quotes, escapes and Unicode', async () => {
+  const test = await setup()
+  const prefix = 'x'.repeat(65_535) + '😀é界"\\\b\f\n\r\t\u0000\u001f\udc00\ud800'
+  const text = prefix + 'x'.repeat(SOURCE_JSON_LIMIT - Buffer.byteLength(JSON.stringify(prefix)))
+  const json = JSON.stringify(text)
+  expect(Buffer.byteLength(json)).toBe(SOURCE_JSON_LIMIT)
+  await test.submit(text)
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  expect(sentText(test.agent.followup.mock.calls[0]![0]).endsWith(`source_input_json: ${json}`)).toBe(true)
+  const saved = structuredClone(taskTable(test.ctx).get(ID)!)
+  expect(saved.lastDelivery).toBeDefined()
+  vi.setSystemTime(Date.now() + 60_000)
+  test.resolve.mockClear()
+  test.agent.followup.mockClear()
+  test.flush.mockClear()
+
+  await expect(test.submit(`${text}x`)).rejects.toMatchObject(rejected('SOURCE_INPUT_TOO_LARGE'))
+  expect(test.resolve).not.toHaveBeenCalled()
+  expect(test.agent.followup).not.toHaveBeenCalled()
+  expect(test.flush).not.toHaveBeenCalled()
+  expect(taskTable(test.ctx).get(ID)).toEqual(saved)
+})
+
+it.each([
+  ['x', SOURCE_JSON_LIMIT - 1],
+  ['\u0000', Math.floor((SOURCE_JSON_LIMIT - 2) / 6) + 1],
+] as const)('refuses repeated %j exceeding 10 MiB of UTF-8 JSON', async (character, count) => {
+  const test = await setup()
+  const initial = structuredClone(taskTable(test.ctx).get(ID))
+  await expect(test.submit(character.repeat(count))).rejects.toMatchObject(rejected('SOURCE_INPUT_TOO_LARGE'))
+  expect(test.resolve).not.toHaveBeenCalled()
+  expect(test.agent.followup).not.toHaveBeenCalled()
+  expect(test.flush).not.toHaveBeenCalled()
+  expect(taskTable(test.ctx).get(ID)).toEqual(initial)
+})
+
 it.each(['paused', 'ended'] as const)('refuses a %s task before activating its Session', async (status) => {
   const test = await setup(stored({ status }))
   await expect(test.submit(INPUT)).rejects.toMatchObject(rejected('SOURCE_TASK_INACTIVE'))

@@ -2,7 +2,8 @@
 
 /** Content produced by a source for delivery to an automation task. */
 export interface AutomationCandidate {
-  /** Additional input accompanying the stored instruction; the producer owns size limits, and delivery does not truncate it. */
+  /** Observed text accompanying the stored instruction. Schedule rejects rather than truncates text whose
+   * `JSON.stringify` result exceeds 10 MiB in UTF-8, including quotes and escapes. */
   readonly text: string
 }
 
@@ -10,6 +11,7 @@ export interface AutomationCandidate {
 export type SourceErrorCode =
   | 'SOURCE_CLOSED'
   | 'SOURCE_DISPOSAL_FAILED'
+  | 'SOURCE_INPUT_TOO_LARGE'
   | 'SOURCE_TASK_RECEIVER_UNAVAILABLE'
   | 'SOURCE_TASK_UNAVAILABLE'
   | 'SOURCE_TASK_BUSY'

@@ -223,7 +223,9 @@ Missing tasks reject with `SOURCE_TASK_UNAVAILABLE`, paused or ended tasks with 
 
 A caller can submit while its fiber is unloading and still has a uid. `submit` returns a rejected Promise with Cordis `INACTIVE_EFFECT` for a disposed caller context and `SOURCE_TASK_RECEIVER_UNAVAILABLE` before Schedule is ready or while it is stopping. Runtime admission can reject with `SOURCE_CLOSED`. Accepted FIFO work drains even if the producer context subsequently unloads. Schedule drains accepted work before disposing its runtime and closing storage. A callback captured from a stopped service does not rebind to a replacement; the newly activated producer captures the replacement service in its own effect.
 
-Target, provider, and persistence failures propagate to the source without delivery-error aggregation. Session and task commits are separate, so a failure can follow inbox acceptance; submission does not retry automatically. Producers own observation size limits, output rate, persistence of observation state, and stop/drain cleanup. Source instances and intermediate observations are process-local, not task records; submission adds no event-only task schema or source-specific permission policy.
+For each candidate, `JSON.stringify(candidate.text)` must occupy at most 10 MiB (10,485,760 UTF-8 bytes), including the surrounding quotes and JSON escapes. If it exceeds that limit, `submit` rejects with `SOURCE_INPUT_TOO_LARGE` without truncating the text, adding a Session inbox message, or writing a delivery receipt. Producers may impose smaller limits.
+
+Target, provider, and persistence failures propagate to the source without delivery-error aggregation. Session and task commits are separate, so a failure can follow inbox acceptance; submission does not retry automatically. Producers own output rate, persistence of observation state, and stop/drain cleanup. Source instances and intermediate observations are process-local, not task records; submission adds no event-only task schema or source-specific permission policy.
 
 </details>
 
