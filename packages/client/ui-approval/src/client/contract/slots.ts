@@ -214,7 +214,7 @@ export interface ApprovalCardInput {
   /** Caller-localized warning label and explanation, with paragraphs separated by blank lines (`\n\n`). */
   warning?: { label: string; title: string; detail: string }
   /** Subject metadata for human recognition; the caller admits icon URLs. Never an authorization identity. */
-  subject?: { name: string; icon?: string; detail?: string }
+  subject?: { name: string; icon?: string }
   /** Optional tool-owned detail rendered through the existing child slot. */
   callId?: ToolCallId
   /** Caller-specific scope label; ordinary approvals use Allow once. */

@@ -67,9 +67,7 @@ function ApprovalFlow(props: FactoryComponentPropsOf<'conversation.approval.card
         >
           {subject !== undefined && <div className={css.subject}>
             {subject.icon !== undefined && <img src={subject.icon} alt="" width={40} height={40} draggable={false} />}
-            <div className={css.subjectText}><strong>{subject.name}</strong>
-              {subject.detail !== undefined && <small>{subject.detail}</small>}
-            </div>
+            <strong>{subject.name}</strong>
           </div>}
           <div className={css.heading}>
             <div className={css.headline}>{title}</div>

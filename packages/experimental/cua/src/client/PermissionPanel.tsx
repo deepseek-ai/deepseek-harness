@@ -34,9 +34,7 @@ function Applications({ title, apps, presentation, onAction, label, disabled }: 
         <div className={css.application} title={app.executablePath}>
           {icon !== undefined ? <img src={icon} alt="" width={32} height={32} draggable={false} />
             : <span className={css.iconPlaceholder} aria-hidden><IconLayersOutlineRegular size={24} /></span>}
-          <div className={css.applicationText}><strong>{app.name}</strong>
-            {app.executablePath !== undefined && <small>{app.executablePath}</small>}
-          </div>
+          <strong>{app.name}</strong>
         </div>
         <Button size="sm" variant="outline" disabled={disabled} onClick={() => { onAction(app.id) }}>{label}</Button>
       </li>})}</ul>

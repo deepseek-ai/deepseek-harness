@@ -68,7 +68,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await approval.getByRole('button', { name: 'Always allow', exact: true })
     .evaluate(button => getComputedStyle(button.parentElement!).flexWrap)).toBe('wrap')
   await expect.poll(() => approval.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
-  expect(await approval.getByText('/fixture/app', { exact: true }).count()).toBe(1)
+  expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),
     await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd), webSnapshotMode())
   const risks = approval.getByRole('button', { name: 'Risks', exact: true })
@@ -162,7 +162,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await panel.getByRole('region', { name: 'Authorize computer use', exact: true }).getByRole('group').count()).toBe(2)
   expect(await panel.getByRole('region', { name: 'Manage applications computer use can access', exact: true }).count()).toBe(1)
   await expect.poll(() => panel.locator('li img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
-  expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(1)
+  expect(await panel.getByText('/fixture/app', { exact: true }).count()).toBe(0)
   expect(await accessibility.getByText('DSH Computer Use.app', { exact: true }).count()).toBe(1)
   expect(await accessibility.textContent()).toContain('In System Settings, allow')
   expect(await accessibility.textContent()).toContain('to read interface controls, click, and type.')

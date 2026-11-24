@@ -45,7 +45,7 @@ kind: "package-reference"
 
 打包应用的授权依据 Windows 提供的进程 AUMID，包含包系列及包内的具体应用。包版本更新沿用授权，同包的其他应用不共享授权。桌面程序的授权依据规范化的可执行文件路径，以及窗口声明的 AUMID（如果存在）。其他可执行文件不能通过声明相同 AUMID 继承权限。在同一规范路径替换桌面程序且应用身份不变时沿用授权，移到其他路径则需重新授权。搜索与路径选择解析为同一身份时复用决定。一个路径承载多个已标识应用时返回 `AMBIGUOUS_APP`，不会一次授权所有应用。
 
-审批卡片和权限列表展示应用名称、图标，以及可获取的可执行文件路径。展示信息更新不会再次询问授权。旧版 Windows 决定需要重新确认，并在选择应用时撤销，不会自动转移。启动器的权限不会扩展到另一个可执行文件；启动后若应用身份不同，需要重新发现并选择该应用。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
+审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。展示信息更新不会再次询问授权。旧版 Windows 决定需要重新确认，并在选择应用时撤销，不会自动转移。启动器的权限不会扩展到另一个可执行文件；启动后若应用身份不同，需要重新发现并选择该应用。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
 
 身份区分遵循 Windows 的[包身份](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/package-identity-overview)与 [Shell AUMID 语义](https://learn.microsoft.com/en-us/windows/win32/shell/appids)。[PowerToys 程序启动器](https://github.com/microsoft/PowerToys/blob/main/src/modules/launcher/Plugins/Microsoft.Plugin.Program/Programs/Win32Program.cs)区分快捷方式展示和实际可执行目标；[simplewall](https://github.com/henrypp/simplewall/blob/master/src/wfp.c)使用可执行文件或包身份进行访问决策。
 

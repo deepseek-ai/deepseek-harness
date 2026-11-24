@@ -159,17 +159,18 @@ it('keeps permission guidance open while a fresh observation is pending', () => 
   expect(screen.getByRole('dialog')).toBe(dialog)
 })
 
-it('shows application icons, names, and the executable path before revocation', () => {
-  const f = fixture()
-  render(<PermissionPanel {...f.props} />)
-  f.publish({ ...observe({ ...value, allowedApps: [{ id: 'a'.repeat(64) as CuaApplicationId,
-    name: 'Calculator', executablePath: '/Applications/Calculator.app/Contents/MacOS/Calculator' }] }),
-  presentation: { value: { applications: [], icons: { '/Applications/Calculator.app/Contents/MacOS/Calculator': 'data:image/png;base64,aWNvbg==' } }, busy: false, error: null }, busy: false })
-  expect(screen.getByText('Calculator')).toBeTruthy()
-  expect(screen.getByText('/Applications/Calculator.app/Contents/MacOS/Calculator')).toBeTruthy()
-  const identity = screen.getByTitle('/Applications/Calculator.app/Contents/MacOS/Calculator')
-  expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
-})
+it.each(['/Applications/Calculator.app/Contents/MacOS/Calculator', 'C:\\Applications\\Calculator.exe'])(
+  'shows the application name and icon with %s available as a tooltip', (executablePath) => {
+    const f = fixture()
+    render(<PermissionPanel {...f.props} />)
+    f.publish({ ...observe({ ...value, allowedApps: [{ id: 'a'.repeat(64) as CuaApplicationId,
+      name: 'Calculator', executablePath }] }),
+    presentation: { value: { applications: [], icons: { [executablePath]: 'data:image/png;base64,aWNvbg==' } }, busy: false, error: null }, busy: false })
+    expect(screen.getByText('Calculator')).toBeTruthy()
+    expect(screen.queryByText(executablePath)).toBeNull()
+    const identity = screen.getByTitle(executablePath)
+    expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+  })
 
 it('uses a Shell icon for a packaged application without an executable path', () => {
   const f = fixture(), iconPath = 'shell:AppsFolder\\Package!App'

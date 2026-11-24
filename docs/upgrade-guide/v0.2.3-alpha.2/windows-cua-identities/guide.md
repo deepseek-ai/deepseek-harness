@@ -17,5 +17,5 @@ Custom permission clients must replace `cuaAccess.applicationIcons()` with `cuaA
 
 1. Restart DSH with the updated Windows helper and all files from its build output. Restart every Host using the same profile.
 2. Discover applications with `cua.listApps()` or `cua.findApps()`, and pass the returned ID unchanged to `cua.getApp()`. Replace stored discovery IDs in scripts; absolute executable paths remain accepted when they resolve to one application.
-3. Confirm the application name and path in the new approval request. Choose session access or explicitly save access. Do not copy old `allowedApps` IDs into new grants.
+3. Confirm the application in the new approval request. Choose session access or explicitly save access. Do not copy old `allowedApps` IDs into new grants.
 4. Check the Computer Use plugin page. Selecting the application retires its matching legacy entries. Repeated selection of the same identity reuses the new decision; selecting a different executable requires its own consent.

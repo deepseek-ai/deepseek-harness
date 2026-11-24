@@ -73,7 +73,7 @@ it('retires legacy grants without transferring consent and keeps one refreshed a
   const current = { ...identity, iconPath: 'shell:AppsFolder\\Fixture', supersedes: [legacy.id] }
   await f.access.select(f.agent, f.client, handle, current, signal)
   expect(f.answer).toHaveBeenCalledOnce()
-  expect(f.answer.mock.calls[0]![0].questions[0]!.intent).toHaveProperty('subject.detail', identity.executablePath)
+  expect(f.answer.mock.calls[0]![0].questions[0]!.intent).toHaveProperty('subject', { name: identity.name })
   expect((await f.access.status()).blockedApps).toEqual([])
   expect(f.grants()).toEqual([expect.objectContaining({ id: identity.id, name: identity.name, iconPath: current.iconPath })])
   expect(f.grants()[0]).not.toHaveProperty('supersedes')

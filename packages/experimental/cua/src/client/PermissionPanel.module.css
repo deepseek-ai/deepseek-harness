@@ -20,8 +20,6 @@
 .application { display: flex; align-items: center; gap: 10px; }
 .application strong { min-width: 0; overflow-wrap: anywhere; }
 .application img { flex-shrink: 0; object-fit: contain; }
-.applicationText { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
-.applicationText small { color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .applicationBadge {
   display: inline-flex;
   align-items: center;

@@ -22,7 +22,7 @@ kind: "package-reference"
 - [已知限制与后续工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
-应用授权从 `src/locales.ts` 提供中英日展示文案。它使用 User Questions 的固定审批呈现，仍独立于会话的工具审批策略。本机图标用于授权提示和权限页；保存的授权仅记录图标查询目标，不保存图像数据。审批前可查看名称与路径。系统权限、保存的决定和展示信息分别查询。`applications()` 无需本机操作即可读取最新决定；`applicationPresentation()` 仅为这些条目补充名称和图标。启用 `applicationMetadata` 的提供方根据保存的字段识别旧授权，另外查询展示信息；两者都不会改变授权。页面在进入、获得焦点、重新连接以及权限或插件操作完成后刷新。
+应用授权从 `src/locales.ts` 提供中英日展示文案。它使用 User Questions 的固定审批呈现，仍独立于会话的工具审批策略。本机图标用于授权提示和权限页；保存的授权仅记录图标查询目标，不保存图像数据。系统权限、保存的决定和展示信息分别查询。`applications()` 无需本机操作即可读取最新决定；`applicationPresentation()` 仅为这些条目补充名称和图标。启用 `applicationMetadata` 的提供方根据保存的字段识别旧授权，另外查询展示信息；两者都不会改变授权。页面在进入、获得焦点、重新连接以及权限或插件操作完成后刷新。
 
 -----
 

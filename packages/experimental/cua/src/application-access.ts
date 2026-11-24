@@ -174,8 +174,7 @@ export class ApplicationAccess {
             options, intent: {
               kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
               ...(identity.persistable && this.options.store.persistent ? { always: 'Always allow' } : {}),
-              subject: { name: identity.name, ...(identity.executablePath === undefined ? {} : { detail: identity.executablePath }),
-                ...(icon === undefined ? {} : { icon }) },
+              subject: { name: identity.name, ...(icon === undefined ? {} : { icon }) },
               display: applicationAccessDisplay,
             } }] })
         } catch (error) {
