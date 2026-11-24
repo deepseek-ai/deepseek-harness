@@ -4,7 +4,6 @@ import type {
   ConversationViewDefinition, RequestPromptChange, RequestView, ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { COMPACTION_INTERRUPTED_ERROR } from './copy-codes.ts'
-import { requestFocus } from './request-focus.ts'
 import type {
   TrajectoryConversationViewNode, TrajectoryRequestHeaderState,
   TrajectorySnapshot,
@@ -307,8 +306,7 @@ export const trajectoryViewDefinition: ConversationViewDefinition<
   TrajectorySnapshot
 > = {
   target: 'trajectory',
-  toolCallFocus: callId => callId,
-  requestFocus,
+  accepts: ['tool-call', 'request'],
   create: () => new TrajectorySnapshotBuilder(),
 }
 

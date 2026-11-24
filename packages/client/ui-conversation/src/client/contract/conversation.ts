@@ -3,6 +3,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type {
   ConversationGroupData, ConversationGroupedView, ConversationGroupInput,
 } from './groups.ts'
+import type { ConversationFocusKind } from './views.ts'
 
 /** Definition-local identity; start permits initialization when no earlier start is present. */
 export interface ConversationMatchResult {
@@ -316,19 +317,8 @@ export interface ConversationViewBuilder<Node extends ConversationViewNode = Con
 /** Registry contribution that creates an isolated builder when a Session first uses this target. */
 export interface ConversationViewDefinition<Node extends ConversationViewNode = ConversationViewNode, Snapshot = unknown> {
   readonly target: string
-  /**
-   * Address a tool call in this target's inspector; absent for non-inspection views.
-   * @param callId - tool-call identity from the Session.
-   * @returns the target's opaque focus identity.
-   */
-  toolCallFocus?(callId: string): string
-  /**
-   * Address one model request in this target's inspector; absent for views without request records.
-   * @param turn - owning turn number.
-   * @param step - step number of the request within its turn.
-   * @returns the target's opaque focus identity.
-   */
-  requestFocus?(turn: number, step: number): string
+  /** Focus kinds this target can reveal; absent for views that accept no focus requests. */
+  readonly accepts?: readonly ConversationFocusKind[]
   /** @returns a new Session-owned incremental builder. */
   create(): ConversationViewBuilder<Node, Snapshot>
   /**

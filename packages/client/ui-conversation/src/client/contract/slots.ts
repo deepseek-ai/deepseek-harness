@@ -469,8 +469,8 @@ export interface ConvViewOwnerProps {
   inspectRequest: ((turn: number, step: number) => void) | undefined
   /** Focus request addressed to the selected View. */
   viewRequest: import('./views.ts').ConversationViewRequest | null
-  /** Select a View and address one opaque focus identity to it. */
-  openView: (view: string, focus: string) => void
+  /** Select a View and address one Session entity focus to it; ignored unless that View accepts the focus kind. */
+  openView: (view: string, focus: import('./views.ts').ConversationFocus) => void
   /** Acknowledge the current one-shot focus request. */
   completeViewRequest: () => void
 }
@@ -518,8 +518,8 @@ export interface ConversationSessionInjected {
   }
   /** Bind input draft persistence to the Session-owned store instance. */
   bindDraftPersistence: (write: (draft: DraftSnapshot) => void) => () => void
-  /** Select and activate one View while addressing an opaque focus request to it. */
-  openView: (view: string, focus: string) => void
+  /** Select and activate one View while addressing one Session entity focus to it; ignored unless that View accepts the focus kind. */
+  openView: (view: string, focus: import('./views.ts').ConversationFocus) => void
 }
 
 /** One customizable View tab listed in the More menu. */

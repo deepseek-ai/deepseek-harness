@@ -48,7 +48,6 @@ import { TrajectoryTimeline as LocalizedTrajectoryTimeline } from '../src/client
 import {
   TrajectoryView, type TrajectoryViewInjected,
 } from '../src/client/TrajectoryView.tsx'
-import { requestFocus } from '../src/client/request-focus.ts'
 import { createTrajectoryDurationStore } from '../src/client/duration-store.ts'
 import { EMPTY_TRAJECTORY_SNAPSHOT } from '../src/client/trajectory-snapshot-builder.ts'
 import type { TrajectorySnapshot } from '../src/client/trajectory-contract.ts'
@@ -1414,7 +1413,7 @@ describe('TrajectoryView state', () => {
     expect(screen.queryByRole('row', { name: /子工具.*bash/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '收起所有调用' }))
     fireEvent.click(screen.getByRole('button', { name: '收起所有轮次' }))
-    view.rerender(<TrajectoryView {...props} viewRequest={{ view: 'trajectory', focus: 'grandchild' }} />)
+    view.rerender(<TrajectoryView {...props} viewRequest={{ view: 'trajectory', focus: { kind: 'tool-call', callId: 'grandchild' } }} />)
     expect(screen.getByRole('row', { name: /子工具.*grep/ }).getAttribute('aria-selected')).toBe('true')
     expect(screen.queryByRole('row', { name: /收起的/ })).toBeNull()
   })
@@ -1648,7 +1647,7 @@ describe('TrajectoryView state', () => {
         {...standaloneProps([])}
         {...standaloneHistory(historySnapshot(nodes))}
         {...standaloneDuration()}
-        viewRequest={{ view: 'trajectory', focus }}
+        viewRequest={{ view: 'trajectory', focus: { kind: 'tool-call', callId: focus } }}
         completeViewRequest={completeViewRequest}
       />,
     )
@@ -1677,7 +1676,7 @@ describe('TrajectoryView state', () => {
         {...standaloneProps([])}
         {...standaloneHistory(historySnapshot(nodes))}
         {...standaloneDuration()}
-        viewRequest={{ view: 'trajectory', focus: requestFocus(1, 1) }}
+        viewRequest={{ view: 'trajectory', focus: { kind: 'request', turn: 1, step: 1 } }}
         completeViewRequest={completeViewRequest}
       />,
     )
@@ -1709,7 +1708,7 @@ describe('TrajectoryView state', () => {
         {...standaloneProps([])}
         {...standaloneHistory(historySnapshot(nodes, { requests }))}
         {...standaloneDuration()}
-        viewRequest={{ view: 'trajectory', focus: requestFocus(turn, step) }}
+        viewRequest={{ view: 'trajectory', focus: { kind: 'request', turn, step } }}
         completeViewRequest={completeViewRequest}
       />,
     )

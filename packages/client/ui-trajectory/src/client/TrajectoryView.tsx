@@ -25,7 +25,6 @@ import {
   type TrajectoryTimelineMode,
   type TrajectoryTimeRange,
 } from './timeline.ts'
-import { parseRequestFocus } from './request-focus.ts'
 import { trajectoryRecordId } from './trajectory-record.ts'
 import { TrajectorySearchIndex } from './trajectory-search-index.ts'
 import type { TrajectorySnapshot } from './trajectory-contract.ts'
@@ -213,8 +212,9 @@ export function TrajectoryView({
   const requests = inspection.requests
   const callSchemas = inspection.callSchemas
   const focus = viewRequest?.view === 'trajectory' ? viewRequest.focus : null
-  const inspectRequestFocus = useMemo(() => focus === null ? null : parseRequestFocus(focus), [focus])
-  const inspectCallId = focus !== null && inspectRequestFocus === null ? focus : null
+  // Focus kinds are merge-extensible; kinds this View does not accept reveal nothing.
+  const inspectRequestFocus = useMemo(() => focus?.kind === 'request' ? { turn: focus.turn, step: focus.step } : null, [focus])
+  const inspectCallId = focus?.kind === 'tool-call' ? focus.callId : null
   const inspectNodeIndex = useMemo(() => inspectRequestFocus !== null
     ? requestNodeIndex(completeInspection, inspectRequestFocus)
     : inspectCallId === null

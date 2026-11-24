@@ -5,7 +5,7 @@ import type { InjectFace, PropsRenderFactories, PropsRenderSlots } from '@deepse
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   DisclosureRow, IconBranchOutlineRegular, IconWarningOutlineRegular, IconWifiOffOutlineRegular, IconWifiOutlineRegular,
-  InspectButton, JsonBlock, StateDot,
+  InspectButton, inspectScopeProps, JsonBlock, StateDot,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
@@ -132,7 +132,7 @@ function ModelRetryItem({ node, active, inFlight, failed, grouped, inspect, t }:
   const title = t('message.retry.title', { label, retry: node.retry, maximum })
   const remaining = t('message.retry.countdown', { seconds })
   return (
-    <div className={grouped ? css.retryBesideGroups : undefined} data-retry-row data-inspect-scope
+    <div className={grouped ? css.retryBesideGroups : undefined} data-retry-row {...inspectScopeProps}
       data-active={retrying || undefined} data-failed={failed || undefined}>
       <span className={a11yCss.visuallyHidden} role="status" aria-atomic="true">{status}</span>
       <DisclosureRow icon={retryIcon(node, failed)} title={title}

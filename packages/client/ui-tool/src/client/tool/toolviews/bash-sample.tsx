@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, type KeyboardEvent } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import clsx from 'clsx'
 import {
-  IconApiOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, InspectButton,
+  IconApiOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, InspectButton, inspectScopeProps,
   CommandText, TerminalBlock, TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -93,7 +93,7 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
       )
       : BASH_ICON
   return (
-    <div className={css.card} data-inspect-scope>
+    <div className={css.card} {...inspectScopeProps}>
       <div
         className={css.root}
         data-sample="bash"

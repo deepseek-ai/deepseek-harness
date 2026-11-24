@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconSkillOutlineRegular, InspectButton, TextShimmer,
+  IconChevronDownOutlineRegular, IconSkillOutlineRegular, InspectButton, inspectScopeProps, TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StartedToolCallViewProps, ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -136,7 +136,7 @@ function StartedSkillRow({ block, inspect, t }: Exclude<SkillRowProps, { phase: 
   } : {}
   const leading = disclosureLeading(open, expandable)
   return (
-    <div className={css.card} data-inspect-scope data-tool="skill" data-state={model.state}>
+    <div className={css.card} {...inspectScopeProps} data-tool="skill" data-state={model.state}>
       <div
         className={css.row}
         data-expandable={expandable || undefined}

@@ -23,7 +23,7 @@ import type {
   SessionListState, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  ConversationGroupedView,
+  ConversationFocus, ConversationGroupedView,
   ConversationSnapshot, ConversationViewSnapshotStore, GroupKey, GroupSnapshot,
   MessageImagesOwnerProps, NodeKey, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -445,7 +445,7 @@ function makeHarness(
   const loadThrough = vi.fn<(seq: number) => Promise<void>>().mockResolvedValue(undefined)
   // Mutable outline holder: tests swap the value and drive a re-render via set().
   let outlineValue: unknown
-  const openView = vi.fn<(view: string, focus: string) => void>()
+  const openView = vi.fn<(view: string, focus: ConversationFocus) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
   let savedScroll: ReturnType<ChatViewSlotProps['chatScroll']['read']> = null
   const chatScroll: ChatViewSlotProps['chatScroll'] = {
@@ -577,8 +577,8 @@ function makeHarness(
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
-    inspectCall: (callId: string) => { openView('trajectory', callId) },
-    inspectRequest: (turn: number, step: number) => { openView('trajectory', `request\u0000${turn}\u0000${step}`) },
+    inspectCall: (callId: string) => { openView('trajectory', { kind: 'tool-call', callId }) },
+    inspectRequest: (turn: number, step: number) => { openView('trajectory', { kind: 'request', turn, step }) },
     viewRequest: null,
     openView,
     completeViewRequest: () => {},
@@ -2807,7 +2807,7 @@ describe('ChatView', () => {
     expect(view.getByRole('button', { name: '查看' }).closest('[data-inspect-scope]')).not.toBeNull()
     fireEvent.click(view.getByRole('button', { name: '查看' }))
     const node = retry(2)
-    expect(h.openView).toHaveBeenCalledWith('trajectory', `request\u0000${String(node.turn)}\u0000${String(node.step)}`)
+    expect(h.openView).toHaveBeenCalledWith('trajectory', { kind: 'request', turn: node.turn, step: node.step })
   })
 
   it('omits the retry row inspect action without an inspection target', () => {
@@ -2823,7 +2823,7 @@ describe('ChatView', () => {
     })
     render(<h.ChatView {...h.props} />)
     h.toolOwners[0]?.inspectCall?.('a')
-    expect(h.openView).toHaveBeenCalledWith('trajectory', 'a')
+    expect(h.openView).toHaveBeenCalledWith('trajectory', { kind: 'tool-call', callId: 'a' })
   })
 
   it('shows assistant IconActions only on the last content message of each turn', () => {
@@ -4147,7 +4147,7 @@ describe('ChatView', () => {
     owner.openFile('src/a.ts')
     expect(h.openFile).toHaveBeenCalledWith('src/a.ts')
     owner.inspectCall?.('a')
-    expect(h.openView).toHaveBeenCalledWith('trajectory', 'a')
+    expect(h.openView).toHaveBeenCalledWith('trajectory', { kind: 'tool-call', callId: 'a' })
   })
 
   it('shows a Host open refusal with the reason and retries the same path', async () => {
