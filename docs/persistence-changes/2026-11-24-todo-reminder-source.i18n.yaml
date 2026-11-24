@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-24-todo-reminder-source.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-11-24-todo-reminder-source.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-11-24-todo-reminder-source:
+  en: d5cd476081e922eb
+  zh: f1187b4991d84870
+/2026-11-24-todo-reminder-source/summary:
+  en: 60d909881a88fa54
+  zh: 894144795334815e
+/2026-11-24-todo-reminder-source/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-11-24-todo-reminder-source/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-11-24-todo-reminder-source/compatibility:
+  en: 8eb40103ae375647
+  zh: c1784d19e969739d
+/2026-11-24-todo-reminder-source/verification:
+  en: dcc6d2535bf4db0c
+  zh: 685b7350cf62bc0b
+/2026-11-24-todo-reminder-source/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269
