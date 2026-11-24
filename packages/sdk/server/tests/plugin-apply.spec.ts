@@ -80,6 +80,7 @@ async function mountPlugin(
     writeDelayMs?: number
     failFlush?: boolean
     beforeServer?: (ctx: Context) => Promise<void> | void
+    startupWaitMs?: number
   } = {},
 ): Promise<ApplyHarness> {
   const ctx = new Context()
@@ -134,6 +135,7 @@ async function mountPlugin(
     output,
     exit,
     processEvents,
+    ...options.startupWaitMs === undefined ? {} : { startupWaitMs: options.startupWaitMs },
   })
 
   const frames = (): Record<string, unknown>[] =>
@@ -255,18 +257,19 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it('holds initialize until MCP manager servers leave their first connection attempt', async () => {
+  it('holds initialize within startupWaitMs until MCP manager servers leave their first connection attempt', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-mcp-'))
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
     const settled = Promise.withResolvers<string[]>()
     const signals: AbortSignal[] = []
     const harness = await mountPlugin(storageDir, {
+      startupWaitMs: 5000,
       beforeServer: (ctx) => {
         ctx.provide('mcpManager', { whenSettled: (signal: AbortSignal) => { signals.push(signal); return settled.promise } })
       },
     })
     try {
-      const initialize = { jsonrpc: '2.0', id: 'init-mcp', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model', mcpStartupTimeoutMs: 5000 } }
+      const initialize = { jsonrpc: '2.0', id: 'init-mcp', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model' } }
       const probe = { jsonrpc: '2.0', id: 'probe-during-mcp', method: 'nope/unknown' }
       harness.sendRaw(`${JSON.stringify(initialize)}\n${JSON.stringify(probe)}\n`)
       await harness.waitForFrame(frame => frame.id === 'probe-during-mcp', 'probe while initialize waits for MCP servers')
@@ -284,10 +287,11 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it('answers initialize after the MCP startup budget and names the servers still connecting', async () => {
+  it('answers initialize after startupWaitMs and names the MCP servers still connecting', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-mcp-timeout-'))
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
     const harness = await mountPlugin(storageDir, {
+      startupWaitMs: 20,
       beforeServer: (ctx) => {
         ctx.provide('mcpManager', {
           whenSettled: (signal: AbortSignal) => new Promise<string[]>((resolve) => {
@@ -297,7 +301,7 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
       },
     })
     try {
-      harness.send({ jsonrpc: '2.0', id: 'init-budget', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model', mcpStartupTimeoutMs: 20 } })
+      harness.send({ jsonrpc: '2.0', id: 'init-budget', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model' } })
       await expect(harness.waitForFrame(frame => frame.id === 'init-budget', 'initialize response after the MCP budget'))
         .resolves.toMatchObject({ result: { serverInfo: { name: 'deepseek-harness-sdk-runtime' } } })
       expect(harness.ctx.logger.buffer.filter(message => message.type === 'warn').map(message => String(message.args[0])))
@@ -308,7 +312,7 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
     }
   })
 
-  it('skips the MCP startup wait without a budget or with a zero budget', async () => {
+  it('skips the startup wait with the default zero startupWaitMs', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'dsh-jsonrpc-apply-mcp-off-'))
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
     const whenSettled = vi.fn((): Promise<string[]> => new Promise(() => {}))
@@ -316,10 +320,8 @@ describe('dsh-sdk-jsonrpc-server plugin apply', () => {
       beforeServer: (ctx) => { ctx.provide('mcpManager', { whenSettled }) },
     })
     try {
-      harness.send({ jsonrpc: '2.0', id: 'init-zero', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model', mcpStartupTimeoutMs: 0 } })
-      await harness.waitForFrame(frame => frame.id === 'init-zero', 'initialize response with a zero MCP budget')
-      harness.send({ jsonrpc: '2.0', id: 'init-omitted', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model' } })
-      await harness.waitForFrame(frame => frame.id === 'init-omitted', 'initialize response without an MCP budget')
+      harness.send({ jsonrpc: '2.0', id: 'init-default', method: 'initialize', params: { cwd: storageDir, provider: 'deepseek-official', model: 'apply-model' } })
+      await harness.waitForFrame(frame => frame.id === 'init-default', 'initialize response without the startup wait')
       expect(whenSettled).not.toHaveBeenCalled()
     } finally {
       await harness.dispose()

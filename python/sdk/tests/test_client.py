@@ -220,7 +220,6 @@ for line in sys.stdin:
         "model": "deepseek-v4-flash",
         "reasoningEffort": "max",
         "maxTokens": 4096,
-        "mcpStartupTimeoutMs": 5000,
     }
 
 
@@ -997,74 +996,6 @@ for line in sys.stdin:
     assert client._proc is None
 
 
-_INIT_RECORDING_RUNTIME = """
-import json
-import os
-import sys
-
-for line in sys.stdin:
-    msg = json.loads(line)
-    if msg.get("method") == "initialize":
-        with open(os.environ["INIT_DUMP"], "a") as dump:
-            dump.write(json.dumps(msg.get("params")) + "\\n")
-        print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": {"serverInfo": {"name": "fake-dsh"}}}), flush=True)
-    elif msg.get("method") == "shutdown":
-        print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": {}}), flush=True)
-        break
-""".strip()
-
-
-def test_initialize_sends_the_mcp_startup_wait_only_when_requested(tmp_path: Path) -> None:
-    script = tmp_path / "recording_runtime.py"
-    script.write_text(_INIT_RECORDING_RUNTIME)
-    init_dump = tmp_path / "init.jsonl"
-    for seconds in (None, 0, 2.5):
-        config = HarnessConfig(env={"INIT_DUMP": str(init_dump)})
-        with HarnessClient(config, _launch_args=(sys.executable, str(script))) as client:
-            client.initialize(cwd=".", provider="deepseek-official", model="dsagent", mcp_startup_timeout_seconds=seconds)
-    with DeepSeekHarness(_launch_args=(sys.executable, str(script)), cwd=str(tmp_path), env={"INIT_DUMP": str(init_dump)}) as harness:
-        harness.start()
-
-    sent = [json.loads(line).get("mcpStartupTimeoutMs") for line in init_dump.read_text().splitlines()]
-    assert sent == [None, 0, 2500, 5000]
-
-
-@pytest.mark.parametrize("seconds", [-1, -0.5, float("nan")])
-def test_initialize_rejects_a_negative_mcp_startup_wait(tmp_path: Path, seconds: float) -> None:
-    script = tmp_path / "recording_runtime.py"
-    script.write_text(_INIT_RECORDING_RUNTIME)
-    init_dump = tmp_path / "init.jsonl"
-    client = HarnessClient(HarnessConfig(env={"INIT_DUMP": str(init_dump)}), _launch_args=(sys.executable, str(script)))
-    client.start()
-    proc = client._proc
-    assert proc is not None
-
-    with pytest.raises(ValueError, match="mcp_startup_timeout_seconds must be at least 0"):
-        client.initialize(cwd=".", provider="deepseek-official", model="dsagent", mcp_startup_timeout_seconds=seconds)
-
-    assert proc.wait(timeout=1) is not None
-    assert client._proc is None
-    assert not init_dump.exists()
-
-
-@pytest.mark.parametrize("seconds", [float("inf"), 1e308])
-def test_initialize_closes_the_runtime_when_the_mcp_startup_wait_overflows(tmp_path: Path, seconds: float) -> None:
-    script = tmp_path / "recording_runtime.py"
-    script.write_text(_INIT_RECORDING_RUNTIME)
-    init_dump = tmp_path / "init.jsonl"
-    client = HarnessClient(HarnessConfig(env={"INIT_DUMP": str(init_dump)}), _launch_args=(sys.executable, str(script)))
-    client.start()
-    proc = client._proc
-    assert proc is not None
-
-    with pytest.raises(OverflowError):
-        client.initialize(cwd=".", provider="deepseek-official", model="dsagent", mcp_startup_timeout_seconds=seconds)
-
-    assert proc.wait(timeout=1) is not None
-    assert client._proc is None
-    assert not init_dump.exists()
-
-
 def test_public_signatures_omit_unsupported_wire_parameters() -> None:
     from deepseek_harness import DeepSeekHarnessConfig, Session
 
@@ -1077,8 +1008,6 @@ def test_public_signatures_omit_unsupported_wire_parameters() -> None:
     assert "max_tokens" in DeepSeekHarnessConfig.__dataclass_fields__
     assert "reasoning_effort" in DeepSeekHarnessConfig.__dataclass_fields__
     assert "max_tokens" in inspect.signature(HarnessClient.initialize).parameters
-    assert "mcp_startup_timeout_seconds" in DeepSeekHarnessConfig.__dataclass_fields__
-    assert "mcp_startup_timeout_seconds" in inspect.signature(HarnessClient.initialize).parameters
     assert "reasoning_effort" in inspect.signature(HarnessClient.initialize).parameters
     assert "client_name" not in HarnessConfig.__dataclass_fields__
     assert "client_version" not in HarnessConfig.__dataclass_fields__

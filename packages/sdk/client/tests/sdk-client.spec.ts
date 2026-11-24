@@ -325,7 +325,7 @@ describe('DeepSeekHarness', () => {
     await harness.close()
   })
 
-  it('sends the configured cwd/provider/model/reasoningEffort/maxTokens/mcpStartupTimeoutMs in the handshake exactly once', async () => {
+  it('sends the configured cwd/provider/model/reasoningEffort/maxTokens in the handshake exactly once', async () => {
     const dir = await tempDir('sdk-client-init-')
     const recordFile = join(dir, 'init.jsonl')
     const harness = createProcessDeepSeekHarness(fakeLaunch({ FAKE_RECORD_INIT: recordFile }), {
@@ -334,7 +334,6 @@ describe('DeepSeekHarness', () => {
       model: 'custom-model',
       reasoningEffort: brandString<ReasoningEffortId>('max'),
       maxTokens: 4096,
-      mcpStartupTimeoutMs: 5000,
       approvalRequests: true,
     })
     cleanups.push(() => harness.close())
@@ -348,7 +347,6 @@ describe('DeepSeekHarness', () => {
       model: 'custom-model',
       reasoningEffort: 'max',
       maxTokens: 4096,
-      mcpStartupTimeoutMs: 5000,
       approvalRequests: true,
     }])
   })

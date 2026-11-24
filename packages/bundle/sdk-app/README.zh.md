@@ -74,7 +74,7 @@ profile 继承 base 系统提示词，包括 `You are an AI agent powered by Dee
 - **用户插件可以破坏 stdout 纯净性**：profile 与逐次启动 patch 属于受信任应用组合。随附组合包不会向 stdout 写入非协议内容，但无法约束任意插入插件。
 - **插件变更共享 profile** — 保存的变更影响 `<DSH_HOME>/profiles/sdk`，以及使用同一 home 的其他嵌入方的下次启动；独立组合应使用不同的 `dshHome` 目录。Python 启动器使用所选下载运行时中的 Node/pnpm；没有该载荷或外部 pnpm 时，包操作会失败。
 - **配置变化需要重启**：`sdk-app` 组合包在 YAML 中禁用 HMR，因此一个 stdio 连接不会观察到 server 或 agent 依赖被替换。
-- **MCP 服务器可能错过首次 prompt**：`initialize` 只按客户端发送的 `mcpStartupTimeoutMs` 等待处于首次连接尝试的受管服务器；Python `DeepSeekHarness` 默认发送 5 秒，其他客户端默认不发送。超过该时间仍在连接或之后才加入的服务器，连上后才加入工具列表，因此更早的请求到达模型时没有它的工具。
+- **MCP 服务器可能错过首次 prompt**：本 profile 把 `sdk-jsonrpc-server.startupWaitMs` 设为 5000，因此 `initialize` 最多等待 5 秒，让受管服务器完成首次连接尝试；profile patch 可以修改该值，`0` 表示不等待。超过该时间仍在连接或之后才加入的服务器，连上后才加入工具列表，因此更早的请求到达模型时没有它的工具。
 - **SDK 中无法进行 OAuth 授权**：发起授权需要 Web server；请在使用同一 DSH home 的 Desktop 中授权该服务器，或改用请求头模板。
 
 

@@ -19,6 +19,9 @@
       inject: [sdkAppStartup, loader]
       config:
         maxTokensAsSuccess: !!js "process.env.DSH_MAX_TOKENS_AS_SUCCESS === undefined ? true : JSON.parse(process.env.DSH_MAX_TOKENS_AS_SUCCESS)"
+        # Clients prompt right after initialize; MCP servers that connect within
+        # this wait reach the first prompt, and later ones join afterwards.
+        startupWaitMs: 5000
 
 - id: hmr
   disabled: true

@@ -66,8 +66,6 @@ export interface DeepSeekHarnessOptions extends HarnessClientOptions {
   reasoningEffort?: ReasoningEffortId
   /** Maximum output tokens for each conversation-model request. */
   maxTokens?: number
-  /** Longest `initialize` wait, in milliseconds, for MCP manager servers in their first connection attempt; omission waits for none. */
-  mcpStartupTimeoutMs?: number
   /** Enable server approval requests; install client.onRequest() after client.start() and before harness.start(). */
   approvalRequests?: boolean
 }
