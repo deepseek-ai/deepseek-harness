@@ -64,8 +64,7 @@ declare module '@deepseek-ai/cordis-plugin-loader' {
     /**
      * Execute this Client package's scripts in a dedicated iframe Realm instead of a startup batch.
      * Omission or null keeps the Main Realm. An unsupported mode or a stage-one (`immediately`) row
-     * with script isolation fails composition. Reload an open page to change a known package's mode;
-     * its Host entry does not restart. This is an unstable test switch, not a product setting.
+     * with script isolation fails composition. This is an unstable test switch, not a product setting.
      */
     __unstable_enable_client_isolation?: ClientIsolation | null
   }
@@ -697,7 +696,9 @@ export class ClientModuleRegistry extends Service {
     // Subscribe before seeding so a fiber arriving mid-activation lands in the
     // same dirty set (Set idempotence makes the overlap harmless). An entry-less
     // fiber is a child plugin or a manual mount — never a loader row; O(1) drop.
-    const markDirty = (entryName: string): void => {
+    ctx.on('internal/plugin', (fiber) => {
+      const entryName = fiber.entry?.options.name
+      if (entryName === undefined) return
       this.dirty.add(entryName)
       if (this.flushQueued) return
       this.flushQueued = true
@@ -705,16 +706,6 @@ export class ClientModuleRegistry extends Service {
         this.flushQueued = false
         this.flush((err) => { ctx.logger.warn(err) })
       })
-    }
-    ctx.on('internal/plugin', (fiber) => {
-      const entryName = fiber.entry?.options.name
-      if (entryName !== undefined) markDirty(entryName)
-    })
-    // An option edit outside `config` patches the running fiber without restarting it.
-    ctx.on('loader/partial-dispose', (entry, previous, active) => {
-      if (active && (entry.options.__unstable_enable_client_isolation ?? null) !== (previous.__unstable_enable_client_isolation ?? null)) {
-        markDirty(entry.options.name)
-      }
     })
 
     // Activation pass: the initial scan IS the incremental path over the

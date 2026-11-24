@@ -72,8 +72,8 @@ export class ClientModuleSystem implements ClientModuleLoader {
   private readonly staticIds = new Set<string>()
   /** In-flight script transport per URL. */
   private readonly pendingArrival = new Map<string, Promise<void>>()
-  /** Owner generation captured by in-flight chunk requests and advanced on invalidation. */
-  private readonly generations = new Map<string, number>()
+  /** In-flight chunks compare generation identity. A factory registration fixes that generation's execution environment. */
+  private readonly generations = new Map<string, { inIframe?: boolean }>()
   /** Single-resource combo URL selected by HMR after invalidating one row. */
   private readonly reloadTargets = new Map<string, { url: string; rev: string }>()
   /** Materialization re-entrancy guard: factory-form CJS cannot deliver partial exports, so a cycle is fatal. */
@@ -187,6 +187,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const registrationName = registration.chunk === undefined ? registration.id : id
       throw new Error(`client-modules: duplicate factory registration for "${registrationName}" (bundle executed twice without invalidate?)`)
     }
+    const generation = this.generations.get(ownerId) ?? {}
+    generation.inIframe ??= this.isolatedRealms.has(ownerId)
+    this.generations.set(ownerId, generation)
     this.factories.set(id, {
       manifest: registration,
       factory: registration.factory,
@@ -195,16 +198,26 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   /** Run one shared script transport per URL, in the owning package's Realm. */
-  private loadShared(url: string, ownerId: string): Promise<void> {
+  private loadShared(url: string, row: BootModuleRow): Promise<void> {
+    const ownerId = row.id
     let transport = this.pendingArrival.get(url)
     if (transport === undefined) {
-      const isolated = this.isolatedRealms.isolates(ownerId)
+      const isolated = this.generations.get(ownerId)?.inIframe ?? row.isolation === 'script'
+      // An unsuccessful isolated load may have opened a frame without registering any code.
+      if (!isolated) this.isolatedRealms.take(ownerId)?.()
       transport = (isolated ? this.isolatedRealms.execute(ownerId, url) : this.mainRealm.execute({ url }))
         .then(() => { this.executedBundleUrls.add(url) })
         .finally(() => { this.pendingArrival.delete(url) })
       this.pendingArrival.set(url, transport)
     }
     return transport
+  }
+
+  /** Dependencies and transport retries can outlast the graph row that requested them. */
+  private arrivalRow(id: string): BootModuleRow {
+    const row = this.graphRows.get(id)
+    if (!row) throw new Error(`client-modules: package "${id}" was removed before its script could load`)
+    return row
   }
 
   /**
@@ -224,7 +237,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   private async arrive(row: BootModuleRow): Promise<void> {
     const { id } = row
-    if (this.isolatedRealms.isolates(id) && this.staticIds.has(id)) {
+    if (row.isolation === 'script' && this.staticIds.has(id)) {
       throw new Error(`client-modules: "${id}" is loaded by the page shell and cannot isolate its scripts`)
     }
     if (this.loadCache.has(id) || this.factories.has(id)) return
@@ -234,9 +247,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const failures: string[] = []
     const attempt = async (url: string): Promise<'registered' | 'transport-failed' | 'not-registered'> => {
       // Removal can cancel a pending script. Its retry must not allocate a new Realm for the evicted row.
-      if (!this.graphRows.has(id)) throw new Error(`client-modules: package "${id}" was removed before loading ${url}`)
+      this.arrivalRow(id)
       try {
-        await this.loadShared(url, id)
+        await this.loadShared(url, row)
       } catch (error) {
         failures.push(`${url}: ${describeError(error)}`)
         return 'transport-failed'
@@ -297,7 +310,8 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const dependency = this.graphRows.get(packageName)
       if (dependency !== undefined) await this.arriveDependency(row.id, dependency, [], visited)
     }
-    await this.arrive(row)
+    // Dependencies may have waited while reconciliation replaced this descriptor and its startup batch URL.
+    await this.arrive(this.arrivalRow(row.id))
   }
 
   /** Arrive one dependency, naming the consumer it failed for so a cascade reads as a chain, not as 44 unrelated failures. */
@@ -395,14 +409,14 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const existing = this.loadCache.get(id)
     if (existing !== undefined) return existing.exports
     if (!this.factories.has(id)) {
-      const generation = this.generations.get(ownerId) ?? 0
+      const generation = this.generations.get(ownerId)
       const row = this.graphRows.get(ownerId)
       if (row === undefined) throw new Error(`client-modules: chunk owner "${ownerId}" is not a boot graph entry`)
       /* v8 ignore next -- the final fallback needs an impossible graph-owned factory with no recorded revision. */
       const revision = this.factories.get(ownerId)?.rev ?? this.reloadTargets.get(ownerId)?.rev ?? row.rev
       const url = chunkUrl(row, fileName, revision)
-      await this.loadShared(url, ownerId)
-      if ((this.generations.get(ownerId) ?? 0) !== generation) {
+      await this.loadShared(url, row)
+      if (this.generations.get(ownerId) !== generation) {
         this.factories.delete(id)
         if (this.loadCache.delete(id)) this.publishModules()
         return await this.importChunk(ownerId, fileName)
@@ -517,7 +531,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     if (this.bootstrapIds.has(normalized)) throw new Error(`client-modules: replacing bootstrap module ${normalized} requires a page reload`)
     if (this.staticIds.has(normalized)) return
     this.importErrors.delete(normalized)
-    this.generations.set(normalized, (this.generations.get(normalized) ?? 0) + 1)
+    this.generations.set(normalized, {})
     const row = this.graphRows.get(normalized)
     if (row !== undefined) {
       const revision = rev ?? row.rev

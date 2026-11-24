@@ -377,7 +377,7 @@ describe('Realm provider startup order', () => {
 })
 
 describe('page-local placement and code replacement', () => {
-  it.each([false, true])('uses the first graph row for delayed chunks and real code HMR (initially isolated: %s)', async (isolated) => {
+  it.each([false, true])('keeps delayed chunks with the loaded entry and selects placement again for rebuilt code (initially isolated: %s)', async (isolated) => {
     const mounted: string[] = []
     let loadDetails!: () => Promise<unknown>
     const bundles: Record<string, Bundle> = {
@@ -390,7 +390,7 @@ describe('page-local placement and code replacement', () => {
     const row = (script: boolean) => entry('a', script ? { isolation: 'script' } : {})
     const b = await page([...PROVIDERS, row(isolated)], bundles)
     const first = isolated ? 'a#1' : 'main'
-    const next = isolated ? 'a#2' : 'main'
+    const next = isolated ? 'main' : 'a#1'
     await b.sync([...PROVIDERS, row(!isolated), entry('plain')], 'changed')
     expect(mounted).toEqual([`+${first}`, '+plain:main'])
     await expect(loadDetails()).resolves.toEqual({ environment: first })
@@ -399,18 +399,76 @@ describe('page-local placement and code replacement', () => {
     await expect(loadDetails()).resolves.toEqual({ environment: next })
     await b.sync([...PROVIDERS, entry('plain')], 'removed')
     expect(mounted.at(-1)).toBe(`-${next}`)
-    expect(b.provider.created.map(realm => [realm.executed, realm.disposed])).toEqual(isolated ? [
-      [[url('a'), chunkUrl('a', 'client.details.js')], 1], [[url('a', '1'), chunkUrl('a', 'client.details.js', '1')], 1],
-    ] : [])
+    const iframeRev = isolated ? '0' : '1'
+    expect(b.provider.created.map(realm => [realm.executed, realm.disposed])).toEqual([
+      [[url('a', iframeRev), chunkUrl('a', 'client.details.js', iframeRev)], 1],
+    ])
   })
 
-  it('pins a new package from its first accepted row even when another graph overtakes the installation', async () => {
+  it.each([false, true])('uses the row at first load, not a superseded installation graph (initially isolated: %s)', async (isolated) => {
+    const mounted: string[] = []
+    const b = await page([...PROVIDERS], { a: mounting(mounted) })
+    const rows = (script: boolean) => [...PROVIDERS, entry('a', script ? { isolation: 'script' } : {})]
+    const adding = b.sync(rows(isolated), 'added')
+    const flipping = b.sync(rows(!isolated), 'changed')
+    await Promise.all([adding, flipping])
+    expect(mounted).toEqual([isolated ? '+main' : '+a#1'])
+  })
+
+  it('does not bind a package to a failed load that never registered a factory', async () => {
+    const mounted: string[] = []
+    const b = await page([], { a: mounting(mounted) })
+    await b.sync([entry('a', { isolation: 'script' })], 'no-provider')
+    expect(b.modules.entries.state.getSnapshot().failures.map(failure => failure.id)).toEqual(['a'])
+    expect(b.main).toEqual([])
+    await b.sync([entry('a')], 'main')
+    expect(b.modules.entries.state.getSnapshot().failures).toEqual([])
+    expect(mounted).toEqual(['+main'])
+  })
+
+  it('keeps an unmaterialized factory delivered by a sibling’s Main batch in Main for its chunks', async () => {
+    const entries = [entry('first'), entry('sibling')]
+    const { modules, main } = system(entries, {
+      first: mounting([]),
+      sibling: environment => require => ({ apply() {}, environment, details: () => require.async('./client.details.js') }),
+      'sibling/client.details.js': reporting(),
+    })
+    onTestFinished(() => modules.dispose())
+    await modules.prefetch('first')
+    expect(main).toEqual([BATCH_URL])
+    expect(modules.loadCache.has('sibling')).toBe(false)
+    await start(modules)
+    await modules.entries.sync(graph([entry('first'), entry('sibling', { isolation: 'script' })]))
+    const sibling = await modules.import('sibling') as { environment: string; details(): Promise<unknown> }
+    expect(sibling.environment).toBe('main')
+    await expect(sibling.details()).resolves.toEqual({ environment: 'main' })
+    expect(main).toEqual([BATCH_URL, chunkUrl('sibling', 'client.details.js')])
+  })
+
+  it('releases an iframe that failed before registration when a later load runs in Main', async () => {
+    const mounted: string[] = []
+    const b = await page([...PROVIDERS], { a: (environment) => {
+      if (environment !== 'main') throw new Error('script error')
+      return mounting(mounted)(environment)
+    } })
+    await b.sync([...PROVIDERS, entry('a', { isolation: 'script' })], 'failed')
+    expect(b.modules.entries.state.getSnapshot().failures[0]?.message).toContain('script error')
+    expect(b.provider.created.map(realm => realm.disposed)).toEqual([0])
+    await b.sync([...PROVIDERS, entry('a')], 'main')
+    expect(b.modules.entries.state.getSnapshot().failures).toEqual([])
+    expect(mounted).toEqual(['+main'])
+    expect(b.provider.created.map(realm => realm.disposed)).toEqual([1])
+  })
+
+  it('ignores the mode of an installation withdrawn before any script request', async () => {
     const mounted: string[] = []
     const b = await page([...PROVIDERS], { a: mounting(mounted) })
     const adding = b.sync([...PROVIDERS, entry('a', { isolation: 'script' })], 'added')
-    const flipping = b.sync([...PROVIDERS, entry('a')], 'changed')
-    await Promise.all([adding, flipping])
-    expect(mounted).toEqual(['+a#1'])
+    await Promise.all([adding, b.sync(PROVIDERS, 'withdrawn')])
+    expect(mounted).toEqual([])
+    expect(b.provider.created).toEqual([])
+    await b.sync([...PROVIDERS, entry('a')], 'installed')
+    expect(mounted).toEqual(['+main'])
   })
 
   it.each([false, true])('retains materialized chunks, but not empty candidates, across failed rebuilds (isolated: %s)', async (isolated) => {

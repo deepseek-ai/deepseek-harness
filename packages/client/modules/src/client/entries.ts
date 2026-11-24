@@ -69,7 +69,6 @@ export class ClientEntries {
    * @param index - Private descriptor replacement and unused-module cleanup.
    */
   constructor(private readonly modules: ClientModuleLoader, private readonly index: ModuleIndex) {
-    index.realms.observe(modules.manifest)
     this.desired = modules.manifest
     this.release = new ReleaseChangeGate(modules.manifest.release)
   }
@@ -150,7 +149,6 @@ export class ClientEntries {
   sync(graph: unknown): Promise<void> {
     if (!this.release.observe(readRelease(graph))) return Promise.resolve()
     const manifest = parseBootManifest(graph)
-    this.index.realms.observe(manifest)
     if (entryTargets(manifest) !== entryTargets(this.desired)) this.generation++
     this.desired = manifest
     // Configuration is not code: it applies at once, before queued entry work creates or replaces any entry.

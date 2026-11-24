@@ -1506,41 +1506,16 @@ describe('unstable client isolation switch', () => {
     ].join('\n'))
   })
 
-  it('recomposes the graph when an option edit changes isolation without restarting the entry', async () => {
-    const packageName = '@fixture/iso-live'
-    writeBuiltPackage(packageName, {})
-    const entryOptions: Record<string, Record<string, unknown>> = { [packageName]: {} }
-    const scans = vi.fn()
-    const { context, service } = constructWithRoute([packageName], { entryOptions, onEntries: scans })
-    const before = service.graph()
-    const changed = vi.fn()
-    service.onGraphChanged(changed)
-    const patch = (previous: Record<string, unknown>, options: Record<string, unknown>, active = true) => {
-      entryOptions[packageName] = options
-      context.emit('loader/partial-dispose', { options: { name: packageName, ...options } } as never, previous, active)
-    }
-    scans.mockClear()
-    patch({ config: {} }, { config: { note: 'unrelated' } })
-    patch({}, { [FIELD]: null })
-    patch({ [FIELD]: null }, {})
-    patch({ [FIELD]: 'script' }, { [FIELD]: 'script' })
-    patch({ [FIELD]: 'script' }, {}, false)
-    await Promise.resolve()
-    expect(scans).not.toHaveBeenCalled()
-    expect(service.graph()).toBe(before)
-
-    patch({}, { [FIELD]: 'script' })
-    await Promise.resolve()
-    expect(changed).toHaveBeenCalledOnce()
-    const after = service.graph()
-    expect(after.rev).not.toBe(before.rev)
-    expect(after.entries[0]).toMatchObject({ rev: before.entries[0]!.rev, isolation: 'script' })
-    expect(after.batches).toEqual([])
-
-    writeFileSync(service.clientPath(packageName)!, 'module.exports = { rebuilt: true }\n')
-    utimesSync(service.clientPath(packageName)!, new Date(1), new Date(1))
-    service.rebuilt(packageName)
-    expect(service.graph().entries[0]).toMatchObject({ isolation: 'script' })
-    expect(service.graph().entries[0]!.rev).not.toBe(before.entries[0]!.rev)
+  it('keeps a rebuilt script-isolated bundle out of Main Realm batches', () => {
+    const name = '@fixture/iso-rebuilt'
+    writeBuiltPackage(name, {})
+    const { service } = constructWithRoute([name], { entryOptions: { [name]: { [FIELD]: 'script' } } })
+    const before = service.graph().entries[0]!.rev
+    writeFileSync(service.clientPath(name)!, 'module.exports = { rebuilt: true }\n')
+    service.rebuilt(name)
+    const graph = service.graph()
+    expect(graph.entries[0]).toMatchObject({ id: name, isolation: 'script' })
+    expect(graph.entries[0]!.rev).not.toBe(before)
+    expect(graph.batches).toEqual([])
   })
 })

@@ -3,24 +3,21 @@ import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { WebBootGraph } from '@deepseek-ai/dsh-client-modules'
 import { chromium } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
-import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole } from './scaffold.ts'
+import { launchWebScaffold, watchConsole } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
 const OVERLAY = fileURLToPath(new URL('./client-isolation.overlay.yml', import.meta.url))
 const FORGE = new URL('../../../packages/experimental/forge-bundle/', import.meta.url)
-const ISOLATED: Readonly<Record<string, string>> = {
-  '@deepseek-ai/dsh-client-ui-schedule': 'script',
-  '@deepseek-ai/dsh-experimental-client-ui-forge': 'script',
-}
-
 const FIXTURE = fileURLToPath(new URL('./fixtures/plugins/fixture-live-client', import.meta.url))
 const LIVE = '@fixture/live-client'
 const SCHEDULE = '@deepseek-ai/dsh-client-ui-schedule'
 const FORGE_UI = '@deepseek-ai/dsh-experimental-client-ui-forge'
+const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
 
-it('uses the first row for each package until reload and replaces rebuilt code in that mode', async () => {
+it('loads opted-in packages in separate iframe Realms and replaces the iframe of the rebuilt package', async () => {
   const fixture = await mkdtemp(join(tmpdir(), 'dsh-client-isolation-'))
   onTestFinished(() => rm(fixture, { recursive: true, force: true }))
   await cp(FIXTURE, fixture, { recursive: true })
@@ -29,81 +26,60 @@ it('uses the first row for each package until reload and replaces rebuilt code i
     extraInstallAnchors: [fileURLToPath(new URL('package.json', FORGE)), join(fixture, 'package.json')],
   })
   onTestFinished(() => scaffold.close())
-  const liveId = await scaffold.ctx.loader.create({ name: LIVE })
-  const live = scaffold.ctx.loader.resolve(liveId)
-  const schedule = [...scaffold.ctx.loader.entries()].find(entry => entry.options.name === SCHEDULE)!
-  const forge = [...scaffold.ctx.loader.entries()].find(entry => entry.options.name === FORGE_UI)!
-  const hostFibers = [live.fiber, schedule.fiber]
   const browser = await chromium.launch()
   onTestFinished(() => browser.close())
   const page = await newEnglishPage(browser)
   const tripwire = watchConsole(page)
+  onTestFailed(() => saveFailureShot(page, 'client-isolation'))
   await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
-  onTestFailed(async () => { await saveFailureShot(page, 'client-isolation') })
-  await page.waitForFunction(count => document.querySelectorAll('iframe[data-realm]').length >= count, Object.keys(ISOLATED).length, { timeout: 60_000 })
-  await page.getByRole('button', { name: 'Automation tasks', exact: true }).click()
+  await page.getByRole('button', { name: 'Automation tasks', exact: true }).click({ timeout: 60_000 })
   await page.getByRole('heading', { name: 'Automation tasks', exact: true }).waitFor()
-  const observed = await page.evaluate(() => {
-    type Graph = { entries: { id: string; isolation?: string }[]; batches: { entries: string[] }[] }
-    const page = window as { __DSH_BOOT__?: Graph; __ModuleLoader__?: unknown }
-    const boot = page.__DSH_BOOT__!
-    const resources = (target: Window): string[] => target.performance.getEntriesByType('resource')
-      .map(entry => new URL(entry.name).pathname + new URL(entry.name).search)
+
+  const frame = (id: string) => page.locator(`iframe[data-realm^="${id}#"]`)
+  const frameRevision = async (id: string) => {
+    const observed = await frame(id).contentFrame().locator('html').evaluate(() => ({
+      separate: window !== window.parent,
+      facade: '__ModuleLoader__' in window && '__ModuleLoader__' in window.parent
+        && window.__ModuleLoader__ === window.parent.__ModuleLoader__,
+      scripts: performance.getEntriesByType('resource').map(entry => entry.name)
+        .filter(name => new URL(name).pathname.startsWith('/plugins/')),
+    }))
+    expect(observed).toEqual({ separate: true, facade: true, scripts: [expect.stringContaining(`/plugins/??${id}/client.js&rev=`)] })
+    const revision = new URL(observed.scripts[0]!).searchParams.get('rev')
+    expect(revision).toBeTruthy()
+    return revision
+  }
+  const boot = await page.evaluate(() => {
+    const { entries, batches } = (window as { __DSH_BOOT__?: WebBootGraph }).__DSH_BOOT__!
     return {
-      isolated: boot.entries.filter(entry => entry.isolation !== undefined).map(entry => [entry.id, entry.isolation]),
-      batched: boot.batches.flatMap(batch => batch.entries),
-      main: resources(window),
-      frames: [...document.querySelectorAll<HTMLIFrameElement>('iframe[data-realm]')].map(frame => ({
-        realm: frame.dataset.realm,
-        separate: frame.contentWindow !== window,
-        facade: (frame.contentWindow as { __ModuleLoader__?: unknown } | null)?.__ModuleLoader__ === page.__ModuleLoader__,
-        scripts: resources(frame.contentWindow!).filter(name => name.startsWith('/plugins/')),
-      })),
+      isolated: Object.fromEntries(entries.filter(row => row.isolation !== undefined).map(row => [row.id, row.isolation])),
+      batched: batches.flatMap(batch => batch.entries),
+      main: performance.getEntriesByType('resource').map(entry => entry.name),
     }
   })
-  expect(Object.fromEntries(observed.isolated)).toEqual(ISOLATED)
-  for (const id of Object.keys(ISOLATED)) {
-    expect(observed.batched).not.toContain(id)
-    expect(observed.main.some(name => name.includes(`${id}/client.js`))).toBe(false)
-    const frames = observed.frames.filter(frame => frame.realm?.startsWith(`${id}#`) === true)
-    expect(frames).toHaveLength(1)
-    expect(frames[0]).toMatchObject({ separate: true, facade: true })
-    expect(frames[0]!.scripts).toEqual([expect.stringMatching(new RegExp(`^/plugins/\\?\\?${id.replace(/[/@-]/g, '\\$&')}/client\\.js&rev=`))])
+  expect(boot.isolated).toEqual({ [SCHEDULE]: 'script', [FORGE_UI]: 'script' })
+  expect(boot.batched).toContain(SIDEBAR)
+  expect(boot.main).toContainEqual(expect.stringContaining(`${SIDEBAR}/client.js`))
+  for (const id of [SCHEDULE, FORGE_UI]) {
+    expect(boot.batched).not.toContain(id)
+    expect(boot.main).not.toContainEqual(expect.stringContaining(`${id}/client.js`))
+    await frameRevision(id)
   }
-  const frame = (id: string) => page.locator(`iframe[data-realm^="${id}#"]`)
-  const original = await frame(SCHEDULE).elementHandle()
-  await page.getByText('Live plugin enabled', { exact: true }).waitFor()
-  expect(await page.evaluate(() => document.documentElement.dataset.liveMounts)).toBe('1')
-  await schedule.update({ __unstable_enable_client_isolation: null })
-  await live.update({ __unstable_enable_client_isolation: 'script' })
-  expect(scaffold.ctx.clientModules.graph().entries.filter(row => row.isolation).map(row => row.id).sort()).toEqual([LIVE, FORGE_UI].sort())
-  expect(live.fiber).toBe(hostFibers[0])
-  expect(schedule.fiber).toBe(hostFibers[1])
-  // Removal of an unrelated package acknowledges a graph containing both edits on this page.
-  await forge.update({ disabled: true })
-  await frame(FORGE_UI).waitFor({ state: 'detached' })
-  expect(await original!.evaluate(node => node.isConnected)).toBe(true)
-  expect(await frame(LIVE).count()).toBe(0)
-  expect(await page.evaluate(() => document.documentElement.dataset.liveMounts)).toBe('1')
+  const scheduleFrame = await frame(SCHEDULE).elementHandle()
 
-  const warningStart = tripwire.warnings.length
-  await page.reload({ waitUntil: 'load' })
+  const liveId = await scaffold.ctx.loader.create({ name: LIVE, __unstable_enable_client_isolation: 'script' })
   await page.getByText('Live plugin enabled', { exact: true }).waitFor()
-  acknowledgeReloadConnectionLoss(tripwire, warningStart)
-  expect(await frame(SCHEDULE).count()).toBe(0)
-  expect(await frame(LIVE).count()).toBe(1)
-  expect(await page.evaluate(() => document.documentElement.dataset.liveMounts)).toBeUndefined()
-  const beforeRebuild = await frame(LIVE).elementHandle()
-  await live.update({ __unstable_enable_client_isolation: null })
+  const original = await frame(LIVE).elementHandle()
+  const originalRevision = await frameRevision(LIVE)
   const file = join(fixture, 'client.js')
   const source = await readFile(file, 'utf8')
   await writeFile(file, source.replace('Live plugin enabled', 'Rebuilt live plugin enabled'))
   scaffold.ctx.clientModules.rebuilt(LIVE)
   await page.getByText('Rebuilt live plugin enabled', { exact: true }).waitFor()
-  expect(await beforeRebuild!.evaluate(node => node.isConnected)).toBe(false)
-  expect(await frame(LIVE).count()).toBe(1)
-  expect(await page.evaluate(() => document.documentElement.dataset.liveMounts)).toBeUndefined()
-  expect(live.fiber).toBe(hostFibers[0])
+  expect(await frameRevision(LIVE)).not.toBe(originalRevision)
+  expect(await original!.evaluate(node => node.isConnected)).toBe(false)
+  expect(await scheduleFrame!.evaluate(node => node.isConnected)).toBe(true)
+
   scaffold.ctx.loader.remove(liveId)
   await frame(LIVE).waitFor({ state: 'detached' })
   await page.locator('[data-live-client]').waitFor({ state: 'detached' })

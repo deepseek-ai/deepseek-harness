@@ -1,7 +1,6 @@
-/** Page-local script placement and ownership of each isolated package's current Realm. */
+/** Owns each script-isolated package's current Realm. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ScriptRealm, ScriptRealmCreateOptions, ScriptRealmId } from '@deepseek-ai/dsh-client-script-realm/client'
-import type { BootManifest } from './manifest.ts'
 
 /** Ordinary Loader rows whose activation supplies the iframe provider at cold boot. */
 export const ISOLATED_REALM_PROVIDER_ROWS: readonly string[] = [
@@ -18,7 +17,6 @@ interface RealmSlot {
 export class IsolatedRealms {
   /** The Loader context, available once entry startup begins. Providers can still come and go. */
   context?: Context
-  private readonly modes = new Map<string, boolean>()
   private readonly current = new Map<string, RealmSlot>()
   private readonly disposals = new Set<Promise<void>>()
   private sequence = 0
@@ -28,22 +26,12 @@ export class IsolatedRealms {
   constructor(private readonly bindings: Readonly<Record<string, unknown>>) {}
 
   /**
-   * Pin the execution mode of newly seen packages before graph work is queued.
-   * @param manifest - Accepted Host graph.
+   * Check whether this generation has an iframe Realm in use or being acquired.
+   * @param ownerId - Owning package.
+   * @returns Whether its current slot belongs to this owner.
    */
-  observe(manifest: BootManifest): void {
-    for (const { id, isolation } of manifest.modules) {
-      if (!this.modes.has(id)) this.modes.set(id, isolation === 'script')
-    }
-  }
-
-  /**
-   * Read the mode the page pinned for a package.
-   * @param id - Owning package.
-   * @returns Whether its scripts must run in an isolated Realm.
-   */
-  isolates(id: string): boolean {
-    return this.modes.get(id) === true
+  has(ownerId: string): boolean {
+    return this.current.has(ownerId)
   }
 
   /**
