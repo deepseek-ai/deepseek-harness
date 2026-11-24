@@ -34,7 +34,7 @@ import type {
   DshClientManifest, ClientModuleMetaFactory,
   DshClientModuleManifest,
 } from '@deepseek-ai/dsh-package-manifest'
-import type { ScriptRealm } from '@deepseek-ai/dsh-client-script-realm/client'
+import type { ScriptRealm, ScriptRealmRegistryHost } from '@deepseek-ai/dsh-client-script-realm/client'
 export type { ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientEntries } from './entries.ts'
 import type { ClientModuleSystem } from './system.ts'
@@ -456,7 +456,7 @@ export interface ClientModuleRecord {
  * consume. Mounted on `ctx.loader.internal` by the shell boot and provided
  * as `ctx.modules`.
  */
-export interface ClientModuleLoader {
+export interface ClientModuleLoader extends ScriptRealmRegistryHost {
   /**
    * Observe changes to {@link activeRecords} and to their cross-package dependency edges.
    * @param listener - Called after a record materializes, records are released, or a record requests another package.

@@ -1,6 +1,7 @@
 /** Script execution in the Main Realm or a package's resident iframe. */
-import type { Context } from '@deepseek-ai/cordis'
-import type { ScriptRealm, ScriptRealmCreateOptions, ScriptRealmId } from '@deepseek-ai/dsh-client-script-realm/client'
+import type {
+  ScriptRealm, ScriptRealmCreateOptions, ScriptRealmId, ScriptRealmRegistry, ScriptRealmRegistryHost,
+} from '@deepseek-ai/dsh-client-script-realm/client'
 import type { BootModuleRow } from './manifest.ts'
 
 /** Ordinary Loader rows whose activation supplies the iframe provider at cold boot. */
@@ -15,10 +16,10 @@ interface Frame {
 }
 
 /** Script placement lasts until the package and its dependents no longer need its code. */
-export class PackageRealms {
+export class PackageRealms implements ScriptRealmRegistryHost {
   private readonly places = new Map<string, 'main' | 'iframe' | Frame>()
   private readonly disposals = new Set<Promise<void>>()
-  private context?: Context
+  private registry: ScriptRealmRegistry | undefined
   private closed = false
 
   /**
@@ -27,11 +28,12 @@ export class PackageRealms {
    */
   constructor(private readonly main: Pick<ScriptRealm, 'execute'>, private readonly bindings: Readonly<Record<string, unknown>>) {}
 
-  /**
-   * Connect the page Loader so an iframe can be acquired on demand.
-   * @param context - Loader context.
-   */
-  connect = (context: Context): void => { this.context = context }
+  installRealmRegistry = (registry: ScriptRealmRegistry): (() => void) => {
+    this.registry = registry
+    return () => {
+      if (this.registry === registry) this.registry = undefined
+    }
+  }
 
   /**
    * Keep a factory that arrived in another package's Main batch in the Main Realm.
@@ -91,7 +93,7 @@ export class PackageRealms {
   }
 
   private async create(options: ScriptRealmCreateOptions): Promise<ScriptRealm> {
-    const registry = this.context?.get('scriptRealms')
+    const registry = this.registry
     if (!registry) throw new Error(`client-modules: script isolation needs the ${ISOLATED_REALM_PROVIDER_ROWS.join(' and ')} entries, and the Realm registry is not active`)
     return await registry.create('iframe', options)
   }

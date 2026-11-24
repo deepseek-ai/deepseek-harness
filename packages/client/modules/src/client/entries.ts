@@ -20,7 +20,6 @@ export interface ClientEntryState {
 
 /** Module-table capabilities used within serialized entry operations. */
 interface ModuleIndex {
-  connectRealms(ctx: Loader['ctx']): void
   update(manifest: BootManifest, managed: Iterable<string>): void
   /** Reset a package's code while its previous records stay active for the runtime that is still running. */
   invalidateForReplacement(id: string, rev: string): void
@@ -94,7 +93,6 @@ export class ClientEntries {
   start(loader: Loader, manifest: BootManifest): Promise<void> {
     if (this.loader !== undefined) throw new Error('client-modules: entries already started')
     this.loader = loader
-    this.index.connectRealms(loader.ctx)
     this.desired = manifest
     this.applyConfig(manifest)
     // Prepended so the Loader's interpolation runs inside this listener and cannot copy the returned object.
@@ -128,7 +126,7 @@ export class ClientEntries {
       const create = async ({ id }: { readonly id: string }): Promise<void> => {
         await this.create(loader, id).catch((error: unknown) => { loader.ctx.logger.error(error) })
       }
-      // A script-isolated bundle executes in a Realm that the provider entries supply once they are active.
+      // The registry must be installed and its iframe factory registered before an isolated bundle executes.
       if (manifest.modules.some(row => row.isolation === 'script')) {
         await Promise.all(manifest.plugins.filter(row => ISOLATED_REALM_PROVIDER_ROWS.includes(row.id)).map(create))
         await loader.await()

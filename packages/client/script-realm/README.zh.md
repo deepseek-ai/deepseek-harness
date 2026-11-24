@@ -28,6 +28,8 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
+注册表插件激活时，如果 `loader.internal` 上已挂载实现本包 `ScriptRealmRegistryHost` 接口的页面模块系统，插件就调用 `modules.installRealmRegistry(this)` 将自身安装到该系统。插件卸载时只撤下自己的注册表，不会移除已接替它的实例。如果激活时没有这样的模块系统，`ctx.scriptRealms` 仍可作为独立的 Cordis 服务使用；之后再挂载 Loader 不会触发安装。
+
 `create()` 按名称解析已注册提供方，并传入调用者提供的身份与取消信号。移除提供方后不能通过该注册继续创建实例，但不会销毁已经返回的实例。注册表不负责给模块分配环境；[Client 模块](../modules/README.zh.md)为脚本隔离的包选择环境。
 
 <a id="further-exploration"></a>

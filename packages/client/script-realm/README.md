@@ -28,6 +28,8 @@ The normal Client plugin provides `ctx.scriptRealms`. Provider plugins inject `s
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
+When the registry plugin activates, it calls `modules.installRealmRegistry(this)` if the page module system at `loader.internal` implements this package's `ScriptRealmRegistryHost` interface. Plugin teardown detaches its registry without disturbing a replacement. If no such module system is present at activation, `ctx.scriptRealms` still works as a standalone Cordis service; a Loader mounted later does not trigger installation.
+
 `create()` resolves a registered provider by name and passes the caller-supplied identity and cancellation signal to it. Removing a provider prevents subsequent creation through that registration; it does not dispose instances already returned. The registry does not assign modules to environments; [Client modules](../modules/README.md) selects the environment of a script-isolated package.
 
 <a id="further-exploration"></a>

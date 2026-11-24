@@ -160,7 +160,7 @@ async function controlled(behavior: Parameters<typeof realms>[2] = {}) {
   const provider = realms({}, () => [], behavior)
   ctx.scriptRealms.register('iframe', { create: provider.factory })
   const isolated = new PackageRealms({ execute: () => Promise.reject(new Error('unexpected Main script')) }, { __ModuleLoader__: {} })
-  isolated.connect(ctx)
+  ctx.effect(() => isolated.installRealmRegistry(ctx.scriptRealms))
   const execute = (url: string) => isolated.execute({ id: 'a', isolation: 'script' }, url)
   return { isolated, provider, execute }
 }
@@ -264,12 +264,13 @@ describe('script-isolated execution', () => {
     const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
     const entries = ['a', 'b'].map(id => entry(id, { isolation: 'script' }))
     const bundles = { a: mounting([]), b: mounting([]) }
-    const { modules } = system(entries, bundles)
+    const { modules } = system([], bundles)
     const provider = realms(bundles, () => entries, { dispose: vi.fn(() => Promise.resolve()).mockRejectedValueOnce(failure) })
     const ctx = new Context()
+    await start(modules, ctx)
     await ctx.plugin(ScriptRealmRegistry)
     ctx.scriptRealms.register('iframe', { create: provider.factory })
-    await start(modules, ctx)
+    await modules.entries.sync(graph(entries))
     await expect(modules.dispose()).rejects.toMatchObject({ errors: [failure] })
     expect(reported).toHaveBeenCalledWith('client-modules: could not dispose isolated Realm a', failure)
     expect(provider.created.map(realm => realm.disposed)).toEqual([1, 1])
@@ -347,20 +348,36 @@ describe('Realm provider startup order', () => {
     expect(b.provider.created).toEqual([])
   })
 
-  it('reuses a resident iframe after provider removal; a new installation still needs the provider', async () => {
+  it.each([
+    [IFRAME_ID, 'provider "iframe" is not registered'],
+    [REGISTRY_ID, 'Realm registry is not active'],
+  ])('rebuilds in the resident iframe after removing %s, but cannot acquire a new one', async (removed, message) => {
     const mounted: string[] = []
     const a = entry('a', { isolation: 'script' })
-    const registry = entry(REGISTRY_ID)
+    const remaining = PROVIDERS.filter(row => row.id !== removed)
     const b = await page([...PROVIDERS, a], { a: mounting(mounted) })
-    await b.sync([registry, a], 'without-provider')
+    await b.sync([...remaining, a], 'without-provider')
     await b.modules.entries.reload('a', '1')
     expect(mounted).toEqual(['+a', '-a', '+a'])
     expect(b.provider.created.map(realm => realm.disposed)).toEqual([0])
-    await b.sync([registry], 'removed')
+    await b.sync(remaining, 'removed')
     expect(b.provider.created.map(realm => realm.disposed)).toEqual([1])
-    await b.sync([registry, a], 'new-installation')
-    expect(b.modules.entries.state.getSnapshot().failures[0]?.message).toContain('provider "iframe" is not registered')
+    await b.sync([...remaining, a], 'new-installation')
+    expect(b.modules.entries.state.getSnapshot().failures.find(failure => failure.id === 'a')?.message).toContain(message)
+    expect(mounted).toEqual(['+a', '-a', '+a', '-a'])
     expect(b.main).not.toContain(url('a'))
+  })
+
+  it('keeps the replacement registry when an older installation is disposed', async () => {
+    const b = await page([], { a: mounting([]) })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(ScriptRealmRegistry)
+    const removePrevious = b.modules.installRealmRegistry(ctx.scriptRealms)
+    await b.sync(PROVIDERS, 'providers')
+    removePrevious()
+    await b.sync([...PROVIDERS, entry('a', { isolation: 'script' })], 'installed')
+    expect(b.provider.created.map(realm => realm.executed)).toEqual([[url('a')]])
   })
 
   it('fails closed for a newly installed isolated package until its ordinary providers are available', async () => {

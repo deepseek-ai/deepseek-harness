@@ -63,6 +63,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   readonly loadCache = new Map<string, ClientModuleRecord>()
   readonly mainRealm: MainScriptRealm
   private readonly packageRealms: PackageRealms
+  readonly installRealmRegistry: PackageRealms['installRealmRegistry']
   /** Previous records of packages under replacement, by package id, until their old runtime is released. */
   private readonly replaced = new Map<string, ClientModuleRecord[]>()
   private readonly moduleListeners = new Set<() => void>()
@@ -94,8 +95,8 @@ export class ClientModuleSystem implements ClientModuleLoader {
     this.manifest = options.manifest
     this.mainRealm = new MainScriptRealm(options.loadBundle)
     this.packageRealms = new PackageRealms(this.mainRealm, { __ModuleLoader__: options.registrationTarget })
+    this.installRealmRegistry = this.packageRealms.installRealmRegistry
     this.entries = new ClientEntries(this, {
-      connectRealms: this.packageRealms.connect,
       update: (manifest, managed) => { this.updateManifest(manifest, managed) },
       invalidateForReplacement: (id, rev) => {
         if (this.bootstrapIds.has(id)) throw new Error(`client-modules: replacing bootstrap module ${id} requires a page reload`)

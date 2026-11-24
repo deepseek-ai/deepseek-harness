@@ -86,14 +86,18 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### Main 执行环境
 
-模块系统围绕 `loadBundle` 构造自身的 Main Realm；未提供载体 hook 时使用原有页面脚本传输。默认启动仍先预取 immediate 层级，再创建 Loader entries，不要求 Realm 注册表或隔离配置。`dispose()` 停止接受新脚本、释放各包的 iframe，并等待进行中的操作结束；它不会取消 Main Realm 中的脚本请求。默认 Web 名册把 [Realm 注册表](../script-realm/README.zh.md)和 [iframe 提供方](../script-realm-iframe/README.zh.md)作为普通 entry 加载；只有在某个包请求脚本隔离时启动才等待它们，否则它们不创建 frame。
+模块系统无需 Cordis 上下文即可构造自己的 Main Realm 并在其中运行脚本。它使用载体的 `loadBundle` 钩子；载体未提供该钩子时，使用页面的脚本传输。默认启动先预取 immediate 层级，再创建 Loader 条目，不要求 Realm 注册表或隔离配置。`dispose()` 停止接受新脚本、释放各包的 iframe，并等待进行中的操作结束；它不会取消 Main Realm 中的脚本请求。
+
+默认 Web 名册把 [Realm 注册表](../script-realm/README.zh.md)和 [iframe 提供方](../script-realm-iframe/README.zh.md)作为普通条目加载。只有启动图包含脚本隔离的包时，页面才会在冷启动时先等待这两个条目，再创建其余条目。安装注册表和注册 `iframe` 工厂都不会创建 iframe。
 
 <a id="script-isolated-packages"></a>
 ### 脚本隔离的包
 
 在 Client 包的 Loader 条目上设置 `__unstable_enable_client_isolation: script`，或使用 [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.zh.md)。省略此项或设为 `null` 时选用 Main Realm。不支持的值，或对第一阶段（`immediately`）行请求脚本隔离，都会导致组合失败。浏览器开始加载包的脚本时才选择执行环境。入口与后续懒加载的 chunk 沿用这个选择。
 
-只要页面还保留这个包，它的入口脚本和懒加载 chunk 就在同一个专属 iframe 中执行。代码重建和重试都复用同一个 `window`；HMR 不清除插件写入的全局变量。模块系统移除这个包或关闭时才移除 iframe。脚本通过页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。创建 iframe 需要注册表和 `iframe` 提供方；缺少其中任一项时，不会回退到 Main。如果在已打开的页面上同时安装提供方和隔离包后加载失败，刷新页面即可。
+只要页面还保留这个包，它的入口脚本和懒加载分片就在同一个专属 iframe 中执行。即使撤下注册表或注销 `iframe` 提供方，代码重建和重试仍复用同一个 `window`；HMR 不清除插件写入的全局变量。只有模块系统回收这个包或关闭时，才会移除 iframe。脚本通过页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。
+
+新建 iframe 需要已安装的注册表，并且其中已注册 `iframe` 提供方。缺少其中任一项，加载就会失败，不会回退到 Main。如果在已打开的页面上同时添加这两个条目和隔离包后，隔离包加载失败，请刷新页面。
 
 ### 增量组合
 

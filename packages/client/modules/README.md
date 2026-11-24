@@ -86,14 +86,18 @@ Executing a plugin bundle registers its factory and optional `meta` without call
 
 ### Main execution environment
 
-The module system constructs its own Main Realm around `loadBundle`, or the existing page script transport when no carrier hook is supplied. Default boot still prefetches the immediate tier before creating Loader entries; no Realm registry or isolation configuration is required. `dispose()` stops accepting scripts, releases package iframes, and waits for pending operations. It does not cancel Main Realm script requests. The default Web roster loads the [Realm registry](../script-realm/README.md) and [iframe provider](../script-realm-iframe/README.md) as ordinary entries; boot waits for them only when a package is script-isolated, and they create no frame otherwise.
+The module system constructs its own Main Realm and runs scripts there without a Cordis context. It uses the carrier's `loadBundle` hook or, by default, the page script transport. Default boot prefetches the immediate tier before creating Loader entries; no Realm registry or isolation configuration is required. `dispose()` stops accepting scripts, releases package iframes, and waits for pending operations. It does not cancel Main Realm script requests.
+
+The default Web roster loads the [Realm registry](../script-realm/README.md) and [iframe provider](../script-realm-iframe/README.md) as ordinary entries. Only when the boot graph contains a script-isolated package does cold boot wait for these two entries before creating the rest. Neither installing the registry nor registering the `iframe` factory creates an iframe.
 
 <a id="script-isolated-packages"></a>
 ### Script-isolated packages
 
 Set `__unstable_enable_client_isolation: script` on a Client package’s Loader entry, or use [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.md). Omission or `null` selects the Main Realm. Unsupported values and script isolation on a stage-one (`immediately`) row fail composition. The browser chooses the package's execution environment when it starts loading its scripts. The entry and its lazy chunks use that choice.
 
-An isolated package’s entry script and lazy chunks execute in one iframe for as long as the page retains that package. Code rebuilds and retries use the same `window`; HMR does not clear globals set by the plugin. The module system removes the iframe when it evicts the package or shuts down. Scripts register with the page’s `__ModuleLoader__`, so `require` returns the same React, Cordis and library instances. Creating an iframe requires the registry and the `iframe` provider; if either is missing, the package does not fall back to Main. If installing both the providers and an isolated package on an open page fails, reload the page.
+An isolated package’s entry script and lazy chunks execute in one iframe for as long as the page retains that package. Code rebuilds and retries use the same `window` even after the registry or `iframe` provider is removed; HMR does not clear globals set by the plugin. The module system removes the iframe only when it evicts the package or shuts down. Scripts register with the page’s `__ModuleLoader__`, so `require` returns the same React, Cordis and library instances.
+
+Creating a new iframe requires an installed registry with a registered `iframe` provider. If either is missing, the load fails instead of falling back to Main. If you add these two entries and an isolated package to an open page together and the package fails to load, reload the page.
 
 ### Incremental composition
 
