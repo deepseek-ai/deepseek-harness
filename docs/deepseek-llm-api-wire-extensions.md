@@ -124,7 +124,7 @@ The `session` member projects logical Session metadata to raw JSON primitives. A
 | `cwd` | optional | Absolute working directory recorded at Session creation |
 | `parentSession` | optional | Parent Session id for a fork |
 | `seedLength` | seeded Sessions only | Exact inherited event count, including zero for an empty inherited prefix |
-| `origin` | optional | Literal `subagent` for a subagent child |
+| `origin` | optional | Literal `subagent` for a subagent child or `side` for a side conversation |
 | `delegationDepth` | optional | Non-negative persisted subagent delegation depth |
 | `agentPreset` | optional | Agent preset id used to compose this Session |
 
