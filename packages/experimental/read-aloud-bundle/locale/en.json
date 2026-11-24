@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Read aloud",
+    "description": "Read assistant replies aloud with DeepSeek cloud speech synthesis through a DeepSeek account or API key. Synthesis is billed per character.",
+    "detail": "docs/DETAIL.md"
+  }
+}

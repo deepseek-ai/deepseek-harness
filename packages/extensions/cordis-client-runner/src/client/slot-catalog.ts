@@ -264,7 +264,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     kind: 'list',
     scope: 'session',
     summary: 'Ordered actions for one finalized assistant message.',
-    doc: 'Ordered actions for one finalized assistant message. Each entry receives\nthe durable message id; a fresh `id` adds an action and reusing one replaces\nthat entry. With no entries, the standard action row remains unchanged.',
+    doc: 'Ordered actions for one finalized assistant message. Each entry receives\nthe durable message id; a fresh `id` adds an action and reusing one replaces\nthat entry. With no entries, the standard action row remains unchanged.\nA control carrying `data-action-ongoing` keeps a row that is otherwise\nshown only on hover or focus visible while its action runs.',
     registerOptions: [
       {
         name: 'id',
@@ -318,10 +318,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-chat), so it exists while that entry is mounted',
     occupants: [
       'client-ui-message-feedback MessageFeedbackActions id \'feedback\'',
+      'client-ui-read-aloud ReadAloudAction id \'read-aloud\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.chat.assistant-actions\', () => ctx.slots.register(\n      { name: \'conversation.chat.assistant-actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:512',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:514',
   },
   {
     key: 'conversation.chat.commandview',
@@ -1839,6 +1840,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-commands PopupSelectView id \'command-popup\'',
       'client-ui-input-trigger MenuView id \'slash-menu\'',
       'client-ui-message-feedback FeedbackDialog id \'feedback-dialog\'',
+      'client-ui-read-aloud ReadAloudNotice id \'read-aloud-notice\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.overlay\', () => ctx.slots.register(\n      { name: \'conversation.input.overlay\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
@@ -3564,6 +3566,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [
       'client-ui-connector-account ConnectorAccountSectionEntry',
       'experimental-client-ui-cot-translation TranslationSettings key \'@deepseek-ai/dsh-experimental-cot-translation-bundle\'',
+      'client-ui-read-aloud ReadAloudSettings',
       'experimental-client-ui-voice-input VoicePreparation key \'@deepseek-ai/dsh-experimental-voice-input-bundle\'',
       'cua PermissionPanel key \'@deepseek-ai/dsh-cua-bundle\'',
       'timeline Settings',
@@ -5198,7 +5201,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'shell.quota-notice\', () => ctx.slots.register(\n      { name: \'shell.quota-notice\', select: owner => null },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-chat/src/client/contract/slots.ts:520',
+    source: 'packages/client/ui-chat/src/client/contract/slots.ts:522',
   },
   {
     key: 'sidebar',

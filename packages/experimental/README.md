@@ -65,6 +65,11 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`liveshare`](liveshare/README.md) | Opt-in LiveShare host bundle: Relay-backed Session sharing at the `view` or `write` tier, with forking and attachment uploads as independent switches | injects `connection`; serves the viewer page through the Host's web resources |
 | [`liveshare-protocol`](liveshare-protocol/README.md) | Wire frames and the identity contract shared by the owner bundle and the Relay | library and protocol — no ctx key |
 | [`voice-input-bundle`](voice-input-bundle/README.md) | Default-disabled optional voice input composition | — |
+| [`text-to-speech`](text-to-speech/README.md) | Named speech synthesis providers | `ctx.textToSpeech` |
+| [`text-to-speech-deepseek`](text-to-speech-deepseek/README.md) | DeepSeek cloud speech synthesis | — |
+| [`read-aloud`](read-aloud/README.md) | Segment planning and paced synthesis Remote for assistant replies | `ctx.readAloud` |
+| [`client-ui-read-aloud`](client-ui-read-aloud/README.md) | Read aloud control in the message action row | — |
+| [`read-aloud-bundle`](read-aloud-bundle/README.md) | Default-disabled optional read-aloud composition | — |
 | [`client-ui-stats`](client-ui-stats/README.md) | Per-turn and per-step context, timing, cache, and tool cost for Web | — |
 | [`auto-review`](auto-review/README.md) | Explicit Web layer for same-model review before each native or PTC inner tool call | — |
 | [`subagent-oar`](subagent-oar/README.md) | Run standalone external coding-agent tasks through OAR | `ctx.subagents` |

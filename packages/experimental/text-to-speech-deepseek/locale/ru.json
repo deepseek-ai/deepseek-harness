@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Облачный синтез DeepSeek",
+    "description": "Синтезирует речь облачным сервисом DeepSeek после входа в аккаунт DeepSeek или с DeepSeek API Key."
+  }
+}

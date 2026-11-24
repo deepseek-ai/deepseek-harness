@@ -58,6 +58,13 @@
   ):focus-within .actions {
     opacity: 1;
   }
+
+  /* A slot entry marks an action in progress with data-action-ongoing, such as
+     a reply being read aloud. Its row stays revealed so the action can be
+     stopped without hovering the row first. */
+  [data-actions-reveal='hover'] .actions:has([data-action-ongoing]) {
+    opacity: 1;
+  }
 }
 
 .action {

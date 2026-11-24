@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "読み上げ",
+    "description": "DeepSeek アカウントまたは API Key で、DeepSeek のクラウド音声合成によりアシスタントの返信を読み上げます。合成は文字数に応じて課金されます。",
+    "detail": "docs/DETAIL.md"
+  }
+}

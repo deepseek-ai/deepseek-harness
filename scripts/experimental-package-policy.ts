@@ -31,6 +31,11 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/speech-to-text-deepseek': '@deepseek-ai/dsh-speech-to-text-deepseek',
   'packages/experimental/sandbox-policy-git': '@deepseek-ai/dsh-sandbox-policy-git',
   'packages/experimental/client-ui-connectors': '@deepseek-ai/dsh-client-ui-connectors',
+  'packages/experimental/text-to-speech': '@deepseek-ai/dsh-text-to-speech',
+  'packages/experimental/text-to-speech-deepseek': '@deepseek-ai/dsh-text-to-speech-deepseek',
+  'packages/experimental/read-aloud': '@deepseek-ai/dsh-read-aloud',
+  'packages/experimental/client-ui-read-aloud': '@deepseek-ai/dsh-client-ui-read-aloud',
+  'packages/experimental/read-aloud-bundle': '@deepseek-ai/dsh-read-aloud-bundle',
 } satisfies Record<`packages/experimental/${string}`, `@deepseek-ai/dsh-${string}`>
 
 /** Legacy npm namespace, allowed only in `LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES`. */

@@ -282,6 +282,7 @@ flowchart TD
   end
   subgraph group_experimental["packages/experimental"]
     pkg_client_ui_connectors["client-ui-connectors"]
+    pkg_client_ui_read_aloud["client-ui-read-aloud"]
     pkg_cua["cua"]
     pkg_cua_bundle["cua-bundle"]
     pkg_cua_macos["cua-macos"]
@@ -335,11 +336,15 @@ flowchart TD
     pkg_im["im"]
     pkg_im_bundle["im-bundle"]
     pkg_im_session_commands["im-session-commands"]
+    pkg_read_aloud["read-aloud"]
+    pkg_read_aloud_bundle["read-aloud-bundle"]
     pkg_sandbox_policy_git["sandbox-policy-git"]
     pkg_session_title_all_prompts_llm["session-title-all-prompts-llm"]
     pkg_skill_badge["skill-badge"]
     pkg_speech_to_text_deepseek["speech-to-text-deepseek"]
     pkg_terminal_panel["terminal-panel"]
+    pkg_text_to_speech["text-to-speech"]
+    pkg_text_to_speech_deepseek["text-to-speech-deepseek"]
     pkg_timeline["timeline"]
     pkg_tool_ralph["tool-ralph"]
     pkg_tool_session_query["tool-session-query"]
@@ -627,6 +632,11 @@ flowchart TD
   pkg_experimental_translator --> pkg_session_persistence
   pkg_experimental_translator --> pkg_timeout
   pkg_experimental_translator --> pkg_util_values
+  pkg_read_aloud --> pkg_llm
+  pkg_read_aloud --> pkg_session
+  pkg_read_aloud --> pkg_session_persistence
+  pkg_read_aloud --> pkg_text_to_speech
+  pkg_read_aloud --> pkg_typert_protocol
   pkg_skill_badge --> pkg_skill
   pkg_host_product_telemetry_otel --> pkg_otel
   pkg_ptc_runtime --> pkg_attachment
@@ -782,6 +792,9 @@ flowchart TD
   pkg_speech_to_text_deepseek --> pkg_credentials
   pkg_speech_to_text_deepseek --> pkg_deepseek_auth
   pkg_speech_to_text_deepseek --> pkg_experimental_speech_to_text
+  pkg_text_to_speech_deepseek --> pkg_credentials
+  pkg_text_to_speech_deepseek --> pkg_deepseek_auth
+  pkg_text_to_speech_deepseek --> pkg_text_to_speech
   pkg_commands --> pkg_agent
   pkg_commands --> pkg_attachment
   pkg_commands --> pkg_llm
@@ -1795,6 +1808,7 @@ flowchart TD
 | [`tencent-docs`](../packages/connector/tencent-docs) | `connector` | — |
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
 | [`client-ui-connectors`](../packages/experimental/client-ui-connectors) | `experimental` | — |
+| [`client-ui-read-aloud`](../packages/experimental/client-ui-read-aloud) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
 | [`experimental-badge-skill-bundle`](../packages/experimental/badge-skill-bundle) | `experimental` | — |
 | [`experimental-client-ui-claude-code-mods`](../packages/experimental/client-ui-claude-code-mods) | `experimental` | — |
@@ -1815,6 +1829,8 @@ flowchart TD
 | [`experimental-voice-input-bundle`](../packages/experimental/voice-input-bundle) | `experimental` | — |
 | [`experimental-webworker-packer`](../packages/experimental/webworker-packer) | `experimental` | — |
 | [`im-bundle`](../packages/experimental/im-bundle) | `experimental` | — |
+| [`read-aloud-bundle`](../packages/experimental/read-aloud-bundle) | `experimental` | — |
+| [`text-to-speech`](../packages/experimental/text-to-speech) | `experimental` | — |
 | [`client-ui-cordis`](../packages/extensions/ui-cordis) | `extensions` | — |
 | [`cordis-client-runner`](../packages/extensions/cordis-client-runner) | `extensions` | — |
 | [`host-directory-picker`](../packages/host/directory-picker) | `host` | — |
@@ -1890,6 +1906,7 @@ flowchart TD
 | [`upstream-skills`](../packages/connector/upstream-skills) | `connector` | [`skill`](../packages/skill/skill) |
 | [`experimental-speech-to-text`](../packages/experimental/speech-to-text) | `experimental` | [`settings`](../packages/settings/settings) |
 | [`experimental-translator`](../packages/experimental/translator) | `experimental` | [`credentials`](../packages/credentials/credentials), [`launch-environment`](../packages/util/launch-environment), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`timeout`](../packages/util/timeout), [`util-values`](../packages/util/values) |
+| [`read-aloud`](../packages/experimental/read-aloud) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`text-to-speech`](../packages/experimental/text-to-speech), [`typert-protocol`](../packages/typert/protocol) |
 | [`skill-badge`](../packages/experimental/skill-badge) | `experimental` | [`skill`](../packages/skill/skill) |
 | [`host-product-telemetry-otel`](../packages/host/product-telemetry-otel) | `host` | [`otel`](../packages/telemetry/otel) |
 | [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime) | `ptc-runtime` | [`attachment`](../packages/attachment/attachment), [`error`](../packages/util/error), [`sandbox`](../packages/sandbox/sandbox) |
@@ -1936,6 +1953,7 @@ flowchart TD
 | [`time-context`](../packages/context/time-context) | `context` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`util-time`](../packages/util/time) |
 | [`tmux-context`](../packages/context/tmux-context) | `context` | [`agent`](../packages/core/agent), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`shell`](../packages/shell/shell) |
 | [`speech-to-text-deepseek`](../packages/experimental/speech-to-text-deepseek) | `experimental` | [`credentials`](../packages/credentials/credentials), [`deepseek-auth`](../packages/account/deepseek-auth), [`experimental-speech-to-text`](../packages/experimental/speech-to-text) |
+| [`text-to-speech-deepseek`](../packages/experimental/text-to-speech-deepseek) | `experimental` | [`credentials`](../packages/credentials/credentials), [`deepseek-auth`](../packages/account/deepseek-auth), [`text-to-speech`](../packages/experimental/text-to-speech) |
 | [`commands`](../packages/interaction/commands) | `interaction` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`typert-protocol`](../packages/typert/protocol) |
 | [`user-approval`](../packages/interaction/user-approval) | `interaction` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt) |
 | [`user-questions`](../packages/interaction/user-questions) | `interaction` | [`agent`](../packages/core/agent), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`typert-protocol`](../packages/typert/protocol) |

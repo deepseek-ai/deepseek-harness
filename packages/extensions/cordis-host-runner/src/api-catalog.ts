@@ -3322,6 +3322,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'readAloud',
+    summary: 'Read-aloud calls never activate, read from, or submit to an Agent, and append no Session event.',
+    description: 'Read-aloud calls never activate, read from, or submit to an Agent, and append no Session event.',
+    methods: [
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<ReadAloudStatus>',
+        description: 'Follow whether a reading can start, so the Client offers the action only while it can.',
+        parameters: [{ name: 'signal', description: 'Client observation lifetime.' }],
+        returns: 'the current state, then each change of it.',
+      },
+      {
+        signature: '@Remote({ resources: { session: target => target.sessionId } }) async plan(target: ReadingTarget, signal: AbortSignal): Promise<ReadingPlan>',
+        description: 'Locate one finalized assistant message and cut its readable text into segments.',
+        parameters: [{ name: 'target', description: 'Session and message to read.' }, { name: 'signal', description: 'Client cancellation.' }],
+        returns: 'the message\'s log position, its segments, and the pacing and audio facts; no text leaves the Host.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\', resources: { session: request => request.sessionId } }) async *synthesize(request: SegmentRequest, signal: AbortSignal): AsyncIterable<AudioFrame>',
+        description: 'Synthesize one planned segment. The range must be a segment of the message under the current configuration, so a Client cannot have other text spoken.',
+        parameters: [{ name: 'request', description: 'message position and one segment of its plan.' }, { name: 'signal', description: 'Client cancellation; it ends the provider request.' }],
+        returns: 'frames of whole PCM samples in playback order.',
+      },
+    ],
+  },
+  {
     key: 'remoteAccess',
     summary: 'Registry of access policies, the Gateway\'s access decisions, list filtering, and the per-Peer access snapshot.',
     description: 'Registry of access policies, the Gateway\'s access decisions, list filtering, and the per-Peer access snapshot. Every composition that mounts the Gateway mounts this service too.',
@@ -4912,6 +4937,43 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List fresh snapshots for exactly one owner.',
         parameters: [{ name: 'owner', description: 'exact owner whose sessions are visible.' }],
         returns: 'owner-visible snapshots in publication order.',
+      },
+    ],
+  },
+  {
+    key: 'textToSpeech',
+    summary: 'Registry shared by all synthesis consumers in one Host composition.',
+    description: 'Registry shared by all synthesis consumers in one Host composition.',
+    methods: [
+      {
+        signature: 'register(provider: SynthesisProvider): () => Promise<void>',
+        description: 'Register one synthesizer; a duplicate id fails without replacing the original.',
+        parameters: [{ name: 'provider', description: 'synthesizer owned by the contributing fiber.' }],
+        returns: 'idempotent disposer which rejects later pulls, cancels, and joins provider calls in flight.',
+      },
+      {
+        signature: 'snapshot(): SynthesisSnapshot',
+        description: 'Read provider availability and the configured selection together.',
+        parameters: [],
+        returns: 'one detached complete observation.',
+      },
+      {
+        signature: 'async *follow(caller: AbortSignal): AsyncIterable<SynthesisSnapshot>',
+        description: 'Observe complete snapshots; an observer that falls behind receives only the latest one.',
+        parameters: [{ name: 'caller', description: 'observer lifetime.' }],
+        returns: 'an initial snapshot followed by one per change, ending when the observer or the service stops.',
+      },
+      {
+        signature: 'resolve(request: SynthesisRequest): SynthesisSpec',
+        description: 'Apply the configured provider and capture it. A missing provider and a text over the provider\'s limit fail explicitly.',
+        parameters: [{ name: 'request', description: 'complete text to speak.' }],
+        returns: 'provider-pinned input for synthesize().',
+      },
+      {
+        signature: 'synthesize(spec: SynthesisSpec, signal: AbortSignal): AsyncIterable<Uint8Array>',
+        description: 'Speak through exactly the resolved provider; no fallback sends text elsewhere. A stream nobody pulls holds no provider call: withdrawal aborts the provider\'s signal and joins only calls in flight.',
+        parameters: [{ name: 'spec', description: 'resolved input; a withdrawn or replaced registration is rejected.' }, { name: 'signal', description: 'caller cancellation.' }],
+        returns: 'the provider\'s audio; pulls after cancellation or withdrawal reject.',
       },
     ],
   },
@@ -6896,6 +6958,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AttachmentId',
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
+  },
+  {
+    name: 'AudioFrame',
+    declaration: 'export interface AudioFrame {\n    readonly pcm: string;\n}',
   },
   {
     name: 'AuthenticationProvider',
@@ -9838,8 +9904,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type QueueAction = {\n    readonly kind: \'edit\';\n    readonly content: readonly TextBlock[];\n} | {\n    readonly kind: \'remove\';\n} | {\n    readonly kind: \'steer\';\n};',
   },
   {
+    name: 'ReadAloudStatus',
+    declaration: 'export interface ReadAloudStatus {\n    readonly state: \'ready\' | \'sign-in-required\' | \'unavailable\';\n}',
+  },
+  {
     name: 'ReadFileLine',
     declaration: 'export interface ReadFileLine {\n    number: number;\n    text: string;\n}',
+  },
+  {
+    name: 'ReadingPlan',
+    declaration: 'export interface ReadingPlan {\n    readonly seq: number;\n    readonly segments: readonly ReadingSegment[];\n    readonly dispatchBelowMs: number;\n    readonly sampleRate: number;\n}',
+  },
+  {
+    name: 'ReadingSegment',
+    declaration: 'export interface ReadingSegment {\n    readonly start: number;\n    readonly end: number;\n}',
+  },
+  {
+    name: 'ReadingTarget',
+    declaration: 'export interface ReadingTarget {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n}',
   },
   {
     name: 'ReadOnlyReason',
@@ -10276,6 +10358,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SearchResultView',
     declaration: 'export type SearchResultView = SearchMatchesResultView | SearchPathsResultView;',
+  },
+  {
+    name: 'SegmentRequest',
+    declaration: 'export interface SegmentRequest extends ReadingTarget, ReadingSegment {\n    readonly seq: number;\n}',
   },
   {
     name: 'SerializedElement',
@@ -11488,6 +11574,54 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SyncedConfigValues',
     declaration: 'export type SyncedConfigValues = {\n    readonly [field: string]: JsonValue;\n};',
+  },
+  {
+    name: 'SynthesisAudioFormat',
+    declaration: 'export interface SynthesisAudioFormat {\n    readonly encoding: \'pcm-s16le\';\n    readonly sampleRate: number;\n}',
+  },
+  {
+    name: 'SynthesisAvailability',
+    declaration: 'export type SynthesisAvailability = {\n    readonly phase: \'ready\';\n} | {\n    readonly phase: \'unavailable\';\n    readonly reason: SynthesisUnavailableReason;\n} | {\n    readonly phase: \'failed\';\n    readonly message: string;\n};',
+  },
+  {
+    name: 'SynthesisAvailabilitySource',
+    declaration: 'export interface SynthesisAvailabilitySource {\n    snapshot(): SynthesisAvailability;\n    subscribe(listener: () => void): () => void;\n}',
+  },
+  {
+    name: 'SynthesisInput',
+    declaration: 'export interface SynthesisInput {\n    readonly text: string;\n}',
+  },
+  {
+    name: 'SynthesisProvider',
+    declaration: 'export interface SynthesisProvider {\n    readonly info: SynthesisProviderInfo;\n    readonly availability?: SynthesisAvailabilitySource;\n    synthesize(input: SynthesisInput, signal: AbortSignal): AsyncIterable<Uint8Array>;\n}',
+  },
+  {
+    name: 'SynthesisProviderId',
+    declaration: 'export type SynthesisProviderId = Branded<\'SynthesisProviderId\'>;',
+  },
+  {
+    name: 'SynthesisProviderInfo',
+    declaration: 'export interface SynthesisProviderInfo {\n    readonly id: SynthesisProviderId;\n    readonly name: string;\n    readonly location: \'host-local\' | \'cloud\';\n    readonly audio: SynthesisAudioFormat;\n    readonly maxCharacters: number;\n}',
+  },
+  {
+    name: 'SynthesisProviderView',
+    declaration: 'export interface SynthesisProviderView extends SynthesisProviderInfo {\n    readonly availability: SynthesisAvailability;\n}',
+  },
+  {
+    name: 'SynthesisRequest',
+    declaration: 'export interface SynthesisRequest {\n    readonly text: string;\n}',
+  },
+  {
+    name: 'SynthesisSnapshot',
+    declaration: 'export interface SynthesisSnapshot {\n    readonly providers: readonly SynthesisProviderView[];\n    readonly selected: SynthesisProviderId;\n}',
+  },
+  {
+    name: 'SynthesisSpec',
+    declaration: 'export interface SynthesisSpec extends SynthesisInput {\n    readonly provider: SynthesisProvider;\n}',
+  },
+  {
+    name: 'SynthesisUnavailableReason',
+    declaration: 'export type SynthesisUnavailableReason = \'sign-in-required\';',
   },
   {
     name: 'SystemMessage',

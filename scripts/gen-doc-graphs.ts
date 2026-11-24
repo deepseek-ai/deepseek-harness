@@ -398,6 +398,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Validates bounded browser audio before provider dispatch.',
   },
   {
+    key: 'readAloud',
+    pkg: 'read-aloud',
+    title: 'Experimental read-aloud Remote',
+    mode: 'core',
+    note: 'Plans a stored reply as segments and synthesizes one segment per call, so the browser paces what is submitted.',
+  },
+  {
     key: 'sessionStatus',
     pkg: 'client-ui-session-status',
     title: 'Host Session reading records',
@@ -938,6 +945,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['experimental-speech-to-text-sensevoice'],
     consumers: ['experimental-api-speech-to-text'],
     note: 'Routes explicit recognizers; the browser uses the authenticated Remote and keeps transcripts in the draft until submission.',
+  },
+  {
+    key: 'textToSpeech',
+    pkg: 'text-to-speech',
+    title: 'Experimental speech synthesis providers',
+    mode: 'seam',
+    implementations: ['text-to-speech-deepseek'],
+    consumers: ['read-aloud'],
+    note: 'Routes text to the configured synthesizer and streams its PCM; the read-aloud Remote is the consumer.',
   },
   {
     key: 'agentTeams',

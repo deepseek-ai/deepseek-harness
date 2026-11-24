@@ -3526,6 +3526,25 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-pwsh-sandbox -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-read-aloud -->
+<a id="deepseek-aidsh-read-aloud"></a>
+
+## `@deepseek-ai/dsh-read-aloud`
+
+- `inject`: `textToSpeech` · `typert` · `sessions` · `sessionPersistence`
+- `source`: [`packages/experimental/read-aloud/src/index.ts:29`](../packages/experimental/read-aloud/src/index.ts)
+
+```ts config-catalog
+/** Pacing of one reading; both values trade cost after an early stop against the number of requests. */
+export interface Config {
+  /** Estimated spoken length, in seconds, of the text one synthesis request carries. */
+  segmentSeconds: number
+  /** The Client requests the next segment once this many seconds of received audio, or fewer, remain unplayed. */
+  dispatchBelowSeconds: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-read-aloud -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -4736,6 +4755,46 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-terminal-panel -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech -->
+<a id="deepseek-aidsh-text-to-speech"></a>
+
+## `@deepseek-ai/dsh-text-to-speech`
+
+- `source`: [`packages/experimental/text-to-speech/src/index.ts:20`](../packages/experimental/text-to-speech/src/index.ts)
+
+```ts config-catalog
+/** Composition choice read when a synthesis is resolved. */
+export interface Config {
+  /** Id of the registered provider that speaks every request. */
+  defaultProvider: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech-deepseek -->
+<a id="deepseek-aidsh-text-to-speech-deepseek"></a>
+
+## `@deepseek-ai/dsh-text-to-speech-deepseek`
+
+- `inject`: `textToSpeech` · `deepseekAuth`
+- `source`: [`packages/experimental/text-to-speech-deepseek/src/config.ts:10`](../packages/experimental/text-to-speech-deepseek/src/config.ts)
+
+```ts config-catalog
+/** Registration id, voice, and the wait bound of one synthesis request; `ctx.deepseekAuth` supplies the endpoint and credential. */
+export interface Config {
+  /** Unique registration id; `text-to-speech` selects this exact id. */
+  providerId: string
+  /** Voice that speaks every request. */
+  voice: Voice
+  /** Longest wait, in milliseconds, for the next audio bytes while a consumer is asking, the first bytes included. */
+  idleTimeoutMs: number
+}
+
+/** Voices of the speech synthesis API: `stella` is the female default, `tide` the male voice. */
+export type Voice = 'stella' | 'tide'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech-deepseek -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-time-context -->
 <a id="deepseek-aidsh-time-context"></a>
 
@@ -5909,6 +5968,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-recommendations` | — | [`packages/client/ui-plugin-recommendations/src/index.ts`](../packages/client/ui-plugin-recommendations/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-read-aloud` | — | [`packages/experimental/client-ui-read-aloud/src/index.ts`](../packages/experimental/client-ui-read-aloud/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
@@ -6073,6 +6133,7 @@ export interface Config {
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-detail` | — | [`packages/util/plugin-detail/src/index.ts`](../packages/util/plugin-detail/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-market-index` | — | [`packages/util/plugin-market-index/src/index.ts`](../packages/util/plugin-market-index/src/index.ts) |
+| `@deepseek-ai/dsh-read-aloud-bundle` | — | [`packages/experimental/read-aloud-bundle/src/index.ts`](../packages/experimental/read-aloud-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-windows-acl` | — | [`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts) |
 | `@deepseek-ai/dsh-scope` | — | [`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts) |

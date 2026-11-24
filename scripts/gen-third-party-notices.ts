@@ -45,6 +45,8 @@ const DEV_ONLY_AREAS = [
 const HOST_BUNDLED_DEPENDENCIES: Readonly<Record<string, readonly string[]>> = {
   // subagent-oar/tsdown.config.ts embeds the patched adapter instead of installing a second copy.
   '@deepseek-ai/dsh-experimental-subagent-oar': ['@botiverse/oar'],
+  // read-aloud/tsdown.config.ts embeds the Markdown parser so that no module resolver picks its DOM build.
+  '@deepseek-ai/dsh-read-aloud': ['mdast-util-from-markdown', 'mdast-util-gfm', 'micromark-extension-gfm'],
 }
 
 /** First-party public native packages: reachable at runtime but not third-party. */
