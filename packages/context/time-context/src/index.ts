@@ -216,7 +216,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       messages: [
         ...decision.messages,
         createUserMessage({
-          content: [{ type: 'text', text }],
+          // Every interpolated value is a number or canonical zone name, so the body cannot close the frame.
+          content: [{ type: 'text', text: `<system-reminder>\n${text}\n</system-reminder>` }],
           source: { kind: name, form: 'snapshot', sections: [{ name, text }] },
         }),
       ],
