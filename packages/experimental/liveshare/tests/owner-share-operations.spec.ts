@@ -281,7 +281,7 @@ describe('creating a share', () => {
     h.ownerShares.set(share.shareId, share)
     h.persistOwnerState.mockRejectedValue(new Error('disk full'))
     await expect(h.operations.addSessions({ shareId: share.shareId, sessionIds: ['session-2'] }))
-      .rejects.toMatchObject({ code: 'liveshareShares/owner-state-unavailable' })
+      .rejects.toMatchObject({ code: 'liveshareShares/owner-state-unavailable', message: 'the owner state file could not be written: Error: disk full' })
     expect(h.ownerShares.get(share.shareId)).toBe(share)
     expect(h.applySourceAccess).not.toHaveBeenCalled()
   })

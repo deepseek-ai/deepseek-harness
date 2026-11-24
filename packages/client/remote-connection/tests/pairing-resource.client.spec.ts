@@ -52,7 +52,9 @@ it.each(['refused', 'disconnected', 'typed-error'] as const)('yields a %s read a
   const stream = requestsResource({ pairingRequests: requests }).provider.open('dsh-resource://device-pairing/requests', { signal: controller.signal })[Symbol.asyncIterator]()
   try {
     expect(await stream.next()).toMatchObject({ done: false, value: {
-      ok: false, error: { code: failure === 'disconnected' ? 'pairing/read-failed' : 'remote-connection/owner-required' },
+      ok: false, error: failure === 'disconnected'
+        ? { code: 'pairing/read-failed', message: 'Could not read pairing requests: Error: disconnected' }
+        : { code: 'remote-connection/owner-required' },
     } })
     controller.abort()
     expect(await stream.next()).toEqual({ done: true, value: undefined })

@@ -336,7 +336,8 @@ export class SessionCommandController {
         })
       } catch (error: unknown) {
         if (remoteErrorOf(error) !== undefined) throw error
-        throw new RemoteError('session/agent-busy', 'generation continuation was not accepted', { reason: String(error) })
+        const reason = String(error)
+        throw new RemoteError('session/agent-busy', `generation continuation was not accepted: ${reason}`, { reason })
       }
     }
     const admission = resolvePromptFileReceipts(
@@ -381,7 +382,8 @@ export class SessionCommandController {
         if (error instanceof AttachmentError) {
           throw new RemoteError('session/attachment-invalid', error.message, { reason: error.code })
         }
-        throw new RemoteError('session/agent-busy', 'prompt rejected', { reason: String(error) })
+        const reason = String(error)
+        throw new RemoteError('session/agent-busy', `prompt rejected: ${reason}`, { reason })
       }
       return { accepted: true }
     }

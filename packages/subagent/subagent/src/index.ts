@@ -546,7 +546,7 @@ export class SubagentRuntime extends TypertRemoteService {
     try {
       this.interrupt(childSessionId, { kind: 'user' })
     } catch (error: unknown) {
-      throw new RemoteError('gateway/internal', 'subagent interrupt failed', {}, { cause: error })
+      throw new RemoteError('gateway/internal', `subagent interrupt failed: ${String(error)}`, {}, { cause: error })
     }
     return { accepted: true }
   }

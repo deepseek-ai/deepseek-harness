@@ -102,7 +102,7 @@ export async function searchWorkspace(
     } catch (cause: unknown) {
       signal.throwIfAborted()
       timeout.signal.throwIfAborted()
-      throw new RemoteError('workspace-file/search-failed', 'Could not launch or read workspace file search; the subprocess provider must be able to execute the packaged ripgrep binary', {}, { cause })
+      throw new RemoteError('workspace-file/search-failed', `Could not launch or read workspace file search: ${String(cause)}; the subprocess provider must be able to execute the packaged ripgrep binary`, {}, { cause })
     }
     const { outcome, stopped } = run
     combined.throwIfAborted()
