@@ -1816,12 +1816,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/unrecognized-url` when no registered provider serves the URL.'],
       },
       {
-        signature: '@Remote async recognize(url: string, signal: AbortSignal): Promise<string | null>',
-        description: 'Read a web URL as a change request, without binding it.',
-        parameters: [{ name: 'url', description: 'web URL, which may name one page of a change request.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the provider\'s canonical URL of the change request, which its Session binding and changes view use, or null when no registered provider serves the URL.',
-      },
-      {
         signature: '@Remote async dismiss(session: Session, url: string, signal: AbortSignal): Promise<void>',
         description: 'Hide a visible binding of a Session; other URLs leave the Session unchanged.',
         parameters: [{ name: 'session', description: 'Session that owns the binding.' }, { name: 'url', description: 'web URL of the change request.' }, { name: 'signal', description: 'request cancellation.' }],

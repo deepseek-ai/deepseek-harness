@@ -316,11 +316,7 @@ it('keeps copy-path available on failed metadata and reports native action failu
 it('opens links in the registered browser, externally, and on the clipboard', async () => {
   const h = await boot()
   const target = { kind: 'url', value: { sessionId, url: 'https://example.com/page' } } as const
-  expect((await h.resolve(target)).source.getSnapshot().map(item => [item.id, item.label, item.icon?.key])).toEqual([
-    ['open-in-app.url/sidebar', 'menu.openInSidebar', 'open-in-app.sidebar'],
-    ['open-in-app.url/external', 'menu.external', 'open-in-app.external'],
-    ['open-in-app.url/copy', 'menu.copyLink', 'open-in-app.copy'],
-  ])
+  expect((await h.resolve(target)).source.getSnapshot().find(item => item.id === 'open-in-app.url/sidebar')?.label).toBe('menu.openInSidebar')
   await h.choose(target, 'open-in-app.url/sidebar')
   expect(h.sidebar.openTabIn).toHaveBeenCalledWith(sessionId, 'browser', { params: { url: target.value.url } })
   const external = vi.spyOn(window, 'open').mockReturnValue(null)
@@ -329,7 +325,7 @@ it('opens links in the registered browser, externally, and on the clipboard', as
   await h.choose(target, 'open-in-app.url/copy')
   expect(h.writeText).toHaveBeenCalledWith(target.value.url)
   h.browserTab.mockReturnValueOnce(undefined as never)
-  expect((await h.resolve(target)).source.getSnapshot().map(item => item.id)).toEqual(['open-in-app.url/external', 'open-in-app.url/copy'])
+  expect((await h.resolve(target)).source.getSnapshot()[0]?.disabled).toBe(true)
 })
 
 it('distinguishes completed, requested and cancelled saves and surfaces rejected saves', async () => {

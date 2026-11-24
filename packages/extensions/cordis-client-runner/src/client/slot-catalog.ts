@@ -172,7 +172,6 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-reference IconPlusOutlineRegular key \'reference.addToChat\'',
       'client-ui-sidebar-right IconCloseOutlineRegular key \'sidebar.close\'',
       'client-ui-workspace Icon',
-      'experimental-client-ui-forge IconFilesDiffOutlineRegular',
       'session-log-export Icon',
     ],
     replaceRisk: 'shadows-shipped-ui',
