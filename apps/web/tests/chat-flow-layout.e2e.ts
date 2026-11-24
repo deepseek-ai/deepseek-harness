@@ -2,7 +2,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import { chromium, type Page } from 'playwright'
 import { expect, it, onTestFinished } from 'vitest'
 import { launchWebScaffold, seedSession, selectedSessionFixture, watchConsole } from './scaffold.ts'
 import { newEnglishPage } from './support.ts'
@@ -79,3 +79,44 @@ it.each(['turn-tail-actions', 'goal-multi-turn-actions', 'present'] as const)(
     expect(console.pageErrors).toEqual([])
   },
 )
+
+/** Gap above each visible row of a kind, measured from the nearest visible row before it. */
+function gapsAbove(page: Page, kind: string): Promise<{ above: string; gap: number }[]> {
+  return page.evaluate((kind) => {
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-slot="conversation.chat.flow"] > *')]
+      .filter(row => row.getBoundingClientRect().height > 0)
+    const label = (row: HTMLElement) => row.dataset.chatGroupKey !== undefined ? 'group'
+      : row.dataset.chatGroupPart === 'response' ? 'response' : row.dataset.chatFlowKind ?? ''
+    return rows.flatMap((row, index) => index > 0 && label(row) === kind
+      ? [{ above: label(rows[index - 1]!), gap: row.getBoundingClientRect().top - rows[index - 1]!.getBoundingClientRect().bottom }]
+      : [])
+  }, kind)
+}
+
+it.each(['question-composer', 'minimal-compact'] as const)('spaces message bubbles in cold %s history', async (scenario) => {
+  const scaffold = await launchWebScaffold({})
+  onTestFinished(() => scaffold.close())
+  const fixture = await selectedSessionFixture(fileURLToPath(
+    new URL(`../../../snapshots/web/${scenario}/session.v4.jsonl`, import.meta.url),
+  ))
+  await seedSession(scaffold, await readFile(fixture, 'utf8'), `bubble-spacing-${scenario}`)
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const page = await newEnglishPage(browser)
+  const console = watchConsole(page)
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  await page.locator('[role="treeitem"]').first().click()
+  await page.locator('[role="treeitem"]').nth(1).click()
+  const process = page.locator('[data-turn-process]').first()
+  await process.waitFor()
+  if (scenario === 'question-composer') {
+    // Folded, the hidden process group separates the reply from the response below it.
+    await expect.poll(() => gapsAbove(page, 'response')).toContainEqual({ above: 'question-reply', gap: 4 })
+    await process.click()
+    await expect.poll(() => gapsAbove(page, 'question-reply')).toEqual([{ above: 'group', gap: 12 }])
+    expect(await gapsAbove(page, 'group')).toContainEqual({ above: 'question-reply', gap: 4 })
+  } else {
+    await expect.poll(() => gapsAbove(page, 'user')).toContainEqual({ above: 'manual-compaction', gap: 12 })
+  }
+  expect(console.pageErrors).toEqual([])
+})

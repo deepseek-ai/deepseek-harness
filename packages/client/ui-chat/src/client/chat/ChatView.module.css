@@ -97,6 +97,22 @@
   --dsh-chat-flow-gap: 12px;
 }
 
+/* A message bubble below a process row keeps the 12px response gap. Below
+   another message's actions row, whose 28px height already separates the two,
+   the following row keeps the 4px default, including a response that a folded
+   process group's hidden rows separate from a question reply. */
+.flowItem[data-chat-flow-kind="question-reply"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :is([data-chat-group-key], .flowItem:is([data-chat-flow-kind="compaction"], [data-chat-flow-kind="manual-compaction"], [data-chat-flow-kind="command"], [data-chat-flow-kind="context"], [data-chat-flow-kind="model-retry"], [data-chat-flow-kind="turn-error"], [data-chat-flow-kind="turn-max-tokens"])):not([hidden]):not(:empty)
+  + .flowItem[data-chat-flow-kind="user"] {
+  --dsh-chat-flow-gap: 12px;
+}
+
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"], [data-chat-flow-kind="question-reply"]) + .flowItem[data-chat-flow-kind="question-reply"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + .flowItem[data-chat-group-part="response"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + :is([hidden], .flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) + .flowItem[data-chat-group-part="response"] {
+  --dsh-chat-flow-gap: 4px;
+}
+
 /* Settled-flow identity boundary. It is neutral until it becomes the natural
    measurement/mount unit for a virtualizer without changing the column gap. */
 .flowItem {
