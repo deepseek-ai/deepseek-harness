@@ -92,10 +92,10 @@ describe('in-process policy inheritance', () => {
       try {
         await run.result
         const child = run.localAgent
-        expect(child.session.snapshotEvents().slice(1, 4)).toMatchObject([
-          { type: 'sandbox/mode', seq: 1, data: { mode: 'danger-full-access', source: 'delegation' } },
-          { type: 'approval/policy', seq: 2, data: { policy: 'never', source: 'delegation' } },
-          { type: 'permission/preset', seq: 3, data: { preset } },
+        expect(child.session.snapshotEvents().slice(2, 5)).toMatchObject([
+          { type: 'sandbox/mode', seq: 2, data: { mode: 'danger-full-access', source: 'delegation' } },
+          { type: 'approval/policy', seq: 3, data: { policy: 'never', source: 'delegation' } },
+          { type: 'permission/preset', seq: 4, data: { preset } },
         ])
       } finally {
         await run.dispose()
@@ -154,9 +154,9 @@ describe('in-process policy inheritance', () => {
       await expect(readFile(blocked, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(toolResultTexts(child).join('\n')).toContain(READ_ONLY_DENIAL)
       expect(result.stopReason).toBe('completed')
-      expect(child.session.snapshotEvents().slice(1, 3)).toMatchObject([
-        { type: 'sandbox/mode', seq: 1, data: { mode: 'read-only', source: 'delegation' } },
-        { type: 'approval/policy', seq: 2, data: { policy: 'never', source: 'delegation' } },
+      expect(child.session.snapshotEvents().slice(2, 4)).toMatchObject([
+        { type: 'sandbox/mode', seq: 2, data: { mode: 'read-only', source: 'delegation' } },
+        { type: 'approval/policy', seq: 3, data: { policy: 'never', source: 'delegation' } },
       ])
       expect(child.session.firstLiveSeq).toBe(0)
       expect(child.session.header.isSeeded).toBe(false)
@@ -225,7 +225,7 @@ describe('in-process policy inheritance', () => {
       // seq 1 is the constructor's end-seed marker.
       expect(child.session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toMatchObject([
         { seq: 0, data: { mode: 'workspace-write' } },
-        { seq: 3, data: { mode: 'read-only', source: 'delegation' } },
+        { seq: 4, data: { mode: 'read-only', source: 'delegation' } },
       ])
       await expect(readFile(blocked, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
@@ -271,7 +271,7 @@ describe('in-process policy inheritance', () => {
       expect(await readFile(allowed, 'utf8')).toBe('fine')
       expect(child.session.snapshotEvents().some(event => event.type === 'sandbox/mode')).toBe(false)
       expect(child.session.snapshotEvents().filter(event => event.type === 'approval/policy')).toMatchObject([
-        { seq: 1, data: { policy: 'never', source: 'delegation' } },
+        { seq: 2, data: { policy: 'never', source: 'delegation' } },
       ])
       expect(child.session.firstLiveSeq).toBe(0)
     } finally {

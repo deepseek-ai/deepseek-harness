@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Responsive behavior",
+    "description": "Lets interface components follow the window's media queries and tell phones and tablets from desktop computers."
+  }
+}

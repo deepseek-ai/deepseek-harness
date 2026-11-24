@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/read-aloud/README.md
+/:
+  en: 278a5c490d8f4c37
+  zh: 857604fe43097823
+/deepseek-ai-dsh-read-aloud:
+  en: 8aaa23142e4893c3
+  zh: 4a470cf0f6b6841c
+/deepseek-ai-dsh-read-aloud/summary:
+  en: 9edd582f15e3082b
+  zh: d0c879c870b4819a
+/deepseek-ai-dsh-read-aloud/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 364c80ee00a374ff
+/deepseek-ai-dsh-read-aloud/use-this-package:
+  en: 29de4f1b205f055d
+  zh: 91f3741198590556
+/deepseek-ai-dsh-read-aloud/understand-the-implementation:
+  en: 75fdd42b1c0bd5cf
+  zh: 51abc33651bbbe64
+/deepseek-ai-dsh-read-aloud/further-exploration:
+  en: 7539dbf48d383ed4
+  zh: c5c0eb80c41ba421
+/deepseek-ai-dsh-read-aloud/model-experience:
+  en: eb1fedb6360835ad
+  zh: 8aed99f9a7371f7b
+/deepseek-ai-dsh-read-aloud/model-experience/kv-cache-effect:
+  en: 66be37e1b3abcae7
+  zh: a4b8524ebbb39ca9
+/deepseek-ai-dsh-read-aloud/known-limitations-and-deferred-work:
+  en: 97f1c9e463b83b36
+  zh: bec7a52bdc81cbba
+/deepseek-ai-dsh-read-aloud/known-limitations-and-deferred-work/dev-note:
+  en: 41c8c2b4552174a4
+  zh: 3d0567b1358ebcbe

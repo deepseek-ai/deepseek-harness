@@ -28,6 +28,11 @@
     - status
     - switch "启用 语音输入"
   - listitem:
+    - button "查看 语音朗读": 语音朗读
+    - text: 实验性 登录 DeepSeek 账号或配置 API Key 后，朗读助手回复。使用 DeepSeek 云端语音合成，按字符计费。
+    - status
+    - switch "启用 语音朗读"
+  - listitem:
     - button "查看 自定义插件索引": 自定义插件索引
     - text: 实验性 在插件页添加“发现”标签页，从你添加的插件索引中浏览和安装插件。
     - status

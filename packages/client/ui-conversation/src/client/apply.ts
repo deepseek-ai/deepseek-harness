@@ -63,10 +63,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /**
  * Services required by the Conversation plugin. `uiSession.sessionStatus` provides the `useSessionStatus` hook the
- * Conversation shell renders with, so the plugin unloads and reloads with it.
+ * Conversation shell renders with, and `uiResponsive` provides the input bar's `useMobile`, so the plugin unloads and
+ * reloads with them.
  */
 export const inject = [
   'slots', 'sessions', 'fileUpload', 'uiSession', 'uiSession.sessionStatus', 'uiWorkspace', 'locale', 'configForms',
+  'uiResponsive',
 ]
 
 

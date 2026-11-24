@@ -131,6 +131,8 @@ A registered component receives inputs assembled at its binding site. Components
 
 Components never receive `ctx`. Parent-owned point-in-time values enter through the owner argument to `renderSlot`; shared view state uses a declared store; services and model objects stay in the `apply` closure and are projected into callbacks or observable sources.
 
+<a id="framework-provided-hooks"></a>
+
 ## Framework-provided hooks
 
 The shipped adapters add these standard props. They are available according to the target slot's scope, independent of which package registered the component.
@@ -142,12 +144,16 @@ The shipped adapters add these standard props. They are available according to t
 | every scope | `useWorkspaces`, `useWorkspaceAccess` | `ui-workspace` |
 | every scope | `useRemoteAccess` (the `global` resource) | `api-remote-access` |
 | every scope | `usePanelInfo` | `ui-layout` |
+| every scope | `useMediaQuery` | `ui-responsive` |
+| every scope | `useMobile` | `ui-responsive` |
 | `session` | `sessionId`, `useSession`, `useProjection`, `useAccess` (the bound Session's answer) | `ui-session` |
 | `session-maybe` | optional `sessionId`, `useSession`, `useProjection`, `useAccess` results | `ui-session` |
 | `session` | `useConversation`, `useInput`, `inputActions` | `ui-conversation` |
 | `session-maybe` | optional `useConversation`, `useInput`, `inputActions` results | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
 | `session` | `useTrajectory` | `ui-trajectory` |
+
+`useMediaQuery(query)` answers whether a CSS media query matches in the page window and rerenders the component when the answer changes; use it when the answer selects rendered structure or behavior, and keep a style-only difference in a CSS `@media` rule. `useMobile()` answers whether the page runs on a phone or tablet and stays fixed for the page lifetime; use it only for automatic focus and soft-keyboard behavior, and select layouts with width media queries. A plugin whose components read either prop injects the `uiResponsive` service, so it starts after both props exist and unloads with them.
 
 The renderer also creates `useStore` from a declared store and `t` from a declared locale namespace. These are registration-derived props rather than global standard props.
 

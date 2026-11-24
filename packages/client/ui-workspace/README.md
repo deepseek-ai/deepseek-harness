@@ -87,7 +87,7 @@ Grouped and flat Session rows show a clock mark when the Session has active sche
 
 Workspace headers share one `workspace` context-menu target, declared by this package, between right-click and the ellipsis. Rename and Delete use the existing confirmation dialogs and recheck Workspace existence and access before opening; native directory reveal is contributed by [ui-open-in-app](../ui-open-in-app/README.md). The menu remains available for native and plugin actions when mutation permissions are absent. Opening it changes neither expansion nor Session selection.
 
-Session rows share their existing action contributions between right-click and the ellipsis trigger through [ui-context-menu](../ui-context-menu/README.md). The captured Session stays the target without changing selection; `sidebar.workspaces.session.menu.item` remains the component extension position. The shipped groups are Pin, Rename, Fork; Copy session ID and the optional native directory reveal; then Archive, with separators before Copy session ID and Archive.
+Session rows share their existing action contributions between right-click and the ellipsis trigger through [ui-context-menu](../ui-context-menu/README.md). The captured Session stays the target without changing selection; `sidebar.workspaces.session.menu.item` remains the component extension position. The shipped groups are Pin, Rename, Fork; Copy session ID and the optional native directory reveal; then Archive, with separators before Copy session ID and Archive. The Session Header's More menu also offers Copy session ID after the export actions; both entries copy the same id and show the same feedback.
 
 -----
 

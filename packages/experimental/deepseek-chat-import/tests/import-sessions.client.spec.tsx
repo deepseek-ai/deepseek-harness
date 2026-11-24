@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { allowAllAccess, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, contextMenuHook, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -58,7 +58,7 @@ function bench(options: { allowed?: boolean; wide?: boolean; current?: string; i
   const standard: GlobalStandardProps = {
     useSessions: hook(sessions(options.current ?? 's-current')),
     useSessionStatus: unused, useSessionRetainInfo: unused, usePanelInfo: unused, useResource: unused,
-    useContextMenu: contextMenuHook(), useWorkspaces: hook(workspaces),
+    useContextMenu: contextMenuHook(), ...responsiveHooks(), useWorkspaces: hook(workspaces),
     ...allowAllAccess, useRemoteAccess,
   }
   const importArchive = options.importArchive ?? vi.fn<ImportArchive>()

@@ -151,6 +151,16 @@ function assertOneWorkspace(
 }
 
 /**
+ * Build the failure for an owner state file that could not be written.
+ * @param error - the write failure.
+ * @returns the Remote failure naming the write error.
+ */
+function ownerStateUnavailable(error: unknown): RemoteError<'liveshareShares/owner-state-unavailable'> {
+  return new RemoteError('liveshareShares/owner-state-unavailable',
+    `the owner state file could not be written: ${String(error)}`, {})
+}
+
+/**
  * Project one stored share onto the owner list's wire record.
  *
  * The stored ACL keeps the retired `approval` spelling for old files; the wire maps it to
@@ -402,12 +412,11 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       })
       try {
         await persistOwnerState()
-      } catch {
+      } catch (error: unknown) {
         ownerShares.delete(shareId)
         tunnel.clearShareExpiry(shareId)
         tunnel.send({ type: 'remove-share', shareId })
-        throw new RemoteError('liveshareShares/owner-state-unavailable',
-          'the owner state file could not be written', {})
+        throw ownerStateUnavailable(error)
       }
       // The share's own deadline is what stops its running turn later, armed from the record it just stored.
       tunnel.scheduleShareExpiry(ownerShares.get(shareId) as OwnerShare)
@@ -461,10 +470,9 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       ownerShares.set(current.shareId, next)
       try {
         await persistOwnerState()
-      } catch {
+      } catch (error: unknown) {
         ownerShares.set(current.shareId, current)
-        throw new RemoteError('liveshareShares/owner-state-unavailable',
-          'the owner state file could not be written', {})
+        throw ownerStateUnavailable(error)
       }
       // An answer that admits a reader must not arrive before the layer that confines what it drives.
       // A source that is not live yet gets its layer when the reader opens it, as the primary does.
@@ -509,9 +517,8 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       if (ownsState && live.some(view => view.changed)) {
         try {
           await persistOwnerState()
-        } catch {
-          throw new RemoteError('liveshareShares/owner-state-unavailable',
-            'the owner state file could not be written', {})
+        } catch (error: unknown) {
+          throw ownerStateUnavailable(error)
         }
       }
       return { shares: live.map(view => view.share) }
@@ -556,9 +563,8 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       tunnel.clearShareExpiry(shareId)
       try {
         await persistOwnerState()
-      } catch {
-        throw new RemoteError('liveshareShares/owner-state-unavailable',
-          'the owner state file could not be written', {})
+      } catch (error: unknown) {
+        throw ownerStateUnavailable(error)
       }
       const relayRemoved = await tunnel.deleteRelayRow(share.relay, shareId, share.gatewayToken)
       if (!relayRemoved) {
@@ -567,9 +573,8 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
         pendingRemovals.set(shareId, { relay: share.relay, shareId, gatewayToken: share.gatewayToken })
         try {
           await persistOwnerState()
-        } catch {
-          throw new RemoteError('liveshareShares/owner-state-unavailable',
-            'the owner state file could not be written', {})
+        } catch (error: unknown) {
+          throw ownerStateUnavailable(error)
         }
         tunnel.armPendingRemovalRetry()
       }
@@ -645,10 +650,9 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       if (current.sessionMode === 'write' && nextMode !== 'write') viewerRead.cancelPendingCalls(shareId)
       try {
         await persistOwnerState()
-      } catch {
+      } catch (error: unknown) {
         ownerShares.set(shareId, current)
-        throw new RemoteError('liveshareShares/owner-state-unavailable',
-          'the owner state file could not be written', {})
+        throw ownerStateUnavailable(error)
       }
       // The Relay is the authority for both values, so the share is re-registered with them instead of
       // the owner keeping a local opinion the Relay cannot see.
@@ -734,10 +738,9 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       ownerShares.set(request.shareId, next)
       try {
         await persistOwnerState()
-      } catch {
+      } catch (error: unknown) {
         ownerShares.set(request.shareId, current)
-        throw new RemoteError('liveshareShares/owner-state-unavailable',
-          'the owner state file could not be written', {})
+        throw ownerStateUnavailable(error)
       }
       // Every open reader snapshot recomputes the policy's bindings, which read this selection and the
       // plugins' offers per decision, so exposure ends or begins at the next call.
@@ -790,9 +793,8 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       if (effectiveRelay() !== previousRelay) bumpRelayRevision()
       try {
         await persistOwnerState()
-      } catch {
-        throw new RemoteError('liveshareShares/owner-state-unavailable',
-          'the owner state file could not be written', {})
+      } catch (error: unknown) {
+        throw ownerStateUnavailable(error)
       }
       return relayState()
     },

@@ -107,7 +107,7 @@ The package is built on one separation: the public `Agent` surface and registry 
 
 ### Durable model selection
 
-`Model` and the `modelSelection` projection types live here. The default driver creates each `AgentModel` and owns projection registration alongside its inbox. Each instance binds the Session, live options, and a projection reader; it holds no second copy of the choice. The loop captures a detached selection before step preparation and retains it across retries.
+`Model` and the `modelSelection` projection types live here. The default driver creates each `AgentModel` and owns projection registration alongside its inbox. Each instance binds the Session, live options, and a projection reader; it holds no second copy of the choice. The projection includes inherited fork history: `lastUsed` is the latest request in the log, and `pending` is a later choice not yet consumed by a matching request. The loop captures a detached selection before step preparation and retains it across retries.
 
 ### Source map
 

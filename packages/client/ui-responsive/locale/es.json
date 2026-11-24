@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comportamiento adaptable",
+    "description": "Permite que los componentes de la interfaz sigan las consultas de medios de la ventana y distingan los teléfonos y las tabletas de los ordenadores de escritorio."
+  }
+}

@@ -50,7 +50,7 @@ The limits section on the **Plugins → Subagent** page edits the Host’s `suba
 
 ### Activation capacity
 
-Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each subagent tree. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
+Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each subagent tree. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. A model-selection maintenance restoration reserves none. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
 
 Consumers read the current limit through `ctx.subagents.maxActiveSubagents`; admission samples the same value before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
 
@@ -73,7 +73,18 @@ The root is always `lead`. A descendant's full name is the slash-separated path 
 
 ### Child presets
 
-In-process spawn accepts an independent `agentPreset`; fork and external backends reject this option. Without a selection, a local child joins the parent's current preset revision. An explicit id mounts the currently available revision, even when that id matches the parent's. Configure model choices through [`dsh-tool-subagent`](../tool-subagent/README.md#selecting-a-child-preset) and persona and tools in the [preset composition](../../preset/agent-preset-registry/README.md). Cold resume preserves persona and tool restrictions recorded in historical child descriptors.
+In-process spawn accepts an independent `agentPreset`; fork and external backends reject this option. Without a selection, a local child joins the parent's current preset revision. An explicit id mounts the currently available revision, even when that id matches the parent's. Configure model choices through [`dsh-tool-subagent`](../tool-subagent/README.md#selecting-a-child-preset) and persona and tools in the [preset composition](../../preset/agent-preset-registry/README.md).
+
+<a id="child-model-choices"></a>
+### Child model choices
+
+A local child captures its creator's `agent.model.current()` choice once, then applies configured and requested overrides. Changing provider or model without naming an effort uses the selected model's default effort. Creation requires a complete provider/model choice. The manager captures it before asynchronous preparation and validates explicit model overrides before invoking the backend; a rejected override keeps its `LlmError` name, code, and message. Later creator selections do not change the child.
+
+Before publication or initial input, the manager appends the descriptor and the child's own `model/selection` after any inherited fork history. The initial choice is recorded even when it equals the creator's choice. Subsequent choices use the child's `agent.model`; the descriptor records no model fields. An already prepared step retains its model, while later steps and cold resume use the child's recorded choice.
+
+`selectModel(childId, selection, authority, signal)` validates and records a complete choice for a continuable child. Agent callers need the exact live ancestor authority used for interruption. The remote `selectModelByUser` operation instead requires authorization on the target Session and, like Session model selection, accepts only a model its provider lists in the current catalog. Both require its live tree root, leave user defaults unchanged, and serialize selection with image capability checks through inbox admission. External executions do not support later selection; creation-time `agentOptions` support does not imply this capability. A rejected choice keeps its `LlmError`; `selectModelByUser` reports it as `subagent/model-unavailable` with the LLM message, and reports an unlisted model with the same code.
+
+Selecting a cold child's model restores the child for maintenance under its live root, records the choice through the restored Agent, and releases it before returning. The restoration takes no capacity slot, publishes no `subagent/start` or `subagent/end`, sends no completion notice, and refuses manager-routed input. Input sent directly to its Agent while the choice is recorded starts no turn and is canceled with it. If an `agent/created` listener wakes the restored Agent before the choice is recorded, the selection fails with `CONTINUATION_UNAVAILABLE` and the release cancels the started turn. A child with pending input is refused with `CONTINUATION_UNAVAILABLE`, leaving that input to its next execution. A complete new choice also repairs a supported child log with no saved model. Each restoration records the ordinary `session/end-seed` resume marker before the choice. Later continuation restores the saved choice. Success follows the Session durability barrier. Cancellation, stale authority, invalid choices, and unavailable persistence reject the operation. `PERSISTENCE_UNCONFIRMED` (`subagent/model-selection-unconfirmed` remotely) means the choice may have changed without confirmed persistence; reload the child state before retrying.
 
 ### Messaging, interrupting, and discovering
 
@@ -113,6 +124,7 @@ This section explains how the service is built and where the observable behavior
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
 | [`src/catalog.ts`](src/catalog.ts) | Parent-owned `subagent/catalog` event and chunked host projection |
 | [`src/child-agent.ts`](src/child-agent.ts) | Child composition, delegated policy, depth helpers |
+| [`src/model-selection.ts`](src/model-selection.ts) | Initial choice requirements and compatible restoration from the child model projection |
 | [`src/list-children.ts`](src/list-children.ts) | Direct and recursive parent-catalog reads |
 | [`src/control.ts`](src/control.ts) | Browser control request validation and stable failure codes |
 | [`src/control-types.ts`](src/control-types.ts) | Client-safe catalog row, control requests, receipts, and failures |
@@ -139,14 +151,16 @@ Successful local creation appends a `subagent/catalog` fact to the parent Sessio
 
 Cold resume mounts the target's saved preset from its `agentPreset` projection or creation header without reading its creator's current composition. A missing or broken saved preset rejects restoration. The original subagent provider need not remain registered.
 
-Targets without a saved preset use the host composition and retain their historical descriptor's persona and tool restrictions. Persisted permission policies replay from the target's own log. Restoration uses the currently registered preset definition, without preserving an earlier revision across restarts.
+Targets without a saved preset use host composition. Historical descriptors that saved a persona or tool restriction reapply it after preset composition. Persisted permission policies replay from the target's own log. Restoration uses the currently registered preset definition, without preserving an earlier revision across restarts.
+
+The restored Agent reads its model from the child's `modelSelection` projection: a pending choice takes precedence over the latest request, and adapter-defaulted effort remains implicit. A historical descriptor that saved an initial route supplies it only when the projection has no model. The fold includes inherited fork history, so an older fork can resume with an inherited parent choice rather than its descriptor model. New children record their own initial choice after inherited history. A child with neither a recorded choice nor a complete saved route is rejected before activation; selecting its model makes it resumable. Restoration never consults the current creator or root model.
 
 ### Ownership and invariants
 
 - **The manager owns accepted work** — unpublished failures roll back; published handles cancel and release only their exact activation. Every instance belongs to the subagent tree root; creation parent ids remain unchanged.
 - **Registration is effect-scoped** — removing a provider blocks new starts but never revokes accepted runs.
 - **Agent-message authority follows the tree** — the exact live sender and target must belong to one root. Cold delivery verifies the target descriptor and creation catalogs before restoring only the target. Final inbox admission rechecks the sender and subagent tree root; failed restoration releases the new instance.
-- **The descriptor is log-only** — a session event absent from model history and retained across compaction; the writer records the resolved child provider, model, and reasoning effort for cold resume. Historical one-shot descriptors remain readable.
+- **The descriptor is log-only** — a session event absent from model history and retained across compaction; the writer records identity and the delegation backend, and model choices belong to the child’s own `model/selection` events. Historical composition fields and one-shot descriptors remain readable.
 - **This runtime answers archive admission for children** ([seam](../../workspace/workspace/README.md)) — activity queries, parent-cause cancellation, and pre-step rejection use managed creation ancestors even after an intermediate creator goes offline. Agents without a published Activation use live header ancestry; ordinary forks remain independent. Labels use the current identity projection's latest descriptor only when it belongs to the child's own log; missing, invalid, inherited, or unlabelled identities report only the id. Reporting requires no Session query service and starts after identity projection registration. Each cancellation failure is contained. The Agent registry owns the parent’s turn, job providers own jobs, and the API Session Controller checks archived Sessions and available header ancestry.
 
 </details>

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import { StaticUiResponsive, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply, inject } from '../src/client/index.ts'
@@ -38,6 +38,7 @@ async function bench() {
   ctx.provide('remote', { $on: () => () => {}, $host: host } as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
+  await ctx.plugin(StaticUiResponsive).await()
   ctx.locale.setLocale('zh')
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
@@ -54,7 +55,7 @@ function faceOf(ctx: Context, slot: string, id: string | undefined): unknown {
 
 describe('ui-session-panel browser half', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['slots', 'locale', 'remote'])
+    expect(inject).toEqual(['slots', 'locale', 'remote', 'uiResponsive'])
   })
 
   it('registers the fold control and row details Factories, the toggle first among the header utilities, the panel in the Chat aside, the Environment section, and the project row', async () => {

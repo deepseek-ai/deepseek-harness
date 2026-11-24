@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Speech synthesis",
+    "description": "Route read-aloud text to a speech synthesis service."
+  }
+}

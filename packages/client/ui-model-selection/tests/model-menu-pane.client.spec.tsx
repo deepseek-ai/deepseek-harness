@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
 import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelDirectoryState } from '../src/client/directory.ts'
 import { ModelSelect } from '../src/client/ModelSelect.tsx'
 import { en } from '../src/client/locales.ts'
@@ -33,7 +33,7 @@ function setup(autoFocus = true, extraOption?: ReactNode) {
     }
     return options?.fallback ?? null
   }
-  render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={select}
+  render(<ModelSelect {...responsiveHooks()} locked={false} available directory={directory} load={vi.fn()} select={select}
     resolveText={text => typeof text === 'string' ? text : text.en} t={makeTranslate(en)} renderSlot={renderSlot} />)
   const trigger = screen.getByRole('button', { name: /^Select model/ })
   fireEvent.click(trigger)

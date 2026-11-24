@@ -3,7 +3,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
-import { allowAllAccess, bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { allowAllAccess, bindSnapshotSelector, contextMenuHook, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ResourceSnapshot } from '@deepseek-ai/dsh-client-resources/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { PairingDecisionResult, PairingRequestId, PairingRequestsValue } from '../src/types.ts'
@@ -30,7 +30,7 @@ function fixture(sourceIp: string | null = '192.0.2.17') {
   } as ComponentProps<typeof PairingRequests>
   const unusedHook = (): never => { throw new Error('Pairing toast does not read global state') }
   const toastProps = {
-    ...props, ...allowAllAccess, useContextMenu: contextMenuHook(),
+    ...props, ...allowAllAccess, useContextMenu: contextMenuHook(), ...responsiveHooks(),
     usePanelInfo: unusedHook, useWorkspaces: unusedHook, useSessions: unusedHook,
     useSessionStatus: unusedHook, useSessionRetainInfo: unusedHook,
   } satisfies ComponentProps<typeof PairingToast>

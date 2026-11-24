@@ -547,8 +547,9 @@ async function createChild(scaffold: WebScaffold, parentId: SessionId, scenario:
   const ordered = [
     ...parsed.events.slice(0, firstUser + 1),
     { type: 'subagent/descriptor', data: snapshotSubagentDescriptor({
-      mode: 'continuable', provider: 'spawn', label: CHILD_LABEL, agentProvider: 'deepseek-official', agentModel: 'deepseek-v4-flash',
+      mode: 'continuable', provider: 'spawn', label: CHILD_LABEL,
     }) },
+    { type: 'model/selection', data: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } },
     ...parsed.events.slice(firstUser + 1),
   ]
   const events = ordered.map((event, seq) => ({ ...event, seq: SessionSeq(seq), time: createdAt + seq })) as SessionEvent[]

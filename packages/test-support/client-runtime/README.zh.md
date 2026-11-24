@@ -48,7 +48,9 @@ await runtime.dispose()
 
 运行时在 ui-session 之前安装 `allowAllAccessPlugin`：它的 `remoteAccess` 服务是一个 `StaticRemoteAccess`，对每个资源都回答 true，因此每个访问 Hook 都允许每个 action，每个 `whenAccess` 回调都立即执行。`TestClientOptions.access` 改为按 action 固定答案，经由 `staticAccessPlugin(allows)`。手工构造的组件 props 展开 `...allowAllAccess` 以获得同样的 Hook；测试被拒绝路径的 spec 覆盖其中一个 Hook，或提供 `new StaticRemoteAccess(ctx, allows)`。
 
-可选渲染参数通过 `entryKey` 选择 keyed 条目，或通过 `only` 选择 list 条目；`view.update(owner)` 保留该选择。`runtime.panelInfo` 提供默认的 `usePanelInfo` 数据源，初始不选中全局面板。挂载生产 Layout 所有者之前，先调用 `releasePanelInfoSource()` 释放该数据源。`dispose()` 同时释放默认的工作区与面板信息根数据源；提前释放是幂等的，不会移除替代它们的所有者。
+可选渲染参数通过 `entryKey` 选择 keyed 条目，或通过 `only` 选择 list 条目；`view.update(owner)` 保留该选择。`runtime.panelInfo` 提供默认的 `usePanelInfo` 数据源，初始不选中全局面板。挂载生产 Layout 所有者之前，先调用 `releasePanelInfoSource()` 释放该数据源。运行时还会挂载 `StaticUiResponsive`：它提供读取 `useMediaQuery` 或 `useMobile` 的插件所 inject 的 `uiResponsive` 服务，并把 `responsiveHooks()` 装为根 props，因此每个 Slot 组件看到的是没有任何媒体查询匹配的桌面设备；挂载生产 `ui-responsive` 服务之前，先 `await releaseResponsiveSource()` 卸载它，inject `uiResponsive` 的插件会随之卸载。`dispose()` 同时释放默认的工作区、面板信息与响应式根数据源；提前释放是幂等的，不会移除替代它们的所有者。
+
+手工构造的组件 props 展开 `...responsiveHooks(options?)`，以获得答案固定的 `useMediaQuery` 与 `useMobile`：`mobile` 指定设备类别，`matches(query)` 回答每个查询，因此 `responsiveHooks({ matches: query => query === '(prefers-reduced-motion: reduce)' })` 表示要求减少动效。这些答案永不变化，因此替身无法触发重新渲染；测试答案变化的 spec 应在替换过的 `window.matchMedia` 上挂载生产插件。
 
 Session fixture 从显式提供的地址或已加载的父级投影解析子代理地址，不会保留 Session generation。外部目录项没有本地浏览地址。
 
@@ -130,6 +132,7 @@ test('registers into the sidebar', async ({ remote, start }) => {
 | [`src/fixtures.ts`](src/fixtures.ts) | 普通 fixture 构造器：会话快照、workspace 列表状态 |
 | [`src/snapshot.ts`](src/snapshot.ts) | DOM 快照序列化器（类名哈希折叠、`<svg>` 指纹） |
 | [`src/access.ts`](src/access.ts) | `allowAllAccess` props、`StaticRemoteAccess`、`staticAccessPlugin` 与 `allowAllAccessPlugin`：remote-access Client 行的固定答案替身 |
+| [`src/responsive.ts`](src/responsive.ts) | `responsiveHooks` 与 `StaticUiResponsive`：`ui-responsive` Client 行的固定答案替身 |
 | [`src/remote.ts`](src/remote.ts) | 用于 host RPC 的 `TestRemote` 替身、`RemoteError` 值转出 |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | 翻译与固定浏览器语言测试辅助 |
 | [`src/config-form.ts`](src/config-form.ts) | 带测试驱动发布与写入 spy 的 `stubConfigForm` |

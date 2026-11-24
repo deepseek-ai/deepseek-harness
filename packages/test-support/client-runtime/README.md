@@ -48,7 +48,9 @@ await runtime.dispose()
 
 The runtime installs `allowAllAccessPlugin` before ui-session: its `remoteAccess` service, a `StaticRemoteAccess`, answers true for every resource, so every access Hook allows every action and every `whenAccess` callback runs at once. `TestClientOptions.access` fixes the answer per action instead, through `staticAccessPlugin(allows)`. Hand-built component props spread `...allowAllAccess` to receive the same Hooks; a spec of a refused path overrides one Hook or provides `new StaticRemoteAccess(ctx, allows)`.
 
-The optional render options select a keyed entry with `entryKey` or a list item with `only`; `view.update(owner)` retains that selection. `runtime.panelInfo` supplies the default `usePanelInfo` source with no global panel selected. Release it with `releasePanelInfoSource()` before mounting the production Layout owner. `dispose()` releases both default Workspace and panel-info root sources; early release is idempotent and does not remove replacement owners.
+The optional render options select a keyed entry with `entryKey` or a list item with `only`; `view.update(owner)` retains that selection. `runtime.panelInfo` supplies the default `usePanelInfo` source with no global panel selected. Release it with `releasePanelInfoSource()` before mounting the production Layout owner. The runtime also mounts `StaticUiResponsive`, which provides the `uiResponsive` service that plugins reading `useMediaQuery` or `useMobile` inject and installs `responsiveHooks()` as root props, so every Slot component sees a desktop device on which no media query matches; `await releaseResponsiveSource()` unloads it, and the plugins that inject `uiResponsive` with it, before mounting the production `ui-responsive` service. `dispose()` releases the default Workspace, panel-info, and responsive root sources; early release is idempotent and does not remove replacement owners.
+
+Hand-built component props spread `...responsiveHooks(options?)` to receive `useMediaQuery` and `useMobile` with fixed answers: `mobile` sets the device class and `matches(query)` answers each query, so `responsiveHooks({ matches: query => query === '(prefers-reduced-motion: reduce)' })` asks for reduced motion. The answers never change, so these stand-ins cannot drive a rerender; a spec of a changing answer mounts the production plugin over a stubbed `window.matchMedia`.
 
 The Session fixture resolves subagent addresses from explicitly supplied addresses or loaded parent projections without retaining a Session generation. External catalog entries have no local browsing address.
 
@@ -130,6 +132,7 @@ The bench copies no production logic: it mounts the production `SlotRegistry`, p
 | [`src/fixtures.ts`](src/fixtures.ts) | Plain fixture builders: conversation snapshots, workspace list state |
 | [`src/snapshot.ts`](src/snapshot.ts) | DOM snapshot serializer (class-hash folding, `<svg>` fingerprint) |
 | [`src/access.ts`](src/access.ts) | `allowAllAccess` props, `StaticRemoteAccess`, `staticAccessPlugin`, and `allowAllAccessPlugin`, the fixed-answer stand-ins for the remote-access Client row |
+| [`src/responsive.ts`](src/responsive.ts) | `responsiveHooks` and `StaticUiResponsive`, the fixed-answer stand-ins for the `ui-responsive` Client row |
 | [`src/remote.ts`](src/remote.ts) | `TestRemote` double for host RPC, `RemoteError` value re-export |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | Translation and pinned-browser-language test helpers |
 | [`src/config-form.ts`](src/config-form.ts) | `stubConfigForm` with test-driven publications and write spies |

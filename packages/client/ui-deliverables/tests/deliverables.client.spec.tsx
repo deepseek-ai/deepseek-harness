@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * ui-deliverables browser half: the derivation contract of produced paths,
  * recorded changes, and deliveries over engine-published Turn data, the
@@ -61,6 +61,7 @@ const standardProps: GlobalStandardProps & Omit<SessionStandardProps, 'sessionId
   useResource: unusedStandardHook,
   useWorkspaces: unusedStandardHook,
   useContextMenu: contextMenuHook(),
+  ...responsiveHooks(),
   inputActions: {
     insertQuote: () => false,
     captureInsertion: unusedStandardHook,
@@ -82,6 +83,7 @@ function openProps(controller = new PresentedOpenController(), summaries = new C
   return {
     openMenu,
     useContextMenu: contextMenuHook(openMenu),
+    ...responsiveHooks(),
     SessionProvider: ({ children }: { children?: import('react').ReactNode }) => <>{children}</>,
     renderSlot: renderFileActions,
     useChangesDiff: <T,>(select: (state: ReturnType<typeof diffs.state.getSnapshot>) => T): T => select(diffs.state.getSnapshot()),

@@ -702,6 +702,22 @@ describe('LlmRuntime', () => {
     }])
   })
 
+  it('reports catalog membership only for listed models of registered providers', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['catalog'], new CatalogAdapter({ id: 'catalog', name: 'Catalog' }, [
+      { provider: 'catalog', id: 'fast', name: 'Fast' },
+    ]))
+    await expect(ctx.llm.isModelInCatalog('catalog', 'fast')).resolves.toBe(true)
+    await expect(ctx.llm.isModelInCatalog('catalog', 'unlisted')).resolves.toBe(false)
+    await expect(ctx.llm.isModelInCatalog('missing', 'fast')).resolves.toBe(false)
+    const failing = new CatalogAdapter({ id: 'failing', name: 'Failing' }, [])
+    const failure = new Error('catalog unavailable')
+    failing.listModels = () => Promise.reject(failure)
+    ctx.llm.registerAdapter(['failing'], failing)
+    await expect(ctx.llm.isModelInCatalog('failing', 'fast')).rejects.toBe(failure)
+  })
+
   it('detaches advertised model badges, including their translations', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)

@@ -47,6 +47,7 @@ import { TestSessions } from './sessions.ts'
 import { TestWorkspaces } from './workspaces.ts'
 import type { Stabilizer } from './fixtures.ts'
 import { allowAllAccessPlugin } from './access.ts'
+import { StaticUiResponsive } from './responsive.ts'
 
 export type { UseSession } from '@deepseek-ai/dsh-client-ui-session/client'
 export { domSnapshotSerializer, registerDomSnapshotSerializer } from './snapshot.ts'
@@ -67,6 +68,8 @@ export { makeTranslate } from './translate.ts'
 export { allowAllAccess, allowAllAccessPlugin, StaticRemoteAccess, staticAccessPlugin } from './access.ts'
 export type { AccessStandardProps, StaticAccessPlugin } from './access.ts'
 export { usePinnedBrowserLanguages } from './locale-env.ts'
+export { responsiveHooks, StaticUiResponsive } from './responsive.ts'
+export type { ResponsiveHookOptions, ResponsiveStandardProps } from './responsive.ts'
 
 /**
  * Bind an observable source to the production renderer's selector hook.
@@ -257,6 +260,7 @@ export class SlotTestRuntime {
   private autoRootView: RenderResult | undefined
   private readonly disposeWorkspaceSource: () => void
   private readonly disposePanelInfoSource: () => void
+  private releaseResponsive: (() => Promise<void>) | undefined
 
   private constructor(ctx: Context, slots: SlotRegistry) {
     this.ctx = ctx
@@ -291,7 +295,8 @@ export class SlotTestRuntime {
 
   /**
    * Assemble a runtime: real Context, mounted SlotRegistry, installed
-   * renderer, and the session/workspace doubles provided as services.
+   * renderer, the session/workspace doubles provided as services, and the
+   * {@link StaticUiResponsive} stand-in for the `uiResponsive` service.
    * @returns the ready runtime.
    */
   static async create(): Promise<SlotTestRuntime> {
@@ -301,6 +306,9 @@ export class SlotTestRuntime {
     await fiber.await()
     const runtime = new SlotTestRuntime(ctx, ctx.get('slots') as SlotRegistry)
     await ctx.plugin(allowAllAccessPlugin).await()
+    const responsive = ctx.plugin(StaticUiResponsive)
+    await responsive.await()
+    runtime.releaseResponsive = () => runtime.stabilizer(() => responsive.dispose())
     await ctx.plugin({ inject: [...uiSessionInject], apply: applyUiSession }).await()
     await ctx.plugin({ inject: [...sessionStatusInject], apply: applySessionStatus }).await()
     return runtime
@@ -345,6 +353,16 @@ export class SlotTestRuntime {
   /** Release the default panel hook before mounting the production Layout owner. */
   releasePanelInfoSource(): void {
     this.disposePanelInfoSource()
+  }
+
+  /**
+   * Unload the default {@link StaticUiResponsive} service and its root props before mounting the production ui-responsive
+   * service; plugins that inject `uiResponsive` unload with it. Releasing again does nothing.
+   */
+  async releaseResponsiveSource(): Promise<void> {
+    const release = this.releaseResponsive
+    this.releaseResponsive = undefined
+    await release?.()
   }
 
   /**
@@ -494,6 +512,7 @@ export class SlotTestRuntime {
     this.root.release()
     this.disposeWorkspaceSource()
     this.disposePanelInfoSource()
+    await this.releaseResponsiveSource()
     await this.sessions.disposeScopes()
     await this.stabilizer(() => this.ctx.fiber.dispose())
     localStorage.clear()

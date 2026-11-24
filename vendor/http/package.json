@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis-plugin-http",
-  "description": "Fetch-based axios-style HTTP client",
-  "version": "1.5.1",
+  "description": "HTTP client service for Cordis",
+  "version": "1.6.0",
   "type": "module",
   "files": [
     "lib/index.js",
@@ -17,9 +17,9 @@
     "directory": "vendor/http"
   },
   "bugs": {
-    "url": "https://github.com/cordiverse/http/issues"
+    "url": "https://github.com/cordiverse/cordis/issues"
   },
-  "homepage": "https://github.com/cordiverse/http",
+  "homepage": "https://github.com/cordiverse/cordis",
   "keywords": [
     "http",
     "fetch",
@@ -29,7 +29,7 @@
     "client",
     "request",
     "cordis",
-    "plugin"
+    "component"
   ],
   "cordis": {
     "service": {

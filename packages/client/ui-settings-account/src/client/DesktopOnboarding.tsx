@@ -26,7 +26,7 @@ const onboardingPages = {
  * @returns the active first-run page.
  */
 export function DesktopOnboarding({
-  state, account, openPlatformPage, update, complete, retry, t, locale, track, exiting = false,
+  state, account, openPlatformPage, update, complete, retry, t, locale, track, exiting = false, reducedMotion,
 }: DesktopOnboardingProps) {
   const [dialog, setDialog] = useState<OnboardingConfirmationKind | null>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -42,7 +42,7 @@ export function DesktopOnboarding({
   useEffect(() => {
     if (step === targetStep) return
     const element = page.current
-    if (!state.visible || element?.animate === undefined || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!state.visible || element?.animate === undefined || reducedMotion) {
       setStep(targetStep)
       return
     }

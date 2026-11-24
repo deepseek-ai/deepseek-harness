@@ -2672,10 +2672,22 @@
             "version": 3,
             "mode": "continuable",
             "provider": "spawn",
-            "label": "Check direct child",
-            "agentProvider": "deepseek-official",
-            "agentModel": "smoke-model",
-            "agentReasoningEffort": "high"
+            "label": "Check direct child"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-1}}",
+        "event": {
+          "type": "model/selection",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "provider": "deepseek-official",
+            "model": "smoke-model"
           }
         }
       }
@@ -2686,7 +2698,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "sandbox/mode",
-          "seq": 1,
+          "seq": 2,
           "time": 0,
           "data": {
             "mode": "danger-full-access",
@@ -2701,7 +2713,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "approval/policy",
-          "seq": 2,
+          "seq": 3,
           "time": 0,
           "data": {
             "policy": "never",
@@ -2716,7 +2728,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "permission/preset",
-          "seq": 3,
+          "seq": 4,
           "time": 0,
           "data": {
             "preset": "danger-full-access"
@@ -2730,7 +2742,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 4,
+          "seq": 5,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -2760,7 +2772,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 5,
+          "seq": 6,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -2807,7 +2819,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/start",
-          "seq": 6,
+          "seq": 7,
           "time": 0,
           "data": {
             "turn": 1
@@ -2821,7 +2833,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 7,
+          "seq": 8,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -2838,7 +2850,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 8,
+          "seq": 9,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -2959,7 +2971,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 9,
+          "seq": 10,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -2989,7 +3001,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 10,
+          "seq": 11,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3007,7 +3019,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 11,
+          "seq": 12,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3037,7 +3049,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 12,
+          "seq": 13,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -3077,7 +3089,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/end",
-          "seq": 13,
+          "seq": 14,
           "time": 0,
           "data": {
             "turn": 1,
@@ -3111,7 +3123,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/start",
-          "seq": 14,
+          "seq": 15,
           "time": 0,
           "data": {
             "turn": 2
@@ -3125,7 +3137,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 15,
+          "seq": 16,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3142,7 +3154,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 16,
+          "seq": 17,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -3159,7 +3171,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "step/start",
-          "seq": 17,
+          "seq": 18,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3174,7 +3186,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "system/message",
-          "seq": 18,
+          "seq": 19,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3241,7 +3253,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "user/message",
-          "seq": 19,
+          "seq": 20,
           "time": 0,
           "data": {
             "id": "{{messageId}}",
@@ -3266,7 +3278,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "user/message",
-          "seq": 20,
+          "seq": 21,
           "time": 0,
           "data": {
             "content": [
@@ -3301,7 +3313,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "user/message",
-          "seq": 21,
+          "seq": 22,
           "time": 0,
           "data": {
             "content": [
@@ -3349,17 +3361,18 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "request/header",
-          "seq": 22,
+          "seq": 23,
           "time": 0,
           "data": {
             "header": {
               "config": {
                 "provider": "deepseek-official",
                 "model": "smoke-model",
-                "reasoningEffort": "high",
-                "maxTokens": 256000
+                "maxTokens": 256000,
+                "reasoningEffort": "high"
               },
               "adapterDefaults": {
+                "reasoningEffort": true,
                 "maxTokens": true
               },
               "tools": [
@@ -3383,7 +3396,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "request/context",
-          "seq": 23,
+          "seq": 24,
           "time": 0,
           "data": {
             "provider": "deepseek-official",
@@ -3399,12 +3412,12 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 24,
+          "seq": 25,
           "time": 0,
           "data": {
             "sessionId": "{{child-1}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 23
+            "throughSeq": 24
           }
         }
       }
@@ -3415,7 +3428,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "assistant/message",
-          "seq": 25,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3529,7 +3542,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "step/end",
-          "seq": 26,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3544,7 +3557,7 @@
         "sessionId": "{{child-1}}",
         "event": {
           "type": "turn/end",
-          "seq": 27,
+          "seq": 28,
           "time": 0,
           "data": {
             "turn": 2,
@@ -3803,10 +3816,22 @@
             "version": 3,
             "mode": "continuable",
             "provider": "spawn",
-            "label": "advanced-exe-snapshot child 1",
-            "agentProvider": "deepseek-official",
-            "agentModel": "smoke-model",
-            "agentReasoningEffort": "high"
+            "label": "advanced-exe-snapshot child 1"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{child-2}}",
+        "event": {
+          "type": "model/selection",
+          "seq": 1,
+          "time": 0,
+          "data": {
+            "provider": "deepseek-official",
+            "model": "smoke-model"
           }
         }
       }
@@ -3817,7 +3842,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "sandbox/mode",
-          "seq": 1,
+          "seq": 2,
           "time": 0,
           "data": {
             "mode": "danger-full-access",
@@ -3832,7 +3857,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "approval/policy",
-          "seq": 2,
+          "seq": 3,
           "time": 0,
           "data": {
             "policy": "never",
@@ -3847,7 +3872,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "permission/preset",
-          "seq": 3,
+          "seq": 4,
           "time": 0,
           "data": {
             "preset": "danger-full-access"
@@ -3861,7 +3886,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 4,
+          "seq": 5,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3891,7 +3916,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 5,
+          "seq": 6,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -3934,7 +3959,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/start",
-          "seq": 6,
+          "seq": 7,
           "time": 0,
           "data": {
             "turn": 1
@@ -3948,7 +3973,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 7,
+          "seq": 8,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -3965,7 +3990,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 8,
+          "seq": 9,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -4019,7 +4044,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 9,
+          "seq": 10,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -4049,7 +4074,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 10,
+          "seq": 11,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -4067,7 +4092,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 11,
+          "seq": 12,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -4097,7 +4122,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 12,
+          "seq": 13,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -4133,7 +4158,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/end",
-          "seq": 13,
+          "seq": 14,
           "time": 0,
           "data": {
             "turn": 1,
@@ -4167,7 +4192,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/start",
-          "seq": 14,
+          "seq": 15,
           "time": 0,
           "data": {
             "turn": 2
@@ -4181,7 +4206,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 15,
+          "seq": 16,
           "time": 0,
           "data": {
             "target": "next-step",
@@ -4198,7 +4223,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "agent/inbox/spliced",
-          "seq": 16,
+          "seq": 17,
           "time": 0,
           "data": {
             "target": "next-turn",
@@ -4215,7 +4240,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "step/start",
-          "seq": 17,
+          "seq": 18,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4230,7 +4255,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "system/message",
-          "seq": 18,
+          "seq": 19,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4297,7 +4322,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "user/message",
-          "seq": 19,
+          "seq": 20,
           "time": 0,
           "data": {
             "id": "{{messageId}}",
@@ -4322,7 +4347,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "user/message",
-          "seq": 20,
+          "seq": 21,
           "time": 0,
           "data": {
             "content": [
@@ -4353,7 +4378,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "user/message",
-          "seq": 21,
+          "seq": 22,
           "time": 0,
           "data": {
             "content": [
@@ -4401,17 +4426,18 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "request/header",
-          "seq": 22,
+          "seq": 23,
           "time": 0,
           "data": {
             "header": {
               "config": {
                 "provider": "deepseek-official",
                 "model": "smoke-model",
-                "reasoningEffort": "high",
-                "maxTokens": 256000
+                "maxTokens": 256000,
+                "reasoningEffort": "high"
               },
               "adapterDefaults": {
+                "reasoningEffort": true,
                 "maxTokens": true
               },
               "tools": [
@@ -4435,7 +4461,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "request/context",
-          "seq": 23,
+          "seq": 24,
           "time": 0,
           "data": {
             "provider": "deepseek-official",
@@ -4451,12 +4477,12 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "session-log-deepseek/delivery-accepted",
-          "seq": 24,
+          "seq": 25,
           "time": 0,
           "data": {
             "sessionId": "{{child-2}}",
             "sessionFormatVersion": 4,
-            "throughSeq": 23
+            "throughSeq": 24
           }
         }
       }
@@ -4467,7 +4493,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "assistant/message",
-          "seq": 25,
+          "seq": 26,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4581,7 +4607,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "step/end",
-          "seq": 26,
+          "seq": 27,
           "time": 0,
           "data": {
             "turn": 2,
@@ -4596,7 +4622,7 @@
         "sessionId": "{{child-2}}",
         "event": {
           "type": "turn/end",
-          "seq": 27,
+          "seq": 28,
           "time": 0,
           "data": {
             "turn": 2,

@@ -139,7 +139,7 @@ export class SessionStatusService extends TypertRemoteService {
   }
 
   private unavailable(cause: unknown): RemoteError {
-    return new RemoteError('session-status/unavailable', 'Reading state could not be updated. Try the operation again; reload the page if synchronization is unavailable.', {}, { cause })
+    return new RemoteError('session-status/unavailable', `Reading state could not be updated: ${String(cause)}. Try the operation again; reload the page if synchronization is unavailable.`, {}, { cause })
   }
 }
 

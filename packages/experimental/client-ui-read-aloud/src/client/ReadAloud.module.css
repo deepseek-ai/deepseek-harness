@@ -1,0 +1,181 @@
+/* The control sits in the assistant action row beside slot-injected siblings,
+   so its box and glyph follow the same content font-size axis as theirs
+   (ui-chat MessageIconActions, ui-message-feedback). */
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: calc(28px + var(--dsh-content-font-delta, 0px));
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.action svg {
+  flex: none;
+  width: calc(16px + var(--dsh-content-font-delta, 0px));
+  height: calc(16px + var(--dsh-content-font-delta, 0px));
+}
+
+@media (hover: hover) {
+  .action:hover:not(:disabled) {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The waveform keeps the business color with and without hover, so a reading
+   in progress is recognizable anywhere in the transcript. */
+.action[data-read-aloud='playing'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.loading,
+.playing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.loading {
+  gap: 2px;
+}
+
+.loading i {
+  width: 2px;
+  height: 5px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.3;
+  animation: read-aloud-loading 1s ease-in-out infinite;
+}
+
+.loading i:nth-child(2) { animation-delay: 0.15s; }
+.loading i:nth-child(3) { animation-delay: 0.3s; }
+.loading i:nth-child(4) { animation-delay: 0.45s; }
+
+.playing {
+  gap: 1.5px;
+}
+
+.playing i {
+  width: 1.5px;
+  border-radius: 1px;
+  background: currentColor;
+  animation: read-aloud-wave 0.9s ease-in-out infinite;
+}
+
+.playing i:nth-child(1),
+.playing i:nth-child(5) { height: 5px; }
+
+.playing i:nth-child(2),
+.playing i:nth-child(4) { height: 9px; }
+
+.playing i:nth-child(3) { height: 14px; }
+
+.playing i:nth-child(2) { animation-delay: -0.72s; }
+.playing i:nth-child(3) { animation-delay: -0.54s; }
+.playing i:nth-child(4) { animation-delay: -0.36s; }
+.playing i:nth-child(5) { animation-delay: -0.18s; }
+
+@keyframes read-aloud-loading {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+@keyframes read-aloud-wave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading i,
+  .playing i {
+    animation: none;
+  }
+
+  .loading i {
+    opacity: 0.6;
+  }
+}
+
+/* Bundle detail: availability, the voice preference, cost, and the guide link. */
+.settings {
+  display: grid;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.settings p {
+  margin: 0;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The voice row follows the preference rows of the voice-input details: a 100px label column, then the field. */
+.voice {
+  display: grid;
+  grid-template-columns: 100px minmax(120px, 280px) auto;
+  align-items: center;
+  justify-content: start;
+  gap: 12px;
+}
+
+.voice select {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.voice select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.voiceError {
+  grid-column: 2 / -1;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.billing {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.link {
+  justify-self: start;
+  color: var(--dsw-alias-link);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: underline;
+  }
+}

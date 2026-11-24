@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
-import { SlotTestRuntime, bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, bindSnapshotSelector, contextMenuHook, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
@@ -128,7 +128,12 @@ describe('SessionPanel', () => {
 
   /** Ids of the probes the rendered panels created, so a later props object answers for the mounted panel. */
   const probeIds = new Set<string>()
-  afterEach(() => { probeIds.clear() })
+  /** Whether the page asks for reduced motion; each test starts with it asked. */
+  let reducedMotion = true
+  afterEach(() => {
+    probeIds.clear()
+    reducedMotion = true
+  })
 
   /** Panel props whose dock probes all have, or all lack, room to dock. */
   function panelProps(dockable: boolean, visibility: SessionPanelVisibility, closeOverlay = vi.fn()) {
@@ -147,6 +152,7 @@ describe('SessionPanel', () => {
       return attached
     })
     const props = {
+      ...responsiveHooks({ matches: query => reducedMotion && query === '(prefers-reduced-motion: reduce)' }),
       sessionId: SID,
       useVisibility: selectorOf(visibility),
       useSections: selectorOf(SECTIONS),
@@ -397,7 +403,7 @@ describe('SessionPanel', () => {
       for (const type of ['animationend', 'webkitAnimationEnd']) fireEvent(element, new Event(type, { bubbles: true }))
     }
     /** The page does not ask for reduced motion. */
-    const allowMotion = (): void => { vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false }))) }
+    const allowMotion = (): void => { reducedMotion = false }
 
     it('plays the entrance when a press shows the panel, marks the probe meanwhile, and ends both with the animation', () => {
       allowMotion()

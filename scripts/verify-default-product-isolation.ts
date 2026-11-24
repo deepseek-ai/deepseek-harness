@@ -64,7 +64,7 @@ export function verifyDefaultProductIsolation(root: string): ProductIsolationRes
   const directories = new Map<string, Package>()
   const display = (path: string): string => relative(root, path).replaceAll('\\', '/')
   for (const path of globSync([
-    'apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json',
+    'apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json', 'vendor/im/*/package.json',
     'native/system/packages/*/package.json', 'python/sdk-runtime/package.json',
   ], { cwd: root }).sort()) {
     const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as Manifest

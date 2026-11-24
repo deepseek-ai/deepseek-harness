@@ -1,8 +1,8 @@
-import { Context, Inject, Service } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import { type Awaitable, Binary, defineProperty, type Dict, isNullable } from '@deepseek-ai/cosmokit'
 import { createRequire } from 'node:module'
 import fetchFile from '@deepseek-ai/cordis-fetch-file'
-import type { Dispatcher, RequestInit, WebSocket, WebSocketInit } from 'undici'
+import type { Dispatcher, RequestInit, WebSocketInit } from 'undici'
 import z from '@deepseek-ai/schemastery'
 
 declare module '@deepseek-ai/cordis' {
@@ -22,6 +22,47 @@ declare module '@deepseek-ai/cordis' {
 
 const kHttpError = Symbol.for('cordis.http.error')
 const kHttpConfig = Symbol.for('cordis.http.config')
+
+function findOwnValue(source: any, predicate: (value: any, key: PropertyKey) => boolean) {
+  for (const key of Reflect.ownKeys(source)) {
+    const value = source[key]
+    if (predicate(value, key)) return value
+  }
+}
+
+function setupInternalUndici(undici: typeof import('undici')) {
+  const runtime: Partial<typeof import('undici')> = undici
+  if (!runtime.getGlobalDispatcher) return
+  runtime.Agent ??= runtime.getGlobalDispatcher().constructor as any
+  if (runtime.ProxyAgent && runtime.buildConnector) return
+  if (!runtime.EnvHttpProxyAgent) return
+
+  const envAgent = new runtime.EnvHttpProxyAgent({
+    httpProxy: 'http://localhost',
+    noProxy: '',
+  })
+  const proxyAgent = findOwnValue(envAgent, (value) => {
+    return value?.constructor?.name === 'ProxyAgent'
+  })
+  envAgent.close().catch(() => {})
+  if (!proxyAgent) return
+
+  const ProxyAgent = runtime.ProxyAgent ??= proxyAgent.constructor
+  runtime.buildConnector ??= (options = {}) => {
+    const agent = new ProxyAgent({
+      uri: 'http://localhost',
+      requestTls: options,
+    })
+    const connector = findOwnValue(agent, (value, key) => {
+      if (typeof value !== 'function') return false
+      if (typeof key === 'symbol' && key.description === 'connect endpoint function') return true
+      return value.name === 'connect' && value.length === 2
+    })
+    agent.close().catch(() => {})
+    if (!connector) throw new Error('cannot access the internal undici connector')
+    return connector
+  }
+}
 
 class HttpError extends Error {
   [kHttpError] = true
@@ -154,6 +195,7 @@ export class Http extends Service<Http.Intercept> {
     try {
       if (process.execArgv.includes('--expose-internals')) {
         this.undici = require('internal/deps/undici/undici')
+        setupInternalUndici(this.undici)
       } else {
         this.undici = require('undici')
       }
@@ -284,12 +326,8 @@ export class Http extends Service<Http.Intercept> {
     })
   }
 
-  [Service.mergeIntercept](...values: Http.Intercept[]): Http.Intercept {
-    return values.reduce<Http.Intercept>((acc, value) => Http.mergeConfig(acc, value), {})
-  }
-
   resolveConfig(init?: Http.RequestConfig): Http.RequestConfig {
-    return Http.mergeConfig(Http.mergeConfig(this.config, this[Service.resolveIntercept]()), init)
+    return { ...this.config, ...this[Service.resolveIntercept](), ...init }
   }
 
   resolveURL(url: string | URL, config: Http.RequestConfig, isWebSocket = false) {
@@ -458,7 +496,7 @@ export class Http extends Service<Http.Intercept> {
 
     const socket = this.ctx.waterfall(this, 'http/websocket', url, init, config, () => {
       this.ctx.logger('http:ws').debug('connect %s', url.href)
-      return new this.undici.WebSocket(url, init)
+      return new this.undici.WebSocket(url, init) as any
     })
     const dispose = this.ctx.effect(() => {
       return () => socket.close(1000, 'context disposed')

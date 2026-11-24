@@ -131,6 +131,8 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 
 组件绝不会收到 `ctx`。父组件在某次渲染时已经知道的值通过 `renderSlot` 的 owner 参数进入；共享视图状态使用声明的 store；service 与 model object 留在 `apply` closure 中，只向组件投影 callback 或 observable source。
 
+<a id="framework-provided-hooks"></a>
+
 ## 框架提供的 hooks
 
 当前组合中的 adapter 会添加以下标准 props。它们按目标 slot 的 scope 提供，与注册组件来自哪个包无关。
@@ -142,12 +144,16 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 | 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
 | 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
+| 所有 scope | `useMediaQuery` | `ui-responsive` |
+| 所有 scope | `useMobile` | `ui-responsive` |
 | `session` | `sessionId`、`useSession`、`useProjection`、`useAccess`（所绑定 Session 的答案） | `ui-session` |
 | `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection`、`useAccess` | `ui-session` |
 | `session` | `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session-maybe` | 结果可选的 `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
 | `session` | `useTrajectory` | `ui-trajectory` |
+
+`useMediaQuery(query)` 回答 CSS 媒体查询当前是否在页面窗口中匹配，结果变化时组件重新渲染；当结果决定渲染结构或行为时使用它，纯样式差异仍写在 CSS `@media` 规则中。`useMobile()` 回答页面是否运行在手机或平板上，在页面生命周期内固定不变；它只用于自动聚焦和软键盘行为，布局按宽度媒体查询选择。组件读取其中任一 prop 的插件要 inject `uiResponsive` 服务，这样它会在两个 props 都存在之后启动，并随它们一起卸载。
 
 Renderer 还会根据声明的 store 创建 `useStore`，并根据声明的 locale namespace 创建 `t`。这些是由注册项推导的 props，不属于全局标准 props。
 

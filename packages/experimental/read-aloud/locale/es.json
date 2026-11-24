@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Servicio de lectura en voz alta",
+    "description": "Prepara las respuestas para leerlas en voz alta y las sintetiza por segmentos."
+  }
+}

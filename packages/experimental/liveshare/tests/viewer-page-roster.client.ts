@@ -30,6 +30,7 @@ import * as uiDeliverables from '@deepseek-ai/dsh-client-ui-deliverables/client'
 import * as uiFileDrag from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import * as uiLayout from '@deepseek-ai/dsh-client-ui-layout/client'
 import * as uiRenderer from '@deepseek-ai/dsh-client-ui-renderer/client'
+import * as uiResponsive from '@deepseek-ai/dsh-client-ui-responsive/client'
 import * as uiSession from '@deepseek-ai/dsh-client-ui-session/client'
 import * as uiSessionStatus from '@deepseek-ai/dsh-client-ui-session-status/client'
 import * as uiSettings from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -70,6 +71,7 @@ export const VIEWER_PAGE_ROSTER: readonly ViewerPageRosterRow[] = [
   { id: '@deepseek-ai/dsh-client-ui-theme', exports: uiTheme },
   { id: '@deepseek-ai/dsh-client-ui-settings', exports: uiSettings },
   { id: '@deepseek-ai/dsh-client-ui-layout', exports: uiLayout },
+  { id: '@deepseek-ai/dsh-client-ui-responsive', exports: uiResponsive },
   { id: '@deepseek-ai/dsh-client-ui-session', exports: uiSession },
   { id: '@deepseek-ai/dsh-client-ui-session-status', exports: uiSessionStatus },
   { id: '@deepseek-ai/dsh-client-ui-sidebar', exports: uiSidebar },
