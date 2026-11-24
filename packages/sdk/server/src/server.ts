@@ -24,6 +24,8 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 
 import type {} from '@deepseek-ai/dsh-schedule'
+import type {} from '@deepseek-ai/dsh-mcp-manager'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -275,7 +277,8 @@ export class HarnessSdkJsonRpcServer {
   }
 
   /**
-   * Validate and configure the SDK route, mounting the DeepSeek fallback only when unowned.
+   * Validate and configure the SDK route, mounting the DeepSeek fallback only when unowned. A positive
+   * `mcpStartupTimeoutMs` then holds the answer while MCP manager servers are in their first connection attempt.
    * @param params - SDK handshake parameters.
    * @returns server identity for the handshake.
    */
@@ -290,6 +293,10 @@ export class HarnessSdkJsonRpcServer {
     if (params.maxTokens !== undefined
       && (!Number.isSafeInteger(params.maxTokens) || params.maxTokens <= 0)) {
       throw new TypeError('initialize maxTokens must be a positive safe integer')
+    }
+    if (params.mcpStartupTimeoutMs !== undefined && (!Number.isSafeInteger(params.mcpStartupTimeoutMs)
+      || params.mcpStartupTimeoutMs < 0 || params.mcpStartupTimeoutMs > MAX_TIMER_DELAY_MS)) {
+      throw new TypeError(`initialize mcpStartupTimeoutMs must be an integer from 0 to ${String(MAX_TIMER_DELAY_MS)}`)
     }
     const cwd = resolve(params.cwd)
     const provider = params.provider
@@ -319,6 +326,7 @@ export class HarnessSdkJsonRpcServer {
       ...reasoningEffort === undefined ? {} : { reasoningEffort },
       ...params.maxTokens === undefined ? {} : { maxTokens: params.maxTokens },
     })
+    if (params.mcpStartupTimeoutMs !== undefined) await this.awaitMcpStartup(params.mcpStartupTimeoutMs)
     this.cwd = cwd
     this.provider = provider
     this.model = model
@@ -329,6 +337,21 @@ export class HarnessSdkJsonRpcServer {
     this.initialized = true
     this.initialization.resolve()
     return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } }
+  }
+
+  /**
+   * Wait until no MCP manager server is in its first connection attempt, so the tools of servers that connect reach
+   * the first prompt. An exhausted budget logs the servers still connecting and returns; their tools join the tool
+   * list when they connect.
+   * @param timeoutMs - the longest wait in milliseconds; with `0`, or in a composition without the manager, it returns at once.
+   */
+  private async awaitMcpStartup(timeoutMs: number): Promise<void> {
+    const manager = this.ctx.get('mcpManager')
+    if (manager === undefined || timeoutMs === 0) return
+    const pending = await manager.whenSettled(AbortSignal.timeout(timeoutMs))
+    if (pending.length > 0) {
+      this.ctx.logger.warn(`sdk-jsonrpc-server: initialize continues after ${String(timeoutMs)} ms while MCP servers are still connecting: ${pending.join(', ')}`)
+    }
   }
 
   /**

@@ -1137,6 +1137,11 @@ describe('mcp-manager', () => {
     await expect(waiting).resolves.toEqual({ done: true, value: undefined })
   })
 
+  it('settles at once when no server is listed, without waiting for the signal', async () => {
+    const { manager } = await mountWorld({ withSettings: false })
+    await expect(manager.whenSettled(new AbortController().signal)).resolves.toEqual([])
+  })
+
   it('settles when a server in its first connection attempt connects', async () => {
     const connecting = Promise.withResolvers<undefined>()
     mockConnect.mockImplementationOnce(() => connecting.promise)

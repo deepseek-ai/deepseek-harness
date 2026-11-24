@@ -160,13 +160,24 @@ class HarnessClient:
         reasoning_effort: str | None = None,
         max_tokens: int | None = None,
         approval_requests: bool = False,
+        mcp_startup_timeout_seconds: float | None = None,
     ) -> InitializeResponse:
         """Initialize the runtime; approval_requests enables approval/request reception.
 
         When enabled, drain next_request() concurrently with blocking waits and
         return one-operation decisions through respond(). Omission preserves the
         runtime's composed approval answerers.
+
+        mcp_startup_timeout_seconds bounds how long the runtime holds this
+        handshake for MCP manager servers in their first connection attempt;
+        omission or 0 answers without waiting. Keep it shorter than
+        initialize_timeout_seconds, which also covers runtime startup, or a
+        hanging MCP server makes the handshake time out. A negative value
+        closes the runtime like any failed initialization.
         """
+        if mcp_startup_timeout_seconds is not None and not mcp_startup_timeout_seconds >= 0:
+            self.close()
+            raise ValueError("mcp_startup_timeout_seconds must be at least 0")
         payload: JsonObject = {
             "cwd": str(Path(cwd).resolve()),
             "provider": provider,
@@ -178,6 +189,8 @@ class HarnessClient:
             payload["reasoningEffort"] = reasoning_effort
         if max_tokens is not None:
             payload["maxTokens"] = max_tokens
+        if mcp_startup_timeout_seconds is not None:
+            payload["mcpStartupTimeoutMs"] = round(mcp_startup_timeout_seconds * 1000)
         if self._user_question_handler is not None:
             payload["capabilities"] = {"userQuestions": True}
         try:

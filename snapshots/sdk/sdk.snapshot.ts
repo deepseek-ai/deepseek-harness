@@ -142,6 +142,8 @@ interface SdkAssertions {
   runtimeContext?: false | { includes: readonly string[]; excludes: readonly string[] }
   /** An HTTP MCP fixture at `DSH_MCP_DEMO_URL`; the first prompt follows `initialize` without waiting for it. */
   mcpDemo?: {
+    /** The `initialize` wait for MCP servers in their first connection attempt. */
+    startupTimeoutMs: number
     /** OAuth credential keys whose grants for the fixture URL are saved before the runtime starts. */
     oauthCredentialKeys: readonly string[]
     /** Tool calls the fixture serves during the run. */
@@ -232,7 +234,7 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   },
   'mcp-manager': {
     expectedFinalResponse: 'MCP_MANAGER_OK',
-    mcpDemo: { oauthCredentialKeys: ['mcp-client/linear'], calls: ['ping', 'ping'] },
+    mcpDemo: { startupTimeoutMs: 5000, oauthCredentialKeys: ['mcp-client/linear'], calls: ['ping', 'ping'] },
   },
   'tool-scheduler-recovery': {
     patches: [fileURLToPath(new URL('./tool-scheduler-recovery/runtime.cordis.yml', import.meta.url))],
@@ -921,6 +923,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   const createHarness = (model = route.model): DeepSeekHarness => new DeepSeekHarness({
     profile: scenario.manifest.profile,
     ...(assertions.approvalOutcomes === undefined ? {} : { approvalRequests: true }),
+    ...(assertions.mcpDemo === undefined ? {} : { mcpStartupTimeoutMs: assertions.mcpDemo.startupTimeoutMs }),
     patches,
     dshHome,
     processCwd: cwd,

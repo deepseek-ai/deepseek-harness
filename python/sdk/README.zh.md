@@ -48,7 +48,7 @@ with DeepSeekHarness(
 print(result.final_response)
 ```
 
-`DeepSeekHarness` 延迟启动运行时，并在调用 `close()` 或退出上下文管理器前复用该进程。首次 profile 握手通过 `initialize_timeout_seconds` 使用独立的 30 秒默认上限；普通活动在协议响应后仍不设时限；`request_timeout_seconds` 可以限制协议响应的等待。超时诊断会指明所选 profile，并包含保留的运行时诊断。`cwd` 是 agent workspace；`runtime_cwd` 独立选择子进程工作目录。两者都会在启动前转成绝对路径。`provider`、`model`、可选的 `reasoning_effort` 和可选的正整数 `max_tokens` 通过 JSON-RPC 初始化发送。`base_url` 与 `api_key` 会显式覆盖子进程环境中的 `DEEPSEEK_BASE_URL` 与 `DEEPSEEK_API_KEY`。
+`DeepSeekHarness` 延迟启动运行时，并在调用 `close()` 或退出上下文管理器前复用该进程。首次 profile 握手通过 `initialize_timeout_seconds` 使用独立的 30 秒默认上限；普通活动在协议响应后仍不设时限；`request_timeout_seconds` 可以限制协议响应的等待。超时诊断会指明所选 profile，并包含保留的运行时诊断。`cwd` 是 agent workspace；`runtime_cwd` 独立选择子进程工作目录。两者都会在启动前转成绝对路径。`provider`、`model`、可选的 `reasoning_effort` 和可选的正整数 `max_tokens` 通过 JSON-RPC 初始化发送。`mcp_startup_timeout_seconds`（默认 5）也随之发送：握手最多等待这么久，让 MCP 管理器中处于首次连接尝试的服务器完成连接，及时连上的服务器的工具就会进入首个 prompt；`None` 或 `0` 不等待。它应小于 `initialize_timeout_seconds`，因为后者还包含运行时的启动时间。`base_url` 与 `api_key` 会显式覆盖子进程环境中的 `DEEPSEEK_BASE_URL` 与 `DEEPSEEK_API_KEY`。
 
 SDK 把运行时写到 stderr 的每一行实时记录到 Python logger `deepseek_harness.runtime`，级别为 `INFO`，前缀为 `dsh runtime[<pid>] stderr:`。该输出包含运行时的致命错误报告，包括导致进程结束的未捕获异常或未处理拒绝的堆栈。宿主把日志配置为 `INFO`（例如 `logging.basicConfig(level=logging.INFO)`）后，这些行会进入宿主自己的日志；未配置日志时，Python 不显示低于 `WARNING` 的记录。调整该 logger 的级别即可关闭。
 

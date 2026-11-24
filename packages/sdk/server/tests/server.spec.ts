@@ -1266,6 +1266,24 @@ describe('HarnessSdkJsonRpcServer', () => {
     },
   )
 
+  it('rejects initialize mcpStartupTimeoutMs values outside the timer range at the wire boundary', async () => {
+    const ctx = new Context()
+    const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())
+    try {
+      for (const mcpStartupTimeoutMs of [-1, 1.5, Number.NaN, 2_147_483_648]) {
+        await expect(server.handleRequest('initialize', {
+          cwd: '.',
+          provider: 'deepseek-official',
+          model: 'model',
+          mcpStartupTimeoutMs,
+        })).rejects.toThrow('initialize mcpStartupTimeoutMs must be an integer from 0 to 2147483647')
+      }
+      await server.shutdown()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects malformed initialize reasoningEffort values at the wire boundary', async () => {
     const ctx = new Context()
     const server = new HarnessSdkJsonRpcServer(ctx, new FakeTransport())

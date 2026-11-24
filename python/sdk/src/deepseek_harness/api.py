@@ -39,6 +39,8 @@ class DeepSeekHarnessConfig:
     api_key: str | None = None
     on_user_question: UserQuestionHandler | None = None
     approval_requests: bool = False
+    # start() waits up to this long for MCP manager servers in their first connection attempt; None or 0 skips the wait.
+    mcp_startup_timeout_seconds: float | None = 5.0
 
 
 @dataclass(slots=True)
@@ -165,6 +167,7 @@ class DeepSeekHarness:
             reasoning_effort=self.config.reasoning_effort,
             max_tokens=self.config.max_tokens,
             approval_requests=self.config.approval_requests,
+            mcp_startup_timeout_seconds=self.config.mcp_startup_timeout_seconds,
         )
         self._initialized = True
 

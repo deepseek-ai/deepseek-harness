@@ -28,6 +28,11 @@ export interface InitializeParams {
   reasoningEffort?: ReasoningEffortId
   /** Optional positive output-token cap inherited by SDK-created agents and their in-process descendants. */
   maxTokens?: number
+  /**
+   * Longest wait, in milliseconds, before this handshake answers for MCP manager servers in their first connection
+   * attempt; omission or `0` answers without waiting. The wait ends early once no server is in its first attempt.
+   */
+  mcpStartupTimeoutMs?: number
   /** Host-provided capabilities; omission retains native in-process answerers. */
   capabilities?: { userQuestions?: boolean }
 }
