@@ -22,7 +22,6 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
-    windowsProvider: { value: null, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
   })
@@ -88,12 +87,14 @@ it.each([en, zh])('waits for platform identification before offering system perm
   const f = fixture()
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   expect(screen.queryByRole('group', { name: dictionary.accessibility })).toBeNull()
+  expect(screen.getByText(dictionary.permissionsIntro).getAttribute('aria-hidden')).toBe('true')
   expect(screen.getByText(dictionary.permissionHint).getAttribute('aria-hidden')).toBe('true')
   f.publish({ system: { ...f.state.getSnapshot().system, busy: false, error: 'connection lost' }, busy: false })
   expect(screen.getAllByText(dictionary.unknown)).toHaveLength(2)
   expect(screen.queryByText(dictionary.granted)).toBeNull()
   expect(screen.queryByRole('button', { name: dictionary.request })).toBeNull()
   expect(screen.queryByRole('button', { name: dictionary.unknown })).toBeNull()
+  expect(screen.getByText(dictionary.permissionsIntro).getAttribute('aria-hidden')).toBe('true')
   expect(screen.getByText(dictionary.permissionHint).getAttribute('aria-hidden')).toBe('true')
   f.publish({ ...observe({ ...value, system: { ...value.system, accessibility: true, screenRecording: false } }) })
   fireEvent.click(screen.getByRole('button', { name: dictionary.request }))
@@ -106,7 +107,7 @@ it('offers setup after inspection, permits dismissal, and dismisses once both pr
   expect(screen.queryByRole('dialog')).toBeNull()
   f.publish({ ...observe(value) })
   const dialog = screen.getByRole('dialog', { name: en.setupTitle })
-  expect(within(dialog).getByText('Computer use is enabled. Before using it, grant Accessibility and Screen Recording permissions. Open the plugin details to complete setup.')).toBeTruthy()
+  expect(within(dialog).getByText(en.setupBody)).toBeTruthy()
   fireEvent.click(within(dialog).getByRole('button', { name: en.openSetup }))
   expect(onOpenDetails).toHaveBeenCalledOnce()
   fireEvent.click(within(dialog).getByRole('button', { name: en.later }))
@@ -213,6 +214,7 @@ it.each([en, zh])('shows system permissions with the target application beside e
   const recording = within(requirements).getByRole('group', { name: dictionary.screenRecording })
   expect(within(recording).getByText(application.name)).toBeTruthy()
   expect(recording.textContent).toContain(dictionary.screenRecordingPermission.replace('{application}', application.name))
+  expect(within(requirements).getByText(dictionary.permissionsIntro)).toBeTruthy()
   expect(within(requirements).getByText(dictionary.permissionHint)).toBeTruthy()
   f.publish({ system: { ...f.state.getSnapshot().system, error: 'offline' } })
   expect(screen.queryByText(application.name)).toBeNull()
@@ -385,27 +387,18 @@ it('retains a known query failure throughout management and refresh', () => {
   expect(f.state.getSnapshot().changing).toBe(true)
 })
 
-it('shows Windows setup above the controls even when the helper is missing', () => {
+it.each([en, zh])('highlights the experimental notice and keeps the PTC recommendation separate', (dictionary) => {
   const f = fixture()
-  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: true, error: null, busy: false } })
-  render(<PermissionPanel {...f.props} />)
-  const instructions = screen.getByText(/pnpm run build:native:x64/)
-  const firstSetting = screen.getByRole('heading', { name: en.title })
-  expect(instructions.compareDocumentPosition(firstSetting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(screen.getByText(/helperPath/)).toBeTruthy()
-  expect(screen.queryByRole('button', { name: en.request })).toBeNull()
-})
-
-it('keeps the provider lookup diagnostic beside the native error until the platform is known', () => {
-  const f = fixture()
-  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: null, error: 'offline', busy: false } })
-  render(<PermissionPanel {...f.props} />)
-  const diagnostic = en.providerLookupFailed.replace('{message}', 'offline')
-  expect(screen.getByText(diagnostic)).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: en.retry }))
-  expect(f.props.refresh).toHaveBeenCalledTimes(2)
-  f.publish({ system: { value: value.system, error: null, busy: false } })
-  expect(screen.queryByText(diagnostic)).toBeNull()
+  f.publish({ ...observe(value) })
+  render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
+  const note = screen.getByRole('note')
+  expect(within(note).getByText(dictionary.previewNoticeTitle)).toBeTruthy()
+  expect(within(note).getByText(dictionary.previewNotice)).toBeTruthy()
+  expect(within(note).queryByText(dictionary.ptcRecommendation)).toBeNull()
+  const ptc = screen.getByText(dictionary.ptcRecommendation)
+  const heading = screen.getByRole('heading', { name: dictionary.title })
+  expect(note.compareDocumentPosition(ptc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(ptc.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it.each([true, false, null] as const)('shows Windows desktop access for lock state %s without macOS permission actions', (sessionLocked) => {
@@ -413,8 +406,12 @@ it.each([true, false, null] as const)('shows Windows desktop access for lock sta
   f.publish({ ...observe(value), system: { value: { platform: 'windows', sessionLocked, captureAvailable: true,
     elevated: false, helper: { path: 'C:\\helper.exe' } }, error: null, busy: false } })
   render(<PermissionPanel {...f.props} />)
+  expect(screen.getByText(en.previewNoticeTitle)).toBeTruthy()
   expect(screen.getByText(en.previewNotice)).toBeTruthy()
-  expect(screen.getByText(/helperPath/)).toBeTruthy()
+  expect(screen.getByText(en.ptcRecommendation)).toBeTruthy()
+  expect(screen.getByText(en.windowsPermissionsIntro)).toBeTruthy()
+  expect(screen.queryByText(/helperPath/)).toBeNull()
+  expect(screen.queryByText(/pnpm run build:native/)).toBeNull()
   const desktop = screen.getByRole('group', { name: en.windowsDesktop })
   const capture = screen.getByRole('group', { name: en.windowsCapture })
   expect(within(desktop).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.locked : en.available)).toBeTruthy()

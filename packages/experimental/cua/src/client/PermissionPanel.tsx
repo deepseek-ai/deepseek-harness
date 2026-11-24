@@ -1,6 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect } from 'react'
-import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineMedium, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -116,7 +116,6 @@ export function PermissionPanel(props: PermissionProps) {
   const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
-  const windows = observed?.platform === 'windows' || (observed === null && state.windowsProvider.value === true)
   const apps = state.applications.value
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
@@ -132,22 +131,20 @@ export function PermissionPanel(props: PermissionProps) {
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
     <section className={css.panel} aria-label={t('title')}>
       <div className={css.guidance} data-cua-guidance>
-        <p>{t('previewNotice')}</p>
-        {windows && <>
-          <p>{t('windowsHelperBuild', {
-            directory: 'packages/experimental/cua-windows',
-            x64: 'pnpm run build:native:x64', arm64: 'pnpm run build:native:arm64',
-          })}</p>
-          <p>{t('windowsHelperPath', {
-            patch: 'cordis.patch.yml', entry: 'cua-windows', config: 'config', path: 'helperPath', exe: 'dsh-cua-windows.exe',
-          })}</p>
-        </>}
+        <div className={css.caution} role="note">
+          <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineMedium /></span>
+          <div className={css.cautionBody}>
+            <p className={css.cautionTitle}>{t('previewNoticeTitle')}</p>
+            <p>{t('previewNotice')}</p>
+          </div>
+        </div>
+        <p>{t('ptcRecommendation')}</p>
       </div>
       <h3>{t('title')}</h3>
+      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>
+        {t(observed?.platform === 'windows' ? 'windowsPermissionsIntro' : 'permissionsIntro')}
+      </p>
       <div className={css.card}>
-        {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
-          {t('providerLookupFailed', { message: state.windowsProvider.error })}
-        </p>}
         {state.system.error !== null && <div className={css.notice} role="alert">
           <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
           <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>

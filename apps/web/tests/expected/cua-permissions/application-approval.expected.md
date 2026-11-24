@@ -3,7 +3,7 @@
   - strong: Fixture
   - text: Allow agent to control this application via computer use?
   - button "Risks"
-  - paragraph: Manage app permissions for all sessions on the plugin page.
+  - paragraph: Once allowed, the agent can view and operate this app. You can manage app permissions anytime in plugin settings.
 - button "Reject"
 - button "Allow for this session"
 - button "Always allow"

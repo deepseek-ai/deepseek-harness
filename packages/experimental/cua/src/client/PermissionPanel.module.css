@@ -1,6 +1,31 @@
 .panels { display: grid; gap: 32px; margin: 0; font-size: 13px; }
 .panel { display: grid; gap: 12px; min-width: 0; }
-.guidance { display: grid; gap: 8px; overflow-wrap: anywhere; }
+.guidance { display: grid; gap: 12px; margin-bottom: 12px; overflow-wrap: anywhere; }
+.caution {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-state-warn-tertiary);
+}
+.cautionIcon {
+  display: inline-flex;
+  flex: none;
+  margin-top: 2px;
+  color: var(--dsw-alias-state-warn-primary);
+}
+.cautionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cautionBody .cautionTitle {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
 .card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); }
 .card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l3); }
 .panel p { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
