@@ -1008,7 +1008,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async applications(): Promise<CuaApplicationState>',
-        description: 'Read saved decisions with provider metadata when supported, without requesting application access.',
+        description: 'Read current saved decisions without waiting for native discovery, system checks, or icons.',
         parameters: [],
         returns: 'Current grants, refusals, obsolete identities requiring review, and durable-storage availability.',
       },
@@ -1019,10 +1019,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Platform-tagged access observations and native process metadata.',
       },
       {
-        signature: '@Remote async applicationIcons(): Promise<Record<string, string>>',
-        description: 'Load presentation icons separately from application decisions.',
+        signature: '@Remote async applicationPresentation(): Promise<CuaApplicationPresentation>',
+        description: 'Load native labels and icons separately from application decisions; presentation never establishes consent.',
         parameters: [],
-        returns: 'Optional native PNG icons keyed by icon target or executable path; applications without either are skipped.',
+        returns: 'Display metadata keyed by application identity and PNG icons keyed by native lookup target.',
       },
       {
         signature: '@Remote async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState>',
@@ -7689,6 +7689,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CuaApplicationId',
     declaration: 'export type CuaApplicationId = Branded<\'CuaApplicationId\'>;',
+  },
+  {
+    name: 'CuaApplicationPresentation',
+    declaration: 'export interface CuaApplicationPresentation {\n    applications: readonly CuaApplicationGrant[];\n    icons: Record<string, string>;\n}',
   },
   {
     name: 'CuaApplicationState',

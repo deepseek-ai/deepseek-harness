@@ -199,7 +199,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'claudeCodeMods/watchBand': 'owner-only', // owner Claude Code mods UI
   'cotTranslation/limits': 'owner-only', // owner chain-of-thought translation UI
   'cotTranslation/translate': 'owner-only', // owner chain-of-thought translation UI
-  'cuaAccess/applicationIcons': 'owner-only', // owner computer-use permissions
+  'cuaAccess/applicationPresentation': 'owner-only', // owner computer-use permissions
   'cuaAccess/applications': 'owner-only', // owner computer-use permissions
   'cuaAccess/enablePersistentPtc': 'owner-only', // owner computer-use permissions
   'cuaAccess/openSettings': 'owner-only', // owner computer-use permissions

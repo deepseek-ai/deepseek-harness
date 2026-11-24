@@ -11,6 +11,8 @@ description: "Windows 自动电脑操作的应用身份需要重新授权，并�
 
 Windows 自动电脑操作不再按应用自行声明的 AUMID 授权，而是使用操作系统提供的包内应用身份，或由窗口 AUMID 限定的规范可执行文件路径。旧决定不能授权这些新身份。选择应用时，辅助程序会撤销对应的旧决定。显示名称和图标不决定权限范围。应用发现返回不透明的 ID，可能与原来的 AUMID 或路径不同。
 
+自定义权限客户端需要将 `cuaAccess.applicationIcons()` 替换为 `cuaAccess.applicationPresentation()`；后者返回 `applications` 展示信息和 `icons` 映射。独立通过 `applications()` 读取授权决定，按 ID 关联展示信息；展示查询不能增删列表条目或授予权限。
+
 ## 迁移
 
 1. 使用更新后的 Windows 辅助程序及其构建输出中的全部文件重启 DSH。重启使用同一 profile 的所有 Host。

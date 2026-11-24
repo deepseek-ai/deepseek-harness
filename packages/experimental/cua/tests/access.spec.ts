@@ -61,7 +61,7 @@ async function setup(choice = 'Allow for this session', options: {
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
   const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
-    applicationMetadata: options.applicationMetadata,
+    applicationMetadata: options.applicationMetadata ? { needsReview: app => app.iconPath === undefined } : undefined,
     permissionParameters: (method, permission, locale) => ({ method, permission, locale }) })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
@@ -370,24 +370,24 @@ it('reads application decisions without native work and retrieves icons separate
   const pending = Promise.withResolvers<Record<string, string>>()
   onTestFinished(() => { pending.resolve({}) })
   control.request.mockReturnValueOnce(pending.promise)
-  const icons = f.ctx.cuaAccess.applicationIcons()
+  const icons = f.ctx.cuaAccess.applicationPresentation()
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual(f.grants())
   pending.resolve({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
-  expect(await icons).toEqual({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
+  expect((await icons).icons).toEqual({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
   expect(f.grants()[0]).not.toHaveProperty('icon')
 })
 
 it('skips native icon work for an empty application list and propagates icon failures independently', async () => {
   const f = await setup()
-  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({})
+  expect((await f.ctx.cuaAccess.applicationPresentation()).icons).toEqual({})
   expect(native.instances).toHaveLength(1)
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({})
+  expect((await f.ctx.cuaAccess.applicationPresentation()).icons).toEqual({})
   expect(native.instances).toHaveLength(1)
   await f.save([{ id: identity.id, name: identity.name, executablePath: identity.executablePath }])
   await f.ctx.cuaAccess.systemStatus()
   native.instances.at(-1)!.request.mockRejectedValueOnce(new Error('icons unavailable'))
-  await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
+  await expect(f.ctx.cuaAccess.applicationPresentation()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', accessibility: false })
 })
@@ -398,7 +398,7 @@ it('loads a saved Shell icon without requiring an executable path', async () => 
   await f.ctx.cuaAccess.systemStatus()
   const control = native.instances.at(-1)!
   control.request.mockResolvedValueOnce({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
-  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect((await f.ctx.cuaAccess.applicationPresentation()).icons).toEqual({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
   expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [iconPath] }, expect.any(AbortSignal))
 })
 
@@ -411,16 +411,41 @@ it('shows obsolete Windows permissions for review without copying them to a new 
     iconPath: 'shell:AppsFolder\\Application', needsReview: true }])
   const current = await f.ctx.cuaAccess.applications()
   expect(current.allowedApps).toEqual([])
-  expect(current.reviewApps).toEqual([expect.objectContaining({ id: identity.id, name: 'Application' })])
+  expect(current.reviewApps).toEqual(f.grants())
+  const presentation = await f.ctx.cuaAccess.applicationPresentation()
+  expect(presentation.applications).toEqual([expect.objectContaining({ id: identity.id, name: 'Application' })])
   expect(f.grants()).toEqual([{ id: identity.id, name: 'C:\\App.exe', executablePath: 'C:\\App.exe' }])
   expect(f.answer).not.toHaveBeenCalled()
+})
+
+it('publishes new grants and revocations while Windows discovery is pending, without another scan', async () => {
+  const f = await setup('Always allow', { applicationMetadata: true })
+  const legacy = { id: identity.id, name: 'Legacy' }
+  const current = { ...identity, id: 'b'.repeat(64) as typeof identity.id, iconPath: executablePath }
+  await f.save([legacy])
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  const discovery = Promise.withResolvers<CuaApplicationGrant[]>()
+  onTestFinished(() => { discovery.resolve([]) })
+  control.request.mockReturnValueOnce(discovery.promise)
+  const presentation = f.ctx.cuaAccess.applicationPresentation()
+  await vi.waitFor(() => { expect(control.request).toHaveBeenCalledWith('applicationMetadata', expect.any(Object), expect.any(AbortSignal)) })
+  await f.access.select(f.agent, f.client, handle, current, signal)
+  expect(await f.ctx.cuaAccess.applications()).toMatchObject({
+    allowedApps: [expect.objectContaining({ id: current.id })], reviewApps: [legacy],
+  })
+  await f.ctx.cuaAccess.revoke(current.id)
+  expect(await f.ctx.cuaAccess.applications()).toMatchObject({ allowedApps: [], reviewApps: [legacy] })
+  discovery.resolve([{ ...legacy, name: 'Legacy display' }])
+  expect((await presentation).applications).toEqual([{ ...legacy, name: 'Legacy display' }])
+  expect(control.request.mock.calls.filter(([method]) => method === 'applicationMetadata')).toHaveLength(1)
 })
 
 it('keeps pathless grants manageable without requesting their icons', async () => {
   const grant = { id: identity.id, name: identity.name }
   const f = await setup('Always allow', { initial: [grant] })
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toEqual([grant])
-  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({})
+  expect((await f.ctx.cuaAccess.applicationPresentation()).icons).toEqual({})
   expect(native.instances).toHaveLength(1)
   expect(native.instances[0]!.request).not.toHaveBeenCalled()
   await f.ctx.cuaAccess.revoke(identity.id)

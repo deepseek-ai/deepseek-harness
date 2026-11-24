@@ -8,7 +8,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
+import type { CuaApplicationState, CuaApplicationPresentation, CuaSystemPermissionState } from '../src/access-types.ts'
 import { expect, it, vi } from 'vitest'
 import type { PermissionFace } from '../src/client/controller.ts'
 import { mountCuaPermissions, inject } from '../src/client/mount.ts'
@@ -46,14 +46,15 @@ async function fixture(fail = false) {
   } })
   const status = vi.fn<() => Promise<RemoteResult<CuaApplicationState>>>().mockResolvedValue({ ok: true, value })
   const systemStatus = vi.fn<() => Promise<RemoteResult<CuaSystemPermissionState>>>().mockResolvedValue({ ok: true, value: value.system })
-  const applicationIcons = vi.fn<() => Promise<RemoteResult<Record<string, string>>>>().mockResolvedValue({ ok: true, value: {} })
+  const applicationPresentation = vi.fn<() => Promise<RemoteResult<CuaApplicationPresentation>>>()
+    .mockResolvedValue({ ok: true, value: { applications: [], icons: {} } })
   const requestPermission = vi.fn<() => Promise<RemoteResult<CuaSystemPermissionState>>>()
     .mockResolvedValue({ ok: true, value: value.system })
   const openSettings = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const revoke = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const retryApproval = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   ctx.provide('remote.cuaAccess', {
-    applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
+    applications: status, systemStatus, applicationPresentation, requestPermission, openSettings, revoke, retryApproval })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({ name: 'root', children: {
@@ -62,7 +63,7 @@ async function fixture(fail = false) {
     'conversation.composer': { kind: 'chain', scope: 'session' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
-  return { ctx, changes, unmount, status, systemStatus, applicationIcons, list,
+  return { ctx, changes, unmount, status, systemStatus, applicationPresentation, list,
     requestPermission, openSettings, revoke, retryApproval,
   }
 }
@@ -113,7 +114,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     const failed = { ok: false as const, error: new RemoteError('gateway/internal', 'offline', {}) }
     for (const [target, invoke] of [
       [f.status, actions.refresh], [f.systemStatus, actions.refresh],
-      [f.applicationIcons, actions.refresh], [f.requestPermission, () => { actions.request('accessibility') }],
+      [f.applicationPresentation, actions.refresh], [f.requestPermission, () => { actions.request('accessibility') }],
       [f.openSettings, () => { actions.openSettings('accessibility') }],
       [f.revoke, () => { actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId) }],
       [f.retryApproval, () => { actions.retryApproval('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId) }],
@@ -126,7 +127,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
         const state = actions.hooks.cuaPermissions.getSnapshot()
         const error = target === f.status ? state.applications.error
           : target === f.systemStatus ? state.system.error
-            : target === f.applicationIcons ? state.icons.error : state.toast?.kind === 'failed' ? state.toast.message : null
+            : target === f.applicationPresentation ? state.presentation.error : state.toast?.kind === 'failed' ? state.toast.message : null
         expect(error).toContain('offline')
       })
     }

@@ -35,3 +35,18 @@ export interface CuaApplicationState {
   reviewApps?: readonly CuaApplicationGrant[] | undefined
   persistentAvailable: boolean
 }
+
+/** Optional presentation loaded independently of the authoritative application decisions. */
+export interface CuaApplicationPresentation {
+  applications: readonly CuaApplicationGrant[]
+  icons: Record<string, string>
+}
+
+/** Provider support for native display lookup and classification of saved identities. */
+export interface CuaApplicationMetadata {
+  /** Identify obsolete grants using stored fields without native discovery.
+   * @param application Saved application identity and presentation.
+   * @returns Whether this identity requires fresh consent under the provider's current identity rules.
+   */
+  needsReview(application: CuaApplicationGrant): boolean
+}

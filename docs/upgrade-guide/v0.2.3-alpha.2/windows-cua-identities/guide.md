@@ -11,6 +11,8 @@ English | [中文](guide.zh.md)
 
 Windows Computer Use replaces grants based on self-declared AUMIDs with OS package application identities or canonical executable paths scoped by window AUMID. Old decisions do not authorize these new identities. The helper retires matching legacy decisions when the application is selected. Display names and icons do not determine permission scope. Application discovery returns opaque IDs that may differ from earlier AUMIDs or paths.
 
+Custom permission clients must replace `cuaAccess.applicationIcons()` with `cuaAccess.applicationPresentation()`, which returns `applications` display metadata and an `icons` map. Read decisions through `applications()` independently and join presentation by ID; display lookup must not add, remove, or authorize rows.
+
 ## Migration
 
 1. Restart DSH with the updated Windows helper and all files from its build output. Restart every Host using the same profile.

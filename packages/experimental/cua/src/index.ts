@@ -200,8 +200,8 @@ export interface CuaBackend {
   capabilities: CuaStartupCapabilities
   /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
   acceptsPidSelector?: boolean
-  /** Resolve saved presentation and obsolete grants through applicationMetadata; omission retains stored labels. */
-  applicationMetadata?: boolean
+  /** Native display lookup and stored-identity classification; omission retains stored labels. */
+  applicationMetadata?: import('./access-types.ts').CuaApplicationMetadata
   /** Opt in to connection-scoped getHeldInputs and releaseHeldInputs; omission preserves the provider's existing protocol. */
   heldInputState?: boolean
   /** Registers a window read. The returned receipt handler sees the native reply only after Host decoding succeeds. */

@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-cua/remote'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaApplicationPresentation, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
 const value: CuaSystemPermissionState = { platform: 'darwin' as const, accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
@@ -16,7 +16,7 @@ function fixture() {
     ptcConfiguration: vi.fn<CuaRemote['ptcConfiguration']>(async () => ({ ok: true, value: { persistent: false, writable: true } })),
     systemStatus: vi.fn<CuaRemote['systemStatus']>(async () => ({ ok: true, value })),
     applications: vi.fn<CuaRemote['applications']>(async () => ({ ok: true, value: applications })),
-    applicationIcons: vi.fn<CuaRemote['applicationIcons']>(async () => ({ ok: true, value: {} })),
+    applicationPresentation: vi.fn<CuaRemote['applicationPresentation']>(async () => ({ ok: true, value: { applications: [], icons: {} } })),
     requestPermission: vi.fn<CuaRemote['requestPermission']>(async () => ({ ok: true, value })),
     openSettings: vi.fn<CuaRemote['openSettings']>(async () => ({ ok: true, value: undefined })),
     revoke: vi.fn<CuaRemote['revoke']>(async () => ({ ok: true, value: undefined })),
@@ -139,11 +139,13 @@ it('joins a pending read without publishing after disposal or starting queued ac
   expect(f.actions.systemStatus).toHaveBeenCalledOnce()
 })
 
-it('revokes access while icons are pending, serializes writes, and joins reads on disposal', async () => {
-  const f = fixture(), icons = Promise.withResolvers<Record<string, string>>()
+it('revokes access while presentation are pending, serializes writes, and joins reads on disposal', async () => {
+  const f = fixture(), presentation = Promise.withResolvers<CuaApplicationPresentation>()
   const action = Promise.withResolvers<undefined>(), entered = Promise.withResolvers<undefined>()
-  onTestFinished(async () => { icons.resolve({}); action.resolve(undefined); await f.controller.dispose() })
-  f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await icons.promise }))
+  onTestFinished(async () => {
+    presentation.resolve({ applications: [], icons: {} }); action.resolve(undefined); await f.controller.dispose()
+  })
+  f.actions.applicationPresentation.mockImplementationOnce(async () => ({ ok: true, value: await presentation.promise }))
   f.actions.revoke.mockImplementationOnce(async () => {
     entered.resolve(undefined)
     await action.promise
@@ -151,7 +153,7 @@ it('revokes access while icons are pending, serializes writes, and joins reads o
   })
   f.face.refresh()
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().applications.busy).toBe(false) })
-  expect(f.controller.state.getSnapshot().icons.busy).toBe(true)
+  expect(f.controller.state.getSnapshot().presentation.busy).toBe(true)
   f.face.revoke('a'.repeat(64) as CuaApplicationId)
   await entered.promise
   f.face.retryApproval('a'.repeat(64) as CuaApplicationId)
@@ -166,7 +168,7 @@ it('revokes access while icons are pending, serializes writes, and joins reads o
   const closed = f.controller.dispose().then(() => { disposed = true })
   await setImmediate()
   expect(disposed).toBe(false)
-  icons.resolve({ '/old/app': 'old-icon' })
+  presentation.resolve({ applications: [], icons: { '/old/app': 'old-icon' } })
   await closed
   expect(f.controller.state.getSnapshot()).toBe(before)
 })
@@ -316,11 +318,13 @@ it('publishes each observation before the other queries finish', async () => {
   const f = fixture()
   const system = Promise.withResolvers<CuaSystemPermissionState>()
   const apps = Promise.withResolvers<CuaApplicationState>()
-  const icons = Promise.withResolvers<Record<string, string>>()
-  onTestFinished(async () => { system.resolve(value); apps.resolve(applications); icons.resolve({}); await f.controller.dispose() })
+  const presentation = Promise.withResolvers<CuaApplicationPresentation>()
+  onTestFinished(async () => {
+    system.resolve(value); apps.resolve(applications); presentation.resolve({ applications: [], icons: {} }); await f.controller.dispose()
+  })
   f.actions.systemStatus.mockImplementationOnce(async () => ({ ok: true, value: await system.promise }))
   f.actions.applications.mockImplementationOnce(async () => ({ ok: true, value: await apps.promise }))
-  f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await icons.promise }))
+  f.actions.applicationPresentation.mockImplementationOnce(async () => ({ ok: true, value: await presentation.promise }))
   f.face.refresh()
   apps.resolve(applications)
   await vi.waitFor(() => {
@@ -329,12 +333,12 @@ it('publishes each observation before the other queries finish', async () => {
   expect(f.controller.state.getSnapshot().system).toMatchObject({ value: null, busy: true })
   system.resolve(value)
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system).toEqual({ value, error: null, busy: false }) })
-  expect(f.controller.state.getSnapshot().icons).toMatchObject({ value: null, busy: true })
-  icons.reject(new Error('icon unavailable'))
+  expect(f.controller.state.getSnapshot().presentation).toMatchObject({ value: null, busy: true })
+  presentation.reject(new Error('icon unavailable'))
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
   expect(f.controller.state.getSnapshot()).toMatchObject({
     system: { value, error: null }, applications: { value: applications, error: null },
-    icons: { value: null, error: 'icon unavailable', busy: false },
+    presentation: { value: null, error: 'icon unavailable', busy: false },
   })
 })
 
@@ -351,23 +355,23 @@ it('keeps application decisions available when system inspection fails', async (
 })
 
 it.each(['success', 'failure'])('drops old icon %s after disabling and reenabling the bundle', async (outcome) => {
-  const f = fixture(), pending = Promise.withResolvers<Record<string, string>>()
-  onTestFinished(async () => { pending.resolve({}); await f.controller.dispose() })
-  f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await pending.promise }))
+  const f = fixture(), pending = Promise.withResolvers<CuaApplicationPresentation>()
+  onTestFinished(async () => { pending.resolve({ applications: [], icons: {} }); await f.controller.dispose() })
+  f.actions.applicationPresentation.mockImplementationOnce(async () => ({ ok: true, value: await pending.promise }))
   f.face.refresh()
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().system.busy).toBe(false) })
   f.controller.setChanging(true)
   f.controller.setChanging(false)
-  if (outcome === 'success') pending.resolve({ '/old/app': 'old-icon' })
+  if (outcome === 'success') pending.resolve({ applications: [], icons: { '/old/app': 'old-icon' } })
   else pending.reject(new Error('old helper stopped'))
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  expect(f.controller.state.getSnapshot().icons).toEqual({ value: {}, error: null, busy: false })
+  expect(f.controller.state.getSnapshot().presentation).toEqual({ value: { applications: [], icons: {} }, error: null, busy: false })
 })
 
 
 it.each([
   ['systemStatus', 'system'],
-  ['applications', 'applications'], ['applicationIcons', 'icons'],
+  ['applications', 'applications'], ['applicationPresentation', 'presentation'],
 ] as const)('contains an unsuccessful %s response in its own query section', async (method, key) => {
   const f = fixture()
   onTestFinished(() => f.controller.dispose())
@@ -401,18 +405,18 @@ it('preserves settled failures and values while permission observations are paus
   const error = new Error('unavailable')
   f.actions.systemStatus.mockRejectedValueOnce(error)
   f.actions.applications.mockRejectedValueOnce(error)
-  f.actions.applicationIcons.mockRejectedValueOnce(error)
+  f.actions.applicationPresentation.mockRejectedValueOnce(error)
   f.face.refresh()
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
   f.controller.setChanging(true)
-  for (const key of ['system', 'applications', 'icons'] as const) {
+  for (const key of ['system', 'applications', 'presentation'] as const) {
     expect(f.controller.state.getSnapshot()[key]).toMatchObject({ error: 'unavailable', busy: true })
   }
   f.face.refresh()
   expect(f.actions.systemStatus).toHaveBeenCalledOnce()
   f.controller.setChanging(false)
   await vi.waitFor(() => { expect(f.controller.state.getSnapshot().busy).toBe(false) })
-  for (const key of ['system', 'applications', 'icons'] as const) {
+  for (const key of ['system', 'applications', 'presentation'] as const) {
     expect(f.controller.state.getSnapshot()[key].error).toBeNull()
   }
   await f.controller.dispose()
