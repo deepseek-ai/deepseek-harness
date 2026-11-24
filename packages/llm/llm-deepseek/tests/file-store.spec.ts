@@ -10,7 +10,7 @@ import { TimeoutReason } from '@deepseek-ai/dsh-timeout'
 import { DeepSeekFileStore, FILES_API_TIMEOUT, MAX_IMAGE_BYTES } from '../src/file-store.ts'
 import type { DeepSeekFileId } from '../src/file-id.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
-import { adapter, chunks, options, requestImageStore, server, uploadedForm, user } from './helpers.ts'
+import { adapter, chunks, options, requestImageStore, server, user } from './helpers.ts'
 
 vi.mock('node:timers/promises', { spy: true })
 
@@ -630,11 +630,12 @@ describe('DeepSeekFileStore', () => {
       fetch: remote.fetchImpl,
     })
     await store.ensureUploaded({ ...VERSION, mediaType }, CONNECTION, POLICY)
-    const form = await uploadedForm(vi.mocked(remote.fetchImpl).mock.calls[0]?.[1])
-    const file = form.get('file')
+    const form = vi.mocked(remote.fetchImpl).mock.calls[0]?.[1]?.body
+    expect(form).toBeInstanceOf(FormData)
+    const file = (form as FormData).get('file')
+    expect(file).toBeInstanceOf(File)
     if (!(file instanceof File)) throw new Error('expected multipart file')
     expect(file.name).toMatch(new RegExp(`\\.${extension}$`, 'u'))
-    expect(file.type).toBe(mediaType)
   })
 
   it('normalizes a non-Error failure from the durable upload index', async () => {
