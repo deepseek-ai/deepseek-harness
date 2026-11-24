@@ -14,7 +14,7 @@ IM 通过现有 agent 工厂、收件箱、预设和持久化 API 托管持久�
 
 来源接纳、写权限、投递模式、模型路由、工作目录和预设均由部署显式配置：`sources` 规则决定哪些聊天可以进入宿主以及其消息如何入库，`defaultDispatch` 组合出所有未被处理且提及机器人的消息都会进入的那个会话。所有聊天共享该会话的历史，因此需要按聊天隔离历史或后台 worker 的部署，改为在 `im/message` 事件链上挂载自己的插件。
 
-传输层使用内置的 Satori 包（`plugin-im-core`、`satori-element`、`plugin-im-adapter-lark` 与 `plugin-im-adapter-qq`）。[vendor 清单](../../../../vendor/README.md) 记录准确的上游版本与本地修改。生成的飞书类型声明不提交到 Git，在安装阶段从经过哈希校验的固定源码生成。
+传输层使用内置的 Satori 包（`plugin-im-core`、`satori-element`、`plugin-im-adapter-lark` 与 `plugin-im-adapter-qq`）。[vendor 清单](../../../../vendor/im/README.md) 记录准确的上游版本与本地修改。生成的飞书类型声明不提交到 Git，在安装阶段从经过哈希校验的固定源码生成。
 
 ## Durability and ownership
 

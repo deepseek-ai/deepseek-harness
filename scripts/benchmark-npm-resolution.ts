@@ -132,7 +132,7 @@ export function parseBenchmarkOptions(args: readonly string[]): BenchmarkOptions
 }
 
 function workspaceManifestPath(path: string): boolean {
-  return /^(?:apps\/[^/]+|packages\/[^/]+\/[^/]+|vendor\/[^/]+|native\/system(?:\/packages\/[^/]+)?)\/package\.json$/.test(path)
+  return /^(?:apps\/[^/]+|packages\/[^/]+\/[^/]+|vendor\/(?:im\/)?[^/]+|native\/system(?:\/packages\/[^/]+)?)\/package\.json$/.test(path)
 }
 
 function workspaceManifestPaths(root: string, ref: string | undefined): string[] {

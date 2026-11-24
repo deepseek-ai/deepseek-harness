@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -273,6 +273,7 @@ describe('parseVendoredRows', () => {
     const parsed = new Set(parseVendoredRows(readFileSync(resolve(root, readme), 'utf8')).map(row => row.npmName))
     const onDisk = readdirSync(resolve(root, directory), { withFileTypes: true })
       .filter(entry => entry.isDirectory() && !(nested as readonly string[]).includes(entry.name))
+      .filter(entry => existsSync(resolve(root, directory, entry.name, 'package.json')))
       .map(entry => (JSON.parse(readFileSync(resolve(root, directory, entry.name, 'package.json'), 'utf8')) as Manifest).name)
 
     expect(onDisk.length).toBeGreaterThan(0)
