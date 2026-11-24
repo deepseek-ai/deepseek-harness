@@ -82,9 +82,9 @@ kind: "package-reference"
 
 在发布或接受初始输入前，管理器在任何继承的 fork 历史之后追加 descriptor 和子级自身的 `model/selection`。即使初始选择与创建者相同，也会记录。后续选择使用子级的 `agent.model`；descriptor 不记录模型字段。已经准备的步骤保持原模型，后续步骤和冷恢复使用子级已记录的选择。
 
-`selectModel(childId, selection, authority, signal)` 校验并为可继续子级记录完整选择。Agent 调用方需要与中断相同的确切在线祖先权限；远程 `selectModelByUser` 操作则要求目标 Session 上的授权。两者都要求树根在线，不改变用户默认值，并把选择操作与图片能力检查到收件箱准入串行执行。外部执行不支持后续选择；创建时支持 `agentOptions` 不代表具有此能力。被拒绝的选择保留 `LlmError`；`selectModelByUser` 以 `subagent/model-unavailable` 返回，并保留 LLM 消息。
+`selectModel(childId, selection, authority, signal)` 校验并为可继续子级记录完整选择。Agent 调用方需要与中断相同的确切在线祖先权限；远程 `selectModelByUser` 操作则要求目标 Session 上的授权，并且与 Session 选模一样，只接受提供方在当前目录中列出的模型。两者都要求树根在线、不改变用户默认值，并让选模与从图片能力检查到收件箱准入的过程串行执行。外部执行不支持后续选择；创建时支持 `agentOptions` 不代表具有此能力。被拒绝的选择保留 `LlmError`；`selectModelByUser` 以 `subagent/model-unavailable` 返回，并保留 LLM 消息；未列出的模型也以同一代码返回。
 
-为冷子级选模型时，在其在线树根下以维护方式恢复子级，通过恢复出的 Agent 记录选择，并在返回前释放它。这次恢复不占容量，不发布 `subagent/start` 或 `subagent/end`，不运行轮次，不发送完成通知，并拒绝经由 manager 投递的输入；直接发给该 Agent 的输入会随它一起被取消。有待处理输入的子级会以 `CONTINUATION_UNAVAILABLE` 拒绝，这些输入留给下一次执行。完整的新选择也可以补足受支持子级日志中缺失的模型。每次恢复都会在选择之前记录普通的 `session/end-seed` 恢复标记。后续继续执行恢复已保存的选择。Session 持久化屏障完成后才返回成功。取消、失效权限、无效选择或不可用的持久化服务都会使操作失败。`PERSISTENCE_UNCONFIRMED`（远程为 `subagent/model-selection-unconfirmed`）表示选择可能已改变，但无法确认持久化；重试前应重新加载子级状态。
+为冷子级选模型时，在其在线树根下以维护方式恢复子级，通过恢复出的 Agent 记录选择，并在返回前释放它。这次恢复不占容量，不发布 `subagent/start` 或 `subagent/end`，不发送完成通知，并拒绝经由 manager 投递的输入。记录选择期间直接发给该 Agent 的输入不会开始轮次，并随它一起被取消。如果 `agent/created` 监听器在记录选择之前唤醒了恢复出的 Agent，选择以 `CONTINUATION_UNAVAILABLE` 失败，释放会取消已开始的轮次。有待处理输入的子级会以 `CONTINUATION_UNAVAILABLE` 拒绝，这些输入留给下一次执行。完整的新选择也可以补足受支持子级日志中缺失的模型。每次恢复都会在选择之前记录普通的 `session/end-seed` 恢复标记。后续继续执行恢复已保存的选择。Session 持久化屏障完成后才返回成功。取消、失效权限、无效选择或不可用的持久化服务都会使操作失败。`PERSISTENCE_UNCONFIRMED`（远程为 `subagent/model-selection-unconfirmed`）表示选择可能已改变，但无法确认持久化；重试前应重新加载子级状态。
 
 ### 消息、中断与发现
 

@@ -4676,7 +4676,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote({ name: \'selectModelByUser\', resources: { session: request => request.childSessionId } }) async selectModelByUser(request: SubagentSelectModelRequest, signal: AbortSignal): Promise<SubagentSelectModelReceipt>',
-        description: 'Select a local child\'s model under the caller\'s target-Session permission. No message or global default is changed. A successful receipt confirms the child\'s persistence barrier; an unconfirmed failure may follow a live change.',
+        description: 'Select a local child\'s model under the caller\'s target-Session permission. Like Session model selection, it accepts only a model its provider lists in the current catalog. No message or global default is changed. A successful receipt confirms the child\'s persistence barrier; an unconfirmed failure may follow a live change.',
         parameters: [{ name: 'request', description: 'target and complete model choice; omitted effort uses adapter defaults.' }, { name: 'signal', description: 'caller cancellation before selection is recorded.' }],
         returns: 'the recorded choice after confirmed persistence.',
         throws: ['{RemoteError} validation, authorization, availability, cancellation, or subagent/model-selection-unconfirmed when the durable outcome is unknown.'],

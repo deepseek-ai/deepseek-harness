@@ -52,6 +52,8 @@ async function harness() {
     prepareContinuable: async () => ({}),
   })
   const adapter = new MockAdapter(['hang'])
+  // User model selection accepts only catalog models.
+  vi.spyOn(adapter, 'listModels').mockResolvedValue([{ provider: 'mock', id: 'selected', name: 'Selected' }])
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   const run = await ctx.subagents.startActivation({

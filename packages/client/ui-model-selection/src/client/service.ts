@@ -83,15 +83,11 @@ export class ModelDirectoryResolver extends Service {
           })
       },
       sessionId,
-      () => {
-        const address = sessions.subagentAddress(sessionId)
-        return address === undefined || address.mode === 'continuable'
-      },
+      () => sessions.subagentAddress(sessionId),
       this.catalog,
       binding.session.projections.faceOf('modelSelection'),
       () => binding.session.getSnapshot().blank,
       (name, attributes) => this.ctx.get('productAnalytics')?.track(name, attributes),
-      () => sessions.subagentAddress(sessionId),
     )
     live.directories.set(binding, directory)
     actx.effect(() => () => {

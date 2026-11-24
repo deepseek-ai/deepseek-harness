@@ -1298,6 +1298,35 @@ describe('continuable model selection', () => {
     }
   })
 
+  it('rejects a cold choice when a creation listener wakes its maintenance restoration', async () => {
+    const { ctx, parent } = await setup([textResponse('done'), 'hang'])
+    parkParent(ctx, parent)
+    await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 1 })
+    const target = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+    await waitNoActivation(ctx, target.childId)
+    const before = await loadStoredSession(ctx.sessionPersistence, target.childId)
+    const woken = createUserMessage({ content: message('creation listener input'), source: { kind: 'user' } })
+    const stopWaking = ctx.on('agent/created', ({ agent }) => {
+      if (agent.id === target.childId) agent.followup(woken)
+    })
+    try {
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'woken' }, { kind: 'user' }, testSignal))
+        .rejects.toMatchObject({ name: 'SubagentError', code: 'CONTINUATION_UNAVAILABLE' })
+      stopWaking()
+      expect(ctx.agents.get(target.childId)).toBeUndefined()
+      expect(managerState(ctx).resident.has(target.childId)).toBe(false)
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 1 })
+      const after = await loadStoredSession(ctx.sessionPersistence, target.childId)
+      expect(after.events.slice(before.events.length).some(event => event.type === 'model/selection')).toBe(false)
+      // The release canceled the woken input, so no pending input blocks the next maintenance restoration.
+      await expect(ctx.subagents.selectModel(target.childId, { provider: 'mock', model: 'after-wake' }, { kind: 'user' }, testSignal))
+        .resolves.toEqual({ provider: 'mock', model: 'after-wake' })
+    } finally {
+      stopWaking()
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('drops a descendant settlement notice instead of admitting it to a maintenance restoration', async () => {
     const { ctx, parent, adapter } = await setup(['hang', 'hang'])
     parkParent(ctx, parent)

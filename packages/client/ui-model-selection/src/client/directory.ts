@@ -36,6 +36,15 @@ export interface ModelDirectoryState {
   error: string | null
 }
 
+/**
+ * Whether a Session offers model selection: ordinary Sessions and continuable subagents do.
+ * @param address - direct-parent address for a child, absent for an ordinary Session.
+ * @returns whether the /model popup and composer seat may load and submit choices.
+ */
+export function modelSelectable(address: SubagentAddress | undefined): boolean {
+  return address === undefined || address.mode === 'continuable'
+}
+
 /** One session's shared directory controller; disposed with the session scope. */
 export class ModelDirectory {
   /** The shared snapshot both entries render from (uSES-safe store). */
@@ -52,11 +61,10 @@ export class ModelDirectory {
   /**
    * @param selectModel - submit a choice through this Session's owning Remote service.
    * @param sessionId - the owning session.
-   * @param available - whether this session may use Agent-bound model RPCs.
+   * @param address - direct-parent address for a child, absent for an ordinary Session.
    * @param catalog - Host-generation catalog shared by every Session.
    * @param projected - durable model selection projected from Session history.
    * @param isBlank - whether this Session has no first message yet.
-   * @param address - direct-parent address for a child, absent for an ordinary Session.
    * @param track - desktop-only callback after a successful user selection.
    */
   constructor(
@@ -64,12 +72,11 @@ export class ModelDirectory {
       selection: ModelSelection,
     ) => Promise<RemoteResult<SessionSelectModelValue>>,
     private readonly sessionId: SessionId,
-    private readonly available: () => boolean,
+    private readonly address: () => SubagentAddress | undefined,
     private readonly catalog: ModelCatalogDirectory,
     private readonly projected: ObservableSnapshot<unknown>,
     private readonly isBlank: () => boolean,
     private readonly track?: TrackProductEvent,
-    private readonly address: () => SubagentAddress | undefined = () => undefined,
   ) {
     this.unsubscribeCatalog = catalog.store.subscribe(() => { this.syncInputs() })
     this.unsubscribeSelection = projected.subscribe(() => { this.syncInputs() })
@@ -148,7 +155,7 @@ export class ModelDirectory {
   }
 
   private assertAvailable(): void {
-    if (!this.available()) {
+    if (!modelSelectable(this.address())) {
       throw new Error('model selection is unavailable for addressed subagent sessions')
     }
   }

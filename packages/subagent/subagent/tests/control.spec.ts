@@ -33,11 +33,26 @@ const signal = new AbortController().signal
 /** Durable-reference base for the fake store; per-test ids and media types override. */
 const IMAGE_REF = { attachmentId: 'att', mediaType: 'image/png', bytes: 2, width: 1, height: 1 }
 
-/** The runtime plus a programmable live-Agent registry, omitted to compose none. */
-async function bench(live?: Record<string, { status: 'running' | 'idle' }>) {
+/** Models each stub provider lists in its catalog. */
+const CATALOG: Readonly<Record<string, readonly string[]>> = { mock: ['chosen'] }
+
+/**
+ * The runtime plus a programmable live-Agent registry, omitted to compose none,
+ * and a catalog-only LLM registry, `null` to compose none.
+ */
+async function bench(
+  live?: Record<string, { status: 'running' | 'idle' }>,
+  catalog: Readonly<Record<string, readonly string[]>> | null = CATALOG,
+) {
   const ctx = new Context()
   await mountWorkingDirectoryFixture(ctx)
   if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
+  if (catalog !== null) {
+    ctx.provide('llm', {
+      listProviders: () => Object.keys(catalog).map(id => ({ id, name: id })),
+      listModels: async (provider: string) => (catalog[provider] ?? []).map(id => ({ provider, id, name: id })),
+    } as never)
+  }
   await ctx.plugin(SubagentRuntime)
   if (live !== undefined) {
     ctx.provide('agents', {
@@ -346,6 +361,28 @@ describe('subagent model selection Remote', () => {
     }, signal))
       .resolves.toEqual({ selected: selection })
     expect(select).toHaveBeenCalledWith(CHILD, selection, { kind: 'user' }, signal)
+  })
+
+  it.each([
+    ['an unlisted model', { ...request, model: 'unlisted' }],
+    ['an unregistered provider', { ...request, provider: 'missing' }],
+  ])('refuses %s before changing the child', async (_case, unlisted) => {
+    const { ctx, subagents } = await bench({})
+    const select = vi.spyOn(subagentManager(ctx), 'selectModel')
+    await expect(subagents.selectModelByUser(unlisted, signal)).rejects.toMatchObject({
+      code: 'subagent/model-unavailable', details: { childSessionId: CHILD },
+      message: 'the selected subagent model is unavailable; choose another model or retry',
+    })
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('refuses a user choice when no LLM registry can read the catalog', async () => {
+    const { ctx, subagents } = await bench({}, null)
+    const select = vi.spyOn(subagentManager(ctx), 'selectModel')
+    await expect(subagents.selectModelByUser(request, signal)).rejects.toMatchObject({
+      code: 'subagent/model-unavailable', details: { childSessionId: CHILD },
+    })
+    expect(select).not.toHaveBeenCalled()
   })
 
   it('maps unavailable runtime services to an actionable refusal', async () => {

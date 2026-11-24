@@ -746,7 +746,9 @@ export class SubagentManager {
   /**
    * Record a choice through a maintenance restoration and begin its release
    * from the idle phase it owns. Input that reaches the Agent meanwhile cannot
-   * start a turn, and the release cancels it.
+   * start a turn, and the release cancels it. A restored Agent that an
+   * `agent/created` listener already woke rejects the choice with
+   * `CONTINUATION_UNAVAILABLE`, and the release cancels the started turn.
    */
   private async selectWhileMaintained(
     activation: Activation, selection: ModelSelection, root: Agent, authority: SubagentInterruptAuthority,
@@ -755,15 +757,26 @@ export class SubagentManager {
     const close = (): Promise<void> => closed ??= this.close(activation, () => this.finishDisposal(activation, false))
     try {
       const { agent } = requireLocalActivation(activation).handle
-      await agent.runMaintenance(async () => {
-        try {
-          this.authorizeSelection(activation.childId, root, activation.ancestors, authority)
-          await this.recordSelection(agent, selection)
-        } finally {
-          // Begin release while this task owns the idle phase; the outer finally observes its outcome.
-          void close().catch(() => undefined)
-        }
-      })
+      let maintained: Promise<void>
+      try {
+        maintained = agent.runMaintenance(async () => {
+          try {
+            this.authorizeSelection(activation.childId, root, activation.ancestors, authority)
+            await this.recordSelection(agent, selection)
+          } finally {
+            // Begin release while this task owns the idle phase; the outer finally observes its outcome.
+            void close().catch(() => undefined)
+          }
+        })
+      } catch (error: unknown) {
+        // Restoration ends its own maintenance first, so a wake requested during `agent/created` starts a turn.
+        throw new SubagentError(
+          `subagent "${activation.childId}" received input while restored for model selection; continue it before changing its model`,
+          'CONTINUATION_UNAVAILABLE',
+          { cause: error },
+        )
+      }
+      await maintained
     } finally {
       try {
         await close()

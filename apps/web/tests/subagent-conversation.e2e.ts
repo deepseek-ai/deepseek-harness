@@ -808,7 +808,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await page.getByRole('menuitemradio', { name: 'max', exact: true }).click()
       await expect.poll(() => trigger.getAttribute('aria-label')).toContain('reasoning effort max')
       await expect.poll(() => observerTrigger.getAttribute('aria-label')).toContain('reasoning effort max')
-      expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
+      // Labels follow the in-memory Session; release follows the durability check.
+      await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
       const after = await readPersistedEvents(scaffold, childId)
       // Each cold save restores the child for maintenance, which records its ordinary resume marker first.
       expect(after.slice(before.length).map(event => event.type))
@@ -824,6 +825,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await page.getByRole('option', { name: 'DeepSeek-V4-Flash', exact: true }).click()
       await expect.poll(() => trigger.getAttribute('aria-label')).toBe('Select model, current DeepSeek-V4-Flash')
       await expect.poll(() => observerTrigger.getAttribute('aria-label')).toBe('Select model, current DeepSeek-V4-Flash')
+      await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
       expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual(defaults)
     } finally { await observer.close() }
   })

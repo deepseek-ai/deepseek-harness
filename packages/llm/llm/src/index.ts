@@ -1188,6 +1188,23 @@ function detachDirectoryEntry(entry: LlmConfigurableProvider): LlmConfigurablePr
   }
 }
 
+/**
+ * Report whether a registered provider advertises a model in its current catalog.
+ * Catalog-driven entry points use it to accept only listed models.
+ * @param llm - provider registry that reads the catalog.
+ * @param selection - provider id and provider-owned model id.
+ * @returns false when the provider is unregistered or its catalog omits the model.
+ * @throws the provider's catalog failure, unchanged.
+ */
+export async function isModelListed(
+  llm: Pick<LlmRuntime, 'listProviders' | 'listModels'>,
+  selection: { readonly provider: string; readonly model: string },
+): Promise<boolean> {
+  if (!llm.listProviders().some(provider => provider.id === selection.provider)) return false
+  const models = await llm.listModels(selection.provider)
+  return models.some(model => model.id === selection.model)
+}
+
 interface AdapterRegistration {
   readonly adapter: LlmAdapter
   readonly provider: LlmProviderInfo

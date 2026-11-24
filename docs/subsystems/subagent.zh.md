@@ -667,8 +667,9 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
 
 /**
  * Select a local child's model under the caller's target-Session permission.
- * No message or global default is changed. A successful receipt confirms the
- * child's persistence barrier; an unconfirmed failure may follow a live change.
+ * Like Session model selection, it accepts only a model its provider lists in the
+ * current catalog. No message or global default is changed. A successful receipt
+ * confirms the child's persistence barrier; an unconfirmed failure may follow a live change.
  * @param request - target and complete model choice; omitted effort uses adapter defaults.
  * @param signal - caller cancellation before selection is recorded.
  * @returns the recorded choice after confirmed persistence.

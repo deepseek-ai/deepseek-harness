@@ -37,7 +37,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
-import type { ContentBlock, MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { isModelListed, type ContentBlock, type MessageId, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
@@ -553,8 +553,9 @@ export class SubagentRuntime extends TypertRemoteService {
 
   /**
    * Select a local child's model under the caller's target-Session permission.
-   * No message or global default is changed. A successful receipt confirms the
-   * child's persistence barrier; an unconfirmed failure may follow a live change.
+   * Like Session model selection, it accepts only a model its provider lists in the
+   * current catalog. No message or global default is changed. A successful receipt
+   * confirms the child's persistence barrier; an unconfirmed failure may follow a live change.
    * @param request - target and complete model choice; omitted effort uses adapter defaults.
    * @param signal - caller cancellation before selection is recorded.
    * @returns the recorded choice after confirmed persistence.
@@ -564,15 +565,28 @@ export class SubagentRuntime extends TypertRemoteService {
   @Remote({ name: 'selectModelByUser', resources: { session: request => request.childSessionId } })
   async selectModelByUser(request: SubagentSelectModelRequest, signal: AbortSignal): Promise<SubagentSelectModelReceipt> {
     validateControlRequest('subagent.selectModel', request)
+    const selection: ModelSelection = {
+      provider: request.provider,
+      model: request.model,
+      ...request.reasoningEffort === undefined ? {} : { reasoningEffort: brandString<ReasoningEffortId>(request.reasoningEffort) },
+    }
     try {
-      const selected = await this.selectModel(request.childSessionId, {
-        provider: request.provider,
-        model: request.model,
-        ...request.reasoningEffort === undefined ? {} : { reasoningEffort: brandString<ReasoningEffortId>(request.reasoningEffort) },
-      }, { kind: 'user' }, signal)
+      await this.assertListedModel(selection)
+      const selected = await this.selectModel(request.childSessionId, selection, { kind: 'user' }, signal)
       return { selected }
     } catch (error: unknown) {
       return rejectModelSelection(error, request.childSessionId, signal)
+    }
+  }
+
+  /** Refuse a user choice that the provider catalog does not list. */
+  private async assertListedModel(selection: ModelSelection): Promise<void> {
+    const llm = this.ctx.get('llm')
+    if (llm === undefined) {
+      throw new SubagentError('cannot validate the selected subagent model because the LLM service is unavailable', 'MODEL_UNAVAILABLE')
+    }
+    if (!await isModelListed(llm, selection)) {
+      throw new SubagentError(`provider "${selection.provider}" does not list model "${selection.model}"`, 'MODEL_UNAVAILABLE')
     }
   }
 

@@ -22,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconDataOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ModelDirectoryState } from './directory.ts'
+import { modelSelectable, type ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
 import { ModelSelect } from './ModelSelect.tsx'
@@ -125,10 +125,7 @@ export function apply(ctx: ClientContext): void {
     const command = scope.get('commandUi') as CommandUiContract
     const models = scope.modelDirectories
     const sessions = scope.sessions
-    const available = (sessionId: SessionId): boolean => {
-      const address = sessions.subagentAddress(sessionId)
-      return address === undefined || address.mode === 'continuable'
-    }
+    const available = (sessionId: SessionId): boolean => modelSelectable(sessions.subagentAddress(sessionId))
     scope.effect(() => command.register({
       name: 'model',
       label: () => t('command.label'),
@@ -181,8 +178,7 @@ export function apply(ctx: ClientContext): void {
       },
       inject: (sessionId): ModelSelectInjected => {
         const directory = models.directoryFor(sessionId)
-        const address = sessions.subagentAddress(sessionId)
-        const available = address === undefined || address.mode === 'continuable'
+        const available = modelSelectable(sessions.subagentAddress(sessionId))
         return {
           available,
           directory: directory.store,
