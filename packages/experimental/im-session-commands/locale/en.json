@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM session commands",
+    "description": "Handle /clear, /new, /stop, /status and /help sent in an IM chat before the message reaches the agent."
+  }
+}

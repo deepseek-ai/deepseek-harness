@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 模型能得到什么
 
-每条注入读数包含三行：带数字偏移与 IANA 时区、形如 ISO 的时间戳，该请求的浏览器时区策略，以及以紧凑整秒单位表示的经过时长。第 1 步从最新一条先前模型可见消息起测量；后续步骤从同一轮次中前一个 time-context 事件起测量。缺少基线时报告 `unavailable`，挂钟时间倒退时把经过时长钳制为零。
+每条注入读数是一个 `<system-reminder>` 块，用于标明它是注入的上下文而非用户输入。该块包含三行：带数字偏移与 IANA 时区、形如 ISO 的时间戳，该请求的浏览器时区策略，以及以紧凑整秒单位表示的经过时长。第 1 步从最新一条先前模型可见消息起测量；后续步骤从同一轮次中前一个 time-context 事件起测量。缺少基线时报告 `unavailable`，挂钟时间倒退时把经过时长钳制为零。
 
 ### 配置
 
@@ -64,7 +64,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-插件前置注册一个 `agent/pre-step` 监听器，先委托下游，需要注入且下游决策进入步骤时追加一条带来源的 `UserMessage`。每个读数都使用确切的快照来源 `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`。
+插件前置注册一个 `agent/pre-step` 监听器，先委托下游，需要注入且下游决策进入步骤时追加一条带来源的 `UserMessage`。每个读数都使用确切的快照来源 `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`，其中 `text` 是不含 `<system-reminder>` 外框的读数。
 
 ### 源码地图
 
@@ -102,22 +102,26 @@ pre-step 监听器在等待投影注册前安装。激活期间到达的步骤�
 
 #### 模型看到的内容
 
-每条注入消息包含三行。`<timestamp>` 是带数字偏移和 IANA 时区、形如 ISO 的时间戳；持续时间使用紧凑的整秒单位。
+每条注入消息用 `<system-reminder>` 块包裹三行。`<timestamp>` 是带数字偏移和 IANA 时区、形如 ISO 的时间戳；持续时间使用紧凑的整秒单位。
 
 ##### 第一步
 
 ```markdown
+<system-reminder>
 Time sampled while preparing turn <turn>, step 1: <timestamp>
 Browser time zone for this request: <iana-zone-or-mixed-or-unavailable-policy>.
 Elapsed since the preceding model-visible message: <duration-or-unavailable>.
+</system-reminder>
 ```
 
 ##### 后续步骤
 
 ```markdown
+<system-reminder>
 Time sampled while preparing turn <turn>, step <step>: <timestamp>
 Browser time zone for this request: <iana-zone-or-mixed-or-unavailable-policy>.
 Elapsed since the preceding step context: <duration-or-unavailable>.
+</system-reminder>
 ```
 
 #### Token 影响
@@ -135,7 +139,7 @@ Elapsed since the preceding step context: <duration-or-unavailable>.
 
 这些限制说明时钟上下文何时不合适。它们是当前包约束。
 
-- **状态与重放成本**：时间戳和当前轮次编号占固定空间。时区状态随最近进入轮次中不同的时区字符串数量增长，不随所有消息增长；每次增加新时区时复制该列表。格式化器仍是可丢弃的进程缓存。标准 AgentLoop 请求最近进入的轮次。若类型化 pre-step 调用方请求其他轮次，原同步完整前缀扫描会包含目标轮次之后已进入的消息。只有将 pre-step 请求明确限定为最近进入的轮次并同步更新调用方后，才可移除此回退。
+- **状态与重放成本**：时间戳和当前轮次编号占固定空间。时区状态随最近进入轮次中不同的时区字符串数量增长，不随所有消息增长；每次增加新时区时复制该列表。格式化器仍是可丢弃的进程缓存。
 - **仅限提示词来源信息**：浏览器时区上下文用于指导自然语言解释，但不会悄然填入另一工具所要求的时区字段。
 - **混合轮次会询问**：如果同一个开放轮次包含来自不同浏览器时区的提示词，模型会收到要求澄清的指令，而不会猜测哪个时区拥有未限定的时间。
 - **回退值不代表用户权威**：浏览器来源信息缺失或混杂时，配置或进程时区用于格式化时钟，但面向模型的策略仍要求澄清。

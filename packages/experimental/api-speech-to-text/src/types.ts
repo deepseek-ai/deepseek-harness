@@ -1,13 +1,13 @@
 /** JSON-safe inputs and results of the experimental speech Remote namespace. */
-import type { SpeechProviderId, SpeechSnapshot } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
+import type { SpeechFailureCode, SpeechProviderId, SpeechSnapshot } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
 import type {} from '@deepseek-ai/dsh-typert-protocol'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /** Audio encoding or intake limits prevented transcription. */
     'speech/invalid-audio': { readonly reason: string }
-    /** The selected provider rejected transcription. */
-    'speech/transcription-failed': { readonly reason: string }
+    /** The selected provider rejected transcription; `code` is present when the provider classified the failure. */
+    'speech/transcription-failed': { readonly reason: string; readonly code?: SpeechFailureCode }
   }
 }
 

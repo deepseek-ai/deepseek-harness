@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
-import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
@@ -11,6 +13,7 @@ import { PanelDetails } from '../src/client/PanelDetails.tsx'
 import { PanelFold } from '../src/client/PanelFold.tsx'
 import { ProjectRow } from '../src/client/ProjectRow.tsx'
 import { SessionPanel } from '../src/client/SessionPanel.tsx'
+import panelStyles from '../src/client/SessionPanel.module.css'
 import { SessionPanelToggle } from '../src/client/SessionPanelToggle.tsx'
 import type {
   EnvironmentSectionProps, PanelDetailsProps, ProjectRowProps, SessionPanelDockable, SessionPanelProbes, SessionPanelProps,
@@ -535,6 +538,64 @@ describe('SessionPanel', () => {
       fireEvent.dragStart(headOf('environment'), { dataTransfer })
       expect(dataTransfer.setData).not.toHaveBeenCalled()
       expect(marks()).toEqual(NONE)
+    })
+
+    it.each([
+      { rows: 'absent', movable: false, shown: ['text'] },
+      { rows: 'empty', movable: false, shown: ['text'] },
+      { rows: 'folder', movable: false, shown: ['environment', 'text'] },
+      { rows: 'folder', movable: true, shown: ['environment', 'text', 'zero', 'element'] },
+      { rows: 'text fallback', movable: false, shown: ['environment', 'text'] },
+    ])('shows titles and starts drags only for populated sections (rows: $rows, reorder: $movable)', async ({ rows: content, movable, shown: ids }) => {
+      const sheet = document.createElement('style')
+      // Vitest supplies the CSS Module class names but does not install their stylesheet in jsdom.
+      sheet.textContent = readFileSync(resolve(import.meta.dirname, '../src/client/SessionPanel.module.css'), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '').replaceAll(':global(', ':is(').replace(/'[^']*'|"[^"]*"|\.([a-zA-Z][\w-]*)/g, (token, local: string | undefined) =>
+          local === undefined ? token : `.${panelStyles[local]}`)
+      document.head.append(sheet)
+      onTestFinished(() => { sheet.remove() })
+      const runtime = await SlotTestRuntime.create()
+      onTestFinished(() => runtime.dispose())
+      await runtime.declare({ 'conversation.chat.aside': { kind: 'single', scope: 'session' } })
+      await runtime.sessions.add({ id: SID })
+      const session = runtime.sessions.retain(SID)
+      onTestFinished(() => { cleanup(); session.release() })
+      await session.ready
+      const body = 'conversation.session.panel.section'
+      const actions = 'conversation.session.panel.section.actions'
+      const rows = 'conversation.session.panel.environment.row'
+      const sections = ['environment', 'missing', 'jobs', 'text', 'zero', 'element'].map(id => ({ id, label: id }))
+      const { props } = panelProps(true, DOCKED)
+      runtime.slots.register({ name: 'conversation.chat.aside', children: {
+        [body]: { kind: 'list', scope: 'session' }, [actions]: { kind: 'keyed', scope: 'session' },
+      } }, ({ renderSlot }) => <SessionPanel {...props} useSections={selectorOf(sections)} renderSlot={renderSlot} />)
+      const environment = { name: body, id: 'environment', children: { [rows]: { kind: 'list', scope: 'session' } } } as const
+      if (content === 'text fallback') {
+        runtime.slots.register(environment, ({ renderSlot, presentation, dismissOverlay }) =>
+          renderSlot(rows, { presentation, dismissOverlay }, { fallback: 'No configured rows' }))
+      } else {
+        runtime.slots.register(environment, EnvironmentSection)
+      }
+      if (content === 'empty' || content === 'folder') {
+        runtime.slots.register({ name: rows, id: 'a' }, () => null)
+        runtime.slots.register({ name: rows, id: 'b' }, () => null)
+      }
+      if (content === 'folder') runtime.slots.register({ name: rows, id: 'folder' }, () => <span />)
+      runtime.slots.register({ name: body, id: 'jobs' }, () => null)
+      runtime.slots.register({ name: actions, key: 'jobs' }, () => <b>Count</b>)
+      runtime.slots.register({ name: body, id: 'text' }, () => 'Text only')
+      if (movable) {
+        runtime.slots.register({ name: body, id: 'zero' }, () => 0)
+        runtime.slots.register({ name: body, id: 'element' }, () => <span />)
+      }
+      runtime.renderSlot('conversation.chat.aside', {}, { session })
+      const shown = screen.getAllByRole('region')
+      expect(shown.map(region => region.dataset.sessionPanelSection)).toEqual(ids)
+      const start = createEvent.dragStart(headOf('text'))
+      Object.defineProperty(start, 'dataTransfer', { value: transfer() })
+      fireEvent(headOf('text'), start)
+      expect(start.defaultPrevented).toBe(!movable)
+      fireEvent.dragEnd(headOf('text'))
     })
 
     it('starts no drag while only one shown section can move, since it could land nowhere else', () => {

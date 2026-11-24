@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM 会话命令",
+    "description": "在 IM 聊天中的 /clear、/new、/stop、/status 和 /help 到达智能体之前处理这些命令。"
+  }
+}

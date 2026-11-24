@@ -2,15 +2,15 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestBrief, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot,
-  ForgeActionFailure,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestActivity, ChangeRequestBrief, ChangeRequestDescription, ChangeRequestKey,
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure,
   ForgeCommitList, ForgeFailure, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList, ForgeViewerQuery,
   ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest,
   ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { listCommits } from './commits.ts'
 import type { GraphqlReader } from './commits.ts'
-import { sendMutation, type GraphqlWriter } from './mutation.ts'
+import { REFUSED, sendMutation, type GraphqlWriter } from './mutation.ts'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
 import { readComparison } from './compare.ts'
@@ -22,10 +22,11 @@ import type { PageResult, SnapshotPages, SnapshotQuery, StatusQuery } from './gr
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 import { readViewed, writeViewed } from './viewed.ts'
-import { gitHubReviewerCandidates, requestGitHubReviews, updateGitHubBranch } from './overview.ts'
+import { gitHubReviewerCandidates, requestGitHubReviews, setGitHubAutoMerge, updateGitHubBranch } from './overview.ts'
 import { writeGitHubReview } from './review-writes.ts'
 import { readReviewThreads } from './threads.ts'
 import { readDescription } from './description.ts'
+import { readActivity } from './activity.ts'
 import { countViewerLists, readViewerList, VIEWER_FILTERS } from './viewer.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
@@ -154,6 +155,46 @@ export class GitHubProvider implements ForgeProvider {
     return await readDescription(this.graphql, ref, signal)
   }
 
+  /**
+   * Read the latest entries of a pull request's timeline through one GraphQL request.
+   * @see readActivity
+   */
+  async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await readActivity(this.graphql, ref, signal)
+  }
+
+  /**
+   * Add a comment through one `POST repos/<owner>/<name>/issues/<number>/comments` request, with the text as JSON on
+   * standard input. The request is never retried. Missing or rejected credentials are `unauthenticated`; a refusal GitHub
+   * reports by its HTTP status, and a `gh` that cannot start, are `failed`; every other run that does not end with the
+   * saved comment, a cancelled one included, is `unknown`.
+   * @throws with `signal.reason` when the signal aborted before the request was sent.
+   */
+  async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const { host, owner, name } = checkedRepository(ref)
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    signal.throwIfAborted()
+    let output: GhOutput
+    try {
+      output = await this.gh(
+        ['api', '--hostname', host, '--method', 'POST', `repos/${owner}/${name}/issues/${ref.number}/comments`, '--input', '-'],
+        signal, JSON.stringify({ body }))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { code: error instanceof GhUnavailableError ? 'failed' : 'unknown', message }
+    }
+    if (output.exitCode === 0) {
+      if (isSavedComment(parseJson(output.stdout))) return undefined
+      return { code: 'unknown', message: 'unexpected GitHub response to the comment' }
+    }
+    const { message } = refusal(output)
+    if (AUTHENTICATION.test(output.stderr)) return { code: 'unauthenticated', message }
+    return { code: REFUSED.test(output.stderr) ? 'failed' : 'unknown', message }
+  }
+
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const location = parseRemoteUrl(url)
     if (location === undefined || !this.served.has(location.host)) return undefined
@@ -268,6 +309,17 @@ export class GitHubProvider implements ForgeProvider {
       'api', '--hostname', host, '--method', 'PUT', `repos/${owner}/${name}/pulls/${ref.number}/merge`,
       '-f', `merge_method=${request.method}`, '-f', `sha=${request.headSha}`,
     ], signal)
+  }
+
+  /**
+   * Turn GitHub's auto-merge of a pull request on, with the merge method and the confirmed head as `expectedHeadOid`,
+   * or off, through one GraphQL mutation that is never retried.
+   * @see setGitHubAutoMerge
+   */
+  async setAutoMerge(ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    return await setGitHubAutoMerge(this.graphql, this.mutate, ref, request, signal)
   }
 
   /**
@@ -659,6 +711,11 @@ function hostMessage(stdout: string): string | undefined {
   const body = parseJson(stdout)
   if (typeof body !== 'object' || body === null || !('message' in body) || typeof body.message !== 'string') return undefined
   return body.message.trim().length > 0 ? body.message : undefined
+}
+
+/** Whether a REST answer is a saved issue comment, which GitHub returns with its numeric id. */
+function isSavedComment(body: unknown): boolean {
+  return typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'number'
 }
 
 /** A repository path with each segment percent-encoded, for an API path or a web URL. */

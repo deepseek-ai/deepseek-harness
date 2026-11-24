@@ -40,6 +40,7 @@ const preview: UserContentAttachment = {
 }
 const filePart: UserContentAttachment = { type: 'file', file }
 const empty: UserContentData = { text: '', attachments: [], extraBlocks: [] }
+const USER_STACK = '[data-slot="root"] > [data-slot-factory="conversation.chat.user.content"]:only-child > :only-child'
 type RenderSeats = PropsRenderSlots<'conversation.approval.detail'> & PropsRenderFactories
 
 async function bench() {
@@ -65,7 +66,7 @@ async function bench() {
       userText.register(rule)
     }
     ctx.slots.registerFactory({
-      name: 'conversation.user.text', scope: 'session',
+      name: 'conversation.user.text', scope: 'session', inline: true,
       children: { 'conversation.user.text.node': { kind: 'keyed', scope: 'session', inline: true } },
       inject: (): UserTextInjected => ({
         hooks: { userTextRevision: {
@@ -133,9 +134,7 @@ describe('user Content Factory', () => {
     const view = b.render(b.factory({ content: { ...empty, text }, facts: {}, loadImage: b.loadImage }))
     const textNode = view.getByText('**literal user text** second line')
     expect(textNode.textContent).toBe(text)
-    const root = view.container.querySelector('[data-slot="root"]')
-    expect(textNode.closest('div')?.parentElement).toBe(root?.firstElementChild)
-    expect(root?.children).toHaveLength(1)
+    expect(textNode.closest('div')?.matches(`${USER_STACK} > [data-message-bubble]:only-child`)).toBe(true)
     expect(view.container.querySelector('strong, time, [role="status"], [data-pending-steering], [data-submission-echo]')).toBeNull()
     expect(view.queryAllByRole('button')).toHaveLength(0)
     expect(view.container.querySelector('[data-message-attachments]')).toBeNull()
@@ -177,7 +176,7 @@ describe('user Content Factory', () => {
     expect(view.getAllByTestId('image')).toHaveLength(1)
     expect(b.imageCalls[0]).toMatchObject({ compact, align: 'end', loadImage: b.loadImage })
     expect(view.queryAllByRole('button')).toHaveLength(0)
-    expect(view.container.querySelector('[data-slot="root"]')?.firstElementChild?.children).toHaveLength(1)
+    expect(view.container.querySelector(`${USER_STACK} > [data-message-attachments]:only-child`)).not.toBeNull()
   })
 
   it('reuses one prepared value in unrelated parents while nested images inherit each Session', async () => {
@@ -246,9 +245,7 @@ describe('user Content Factory', () => {
     const b = await bench()
     const view = b.render(b.factory({ content: empty, facts: {}, loadImage: b.loadImage }))
     expect(view.container.textContent).toBe('')
-    const root = view.container.querySelector('[data-slot="root"]')
-    expect(root?.children).toHaveLength(1)
-    expect(root?.firstElementChild?.children).toHaveLength(0)
+    expect(view.container.querySelector(`${USER_STACK}:empty`)).not.toBeNull()
     expect(view.container.querySelector('[data-message-attachments]')).toBeNull()
     expect(view.queryAllByRole('button')).toHaveLength(0)
     expect(b.imageCalls).toHaveLength(0)

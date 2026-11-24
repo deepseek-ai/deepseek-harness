@@ -22,12 +22,12 @@ window.__ModuleLoader__.load({
           zh: {
             active: '动态插件已启用', configSummary: '示例配置项', configForm: '动态插件配置', configField: '问候语', configSave: '保存',
             action: '夹具操作', badge: '夹具标签', section: '夹具区块', sectionBody: '来自夹具的区块内容',
-            exportSession: '导出会话', copySessionId: '复制会话 ID',
+            exportSession: '导出会话', copySessionId: '复制会话 ID', hideGroup: '隐藏第一组',
           },
           en: {
             active: 'Live plugin enabled', configSummary: 'An example setting', configForm: 'Live plugin configuration', configField: 'Greeting', configSave: 'Save',
             action: 'Fixture action', badge: 'Fixture badge', section: 'Fixture section', sectionBody: 'Section content from the fixture',
-            exportSession: 'Export session', copySessionId: 'Copy session ID',
+            exportSession: 'Export session', copySessionId: 'Copy session ID', hideGroup: 'Hide first group',
           },
         }))
         // Detail contributions for this bundle's own page and its row's page: an
@@ -92,6 +92,24 @@ window.__ModuleLoader__.load({
             },
             t(label),
           )
+        })
+        ctx.slots.inject('sidebar.panellist.actions', function* () {
+          yield ctx.slots.register({
+            name: 'sidebar.panellist.actions', id: 'fixture.first-group', order: -200, locale: 'fixtureLive',
+          }, function FirstGroup({ t }) {
+            const [visible, setVisible] = React.useState(true)
+            return visible ? React.createElement(MenuItemButton, {
+              separatorBefore: true, onSelect: () => setVisible(false),
+            }, t('hideGroup')) : null
+          })
+          yield ctx.slots.register({
+            name: 'sidebar.panellist.actions', id: 'fixture.next-group', order: -100, locale: 'fixtureLive',
+          }, ({ t, onDismiss }) => {
+            const rows = ['section', 'action'].map(label => React.createElement(MenuItemButton, {
+              key: label, separatorBefore: true, onSelect: onDismiss,
+            }, t(label)))
+            return React.createElement(React.Fragment, null, rows)
+          })
         })
         ctx.slots.inject('sidebar.session.row.trailing', function* () {
           for (const [id, order, Icon, label] of [

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Accès Git des arbres de travail liés",
+    "description": "Permet à une session qui travaille dans un arbre de travail Git lié d'indexer et de valider sous workspace-write en accordant l'écriture dans le répertoire Git du dépôt."
+  }
+}

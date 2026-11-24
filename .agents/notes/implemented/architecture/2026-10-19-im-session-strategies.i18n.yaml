@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-19-im-session-strategies.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-19-im-session-strategies.md
+/agent-note-im-session-strategies:
+  en: c701e8fcc2c77418
+  zh: de6be36e59ef1ace
+/agent-note-im-session-strategies/problem:
+  en: 5ce30763ab012b06
+  zh: 39c831cb8f64b079
+/agent-note-im-session-strategies/decision:
+  en: 29005c64c8967565
+  zh: 7b07b4e21d65f2e8
+/agent-note-im-session-strategies/alternatives-considered:
+  en: ebecd48e91907e6d
+  zh: 06231ece36e4ba33
+/agent-note-im-session-strategies/consequences:
+  en: 8264424d4f0c15c9
+  zh: df733d9d987848ea

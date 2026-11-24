@@ -4,14 +4,12 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using DeepSeek.Cua.Protocol;
-using Microsoft.Win32.SafeHandles;
 
 namespace DeepSeek.Cua.Windows;
 
 internal sealed record ShellApplication(string AppId, string DisplayName, bool HasShellName);
 internal sealed record ShellCatalog(ShellApplication[] Applications, int Omitted);
-internal sealed record ResolvedWindow(nint Handle, string AppId, string? ExecutablePath, string ProcessName,
-    int ProcessId, long ProcessStarted);
+internal sealed record ResolvedWindow(nint Handle, string AppId, string? ExecutablePath, string ProcessName);
 internal sealed record WindowObservation(ResolvedWindow[] Windows, int Denied, int Gone);
 internal sealed record CatalogApplication(string AppId, string DisplayName, string? ExecutablePath, bool IsRunning);
 
@@ -29,15 +27,66 @@ internal static class DesktopWindows
     private const int MaximumIdentityBuffer = 1_048_576;
     private static readonly Guid AppUserModelIdFormat = new("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
 
-    internal static async Task<object[]> ListApps(RequestContext context)
+    internal static object[] ListApps(RequestContext context)
     {
-        var applications = await Discover(context);
+        context.Check();
+        var observation = Observe(context);
+        ReportWindowOmissions(observation);
+        var applications = Merge([], observation.Windows, includeWindowOnly: true);
         var result = applications.Select(application => new
         {
-            pid = 4, id = application.AppId, name = application.DisplayName, isRunning = application.IsRunning,
+            id = application.AppId, identity = (string?)null, name = application.DisplayName, isRunning = application.IsRunning,
         }).ToArray();
         context.Check();
         return result;
+    }
+
+    internal static async Task<object[]> FindApps(string? query, int maxAppMatches, RequestContext context)
+    {
+        context.Check();
+        if (!string.IsNullOrEmpty(query) && string.IsNullOrWhiteSpace(query))
+            throw new NativeFailure("INVALID_ARGUMENT", "Application query must contain non-whitespace characters");
+        CatalogApplication[] matches;
+        if (string.IsNullOrEmpty(query)) matches = await Discover(context, includeWindowOnly: false);
+        else if (Path.IsPathFullyQualified(query))
+        {
+            var application = FindExecutable(query, Observe(context).Windows);
+            matches = application is null ? [] : [application];
+        }
+        else matches = FindMatches(await Discover(context, includeWindowOnly: false), query, maxAppMatches, context.Cancellation);
+        context.Check();
+        return matches.Select(application => new
+        {
+            id = application.AppId, displayName = application.DisplayName, identity = (string?)null, isRunning = application.IsRunning,
+        }).ToArray();
+    }
+
+    internal static CatalogApplication[] FindMatches(IEnumerable<CatalogApplication> applications, string query,
+        int maxAppMatches, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        var matches = new List<CatalogApplication>();
+        foreach (var application in applications)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (!application.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
+                && !application.AppId.Contains(query, StringComparison.OrdinalIgnoreCase)
+                && application.ExecutablePath?.Contains(query, StringComparison.OrdinalIgnoreCase) != true) continue;
+            matches.Add(application);
+            if (matches.Count > maxAppMatches)
+                throw new NativeFailure("AMBIGUOUS_APP", "Too many matching applications; use a more specific name or path");
+        }
+        cancellation.ThrowIfCancellationRequested();
+        return matches.ToArray();
+    }
+
+    internal static CatalogApplication? FindExecutable(string query, IReadOnlyList<ResolvedWindow> windows)
+    {
+        string path;
+        try { path = Applications.ResolveExecutable(query); }
+        catch (NativeFailure error) when (error.Code is "APP_NOT_FOUND" or "INVALID_ARGUMENT") { return null; }
+        return new(path, Path.GetFileName(path), path,
+            windows.Any(window => string.Equals(window.AppId, path, StringComparison.Ordinal)));
     }
 
     internal static async Task<AppState> Select(string selector, RequestContext context)
@@ -52,7 +101,7 @@ internal static class DesktopWindows
             return new AppState(Guid.NewGuid().ToString("N"), path, Path.GetFileName(path),
                 ApplicationAuthorization.Create(path, path, path), windows.Any(window => string.Equals(window.AppId, path, StringComparison.Ordinal)));
         }
-        var applications = await Discover(context);
+        var applications = await Discover(context, includeWindowOnly: true);
         var application = SelectApplication(applications, selector);
         context.Check();
         return new AppState(Guid.NewGuid().ToString("N"), application.AppId, application.DisplayName,
@@ -60,19 +109,24 @@ internal static class DesktopWindows
             application.IsRunning);
     }
 
-    private static async Task<CatalogApplication[]> Discover(RequestContext context)
+    private static async Task<CatalogApplication[]> Discover(RequestContext context, bool includeWindowOnly)
     {
         var catalog = await context.Sta.Invoke(_ => ReadAppsFolder(context), context.Cancellation);
         var observation = Observe(context);
         if (catalog.Omitted > 0)
             Console.Error.WriteLine($"NATIVE_DISCOVERY: omitted {catalog.Omitted} AppsFolder items without an application identity");
+        ReportWindowOmissions(observation);
+        var applications = Merge(catalog.Applications, observation.Windows, includeWindowOnly);
+        context.Check();
+        return applications;
+    }
+
+    private static void ReportWindowOmissions(WindowObservation observation)
+    {
         if (observation.Denied > 0)
             Console.Error.WriteLine($"NATIVE_DISCOVERY: omitted {observation.Denied} windows whose process or window access was denied");
         if (observation.Gone > 0)
             Console.Error.WriteLine($"NATIVE_DISCOVERY: omitted {observation.Gone} disappeared or identity-less windows");
-        var applications = Merge(catalog.Applications, observation.Windows);
-        context.Check();
-        return applications;
     }
 
     private static ShellCatalog ReadAppsFolder(RequestContext context)
@@ -123,7 +177,7 @@ internal static class DesktopWindows
         throw new NativeFailure("APP_NOT_FOUND", "Use an exact application id from listApps or an existing absolute .exe file path");
     }
 
-    private static CatalogApplication[] Merge(ShellApplication[] shellApplications, ResolvedWindow[] windows)
+    private static CatalogApplication[] Merge(ShellApplication[] shellApplications, ResolvedWindow[] windows, bool includeWindowOnly)
     {
         var applications = new Dictionary<string, Builder>(StringComparer.Ordinal);
         foreach (var shell in shellApplications)
@@ -139,6 +193,7 @@ internal static class DesktopWindows
             if (string.IsNullOrEmpty(window.AppId) || string.IsNullOrEmpty(window.ProcessName)) continue;
             if (!applications.TryGetValue(window.AppId, out var builder))
             {
+                if (!includeWindowOnly) continue;
                 builder = new(window.AppId, window.ProcessName, hasShellName: false, shellNamed: false);
                 applications.Add(window.AppId, builder);
             }
@@ -177,12 +232,13 @@ internal static class DesktopWindows
         }
     }
 
-    internal static WindowObservation Observe(RequestContext context)
+    // Supplied HWNDs already belong to the caller's application and need no process metadata lookup.
+    internal static WindowObservation Observe(RequestContext context, IReadOnlySet<nint>? knownWindows = null)
     {
         var windows = new List<ResolvedWindow>();
         var denied = 0;
         var gone = 0;
-        foreach (var handle in EnumerateHandles(context))
+        foreach (var handle in EnumerateHandles(context, knownWindows))
         {
             context.Check();
             try
@@ -209,13 +265,14 @@ internal static class DesktopWindows
         return Win32.ProcessIdToSessionId(processId, out var session) && session == Applications.SessionId;
     }
 
-    private static IReadOnlyList<nint> EnumerateHandles(RequestContext context)
+    private static IReadOnlyList<nint> EnumerateHandles(RequestContext context, IReadOnlySet<nint>? knownWindows)
     {
         var handles = new List<nint>();
         var enumerated = Win32.EnumWindows((window, _) =>
         {
             // Cancellation cannot throw across the unmanaged callback; stop, then rethrow outside it.
             if (context.Cancellation.IsCancellationRequested) return false;
+            if (knownWindows?.Contains(window) == true) return true;
             if (Eligible(window)) handles.Add(window);
             return true;
         }, 0);
@@ -235,8 +292,6 @@ internal static class DesktopWindows
         if (process == 0) return OpenFailure();
         try
         {
-            using var native = new SafeProcessHandle(process, ownsHandle: false);
-            if (!Win32.GetProcessTimes(native, out var started, out _, out _, out _)) return null;
             var processName = ReadProcessName(processId);
             if (string.IsNullOrEmpty(processName)) return null;
             context.Check();
@@ -251,13 +306,8 @@ internal static class DesktopWindows
                 appId ??= executablePath;
             }
             if (appId is null) return null;
-            // A recycled handle must not inherit the identity resolved for its former process.
-            Win32.GetWindowThreadProcessId(handle, out var currentProcessId);
-            if (currentProcessId != rawProcessId) return null;
-            using var current = new SafeProcessHandle(process, ownsHandle: false);
-            if (!Win32.GetProcessTimes(current, out var currentStarted, out _, out _, out _) || currentStarted != started) return null;
             context.Check();
-            return new(handle, appId, executablePath, processName, processId, started);
+            return new(handle, appId, executablePath, processName);
         }
         finally { Win32.CloseHandle(process); }
     }

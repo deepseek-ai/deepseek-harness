@@ -17,7 +17,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { CuaConfig, installCua } from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
-const programPrompt = 'Fixture CUA program guidance\n\nAX read defaults: maxElements=2000, maxDepth=25.\n\nMaximum click holdMs: 5000 ms.'
+const programPrompt = 'Fixture CUA program guidance\n\nAccessibility tree defaults: maxElements=2000, maxDepth=25.\n\nMaximum click holdMs: 5000 ms.'
 
 const provider = {
   name: 'test-cua-scopes',

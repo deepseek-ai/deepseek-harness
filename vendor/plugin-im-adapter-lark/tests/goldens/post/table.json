@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "| Name | Qty |\n| --- | ---: |\n| apple | 3 |\n| banana | 7 second paragraph |"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

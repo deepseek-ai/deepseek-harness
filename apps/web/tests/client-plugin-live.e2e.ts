@@ -38,6 +38,33 @@ async function openDraft(page: Page) {
   return draft
 }
 
+it('updates group separators when a preceding More menu registration becomes empty', async () => {
+  const scaffold = await launchWebScaffold({
+    extraInstallAnchors: [join(FIXTURE, 'package.json')],
+    extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
+  })
+  onTestFinished(() => scaffold.close())
+  await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const page = await newEnglishPage(browser)
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'More', exact: true }).click()
+
+  const menu = page.getByRole('menu')
+  const row = (name: string) => menu.getByRole('menuitem', { name, exact: true })
+  const separatorHeight = (name: string) => row(name).locator('..').getByRole('separator', { includeHidden: true })
+    .evaluate(element => element.getBoundingClientRect().height)
+  expect(await separatorHeight('Hide first group')).toBe(0)
+  expect(await separatorHeight('Fixture section')).toBeGreaterThan(0)
+  expect(await separatorHeight('Fixture action')).toBeGreaterThan(0)
+
+  await row('Hide first group').click()
+  await row('Hide first group').waitFor({ state: 'detached' })
+  expect(await separatorHeight('Fixture section')).toBe(0)
+  expect(await separatorHeight('Fixture action')).toBeGreaterThan(0)
+})
+
 it('keeps ordered legacy Session menu rows before Archive and removes them with their fiber', async () => {
   const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
   onTestFinished(() => scaffold.close())

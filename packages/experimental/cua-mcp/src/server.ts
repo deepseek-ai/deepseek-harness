@@ -153,10 +153,11 @@ function projectProgramTool(definition: ToolDefinition): Tool {
  */
 export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOptions): Promise<CuaMcpServer> {
   const manifest = createRequire(import.meta.url)('../package.json') as { version: string }
+  const { id: agentPreset } = await ctx.agentPresets.resolve()
   const handle = await ctx.agents.create({
     sessionId: brandString<SessionId>(`cua-mcp-${randomUUID()}`),
-    meta: { cwd: options.cwd, agentPreset: ctx.agentPresets.defaultId },
-    setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx) },
+    meta: { cwd: options.cwd, agentPreset },
+    setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, agentPreset) },
   })
   const { agent } = handle
   // The listing is projected from the registry at each request; McpServer owns tools/list and tools/call once a tool

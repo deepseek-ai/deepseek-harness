@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-围栏覆盖 `writeText`、`editText`、`patchText`、`deleteFile` 和 `moveFile`。移动在任何效果发生前检查源与目标，因此任一路径被拒都会使两端文件保持不变。
+围栏覆盖 `writeText`、`writeBytes`、`editText`、`patchText`、`deleteFile` 和 `moveFile`。移动在任何效果发生前检查源与目标，因此任一路径被拒都会使两端文件保持不变。
 
 当模型的文件写入与编辑必须受会话沙箱模式约束、而读取保持不受约束时，挂载此后端以替代 `fs-local`。围栏按调用生效：工具层把调用会话的模式与工作区根目录解析为与 bash runner 收到的相同策略，因此文件系统与 shell 两个能力族绝不会约束到不同根目录。
 
@@ -69,7 +69,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `SandboxedFileSystem`：`writeText`/`editText`/`patchText`/`deleteFile`/`moveFile` 上的模式围栏、`sandboxMode` 事实 |
+| [`src/index.ts`](src/index.ts) | `SandboxedFileSystem`：`writeText`/`writeBytes`/`editText`/`patchText`/`deleteFile`/`moveFile` 上的模式围栏、`sandboxMode` 事实 |
 | [`src/containment.ts`](src/containment.ts) | 祖先包含检查，带词法快速路径与基于身份的兜底 |
 
 ### 变更如何被围栏

@@ -40,7 +40,7 @@ The tools read the Office kit service at each call. When Kit is missing, calls f
 
 | Field | Default | Meaning |
 |---|---|---|
-| `activationSkills` | `[office, office-docx, office-xlsx, office-pptx]` | Nonempty list of kebab-case skill names whose successful loading activates all three tools |
+| `activationSkills` | `[office]` | Nonempty list of kebab-case skill names whose successful loading activates all three tools |
 | `maxImages` | `20` | Maximum images one render returns, including worksheet fragments |
 | `maxImagePixels` | `8388608` | Maximum pixels of each image |
 | `maxImageDimension` | `8192` | Maximum width and height of each image |

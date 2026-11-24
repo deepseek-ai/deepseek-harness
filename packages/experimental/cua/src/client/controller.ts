@@ -8,7 +8,6 @@ import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSys
 
 interface PermissionData {
   windowsProvider: boolean
-  runtime: { persistent: boolean; writable: boolean }
   system: CuaSystemPermissionState
   applications: CuaApplicationState
   icons: Record<string, string>
@@ -41,7 +40,6 @@ export class PermissionController {
   /** Last observed permissions and the lifetime of the current refresh/action. */
   readonly state = createSnapshotStore<PermissionView>({
     windowsProvider: { value: null, busy: false, error: null },
-    runtime: { value: null, busy: false, error: null },
     system: { value: null, busy: false, error: null },
     applications: { value: null, busy: false, error: null },
     icons: { value: null, busy: false, error: null },
@@ -89,7 +87,7 @@ export class PermissionController {
       state.changing = changing
       state.busy = true
       state.windowsProvider.busy = false
-      for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
+      for (const key of ['system', 'applications', 'icons'] as const) state[key].busy = true
     })
     if (!changing) this.enqueue()
   }
@@ -103,7 +101,7 @@ export class PermissionController {
     this.state.update((state) => {
       state.busy = true
       state.windowsProvider.busy = false
-      for (const key of ['runtime', 'system', 'applications', 'icons'] as const) state[key].busy = true
+      for (const key of ['system', 'applications', 'icons'] as const) state[key].busy = true
     })
     this.tail = this.tail.then(async () => {
       if (!current()) return
@@ -121,7 +119,6 @@ export class PermissionController {
       }
       const latest = () => current() && this.sequence === sequence
       const refresh = Promise.all([
-        this.read('runtime', this.remote.ptcConfiguration, latest),
         this.read('system', this.remote.systemStatus, latest).then(async () => {
           // The Windows helper can be missing before its first permission response.
           if (latest() && this.state.getSnapshot().system.value === null) {

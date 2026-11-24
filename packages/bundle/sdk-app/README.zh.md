@@ -50,11 +50,11 @@ Python 运行时向本 profile 提供显式下载的创作资源和 Office sidec
 
 #### 模型看到什么
 
-profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、`plugin_manager`、定时任务工具、共用文件引用说明和时间上下文。子 agent 不能使用定时任务工具。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。每条普通 prompt 像 Web prompt 一样上报时区：传入了客户端的 `timeZone`（Python 中为 `time_zone`）时用它，否则用运行时为这条 prompt 采样的进程时区，因此模型看到 `Browser time zone for this request: <zone>. Interpret otherwise-unqualified dates and times in this zone.`。进程时区既不是 UTC 也不是 IANA Area/Location 名称时（例如 `TZ=GMT` 产生的 `+00:00`），上报 `unavailable`。技能目录总是列出 Office skills；有创作载荷时其 Python 环境说明指向 `load_workspace_dependencies`，没有时指向用户已有的 Python。技能目录还列出 `dsh-doc`，即 Desktop 标准模式、PTC 模式和创造模式列出的 DSH 文档 skill；其用途参见 [Web app](../web-app/README.zh.md#model-experience)。
+profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、`plugin_manager`、`cordis_inspect`、定时任务工具、共用文件引用说明和时间上下文。`cordis_inspect` 与 Desktop 标准模式和创造模式一样读取 Host 运行时 API；SDK 不提供浏览器，因此它的目录不列出 Client provider。子 agent 不能使用定时任务工具。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。每条普通 prompt 像 Web prompt 一样上报时区：传入了客户端的 `timeZone`（Python 中为 `time_zone`）时用它，否则用运行时为这条 prompt 采样的进程时区，因此模型看到 `Browser time zone for this request: <zone>. Interpret otherwise-unqualified dates and times in this zone.`。进程时区既不是 UTC 也不是 IANA Area/Location 名称时（例如 `TZ=GMT` 产生的 `+00:00`），上报 `unavailable`。技能目录总是列出 Office skills；有创作载荷时其 Python 环境说明指向 `load_workspace_dependencies`，没有时指向用户已有的 Python。技能目录还列出 `dsh-doc`，即 Desktop 标准模式、PTC 模式和创造模式列出的 DSH 文档 skill；其用途参见 [Web app](../web-app/README.zh.md#model-experience)。
 
 #### Token 影响
 
-此 profile 添加一句 coding persona、所挂载的工具定义与说明，以及记录在日志中的运行时上下文和时间消息。 即使操作无法获批，`plugin_manager` 的描述和参数 schema 仍增加输入 token；不使用插件管理的嵌入方可禁用该条目。`dsh-doc` 目录项使首个请求增加约 125 个启发式估算 token；其指令和参考资料仅在模型加载该 skill 时进入上下文。
+此 profile 添加一句 coding persona、所挂载的工具定义与说明，以及记录在日志中的运行时上下文和时间消息。 即使操作无法获批，`plugin_manager` 的描述和参数 schema 仍增加输入 token；不使用插件管理的嵌入方可禁用该条目。`cordis_inspect` 的 schema 增加一个工具定义；查询结果仅在模型调用它时进入转录。`dsh-doc` 目录项使首个请求增加约 125 个启发式估算 token；其指令和参考资料仅在模型加载该 skill 时进入上下文。
 
 #### KV Cache 影响
 
@@ -80,6 +80,6 @@ profile 继承 base 系统提示词，包括 `You are an AI agent powered by Dee
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-[SDK/Desktop 工具比较](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts) 在 `test:expected` 中无需 API 凭据运行，并纳入 PR 必需的 consumer 作业。检查覆盖关闭 Team 的 standard/PTC 主会话；Team 对齐暂由 #7172 跟踪。构建后运行 `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts`。在相邻的 `tool-parity.ts` 中维护精确、带理由的差异；差异消除后，对应例外会使检查失败。已有 SDK 会话快照和安装后运行时 smoke 分别检查模型输出和打包结果。
+[SDK/Desktop 模型上下文比较](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts)与 [agent 配置项比较](../../../apps/cli/tests/profiles/sdk/agent-config-parity.expected.e2e.ts) 在 `test:expected` 中无需 API 凭据运行，并纳入 PR 必需的 consumer 作业。两者都比较本 profile（原生工具执行）与 Desktop `standard` agent preset，不比较 PTC 执行。前者比较顶层 Agent 在关闭和开启 Team 时的首个模型请求：工具名和 schema、系统提示词段落、运行时上下文取值、会话 skill 目录和其余注入消息，以及提示词段落、运行时上下文、注入消息和工具的排列顺序；比较前替换测试路径和时间读数，两侧都在 UTC 下运行。后者用 `--dump-config` 把本 profile 的每个配置项与 preset 中同 id 的配置项比较，preset 中没有时与 Desktop 宿主层同 id 的配置项比较，两处都没有的已启用配置项单独报出；它覆盖默认回合看不到的配置效果，例如 plan mode 段落。构建后运行 `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/`。每项接受的差异都在相邻的 `parity-exceptions.ts` 中带理由登记；暂不修复的不一致还要在 `debt` 中写明跟踪 issue。差异修复后对应例外变为 stale，修复改动需同时删除它。已有 SDK 会话快照和安装后运行时 smoke 分别检查模型输出和打包结果。
 
 </details>

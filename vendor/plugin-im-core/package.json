@@ -1,0 +1,74 @@
+{
+  "name": "@deepseek-ai/cordis-plugin-im-core",
+  "description": "Core components of Satorijs",
+  "version": "5.0.0-alpha.0",
+  "type": "module",
+  "files": [
+    "lib/*.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "vendor/plugin-im-core"
+  },
+  "bugs": {
+    "url": "https://github.com/satorijs/satori/issues"
+  },
+  "homepage": "https://satori.chat/",
+  "keywords": [
+    "satori",
+    "element",
+    "message",
+    "utilities",
+    "cordis"
+  ],
+  "cordis": {
+    "ecosystem": {
+      "name": "im",
+      "pattern": [
+        "@deepseek-ai/cordis-plugin-im-*"
+      ]
+    },
+    "service": {
+      "implements": [
+        "satori"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis-plugin-http": "workspace:~"
+  },
+  "dependencies": {
+    "@deepseek-ai/satori-element": "workspace:~",
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cosmokit": "workspace:~",
+    "path-to-regexp": "^8.3.0",
+    "path-to-regexp-typed": "^8.0.0",
+    "@deepseek-ai/schemastery": "workspace:~"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./testing": {
+      "types": "./lib/types/testing.d.ts",
+      "default": "./lib/testing.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  }
+}

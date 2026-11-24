@@ -37,6 +37,8 @@ const windowsUnsupportedPackages = process.platform === 'win32'
       'packages/experimental/hooks-codex',
       'packages/terminal/terminal-bash',
       'packages/sandbox/sandbox-local',
+      // Registers nothing on Windows, whose process confinement ignores additional writable directories.
+      'packages/experimental/sandbox-policy-git',
       // OpenSSH multiplexing and Unix-socket helper streams require POSIX endpoints.
       'packages/ssh/*',
     ]
@@ -139,6 +141,10 @@ const pwshCoverageExclusions = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProf
 
 const testIncludes = [
   'packages/*/*/tests/**/*.spec.{ts,tsx}',
+  // Vendor packages carry their own suites (conformance, goldens, decode
+  // fixtures). They are deliberately outside the coverage gate: coverage
+  // measures `packages/*/*/src`, so nothing here is instrumented or thresholded.
+  'vendor/*/tests/**/*.spec.{ts,tsx}',
   'apps/*/tests/**/*.spec.{ts,tsx}',
   'scripts/**/*.spec.ts',
   'website/tests/**/*.spec.ts',

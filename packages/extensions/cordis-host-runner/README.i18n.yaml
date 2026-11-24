@@ -9,17 +9,20 @@
   en: ac416c2eb5e0a00f
   zh: 924964cf4466b874
 /deepseek-ai-dsh-cordis-host-runner/summary:
-  en: 8ff708e868c265c4
-  zh: 9b727e6b7a15fa64
+  en: 932a68b9368c7a4c
+  zh: 08ae87b564c6f40d
 /deepseek-ai-dsh-cordis-host-runner/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-cordis-host-runner/use-this-package:
-  en: bdaba8036acf80c9
-  zh: 2dd8f972c3023a8a
+  en: a52faa043c3b253f
+  zh: adf53bb005915e18
 /deepseek-ai-dsh-cordis-host-runner/use-this-package/minimal-configuration:
-  en: ca844fa88b307274
-  zh: da2032bfe3c1b792
+  en: 6ec0ef172b567509
+  zh: 0708a227548ac09c
+/deepseek-ai-dsh-cordis-host-runner/use-this-package/host-inspect-providers:
+  en: d96219123f4e1d1e
+  zh: 5ff3743edf9ab9e6
 /deepseek-ai-dsh-cordis-host-runner/use-this-package/client-inspection:
   en: 020438ac524974b4
   zh: 9f073882a68df78c
@@ -39,14 +42,14 @@
   en: 2193b1c446b388fc
   zh: 6173e0e3e2df6812
 /deepseek-ai-dsh-cordis-host-runner/understand-the-implementation/source-map:
-  en: f567eacc1072b96c
-  zh: 7f50499d9740f802
+  en: 74b58af9244c13f3
+  zh: 2308bb25beb303ce
 /deepseek-ai-dsh-cordis-host-runner/understand-the-implementation/how-a-run-flows:
   en: 40d63d9a75d233e6
   zh: 96954bf346c6d9e6
 /deepseek-ai-dsh-cordis-host-runner/further-exploration:
-  en: 86c7f132478aa682
-  zh: 4c0729a12b8e5b66
+  en: 9e0336f0ce64a122
+  zh: 354df24d5938e77b
 /deepseek-ai-dsh-cordis-host-runner/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -54,8 +57,8 @@
   en: f53130bb645f50df
   zh: 603361c566527789
 /deepseek-ai-dsh-cordis-host-runner/model-experience/run-outcomes-refusals-and-diagnostics-relayed-to-the-owning-session/what-the-model-sees:
-  en: 743dbef78fa3a8ad
-  zh: 2aa4e404e908cf22
+  en: b9414b3873d6b29c
+  zh: e83f4b2b8e3f27d4
 /deepseek-ai-dsh-cordis-host-runner/model-experience/run-outcomes-refusals-and-diagnostics-relayed-to-the-owning-session/token-effect:
   en: c7ef63dd8179a97e
   zh: e66545088d00956a
@@ -63,8 +66,8 @@
   en: bbc4338c3035757a
   zh: f51f4848786d5606
 /deepseek-ai-dsh-cordis-host-runner/known-limitations-and-deferred-work:
-  en: 1f10688ae249a077
-  zh: ab2ff597e1769b81
+  en: d6a71409b13abe23
+  zh: 67102759635dea31
 /deepseek-ai-dsh-cordis-host-runner/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -24,6 +24,7 @@ import type * as Md from 'mdast'
 import type {} from 'mdast-util-math'
 import { normalizeUri } from 'micromark-util-sanitize-uri'
 import type { CodeToolbarLabels } from '../CodeToolbar.tsx'
+import { changeRequestReference, type ChangeRequestReference } from './change-request-link.ts'
 import { FenceCodeBlock, FenceMathBlock } from './FenceBlocks.tsx'
 import { isExplicitFilePath, parseFileLink } from './file-link.ts'
 import { renderTexToReact } from './katex.tsx'
@@ -392,7 +393,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     case 'link':
       return renderAnchor(
         node.url, renderChildren(node.children, { ...context, inLink: true }), key,
-        !anchorWrapsOnlyImages(node.children), context.streaming,
+        !anchorWrapsOnlyImages(node.children), context.streaming, linkText(node.children),
       )
     case 'linkReference':
       return renderLinkReference(node, key, context)
@@ -592,16 +593,21 @@ function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
   return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
 }
 
-/** Anchor over a safe absolute href, with optional owner navigation for HTTP(S). */
-function renderSafeLink(href: string, children: ReactNode[], key: Key, glyph = true): ReactNode {
+/**
+ * Anchor over a safe absolute href, with optional owner navigation for HTTP(S). A settled link whose `text` spells a
+ * change request's overview URL draws as its reference, with the URL as its title.
+ */
+function renderSafeLink(href: string, children: ReactNode[], key: Key, glyph = true, text?: string): ReactNode {
   const safeHref = sanitizeUrl(href)
   if (safeHref === '') return <Fragment key={key}>{children}</Fragment>
-  return <MarkdownAnchor key={key} href={safeHref} glyph={glyph}>{children}</MarkdownAnchor>
+  const reference = text === undefined ? undefined : changeRequestReference(safeHref, text)
+  return <MarkdownAnchor key={key} href={safeHref} glyph={glyph} reference={reference}>{children}</MarkdownAnchor>
 }
 
-function MarkdownAnchor({ href, glyph, children }: {
+function MarkdownAnchor({ href, glyph, reference, children }: {
   readonly href: string
   readonly glyph: boolean
+  readonly reference: ChangeRequestReference | undefined
   readonly children: ReactNode[]
 }): ReactNode {
   const { openExternalLink, getTriggerProps } = useMarkdownDelegate()
@@ -612,6 +618,7 @@ function MarkdownAnchor({ href, glyph, children }: {
       href={href}
       {...external ? getTriggerProps?.({ kind: 'url', url: href }) : {}}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      title={reference === undefined ? undefined : href}
       onClick={open === undefined ? undefined : (event) => {
         if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         event.preventDefault()
@@ -619,19 +626,38 @@ function MarkdownAnchor({ href, glyph, children }: {
       }}
     >
       {glyph && <LinkIconMedium kind="url" href={href} className={css.linkIcon} />}
-      {children}
+      {reference === undefined
+        ? children
+        : <><span className={css.changeRequestRepository}>{reference.repository}</span>{reference.number}</>}
     </a>
   )
 }
 
-/** Local destinations use the scoped file delegate after settlement. */
-function renderAnchor(url: string, children: ReactNode[], key: Key, glyph = true, streaming = false): ReactNode {
+/**
+ * Local destinations use the scoped file delegate after settlement; a settled external link passes its plain `text`
+ * so a change request link written as its own URL can draw as a reference.
+ */
+function renderAnchor(url: string, children: ReactNode[], key: Key, glyph = true, streaming = false, text?: string): ReactNode {
   const file = parseFileLink(url)
   if (file !== undefined) {
     if (streaming) return <Fragment key={key}>{children}</Fragment>
     return <MarkdownFileLink key={key} file={file} glyph={glyph}>{children}</MarkdownFileLink>
   }
-  return renderSafeLink(normalizeUri(url), children, key, glyph)
+  return renderSafeLink(normalizeUri(url), children, key, glyph, streaming ? undefined : text)
+}
+
+/**
+ * The text of a link whose content is plain text.
+ * @param nodes - The link's phrasing content.
+ * @returns The text, or undefined when the content holds anything else, such as code, emphasis, or an image.
+ */
+function linkText(nodes: readonly Md.PhrasingContent[]): string | undefined {
+  let text = ''
+  for (const node of nodes) {
+    if (node.type !== 'text') return undefined
+    text += node.value
+  }
+  return text
 }
 
 function MarkdownFileLink({ file, glyph, children }: {
@@ -757,7 +783,9 @@ function renderLinkReference(
     return <Fragment key={key}>{'['}{renderChildren(node.children, context)}{referenceSuffix(node)}</Fragment>
   }
   const rendered = renderChildren(node.children, { ...context, inLink: true })
-  return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming)
+  return renderAnchor(
+    definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming, linkText(node.children),
+  )
 }
 
 function renderImageReference(

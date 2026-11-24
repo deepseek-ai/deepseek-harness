@@ -29,6 +29,9 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
   const invocation = parseDshArgs(process.argv.slice(2), version, manageDesktopProfile)
 
   switch (invocation.mode) {
+    case 'exit':
+      process.exitCode = invocation.exitCode
+      return
     case 'profile': {
       const { runProfile } = await import('./profile-boot.ts')
       try {
@@ -49,7 +52,7 @@ export async function runCli(options: RunCliOptions = {}): Promise<void> {
     }
     case 'plugin': {
       const { runPlugin } = await import('./plugin.ts')
-      process.exit(await runPlugin(invocation.profile, invocation.args, options.packageManager))
+      process.exitCode = await runPlugin(invocation.profile, invocation.args, options.packageManager)
       break
     }
     case 'dump-config': {

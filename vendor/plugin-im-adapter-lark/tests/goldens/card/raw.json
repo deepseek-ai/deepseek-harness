@@ -1,0 +1,37 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "etrlkfl7fv6z3ysx",
+              "content": "raw fallback text",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [
+      {
+        "tag": "raw",
+        "via": "p",
+        "path": "message/raw[0]"
+      }
+    ],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

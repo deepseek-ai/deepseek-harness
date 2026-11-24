@@ -1,10 +1,8 @@
 /** The WeCom authorization section the Plugins page shows for each Host view. */
 import type { CliAccountText } from '@deepseek-ai/dsh-cli-account/types'
 import type {
-  ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure, ConnectorAccountNote,
-  ConnectorAccountOperation,
+  ConnectorAccountButton, ConnectorAccountCopy, ConnectorAccountDisplay, ConnectorAccountFailure, ConnectorAccountOperation,
 } from '@deepseek-ai/dsh-client-ui-connector-account/types'
-import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { WecomTextKey } from './locales.ts'
 import type { WecomOperationKind, WecomState } from './types.ts'
@@ -44,24 +42,15 @@ const CHECK = { kind: 'start', operation: 'check' } as const
 const CONNECT = { kind: 'start', operation: 'connect' } as const
 /* jscpd:ignore-end */
 
-/* jscpd:ignore-start -- CLI app plugins whose guides download report the same states, each in its own text. */
-/** The row that reports guides that are not in place yet; a failed download offers a check, which restarts it. */
-function skillsNotes(skills: UpstreamSkillsState, text: Text): ConnectorAccountNote[] {
-  switch (skills) {
-    case 'installed': return []
-    case 'downloading': return [{ text: text('skills.downloading') }]
-    case 'failed': return [{ text: text('skills.failed'), button: { label: text('action.retry'), command: CHECK } }]
-    /* v8 ignore next -- closed skills state union */
-    default: return assertNever(skills)
-  }
+function cancelButton(text: Text): ConnectorAccountButton {
+  return { label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' }
 }
-/* jscpd:ignore-end */
 
 /** The bound bot's QR-code page and the operation's cancel, while an authorization runs. */
 function connectingButtons(operation: NonNullable<WecomState['operation']>, text: Text): ConnectorAccountButton[] {
   const buttons: ConnectorAccountButton[] = []
   if (operation.authorizationUrl !== undefined) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
-  if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
+  if (operation.cancellable) buttons.push(cancelButton(text))
   return buttons
 }
 
@@ -69,34 +58,40 @@ function connectingButtons(operation: NonNullable<WecomState['operation']>, text
  * The authorization section for one Host view.
  * @param view - the authorization, the operation in progress, and the last result.
  * @param text - writes a key of the WeCom text in every shipped language.
- * @returns the phase, status, tag, buttons, detail, bound-bot and guide download rows, and failure guidance.
+ * @returns the phase, status, tag, buttons, detail, bound-bot row, and failure guidance.
  */
 export function presentAccount(view: WecomState, text: Text): ConnectorAccountDisplay {
-  const notes = skillsNotes(view.account.skills, text)
   const { operation } = view
-  if (operation?.kind === 'check') return { phase: 'checking', status: text('status.checking'), buttons: [], notes }
+  /* jscpd:ignore-start -- CLI app plugins whose check waits for a download show a running check alike, each with its own text. */
+  if (operation?.kind === 'check') {
+    return {
+      phase: 'checking', status: text(operation.phase === 'downloading' ? 'step.downloading' : 'status.checking'),
+      buttons: operation.cancellable ? [cancelButton(text)] : [], notes: [],
+    }
+  }
+  /* jscpd:ignore-end */
   if (operation !== undefined) {
     return {
       phase: 'connecting', status: text(operation.phase === 'authorizing' ? 'step.authorizing' : 'step.connecting'),
-      badge: text('badge.connecting'), buttons: connectingButtons(operation, text), notes,
+      badge: text('badge.connecting'), buttons: connectingButtons(operation, text), notes: [],
       ...operation.authorizationUrl === undefined ? {} : { detail: text('detail.authorizing') },
     }
   }
   const failed = view.result?.outcome === 'failed'
   // The Service adds the failed command and its exit code.
   const failure: { failure?: ConnectorAccountFailure } = failed ? { failure: { text: text('failed') } } : {}
+  const unavailable = (missing: boolean): ConnectorAccountDisplay => ({
+    phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
+    buttons: [{ label: text('action.retry'), command: CHECK }], detail: text(missing ? 'detail.missing' : 'detail.unavailable'), notes: [], ...failure,
+  })
   switch (view.account.state) {
-    case 'unchecked':
-      if (!failed) return { phase: 'checking', status: text('status.checking'), buttons: [], notes }
-      return {
-        phase: 'unavailable', status: text('status.unavailable'), badge: text('badge.unavailable'),
-        buttons: [{ label: text('action.retry'), command: CHECK }], detail: text('detail.unavailable'), notes, ...failure,
-      }
+    case 'unchecked': return failed ? unavailable(false) : { phase: 'checking', status: text('status.checking'), buttons: [], notes: [] }
+    case 'not-installed': return unavailable(true)
     case 'unauthorized':
       return {
         phase: 'disconnected', status: text('status.disconnected'), badge: text('badge.disconnected'),
         buttons: [{ label: text('action.connect'), command: CONNECT, variant: 'primary' }], connect: CONNECT,
-        detail: text('detail.disconnected'), notes, ...failure,
+        detail: text('detail.disconnected'), notes: [], ...failure,
       }
     case 'authorized':
       return {
@@ -107,7 +102,7 @@ export function presentAccount(view: WecomState, text: Text): ConnectorAccountDi
           confirm: { title: text('rebind.title'), body: text('rebind.body'), label: text('action.rebind') },
         }],
         detail: text('detail.connected'),
-        notes: [...view.account.botId === undefined ? [] : [{ text: text('bot.bound', { id: view.account.botId }) }], ...notes],
+        notes: view.account.botId === undefined ? [] : [{ text: text('bot.bound', { id: view.account.botId }) }],
         ...failure,
       }
     /* v8 ignore next -- closed account state union */

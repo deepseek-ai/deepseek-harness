@@ -63,7 +63,7 @@ kind: "package-bundle"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 本 Bundle 只服务 github.com 和 gitlab.com；GitHub Enterprise 或自建 GitLab 主机需要用 profile patch 把它列入 `forge-github` 行的 [`hosts`](../forge-github/README.zh.md#use-this-package) 或 `forge-gitlab` 行的 [`hosts`](../forge-gitlab/README.zh.md#use-this-package)。没有提供方识别其他代码托管平台。
+- 在添加其他主机之前，本 Bundle 只服务 github.com 和 gitlab.com：插件页上本 Bundle 的 GitHub 行或 GitLab 行的页面可以添加 GitHub Enterprise 或自建 GitLab 主机，并把它写入 profile patch 中 `forge-github` 行的 [`hosts`](../forge-github/README.zh.md#use-this-package) 或 `forge-gitlab` 行的 [`hosts`](../forge-gitlab/README.zh.md#use-this-package)。没有提供方识别其他代码托管平台。
 - 模型目前还没有读取已绑定变更请求的工具。
 
 -----

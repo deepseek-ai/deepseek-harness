@@ -351,7 +351,7 @@ describe('the shipped Web composition', () => {
       // excluded for the reason the TUI composition e2e excludes them — they
       // depend on ripgrep being present on the machine.
       expect(toolNames(ctx, handle.agent).filter(name => name !== 'glob' && name !== 'grep')).toEqual([
-        'ask_user_question', 'bash', 'cordis_inspect', 'create_goal', 'edit', 'exit_plan_mode',
+        'apply_patch', 'ask_user_question', 'bash', 'cordis_inspect', 'create_goal', 'edit', 'exit_plan_mode',
         'get_goal', 'job_kill', 'job_list', 'job_output', 'list_agents', 'list_subagent_models', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'present', 'read', 'read_image',
         'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
         'send_message', 'skill',
@@ -707,6 +707,7 @@ describe('the shipped Web composition', () => {
         expect(cordisPersona).toEqual(standardPersona.map(section => section.name === 'deployment:persona-prefix'
           ? { ...section, text: `${section.text} You help the user customize DeepSeek Harness itself.` }
           : section))
+        expect(toolNames(ctx, handle.agent)).toContain('apply_patch')
         const definition = composeEntries([webPatches('Creator persona')])
           .find(row => row.id === 'preset-cordis')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
         const unregister = await ctx.agentPresets.register({
@@ -753,6 +754,8 @@ describe('the shipped Web composition', () => {
       const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
       expect(sdk).not.toContain('str_replace_editor')
       expect(sdk).toContain('web_search')
+      expect(toolNames(ctx, coded.agent)).toContain('apply_patch')
+      expect(sdk).toContain('apply_patch')
       // Like `standard`, PTC manages plugins when the Host provides an editable profile.
       expect(toolNames(ctx, coded.agent)).toContain('plugin_manager')
       expect(sdk).toContain('plugin_manager')
@@ -811,7 +814,7 @@ describe('the shipped Web composition', () => {
       // The host (global) view carries the deployment-level providers alone:
       // local discovery moved behind the presets with `skill-filesystem`.
       expect((await ctx.skills.list({ cwd: proj })).map(skill => skill.name)).toEqual([
-        'dsh-badge', 'office', 'office-docx', 'office-pptx', 'office-xlsx', 'official-plugins', 'personalized-pages',
+        'dsh-badge', 'office', 'official-plugins', 'personalized-pages',
       ])
 
       // The standard agent's view merges the global layer with its preset's
@@ -1143,10 +1146,11 @@ describe('a user preset declared from the shipped cordis rows', () => {
   }
 
   it('mounts beside the shipped `cordis` preset and reads the shared Host inspect providers', async () => {
-    // The Host inspect providers are one process-global set registered by the
-    // host composition (`@deepseek-ai/dsh-tool-cordis/host`); each preset's
-    // `tool-cordis` row only registers the tools. Before that split the copy
-    // failed to mount: its row re-registered provider "Service".
+    // The Host inspect providers are one process-global set that the host
+    // composition's `cordis-host-runner` row registers; each preset's
+    // `tool-cordis` row only registers the tools. The registry rejects a
+    // duplicate provider id, so a preset row that registered providers would
+    // fail to mount beside another preset.
     const root = await mkdtemp(join(tmpdir(), 'dsh-copied-preset-'))
     const cordis = composeEntries([webPatches('test')]).find(row => row.id === 'preset-cordis')!.config as import('@deepseek-ai/dsh-agent-preset-registry').PresetDefinition
     const copyCtx = await bootWeb(root, [{ insert: [{

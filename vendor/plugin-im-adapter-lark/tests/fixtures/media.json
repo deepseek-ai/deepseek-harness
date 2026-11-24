@@ -1,0 +1,26 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_media",
+    "app_id": "cli_lark",
+    "create_time": "1700000020000"
+  },
+  "event": {
+    "sender": {
+      "sender_id": {
+        "open_id": "ou_user"
+      },
+      "sender_type": "user",
+      "tenant_key": "t1"
+    },
+    "message": {
+      "message_id": "om_media",
+      "chat_id": "oc_chat",
+      "chat_type": "group",
+      "message_type": "media",
+      "create_time": "1700000020000",
+      "content": "{\"file_key\":\"file_v2_clip\",\"image_key\":\"img_v2_poster\",\"duration\":4200,\"file_name\":\"clip.mp4\"}"
+    }
+  }
+}

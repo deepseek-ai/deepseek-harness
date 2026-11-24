@@ -498,6 +498,8 @@ async function seedWorkspace(scenario: HeadlessScenario, cwd: string): Promise<v
 
 const WORKTREE_CHECKOUT_FILTER = "printf 'FILTERED CHECKOUT CONTENT\\n'"
 const WORKTREE_CHECKOUT_ATTRIBUTES = 'tracked.txt filter=dsh-snapshot-checkout\n'
+/** The `.git` file of a checkout in the default worktree pool. */
+const WORKTREE_GIT_POINTER = /^\.agents\/worktrees\/[^/]+\/\.git$/
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
   async 'readonly-patch-directory'(cwd) {
@@ -948,6 +950,15 @@ async function verifyWorktree(log: string, cwd: string): Promise<void> {
   ])
 }
 
+/** Verify in Git that the Session's commit landed on the worktree's branch and left the source checkout's branch where it was. */
+function verifyWorktreeCommit(cwd: string): void {
+  const checkout = join(cwd, '.agents', 'worktrees', 'committing')
+  expect(snapshotGit(checkout, ['log', '-1', '--format=%s'])).toBe('Add note')
+  expect(snapshotGit(cwd, ['show', '--format=', '--name-only', 'refs/heads/committing'])).toBe('note.txt')
+  expect(snapshotGit(cwd, ['rev-parse', 'refs/heads/committing~1'])).toBe(snapshotGit(cwd, ['rev-parse', 'refs/heads/main']))
+  expect(snapshotGit(checkout, ['status', '--porcelain=v1'])).toBe('')
+}
+
 /** Exercise provider-cwd adoption through the shipped launcher without normalizing away the observation. */
 async function verifyProviderCwdResume(
   scenario: HeadlessScenario,
@@ -1049,10 +1060,11 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   for (const [logIndex, log] of actualLogs.entries()) {
     const headers = normalizedHeaders(log.content, ctx)
     const prompts = normalizedSystemPrompts(log.content, ctx)
+    const promptChanges = scenario.manifest.header.promptChanges ?? pin.manifest.header.promptChanges ?? 0
     if (headers.length > 0) {
       expect(systemPromptPrecedesRequests(log.content), `${scenario.name}: a system/message precedes the first request/header`).toBe(true)
       expect(prompts.length, `${scenario.name}: system/message count`)
-        .toBe(1 + (logIndex === 0 ? pin.manifest.header.promptChanges ?? 0 : 0))
+        .toBe(1 + (logIndex === 0 ? promptChanges : 0))
     }
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
@@ -1064,9 +1076,21 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
       expect(
         formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
         `${scenario.name}: system prompts`,
-      ).toBe(childPrompts.get(logIndex) ?? prompt)
+      ).toBe(childPrompts.get(logIndex) ?? leadingPromptSections(prompt, logIndex === 0 ? promptChanges : 0))
     }
   }
+}
+
+/**
+ * Keep the pinned prompt sidecar through change `changes`; a scenario that declares fewer prompt changes than its pin
+ * compares against that leading part.
+ * @param prompt - complete pinned prompt sidecar.
+ * @param changes - prompt changes the scenario declares.
+ * @returns the sidecar text before change `changes + 1`.
+ */
+function leadingPromptSections(prompt: string, changes: number): string {
+  const end = prompt.indexOf(`\n<!-- system/message change ${changes + 1} -->`)
+  return end < 0 ? prompt : prompt.slice(0, end)
 }
 
 describe('headless recorded-session snapshots', () => {
@@ -1569,9 +1593,9 @@ describe('headless recorded-session snapshots', () => {
                   type: 'text', text: expect.stringMatching(/^Error: cannot render ".+[\\/]report\.docx": model "deepseek-v4-flash" does not accept images$/u),
                 }])
               }
-              expect(results).toHaveLength(2)
+              expect(results).toHaveLength(1)
               expect(results.every(result => result.isError === false)).toBe(true)
-              expect(log).toContain('# Office task routing')
+              expect(log).toContain('# Office tasks')
             }
             if (scenario.name === 'complete-prompt-in-history') {
               const events = parseSessionLog(actualLogs[0]!.content)
@@ -1624,12 +1648,13 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name === 'worktree') {
               await verifyWorktree(actualLogs[0]!.content, await realpath(cwd))
             }
+            if (scenario.name === 'worktree-commit') verifyWorktreeCommit(await realpath(cwd))
             finalWorkspace = await captureWorkspaceSnapshot(cwd, {
               ignoredRootEntries: ignoredWorkspaceEntries,
             })
-            if (scenario.name === 'worktree') {
-              // The linked checkout's .git pointer contains the temporary source path; Git assertions verify it separately.
-              finalWorkspace = finalWorkspace.filter(entry => entry.path !== '.agents/worktrees/isolated/.git')
+            if (scenario.manifest.workspace?.setup === 'git-worktree') {
+              // A linked checkout's .git pointer contains the temporary source path; Git assertions verify it separately.
+              finalWorkspace = finalWorkspace.filter(entry => !WORKTREE_GIT_POINTER.test(entry.path))
             }
           },
         })

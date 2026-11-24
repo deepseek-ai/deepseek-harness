@@ -5,7 +5,7 @@ namespace DeepSeek.Cua.Protocol;
 
 public enum NativeControl { Close, Cancel, CompletedCancel }
 
-/// <summary>Cancellation matches the latest request; a late cancellation after its completion is a no-op.</summary>
+/// <summary>Cancellation identifies the latest request, including a completed request whose reply the client discarded.</summary>
 public static class NativeControlFrame
 {
     public static NativeControl Parse(JsonElement value, string? requestId, bool completed = false)

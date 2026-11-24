@@ -284,8 +284,6 @@ def write_advanced_profile_patch(
         },
         {"insert": [
             {"id": "ptc-runtime", "name": "@deepseek-ai/dsh-ptc-runtime-node"},
-            {"id": "cordis-host-runner", "name": "@deepseek-ai/dsh-cordis-host-runner"},
-            {"id": "cordis-tool", "name": "@deepseek-ai/dsh-tool-cordis"},
         ]},
     ])
 
@@ -972,9 +970,9 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
             root = Path(temporary).resolve()
             home = root / "home"
             if mode == "replacement":
-                skill = home / "skills/office-docx/SKILL.md"
+                skill = home / "skills/office/SKILL.md"
                 skill.parent.mkdir(parents=True)
-                skill.write_text("---\nname: office-docx\ndescription: CUSTOM_OFFICE_DOCX\n---\nUse the bundled Python for custom document work.\n")
+                skill.write_text("---\nname: office\ndescription: CUSTOM_OFFICE\n---\nUse the bundled Python for custom document work.\n")
             patch = root / "skills.patch.yml"
             # Fix the model-visible clock in this child only; native timers stay live.
             patch_rows = [
@@ -1000,9 +998,9 @@ def _smoke_sdk_authoring_cached(base_url: str, executable: Path, update_snapshot
             assert len(requests) == 2, requests
             prompt = json.dumps(requests[0], ensure_ascii=False)
             assert ("- `office`:" in prompt) == (mode != "disabled"), mode
-            for name in ("office-docx", "office-pptx", "office-xlsx"):
-                assert (name in prompt) == (mode != "disabled"), (mode, name)
-            assert ("CUSTOM_OFFICE_DOCX" in prompt) == (mode == "replacement"), mode
+            assert not re.search(r"office-(?:docx|pptx|xlsx)", prompt), mode
+            assert ("Word, PowerPoint, and Excel" in prompt) == (mode == "default"), mode
+            assert ("CUSTOM_OFFICE" in prompt) == (mode == "replacement"), mode
             tool_result = next(block for message in requests[1]["messages"]
                                for block in message.get("content", [])
                                if isinstance(block, dict) and block.get("tool_use_id") == "authoring-runtime")
@@ -1526,7 +1524,6 @@ def smoke_sdk_dynamic_tools(base_url: str, executable: Path, update_snapshots: b
         task = root / "dynamic-tool-task.txt"
         task.write_text("Call snapshot_ping once.\n", encoding="utf-8")
         patch = write_profile_patch(root, "dynamic-tools.patch.yml", sessions, [
-            {"id": "tool-fs", "config": {"applyPatch": True}},
             {"id": "llm-deepseek", "config": {"models": [
                 {"id": "smoke-model", "toolUpdate": "addition-only"},
             ]}},

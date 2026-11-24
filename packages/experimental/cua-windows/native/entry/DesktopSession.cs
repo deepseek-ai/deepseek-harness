@@ -39,7 +39,7 @@ internal static class DesktopSession
             platform = "windows", sessionLocked = Locked(),
             captureAvailable,
             elevated = new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator),
-            helper = new { pid = 4, path = Environment.ProcessPath, name = "dsh-cua-windows" },
+            helper = new { path = Environment.ProcessPath, name = "dsh-cua-windows" },
         };
     }
 }

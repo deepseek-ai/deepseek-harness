@@ -24,6 +24,43 @@ export interface ConversationPromptSnapshot {
   system: string
   /** Complete tool catalog sent with the request, including tools that were never called. */
   tools: readonly ToolSchema[]
+  /**
+   * Instructions in force per source, derived from the retained system messages;
+   * absent when a retained message lacks section metadata.
+   */
+  sections?: readonly EffectiveSystemSection[]
+}
+
+/** One source's instructions in force at a log position. */
+export interface EffectiveSystemSection {
+  /** Registration name of the source. */
+  name: string
+  /** Prompt order; name order breaks ties. */
+  order: number
+  /** Latest admitted text; empty when the source withdrew its guidance but stays registered. */
+  text: string
+}
+
+/** One source's part of a single system message, classified against the instructions in force before it. */
+export interface SystemSectionChange {
+  /** Registration name of the source. */
+  name: string
+  /** `cleared` updates the text to empty; `removed` retires the source; `unchanged` restates identical text. */
+  change: 'added' | 'updated' | 'cleared' | 'reordered' | 'removed' | 'unchanged'
+  /** Text this message carries for the source; empty for `cleared` and `removed`. */
+  text: string
+  /** Replacement or retirement notices this message associates with the source. */
+  notices: readonly string[]
+}
+
+/** Section-attributed reading of one system message, in the order the model read its blocks. */
+export interface SystemMessageSections {
+  /** One entry per source the message names. */
+  changes: readonly SystemSectionChange[]
+  /** Nonempty text blocks that no source record references, such as whole-prompt supersession notices. */
+  notices: readonly string[]
+  /** True when the message supersedes every previously admitted source. */
+  reset: boolean
 }
 
 /** Effective prompt or introduced system node, anchored at the event that establishes it. */
@@ -44,6 +81,18 @@ export interface SystemPromptNode {
    * was committed rather than by the next request header.
    */
   update: boolean
+  /**
+   * True when a positional replacement, such as compaction or a rebuilt system head, established this
+   * effective prompt; the model reads the rebuilt history instead of an appended update.
+   */
+  rebuilt?: true
+  /**
+   * Instructions in force per source at this prompt, or after the message for a node a message introduces;
+   * absent when a retained nonempty message lacks section metadata.
+   */
+  sections?: readonly EffectiveSystemSection[]
+  /** Per-source reading of an in-history update that carries section metadata, against the instructions in force before it. */
+  message?: SystemMessageSections
 }
 
 /** System/tool change introduced while preparing one ordinary request, or by an in-history prompt update. */
@@ -60,6 +109,10 @@ export interface RequestPromptChange {
   kind: 'initial' | 'system' | 'tools' | 'system-and-tools'
   /** State immediately before this change; absent for the initial header. */
   previous?: ConversationPromptSnapshot
+  /** True when the system part of this change was rebuilt by a positional replacement rather than appended. */
+  rebuilt?: true
+  /** Per-source reading of the in-history update that introduced this change, when it carries section metadata. */
+  message?: SystemMessageSections
 }
 
 /** Canonical prompt snapshot and any model-visible change introduced by one request header. */
@@ -101,6 +154,7 @@ export function inspectRequestPrompt(
     config: header.config,
     system: system?.text ?? '',
     tools: Array.isArray(rawTools) ? rawTools as readonly ToolSchema[] : [],
+    ...(system?.sections === undefined ? {} : { sections: system.sections }),
   }
   if (previous === undefined && event.data.reason !== 'initial') return { prompt }
   const systemChanged = previous !== undefined && previous.system !== prompt.system && system?.update !== true
@@ -119,6 +173,7 @@ export function inspectRequestPrompt(
           ? 'system-and-tools'
           : systemChanged ? 'system' : 'tools',
       ...(previous === undefined ? {} : { previous }),
+      ...(origin === system && system.rebuilt === true ? { rebuilt: true } : {}),
     },
   }
 }

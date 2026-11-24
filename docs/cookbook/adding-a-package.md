@@ -41,7 +41,7 @@ Covered automatically by globs or package-manifest discovery — no edits needed
 
 ## 3. Decide the package topology
 
-For a swappable capability, separate Service Definition / Service Provider / Consumer roles into packages when they evolve independently (see docs/architecture.md § "Capability seams" — the shell trio is the template). A single-purpose plugin stays one package.
+For a swappable capability, separate Service Definition / Service Provider / Consumer roles into packages when they evolve independently (see the "Capability seams" section of [architecture.md](../architecture.md) — the shell trio is the template). A single-purpose plugin stays one package.
 
 ### Name the role that exists
 

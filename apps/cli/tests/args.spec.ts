@@ -3,16 +3,18 @@ import { parseDshArgs } from '../src/args.ts'
 
 const parse = (argv: string[], manageDesktopProfile = false) => parseDshArgs(argv, '1.2.3', manageDesktopProfile)
 
-/** Capture the process exit code while muting Commander's output. */
+/** Return the requested exit code while muting Commander's output and rejecting `process.exit`. */
 function exitCode(argv: string[], manageDesktopProfile = false): number {
-  const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit') })
+  const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('unexpected process.exit') })
   vi.spyOn(process.stdout, 'write').mockReturnValue(true)
   vi.spyOn(process.stderr, 'write').mockReturnValue(true)
   try {
-    parse(argv, manageDesktopProfile)
-    throw new Error(`expected ${JSON.stringify(argv)} to exit`)
-  } catch {
-    return exit.mock.calls.at(-1)?.[0] as number
+    const invocation = parse(argv, manageDesktopProfile)
+    expect(exit).not.toHaveBeenCalled()
+    if (invocation.mode !== 'exit') {
+      throw new Error(`expected ${JSON.stringify(argv)} to return mode "exit", got ${JSON.stringify(invocation)}`)
+    }
+    return invocation.exitCode
   } finally {
     vi.restoreAllMocks()
   }
@@ -89,8 +91,15 @@ describe('parseDshArgs', () => {
     expect(exitCode(argv)).toBe(1)
   })
 
-  it.each(['-V', '--version'])('prints the launcher version for shorthand %s', (flag) => {
-    expect(exitCode(['custom', flag])).toBe(0)
+  it.each(['-V', '--version'])('prints the launcher version and returns exit 0 for %s', (flag) => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('unexpected process.exit') })
+    for (const argv of [[flag], ['custom', flag], ['--profile', 'sdk', '--dump-default-config', flag]]) {
+      stdout.mockClear()
+      expect(parse(argv)).toEqual({ mode: 'exit', exitCode: 0 })
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe('1.2.3\n')
+    }
+    expect(exit).not.toHaveBeenCalled()
     expect(parse(['custom', 'task', flag])).toMatchObject({ args: ['task', flag] })
   })
 
@@ -252,6 +261,5 @@ describe('parseDshArgs', () => {
     expect(exitCode(['--help'])).toBe(0)
     expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).not.toContain('help [command]')
     expect(exitCode(['-h'])).toBe(0)
-    expect(exitCode(['--version'])).toBe(0)
   })
 })

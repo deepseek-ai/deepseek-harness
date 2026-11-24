@@ -1,0 +1,22 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.reaction.created_v1",
+    "event_id": "ev_reaction",
+    "app_id": "cli_lark",
+    "create_time": "1700000030000"
+  },
+  "event": {
+    "message_id": "om_text_mentions",
+    "chat_id": "oc_chat",
+    "chat_type": "group",
+    "reaction_type": {
+      "emoji_type": "SMILE"
+    },
+    "operator_type": 2,
+    "user_id": {
+      "open_id": "ou_user"
+    },
+    "action_time": "1700000030000"
+  }
+}

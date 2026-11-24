@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-编写插件代码前查询 Host 和 Client 的运行时 API。标准模式和创造模式同时提供这个只读工具与 Plugin Manager，后者负责持久化 profile 变更。检查注册表由 Cordis host runner 提供；浏览器查询需要已连接的页面。
+编写插件代码前查询 Host 和 Client 的运行时 API。Desktop 标准模式、创造模式和 SDK profile 同时提供这个只读工具与 Plugin Manager，后者负责持久化 profile 变更。检查注册表和 Host provider 由 Cordis host runner 提供；浏览器查询需要已连接的页面。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-标准模式和创造模式包含这个工具。其他组合需要在宿主组合里、提供 `cordisInspect` 的 host runner 旁挂载一次 `@deepseek-ai/dsh-tool-cordis/host`，并在每个要暴露这个工具的 agent preset 里挂载 `@deepseek-ai/dsh-tool-cordis`；仅有 preset 行不会注册任何 Host provider。调用 `cordis_inspect` 时省略 `query` 以发现 provider，再传入包含 `platform`、`provider`、`method` 及可选 `input` 的 `query` 对象，读取 provider 的具体方法和类型。Host 的 `Config` provider 分页列出运行中的 Loader entry（`offset`、最多 100 的 `limit`、可选的精确插件 `name`；`total` 与 `nextOffset` 界定遍历），每个 entry 带 Loader id、patch 所寻址的树内 id 及其 Config 状态（`schema`、`absent`、`unsupported`、group 与 include 载体为 `tree`、禁用、未导入或已销毁的 entry 为 `inactive`），并把单个 entry 的原生 Config 投影为自包含的 JSON Schema 文档，同时在 profile 包查找能解析时给出该 entry 的 `packageDir`，即包 README 与构建产物 `lib/` 所在目录。Host 的 `Runtime` provider 的 `getVersion` 返回 `{ version }`，即插件 `engines.dsh` 范围和 DSH peer 依赖所比对的当前运行 DSH 的精确版本。没有 Agent 的调用，或在没有 Loader 的 Host 上的 `Config` 查询，以 `ToolContextUnavailableError` 失败；`Config` 分页字段格式错误时以 `ToolArgsError` 失败；未知 entry id 以 `InspectError` `INSPECT_TARGET_NOT_FOUND` 失败。通过 [Plugin Manager](../../boot/plugin-manager/README.zh.md) 安装包含插件代码或 MCP 配置的组合包。
+Desktop 标准模式、创造模式和 SDK profile 包含这个工具。其他组合需要在宿主组合里挂载一次 `@deepseek-ai/dsh-cordis-host-runner`，它提供 `cordisInspect` 并注册 [Host provider](../cordis-host-runner/README.zh.md#host-inspect-providers)；再在每个要暴露这个工具的 agent preset 里挂载 `@deepseek-ai/dsh-tool-cordis`。调用 `cordis_inspect` 时省略 `query` 以发现 provider，再传入包含 `platform`、`provider`、`method` 及可选 `input` 的 `query` 对象，读取 provider 的具体方法和类型。没有 Agent 的查询以 `ToolContextUnavailableError` 失败。通过 [Plugin Manager](../../boot/plugin-manager/README.zh.md) 安装包含插件代码或 MCP 配置的组合包。
 
 -----
 
@@ -35,7 +35,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影器投影的运行中 Loader 树、请求 agent 的工具注册表，以及 app-boot 运行时版本。Client provider 通过现有检查注册表同步清单，并从已连接页面回答查询。宿主入口持有 Host provider 的注册，preset 行持有这个工具，都通过 Cordis effect；注册表拒绝重复的 provider id，所以 provider 按进程注册一次而不是按 preset 注册。
+preset 行通过 Cordis effect 注册这个工具，并查询共享的 `cordisInspect` 注册表。注册表拒绝重复的 provider id，所以 Cordis host runner 按进程注册一次 Host provider。Client provider 通过同一注册表同步清单，并从已连接页面回答查询。
 
 </details>
 
@@ -45,7 +45,7 @@ Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影�
 ## 进一步探索
 
 - [Plugin Manager](../../boot/plugin-manager/README.zh.md) — 持久化组合包安装和启停。
-- [Cordis host runner](../cordis-host-runner/README.zh.md) — 检查注册表和现有运行时消费者。
+- [Cordis host runner](../cordis-host-runner/README.zh.md) — 检查注册表、Host provider 和现有运行时消费者。
 
 <a id="model-experience"></a>
 ## 模型体验
@@ -58,7 +58,7 @@ Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影�
 
 #### Token 影响
 
-在随发行版提供的标准模式和创造模式中，此插件向每次模型请求提供一个工具 schema。查询结果追加到转录中；精确查询避免加载无关声明。
+在随发行版提供的 Desktop 标准模式、创造模式和 SDK profile 中，此插件向每次模型请求提供一个工具 schema。查询结果追加到转录中；精确查询避免加载无关声明。
 
 #### KV Cache 影响
 
@@ -69,7 +69,6 @@ Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影�
 <a id="known-limitations-and-deferred-work"></a>
 
 - Client 查询需要页面响应，并采用 Host runner 的[有界等待与重试策略](../cordis-host-runner/README.zh.md#client-inspection)。检查不能调用服务方法、配置插件或执行生成代码。
-- `Config.listConfigs` 只遍历 profile 的 Loader 树。Agent preset 的 `plugins` 列表挂载在独立的 preset 树中，所以只出现在 preset 声明里的插件不会被列出，除非 profile 树也挂载了它。
 
 <a id="dev-note"></a>
 ### 开发备注

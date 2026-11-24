@@ -1,0 +1,15 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.recalled_v1",
+    "event_id": "ev_recalled",
+    "app_id": "cli_lark",
+    "create_time": "1700000035000"
+  },
+  "event": {
+    "chat_id": "oc_chat",
+    "message_id": "om_text_mentions",
+    "recall_time": "1700000035000",
+    "recall_type": "user"
+  }
+}

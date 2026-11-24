@@ -2373,6 +2373,38 @@ describe('built-in conversation node Definitions', () => {
     ])
   })
 
+  it('shows a section-attributed update in Chat order, including one that only retires a source', () => {
+    const sectioned = (seq: number, step: number, content: readonly string[], sections: readonly object[]): SessionLiveEventEntry =>
+      at(seq, 'system/message', { turn: 1, step, message: {
+        ...systemMessage(''), content: content.map(text => ({ type: 'text', text })), source: { kind: 'system-prompt', sections },
+      } }, { surfaceOp: 'append' })
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      sectioned(3, 1, ['plan on'], [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }]),
+      at(4, 'user/message', textMessage('first-user', 'first'), { surfaceOp: 'append' }),
+      at(5, 'step/end', { turn: 1, step: 1 }),
+      at(6, 'step/start', { turn: 1, step: 2 }),
+      sectioned(7, 2, ['plan off'], [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }]),
+      at(8, 'step/end', { turn: 1, step: 2 }),
+      at(9, 'step/start', { turn: 1, step: 3 }),
+      sectioned(10, 3, [], [{ name: 'plan:status', state: 'retired' }]),
+    ])
+
+    const current = snapshot(value)
+    const prompts = current.nodes.values().filter(candidate => candidate.kind === 'system-prompt')
+      .sort((left, right) => left.anchorSeq - right.anchorSeq)
+    expect(prompts.map(candidate => [current.order.includes(candidate.key), candidate.data])).toEqual([
+      [false, { text: 'plan on' }],
+      [true, { text: 'plan off', update: true, message: {
+        reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated', text: 'plan off', notices: [] }],
+      } }],
+      [true, { text: '', update: true, message: {
+        reset: false, notices: [], changes: [{ name: 'plan:status', change: 'removed', text: '', notices: [] }],
+      } }],
+    ])
+  })
+
   it('renders no card for an in-history update that clears the prompt', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

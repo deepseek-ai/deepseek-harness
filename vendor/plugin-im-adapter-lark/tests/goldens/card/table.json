@@ -1,0 +1,31 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "e2s3wzd22sde4yr4",
+              "content": "| Name | Qty |\n| --- | ---: |\n| apple | 3 |\n| banana | 7<br>second paragraph |",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

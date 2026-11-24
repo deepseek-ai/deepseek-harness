@@ -1,0 +1,41 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "\\[Title\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "☑ I agree"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Size: Small / Large\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[选择: Alpha / Beta\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Send\\]"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

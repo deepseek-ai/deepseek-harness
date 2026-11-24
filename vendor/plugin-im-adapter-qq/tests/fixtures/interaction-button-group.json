@@ -1,0 +1,23 @@
+{
+  "op": 0,
+  "s": 3101,
+  "t": "INTERACTION_CREATE",
+  "id": "INTERACTION_CREATE:06915133-7aef-46ed-94f7-c50939e285ae",
+  "d": {
+    "application_id": "101984245",
+    "chat_type": 1,
+    "data": {
+      "resolved": {
+        "button_data": "eyJjb21tYW5kIjogInNhbXBsZSJ9"
+      },
+      "type": 11
+    },
+    "group_member_openid": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4",
+    "group_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+    "id": "06915133-7aef-46ed-94f7-c50939e285ae",
+    "scene": "group",
+    "timestamp": "2026-07-20T21:53:54+08:00",
+    "type": 11,
+    "version": 1
+  }
+}

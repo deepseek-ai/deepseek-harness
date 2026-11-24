@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/cordis",
   "description": "Meta-Framework for Modern JavaScript Applications",
-  "version": "4.1.0",
+  "version": "4.2.0-alpha.1",
   "publishConfig": {
     "access": "public"
   },

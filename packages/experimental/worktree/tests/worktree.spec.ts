@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
-import { join, sep } from 'node:path'
+import { basename, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -294,10 +294,11 @@ describe('creating and entering retained worktrees', () => {
     if (stage === 'preflight') {
       await writeFile(pool, 'retain this file\n')
     } else {
+      // Other services inspect paths during creation too; only the service's check of the new checkout path is hooked.
       const inspect = ctx.fs.lstat.bind(ctx.fs)
-      vi.spyOn(ctx.fs, 'lstat').mockImplementationOnce(async (...args) => {
+      vi.spyOn(ctx.fs, 'lstat').mockImplementation(async (...args) => {
         const found = await inspect(...args)
-        await writeFile(pool, 'retain this file\n')
+        if (basename(args[0]) === 'blocked') await writeFile(pool, 'retain this file\n')
         return found
       })
     }
@@ -317,10 +318,12 @@ describe('creating and entering retained worktrees', () => {
     const baseCommit = await git(root, 'rev-parse', 'HEAD')
     ctx = await harness(root)
     const original = ctx.fs.lstat.bind(ctx.fs)
-    vi.spyOn(ctx.fs, 'lstat').mockImplementationOnce(async (...args) => {
+    vi.spyOn(ctx.fs, 'lstat').mockImplementation(async (...args) => {
       const value = await original(...args)
-      await writeFile(join(root, 'tracked.txt'), 'advanced\n')
-      await git(root, 'commit', '-am', 'advance')
+      if (basename(args[0]) === 'pinned') {
+        await writeFile(join(root, 'tracked.txt'), 'advanced\n')
+        await git(root, 'commit', '-am', 'advance')
+      }
       return value
     })
     const result = await ctx.worktrees.create(testAgent(ctx, root), { name: 'pinned' })

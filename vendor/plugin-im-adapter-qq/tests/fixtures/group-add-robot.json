@@ -1,0 +1,11 @@
+{
+  "op": 0,
+  "s": 3301,
+  "t": "GROUP_ADD_ROBOT",
+  "id": "GROUP_ADD_ROBOT:6f708192a3b4c5d6e7f8091a2b3c4d5e",
+  "d": {
+    "group_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+    "op_member_openid": "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4",
+    "timestamp": 1753063200
+  }
+}

@@ -25,6 +25,7 @@ import type {
   FsPathInfo,
   FsTarget,
   FsWriteIntent,
+  FsWriteBytesOutcome,
   FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
 import {
@@ -244,6 +245,24 @@ export class LocalFileSystem extends FileSystem {
         // overwrite must not read as every line changed. Line-ending restoration
         // is a storage detail the applied-hunk diff ignores.
         after: normalizeLineEndings(content),
+      }
+    })
+  }
+
+  override async writeBytes(
+    target: FsTarget,
+    data: Uint8Array,
+    expected?: FsWriteIntent,
+    signal?: AbortSignal,
+  ): Promise<FsWriteBytesOutcome> {
+    return this.withLock(target.targetKey, async () => {
+      const existing = await this.writeTarget(target, expected)
+      await writeFileAtomic(target.targetKey, data, existing?.mode, signal, this.internals,
+        { displayPath: target.displayPath, createIfAbsent: expected?.kind === 'createIfAbsent' })
+      const after = await probe(target.targetKey)
+      return {
+        operation: existing ? 'update' : 'create',
+        version: this.versionAfterWrite(after, target),
       }
     })
   }

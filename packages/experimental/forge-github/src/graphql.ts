@@ -3,8 +3,8 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestBrief, ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, CheckState,
-  ChecksRollup,
+  ChangeRequestAutoMerge, ChangeRequestBrief, ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer,
+  ChangeRequestSnapshot, CheckState, ChecksRollup,
   ForgeCheckId, ForgeFailure, ForgeRepository, Mergeability, MergeMethod, ReviewDecision, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
@@ -40,6 +40,7 @@ function pullRequestFields(threads: number): string {
   author { login }
   headRefName headRefOid baseRefName baseRefOid additions deletions mergeable mergeStateStatus reviewDecision viewerCanUpdateBranch
   canBeRebased
+  viewerCanEnableAutoMerge viewerCanDisableAutoMerge isMergeQueueEnabled autoMergeRequest { mergeMethod enabledBy { login } }
   reviewThreads(first: ${threads}) { ${THREAD_FIELDS} }
   reviewRequests(first: ${OVERVIEW_PAGE}) { totalCount nodes { asCodeOwner requestedReviewer {
     __typename ... on User { login avatarUrl } ... on Bot { login avatarUrl } ... on Team { combinedSlug avatarUrl }
@@ -142,8 +143,8 @@ export interface SnapshotPages {
 
 const actorSchema = z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() })
 
-/** The closing issues references of a pull request, the snapshot's and a viewer list item's. */
-export const closingIssuesSchema = z.object({
+/** The closing issues references of a pull request snapshot. */
+const closingIssuesSchema = z.object({
   totalCount: z.number().int().nonnegative(),
   nodes: z.array(z.object({
     number: z.number().int().positive(),
@@ -180,6 +181,10 @@ const pullRequestSchema = z.object({
   reviewDecision: z.string().nullable(),
   viewerCanUpdateBranch: z.boolean(),
   canBeRebased: z.boolean(),
+  viewerCanEnableAutoMerge: z.boolean(),
+  viewerCanDisableAutoMerge: z.boolean(),
+  isMergeQueueEnabled: z.boolean(),
+  autoMergeRequest: z.object({ mergeMethod: z.string(), enabledBy: z.object({ login: z.string() }).nullable() }).nullable(),
   reviewThreads: threadPageSchema,
   reviewRequests: z.object({
     totalCount: z.number().int().nonnegative(),
@@ -276,15 +281,17 @@ export const VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
   APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', COMMENTED: 'commented', DISMISSED: 'dismissed',
 }
 
-/** Merge methods in menu order, with the repository setting that allows each and GitHub's name for it. */
+/** GitHub's `PullRequestMergeMethod` value of each merge method. */
+export const MERGE_METHOD_NAMES: Readonly<Record<MergeMethod, string>> = { squash: 'SQUASH', merge: 'MERGE', rebase: 'REBASE' }
+
+/** Merge methods in menu order, with the repository setting that allows each. */
 const METHODS: readonly {
   readonly method: MergeMethod
   readonly allowed: 'squashMergeAllowed' | 'mergeCommitAllowed' | 'rebaseMergeAllowed'
-  readonly name: string
 }[] = [
-  { method: 'squash', allowed: 'squashMergeAllowed', name: 'SQUASH' },
-  { method: 'merge', allowed: 'mergeCommitAllowed', name: 'MERGE' },
-  { method: 'rebase', allowed: 'rebaseMergeAllowed', name: 'REBASE' },
+  { method: 'squash', allowed: 'squashMergeAllowed' },
+  { method: 'merge', allowed: 'mergeCommitAllowed' },
+  { method: 'rebase', allowed: 'rebaseMergeAllowed' },
 ]
 
 /** One batched status query and the change request behind each alias. */
@@ -634,6 +641,7 @@ function toSnapshot(
     mergeReady: settings !== undefined && MERGERS.has(settings.viewerPermission ?? '') && node.state === 'OPEN' && !node.isDraft
       && MERGEABLE_NOW.has(node.mergeStateStatus),
     mergeMethods: settings === undefined ? [] : mergeMethods(settings),
+    autoMerge: autoMergeOf(node),
     // GitHub's `viewerCanUpdateBranch` is false while the head is up to date as well as when the viewer may not update
     // it; `mergeStateStatus` cannot tell a head behind its base, as BLOCKED and the other states take precedence over
     // BEHIND. `canBeRebased` reports whether the pull request can be rebase merged, which follows the repository's rebase
@@ -718,8 +726,23 @@ export function actionsRunOf(id: ForgeCheckId): number | undefined {
 /** The methods the repository allows, the viewer's default first. */
 function mergeMethods(settings: RepositoryNode): MergeMethod[] {
   const allowed = METHODS.filter(entry => settings[entry.allowed])
-  const usual = allowed.filter(entry => entry.name === settings.viewerDefaultMergeMethod)
+  const usual = allowed.filter(entry => MERGE_METHOD_NAMES[entry.method] === settings.viewerDefaultMergeMethod)
   return [...usual, ...allowed.filter(entry => !usual.includes(entry))].map(entry => entry.method)
+}
+
+/**
+ * How the pull request stands with GitHub's auto-merge. Turning it on is not offered on a base branch with a merge
+ * queue, where GitHub ignores the merge method of the request; a merge method GitHub adds later reads as null.
+ */
+function autoMergeOf(node: PullRequestNode): ChangeRequestAutoMerge {
+  const request = node.autoMergeRequest
+  return {
+    enabled: request !== null,
+    method: METHODS.find(entry => MERGE_METHOD_NAMES[entry.method] === request?.mergeMethod)?.method ?? null,
+    enabledBy: request?.enabledBy?.login ?? null,
+    canEnable: node.viewerCanEnableAutoMerge && !node.isMergeQueueEnabled,
+    canDisable: node.viewerCanDisableAutoMerge,
+  }
 }
 
 function changeRequestState(state: PullRequestNode['state']): ChangeRequestSnapshot['state'] {

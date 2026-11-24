@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "plain **bold** *italic* <u>underline</u> ~~strike~~ `const x = 1`"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

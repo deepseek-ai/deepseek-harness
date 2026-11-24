@@ -1,0 +1,45 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "button",
+              "element_id": "epafivekxna2p6pn",
+              "text": {
+                "tag": "plain_text",
+                "content": "Delete everything"
+              },
+              "type": "danger_filled",
+              "disabled": false,
+              "behaviors": [
+                {
+                  "type": "callback",
+                  "value": {
+                    "v4": {
+                      "id": "btn-danger"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

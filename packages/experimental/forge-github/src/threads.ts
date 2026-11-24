@@ -178,8 +178,7 @@ export async function readReviewThreads(
   // GitHub lists a pending review only to its author; reading up to 100 finds the viewer's even if others were listed first.
   const pending = pull.reviews.nodes.find(review => review.viewerDidAuthor)
   const pendingReview = pending === undefined ? null : { id: pending.id as ForgeReviewId, comments: pending.comments.totalCount }
-  // GitHub refuses every write to an archived repository, and comments on a locked conversation from anyone without write access.
-  const viewerCanReview = !repository.isArchived && (!pull.locked || WRITERS.has(repository.viewerPermission ?? ''))
+  const viewerCanReview = viewerMayComment(repository, pull.locked)
   // GitHub lets the author of a pull request comment on it but not approve it or request changes.
   const reviewEvents: readonly ForgeReviewEvent[] = !viewerCanReview ? [] : pull.viewerDidAuthor ? ['comment'] : ['comment', 'approve', 'request-changes']
   const result = (truncated: boolean): ForgeReviewData => ({
@@ -221,6 +220,19 @@ export async function readReviewThreads(
     if (bytes > limits.maxOutputBytes) return result(true)
     page = following.data.data.node.reviewThreads
   }
+}
+
+/**
+ * Whether GitHub's two general refusals leave the signed-in user free to comment on a pull request: it refuses every
+ * write to an archived repository, and comments on a locked conversation from anyone without write access.
+ * @param repository - the repository's `isArchived` and `viewerPermission`.
+ * @param locked - the pull request's `locked`.
+ * @returns false when either refusal applies.
+ */
+export function viewerMayComment(
+  repository: { readonly isArchived: boolean; readonly viewerPermission: string | null }, locked: boolean,
+): boolean {
+  return !repository.isArchived && (!locked || WRITERS.has(repository.viewerPermission ?? ''))
 }
 
 /**

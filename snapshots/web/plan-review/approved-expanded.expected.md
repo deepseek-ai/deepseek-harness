@@ -23,6 +23,7 @@
   - text: .
 - button "Called tools" [expanded]
 - 'button "Tool call exit_plan_mode · # Add `--greeting` flag to CLI"'
+- button "System prompt update plan:status"
 - 'button "Think The plan was approved. The user''s last instruction says: \"Once the plan is approved, reply with the single word DONE and stop.\" So I should just reply with DONE and stop."'
 - paragraph: DONE
 - 'button "Open plan: Add `--greeting` flag to CLI"': "Add `--greeting` flag to CLI Plan · Markdown Open"

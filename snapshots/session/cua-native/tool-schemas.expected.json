@@ -95,7 +95,7 @@
     },
     {
       "name": "cua",
-      "description": "Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
+      "description": "Inspect desktop access, select an application and window, read accessibility state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
       "parameters": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "oneOf": [
@@ -148,9 +148,10 @@
                 "type": "object",
                 "properties": {
                   "query": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": "\\S"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -182,6 +183,33 @@
                 },
                 "required": [
                   "selector"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "launchApp"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "appHandle"
                 ],
                 "additionalProperties": false
               }
@@ -301,6 +329,10 @@
                   },
                   "details": {
                     "description": "Include identifiers, global native bounds and complete action names.",
+                    "type": "boolean"
+                  },
+                  "showDiff": {
+                    "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
                     "type": "boolean"
                   },
                   "maxElements": {

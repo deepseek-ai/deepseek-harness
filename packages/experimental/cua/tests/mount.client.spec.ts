@@ -44,16 +44,6 @@ async function fixture(fail = false) {
     expect(name).toBe('@deepseek-ai/dsh-cua-bundle')
     return changes
   } })
-  const setDefault = vi.fn(async () => true)
-  const setPersistent = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
-  const runtimeConfiguration = vi.fn<() => Promise<RemoteResult<{ persistent: boolean; writable: boolean }>>>()
-    .mockResolvedValue({ ok: true, value: { persistent: false, writable: true } })
-  const preset = createSnapshotStore({ status: 'ready' as const, value: { default: 'standard' },
-    base: {}, user: {}, revision: 1, writable: true })
-  ctx.provide('configForms', { get: (namespace: string) => {
-    expect(namespace).toBe('agent-preset-registry')
-    return { ...preset, set: setDefault }
-  } })
   const status = vi.fn<() => Promise<RemoteResult<CuaApplicationState>>>().mockResolvedValue({ ok: true, value })
   const systemStatus = vi.fn<() => Promise<RemoteResult<CuaSystemPermissionState>>>().mockResolvedValue({ ok: true, value: value.system })
   const applicationIcons = vi.fn<() => Promise<RemoteResult<Record<string, string>>>>().mockResolvedValue({ ok: true, value: {} })
@@ -63,7 +53,6 @@ async function fixture(fail = false) {
   const revoke = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   const retryApproval = vi.fn<() => Promise<RemoteResult<void>>>().mockResolvedValue({ ok: true, value: undefined })
   ctx.provide('remote.cuaAccess', {
-    ptcConfiguration: runtimeConfiguration, enablePersistentPtc: setPersistent,
     applications: status, systemStatus, applicationIcons, requestPermission, openSettings, revoke, retryApproval })
   ctx.provide('locale', new LocaleRuntime(ctx))
   await ctx.plugin(SlotRegistry)
@@ -74,7 +63,7 @@ async function fixture(fail = false) {
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
   return { ctx, changes, unmount, status, systemStatus, applicationIcons, list,
-    requestPermission, openSettings, revoke, retryApproval, setDefault, setPersistent, runtimeConfiguration,
+    requestPermission, openSettings, revoke, retryApproval,
   }
 }
 
@@ -123,7 +112,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
     await vi.waitFor(() => { expect(actions.hooks.cuaPermissions.getSnapshot().toast?.kind).toBe('retryAllowed') })
     const failed = { ok: false as const, error: new RemoteError('gateway/internal', 'offline', {}) }
     for (const [target, invoke] of [
-      [f.runtimeConfiguration, actions.refresh], [f.status, actions.refresh], [f.systemStatus, actions.refresh],
+      [f.status, actions.refresh], [f.systemStatus, actions.refresh],
       [f.applicationIcons, actions.refresh], [f.requestPermission, () => { actions.request('accessibility') }],
       [f.openSettings, () => { actions.openSettings('accessibility') }],
       [f.revoke, () => { actions.revoke('a'.repeat(64) as import('../src/access-types.ts').CuaApplicationId) }],
@@ -135,7 +124,7 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
       invoke()
       await vi.waitFor(() => {
         const state = actions.hooks.cuaPermissions.getSnapshot()
-        const error = target === f.runtimeConfiguration ? state.runtime.error : target === f.status ? state.applications.error
+        const error = target === f.status ? state.applications.error
           : target === f.systemStatus ? state.system.error
             : target === f.applicationIcons ? state.icons.error : state.toast?.kind === 'failed' ? state.toast.message : null
         expect(error).toContain('offline')
@@ -147,19 +136,6 @@ it('withdraws the permission Remote and all controls with the optional plugin', 
       actionsOf(otherActions)
       expect(otherActions.hooks.cuaPermissions).toBe(actions.hooks.cuaPermissions)
     }
-    const settings = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
-    assert(typeof settings.setPtcDefault === 'function')
-    expect(f.ctx.slots.entries('plugins.bundle.activation')[0]!.inject!()).not.toHaveProperty('setPtcDefault')
-    expect(f.setDefault).not.toHaveBeenCalled()
-    await (settings.setPtcDefault as () => Promise<boolean>)()
-    expect(f.setDefault).toHaveBeenCalledExactlyOnceWith('selectedDefault', 'ptc')
-    assert(typeof settings.setPersistentPtc === 'function')
-    expect(f.ctx.slots.entries('plugins.bundle.activation')[0]!.inject!()).not.toHaveProperty('setPersistentPtc')
-    expect(f.setPersistent).not.toHaveBeenCalled()
-    await (settings.setPersistentPtc as () => Promise<boolean>)()
-    expect(f.setPersistent).toHaveBeenCalledExactlyOnceWith()
-    f.setPersistent.mockResolvedValueOnce(failed)
-    await expect((settings.setPersistentPtc as () => Promise<boolean>)()).rejects.toThrow('offline')
     await fiber.dispose()
     expect(f.ctx.slots.entries('conversation.composer')).toHaveLength(0)
     expect(f.ctx.slots.entries('plugins.bundle.config')).toHaveLength(0)

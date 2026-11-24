@@ -48,7 +48,7 @@ kind: "package-reference"
 | `workspaceRoot` | `process.cwd()` | 无 agent 调用所用的绝对回退根目录；未挂载工作目录服务时，header 没有目录的会话也使用它；相对值在加载时拒绝。普通 agent 调用使用会话的工作目录；根为相对路径或含 NUL 字节时调用以 `SANDBOX_INVALID_ROOT` 失败 |
 | `additionalWritableRoots` | `[]` | 在 `workspace-write` 下额外允许写入的物理绝对目录；Windows 文件工具执行这些授权，Windows 子进程忽略它们，`read-only` 不授予访问权限 |
 
-会话的工作区根是它所在的目录，读取自[工作目录服务](../../session/working-directory/README.zh.md)：Host 每次移动 Session 的目录（例如进入或离开 worktree），边界都随之移动。对于关联的 Git worktree，仓库的 Git 目录位于该根之外，因此在 `workspace-write` 下写入它的 Git 命令会被拒绝，直到有授权覆盖它：部署可以通过 `additionalWritableRoots` 向所有会话授权，Host 插件可以通过 `registerWritableRoot` 向单个 live Session 授权。调用方必须显式选择该目录；策略不会读取 Git 文件或授权父检出目录。这些授权是组合中所有会话共享的部署配置，而非保存的 Session 权限。授权整个 Git 目录也允许修改钩子和配置，后续主机 Git 调用可能在沙箱之外执行它们；仅对可信任务使用此授权。使用物理绝对目录路径。执行限制的主机在每次调用时拒绝不存在的路径、非目录和符号链接目录，包括两次调用之间被替换为符号链接的目录。远端授权在远端主机上验证。
+会话的工作区根是它所在的目录，读取自[工作目录服务](../../session/working-directory/README.zh.md)：Host 每次移动 Session 的目录（例如进入或离开 worktree），边界都随之移动。对于关联的 Git worktree，仓库的 Git 目录位于该根之外，因此在 `workspace-write` 下写入它的 Git 命令会被拒绝，直到有授权覆盖它：部署可以通过 `additionalWritableRoots` 向所有会话授权，Host 插件可以通过 `registerWritableRoot` 向单个 live Session 授权，[链接工作树授权](../../experimental/sandbox-policy-git/README.zh.md)就为 Session 所在的 worktree 这样做。调用方必须显式选择该目录；策略不会读取 Git 文件或授权父检出目录。这些授权是组合中所有会话共享的部署配置，而非保存的 Session 权限。授权整个 Git 目录也允许修改钩子和配置，后续主机 Git 调用可能在沙箱之外执行它们；仅对可信任务使用此授权。使用物理绝对目录路径。执行限制的主机在每次调用时拒绝不存在的路径、非目录和符号链接目录，包括两次调用之间被替换为符号链接的目录。远端授权在远端主机上验证。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-sandbox-policy)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
