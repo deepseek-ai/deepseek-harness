@@ -109,7 +109,7 @@
 
 :is(.column, :global([data-slot="conversation.chat.flow"])) > :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"], [data-chat-flow-kind="question-reply"]) + .flowItem[data-chat-flow-kind="question-reply"],
 :is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + .flowItem[data-chat-group-part="response"],
-:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + :is([hidden], .flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))) + .flowItem[data-chat-group-part="response"] {
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + [hidden] + .flowItem[data-chat-group-part="response"] {
   --dsh-chat-flow-gap: 4px;
 }
 
