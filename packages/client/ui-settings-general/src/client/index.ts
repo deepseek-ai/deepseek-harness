@@ -31,6 +31,7 @@ import type {
   SettingsOnboardingStep, SettingsRootInjected, SettingsSectionRow,
 } from './shell-contract.ts'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
+import { compareGroupOrder } from './group-order.ts'
 import { createSettingsShellStore } from './shell-store.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
@@ -321,8 +322,7 @@ export function apply(ctx: ClientContext): void {
             version = nextVersion
             revision = nextRevision
             groups = slots.entriesOfSlot('settings.general.group')
-              /* v8 ignore next -- the slot ledger normalizes options.order to a number */
-              .toSorted((a, b) => (a.options.order ?? 0) - (b.options.order ?? 0))
+              .toSorted(compareGroupOrder)
               .map(entry => ({
                 /* v8 ignore next -- list registrations require an id */
                 id: entry.options.id ?? '',
