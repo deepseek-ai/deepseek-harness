@@ -6,8 +6,18 @@ import { documentViewport } from '../src/client/document-viewport.ts'
 
 afterEach(cleanup)
 
+it('does not subscribe an inert document to the execution window', () => {
+  const source = documentViewport(document.implementation.createHTMLDocument())
+  const listener = vi.fn()
+  const stop = source.subscribe(listener)
+  try {
+    fireEvent.resize(window)
+    expect(listener).not.toHaveBeenCalled()
+  } finally { stop() }
+})
+
 it('keeps portaled content mounted when its nearest package boundary changes, including to an empty boundary', () => {
-  const Portal = createDocumentPortal(() => document)
+  const Portal = createDocumentPortal(document)
   function Source({ owner }: { owner?: string }) {
     return <div data-plugin="outer"><section data-plugin={owner}><Portal><input aria-label="Draft" /></Portal></section></div>
   }
@@ -29,7 +39,7 @@ it('owns each native listener even when portals share their callback, and replac
   document.body.append(frame)
   try {
     const page = frame.contentDocument!
-    const Portal = createDocumentPortal(() => page)
+    const Portal = createDocumentPortal(page)
     const first = vi.fn()
     const changed = vi.fn()
     const capture = vi.fn()
@@ -64,7 +74,7 @@ it('reads fresh viewport dimensions without subscribers and detaches from the wi
     const root = page.document.documentElement
     let width = 800, height = 600
     Object.defineProperties(root, { clientWidth: { get: () => width }, clientHeight: { get: () => height } })
-    const source = documentViewport(() => page)
+    const source = documentViewport(page.document)
     const initial = source.getSnapshot()
     expect(initial).toEqual({ width: 800, height: 600 })
     expect(source.getSnapshot()).toBe(initial)

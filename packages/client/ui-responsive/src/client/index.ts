@@ -1,20 +1,19 @@
 /**
- * Page-responsive data and document portals published to every Slot scope.
+ * Page media-query answers and the device class, published to every Slot scope.
  * @module @deepseek-ai/dsh-client-ui-responsive/client
  */
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { FC } from 'react'
 import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: the SlotRegistry (`ctx.slots`) merge.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import { createDocumentPortal, type DocumentPortalProps } from './document-portal.tsx'
-import { documentViewport, type DocumentViewport } from './document-viewport.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /**
-     * Publishes page-responsive and portal props. Consumers inject this service so they unload with these props.
+     * Owner of the `useMediaQuery` and `useMobile` standard props. A plugin whose components read them injects
+     * `uiResponsive`, so it starts after both props are published and unloads when they are withdrawn. The service has no
+     * public members.
      */
     uiResponsive: UiResponsiveService
   }
@@ -22,13 +21,6 @@ declare module '@deepseek-ai/cordis' {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
-    /**
-     * @returns A stable component that portals its children into the application document body. Its native keydown
-     * handlers listen on that document in the requested phase, including events outside the children.
-     */
-    useDocumentPortal: () => FC<DocumentPortalProps>
-    /** @returns The application document's layout viewport in CSS pixels; rerenders when its dimensions change. */
-    useDocumentViewport: () => DocumentViewport
     /**
      * Whether a CSS media query currently matches in the page window; the component rerenders when the answer
      * changes. Use it only when the answer selects rendered structure or behavior; a style-only difference stays in a
@@ -47,10 +39,10 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Publishes page-responsive props to every Slot scope for the lifetime of the service. */
+/** Publishes `useMediaQuery` and `useMobile` to every Slot scope for the lifetime of the `uiResponsive` service. */
 export default class UiResponsiveService extends Service {
-  /** The Slot registry publishes the props; the renderer identifies the mounted document. */
-  static inject = ['slots', 'uiRenderer']
+  /** Root standard props are published through the Slot registry. */
+  static inject = ['slots']
 
   /** @param ctx - plugin-owned Client context. */
   constructor(ctx: Context) {
@@ -73,17 +65,9 @@ export default class UiResponsiveService extends Service {
       return source
     }
     const mobile = isMobileDevice()
-    // Consumers render after the Web kernel mounts the application, not when the service activates.
-    const page = (): Window => {
-      const view = ctx.uiRenderer.mountDocument?.defaultView
-      if (!view) throw new Error('ui-responsive: document hooks require a mounted application window')
-      return view
-    }
-    const Portal = createDocumentPortal(() => page().document)
     ctx.slots.provideRoot({
-      hooks: { documentViewport: documentViewport(page) },
       keyedHooks: { mediaQuery },
-      props: { useMobile: () => mobile, useDocumentPortal: () => Portal },
+      props: { useMobile: () => mobile },
     } satisfies RootStandardSourceContribution)
   }
 }

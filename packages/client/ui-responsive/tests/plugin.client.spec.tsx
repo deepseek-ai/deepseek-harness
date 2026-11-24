@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Standard page props reach Slot components through the production renderer and withdraw with the service fiber.
+ * The `uiResponsive` service publishes page media-query answers and the device class to every Slot scope through the
+ * production renderer, withdraws both props with its fiber, and orders the plugins that inject it.
  */
-import { act, cleanup, fireEvent } from '@testing-library/react'
+import { act, cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -62,21 +63,14 @@ function MobileProbe({ useMobile }: ProbeProps) {
   return <span>{useMobile() ? 'mobile' : 'desktop'}</span>
 }
 
-function PresenceProbe({ useMediaQuery, useMobile, useDocumentPortal, useDocumentViewport }: ProbeProps) {
-  return <span>{[useMediaQuery, useMobile, useDocumentPortal, useDocumentViewport].map(hook => typeof hook).join('/')}</span>
+function PresenceProbe({ useMediaQuery, useMobile }: ProbeProps) {
+  return <span>{typeof useMediaQuery}/{typeof useMobile}</span>
 }
 
-function DocumentProbe({ useDocumentPortal, useDocumentViewport }: ProbeProps) {
-  const Portal = useDocumentPortal()
-  const { width, height } = useDocumentViewport()
-  return <Portal><output>{width}×{height}</output></Portal>
-}
-
-/** Release the fixed test props and supply the document rendered by this suite. */
-async function bench(page: Document = document): Promise<SlotTestRuntime> {
+/** A runtime whose default responsive service is released, so the production service owns both props. */
+async function bench(): Promise<SlotTestRuntime> {
   const runtime = await SlotTestRuntime.create()
   await runtime.releaseResponsiveSource()
-  runtime.ctx.reflect.provide('uiRenderer', { mountDocument: page, mount: () => () => {} })
   await runtime.declare({ [SLOT]: { kind: 'list', scope: 'root' } })
   return runtime
 }
@@ -179,47 +173,6 @@ describe('useMobile', () => {
 })
 
 describe('service lifetime', () => {
-  it('uses the renderer mount for both props and reacts only to a resize of that window', async () => {
-    const frame = document.createElement('iframe')
-    document.body.append(frame)
-    const page = frame.contentDocument!
-    const runtime = await bench(page)
-    try {
-      let width = 800
-      Object.defineProperties(page.documentElement, { clientWidth: { get: () => width }, clientHeight: { value: 600 } })
-      await runtime.mount(UiResponsiveService)
-      runtime.slots.register({ name: SLOT, id: 'probe' }, DocumentProbe)
-      const view = runtime.renderSlot(SLOT, { query: '' })
-      expect(view.container.querySelector('output')).toBeNull()
-      const output = page.body.querySelector('output')!
-      expect(output.textContent).toBe('800×600')
-      width = 980
-      fireEvent.resize(window)
-      expect(output.textContent).toBe('800×600')
-      fireEvent.resize(frame.contentWindow!)
-      expect(output.textContent).toBe('980×600')
-      expect(page.body.querySelector('output')).toBe(output)
-    } finally {
-      await runtime.dispose()
-      frame.remove()
-    }
-  })
-
-  it('reports a document hook read without a mounted browsing context instead of using the plugin window', async () => {
-    const runtime = await bench(document.implementation.createHTMLDocument())
-    try {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      await runtime.mount(UiResponsiveService)
-      runtime.slots.register({ name: SLOT, id: 'probe' }, DocumentProbe)
-      const view = runtime.renderSlot(SLOT, { query: '' })
-      expect(view.container.querySelector('[data-slot-error]')).not.toBeNull()
-      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('crashed'),
-        expect.objectContaining({ message: 'ui-responsive: document hooks require a mounted application window' }))
-    } finally {
-      await runtime.dispose()
-    }
-  })
-
   it('starts a plugin that injects it only after publishing, and unloads that plugin with it', async () => {
     stubMatchMedia()
     const runtime = await bench()
@@ -248,18 +201,18 @@ describe('service lifetime', () => {
     }
   })
 
-  it('withdraws its standard props on disposal and publishes them again after a reload', async () => {
+  it('withdraws both props when its fiber is disposed and publishes them again after a reload', async () => {
     stubMatchMedia()
     const runtime = await bench()
     try {
       const first = await runtime.mount(UiResponsiveService)
       runtime.slots.register({ name: SLOT, id: 'probe' }, PresenceProbe)
       const view = runtime.renderSlot(SLOT, { query: '' })
-      expect(view.container.textContent).toBe('function/function/function/function')
+      expect(view.container.textContent).toBe('function/function')
       await first.dispose()
-      expect(view.container.textContent).toBe('undefined/undefined/undefined/undefined')
+      expect(view.container.textContent).toBe('undefined/undefined')
       await runtime.mount(UiResponsiveService)
-      expect(view.container.textContent).toBe('function/function/function/function')
+      expect(view.container.textContent).toBe('function/function')
     } finally {
       await runtime.dispose()
     }

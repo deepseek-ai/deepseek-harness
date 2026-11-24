@@ -21,12 +21,11 @@ function useKeyDown(doc: Document, handler: DocumentPortalProps['onKeyDown'], ca
 
 /**
  * Bind one stable component to the application's mount document, independently of the caller's JavaScript realm.
- * @param page - Read the current presentation document when the component renders.
+ * @param doc - Document of this application mount.
  * @returns Component that places its children in the document body without imposing a layout box.
  */
-export function createDocumentPortal(page: () => Document): FC<DocumentPortalProps> {
+export function createDocumentPortal(doc: Document): FC<DocumentPortalProps> {
   return function DocumentPortal({ children, onKeyDown, onKeyDownCapture }) {
-    const doc = page()
     const [owner, setOwner] = useState<string | null>()
     useKeyDown(doc, onKeyDownCapture, true)
     useKeyDown(doc, onKeyDown, false)

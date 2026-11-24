@@ -160,6 +160,7 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 | 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
 | 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
+| 所有已挂载的作用域 | `useDocumentPortal`、`useDocumentViewport` | [ui-renderer](../../packages/client/ui-renderer/README.zh.md#use-this-package) |
 | 所有 scope | `useMediaQuery` | `ui-responsive` |
 | 所有 scope | `useMobile` | `ui-responsive` |
 | `session` | `sessionId`、`useSession`、`useProjection`、`useAccess`（所绑定 Session 的答案） | `ui-session` |

@@ -1,9 +1,9 @@
 ---
 kind: upgrade-guide
-description: "Web Client GlobalStandardProps now requires useMediaQuery and useMobile, which the new ui-responsive Client plugin provides."
+description: "Hand-built Web Client Slot props must supply the responsive and document hooks."
 ---
 
-# `useMediaQuery` and `useMobile` standard props
+# Responsive and document standard props
 
 English | [中文](guide.zh.md)
 
@@ -11,7 +11,7 @@ English | [中文](guide.zh.md)
 
 In 0.2.3-alpha.2, Web Client components that branched on a media query or on the device class called `window.matchMedia` or `isMobileDevice()` themselves. After upgrading, `GlobalStandardProps` requires `useMediaQuery(query)` and `useMobile()`, which the `uiResponsive` service of the new `@deepseek-ai/dsh-client-ui-responsive` Client plugin publishes to every Slot scope; see [Framework-provided hooks](../../../subsystems/slots.md#framework-provided-hooks). The composer, the right Sidebar expand button, the agent-preset chip, the desktop onboarding flow, the model selector, and the Session panel read them, and their plugins inject `uiResponsive`. Profiles that run the shipped Web bundles need no configuration change.
 
-Two cases are affected. TypeScript code that builds complete Slot component props by hand, usually a test that renders a component directly, no longer compiles: the object lacks the two members. A custom Web roster that keeps `ui-conversation`, `ui-sidebar-right`, `ui-agent-preset`, `ui-settings-account`, `ui-model-selection`, or `ui-session-panel` but omits `@deepseek-ai/dsh-client-ui-responsive` no longer starts those plugins: they wait for the `uiResponsive` service.
+TypeScript code that builds complete Slot props by hand must supply those two hooks and the renderer's `useDocumentPortal()` and `useDocumentViewport()`. The document hooks need no `uiResponsive` injection. A custom Web roster that keeps `ui-conversation`, `ui-sidebar-right`, `ui-agent-preset`, `ui-settings-account`, `ui-model-selection`, or `ui-session-panel` but omits `@deepseek-ai/dsh-client-ui-responsive` no longer starts those plugins: their media and device hooks require the `uiResponsive` service.
 
 ## Migration
 

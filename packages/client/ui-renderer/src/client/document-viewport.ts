@@ -9,21 +9,21 @@ export interface DocumentViewport {
 
 /**
  * Read the current dimensions even between subscribers; unchanged dimensions keep the snapshot identity.
- * @param page - Get the window containing the mounted application at subscription or read time.
+ * @param page - Document of this application mount. A detached document has no resize events.
  * @returns Source invalidated by that window's native resize events.
  */
-export function documentViewport(page: () => Window): HostObservable<DocumentViewport> {
+export function documentViewport(page: Document): HostObservable<DocumentViewport> {
   let snapshot: DocumentViewport | undefined
   return {
     getSnapshot() {
-      const { clientWidth: width, clientHeight: height } = page().document.documentElement
+      const { clientWidth: width, clientHeight: height } = page.documentElement
       if (snapshot?.width !== width || snapshot.height !== height) snapshot = { width, height }
       return snapshot
     },
     subscribe(listener) {
-      const view = page()
-      view.addEventListener('resize', listener)
-      return () => { view.removeEventListener('resize', listener) }
+      const view = page.defaultView
+      view?.addEventListener('resize', listener)
+      return () => { view?.removeEventListener('resize', listener) }
     },
   }
 }

@@ -47,7 +47,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots', 'uiResponsive'],
+      inject: ['slots'],
       apply(ctx) {
         // Boot has captured #root but has not mounted React. Only the mount moves; both plugins still execute here.
         ctx.effect(() => {

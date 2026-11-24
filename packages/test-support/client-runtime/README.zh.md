@@ -50,9 +50,9 @@ await runtime.dispose()
 
 可选渲染参数通过 `entryKey` 选择 keyed 条目，或通过 `only` 选择 list 条目；`view.update(owner)` 保留该选择。`runtime.panelInfo` 提供默认的 `usePanelInfo` 数据源，初始不选中全局面板。挂载生产 Layout 所有者之前，先调用 `releasePanelInfoSource()` 释放该数据源。`dispose()` 同时释放默认的工作区、面板信息与响应式根数据源；提前释放是幂等的，不会移除替代它们的所有者。
 
-`StaticUiResponsive` 提供 `uiResponsive` 服务，并向每个 Slot 发布返回固定值的 Hook。手工构造组件 props 时，展开 `...responsiveHooks(options)` 可获得相同的 Hook。默认情况下，`useMobile()` 与 `useMediaQuery(query)` 都返回 false，`useDocumentViewport()` 返回 1024 × 768 CSS 像素的视口，`useDocumentPortal()` 返回的组件会原位渲染子节点，不监听文档的键盘事件。用 `mobile`、`matches(query)`、`viewport` 和 `portal` 可分别覆盖这些默认值。
+`StaticUiResponsive` 发布媒体查询与设备 props；测试渲染器独立提供文档 props。手工构造组件 props 时，展开 `...responsiveHooks(options)` 可获得相同的默认值：`useMobile()` 与 `useMediaQuery(query)` 都返回 false，`useDocumentViewport()` 返回 1024 × 768 CSS 像素的视口，`useDocumentPortal()` 原位渲染子节点，不监听文档事件。用 `mobile`、`matches(query)`、`viewport` 和 `portal` 可分别覆盖这些默认值。
 
-要测试真实的 portal 挂载位置、文档键盘事件、视口尺寸或媒体查询结果的变化，请使用生产 `ui-responsive` 服务。在 Slot 测试中，先用 `await runtime.releaseResponsiveSource()` 卸载替身，同时卸载注入 `uiResponsive` 的插件。挂载生产服务前还需提供 `uiRenderer`；文档 Hook 读取它的 `mountDocument`。在 jsdom 中测试媒体查询时，需为 `window.matchMedia` 提供替身。
+要测试真实的 Portal 挂载位置、文档键盘事件和视口尺寸变化，请挂载生产 UI 渲染器。要在 Slot 测试中验证媒体查询变化，先调用 `await runtime.releaseResponsiveSource()`，再挂载生产 `ui-responsive` 服务。在 jsdom 中测试媒体查询时，需为 `window.matchMedia` 提供替身。
 
 Session fixture 从显式提供的地址或已加载的父级投影解析子代理地址，不会保留 Session generation。外部目录项没有本地浏览地址。
 

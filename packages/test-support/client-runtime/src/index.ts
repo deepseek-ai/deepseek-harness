@@ -47,7 +47,7 @@ import { TestSessions } from './sessions.ts'
 import { TestWorkspaces } from './workspaces.ts'
 import type { Stabilizer } from './fixtures.ts'
 import { allowAllAccessPlugin } from './access.ts'
-import { StaticUiResponsive } from './responsive.ts'
+import { responsiveHooks, StaticUiResponsive } from './responsive.ts'
 
 export type { UseSession } from '@deepseek-ai/dsh-client-ui-session/client'
 export { domSnapshotSerializer, registerDomSnapshotSerializer } from './snapshot.ts'
@@ -282,6 +282,8 @@ export class SlotTestRuntime {
     } })
     this.disposeWorkspaceSource = slots.provideRoot({ hooks: { workspaces: this.workspaces.list } })
     this.disposePanelInfoSource = slots.provideRoot({ hooks: { panelInfo: this.panelInfo } })
+    const { useDocumentPortal, useDocumentViewport } = responsiveHooks()
+    slots.provideRoot({ props: { useDocumentPortal, useDocumentViewport } })
     // Capturing install: the production renderer does the rendering; the
     // wrapper only takes the host face for storeOf (no machinery copied).
     const renderer = createSlotRenderer()

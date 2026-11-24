@@ -1,6 +1,5 @@
 /**
- * Fixed responsive Hooks for hand-built component props and the {@link SlotTestRuntime} Slot renderer.
- * Release {@link StaticUiResponsive} to exercise the production service's browser behavior.
+ * Fixed browser Hooks for hand-built component props and the Slot test renderer.
  * @module @deepseek-ai/dsh-client-test-runtime/src/responsive
  */
 import { Service, type Context } from '@deepseek-ai/cordis'
@@ -46,7 +45,7 @@ export function responsiveHooks(options: ResponsiveHookOptions = {}): Responsive
 }
 
 /**
- * Publishes {@link responsiveHooks} as root props for the lifetime of the `uiResponsive` stand-in service.
+ * Publishes the media-query and device props for the lifetime of the `uiResponsive` stand-in service.
  */
 export class StaticUiResponsive extends Service {
   /** Root standard props are published through the Slot registry. */
@@ -58,6 +57,7 @@ export class StaticUiResponsive extends Service {
    */
   constructor(ctx: Context, options: ResponsiveHookOptions = {}) {
     super(ctx, 'uiResponsive')
-    ctx.slots.provideRoot({ props: responsiveHooks(options) })
+    const { useMediaQuery, useMobile } = responsiveHooks(options)
+    ctx.slots.provideRoot({ props: { useMediaQuery, useMobile } })
   }
 }

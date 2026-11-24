@@ -5,6 +5,8 @@ import { createRoot, hydrateRoot, type Root } from 'react-dom/client'
 import type { Context } from '@deepseek-ai/cordis'
 import type { UiRendererService } from './index.ts'
 import { buildRenderApp } from './app.tsx'
+import { createDocumentPortal } from './document-portal.tsx'
+import { documentViewport } from './document-viewport.ts'
 import { DocumentStyles } from './styles/document-styles.ts'
 
 interface BootSnapshot {
@@ -49,8 +51,8 @@ function mountApp(container: HTMLElement, app: () => ReactNode): Root {
 
 /** Resources belonging to one mount, retained so stale cleanup cannot affect a later mount. */
 interface RendererMount {
-  readonly document: Document
   readonly styles: DocumentStyles
+  releaseDocumentProps?: () => void
   root?: Root
   releasing?: boolean
 }
@@ -62,18 +64,19 @@ export class UiRenderer implements UiRendererService {
 
   constructor(private readonly ctx: Context) {}
 
-  get mountDocument(): Document | undefined { return this.current?.document }
-
   mount(container: HTMLElement): () => void {
     if (this.disposed) throw new Error('renderer: cannot mount a disposed renderer')
     if (this.current !== undefined) throw new Error('renderer: application is already mounted')
-    const mounted: RendererMount = {
-      document: container.ownerDocument,
-      styles: new DocumentStyles(container.ownerDocument.head, this.ctx.modules),
-    }
+    const page = container.ownerDocument
+    const mounted: RendererMount = { styles: new DocumentStyles(page.head, this.ctx.modules) }
     this.current = mounted
     try {
       mounted.styles.mount()
+      const Portal = createDocumentPortal(page)
+      mounted.releaseDocumentProps = this.ctx.slots.provideRoot({
+        hooks: { documentViewport: documentViewport(page) },
+        props: { useDocumentPortal: () => Portal },
+      })
       const root = mountApp(container, buildRenderApp({ ctx: this.ctx }))
       if (this.current !== mounted) {
         root.unmount()
@@ -108,7 +111,11 @@ export class UiRenderer implements UiRendererService {
       failures.push(error)
     }
     try {
-      mounted.styles.dispose()
+      try {
+        mounted.releaseDocumentProps?.()
+      } finally {
+        mounted.styles.dispose()
+      }
     } catch (error) {
       failures.push(error)
     } finally {

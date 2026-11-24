@@ -33,6 +33,8 @@ kind: "package-reference"
 
 ### 对业务插件
 
+挂载后的 Slot 无需额外注入服务就能使用 `useDocumentPortal()` 和 `useDocumentViewport()`。`const Portal = useDocumentPortal()` 返回稳定的组件：`<Portal onKeyDownCapture={onKey}>{children}</Portal>` 将内容渲染到应用文档的 `body`，保留来源位置最近的 `data-plugin` 标记。即使焦点在 Portal 外，`onKeyDownCapture` 和 `onKeyDown` 也能收到文档的原生事件；卸载时会移除监听器。视口钩子以 CSS 像素返回 `{ width, height }`，不含滚动条，并随窗口尺寸变化更新。两个钩子都不依赖插件脚本所在的窗口。
+
 业务插件注册普通 Slot entry 或可复用 Component Factory；渲染器在渲染位置把运行时的会话与 Workspace observable source 绑定为 selector 钩子。插件通过推导出的 Component props 收到标准 scope props——它绝不导入渲染器，也不触碰 React 内部机制。每个由 renderer 创建的 Component 都能渲染 Factory occurrence，Factory 也能暴露由调用方选择的局部 Component，而无需在包之间共享实现值。
 
 <a id="package-style-isolation"></a>
@@ -103,7 +105,7 @@ React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静�
 这些限制说明应用首帧何时出现、按区域就绪能走多远；它们是当前包约束。
 
 - **应用首帧会等待整个客户端名册**：启动内核只在 loader 名册稳定且启动审计通过后交出挂载点；按区域就绪仍属暂缓事项。
-- **样式安装在主文档中。** 原生 `@scope` 限制选择器匹配，但不阻断属性继承。通过 Portal 渲染或在 props 中任意移动 JSX 时，来源包的样式作用域不会随内容转移。没有单独的展示文档或 Shadow DOM；样式遵循模块而不是组件的生命周期。
+- **样式安装在主文档中。** 原生 `@scope` 限制选择器匹配，但不阻断属性继承。React 的 `createPortal` 和在 props 中任意移动的 JSX 不会自动携带来源包的样式作用域；`useDocumentPortal()` 会保留来源标记。没有单独的展示文档或 Shadow DOM；样式遵循模块而不是组件的生命周期。
 - **slot 渲染没有 Suspense 集成或逐 entry 惰性加载**：完整插件名册稳定后，渲染器才挂载根节点。
 
 <a id="dev-note"></a>

@@ -80,7 +80,7 @@ describe('fixture helpers', () => {
       runtime.releasePanelInfoSource()
       await runtime.releaseResponsiveSource()
       expect(runtime.ctx.get('uiResponsive')).toBeUndefined()
-      releaseReplacement = runtime.slots.provideRoot({ hooks, props })
+      releaseReplacement = runtime.slots.provideRoot({ hooks, props: { useMediaQuery: props.useMediaQuery, useMobile: props.useMobile } })
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
       await runtime.releaseResponsiveSource()
@@ -148,18 +148,19 @@ describe('fixture helpers', () => {
     expect(fixed.useDocumentViewport()).toBe(viewport)
   })
 
-  it('renders portal children in the slot with a fixed desktop viewport by default', async () => {
+  it('keeps the document props available without the responsive service', async () => {
     const runtime = await SlotTestRuntime.create()
     try {
+      await runtime.releaseResponsiveSource()
       await runtime.declare({ 'trt.panel-info': { kind: 'keyed', scope: 'root' } })
-      runtime.slots.register({ name: 'trt.panel-info', key: 'uiResponsive' },
-        ({ useMediaQuery, useMobile, useDocumentPortal, useDocumentViewport }: PropsRuntime<'trt.panel-info'>) => {
+      runtime.slots.register({ name: 'trt.panel-info', key: 'document' },
+        ({ useDocumentPortal, useDocumentViewport }: PropsRuntime<'trt.panel-info'>) => {
           const Portal = useDocumentPortal()
           const { width, height } = useDocumentViewport()
-          return <Portal><span>{String(useMediaQuery('(hover: none)'))}/{String(useMobile())}: {width}×{height}</span></Portal>
+          return <Portal><span>{width}×{height}</span></Portal>
         })
-      const view = runtime.renderSlot('trt.panel-info', { label: 'uiResponsive' }, { entryKey: 'uiResponsive' })
-      expect(view.container.textContent).toBe('false/false: 1024×768')
+      const view = runtime.renderSlot('trt.panel-info', { label: 'document' }, { entryKey: 'document' })
+      expect(view.container.textContent).toBe('1024×768')
     } finally {
       await runtime.dispose()
     }
