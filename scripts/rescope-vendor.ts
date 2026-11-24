@@ -50,7 +50,7 @@ const RENAMES: readonly Rename[] = [
   { directory: 'plugin-im-markdown', upstream: '@satorijs/markdown', scoped: '@deepseek-ai/cordis-plugin-im-markdown' },
   { directory: 'satori-element', upstream: '@satorijs/element', scoped: '@deepseek-ai/satori-element' },
   { directory: 'element', upstream: '@cordisjs/element', scoped: '@deepseek-ai/cordis-element' },
-  { directory: 'http', upstream: '@cordisjs/plugin-http', scoped: '@deepseek-ai/cordis-plugin-http' },
+  { directory: 'http', upstream: '@cordisjs/http', scoped: '@deepseek-ai/cordis-plugin-http' },
   { directory: 'fetch-file', upstream: '@cordisjs/fetch-file', scoped: '@deepseek-ai/cordis-fetch-file' },
   { directory: 'cordis', upstream: 'cordis', scoped: '@deepseek-ai/cordis' },
   { directory: 'cosmokit', upstream: 'cosmokit', scoped: '@deepseek-ai/cosmokit' },

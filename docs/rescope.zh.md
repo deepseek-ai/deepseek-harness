@@ -19,7 +19,7 @@ Cordis 框架及其基础库以源码形式 vendored 在 [`vendor/`](../vendor/R
 | `vendor/logger-console/` | `@cordisjs/plugin-logger-console` | `@deepseek-ai/cordis-plugin-logger-console` | 1.0.0 | 控制台日志导出 |
 | `vendor/element/` | `@cordisjs/element` | `@deepseek-ai/cordis-element` | 0.3.0 | 元素解析与序列化 |
 | `vendor/fetch-file/` | `@cordisjs/fetch-file` | `@deepseek-ai/cordis-fetch-file` | 1.0.3 | 文件 URL 资源读取 |
-| `vendor/http/` | `@cordisjs/plugin-http` | `@deepseek-ai/cordis-plugin-http` | 1.5.1 | HTTP 与 WebSocket 客户端 |
+| `vendor/http/` | `@cordisjs/http` | `@deepseek-ai/cordis-plugin-http` | 1.6.0 | HTTP 与 WebSocket 客户端 |
 | `vendor/satori-element/` | `@satorijs/element` | `@deepseek-ai/satori-element` | 4.0.0-alpha.0 | IM 消息元素 |
 | `vendor/plugin-im-core/` | `@satorijs/core` | `@deepseek-ai/cordis-plugin-im-core` | 5.0.0-alpha.0 | 通用 IM 运行时 |
 | `vendor/plugin-im-adapter-lark/` | `@satorijs/adapter-lark` | `@deepseek-ai/cordis-plugin-im-adapter-lark` | 4.0.0-alpha.0 | 飞书 WebSocket 适配器 |
