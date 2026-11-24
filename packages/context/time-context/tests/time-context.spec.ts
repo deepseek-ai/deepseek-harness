@@ -173,16 +173,18 @@ describe('durable step context', () => {
     await fire(ctx, sessionAgent(session), 1, 1)
 
     expect(contextTexts(session)).toEqual([
-      'Time sampled while preparing turn 1, step 1: 2026-07-15T09:01:01+08:00[Asia/Shanghai]\n'
+      '<system-reminder>\n'
+      + 'Time sampled while preparing turn 1, step 1: 2026-07-15T09:01:01+08:00[Asia/Shanghai]\n'
       + 'Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone.\n'
-      + 'Elapsed since the preceding model-visible message: 1d 1h 1m 1s.',
+      + 'Elapsed since the preceding model-visible message: 1d 1h 1m 1s.\n'
+      + '</system-reminder>',
     ])
     const event = session.snapshotEvents().at(-1)
     expect(event?.type).toBe('user/message')
     if (event?.type !== 'user/message') throw new Error('missing time context')
     // The reading is a `snapshot`-form context: one named contribution whose
-    // text is exactly what the model read, so a consumer attributes it without
-    // re-splitting prose.
+    // text is the model-read reading without its `<system-reminder>` frame, so
+    // a consumer attributes it without re-splitting prose.
     expect(event.data.source).toEqual({
       kind: 'time-context',
       form: 'snapshot',
@@ -236,9 +238,11 @@ describe('durable step context', () => {
     await fire(ctx, agent, 3, 2)
 
     expect(contextTexts(session)[1]).toBe(
-      'Time sampled while preparing turn 3, step 2: 2026-07-14T00:01:01+00:00[UTC]\n'
+      '<system-reminder>\n'
+      + 'Time sampled while preparing turn 3, step 2: 2026-07-14T00:01:01+00:00[UTC]\n'
       + 'Browser time zone for this request: unavailable. Ask the user to clarify otherwise-unqualified dates and times.\n'
-      + 'Elapsed since the preceding step context: 1m 1s.',
+      + 'Elapsed since the preceding step context: 1m 1s.\n'
+      + '</system-reminder>',
     )
   })
 

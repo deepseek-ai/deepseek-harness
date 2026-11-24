@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 模型能得到什么
 
-每条注入读数包含三行：带数字偏移与 IANA 时区、形如 ISO 的时间戳，该请求的浏览器时区策略，以及以紧凑整秒单位表示的经过时长。第 1 步从最新一条先前模型可见消息起测量；后续步骤从同一轮次中前一个 time-context 事件起测量。缺少基线时报告 `unavailable`，挂钟时间倒退时把经过时长钳制为零。
+每条注入读数是一个 `<system-reminder>` 块，用于标明它是注入的上下文而非用户输入。该块包含三行：带数字偏移与 IANA 时区、形如 ISO 的时间戳，该请求的浏览器时区策略，以及以紧凑整秒单位表示的经过时长。第 1 步从最新一条先前模型可见消息起测量；后续步骤从同一轮次中前一个 time-context 事件起测量。缺少基线时报告 `unavailable`，挂钟时间倒退时把经过时长钳制为零。
 
 ### 配置
 
@@ -64,7 +64,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-插件前置注册一个 `agent/pre-step` 监听器，先委托下游，需要注入且下游决策进入步骤时追加一条带来源的 `UserMessage`。每个读数都使用确切的快照来源 `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`。
+插件前置注册一个 `agent/pre-step` 监听器，先委托下游，需要注入且下游决策进入步骤时追加一条带来源的 `UserMessage`。每个读数都使用确切的快照来源 `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`，其中 `text` 是不含 `<system-reminder>` 外框的读数。
 
 ### 源码地图
 
@@ -102,22 +102,26 @@ pre-step 监听器在等待投影注册前安装。激活期间到达的步骤�
 
 #### 模型看到的内容
 
-每条注入消息包含三行。`<timestamp>` 是带数字偏移和 IANA 时区、形如 ISO 的时间戳；持续时间使用紧凑的整秒单位。
+每条注入消息用 `<system-reminder>` 块包裹三行。`<timestamp>` 是带数字偏移和 IANA 时区、形如 ISO 的时间戳；持续时间使用紧凑的整秒单位。
 
 ##### 第一步
 
 ```markdown
+<system-reminder>
 Time sampled while preparing turn <turn>, step 1: <timestamp>
 Browser time zone for this request: <iana-zone-or-mixed-or-unavailable-policy>.
 Elapsed since the preceding model-visible message: <duration-or-unavailable>.
+</system-reminder>
 ```
 
 ##### 后续步骤
 
 ```markdown
+<system-reminder>
 Time sampled while preparing turn <turn>, step <step>: <timestamp>
 Browser time zone for this request: <iana-zone-or-mixed-or-unavailable-policy>.
 Elapsed since the preceding step context: <duration-or-unavailable>.
+</system-reminder>
 ```
 
 #### Token 影响

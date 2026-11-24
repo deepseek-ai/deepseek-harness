@@ -62,7 +62,7 @@ describe('time-context activation', () => {
     expect(adapter.requests).toHaveLength(outcome === 'ready' ? 1 : 0)
     if (outcome === 'ready') {
       expect(adapter.requests[0]?.messages.flatMap(message => message.content)
-        .some(block => block.type === 'text' && block.text.startsWith('Time sampled while preparing turn 1, step 1:'))).toBe(true)
+        .some(block => block.type === 'text' && block.text.startsWith('<system-reminder>\nTime sampled while preparing turn 1, step 1:'))).toBe(true)
     }
     if (outcome === 'failed') expect(errors).toContainEqual(new Error('time registration failed'))
   })
