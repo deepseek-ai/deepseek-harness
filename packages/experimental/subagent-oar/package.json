@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-subagent-oar",
   "description": "Experimental one-shot subagents through OAR runtimes",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -51,7 +51,7 @@
     "@earendil-works/pi-ai": "^1.3.0",
     "@earendil-works/pi-coding-agent": "^1.3.0",
     "cross-spawn": "^7.0.6",
-    "undici": "8.10.2",
+    "undici": "8.12.4",
     "which": "^2.0.2"
   },
   "devDependencies": {

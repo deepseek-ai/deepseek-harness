@@ -73,7 +73,7 @@ One fork request binds its viewer, share, source, operation identity, and comple
 
 A share can only be created by a verified owner. The dialog shows the identity the owner's DSH read back — name, expiry, when it will renew — and uses a label derived from the identity when there is no display name. The code that creates the share refuses an unverified owner as well, so the question is not settled by whether a button was clickable.
 
-Signing in happens once, in a window the page opens while the owner clicks. The DSH creates a short-lived transaction tied to the Liveshare server address, to the Liveshare server instance, and to the page allowed to finish it; the page opens the sign-in page the DSH names, accepts one one-time code only from that exact origin, window, and transaction, and hands it back to its own DSH.
+The Host binds a short-lived transaction to the Relay address, its own instance, and the origin allowed to read the result. The owner can approve the same link in any browser: the Relay holds the code for the Host to collect, so approval needs neither an opener window nor a callback to a reachable Host address. Concurrent status reads share one in-flight collection per transaction.
 
 The Owner redeems the code with the verifier it retained, stores the credential with owner-only permissions, and sends it only to the Liveshare server address that issued it. New registration requires that verified credential; existing-share reconnect uses the share's management token, and explicit identity claim preserves the share's ACL, mode, expiry, and token. A share's named colleagues are the owner's stored selection plus the deployment's own allowlist; nothing is derived from a display identity.
 
@@ -95,7 +95,7 @@ The viewer page is tested in-process: the test assembles the page from the carri
 
 The package ships one Host program and one browser face. Its public entries are the Host export (`lib/index.js`), `./client` (`lib/client.js`, a closure-factory bundle), `./viewer-declarations`, the share-management Remote's `./typert` and `./remote` faces, `./types`, the bundle patch `./cordis.patch.yml`, and the locale JSON files. The manifest declares the browser face as `dsh.client` with `platform: web` and the client services it needs; that face reads `__DSH_LIVESHARE_VIEWER__`, mounts the viewer session plugin and its brand, model, permission, session-row, and share-path surfaces on a served viewer page, and otherwise mounts the owner's generated Remote before the Session-header Share action.
 
-Share management is one `liveshareShares` Typert Remote with twelve methods — `create`, `list`, `stop`, `updatePermissions`, `setCapabilities`, `capabilities`, `relay`, `setRelay`, `identity`, `audit`, `testRelay`, and `testPublish` — over the operations the owner host runs. The only same-origin HTTP routes left are the four owner sign-in and credential routes: `/api/liveshare.ownerLoginStart`, `/api/liveshare.ownerLoginRedeem`, `/api/liveshare.ownerLoginCancel`, and `/api/liveshare.ownerCredential`.
+The `liveshareShares` Typert Remote exposes the Host's share-management operations. The Share dialog uses three same-origin HTTP routes for sign-in: `/api/liveshare.ownerLoginStart`, `/api/liveshare.ownerLoginStatus`, and `/api/liveshare.ownerLoginCancel`. The separate `/api/liveshare.ownerCredential` route imports a credential; the dialog does not use it for sign-in.
 
 The outgoing gateway is a supervised child process whose source entry is `src/owner-gateway/cli.ts` and whose published entry is `lib/owner-gateway/cli.js`; the directory name keeps it distinct from the DSH API gateway.
 
@@ -127,7 +127,7 @@ The outgoing gateway is a supervised child process whose source entry is `src/ow
 - A share uses one of two tiers and that tier's sandbox; unknown modes, unreadable answers, and shares without a mode stay readable but are never driven.
 - A share cannot be created without a verified owner identity.
 - A share created from the dialog carries `open`; a stored `selected` or `approval` record keeps its recorded ACL and access summary, and `create` still stores a requested `selected` mode with its subjects.
-- Sign-in accepts one one-time code from the transaction's origin, window, and state, and nothing else; a failed or abandoned attempt discards the transaction, and no credential, cookie, or code reaches a URL, storage, or a log.
+- Only the bound page origin can read the transaction result. The Host exchanges a Relay-issued code against the bound Relay and Host instance using its PKCE verifier; the Share dialog reads no login cookie and receives neither code nor credential.
 - Real Controller, ToolRuntime, filesystem, and profile tests cover fork identity, cold enforcement, bounded execution, revocation, and normal cancellation. The built viewer must use its real POST carrier and Owner authorization handler; deterministic display fixtures do not replace execution or persistence tests.
 - Generated API documentation and both SDK projections remain aligned with the `user-rpc` source principal, which only the `agent/pre-step` admission check consumes.
 - `ViewerSessionMode` has two members, and a persisted `fork-readonly` record is rejected when the owner state loads.

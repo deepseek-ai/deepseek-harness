@@ -20,8 +20,8 @@
 |---|---|
 | 包导出面、包形态、构建面、依赖声明 | [package-surface.zh.md](package-surface.zh.md) |
 | 远程服务、`@Remote` 方法、API 分发、API 层的业务归属 | [remote-and-api.zh.md](remote-and-api.zh.md) |
-| 客户端组件、slots、store、hooks、effect | [client-components.zh.md](client-components.zh.md) |
+| 客户端组件、slots、store、hooks、effect、样式表选择器 | [client-components.zh.md](client-components.zh.md) |
 | Session 读取、持有、会话节点、renderer | [conversation-and-session.zh.md](conversation-and-session.zh.md) |
 | 时序、状态表示、共享归属、去中心化、重构、迁移、性能证据、清理、回调、子进程 | [general.zh.md](general.zh.md) |
 
-类型定义与各子系统语义见 [subsystems/](../subsystems/README.zh.md)；本目录承载**规则**，语义页承载**类型的含义**。[dsh-code-review](../../.agents/skills/dsh-code-review/SKILL.md) 在评审 pull request 时读本目录，日常修改经 [AGENTS.md](../../AGENTS.md) 路由到同一张表。
+类型定义与各子系统语义见 [subsystems/](../subsystems/README.zh.md)；本目录承载**规则**，语义页承载**类型的含义**。[dsh-code-review](../../.agents/skills/dsh-code-review/SKILL.md) 在评审 pull request 时读本目录，日常修改经 [AGENTS.md](../../AGENTS.md) 路由到同一张表。带编号的代码设计规则见 [DSH 核心准则](../core-guidelines/README.zh.md)。

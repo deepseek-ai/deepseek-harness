@@ -1,0 +1,430 @@
+[
+  {
+    "name": "text",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Hello world, 你好，世界 🚀 — plain text stays plain."
+      }
+    ]
+  },
+  {
+    "name": "inline-marks",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "plain bold italic underline strike const x = 1"
+      }
+    ]
+  },
+  {
+    "name": "spoiler",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "before hidden text after"
+      }
+    ]
+  },
+  {
+    "name": "link",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "see the documentation for details"
+      }
+    ]
+  },
+  {
+    "name": "at-user",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "@Alice please take a look"
+      }
+    ]
+  },
+  {
+    "name": "at-all",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "@所有人 build is green again"
+      }
+    ]
+  },
+  {
+    "name": "at-here",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "@在线成员 standup in five minutes"
+      }
+    ]
+  },
+  {
+    "name": "at-role",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "@Admins please review"
+      }
+    ]
+  },
+  {
+    "name": "channel",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "moved the discussion to #general"
+      }
+    ]
+  },
+  {
+    "name": "emoji",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "nice work :party:!"
+      }
+    ]
+  },
+  {
+    "name": "span-color",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "status: failed"
+      }
+    ]
+  },
+  {
+    "name": "line-break",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "first line\nsecond line"
+      }
+    ]
+  },
+  {
+    "name": "headings",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Heading one\nHeading two\nHeading three\nHeading four\nHeading five\nHeading six"
+      }
+    ]
+  },
+  {
+    "name": "list-unordered",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "• first item\n• second item\n• third item"
+      }
+    ]
+  },
+  {
+    "name": "list-ordered",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "3. third item\n4. fourth item"
+      }
+    ]
+  },
+  {
+    "name": "list-checked",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "☑ done task\n☐ open task"
+      }
+    ]
+  },
+  {
+    "name": "list-nested",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "• parent item\n  ◦ child item\n  ◦ second child"
+      }
+    ]
+  },
+  {
+    "name": "blockquote",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "> quoted line\n> second quoted line\n> > deeper quote"
+      }
+    ]
+  },
+  {
+    "name": "code-block",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "const answer = 42\nconsole.log(answer)"
+      }
+    ]
+  },
+  {
+    "name": "code-block-plain",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "no language here\nsecond line"
+      }
+    ]
+  },
+  {
+    "name": "divider",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "above the line\n────────\nbelow the line"
+      }
+    ]
+  },
+  {
+    "name": "table",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Name: apple\nQty: 3\nName: banana\nQty: 7\nsecond paragraph"
+      }
+    ]
+  },
+  {
+    "name": "table-cells",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Section: first\nDetails: paragraph one\nparagraph two"
+      }
+    ]
+  },
+  {
+    "name": "details",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "▸ More information\nhidden body text"
+      }
+    ]
+  },
+  {
+    "name": "small",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "— fine print note"
+      }
+    ]
+  },
+  {
+    "name": "image",
+    "payloads": [
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:image:https://example.com/media/block.png"
+        }
+      }
+    ]
+  },
+  {
+    "name": "image-inline",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "text before "
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:image:https://example.com/media/inline.png"
+        }
+      },
+      {
+        "msg_type": 0,
+        "content": " text after"
+      }
+    ]
+  },
+  {
+    "name": "media",
+    "payloads": [
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:audio:https://example.com/media/voice.opus"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:video:https://example.com/media/clip.mp4"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:file:https://example.com/media/report.pdf"
+        }
+      }
+    ]
+  },
+  {
+    "name": "buttons",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "[Stop] Open Compact /compact"
+      }
+    ]
+  },
+  {
+    "name": "button-theme",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "[Delete everything]"
+      }
+    ]
+  },
+  {
+    "name": "button-inline",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "run Status /status to check"
+      }
+    ]
+  },
+  {
+    "name": "form",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "[Title]\n☑ I agree\n[Size: Small / Large]\n[选择: Alpha / Beta]\n[Send]"
+      }
+    ]
+  },
+  {
+    "name": "title",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Release notes\n— subtitle text\nbody of the titled message"
+      }
+    ]
+  },
+  {
+    "name": "quote",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "answer that quotes another message"
+      }
+    ]
+  },
+  {
+    "name": "fallback",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "headline in bold\nbody below the alternative"
+      }
+    ]
+  },
+  {
+    "name": "title-and-quote",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Weekly digest\n— subtitle text\nboth envelope elements at once"
+      }
+    ]
+  },
+  {
+    "name": "markdown-input",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "bold text\n• item one\n• item two\nconst x = 1"
+      }
+    ]
+  },
+  {
+    "name": "forward",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "[合并转发]\nmessage after the forward"
+      }
+    ]
+  },
+  {
+    "name": "raw",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "raw fallback text"
+      }
+    ]
+  },
+  {
+    "name": "long-cjk",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "这是一段很长的中文内容，用来验证换行、标点符号（包括全角括号）以及 emoji 😀🎉 在处理过程中不会丢失。第二句话继续说明：表格、列表、代码块等元素在平台不支持时应当降级为文本，而不是被丢弃。"
+      }
+    ]
+  },
+  {
+    "name": "everything",
+    "payloads": [
+      {
+        "msg_type": 0,
+        "content": "Everything at once\n— subtitle text\nplain bolditalicunderstrikesecretinline-codelink-text@Alice@所有人@在线成员@Admins#general:party:green-text\nafter the break\nHeading one\nHeading two\nHeading three\nHeading four\nHeading five\nHeading six\n• first item\n☑ done task\n• parent item\n  ◦ child item\n3. third item\n4. fourth item\n> quoted line\n> > deeper quote\nconst answer = 42\n────────\nName: apple\nQty: 3\nsecond paragraph\n▸ More information\nhidden body text\n— fine print note\n[Stop] Open Compact /compact\nrun Status /status to check\n[Delete everything]\n[Title]\n☑ I agree\n[Size: Small / Large]\n[选择: Alpha / Beta]\n[Send]\n[合并转发]\nraw fallback text\n[文件: report.pdf]"
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:image:https://example.com/media/inline.png"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:image:https://example.com/media/block.png"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:audio:https://example.com/media/voice.opus"
+        }
+      },
+      {
+        "msg_type": 7,
+        "content": " ",
+        "media": {
+          "file_info": "file_info:video:https://example.com/media/clip.mp4"
+        }
+      }
+    ]
+  }
+]

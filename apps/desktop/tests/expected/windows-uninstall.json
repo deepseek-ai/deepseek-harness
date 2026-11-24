@@ -1,3 +1,23 @@
 {
-  "cases": ["interactive", "silent", "upgrade", "replaced", "home-inside"]
+  "cases": [
+    "interactive",
+    "silent",
+    "unowned",
+    "missing-location",
+    "missing-location-short",
+    "missing-location-foreign",
+    "owned-retained",
+    "upgrade",
+    "replaced",
+    "home-inside",
+    "home-slash",
+    "home-tilde",
+    "home-slash-inside",
+    "registration-error",
+    "main-locked",
+    "self-copy",
+    "auxiliary-locked",
+    "unsafe-root",
+    "save-report"
+  ]
 }

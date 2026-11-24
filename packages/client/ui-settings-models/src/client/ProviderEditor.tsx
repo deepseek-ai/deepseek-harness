@@ -250,12 +250,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
-  // Only a hand-declared pi-ai route's rows edit reasoning levels — the one
-  // model list with no installed catalog behind it — so only there are the
-  // levels read and the declarations checked.
+  // Every pi-ai route's rows edit reasoning levels, catalog and hand-declared
+  // alike: the adapter resolves a row's `reasoningEfforts` the same way on
+  // both, so the levels are read and the declarations checked for both.
   const schemaReasoningLevels = useMemo(
-    () => layout === 'pi-ai' && props.declared === true ? reasoningLevelChoices(namespace, schema) : [],
-    [layout, props.declared, namespace, schema],
+    () => layout === 'pi-ai' ? reasoningLevelChoices(namespace, schema) : [],
+    [layout, namespace, schema],
   )
   // What the form currently shows, which is what an interrogation must ask and
   // what decides the protocol's own constraints: an edited-but-unsaved protocol.

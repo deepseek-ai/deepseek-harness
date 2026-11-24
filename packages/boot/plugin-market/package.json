@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plugin-market",
   "description": "Configured plugin market indexes for the Web Discover page and the plugin_market agent tool",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -103,6 +103,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@types/hosted-git-info": "^3.0.5",
-    "@types/semver": "^7.8.0"
+    "@types/semver": "^7.8.0",
+    "@deepseek-ai/dsh-session-projection": "workspace:*"
   }
 }

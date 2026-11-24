@@ -32,7 +32,7 @@ import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
-import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
+import * as ToolSessionControl from '@deepseek-ai/dsh-tool-session-control'
 import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -64,6 +64,9 @@ import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
 import * as TerminalPanel from '@deepseek-ai/dsh-terminal-panel'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
+import { Config as ImConfig } from '@deepseek-ai/dsh-im/src/config.ts'
+import type { ImToolHost } from '@deepseek-ai/dsh-im/src/tools.ts'
+import { applyTools as applyImTools } from '@deepseek-ai/dsh-im/src/tools.ts'
 import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
 import ScheduleService from '@deepseek-ai/dsh-schedule'
 import Lsp from '@deepseek-ai/dsh-lsp'
@@ -216,6 +219,34 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-im',
+    dir: 'im',
+    source: 'packages/experimental/im/src/tools.ts',
+    requires: ['ctx.tools', 'ctx.im', 'ctx.systemPrompt', 'ctx.fs + ctx.workingDirectory (im_send_file)'],
+    writes: ['tool/call', 'IM send receipts for publication', 'tool/result'],
+    mount(ctx) {
+      // The catalog reads schemas without executing IM operations or prompt callbacks:
+      // `applyTools` is the service's own registration entry, so no ImService boot is needed.
+      applyImTools(ctx, {} as ImToolHost, ImConfig())
+      return Promise.resolve()
+    },
+    note: 'Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-session-control',
+    dir: 'tool-session-control',
+    source: 'packages/session/tool-session-control/src/index.ts',
+    requires: ['ctx.tools', 'ctx.sessionController', 'ctx.workspaceRegistry', 'a calling Agent'],
+    writes: ['tool/call', 'agent/inbox/spliced in the recipient', 'tool/result'],
+    async mount(ctx) {
+      // Schema harvest never executes a tool, so both Host services are empty stubs.
+      ctx.provide('sessionController', {} as Context['sessionController'])
+      ctx.provide('workspaceRegistry', {} as Context['workspaceRegistry'])
+      await ctx.plugin(ToolSessionControl)
+    },
+    note: 'The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target.',
+  },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',
     dir: 'plugin-manager',
@@ -385,7 +416,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(ToolCordis)
     },
     note:
-      'Standard and Creator modes provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager.',
+      'The Desktop Standard and Creator modes and the SDK profile provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',
@@ -435,10 +466,10 @@ const TOOL_PACKAGES: ToolPackage[] = [
       // The catalog seam marker opts into
       // the attachments-conditional image schema without attachment I/O.
       await ctx.plugin(CatalogAttachmentStore)
-      await ctx.plugin(ToolFs, { applyPatch: true })
+      await ctx.plugin(ToolFs)
     },
     note:
-      'The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers only with `applyPatch: true`; the catalog sets it so the schema is documented. `dsh-base` and the Web `standard` preset enable it; the Web `ptc` and `cordis` presets and the PTC overlay state `applyPatch: false`.',
+      'The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers when `applyPatch` resolves to true; unset, it follows `edit`, so every shipped composition that keeps `edit` offers it, including the Web `standard`, `ptc`, and `cordis` presets.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-fs-search',
@@ -707,29 +738,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-working-directory',
-    dir: 'tool-working-directory',
-    source: 'packages/session/tool-working-directory/src/index.ts',
-    requires: ['ctx.tools', 'ctx.workingDirectory'],
-    writes: ['tool/call', 'working-directory/change', 'user context for directory changes', 'tool/result'],
-    async mount(ctx) {
-      await ctx.plugin(ToolWorkingDirectory)
-    },
-    note: 'Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed.',
-  },
-  {
     pkg: '@deepseek-ai/dsh-experimental-tool-worktree',
     dir: 'tool-worktree',
     source: 'packages/experimental/tool-worktree/src/index.ts',
     requires: ['ctx.tools', 'ctx.worktrees', 'a calling Agent'],
-    writes: ['tool/call', 'Git branch and checkout', 'working-directory/change', 'tool/result'],
+    writes: ['tool/call', 'Git branch and checkout', 'workspace-root/change', 'tool/result'],
     async mount(ctx) {
       ctx.provide('worktrees', {
         create: () => Promise.reject(new Error('gen-tool-catalog: worktree creation is unavailable during schema harvest')),
+        enter: () => Promise.reject(new Error('gen-tool-catalog: entering a worktree is unavailable during schema harvest')),
+        exit: () => Promise.reject(new Error('gen-tool-catalog: leaving a worktree is unavailable during schema harvest')),
       })
       await ctx.plugin(ToolWorktree)
     },
-    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.',
+    note: 'Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. `enter_worktree` moves the Session into the worktree a name selects in the pool of the checkout it works in, creating a new branch and checkout from a pinned local commit under existing write permissions when none has that name. `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-workflow',

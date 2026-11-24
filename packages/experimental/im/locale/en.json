@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM automation",
+    "description": "Store and dispatch messages from admitted Feishu/Lark or QQ chats, host agent sessions, and publish replies with durable receipts."
+  }
+}

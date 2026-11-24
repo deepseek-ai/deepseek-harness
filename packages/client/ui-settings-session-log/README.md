@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use **Upload Session Log when using the official model API** above the version number in **Settings → General** to control Session-log upload with DeepSeek API requests. The switch shows the accepted Host setting and saves each change immediately. It appears only while the Host exposes the upload setting; read-only clients cannot change it.
+Use **Upload session log when using the official model API** in **Settings → General → Data management** to control Session-log upload with DeepSeek API requests. The switch shows the accepted Host setting and saves each change immediately. It appears only while the Host exposes the upload setting; read-only clients cannot change it.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ The Web bundle mounts this companion. Its switch edits the Host plugin's `enable
 <details>
 <summary>Implementation details — click to expand</summary>
 
-The companion contributes a `settings.general.item` row while `session-log-deepseek` is served and a `shell.overlay` toast for mutation outcomes. The shared form owns persistence and reconnect synchronization; the companion owns only pending-write state and localized notices.
+The companion contributes a `settings.general.group.data.item` row while `session-log-deepseek` is served and a `shell.overlay` toast for mutation outcomes. The shared form owns persistence and reconnect synchronization; the companion owns only pending-write state and localized notices.
 
 </details>
 

@@ -12,6 +12,14 @@ describe('native protocol generation', () => {
     expect(await readFile(new URL('../native/Sources/CuaNative/NativeProtocol.generated.swift', import.meta.url), 'utf8')).toBe(generated.swift)
   })
 
+  it('uses the requesting connection for held-input queries and cleanup', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    for (const method of ['getHeldInputs', 'releaseHeldInputs']) {
+      expect(validate({ id: 'held', method, params: {} })).toBe(true)
+      expect(validate({ id: 'foreign', method, params: { taskId: 'other' } })).toBe(false)
+    }
+  })
+
   it('resolves recursive JSON arguments in the complete native request schema', () => {
     const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
     const target = { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' }
@@ -19,6 +27,11 @@ describe('native protocol generation', () => {
     expect(validate({ id: 'value', method: 'setValue', params: { ...target, value } })).toBe(true)
     expect(validate({ id: 'action', method: 'performAction', params: { ...target, action: 'AXTextArea.AXValue.Set', argument: value } })).toBe(true)
     expect(validate({ id: 'invalid', method: 'setValue', params: target })).toBe(false)
+  })
+
+  it.each(['', null, ' \t\n', 'Editor'])('admits strings and null as native application queries: %j', (query) => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    expect(validate({ id: 'all-apps', method: 'findApps', params: { query, maxAppMatches: 1 } })).toBe(true)
   })
 
   it('admits shared pointer modifier names for native input validation', () => {
@@ -35,6 +48,19 @@ describe('native protocol generation', () => {
       for (const modifier of ['unknown', 7]) {
         expect(validate({ id: 'modifiers', method, params: { ...params, modifiers: [modifier] } })).toBe(false)
       }
+    }
+  })
+
+  it('admits an action schema request with only an action name', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    expect(validate({ id: 'schema', method: 'getActionSchema', params: { action: 'AXPress' } })).toBe(true)
+    const invalid = [
+      {}, { action: '' }, { action: 7 }, { action: 'AXPress', appHandle: 'app' },
+      { action: 'AXPress', windowId: '1' }, { action: 'AXPress', snapshotId: 'snapshot' },
+      { action: 'AXPress', elementId: '0' },
+    ]
+    for (const params of invalid) {
+      expect(validate({ id: 'schema', method: 'getActionSchema', params })).toBe(false)
     }
   })
 
@@ -61,8 +87,10 @@ describe('native protocol generation', () => {
     { method: 'paste', params: { appHandle: 'app', text: 'text', pasteReadTimeoutMs: 1000 } },
     { method: 'mouseMove', params: { appHandle: 'app', windowId: '1', x: 0, y: 0, allowSystemPointer: true } },
     { method: 'findApps', params: { query: 'Editor', maxAppMatches: 1 } },
-    { method: 'releaseHeldKeys', params: { runId: 'execution' } },
-    { method: 'launchApp', params: { appHandle: 'pending' } },
+    { method: 'getHeldInputs', params: {} },
+    { method: 'releaseHeldInputs', params: {} },
+    { method: 'takeWindowActivity', params: { appHandle: 'app', observations: { '7': '123' } } },
+    { method: 'clearWindowActivity', params: {} },
     { method: 'applicationIcons', params: { paths: ['/Applications/Fixture.app'] } },
     { method: 'permissionStatus', params: {} },
     { method: 'requestPermission', params: { permission: 'accessibility' } },

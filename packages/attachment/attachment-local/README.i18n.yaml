@@ -18,14 +18,17 @@
   en: 912a19be4b59ff8a
   zh: 9c14694cf2ebbaf2
 /deepseek-ai-dsh-attachment-local/use-this-package/minimal-configuration:
-  en: 9597c3d9779cb93d
-  zh: 900baa94138cc7de
+  en: 407c75c6f2e8834b
+  zh: 35dbcf0974fa78bb
 /deepseek-ai-dsh-attachment-local/use-this-package/where-your-images-are-stored-and-how-long-they-last:
   en: 4ee90b8f74baa38c
   zh: 9c577709ec55eb82
 /deepseek-ai-dsh-attachment-local/use-this-package/what-happens-when-you-attach-an-image:
   en: 75ba799b1e4edba4
   zh: 06c5f76200e8da8a
+/deepseek-ai-dsh-attachment-local/use-this-package/request-image-byte-limits:
+  en: d2ad0b047828baf8
+  zh: 9c22a4b87fafdbec
 /deepseek-ai-dsh-attachment-local/use-this-package/what-can-go-wrong:
   en: 377696b2dc08b170
   zh: 6b831ef31c93f712
@@ -36,8 +39,8 @@
   en: dcd9857653645420
   zh: a27259a09f17465d
 /deepseek-ai-dsh-attachment-local/understand-the-implementation/write-and-read-paths:
-  en: 4cbbe8a1466ed46f
-  zh: 49d2d118501867d3
+  en: 93c691ba1845b5bf
+  zh: c9902789a6611746
 /deepseek-ai-dsh-attachment-local/understand-the-implementation/source-map:
   en: 05af85aa85934d01
   zh: 1c89e80d496dc0a3

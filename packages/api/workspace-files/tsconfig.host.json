@@ -9,6 +9,7 @@
     "src/index.ts",
     "src/types.ts",
     "src/changes.ts",
+    "src/descent.ts",
     "src/search.ts"
   ],
   "references": [
@@ -35,6 +36,12 @@
     },
     {
       "path": "../../util/deque"
+    },
+    {
+      "path": "../../session/session-projection-cache"
+    },
+    {
+      "path": "../../session/working-directory"
     },
     {
       "path": "../../util/ripgrep"

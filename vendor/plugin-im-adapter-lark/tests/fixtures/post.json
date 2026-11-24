@@ -1,0 +1,32 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_post",
+    "app_id": "cli_lark",
+    "create_time": "1700000010000"
+  },
+  "event": {
+    "sender": {
+      "sender_id": { "open_id": "ou_user" },
+      "sender_type": "user",
+      "tenant_key": "t1"
+    },
+    "message": {
+      "message_id": "om_post",
+      "chat_id": "oc_chat",
+      "chat_type": "group",
+      "message_type": "post",
+      "create_time": "1700000010000",
+      "content": "{\"title\":\"周报\",\"content\":[[{\"tag\":\"text\",\"text\":\"完成 M1 \"},{\"tag\":\"a\",\"text\":\"看板\",\"href\":\"https://example.com/board\"}],[{\"tag\":\"at\",\"user_id\":\"@_user_1\",\"user_name\":\"Alice\"},{\"tag\":\"text\",\"text\":\" 请确认\"}],[{\"tag\":\"img\",\"image_key\":\"img_v2_post\"}],[{\"tag\":\"media\",\"file_key\":\"file_v2_clip\",\"image_key\":\"img_v2_poster\",\"duration\":4200}],[{\"tag\":\"code_block\",\"language\":\"ts\",\"text\":\"const a = 1\"}],[{\"tag\":\"hr\"}],[{\"tag\":\"emotion\",\"emoji_type\":\"😊\"}]]}",
+      "mentions": [
+        {
+          "key": "@_user_1",
+          "id": { "open_id": "ou_alice" },
+          "name": "Alice",
+          "tenant_key": "t1"
+        }
+      ]
+    }
+  }
+}

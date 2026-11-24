@@ -18,7 +18,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -78,10 +79,48 @@
             {
               "type": "text",
               "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
+            },
+            {
+              "type": "text",
+              "text": "{{system}}"
             }
           ],
           "source": {
-            "kind": "system-prompt"
+            "kind": "system-prompt",
+            "sections": [
+              {
+                "name": "harness:identity",
+                "order": -1000,
+                "state": "active",
+                "contentIndex": 0
+              },
+              {
+                "name": "tool:jobs",
+                "order": 1600,
+                "state": "active",
+                "contentIndex": 1
+              },
+              {
+                "name": "tool:workflow",
+                "order": 2600,
+                "state": "active",
+                "contentIndex": 2
+              },
+              {
+                "name": "tool:subagent",
+                "order": 2800,
+                "state": "active",
+                "contentIndex": 3
+              }
+            ]
           },
           "id": "{{messageId}}"
         }
@@ -119,7 +158,8 @@
           }
         ],
         "source": {
-          "kind": "user"
+          "kind": "user",
+          "clientTimeZone": "UTC"
         },
         "role": "user",
         "id": "{{messageId}}"
@@ -208,8 +248,7 @@
             "job_output",
             "snapshot_double",
             "subagent",
-            "workflow",
-            "working_directory"
+            "workflow"
           ]
         },
         "reason": "initial"
@@ -303,8 +342,7 @@
             "job_output",
             "snapshot_double",
             "subagent",
-            "workflow",
-            "working_directory"
+            "workflow"
           ]
         },
         "reason": "series"
@@ -1511,7 +1549,8 @@
                   }
                 ],
                 "source": {
-                  "kind": "user"
+                  "kind": "user",
+                  "clientTimeZone": "UTC"
                 },
                 "role": "user",
                 "id": "{{messageId}}"
@@ -1608,10 +1647,48 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 3
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -1661,7 +1738,8 @@
               }
             ],
             "source": {
-              "kind": "user"
+              "kind": "user",
+              "clientTimeZone": "UTC"
             },
             "role": "user",
             "id": "{{messageId}}"
@@ -1768,8 +1846,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -1893,8 +1970,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "series"
@@ -3109,10 +3185,48 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 3
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -3255,8 +3369,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"
@@ -4128,10 +4241,48 @@
                 {
                   "type": "text",
                   "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
+                },
+                {
+                  "type": "text",
+                  "text": "{{system}}"
                 }
               ],
               "source": {
-                "kind": "system-prompt"
+                "kind": "system-prompt",
+                "sections": [
+                  {
+                    "name": "harness:identity",
+                    "order": -1000,
+                    "state": "active",
+                    "contentIndex": 0
+                  },
+                  {
+                    "name": "tool:jobs",
+                    "order": 1600,
+                    "state": "active",
+                    "contentIndex": 1
+                  },
+                  {
+                    "name": "tool:workflow",
+                    "order": 2600,
+                    "state": "active",
+                    "contentIndex": 2
+                  },
+                  {
+                    "name": "tool:subagent",
+                    "order": 2800,
+                    "state": "active",
+                    "contentIndex": 3
+                  }
+                ]
               },
               "id": "{{messageId}}"
             }
@@ -4270,8 +4421,7 @@
                 "job_output",
                 "snapshot_double",
                 "subagent",
-                "workflow",
-                "working_directory"
+                "workflow"
               ]
             },
             "reason": "initial"

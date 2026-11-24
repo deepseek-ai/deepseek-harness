@@ -39,7 +39,9 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 
 ### 全局面板入口
 
-插件在 root 作用域的 `sidebar.panellist` list 中注册图标组件，提供 `id`、可选 `order`，以及字符串或 locale-aware 的 `label`。同一个 id 寻址布局中 root 作用域 `main` keyed slot 的组件；选择不存在的主面板条目会抛错，并保留当前选中态。标签提供普通可见文字、无障碍名称和折叠提示。展开态导航行高 32px，间距为 2px；折叠窄栏控件保持 36px 高和 12px 间距。每一行通过 `usePanelInfo` 读取自己的选中态；DOM 焦点移到搜索框或目录选择器时，显示的面板及其列表项选中态不变。没有面板注册项时，列表及其间距均不渲染。产品随附的组合不注册示例面板。
+插件在 root 作用域的 `sidebar.panellist` list 中注册图标组件，提供 `id`、可选 `order`，以及字符串或 locale-aware 的 `label`。同一个 id 寻址布局中 root 作用域 `main` keyed slot 的组件；选择不存在的主面板条目会抛错，并保留当前选中态。标签提供普通可见文字、无障碍名称和折叠提示。展开态导航行高 32px，间距为 2px；折叠窄栏控件保持 36px 高和 12px 间距。展开态导航区域与工作区标题行之间保留 8px 底部外边距。每一行通过 `usePanelInfo` 读取自己的选中态；DOM 焦点移到搜索框或目录选择器时，显示的面板及其列表项选中态不变。没有面板注册项时，列表及其间距均不渲染。产品随附的组合不注册示例面板。
+
+面板还可以用相同 `id` 在 root 作用域的 `sidebar.panellist.trailing` list 中注册不可交互的行内内容，例如数量。它接收 `wide` 与 `active`。展开的行把它排在标题之后，没有内容的行保留完整的标题宽度。在支持悬停的设备上，内容停在行尾、取消固定操作所在的位置，行被悬停或获得键盘焦点时让位给该操作，与会话行的时间让位给行内操作的方式相同；在触屏设备上取消固定操作始终显示，内容留在它之前。收起的窄栏在图标右上角显示它。它渲染在行按钮内，因此不能包含可交互元素；它的文字成为按钮的无障碍描述，因此装饰性的部分必须设为 `aria-hidden`。
 
 root 作用域的 `sidebar.panellist.actions` list 有注册项时，导航区域的面板行之后显示面板行样式的**更多**按钮；收起的窄栏以提示框显示其名称。它打开的菜单以该 list 的注册项为菜单行。每个注册项接收 `entries`（按注册顺序的可自定义面板，含 `id`、`label`、`pinned` 与 `active`；不含插件管理）、选中面板的 `onOpen(id)`、`onPinnedChange(id, pinned)`，以及关闭菜单的 `onDismiss()`。侧边栏在内存中保存所有会话共用的已收起面板 id 列表；插件管理入口始终显示。更多按钮显示时，展开态中除插件管理外的面板行在悬停或键盘聚焦时显示取消固定操作；不支持悬停的设备始终显示该操作。图标默认颜色与会话置顶标记一致，提示为“从左侧栏取消固定”。侧栏和更多菜单入口遵循相同的注册排序，不按固定时间重排。默认更多菜单在插件浏览和创建之前仅列出未固定的面板；打开面板不会将其固定，独立的固定图标则将该行放回侧边栏并关闭菜单。插件重新加载时选择重置，不读取旧 localStorage 值。收起只隐藏导航行，且仅在更多按钮显示时生效；`sidebar.panellist.actions` 没有注册项时，所有已注册的面板行重新显示。主面板、其注册和当前选中态不变。未注册面板的 id 保留在内存列表中，直到插件重新加载。
 
@@ -49,7 +51,7 @@ root 作用域的 `sidebar.panellist.actions` list 有注册项时，导航区�
 
 侧栏收起时，顶部展开按钮承载可选、不可交互的 `sidebar.toggle.badge` slot。占用方提供状态和提示内容，不增加操作，也不改变按钮的导航行为。
 
-root 作用域的 `sidebar.session.action` 是包裹新建会话行内容的 HOC 层：占用方以 `children` 收到该行的 Tooltip 与按钮，再把它们（可再包裹）连同自己的控件一起返回，因此无需新增包裹元素即可装饰该行。占用方只收到 `wide`；不添加任何内容时必须原样返回 `children`。展开态下这些控件与新建会话按钮同处一行，按钮占据剩余宽度；收起态下它们纵向排在新建会话图标下方。该行只在新建会话按钮渲染时渲染，各占用方仍自行检查访问权限。
+root 作用域的 `sidebar.session.action` HOC slot 包裹新建会话按钮及其 Tooltip。每层收到的 owner prop 只有 `wide`，并将 `children`（可再包裹）与自己的控件一起渲染。不添加任何内容的层必须返回 `children`。展开态下这些控件与新建会话按钮同处一行，按钮占据剩余宽度；收起态下它们纵向排在新建会话图标下方。该行只在新建会话按钮渲染时渲染，各占用方仍自行检查访问权限。
 
 展开内容跟随框架的列宽及其过渡。实时收起时，内容固定在展开宽度淡出，上方控件共用同一段透明度渐变，并向左平移进入 56px 轨道，由布局的栏滑动结束整段动画。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。固定在底部的 `sidebar.settings` 控件共用相同的透明度渐变时序，但不发生横向位移。
 
@@ -80,9 +82,9 @@ root 作用域的 `sidebar.session.action` 是包裹新建会话行内容的 HOC
 <details>
 <summary>实现细节——点击展开</summary>
 
-外壳是纯组合：`SidebarRootComponentProps` 组合布局 owner share、全局 `useSessions` 与 `useWorkspaces` 钩子、已声明的品牌、`sidebar.workspaces` 与 `sidebar.settings` 子 slot，以及注入的导航回调。侧边栏声明 `sidebar.panel.icon` Component Factory，由它拥有 `sidebar.panellist` list；面板行和更多菜单都通过该 factory 渲染面板注册的图标。面板元数据由列表注册和 locale 变化派生；选中态属于布局存储。注入的 `trackEntryClick(attributes)` 转发到 `ctx.get('productAnalytics')?.track('sidebar_menu_click', attributes)`；`selectPanel` 只负责选中，因此由各控件自行提供入口与位置。
+外壳是纯组合：`SidebarRootComponentProps` 组合布局 owner share、全局 `useSessions` 与 `useWorkspaces` 钩子、已声明的品牌、`sidebar.workspaces` 与 `sidebar.settings` 子 slot，以及注入的导航回调。侧边栏声明 `sidebar.panel.icon` Component Factory，由它拥有 `sidebar.panellist` list，并声明 `sidebar.panel.trailing` Component Factory，由它拥有 `sidebar.panellist.trailing` list；面板行和更多菜单通过前者渲染面板注册的图标，面板行通过后者渲染行尾内容。面板元数据由列表注册和 locale 变化派生；选中态属于布局存储。注入的 `trackEntryClick(attributes)` 转发到 `ctx.get('productAnalytics')?.track('sidebar_menu_click', attributes)`；`selectPanel` 只负责选中，因此由各控件自行提供入口与位置。
 
-展开态导航的左右外距为 8px，悬停与选中底色在两侧各内缩 3px，前置单元宽 16px，与标签间隔 6px。新会话内容居中，左右外边距为 4px。它与导航的初始 12px 间距由滚动区外的 4px 和随内容滚走的 8px 组成。logo 行无底部外边距；内容从侧栏左边缘向内 16px 开始，标记与名称间隔 5px。仅 macOS 非全屏、侧栏展开时，顶部开关向右偏移 4px，并在整个淡出期间保持该偏移。折叠态尺寸独立保留。
+展开态导航的左右外距为 8px，悬停与选中底色在两侧各内缩 3px，前置单元宽 16px，与标签间隔 6px。新会话内容居中，所在行保留 4px 左右外边距及 6px 底部外边距。导航额外保留滚动区外的 4px 与滚动区内、随内容滚走的 8px 间距。logo 行无底部外边距；内容从侧栏左边缘向内 16px 开始，标记与名称间隔 5px。仅 macOS 非全屏、侧栏展开时，顶部开关向右偏移 4px，并在整个淡出期间保持该偏移。折叠态尺寸独立保留。
 
 展开态的面板导航与 `sidebar.workspaces` 区块共用一个仅纵向滚动的视口，位于固定的品牌和新会话控件下方；底部操作与设置位于视口之外。横向溢出被裁切，工具栏边缘偏移不会产生横向滚动条。视口隐藏自身滚动条，只负责把导航滚走：区块最高为一个视口，在自己的滚动容器中滚动列表行，并由该容器绘制唯一可见的滚动条；区块放得下时，视口没有可滚动的距离。展开时视口带有 `data-sidebar-scrollport`，这是供测试和集成方定位的稳定标记。外壳负责底部渐隐。
 

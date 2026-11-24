@@ -75,13 +75,22 @@ export async function runArtifactDriver(config: string, report: string, sandbox:
   } finally { clearTimeout(force) }
 }
 
+/** Node PTC program formats the artifact driver accepts, mapped to their runtime configuration lines. */
+const PTC_EXECUTION = {
+  'per-call': '    executionMode: per-call\n',
+  'scoped-repl': '    executionMode: persistent-in-memory\n    replScoped: true\n',
+} as const
+
 /**
  * Serialize the shared provider composition around a selected helper transport.
  * @param connection - concrete Loader connection row, direct fixture or OpenSSH.
  * @param workspace - target-side workspace path.
+ * @param ptc - PTC program format the driver checks remotely.
  * @returns YAML consumed by the normal application boot path.
  */
-export function artifactComposition(connection: { id: string; name: string; config: object }, workspace: string): string {
+export function artifactComposition(
+  connection: { id: string; name: string; config: object }, workspace: string, ptc: keyof typeof PTC_EXECUTION = 'per-call',
+): string {
   const rows = [
     { id: 'projections', name: '@deepseek-ai/dsh-session-projection' },
     { id: 'policy', name: '@deepseek-ai/dsh-sandbox-policy', config: { mode: 'workspace-write', workspaceRoot: workspace } },
@@ -91,7 +100,7 @@ export function artifactComposition(connection: { id: string; name: string; conf
     { id: 'sandbox', name: '@deepseek-ai/dsh-sandbox-ssh' },
   ]
   return rows.map(row => `- ${JSON.stringify(row)}`).join('\n')
-    + '\n- id: ptc\n  name: "@deepseek-ai/dsh-ptc-runtime-node"\n  inject: [ssh]\n  config:\n    launch: !!js ctx.ssh.ptcLaunch\n'
+    + '\n- id: ptc\n  name: "@deepseek-ai/dsh-ptc-runtime-node"\n  inject: [ssh]\n  config:\n' + PTC_EXECUTION[ptc] + '    launch: !!js ctx.ssh.ptcLaunch\n'
 }
 
 /**
@@ -136,14 +145,15 @@ export async function verifySshHelper(argv: string[]): Promise<void> {
       TSX_TSCONFIG_PATH: join(root, 'tsconfig.base.json'), DSH_TELEMETRY_DISABLED: '1',
       ...(values.backend === undefined ? {} : { DSH_EXPECT_SANDBOX_RUNNER: values.backend }),
     }
-    const runs = await Promise.allSettled([0, 1].map(async (index) => {
+    // The concurrent consumers cover both PTC program formats; report-0 stays the per-call evidence.
+    const runs = await Promise.allSettled((['per-call', 'scoped-repl'] as const).map(async (ptc, index) => {
       const cwd = join(workspace, String(index))
       await mkdir(cwd)
       const config = join(temporary, `cordis-${index}.yml`)
       const report = join(temporary, `report-${index}.json`)
       await writeFile(config, artifactComposition({ id: 'ssh', name: join(fixtures, 'direct-helper.ts'), config: {
         executable, helperHash, workspace: cwd, home, path,
-      } }, cwd))
+      } }, cwd, ptc))
       await runArtifactDriver(config, report, values.sandbox, environment)
     }))
     const failures = runs.filter(result => result.status === 'rejected').map((result): unknown => result.reason)

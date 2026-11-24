@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM-Automatisierung",
+    "description": "Speichert und verteilt Nachrichten aus zugelassenen Feishu/Lark- oder QQ-Chats, hostet Agent-Sitzungen und veröffentlicht Antworten mit dauerhaften Belegen."
+  }
+}

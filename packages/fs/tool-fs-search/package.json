@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-fs-search",
   "description": "Model-facing filesystem discovery tools (glob, grep) backed by the packaged ripgrep binary (@vscode/ripgrep)",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -65,6 +65,7 @@
     "@deepseek-ai/dsh-scope": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
-    "@vscode/ripgrep": "^1.18.0"
+    "@vscode/ripgrep": "^1.18.0",
+    "@deepseek-ai/dsh-session-projection": "workspace:*"
   }
 }

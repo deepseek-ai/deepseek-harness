@@ -5,14 +5,14 @@ import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-approval/client'
 
 /**
- * Select application access and mouse-control questions; other interactions keep their renderer.
+ * Select application access and system-input questions; other interactions keep their renderer.
  * @param pending The session's currently elected interaction.
  * @returns Its Computer Use decision, or null for another interaction.
  */
 export function selectApplicationApproval(pending: ComposerChainProps['pendingInteraction']) {
   if (pending?.kind !== 'question' || pending.questions.length !== 1) return null
   const item = pending.questions[0] as (typeof pending.questions)[number]
-  if ((item.id !== 'cua-app-access' && item.id !== 'cua-mouse-control') || item.intent?.kind !== 'approval') return null
+  if ((item.id !== 'cua-app-access' && item.id !== 'cua-system-input') || item.intent?.kind !== 'approval') return null
   return { pending, item, intent: item.intent }
 }
 

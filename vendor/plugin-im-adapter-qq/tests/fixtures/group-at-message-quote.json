@@ -1,0 +1,33 @@
+{
+  "op": 0,
+  "s": 1203,
+  "t": "GROUP_AT_MESSAGE_CREATE",
+  "id": "GROUP_AT_MESSAGE_CREATE:2b3c4d5e6f708192a3b4c5d6e7f8091a",
+  "d": {
+    "id": "ROBOT1.0_z5Q6oR4tV9xC1yZ3aB7dE0fG2hJ4kL6mN8oQ0rS2tV4wY6xZ8aC0bD2eF4gH6jK8mN0pQ2rS4",
+    "author": {
+      "id": "D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1",
+      "member_openid": "D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1",
+      "member_role": "owner",
+      "username": "小华",
+      "bot": false
+    },
+    "content": " ",
+    "group_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+    "message_type": 103,
+    "timestamp": "2026-07-21T10:10:00+08:00",
+    "msg_elements": [
+      {
+        "content": "=== 消息 1 ===\n[消息内容] 今天的学习计划已完成\n\n=== 消息 2 ===\n[消息内容] 很棒！继续保持，明天继续加油\n\n=== 消息 3 ===\n[消息内容] 好的，一起进步！"
+      }
+    ],
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "msg_idx=REFIDX_zzzzzzzzzzzzzzz==",
+        "auth_token=9a8b7c6d5e4f3021a2b3c4d5e6f70819",
+        "ref_msg_idx=TMP_bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+      ]
+    }
+  }
+}

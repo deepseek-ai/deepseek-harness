@@ -118,8 +118,6 @@ kind: "package-reference"
 
 冷 `SessionObservation` 通过 `persistedEventCount` 区分 `events` 中已存储的前缀与内存中补出的中断轮次修复事件。fork 调用方将这些修复事件保留在孩子的后缀中。实时观察不带该字段，因为实时 log 没有读取时补出的修复。
 
-`inspectSession(id, read, signal?)` 准备冷 Session，但不发布或恢复运行它，然后在新的实时或准备状态截面上调用同步的领域读取函数。读取函数可以读取自己拥有的投影或解析策略，但不能修改或保留 Session。读取函数返回或抛出异常后都会释放观察；调用方只保留返回的数据。准备过程复用观察缓存并验证持久化历史。
-
 ### 读取与追踪
 
 `readSession` 通过 `Session.create` 回放日志，复用恢复的校验。`readSurface`、`listEvents` 与 `traceEvent` 共用一次 `foldSurface` 遍历，把事件分类为 `current`、`shadowed` 或 `log-only`，并校验从零开始且连续的 seq、表层标记的适用性以及替换或引用完整性；任何违规都以 `SESSION_QUERY_INVALID_SURFACE` 失败。追踪是一次性的：会话血缘只读取一次语料库并确定性遍历父级与后代树；事件追踪沿位置替换者跟进到最终节点，同时保持被引用源事件链接不传递。

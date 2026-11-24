@@ -50,6 +50,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
       },
       persistenceRoot: join(workdir, '.sessions'),
     })
+    expect(ctx.get('compaction'), 'the compaction service is active before model requests').toBeDefined()
     const agent = await ctx.agentLoop.create(brandString<SessionId>('e2e-compaction'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' }, { cwd: workdir })
 
     // Completed read turns cannot collapse into one retained parallel tool group.

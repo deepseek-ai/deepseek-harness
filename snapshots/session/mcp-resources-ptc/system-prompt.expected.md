@@ -4,7 +4,6 @@ You are a coding assistant powered by the deepseek-v4-flash model. Your bash too
 
 Verify your work by running the code or tests. Keep answers brief and factual.
 
-
 `run_code` is the only tool you can call directly — a tool call naming any other tool fails. Reach every tool the SDK declares below from inside the program.
 
 Check the [exit code: N] marker on every bash result; investigate failures before moving on.
@@ -31,7 +30,7 @@ create_goal may infer goal intent from a direct human request in any language. A
 
 Use the workflow tool ONLY when the user explicitly asks for a workflow or for large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. For one or two delegations, prefer plain subagent calls.
 
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. The concurrency limit of all the subagents is 8. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.
 
 Bash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.
 
@@ -150,7 +149,7 @@ interface ToolArgsMap {
     /** Max wait in milliseconds with wait: true. Defaults to and is capped by configuration. */
     timeout_ms?: number;
   } & Record<string, JsonValue>;
-  /** List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
+  /** List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation. */
   list_agents: Record<string, JsonValue>;
   /** List parameterized resource URI templates from an MCP server. */
   list_mcp_resource_templates: {
@@ -201,8 +200,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent: {
-    /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
-    cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request. */
     description: string;
     /** Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on. */
@@ -212,8 +209,6 @@ interface ToolArgsMap {
   } & Record<string, JsonValue>;
   /** Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes. */
   subagent_fork: {
-    /** Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent. */
-    cwd?: string;
     /** A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request. */
     description: string;
     /** Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on. */
@@ -289,11 +284,6 @@ interface ToolArgsMap {
     args?: Record<string, JsonValue>;
     /** Run as a background job: return a job id immediately instead of waiting; the return value arrives with the completion notice. */
     run_in_background?: boolean;
-  } & Record<string, JsonValue>;
-  /** Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories. */
-  working_directory: {
-    /** Existing directory to enter. Omit to read the current directory. */
-    cd?: string;
   } & Record<string, JsonValue>;
   /** Create or fully replace a UTF-8 text file. */
   write: {
@@ -450,11 +440,15 @@ interface ToolOutputMap {
       finishedAt?: number;
     };
   };
-  list_agents: ({
-    name: string;
-    status: "running" | "inactive" | "corrupt" | "unsupported" | "unavailable";
-    description?: string;
-  })[];
+  list_agents: {
+    running: number;
+    limit: number;
+    agents: ({
+      name: string;
+      status: "running" | "inactive" | "corrupt" | "unsupported" | "unavailable";
+      description?: string;
+    })[];
+  };
   list_mcp_resource_templates: JsonValue;
   list_mcp_resources: JsonValue;
   read: {
@@ -558,10 +552,6 @@ interface ToolOutputMap {
     runId: string;
     agentsStarted: number;
     result: JsonValue;
-  };
-  working_directory: {
-    /** Current absolute working directory. */
-    cwd: string;
   };
   write: {
     /** Canonical absolute path in the filesystem execution world. */

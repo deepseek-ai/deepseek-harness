@@ -44,7 +44,7 @@ describe('liveshare host activation', () => {
     expect(paths).toEqual([
       '/api/liveshare.ownerCredential',
       '/api/liveshare.ownerLoginStart',
-      '/api/liveshare.ownerLoginRedeem',
+      '/api/liveshare.ownerLoginStatus',
       '/api/liveshare.ownerLoginCancel',
     ])
     await ctx.fiber.dispose()

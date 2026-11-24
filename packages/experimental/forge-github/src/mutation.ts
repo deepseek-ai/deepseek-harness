@@ -4,8 +4,8 @@ import type { ForgeActionFailure } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import { GhUnavailableError, type GhOutput, type GhRunner } from './gh.ts'
 
-/** HTTP statuses that mean GitHub refused the request, so it changed nothing. */
-const REFUSED = /\(HTTP (?:400|401|403|404|409|422)\)/
+/** HTTP statuses that mean GitHub refused the request, so it changed nothing, as `gh api` names them in its diagnostic. */
+export const REFUSED = /\(HTTP (?:400|401|403|404|409|422)\)/
 
 /**
  * GraphQL error types that mean GitHub refused a mutation before applying it. An error without one of them, such as

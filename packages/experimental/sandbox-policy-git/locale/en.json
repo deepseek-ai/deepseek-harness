@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Linked worktree Git access",
+    "description": "Let a session that works in a linked Git worktree stage and commit under workspace-write by granting write access to the repository's Git directory."
+  }
+}

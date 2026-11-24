@@ -33,10 +33,10 @@ function agentWithSession(id = 'parent-1'): Agent & { session: Session } {
 
 async function setup(allowParallelInProgress: boolean): Promise<Context> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(tool, { allowParallelInProgress })
   return ctx
 }
@@ -221,10 +221,10 @@ describe('dsh-tool-todo', () => {
 
   it('unregisters the tool when its contributing fiber is disposed (HMR-safety)', async () => {
     const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
-    await ctx.plugin(SessionProjectionRegistry)
     const fiber = await ctx.plugin(tool, { allowParallelInProgress: true })
     expect(ctx.tools.schemas().some(s => s.name === 'todo_write')).toBe(true)
     await fiber.dispose()

@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/remote-connection/README.md
+/:
+  en: da9b40b15dbf1306
+  zh: 67fcfed98a961f88
+/deepseek-ai-dsh-client-remote-connection:
+  en: 9bbd5b81d7f513ef
+  zh: ba7d27a7b0f22dc9
+/deepseek-ai-dsh-client-remote-connection/summary:
+  en: 6f43444b88f0b1ac
+  zh: 46cf92c078350c5e
+/deepseek-ai-dsh-client-remote-connection/table-of-contents:
+  en: cb4114e511d9a1bb
+  zh: e114ec11dac86de9
+/deepseek-ai-dsh-client-remote-connection/use-this-package:
+  en: 1b041c2f19e60428
+  zh: ed7603fc16dedd51
+/deepseek-ai-dsh-client-remote-connection/authentication-and-failures:
+  en: f7536575431d8e1e
+  zh: d39b1907e78abaa6
+/deepseek-ai-dsh-client-remote-connection/pairing-requests:
+  en: 46a6fd8dc2514ef2
+  zh: 0e35b1e5f23f2a73
+/deepseek-ai-dsh-client-remote-connection/add-settings-options:
+  en: 09cb4d0c453e394c
+  zh: f6a438da3e471ffa
+/deepseek-ai-dsh-client-remote-connection/replace-the-settings-panel:
+  en: bd587e062413f32d
+  zh: 8f6249e76d682904
+/deepseek-ai-dsh-client-remote-connection/further-exploration:
+  en: dc8b05a29d545c8e
+  zh: 81e6fb89db3c962e
+/deepseek-ai-dsh-client-remote-connection/model-experience:
+  en: 2c60f5547f835f44
+  zh: 47ade6e0a0b55b15
+/deepseek-ai-dsh-client-remote-connection/model-experience/kv-cache-effect:
+  en: 4f912e6f343086de
+  zh: e5435b3281ad1820
+/deepseek-ai-dsh-client-remote-connection/known-limitations-and-deferred-work:
+  en: 4d3a1aa37bd7b9b5
+  zh: 3de7b0d55b80afea
+/deepseek-ai-dsh-client-remote-connection/known-limitations-and-deferred-work/dev-note:
+  en: b836f01bd0bceb4a
+  zh: 25e979141fbe5501

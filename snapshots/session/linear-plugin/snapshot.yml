@@ -1,0 +1,8 @@
+version: 1
+scenario: linear-plugin
+profile: headless
+composition: linear-plugin
+recording: authored
+header:
+  class: linear-plugin
+  pin: true

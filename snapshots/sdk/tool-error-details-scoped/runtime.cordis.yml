@@ -1,0 +1,14 @@
+# Replays the native-then-PTC denial details with the scoped REPL.
+- id: tool-executor-native
+  disabled: false
+
+- id: tool-executor-ptc
+  disabled: true
+
+- insert:
+    - id: ptc-runtime
+      name: '@deepseek-ai/dsh-ptc-runtime-node'
+      config:
+        executionMode: persistent-in-memory
+    - id: structured-denial-fixture
+      name: '../tool-error-details/deny.mjs'

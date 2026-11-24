@@ -75,9 +75,8 @@ export interface ModelListEditorProps {
   /** Installed provider whose catalog supplies defaults without endpoint I/O. */
   catalogProvider?: string | undefined
   /**
-   * Reasoning levels a hand-declared route's rows may declare in
-   * `reasoningEfforts`, in escalation order; absent or empty shows no
-   * reasoning control, leaving a catalog model's levels to the catalog.
+   * Reasoning levels the rows may declare in `reasoningEfforts`, in
+   * escalation order; absent or empty shows no reasoning control.
    */
   reasoningLevels?: readonly string[] | undefined
   /** Whether the route's protocol accepts only {@link reasoningLevels}, each sent under its own name. */

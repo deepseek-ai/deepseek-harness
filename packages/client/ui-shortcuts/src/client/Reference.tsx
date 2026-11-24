@@ -52,7 +52,7 @@ const coreActionOrder = new Map<string, number>([
  * @param props - shared dialog action and localized labels.
  * @returns the settings row.
  */
-export function ShortcutsRow({ actions, t, useCatalog }: PropsRuntime<'settings.general.item'> & Store & Locale & InjectFace<ReferenceInjected>) {
+export function ShortcutsRow({ actions, t, useCatalog }: PropsRuntime<'settings.general.group.interaction.item'> & Store & Locale & InjectFace<ReferenceInjected>) {
   const shortcut = useCatalog(rows => rows.find(row => row.id === 'shortcuts.open'))
   return <div className={css.setting}>
     <div className={css.settingText}>

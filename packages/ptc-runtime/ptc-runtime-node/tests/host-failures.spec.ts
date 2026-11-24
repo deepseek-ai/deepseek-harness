@@ -224,7 +224,7 @@ describe('Node runtime host failures', () => {
     expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({ kind: 'worker-exit', message: 'runner connection broken; control channel failed: control transport closed' })
   })
 
-  it.each<Config>([{}, { executionMode: 'persistent-in-memory', replScoped: false },
+  it.each<Config>([{}, { executionMode: 'persistent-in-memory', replScoped: false }, { executionMode: 'persistent-in-memory', replScoped: true },
     { executionMode: 'vm-script' }, { executionMode: 'vm-script', scriptPersistence: true },
   ])('reports control loss and awaits process cleanup in %j', async (config) => {
     const h = await setup(config)

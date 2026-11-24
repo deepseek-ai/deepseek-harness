@@ -5,7 +5,7 @@
   min-width: 0;
   max-width: 220px;
   height: 28px;
-  padding: 0 4px 0 8px;
+  padding: 0 4px 0 12px;
   border: none;
   /* Rounded chip chrome, matching the sibling model trigger. */
   border-radius: var(--dsw-radius-sm);
@@ -38,11 +38,10 @@
   flex: 0 0 auto;
 }
 
-/* The shared 16px glyphs render one step smaller on the exposed trigger;
-   the dropdown rows keep the full 16px. */
+/* Keep the composer mode visible beside its label. */
 .triggerIcon svg {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .triggerLabel {
@@ -92,7 +91,7 @@
    starts squeezing labels; the container is the composer row (InputBar .row —
    anonymous query because CSS modules hash container-names per module). */
 @container (max-width: 460px) {
-  .trigger:has(.triggerIcon) .triggerLabel {
+  .triggerIcon ~ .triggerLabel {
     display: none;
   }
 }

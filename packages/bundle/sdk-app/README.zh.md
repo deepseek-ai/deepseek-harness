@@ -39,6 +39,8 @@ SDK 使用 base 默认提供的 `read`、`write` 和 `edit`。要添加 `str_rep
 
 Python 运行时向本 profile 提供显式下载的创作资源和 Office sidecar。`DSH_PRIMARY_RUNTIME` 覆盖创作载荷；空值禁用其查询。Office skills、Office 套件和 [Office 工具](../../document/tool-office/README.zh.md)总是加载。skills 使用包内 assets；有创作载荷时指引模型使用其内置 Python 环境，没有时指引模型使用用户已有的 Python。下载或选择 Office sidecar 之前，工具报告 LibreOffice Kit 不可用。Profile patch 可独立于 `workspace-dependencies` 禁用 `skill-office` 或替换其 `assetRoot`；同名文件系统 skills 优先。下载与配置见[运行时包](../../../python/sdk-runtime/README.zh.md)。
 
+标准 SDK profile 默认列出 `official-plugins` 和 `personalized-pages`。调用方在最终回答中收到 `action-card` 围栏代码块。训练时可传入含有 `- {id: action-cards, config: {enabled: false}}` 的 YAML patch，同时从目录移除这两个 Skill 并关闭按名加载。
+
 -----
 
 <a id="model-experience"></a>
@@ -48,22 +50,22 @@ Python 运行时向本 profile 提供显式下载的创作资源和 Office sidec
 
 #### 模型看到什么
 
-profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、`plugin_manager`、定时任务工具、共用文件引用说明和时间上下文。子 agent 不能使用定时任务工具。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。技能目录总是列出 Office skills；有创作载荷时其 Python 环境说明指向 `load_workspace_dependencies`，没有时指向用户已有的 Python。
+profile 继承 base 系统提示词，包括 `You are an AI agent powered by DeepSeek Harness.` 身份说明，并添加与 Web 和 headless profile 相同、按当前模型插值的 coding persona。每个 Session 通过 [`dsh-working-directory`](../../session/working-directory/README.zh.md) 提供的必需 user-role 上下文接收当前目录。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。模型还会收到 `present`、`ask_user_question`、`plugin_manager`、`cordis_inspect`、定时任务工具、共用文件引用说明和时间上下文。`cordis_inspect` 与 Desktop 标准模式和创造模式一样读取 Host 运行时 API；SDK 不提供浏览器，因此它的目录不列出 Client provider。子 agent 不能使用定时任务工具。[`time-context`](../../context/time-context/README.zh.md) 配置项接受回退时区。每条普通 prompt 像 Web prompt 一样上报时区：传入了客户端的 `timeZone`（Python 中为 `time_zone`）时用它，否则用运行时为这条 prompt 采样的进程时区，因此模型看到 `Browser time zone for this request: <zone>. Interpret otherwise-unqualified dates and times in this zone.`。进程时区既不是 UTC 也不是 IANA Area/Location 名称时（例如 `TZ=GMT` 产生的 `+00:00`），上报 `unavailable`。技能目录总是列出 Office skills；有创作载荷时其 Python 环境说明指向 `load_workspace_dependencies`，没有时指向用户已有的 Python。技能目录还列出 `dsh-doc`，即 Desktop 标准模式、PTC 模式和创造模式列出的 DSH 文档 skill；其用途参见 [Web app](../web-app/README.zh.md#model-experience)。
 
 #### Token 影响
 
-此 profile 添加一句 coding persona、所挂载的工具定义与说明，以及记录在日志中的运行时上下文和时间消息。 即使操作无法获批，`plugin_manager` 的描述和参数 schema 仍增加输入 token；不使用插件管理的嵌入方可禁用该条目。
+此 profile 添加一句 coding persona、所挂载的工具定义与说明，以及记录在日志中的运行时上下文和时间消息。 即使操作无法获批，`plugin_manager` 的描述和参数 schema 仍增加输入 token；不使用插件管理的嵌入方可禁用该条目。`cordis_inspect` 的 schema 增加一个工具定义；查询结果仅在模型调用它时进入转录。`dsh-doc` 目录项使首个请求增加约 125 个启发式估算 token；其指令和参考资料仅在模型加载该 skill 时进入上下文。
 
 #### KV Cache 影响
 
-启用 `plugin_manager` 会改变早期 SDK 版本的工具 schema 前缀。对固定 profile、提供方、模型与工具清单，静态前缀保持稳定。运行时值追加到已记录的 user 上下文中。由于随附 SDK profile 使用仅启动时 patch，profile 变化会在下一个进程生效。
+启用 `plugin_manager` 会改变早期 SDK 版本的工具 schema 前缀，`dsh-doc` 目录项会改变第一个步骤记录的技能目录。对固定 profile、提供方、模型与工具清单，静态前缀保持稳定。运行时值追加到已记录的 user 上下文中。由于随附 SDK profile 使用仅启动时 patch，profile 变化会在下一个进程生效。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **没有图形客户端**：文件卡片、本地文件打开和浏览器状态需要嵌入客户端；SDK 不启动 Web server。
-- **用户时区未知**：SDK 协议不携带用户时区，因此时间上下文显示 `Browser time zone for this request: unavailable.`。进程或容器的时区可能与用户时区不同。`time-context.timeZone` 配置只控制回退时间戳的显示格式，不能据此确定用户时区。自动检测和 SDK 时区传参暂缓支持。
+- **进程时区代替用户时区**：不带 `timeZone` 的 prompt 上报运行时进程时区，它可能与用户时区不同；容器通常运行在 UTC。请为每条 prompt 传入用户时区，或为运行时设置 `TZ`。`time-context.timeZone` 配置只控制回退时间戳的显示格式，不能据此确定用户时区。原生命令与 Web 命令一样不记录时区，因此由 `/plan <message>` 开启的轮次上报 `unavailable`。
 - **提问需要回答方**：在 TypeScript 中配置 `onUserQuestion`、在 Python 中配置 `on_user_question`，或提供原生 `user-questions/request` handler；否则 `ask_user_question` 返回 `NO_PROVIDER`。
 - **定时任务依赖运行时生命周期**：投递需要运行中的进程及其持久化 Session 存储。
 - **profile 可能省略 SDK server**：TypeScript client 选择的自定义 profile 必须保留本组合包或另一个 `dsh-sdk-jsonrpc-server` 配置项；没有 peer 响应时，client 初始化会失败。
@@ -78,6 +80,6 @@ profile 继承 base 系统提示词，包括 `You are an AI agent powered by Dee
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 
-[SDK/Desktop 工具比较](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts) 在 `test:expected` 中无需 API 凭据运行，并纳入 PR 必需的 consumer 作业。检查覆盖关闭 Team 的 standard/PTC 主会话；Team 对齐暂由 #7172 跟踪。构建后运行 `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts`。在相邻的 `tool-parity.ts` 中维护精确、带理由的差异；差异消除后，对应例外会使检查失败。已有 SDK 会话快照和安装后运行时 smoke 分别检查模型输出和打包结果。
+[SDK/Desktop 模型上下文比较](../../../apps/cli/tests/profiles/sdk/desktop-tools.expected.e2e.ts)与 [agent 配置项比较](../../../apps/cli/tests/profiles/sdk/agent-config-parity.expected.e2e.ts) 在 `test:expected` 中无需 API 凭据运行，并纳入 PR 必需的 consumer 作业。两者都比较本 profile（原生工具执行）与 Desktop `standard` agent preset，不比较 PTC 执行。前者比较顶层 Agent 在关闭和开启 Team 时的首个模型请求：工具名和 schema、系统提示词段落、运行时上下文取值、会话 skill 目录和其余注入消息，以及提示词段落、运行时上下文、注入消息和工具的排列顺序；比较前替换测试路径和时间读数，两侧都在 UTC 下运行。后者用 `--dump-config` 把本 profile 的每个配置项与 preset 中同 id 的配置项比较，preset 中没有时与 Desktop 宿主层同 id 的配置项比较，两处都没有的已启用配置项单独报出；它覆盖默认回合看不到的配置效果，例如 plan mode 段落。构建后运行 `CI=true pnpm run test:expected apps/cli/tests/profiles/sdk/`。每项接受的差异都在相邻的 `parity-exceptions.ts` 中带理由登记；暂不修复的不一致还要在 `debt` 中写明跟踪 issue。差异修复后对应例外变为 stale，修复改动需同时删除它。已有 SDK 会话快照和安装后运行时 smoke 分别检查模型输出和打包结果。
 
 </details>

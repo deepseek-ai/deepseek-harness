@@ -371,19 +371,16 @@ export class ScheduleService extends TypertRemoteService {
   }
 
   /**
-   * Submit an observation to this runtime without consuming the task's scheduled occurrence.
-   * @param id - Task identity rechecked inside the management FIFO.
-   * @param candidate - Additional observed data accompanying the stored instruction.
-   * @returns Resolves after Session inbox persistence and the task receipt commit, not model completion.
-   * Declared consumers stop their producers through their own effects. An unloading or disposed caller cannot submit
-   * new work; accepted work drains with Schedule's FIFO even if that caller unloads. A captured service never
-   * rebinds to a replacement runtime. Failures may follow partial persistence; no automatic retry is provided.
-   * @throws Cordis INACTIVE_EFFECT for an inactive calling context; SourceError with
-   * SOURCE_TASK_RECEIVER_UNAVAILABLE before initialization or after shutdown admission closes, or the task's
-   * admission error. Provider and storage failures propagate directly.
+   * Deliver an observation to an existing task without consuming its scheduled occurrence.
+   * @param id - Task to deliver to.
+   * @param candidate - Observed text to send alongside the task's stored instruction.
+   * @returns Resolves when the Session inbox and task receipt are both persisted, not when the model responds.
+   * @throws If the caller is unloading, the runtime or task is unavailable, or delivery fails.
+   * A receipt write can fail after the inbox is persisted; submission does not retry.
    */
   async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
     this.ctx.fiber.assertActive()
+    // A restarting caller retains its fiber uid while unloading, so assertActive() alone admits new work.
     if (this.ctx.fiber.state === FiberState.UNLOADING) throw new CordisError('INACTIVE_EFFECT')
     const runtime = this.runtime
     if (this.stopping || runtime === undefined) {

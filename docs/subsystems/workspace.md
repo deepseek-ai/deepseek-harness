@@ -454,6 +454,15 @@ Host Remote file reads and workspace directory observations over the composed fi
 
 ```ts cordis-catalog
 /**
+ * Resolve the scope other Host services use to open the same `session/<id>/<path>` addresses:
+ * a live Session's sandbox workspace root, else a stored Session's cached directory, else its header directory.
+ * @param sessionId - Session identity received on the wire.
+ * @param signal - cancellation for the persistence read of a stored Session.
+ * @returns the scope, or undefined when no live or stored Session has that identity.
+ */
+scopeOf(sessionId: SessionId, signal?: AbortSignal): Promise<WorkspaceFileScope | undefined>
+
+/**
  * Read one page of lines from a UTF-8 file readable by the filesystem backend.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
  * @param path - absolute path or path relative to the workspace root; files outside it are allowed.
@@ -483,7 +492,10 @@ Host Remote file reads and workspace directory observations over the composed fi
 @Remote async stat(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceFileStat>
 
 /**
- * List the direct children of one directory inside the Session's workspace.
+ * List the direct children of one directory of the Session's workspace: one
+ * that resolves inside the workspace root, or one whose path, as the backend
+ * spells it before following links, descends from the root by child names
+ * through a link that resolves outside it.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
  * @param path - workspace path, absolute or relative to the workspace root.
  * @param signal - caller cancellation.
@@ -509,15 +521,18 @@ Host Remote file reads and workspace directory observations over the composed fi
 
 /**
  * Watch one file or a directory's direct entries in the Session's filesystem.
- * Files use the backend's read authority; directories remain workspace-scoped.
+ * Files use the backend's read authority; a directory passes the same workspace check as `list`.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
- * @param path - target path; the Host determines its type and confines directories to the workspace.
+ * @param path - target path; the Host determines its type and applies the workspace check to a directory.
  * @param signal - generation cancellation.
  * @returns `ready` once the target watch is active, then current metadata for queued and live invalidations.
- * @throws RemoteError when watching is unavailable or a directory is outside the workspace.
+ * @throws RemoteError when watching is unavailable, or a directory neither resolves inside the
+ *   workspace root nor has a path that descends from it.
  */
 @Remote({ mode: 'stream' }) changes(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame>
 ```
+
+Types: [SessionId](core.md)
 
 Source: [`packages/api/workspace-files/src/index.ts`](../../packages/api/workspace-files/src/index.ts)
 

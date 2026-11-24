@@ -62,8 +62,8 @@ export type {
   ContextProducerView, ContextRole, KnownContextForm,
 } from './contract/context-producer.ts'
 export type {
-  ConversationPromptSnapshot, RequestInspectionSnapshot, RequestPromptChange, RequestPromptInspection, RequestPromptInspector, RequestView,
-  SystemPromptNode,
+  ConversationPromptSnapshot, EffectiveSystemSection, RequestInspectionSnapshot, RequestPromptChange, RequestPromptInspection,
+  RequestPromptInspector, RequestView, SystemMessageSections, SystemPromptNode, SystemSectionChange,
 } from './contract/request-inspection.ts'
 export { inspectRequestPrompt } from './contract/request-inspection.ts'
 export type { SystemPromptState, SystemPromptInspector } from './contract/system-prompt.ts'
@@ -86,14 +86,15 @@ export type {
   ComposerBarInjected, ComposerBarOwnerProps, ComposerBarProps, ComposerChainProps,
   ConversationHeaderActionOwnerProps, ConversationHeaderCornerOwnerProps, ConversationHeaderLineageOwnerProps,
   ConversationContentInputProps, ConversationContentProps,
-  ConversationInjected, ConversationSessionHeaderInjected, ConversationSessionHeaderSlotProps,
+  ConversationInjected, ConversationSessionHeaderInjected, ConversationSessionHeaderSlotProps, ConversationShellInjected,
   ConversationSessionInjected, ConversationSessionSlotProps, ConversationSlotProps,
   ConversationViewActionEntry, ConversationViewActionsOwnerProps, ConversationViewsProps,
   ConversationWidthControlsInputProps, ConversationWidthControlsProps,
   ConversationStore, ConvViewOwnerProps, ConvViewProps, EmptyWorkspaceOwnerProps,
-  HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, HeroFrameOwnerProps, InputControlOwnerProps, InputZone,
+  HeroAgentPresetOwnerProps, HeroBrandMarkOwnerProps, HeroFrameOwnerProps, InputControlOwnerProps, InputPlaceholderOwnerProps, InputZone,
   MessageImageLabels, MessageImageLoader, MessageImageSource, MessageImagesContentInput, MessageImagesOwnerProps, UseConversation,
   UserTextInput, UserTextInjected, UserTextNodeOwnerProps, UserTextNodeProps,
+  WorkspaceSelectedHandler, WorkspaceSessionAdopter,
   UseConversationViews,
 } from './contract/slots.ts'
 export type {

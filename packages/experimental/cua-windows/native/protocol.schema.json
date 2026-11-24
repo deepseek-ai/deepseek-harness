@@ -64,9 +64,10 @@
           "type": "object",
           "properties": {
             "query": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "maxAppMatches": {
               "type": "integer",
@@ -108,6 +109,37 @@
           },
           "required": [
             "selector"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "launchApp"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "appHandle": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "appHandle"
           ],
           "additionalProperties": false
         }
@@ -245,6 +277,10 @@
               "description": "Include identifiers, global native bounds and complete action names.",
               "type": "boolean"
             },
+            "showDiff": {
+              "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
+              "type": "boolean"
+            },
             "maxElements": {
               "type": "integer",
               "minimum": 1,
@@ -306,6 +342,37 @@
             "appHandle",
             "snapshotId",
             "elementId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "getActionSchema"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "action"
           ],
           "additionalProperties": false
         }
@@ -1306,37 +1373,6 @@
         },
         "method": {
           "type": "string",
-          "const": "launchApp"
-        },
-        "params": {
-          "type": "object",
-          "properties": {
-            "appHandle": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "required": [
-            "appHandle"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string",
           "const": "permissionStatus"
         },
         "params": {
@@ -1444,6 +1480,52 @@
           "required": [
             "permission"
           ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "getHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "releaseHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
           "additionalProperties": false
         }
       },

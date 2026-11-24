@@ -1,13 +1,11 @@
 /**
- * Durable admission state for the loop-owned system prompt (surface node 0 and
- * in-history updates) and runtime context. The prompt registry supplies named
- * contributions; this module owns runtime reminder framing and supersession.
+ * Durable admission state for the dynamic runtime-context snapshot.
  * @module @deepseek-ai/dsh-agent-loop/runtime-context
  */
 
-import { createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { ContextFormed, ContextSnapshotSection, Message } from '@deepseek-ai/dsh-llm'
-import type { Session, SessionEvent, SessionSeq, SurfaceIntent, SystemMessage, UserMessage } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, ContextSnapshotSection } from '@deepseek-ai/dsh-llm'
+import type { Session, SessionEvent, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 import { isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import type { Context } from '@deepseek-ai/cordis'
@@ -29,96 +27,10 @@ function sectionsOf(message: UserMessage): readonly ContextSnapshotSection[] | u
   return message.source.kind === SOURCE && message.source.form === 'snapshot' ? message.source.sections : undefined
 }
 
-function textOf(message: Message): string | undefined {
-  const [block] = message.content
-  return message.content.length === 1 && block?.type === 'text' ? block.text : undefined
-}
-
-/** One uncommitted system-prompt surface operation for request admission or reconciliation. */
-export interface SystemPromptCommit {
-  /** Rendered prompt or empty content: an empty head records no prompt; empty tails are dormant. */
-  message: SystemMessage
-  /** `append` for a new system node, otherwise a replacement of one surviving system node. */
-  intent: SurfaceIntent<'system/message'>
-}
-
-/** The request-series facts one prompt decision is made under. */
-export interface SystemPromptDecisionInput {
-  /** Whether the prepared route for this attempt reads a later `system` message as the effective prompt. */
-  inHistory: boolean
-  /**
-   * Whether this step starts a new request series: a pre-step listener declared
-   * one, the surface changed since the last request, or assembled tools changed
-   * on a route without tool-update support.
-   */
-  startsSeries: boolean
-}
-
 /** Committed events from the newest backward; the restore scans stop at the first match. */
 function eventsNewestFirst(session: Session): readonly SessionEvent[] {
   // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   return session.snapshotEvents().toReversed()
-}
-
-/**
- * Decides how a rendered system prompt reaches the surface without owning the
- * commit. The first prompt, even empty, reserves surface node 0.
- * A capable continuing series appends changed nonempty text after the
- * cached history. An incapable route, a cleared prompt, or a new series whose
- * effective text differs instead normalizes the first system node and empties
- * later active nodes. A series start whose latest surviving node already holds
- * the rendering emits nothing: moving the same text to node 0 would change the
- * request prefix without changing the prompt. Dormant empty tails do not supply
- * effective text or require repeated replacements.
- */
-export class SystemPromptProjection {
-  constructor(private readonly session: Session) {}
-
-  /** The surviving `system/message` nodes in surface order. */
-  private systemNodes(): { seq: SessionSeq; text: string | undefined }[] {
-    const nodes: { seq: SessionSeq; text: string | undefined }[] = []
-    for (const seq of this.session.surface.nodes) {
-      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-      const event = this.session.eventAt(seq)
-      if (event?.type !== 'system/message') continue
-      const content = event.data.message.content
-      const text = content.length === 0 ? '' : textOf(event.data.message)
-      nodes.push({ seq, text })
-    }
-    return nodes
-  }
-
-  /**
-   * Reconcile effective text and retained nodes with the prepared route and series.
-   * A series start re-baselines node 0 only when the effective text differs; a
-   * capable continuing series keeps appended nodes in place to preserve the prefix.
-   * @param rendered - the fully rendered system prompt; `''` when none is active.
-   * @param input - the route capability and series facts for this step.
-   * @returns ordered per-node updates; an empty list means no update is needed.
-   */
-  project(rendered: string, input: SystemPromptDecisionInput): SystemPromptCommit[] {
-    const nodes = this.systemNodes()
-    const head = nodes[0]
-    if (head === undefined) {
-      return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
-    }
-    const latest = nodes.findLast(node => node.text !== '') ?? head
-    if (!input.inHistory || rendered.length === 0 || (input.startsSeries && latest.text !== rendered)) {
-      const updates = nodes.slice(1).filter(node => node.text !== '')
-        .map(node => this.replace(node.seq, ''))
-      if (head.text !== rendered) updates.push(this.replace(head.seq, rendered))
-      return updates
-    }
-    if (latest.text === rendered) return []
-    return [{ message: createSystemMessage(rendered), intent: { surfaceOp: 'append' } }]
-  }
-
-  private replace(seq: SessionSeq, text: string): SystemPromptCommit {
-    return {
-      message: createSystemMessage(text),
-      intent: { surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq }, sourceEventSeqs: [seq] },
-    }
-  }
 }
 
 /** Tracks the last retained runtime-context snapshot without owning its commit. */

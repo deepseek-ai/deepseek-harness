@@ -1,12 +1,13 @@
 /**
  * Coordinate single-worker Vitest coverage partitions and one merged report.
  * Separate processes preserve worker isolation; only the complete merged
- * inventory can enforce per-file coverage thresholds.
+ * inventory can enforce per-file coverage thresholds. CI splits the inventory
+ * into file shards on separate runners and merges their blobs on one report job.
  */
 import { spawn } from 'node:child_process'
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { lstat, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
-import { join, relative, sep } from 'node:path'
+import { globSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { copyFile, lstat, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import type { TestUserConfig } from 'vitest/config'
 import { coverageExemptHeavySuites } from './coverage-exempt.ts'
 import { pnpmInvocation } from './pnpm-invocation.ts'
@@ -19,6 +20,79 @@ export const COVERAGE_PARTITION_MODE_ENV = 'DSH_COVERAGE_PARTITION_MODE'
 
 /** Environment variable carrying a lane's per-test, hook, and `expect.poll` budget in milliseconds. */
 export const COVERAGE_TEST_TIMEOUT_ENV = 'DSH_COVERAGE_TEST_TIMEOUT_MS'
+
+/**
+ * Environment variable selecting one file shard of the instrumented inventory,
+ * as `<index>/<count>`. A shard run writes {@link COVERAGE_SHARD_DIRECTORY}
+ * and leaves merging and thresholds to {@link mergeCoverageShards}.
+ */
+export const COVERAGE_SHARD_ENV = 'DSH_COVERAGE_SHARD'
+
+/** Root-relative directory where a shard run writes its manifest, blobs, and durations. */
+export const COVERAGE_SHARD_DIRECTORY = 'coverage/shard'
+
+/** One selected file shard: 1-based `index` of `count`. */
+export interface CoverageShard {
+  index: number
+  count: number
+}
+
+/**
+ * Parse an optional coverage file shard.
+ * @param raw - the `DSH_COVERAGE_SHARD` value.
+ * @returns the shard, or undefined when unset or empty.
+ * @throws when the value is not `<index>/<count>` with 1 <= index <= count.
+ */
+export function parseCoverageShard(raw: string | undefined): CoverageShard | undefined {
+  if (raw === undefined || raw === '') return undefined
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(raw)
+  if (match === null || Number(match[1]) > Number(match[2])) {
+    throw new Error(`${COVERAGE_SHARD_ENV} must be <index>/<count> with 1 <= index <= count, got ${JSON.stringify(raw)}.`)
+  }
+  return { index: Number(match[1]), count: Number(match[2]) }
+}
+
+/**
+ * Select one shard's files by byte size: files are taken largest first (ties by
+ * repository-relative path) and each goes to the shard with the smallest total
+ * size so far (ties to the lower index). Byte size stands in for test cost; the
+ * split reads only the checkout, so every shard computes the same assignment.
+ * @param files - the instrumented inventory.
+ * @param shard - the shard to keep.
+ * @param sizeOf - byte size of one repository-relative file.
+ * @returns the shard's files in path order.
+ */
+export function selectCoverageShardFiles(
+  files: readonly string[],
+  shard: CoverageShard,
+  sizeOf: (file: string) => number,
+): string[] {
+  const loads = Array.from({ length: shard.count }, () => 0)
+  const selected: string[] = []
+  const ordered = [...files].map(file => ({ file, size: sizeOf(file) }))
+    .sort((left, right) => right.size - left.size || (left.file < right.file ? -1 : left.file > right.file ? 1 : 0))
+  for (const { file, size } of ordered) {
+    let owner = 0
+    for (let index = 1; index < loads.length; index++) {
+      if ((loads[index] ?? 0) < (loads[owner] ?? 0)) owner = index
+    }
+    loads[owner] = (loads[owner] ?? 0) + size
+    if (owner === shard.index - 1) selected.push(file)
+  }
+  return selected.sort()
+}
+
+/** Manifest a shard run writes beside its blobs, read back by {@link mergeCoverageShards}. */
+export interface CoverageShardManifest {
+  /** The shard as `<index>/<count>`. */
+  shard: string
+  /** Absolute checkout root of the shard run, the prefix of every path its blobs record. */
+  root: string
+  /** Test files the shard ran, in path order. */
+  files: string[]
+  /** Blob file names under the shard's `blobs/` directory. */
+  blobs: string[]
+}
 
 /**
  * Reporter that canonicalizes a partition's coverage locations before its blob
@@ -55,6 +129,8 @@ export interface CoverageCommandResult {
   error?: string
   /** Bounded combined stdout/stderr tail repeated when the command fails. */
   outputTail?: string
+  /** Vitest `FAIL` and `×` lines from the whole output, bounded, repeated in the run summary. */
+  failedTests?: string[]
 }
 
 /** Execute one coordinator command with inherited output. */
@@ -78,6 +154,8 @@ export interface CoveragePartitionCoordinatorOptions {
   weights?: ReadonlyMap<string, number>
   /** Project ownership paired with `files`; collected from `vitest list` when absent. */
   projectOf?: ReadonlyMap<string, string>
+  /** File shard to run; its manifest, blobs, and durations replace the merge and thresholds. */
+  shard?: CoverageShard
 }
 
 /** Parse an optional coverage partition count. */
@@ -150,6 +228,11 @@ const UNKNOWN_FILE_WEIGHT = 1
  * runs on a persistent checkout (self-hosted runners).
  */
 const FILE_TIMES_NAME = '.coverage-times.json'
+
+/** File names inside a shard directory. */
+const SHARD_MANIFEST_NAME = 'shard.json'
+const SHARD_TIMES_NAME = 'times.json'
+const SHARD_BLOBS_NAME = 'blobs'
 
 /**
  * The instrumented inventory: every file plus the Vitest project it belongs
@@ -467,8 +550,10 @@ export class CoveragePartitionCoordinator {
   private readonly files: readonly string[]
   private readonly weights: ReadonlyMap<string, number> | undefined
   private projectOf = new Map<string, string>()
+  private readonly shard: CoverageShard | undefined
   private readonly temporaryRoot: string
   private readonly blobsRoot: string
+  private readonly blobPrefix: string
 
   /** Create a coordinator from validated process-independent inputs. */
   public constructor(options: CoveragePartitionCoordinatorOptions) {
@@ -483,17 +568,23 @@ export class CoveragePartitionCoordinator {
     this.files = options.files ?? []
     this.weights = options.weights
     this.projectOf = new Map(options.projectOf ?? [])
+    this.shard = options.shard
     this.temporaryRoot = join(this.root, 'coverage', '.partitioned')
-    this.blobsRoot = join(this.temporaryRoot, 'blobs')
+    // Shard blobs carry the shard index so the report job can merge every
+    // shard's blobs from one directory.
+    this.blobsRoot = this.shard === undefined ? join(this.temporaryRoot, 'blobs') : join(this.root, COVERAGE_SHARD_DIRECTORY, SHARD_BLOBS_NAME)
+    this.blobPrefix = this.shard === undefined ? '' : `shard-${this.shard.index}-`
   }
 
   /**
    * Run every partition and verify its test-file inventory before one merged threshold check.
+   * A shard run instead writes its manifest, blobs, and durations under `coverage/shard/`.
    * Failed runs retain inventories, partition configs, and test reports in coverage/.partitioned.
    * @returns zero only when every partition and the merge command succeed.
    */
   public async run(): Promise<number> {
     await removeOwnedTree(join(this.root, 'coverage'))
+    await mkdir(this.temporaryRoot, { recursive: true })
     await mkdir(this.blobsRoot, { recursive: true })
 
     let succeeded = false
@@ -513,6 +604,14 @@ export class CoveragePartitionCoordinator {
         }
         return result
       }))
+      reportFailedPartitions(commands, results)
+      if (this.shard !== undefined) {
+        await this.assertCompleteBlobSet(commands)
+        await this.assertCompleteTestFiles(assignments)
+        await this.writeShardOutput(this.shard, assignments, commands)
+        succeeded = !results.some(commandFailed)
+        return succeeded ? 0 : 1
+      }
       // Persist durations before blob validation: a missing blob aborts the
       // run, but the completed partitions' timings are still worth keeping.
       this.persistDurations(this.partitions)
@@ -555,6 +654,25 @@ export class CoveragePartitionCoordinator {
     writeFileDurations(this.root, collectPartitionDurations(reportFiles), currentFiles)
   }
 
+  /** Write the shard manifest and measured durations beside the shard's blobs. */
+  private async writeShardOutput(
+    shard: CoverageShard,
+    assignments: readonly (readonly string[])[],
+    commands: readonly CoverageCommand[],
+  ): Promise<void> {
+    const directory = join(this.root, COVERAGE_SHARD_DIRECTORY)
+    const manifest: CoverageShardManifest = {
+      shard: `${shard.index}/${shard.count}`,
+      root: this.root,
+      files: assignments.flat().sort(),
+      blobs: commands.map(command => basename(command.blobPath ?? '')).sort(),
+    }
+    const reportFiles = assignments.map((_, index) => join(this.temporaryRoot, `partition-${index + 1}.times.json`))
+    await writeFile(join(directory, SHARD_MANIFEST_NAME), `${JSON.stringify(manifest, null, 1)}\n`, 'utf8')
+    const durations = [...collectPartitionDurations(reportFiles)].map(([file, duration]) => ({ file, duration }))
+    await writeFile(join(directory, SHARD_TIMES_NAME), `${JSON.stringify(durations, null, 1)}\n`, 'utf8')
+  }
+
   /**
    * Distribute the instrumented inventory across partitions by recorded
    * duration, heaviest partition first so the longest child starts earliest
@@ -578,6 +696,9 @@ export class CoveragePartitionCoordinator {
       this.projectOf = inventory.projectOf
       weights = readFileDurations(this.root)
     }
+    if (this.shard !== undefined) {
+      files = selectCoverageShardFiles(files, this.shard, file => statSync(join(this.root, file)).size)
+    }
     const buckets = assignWeightedPartitions(files, weights, this.partitions)
     buckets.sort((left, right) => partitionWeight(right, weights) - partitionWeight(left, weights))
     return buckets
@@ -599,7 +720,7 @@ export class CoveragePartitionCoordinator {
   }
 
   private partitionCommand(index: number, configPath: string): CoverageCommand {
-    const blobPath = join(this.blobsRoot, `partition-${index}.json`)
+    const blobPath = join(this.blobsRoot, `${this.blobPrefix}partition-${index}.json`)
     const reportsDirectory = join(this.temporaryRoot, `coverage-${index}`)
     const timingReportPath = join(this.temporaryRoot, `partition-${index}.times.json`)
     const invocation = pnpmInvocation([
@@ -632,21 +753,7 @@ export class CoveragePartitionCoordinator {
   }
 
   private mergeCommand(): CoverageCommand {
-    const invocation = pnpmInvocation([
-      'exec',
-      'vitest',
-      `--merge-reports=${this.relativePath(this.blobsRoot)}`,
-      '--coverage',
-    ], { npm_execpath: this.pnpmEntrypoint })
-    return {
-      label: 'merged coverage report',
-      ...invocation,
-      env: {
-        [COVERAGE_PARTITIONS_ENV]: undefined,
-        [COVERAGE_PARTITION_MODE_ENV]: undefined,
-      },
-      cwd: this.root,
-    }
+    return mergeReportsCommand(this.root, this.pnpmEntrypoint, this.blobsRoot)
   }
 
   private relativePath(path: string): string {
@@ -691,10 +798,167 @@ export class CoveragePartitionCoordinator {
   }
 }
 
+/** Construction inputs for {@link mergeCoverageShards}. */
+export interface CoverageShardMergeOptions {
+  /** Repository root that owns coverage output. */
+  root: string
+  /** pnpm JavaScript or executable entrypoint from `npm_execpath`. */
+  pnpmEntrypoint: string
+  /** Directory outside `coverage/` whose immediate subdirectories each hold one shard's `coverage/shard/` output. */
+  inputDirectory: string
+  /** Child executor, injectable for tests. */
+  runCommand?: CoverageCommandRunner
+  /** Instrumented inventory; collected from the workspace when absent. */
+  inventory?: readonly string[]
+}
+
+/** One shard's validated output directory. */
+interface ShardOutput {
+  directory: string
+  shard: CoverageShard
+  root: string
+  files: string[]
+  blobs: string[]
+}
+
+/**
+ * Merge the blobs of every file shard into one report with thresholds. Before
+ * merging, the shard file lists must be disjoint, their union must equal the
+ * re-listed instrumented inventory, and every listed blob must be present;
+ * the shards' measured durations replace `.coverage-times.json`.
+ * @param options - the repository, shard outputs, and optional injected executor and inventory.
+ * @returns zero only when the merged report and its thresholds pass.
+ * @throws when a shard output is malformed or the shards do not cover the inventory exactly once.
+ */
+export async function mergeCoverageShards(options: CoverageShardMergeOptions): Promise<number> {
+  const coverageRoot = join(options.root, 'coverage')
+  const input = relative(coverageRoot, options.inputDirectory)
+  if (input === '' || (!input.startsWith('..') && !isAbsolute(input))) {
+    throw new Error(`coverage shard merge: input ${options.inputDirectory} must lie outside ${coverageRoot}, which the merge replaces.`)
+  }
+  await removeOwnedTree(coverageRoot)
+  const mergeRoot = join(coverageRoot, '.merge')
+  const blobsRoot = join(mergeRoot, SHARD_BLOBS_NAME)
+  await mkdir(blobsRoot, { recursive: true })
+  const shards = await readShardOutputs(options.inputDirectory)
+  const inventory = options.inventory
+    ?? (await collectInstrumentedFiles(options.root, options.pnpmEntrypoint, join(mergeRoot, 'inventory.json'))).files
+  assertShardsCoverInventory(shards, inventory)
+  const blobNames = new Set<string>()
+  for (const output of shards) {
+    for (const blob of output.blobs) {
+      if (blobNames.has(blob)) throw new Error(`coverage shard merge: blob ${blob} appears in more than one shard.`)
+      blobNames.add(blob)
+      await copyShardBlob(join(output.directory, SHARD_BLOBS_NAME, blob), join(blobsRoot, blob), output.root, options.root)
+    }
+  }
+  writeFileDurations(options.root, collectPartitionDurations(shards.map(output => join(output.directory, SHARD_TIMES_NAME))), inventory)
+  const command = mergeReportsCommand(options.root, options.pnpmEntrypoint, blobsRoot)
+  console.log(`coverage-partitions: start ${command.label} of ${shards.length} shards`)
+  const result = await (options.runCommand ?? runCoverageCommand)(command)
+  if (commandFailed(result)) {
+    console.error(`coverage-partitions: FAIL ${command.label} (${commandFailureReason(result)})`)
+    return 1
+  }
+  await removeOwnedTree(mergeRoot)
+  return 0
+}
+
+/**
+ * Copy one shard blob into the merge directory. A blob records absolute source
+ * paths under its shard's checkout, and the merge keys coverage by those
+ * paths, so a shard whose checkout differs from this one has its root prefix
+ * rewritten in the serialized JSON strings to the merging checkout.
+ */
+async function copyShardBlob(source: string, target: string, shardRoot: string, mergeRoot: string): Promise<void> {
+  if (shardRoot === mergeRoot) {
+    await copyFile(source, target)
+    return
+  }
+  const quoted = (path: string): string => JSON.stringify(`${path}${sep}`).slice(1, -1)
+  const content = await readFile(source, 'utf8')
+  await writeFile(target, content.split(quoted(shardRoot)).join(quoted(mergeRoot)), 'utf8')
+}
+
+/** Read and validate every shard directory, requiring shards 1..count exactly once. */
+async function readShardOutputs(inputDirectory: string): Promise<ShardOutput[]> {
+  const entries = (await readdir(inputDirectory, { withFileTypes: true })).filter(entry => entry.isDirectory())
+  const outputs = await Promise.all(entries.map(async (entry) => {
+    const directory = join(inputDirectory, entry.name)
+    const manifest: unknown = JSON.parse(await readFile(join(directory, SHARD_MANIFEST_NAME), 'utf8'))
+    if (manifest === null || typeof manifest !== 'object' || !('shard' in manifest) || typeof manifest.shard !== 'string'
+      || !('root' in manifest) || typeof manifest.root !== 'string' || !isAbsolute(manifest.root)
+      || !('files' in manifest) || !isStringArray(manifest.files)
+      || !('blobs' in manifest) || !isStringArray(manifest.blobs) || manifest.blobs.length === 0) {
+      throw new Error(`coverage shard merge: ${directory} needs a ${SHARD_MANIFEST_NAME} with shard, absolute root, files, and at least one blob.`)
+    }
+    const shard = parseCoverageShard(manifest.shard)
+    if (shard === undefined) throw new Error(`coverage shard merge: ${directory} names no shard.`)
+    for (const blob of manifest.blobs) {
+      const path = join(directory, SHARD_BLOBS_NAME, blob)
+      const metadata = basename(blob) === blob ? await lstatIfPresent(path) : undefined
+      if (metadata === undefined || !metadata.isFile() || metadata.size === 0) {
+        throw new Error(`coverage shard merge: shard ${manifest.shard} blob ${blob} is missing or empty at ${path}.`)
+      }
+    }
+    return { directory, shard, root: manifest.root, files: manifest.files, blobs: manifest.blobs }
+  }))
+  const count = outputs[0]?.shard.count
+  const indices = outputs.map(output => output.shard.index).sort((left, right) => left - right)
+  if (count === undefined || outputs.some(output => output.shard.count !== count)
+    || indices.length !== count || indices.some((index, position) => index !== position + 1)) {
+    throw new Error(`coverage shard merge: expected shards 1..n of one count under ${inputDirectory}, got ${JSON.stringify(outputs.map(output => `${output.shard.index}/${output.shard.count}`))}.`)
+  }
+  return outputs
+}
+
+/** Require disjoint shard file lists whose union is exactly the instrumented inventory. */
+function assertShardsCoverInventory(shards: readonly ShardOutput[], inventory: readonly string[]): void {
+  const owner = new Map<string, number>()
+  const overlapping: string[] = []
+  for (const output of shards) {
+    for (const file of output.files) {
+      if (owner.has(file)) overlapping.push(file)
+      else owner.set(file, output.shard.index)
+    }
+  }
+  const expected = new Set(inventory)
+  const missing = inventory.filter(file => !owner.has(file))
+  const unexpected = [...owner.keys()].filter(file => !expected.has(file))
+  if (overlapping.length > 0 || missing.length > 0 || unexpected.length > 0) {
+    const sample = (files: readonly string[]): string => `${files.length} ${JSON.stringify(files.slice(0, 20))}`
+    throw new Error(`coverage shard merge: shard file lists must partition the instrumented inventory; overlapping ${sample(overlapping)}; missing ${sample(missing)}; unexpected ${sample(unexpected)}.`)
+  }
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string')
+}
+
+/** The single `vitest --merge-reports` command that applies thresholds to a blob directory. */
+function mergeReportsCommand(root: string, pnpmEntrypoint: string, blobsRoot: string): CoverageCommand {
+  const invocation = pnpmInvocation([
+    'exec',
+    'vitest',
+    `--merge-reports=${relative(root, blobsRoot).split(sep).join('/')}`,
+    '--coverage',
+  ], { npm_execpath: pnpmEntrypoint })
+  return {
+    label: 'merged coverage report',
+    ...invocation,
+    env: {
+      [COVERAGE_PARTITIONS_ENV]: undefined,
+      [COVERAGE_PARTITION_MODE_ENV]: undefined,
+    },
+    cwd: root,
+  }
+}
+
 /** Spawn one pnpm-backed command without a platform shell. */
 function runCoverageCommand(command: CoverageCommand): Promise<CoverageCommandResult> {
   return new Promise((resolveCommand) => {
     let outputTail = ''
+    const failures = new FailedTestCollector()
     const env = { ...process.env }
     for (const [name, value] of Object.entries(command.env)) {
       if (value === undefined) Reflect.deleteProperty(env, name)
@@ -710,18 +974,82 @@ function runCoverageCommand(command: CoverageCommand): Promise<CoverageCommandRe
     child.stdout.on('data', (chunk: string) => {
       process.stdout.write(chunk)
       outputTail = appendOutputTail(outputTail, chunk)
+      failures.add('stdout', chunk)
     })
     child.stderr.on('data', (chunk: string) => {
       process.stderr.write(chunk)
       outputTail = appendOutputTail(outputTail, chunk)
+      failures.add('stderr', chunk)
     })
     child.once('error', (error: Error) => {
-      resolveCommand({ exitCode: null, signalCode: null, error: error.message, outputTail })
+      resolveCommand({ exitCode: null, signalCode: null, error: error.message, outputTail, failedTests: failures.lines() })
     })
     child.once('close', (exitCode, signalCode) => {
-      resolveCommand({ exitCode, signalCode, outputTail })
+      resolveCommand({ exitCode, signalCode, outputTail, failedTests: failures.lines() })
     })
   })
+}
+
+/** ANSI color sequences Vitest writes around status markers. */
+const ANSI_COLOR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
+
+/** Maximum failed-test lines one command keeps for the run summary. */
+const FAILED_TEST_LINE_LIMIT = 50
+
+/**
+ * Collect Vitest failure lines (`FAIL <file> > <test>` and `× <test>`) across
+ * output chunks, which can split a line, so a failure stays visible after a
+ * long interleaved log.
+ */
+export class FailedTestCollector {
+  private readonly partial = new Map<string, string>()
+  private readonly found: string[] = []
+
+  /**
+   * Add one output chunk.
+   * @param stream - the chunk's stream; partial lines are joined per stream.
+   * @param chunk - decoded output.
+   */
+  public add(stream: string, chunk: string): void {
+    const text = (this.partial.get(stream) ?? '') + chunk
+    const lines = text.split('\n')
+    this.partial.set(stream, lines.pop() ?? '')
+    for (const line of lines) this.consider(line)
+  }
+
+  /** @returns the collected lines, including a trailing unterminated line. */
+  public lines(): string[] {
+    for (const [stream, rest] of this.partial) {
+      this.consider(rest)
+      this.partial.set(stream, '')
+    }
+    return [...this.found]
+  }
+
+  private consider(line: string): void {
+    const plain = line.replace(ANSI_COLOR, '').trim()
+    if (!/^(FAIL|×)\s/.test(plain) || this.found.length >= FAILED_TEST_LINE_LIMIT) return
+    if (!this.found.includes(plain)) this.found.push(plain)
+  }
+}
+
+/**
+ * Repeat each failed partition and its failed tests after every partition has
+ * finished, so the cause is at the end of an interleaved multi-partition log.
+ */
+function reportFailedPartitions(commands: readonly CoverageCommand[], results: readonly CoverageCommandResult[]): void {
+  const failed = commands.flatMap((command, index) => {
+    const result = results[index]
+    return result !== undefined && commandFailed(result) ? [{ command, result }] : []
+  })
+  if (failed.length === 0) return
+  console.error(`coverage-partitions: ${String(failed.length)} of ${String(commands.length)} partition(s) failed:`)
+  for (const { command, result } of failed) {
+    console.error(`  ${command.label} (${commandFailureReason(result)})`)
+    const tests = result.failedTests ?? []
+    if (tests.length === 0) console.error('    no Vitest FAIL line; see the output tail above')
+    for (const test of tests) console.error(`    ${test}`)
+  }
 }
 
 function appendOutputTail(previous: string, chunk: string): string {
@@ -742,11 +1070,15 @@ function commandFailureReason(result: CoverageCommandResult): string {
   return facts.join(', ') || 'no exit code or signal'
 }
 
-async function removeOwnedTree(path: string): Promise<void> {
-  const metadata = await lstat(path).catch((error: unknown) => {
+async function lstatIfPresent(path: string): Promise<Awaited<ReturnType<typeof lstat>> | undefined> {
+  return await lstat(path).catch((error: unknown) => {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
     throw error
   })
+}
+
+async function removeOwnedTree(path: string): Promise<void> {
+  const metadata = await lstatIfPresent(path)
   if (metadata === undefined) return
   if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
     await unlink(path)

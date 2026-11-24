@@ -15,6 +15,8 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-im` | `im_history`, `im_members`, `im_read`, `im_read_file`, `im_read_image`, `im_reply`, `im_send`, `im_send_file` | `ctx.tools`, `ctx.im`, `ctx.systemPrompt`, `ctx.fs + ctx.workingDirectory (im_send_file)` | `tool/call`, `IM send receipts for publication`, `tool/result` | - | Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated. |
+| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`, `ctx.sessionController`, `ctx.workspaceRegistry`, `a calling Agent` | `tool/call`, `agent/inbox/spliced in the recipient`, `tool/result` | - | The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target. |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -26,11 +28,11 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-office` | `office_convert`, `office_recalculate`, `office_render` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents`, `ctx.officeKit`, `ctx.attachments and ctx.llm for office_render` | `tool/call`, `tool/result with rendered image attachments`, `temporary converted files in the Office kit output store` | - | Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed. |
 | `@deepseek-ai/dsh-tool-present` | `present` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents` | `tool/call`, `deliverables/presented after a successful final result`, `tool/result` | - | Deliveries belong to the calling Session; Web ui-deliverables supplies source-file opening and cards. |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.workingDirectory`, `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
-| `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | Standard and Creator modes provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager. |
+| `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | The Desktop Standard and Creator modes and the SDK profile provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
-| `@deepseek-ai/dsh-tool-fs` | `apply_patch`, `edit`, `read`, `read_image`, `write` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (image-tool registration)`, `ctx.llm + an image-capable route (image-tool execution)` | `tool/call`, `fs/write-intent, fs/edit-intent, or fs/delete-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers only with `applyPatch: true`; the catalog sets it so the schema is documented. `dsh-base` and the Web `standard` preset enable it; the Web `ptc` and `cordis` presets and the PTC overlay state `applyPatch: false`. |
+| `@deepseek-ai/dsh-tool-fs` | `apply_patch`, `edit`, `read`, `read_image`, `write` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (image-tool registration)`, `ctx.llm + an image-capable route (image-tool execution)` | `tool/call`, `fs/write-intent, fs/edit-intent, or fs/delete-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers when `applyPatch` resolves to true; unset, it follows `edit`, so every shipped composition that keeps `edit` offers it, including the Web `standard`, `ptc`, and `cordis` presets. |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.workingDirectory`, `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.workingDirectory`, `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-terminal-panel` | `user_terminal_list`, `user_terminal_read` | `ctx.tools`, `ctx.systemPrompt`, `ctx.terminals`, `ctx.terminalController`, `ctx.sandboxPolicy`, `a calling Agent` | `tool/call`, `tool/result` | - | The package also serves the six `terminal_*` tools from Web sidebar terminals. `user_terminal_list` and `user_terminal_read` only read terminals the user controls; `readUserTerminals: false` removes both. |
@@ -47,11 +49,267 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-jobs` | `job_kill`, `job_list`, `job_output` | `ctx.tools`, `ctx.jobs`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `user/message via agent.inject() for background completion notices` | - | The kind-agnostic background-job controller: background bash commands and PTY sends are read, listed, and killed through the same three tools. Loading the plugin attaches the controller that arms producers' `ctx.jobs.start()`. |
 | `@deepseek-ai/dsh-tool-agent-team` | `team_task_create`, `team_task_get`, `team_task_list`, `team_task_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agentTeams`, `ctx.subagents`, `an exact live Team member Agent` | `tool/call`, `team/task`, `tool/result` | - | Four task-board tools share the subagent tree’s root Session. Enabling Team mode on the root Session adds task-board guidance alongside standard subagent delegation and control tools. Standard subagent controls provide required identity independently of Team mode; their result report instruction appears only while Team mode is off. |
 | `@deepseek-ai/dsh-tool-todo` | `todo_write` | `ctx.tools`, `owning Agent session` | `tool/call`, `todo/write`, `tool/result` | - | todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task. |
-| `@deepseek-ai/dsh-tool-working-directory` | `working_directory` | `ctx.tools`, `ctx.workingDirectory` | `tool/call`, `working-directory/change`, `user context for directory changes`, `tool/result` | - | Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed. |
-| `@deepseek-ai/dsh-experimental-tool-worktree` | `create_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `working-directory/change`, `tool/result` | - | Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout. |
+| `@deepseek-ai/dsh-experimental-tool-worktree` | `enter_worktree`, `exit_worktree` | `ctx.tools`, `ctx.worktrees`, `a calling Agent` | `tool/call`, `Git branch and checkout`, `workspace-root/change`, `tool/result` | - | Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. `enter_worktree` moves the Session into the worktree a name selects in the pool of the checkout it works in, creating a new branch and checkout from a pinned local commit under existing write permissions when none has that name. `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain. |
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-im"></a>
+
+## `@deepseek-ai/dsh-im`
+
+### `im_history`
+
+Read a bounded page of one IM chat you may read. Page older messages with before or newer ones with after, both cursors being seq numbers.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "before": {
+      "type": "integer",
+      "description": "Only messages with a lower seq than this cursor."
+    },
+    "after": {
+      "type": "integer",
+      "description": "Only messages with a higher seq than this cursor."
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Page size, within the operator-configured history limit."
+    }
+  }
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_members`
+
+List the people a chat you may read has as members, each with the markdown that mentions them: a mention addresses the platform user id and shows the name. Filter with query rather than paging by hand.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "query": {
+      "type": "string",
+      "description": "Keep only members whose name carries this text; use it instead of paging a large chat by hand."
+    }
+  }
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read`
+
+Read one message of an IM chat you may read: its sender, time, text, quote and media labels.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Message key (bot|id) or the per-chat seq number shown as #12."
+    },
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    }
+  },
+  "required": [
+    "message"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read_file`
+
+Save the file of one media label such as [文件 #12.2 report.pdf] into your workspace and get the path to open with your file tools.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable media id such as 12.2 from [文件 #12.2 report.pdf]."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_read_image`
+
+Read the image of one media label such as [图片 #12.1] and see it.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable media id such as 12.1 from [图片 #12.1]."
+    }
+  },
+  "required": [
+    "id"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_reply`
+
+Publish one markdown reply to a message of an IM chat you may write; a reply to a message inside a thread or topic stays there.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "message": {
+      "type": "string",
+      "description": "Message to answer, by key (bot|id) or seq."
+    },
+    "text": {
+      "type": "string",
+      "description": "Complete markdown reply."
+    },
+    "thread": {
+      "type": "boolean",
+      "description": "Also answer inside that message thread."
+    }
+  },
+  "required": [
+    "message",
+    "text"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_send`
+
+Publish one markdown message into an IM chat you may write. Returns the delivery status: confirmed, failed, uncertain or partial.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "text": {
+      "type": "string",
+      "description": "Complete markdown to publish as one message."
+    },
+    "thread": {
+      "type": "string",
+      "description": "Thread id to publish into; omit to answer in the thread this session answered last, or the chat itself when none."
+    }
+  },
+  "required": [
+    "text"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+### `im_send_file`
+
+Publish one local file into an IM chat you may write as an image, video, audio or file message; the extension picks the platform message kind.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "chat": {
+      "type": "string",
+      "description": "Chat key (bot|chatId) or bare chat id; omit to use your home chat."
+    },
+    "path": {
+      "type": "string",
+      "description": "Local path of the file to publish."
+    },
+    "quote": {
+      "type": "string",
+      "description": "Message to answer, by key or seq; omit to publish in the thread this session answered last, or the chat itself when none."
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+Source: [`packages/experimental/im/src/tools.ts`](../packages/experimental/im/src/tools.ts)
+
+Read messages, history pages, and the media of the chats the caller may use, explicitly publish markdown messages, replies, or files, and read one image or one file of a message. `tools.readOnly` registers only the reads. Assistant output remains private unless the session streams replies; uncertain sends are never automatically repeated.
+
+<a id="deepseek-aidsh-tool-session-control"></a>
+
+## `@deepseek-ai/dsh-tool-session-control`
+
+### `session_send_message`
+
+Send a message to an independent session. Use this tool only when the user explicitly asks you to send a message to another session.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The target session ID."
+    },
+    "message": {
+      "type": "string",
+      "description": "Nonblank message to deliver."
+    }
+  },
+  "required": [
+    "session_id",
+    "message"
+  ]
+}
+```
+
+Source: [`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+
+The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target.
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 
@@ -580,7 +838,7 @@ ask_user_question keeps the original blocking behavior by default; set `mode: ti
 
 ### `run_code`
 
-Execute a TypeScript program against the available tools. Takes two required arguments: `code`, the BODY of an async function (erasable syntax only; top-level `await` and `return` work), and `description`, a short summary of what the program does. Call tools as `await tools.name(args)` per the declarations in the system prompt. Show selected text and images with inspect(...values). The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Use inspect(...values) to display output. Do not use console. Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution's sandbox policy. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.
+Execute a TypeScript program against the available tools. Takes two required arguments: `code`, the program to execute, and `description`, a short summary of what the program does. Call tools as `await tools.name(args)` per the declarations in the system prompt. Show selected text and images with inspect(...values). The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Use inspect(...values) to display output. Do not use console. Use the raw form of a template literal only for short text whose backslashes must stay exactly as written, such as a regular expression; write other text, in particular file contents and commands, as ordinary strings. Write file contents as an array of quoted strings, one line each, joined with newlines; never as one template literal. The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. Variables, functions, and imported modules remain in memory for this Agent across calls. Each call runs one program in its own top-level scope. Its top-level let, const, var, class, and function declarations, and the names it received from earlier programs, are copied into the top-level scope of later programs: later programs receive copies of these variables, not references to them, so an object they hold is still shared. In one program, either use a copied name or declare it again; do not declare a name and also use its copied value. Assigning to a copied name, even one declared with const, changes only this program's copy, which later programs receive. Do not declare var inside blocks; a block-level var changes which value later programs copy. Functions and still-running code from earlier programs keep the values they captured, and assignments they make later are not copied; keep shared mutable state in objects. If a program fails before a declaration of an existing name finishes, later programs keep that name's earlier value. Use await import(...) for modules; require and module are unavailable. Relative import specifiers resolve from the working directory of this environment's first program, while process.cwd() and relative file paths follow each program's working directory. Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. Timeout and cancellation results say whether retained variables were preserved or cleared. Restart, sandbox changes, or process failure clears them. Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before the program ends; unfinished tools reject. After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. Await child-process completion before the program ends; raw output belongs to the active evaluation. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.
 
 ```json
 {
@@ -588,7 +846,7 @@ Execute a TypeScript program against the available tools. Takes two required arg
   "properties": {
     "code": {
       "type": "string",
-      "description": "The program: the body of an async TypeScript function."
+      "description": "The TypeScript program to execute, following this tool's execution instructions."
     },
     "description": {
       "type": "string",
@@ -946,7 +1204,7 @@ Inspect runtime APIs before writing or configuring plugins. Omit query to discov
 
 Source: [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)
 
-Standard and Creator modes provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager.
+The Desktop Standard and Creator modes and the SDK profile provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager.
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 
@@ -1244,7 +1502,7 @@ Create or fully replace a UTF-8 text file.
 
 Source: [`packages/fs/tool-fs/src/index.ts`](../packages/fs/tool-fs/src/index.ts)
 
-The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers only with `applyPatch: true`; the catalog sets it so the schema is documented. `dsh-base` and the Web `standard` preset enable it; the Web `ptc` and `cordis` presets and the PTC overlay state `applyPatch: false`.
+The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); the shipped compositions leave its row disabled, so mutations are unconditional unless a deployment enables it. The image tool is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. `apply_patch` registers when `applyPatch` resolves to true; unset, it follows `edit`, so every shipped composition that keeps `edit` offers it, including the Web `standard`, `ptc`, and `cordis` presets.
 
 <a id="deepseek-aidsh-tool-fs-search"></a>
 
@@ -2190,10 +2448,6 @@ Delegate a self-contained task to a configured external agent. Choose its runtim
     "prompt": {
       "type": "string",
       "description": "The complete, self-contained task. Include all context the external agent needs."
-    },
-    "cwd": {
-      "type": "string",
-      "description": "Initial child working directory. Relative paths use your current directory; omission inherits it."
     }
   },
   "required": [
@@ -2242,10 +2496,6 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
 {
   "type": "object",
   "properties": {
-    "cwd": {
-      "type": "string",
-      "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-    },
     "description": {
       "type": "string",
       "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -2297,7 +2547,7 @@ Source: [`packages/subagent/tool-subagent-control/src/index.ts`](../packages/sub
 
 ### `list_agents`
 
-List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
+List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.
 
 ```json
 {
@@ -2456,7 +2706,7 @@ Create one unowned pending task on the shared Team task board.
     },
     "write_scopes": {
       "type": "array",
-      "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+      "description": "Advisory file or directory prefixes relative to the workspace root; no absolute paths or \"..\" segments. Omit or pass [] if no workspace files will be modified.",
       "items": {
         "type": "string"
       }
@@ -2582,7 +2832,7 @@ Compare-and-set a shared task action using the latest revision from team_task_ge
     },
     "write_scopes": {
       "type": "array",
-      "description": "Replacement advisory write scopes for edit.",
+      "description": "Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.",
       "items": {
         "type": "string"
       }
@@ -2654,37 +2904,13 @@ Source: [`packages/todo/tool-todo/src/index.ts`](../packages/todo/tool-todo/src/
 
 todo_write is session-owned state; UIs render the latest todo/write event as a checklist. `allowParallelInProgress` is required with no default, so the catalog states its choice: `true`, whose description invites several `in_progress` items. A deployment choosing `false` receives the same tool with a description asking for exactly one active task.
 
-<a id="deepseek-aidsh-tool-working-directory"></a>
-
-## `@deepseek-ai/dsh-tool-working-directory`
-
-### `working_directory`
-
-Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "cd": {
-      "type": "string",
-      "description": "Existing directory to enter. Omit to read the current directory."
-    }
-  }
-}
-```
-
-Source: [`packages/session/tool-working-directory/src/index.ts`](../packages/session/tool-working-directory/src/index.ts)
-
-Reads or changes the calling Session directory. Existing shells and processes retain their own directories; origin metadata and permission roots stay fixed.
-
 <a id="deepseek-aidsh-experimental-tool-worktree"></a>
 
 ## `@deepseek-ai/dsh-experimental-tool-worktree`
 
-### `create_worktree`
+### `enter_worktree`
 
-Create a new Git branch and worktree from a local commit, branch, or tag, then change this session's working directory to it. Uncommitted files stay in the source checkout. Existing names fail. Use working_directory with cd to leave; the checkout and branch remain.
+Change this session's working directory to a Git worktree of the checkout it is in. An existing worktree named name is entered as it is. Otherwise a new branch and worktree are created from a local commit, branch, or tag, and uncommitted files stay in the source checkout. exit_worktree returns to the source checkout.
 
 ```json
 {
@@ -2692,11 +2918,11 @@ Create a new Git branch and worktree from a local commit, branch, or tag, then c
   "properties": {
     "name": {
       "type": "string",
-      "description": "New branch name, also used as the checkout directory: a few lowercase words joined by hyphens that describe the task, such as fix-login-retry. Omit to generate a unique name."
+      "description": "Worktree to enter, also the branch name and checkout directory of a new one: a few lowercase words joined by hyphens that describe the task, such as fix-login-retry. Omit to create a worktree with a generated name."
     },
     "from": {
       "type": "string",
-      "description": "Local commit, branch, or tag to start from. Defaults to HEAD; no fetch is performed."
+      "description": "Local commit, branch, or tag a new worktree starts from. Defaults to HEAD; no fetch is performed. Fails when the worktree already exists."
     }
   }
 }
@@ -2704,7 +2930,20 @@ Create a new Git branch and worktree from a local commit, branch, or tag, then c
 
 Source: [`packages/experimental/tool-worktree/src/index.ts`](../packages/experimental/tool-worktree/src/index.ts)
 
-Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. Creates a new branch and checkout from a pinned local commit under existing write permissions, then changes the Session directory. Leaving retains the branch and checkout.
+### `exit_worktree`
+
+Change this session's working directory from the worktree it is in back to the checkout it entered that worktree from, and report the worktree left. The worktree and its branch remain.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/experimental/tool-worktree/src/index.ts`](../packages/experimental/tool-worktree/src/index.ts)
+
+Enabled through the Change requests & worktrees bundle on Web and Desktop; other profiles can select the standalone bundle. `enter_worktree` moves the Session into the worktree a name selects in the pool of the checkout it works in, creating a new branch and checkout from a pinned local commit under existing write permissions when none has that name. `exit_worktree` returns the Session to the checkout it came from; the branch and checkout remain.
 
 <a id="deepseek-aidsh-tool-workflow"></a>
 

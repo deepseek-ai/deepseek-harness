@@ -32,7 +32,19 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Hide details",
     "INSTALLER_EXTRACT_SAVED": "The full report was saved to %s",
     "INSTALLER_EXTRACT_UNSAVED": "The full report could not be saved. Use Copy error details to keep it.",
-    "INSTALLER_EXTRACT_COPIED": "Error details were copied to the clipboard."
+    "INSTALLER_EXTRACT_COPIED": "Error details were copied to the clipboard.",
+    "INSTALLER_UNINSTALL_OWNER": "DeepSeek Harness is installed in multiple locations",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Some items could not be cleaned up. Save the report for details.",
+    "INSTALLER_UNINSTALL_REGISTERED": "Registered installation location:",
+    "INSTALLER_UNINSTALL_SCOPE": "Continuing removes this directory and commands, shortcuts and registrations pointing to it:",
+    "INSTALLER_UNINSTALL_CONTINUE": "Continue cleaning uninstall directory",
+    "INSTALLER_UNINSTALL_SAVE": "Save cleanup report…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "The report could not be saved. Choose another location.",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "Uninstall did not finish",
+    "INSTALLER_UNINSTALL_UNSAFE": "The removal scope could not be verified. No deletion was started.",
+    "INSTALLER_UNINSTALL_UNKNOWN": "A cleanup operation did not return a complete result. Further cleanup was stopped.",
+    "INSTALLER_UNINSTALL_BLOCKED": "This file could not be deleted. Close programs that may be using it, check access permissions, and retry.",
+    "INSTALLER_UNINSTALL_COMPLETE": "Uninstall completed"
   },
   "uninstaller": {
     "welcome": "Welcome",

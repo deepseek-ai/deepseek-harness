@@ -24,7 +24,7 @@
 - list:
   - listitem:
     - button "查看 语音输入": 语音输入
-    - text: 实验性 在本机使用 SenseVoice 转写录音，首次使用需安装依赖。
+    - text: 实验性 登录 DeepSeek 账号或配置 API Key 后使用云端识别转写录音，也可以下载本地 SenseVoice 模型。
     - status
     - switch "启用 语音输入"
   - listitem:
@@ -42,6 +42,11 @@
     - text: 实验性 在会话侧栏集中跟踪关联的代码变更请求，支持 GitHub PR 以及 GitLab MR：查看检查状态、评审意见与代码差异，并把修改建议交给智能体继续处理。也可查看本地改动，用独立工作树隔离任务。GitHub 功能需要本机安装 gh 并登录。GitLab 合并请求需要本机安装 glab 并登录。
     - status
     - switch "启用 变更请求与工作树"
+  - listitem:
+    - button "查看 连接器": 连接器
+    - text: 实验性 在“插件”页新增“连接器”标签，可查看、安装和打开官方连接器。
+    - status
+    - switch "启用 连接器"
 - heading "已安装插件" [level=3]
 - list:
   - listitem:

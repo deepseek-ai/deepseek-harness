@@ -126,6 +126,9 @@ describe('Relay operation transactions', () => {
     const exchanged = deferred<Response>()
     releases.push(() => { exchanged.resolve(response({ credential: credential('owner-a') })) })
     const calls = relayFetch((call) => {
+      if (call.method === 'POST' && call.url.pathname.endsWith('/owner-login-poll')) {
+        return response({ status: 'issued', code: 'code-a' })
+      }
       if (call.method === 'POST' && call.url.pathname.endsWith('/owner-credential')) {
         exchanging.resolve(undefined)
         return exchanged.promise
@@ -134,7 +137,7 @@ describe('Relay operation transactions', () => {
     })
     const fixture = await host({ shares: [{ shareId: 'share-b', relay: RELAY_B }] })
     const { state } = await (await fixture.call('ownerLoginStart', {})).json() as { state: string }
-    const redeeming = fixture.call('ownerLoginRedeem', { state, code: 'code-a' })
+    const settling = fixture.call('ownerLoginStatus', { state })
     await exchanging.promise
     if (change === 'dispose') await fixture.dispose()
     else {
@@ -142,18 +145,20 @@ describe('Relay operation transactions', () => {
       if (change === 'switch-back') await switchRelay(fixture.ctx, RELAY_A)
     }
     exchanged.resolve(response({ credential: credential('owner-a') }))
-    const redeemed = await redeeming
-    expect(redeemed.status).toBe(403)
-    expect(await redeemed.json()).toEqual({ error: 'owner-login-mismatch' })
+    const settled = await settling
+    expect(settled.status).toBe(200)
+    expect(await settled.json()).toEqual({ status: 'failed', error: 'owner-login-mismatch' })
     expect(existsSync(fixture.ownerCredentialFile)).toBe(false)
     expect(calls.filter(call => call.url.pathname.endsWith('/claim'))).toEqual([])
-    const exchange = calls.find(call => call.method === 'POST')
+    const exchange = calls.find(call => call.method === 'POST' && call.url.pathname.endsWith('/owner-credential'))
     expect(exchange?.url.href).toBe(`${RELAY_A}/__liveshare/owner-credential`)
     expect(exchange?.body).toMatchObject({ code: 'code-a', instanceKey: 'instance-1' })
     const payload = exchange?.body as { readonly code_verifier?: string }
     expect(payload.code_verifier).toMatch(/^[A-Za-z0-9_-]{43}$/u)
-    const replayed = await fixture.call('ownerLoginRedeem', { state, code: 'code-a' })
-    expect(await replayed.json()).toEqual({ error: 'owner-login-expired' })
+    // The spent transaction keeps its refusal: asking again neither collects nor exchanges the code.
+    const again = await fixture.call('ownerLoginStatus', { state })
+    expect(await again.json()).toEqual({ status: 'failed', error: 'owner-login-mismatch' })
+    expect(calls.filter(call => call.url.pathname.endsWith('/owner-login-poll'))).toHaveLength(1)
   })
 
   it('refuses a credential upload when the Relay changes while its request body is buffered', async () => {
@@ -251,19 +256,16 @@ describe('Relay operation transactions', () => {
     expect(identityA).toMatchObject({ claim: { claimed: 1, skipped: 0 } })
   })
 
-  it('refuses a login start whose support probe finishes after its selected Relay changes', async () => {
-    const probing = deferred<undefined>()
-    const probed = deferred<Response>()
-    releases.push(() => { probed.resolve(response({ supported: true })) })
-    relayFetch(() => { probing.resolve(undefined); return probed.promise })
+  it('mints a poll URL for the selected Relay without a capability probe', async () => {
+    const calls = relayFetch(() => response({ supported: true }))
     const fixture = await host()
-    const starting = fixture.call('ownerLoginStart', {})
-    await probing.promise
-    await switchRelay(fixture.ctx)
-    probed.resolve(response({ supported: true }))
-    const started = await starting
-    expect(started.status).toBe(403)
-    expect(await started.json()).toEqual({ error: 'owner-login-mismatch' })
+    const before = calls.length
+    const started = await fixture.call('ownerLoginStart', {})
+    expect(started.status).toBe(200)
+    const { authorizeUrl } = await started.json() as { authorizeUrl: string }
+    expect(authorizeUrl).toContain(`${RELAY_A}/__liveshare/owner-authorize?`)
+    expect(new URL(authorizeUrl).searchParams.get('mode')).toBe('poll')
+    expect(calls).toHaveLength(before)
   })
 
   it('keeps an in-flight share registration, persisted Relay, link and reconnect on the captured address', async () => {

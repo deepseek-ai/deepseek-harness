@@ -17,6 +17,9 @@ export const remoteDefaultResponses: RemoteTable = {
     'workspace/initializeDefault': ok(undefined),
     // ui-settings `mirror.ensure()` at apply and again on `connection/reset`.
     'settings/describe': ok({ writable: true, hasDocument: false, namespaces: [] }),
+    // remote-connection reads the advertised address when its settings section registers.
+    'remoteConnection/status': ok({ url: 'http://localhost:3000/', availability: 'unreachable-host', loginUrlAllowed: true, ticket: 'none', pollIntervalMs: 1000 }),
+    'remoteConnection/loginUrl': { ok: false, error: { code: 'remote-connection/token-unavailable', message: 'Token login is not enabled for this Host.', details: {} } },
     // ui-model-selection `ModelDirectoryResolver` constructor.
     'session/modelCatalog': ok({
       default: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },

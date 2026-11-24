@@ -154,7 +154,11 @@ interface SessionHeader {
   readonly id: SessionId
   /** Non-negative safe-integer Unix epoch milliseconds when the session was created. */
   readonly createdAt: number
-  /** Absolute working directory the session was created in (if any). */
+  /**
+   * Canonical absolute working directory the session was created in (if any). Producers resolve the
+   * requested directory through the execution-world filesystem before recording it, so the later
+   * canonical directory records of the working-directory service compare with it lexically.
+   */
   readonly cwd?: string
   /**
    * Direct creator of a subagent Session. Ordinary forks omit this field;
@@ -215,15 +219,25 @@ interface CreateSessionOptions {
    * Storage metadata read once before publication. `isSeeded` marks fork
    * lineage; supplying replay history alone does not make it inherited.
    */
-  readonly meta?: {
-    readonly cwd?: string
-    readonly parentSession?: SessionId
-    readonly createdAt?: number
-    readonly isSeeded?: boolean
-    readonly origin?: 'subagent'
-    readonly delegationDepth?: number
-    readonly agentPreset?: string
-  }
+  readonly meta?: SessionHeaderMeta
+}
+```
+
+`SessionHeaderMeta` 列出这些由调用方提供的字段；`buildSessionHeader` 把同样的字段折叠进新 Session 的头部。
+
+```ts type-equiv
+/**
+ * Caller-supplied storage fields that `buildSessionHeader` folds into a new {@link SessionHeader}.
+ * `isSeeded` marks fork lineage; supplying replay history alone does not make it inherited.
+ */
+interface SessionHeaderMeta {
+  readonly cwd?: string
+  readonly parentSession?: SessionId
+  readonly createdAt?: number
+  readonly isSeeded?: boolean
+  readonly origin?: 'subagent'
+  readonly delegationDepth?: number
+  readonly agentPreset?: string
 }
 ```
 
@@ -339,7 +353,7 @@ interface SessionPersistenceSnapshot {
 随产品交付的多个 provider 实现抽象 `SessionPersistence` 约定（`create`/`open`/`stat`/`list`，逐会话 `SessionHandle` 承载 `read`/`append`/`flush`/`close`，全程可选支持取消），并通过共享的持久化契约套件：
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)**——逐会话仅追加的逻辑 JSONL 日志，默认存储为带 checksum 的连续 Zstandard frame，也可配置为原始行；具备崩溃安全的原子实体化、逐批 `fsync` 的 append，以及在第一次新 append 之前截断撕裂尾部。`stat`/`list` 携带 `sizeBytes` 与尽力而为的、由 `fs.stat` 派生的修订号。
-- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)**——带索引元数据及前驱关联 Segment 的逻辑 JSON 事件存储，每次写入存为一帧 JSON 行，默认以 Zstandard 压缩。此可选提供者在首次打开时导入现有 JSONL，并协调并发读者及每个 Session 的唯一写者；`stat`/`list` 不导入历史。
+- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)**——带索引元数据及前驱关联 Segment 的逻辑 JSON 事件存储；事件以 JSON 行的帧存储，默认以 Zstandard 压缩，追加时把末尾的短帧合并为完整帧。此可选提供者在首次打开时导入现有 JSONL，并协调并发读者及每个 Session 的唯一写者；`stat`/`list` 不导入历史。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

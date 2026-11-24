@@ -1,0 +1,26 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="connectors-blue" x1="6" y1="13" x2="21" y2="23" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7AB8F2" />
+      <stop offset="1" stop-color="#5279D8" />
+    </linearGradient>
+    <linearGradient id="connectors-violet" x1="15" y1="13" x2="30" y2="23" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#AA9AE6" />
+      <stop offset="1" stop-color="#7A71CC" />
+    </linearGradient>
+    <mask id="connectors-blue-crossing" maskUnits="userSpaceOnUse" x="0" y="0" width="36" height="36">
+      <rect width="36" height="36" fill="#fff" />
+      <path d="M20 13H25A5 5 0 0 1 25 23H20A5 5 0 0 1 20 13Z" stroke="#000" stroke-width="5.5" />
+      <rect y="18" width="36" height="18" fill="#fff" />
+    </mask>
+    <mask id="connectors-violet-crossing" maskUnits="userSpaceOnUse" x="0" y="0" width="36" height="36">
+      <rect width="36" height="36" fill="#fff" />
+      <path d="M11 13H16A5 5 0 0 1 16 23H11A5 5 0 0 1 11 13Z" stroke="#000" stroke-width="5.5" />
+      <rect width="36" height="18" fill="#fff" />
+    </mask>
+  </defs>
+  <g transform="translate(18 18) rotate(-40) scale(0.9) translate(-18 -18)" stroke-width="3.5">
+    <path d="M11 13H16A5 5 0 0 1 16 23H11A5 5 0 0 1 11 13Z" stroke="url(#connectors-blue)" mask="url(#connectors-blue-crossing)" />
+    <path d="M20 13H25A5 5 0 0 1 25 23H20A5 5 0 0 1 20 13Z" stroke="url(#connectors-violet)" mask="url(#connectors-violet-crossing)" />
+  </g>
+</svg>

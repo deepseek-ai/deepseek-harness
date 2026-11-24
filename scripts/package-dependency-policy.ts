@@ -76,6 +76,8 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
 
 /** Runtime exports that require every consumer to resolve the provider's shared peer instance. */
 const PEER_REQUIRED_HOST_EXPORTS = {
+  // Agent notifications must use the installed Agent and scope dispatch implementation.
+  '@deepseek-ai/dsh-agent': ['emitAgentEvent'],
   // Profile settings must match the installed Node provider's configuration schema.
   '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
   // CUA mounts the installed provider and shares executor error classes with PTC.
@@ -87,22 +89,26 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
   // The tool registry and every subclass rely on `instanceof` against one HarnessError class.
   '@deepseek-ai/dsh-error': ['HarnessError'],
+  // The Remote plugin uses the injected credential service; its key helper follows that peer.
+  '@deepseek-ai/dsh-credentials': ['credentialKey'],
   // `instanceof` checks need the translator's own class instance.
   '@deepseek-ai/dsh-experimental-translator': ['TranslationError'],
   // Stateless; a safe classification would turn the forge panel's forge and worktree peers into dependencies.
   '@deepseek-ai/dsh-experimental-forge': ['changeRequestKey'],
   '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'],
+  // Stateless; the injected WebServer remains a peer.
+  '@deepseek-ai/dsh-host-webserver': ['normalizeBindAddress'],
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeParentOf', 'scopeTarget'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
-  // The DeepSeek chat importer validates its seed with the installed Session class before storing it.
-  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'Session', 'appendPluginRecord', 'pluginRecordOf'],
+  // The DeepSeek chat importer validates its seed with the installed Session log validation before storing it.
+  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf', 'validateSessionLog'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
   // Imported titles follow the installed title service's normalization.
   '@deepseek-ai/dsh-session-title': ['normalizeSessionTitle'],
   // Error classes have instance identity; CUA and Liveshare throw the registry's own copy so `instanceof` against it matches.
-  '@deepseek-ai/dsh-tools': ['defineTool', 'ToolArgsError', 'ToolContextUnavailableError'],
+  '@deepseek-ai/dsh-tools': ['defineTool', 'ToolArgsError', 'ToolContextUnavailableError', 'RUN_CODE_NAME'],
   // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
   '@deepseek-ai/dsh-timeout': ['deadline', 'timeoutOf'],
   // Imported web tool results must render exactly like the installed web tools' results and cards.

@@ -65,6 +65,26 @@ public static class InstallerCapture {
         return incomplete;
     }
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageW")] static extern IntPtr ReadControlText(IntPtr window, uint message, IntPtr count, StringBuilder text);
+    public static string ControlText(IntPtr window) {
+        var text = new StringBuilder(32768);
+        ReadControlText(window, 0xD, new IntPtr(text.Capacity), text);
+        return text.ToString();
+    }
+
+    public static IntPtr FindWindowTitle(int process, string expected) {
+        IntPtr result = IntPtr.Zero;
+        EnumWindows(delegate(IntPtr window, IntPtr data) {
+            uint owner;
+            GetWindowThreadProcessId(window, out owner);
+            var title = new StringBuilder(256);
+            GetWindowText(window, title, title.Capacity);
+            if (owner == process && IsWindowVisible(window) && title.ToString() == expected) result = window;
+            return result == IntPtr.Zero;
+        }, IntPtr.Zero);
+        return result;
+    }
+
     public static IntPtr FindClass(IntPtr parent, string name) {
         IntPtr result = IntPtr.Zero;
         EnumChildWindows(parent, delegate(IntPtr child, IntPtr unused) {

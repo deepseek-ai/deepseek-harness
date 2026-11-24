@@ -6,6 +6,7 @@
  * child instance.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
 import type { Transport } from '@modelcontextprotocol/client'
@@ -150,6 +151,7 @@ async function mountWorld(options?: {
   managerFiber: Fiber
 }> {
   const ctx = new Context()
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   let credentials: MemoryCredentials | undefined
@@ -244,6 +246,17 @@ describe('mcp-manager', () => {
     // Exactly one new client generation: beta was not rebuilt.
     expect(instances.length).toBe(clientsBefore + 1)
     expect(transportConfigs.at(-1)).toMatchObject({ command: 'echo', args: ['--fast'] })
+  })
+
+  it('passes on-demand tool loading to the managed instance', async () => {
+    mockListTools.mockResolvedValue(listing('remote'))
+    const { ctx, manager } = await mountWorld({
+      settingsDoc: { mcp: { servers: { lazy: stdioEntry({ toolLoading: 'on-demand' }) } } },
+    })
+    await waitForState(manager, 'lazy', 'connected')
+
+    expect(ctx.tools.get('mcp__lazy__load_tools')).toBeDefined()
+    expect(ctx.tools.get('mcp__lazy__remote')).toBeUndefined()
   })
 
   it('disable unmounts the instance and keeps the entry listed; re-enable remounts it', async () => {

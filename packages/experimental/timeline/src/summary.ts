@@ -41,10 +41,9 @@ export async function summarizeReport(
     purpose: 'timeline-report' as const,
     ...(snapshot.sessionId === undefined ? {} : { sessionId: snapshot.sessionId }),
   }
-  const selectedLanguage = outputLanguage(settings.language, settings.uiLanguage)
-  const language = languageInstruction(selectedLanguage)
+  const language = outputLanguage(settings.language, settings.uiLanguage)
   const extra = settings.levelPrompts[draft.level]?.trim()
-  const style = `${reportStyle}\n\n${language}`
+  const style = language === undefined ? reportStyle : `${reportStyle}\n\n${languageInstruction(language)}`
   const question = (
     `Write a Timeline report for ${new Date(draft.start).toISOString()} to ${new Date(draft.end).toISOString()}.\n` +
     (children.length === 0
@@ -146,7 +145,7 @@ export async function summarizeReport(
   }
   const text = await query(request)
   try {
-    return parseSummary(text, selectedLanguage)
+    return parseSummary(text, language)
   } catch (error: unknown) {
     // One format-only repair shares this operation's timeout and concurrency slot.
     // It needs the draft, not another copy of the main conversation or tool history.
@@ -170,7 +169,7 @@ export async function summarizeReport(
       ],
     })
     try {
-      return parseSummary(rewritten, selectedLanguage)
+      return parseSummary(rewritten, language)
     } catch (cause: unknown) {
       throw new Error('The report did not meet the summary writing rules.', { cause })
     }

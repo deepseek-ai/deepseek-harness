@@ -71,7 +71,7 @@ profile 的 `cordis.patch.yml` 会替换条目的完整 `servers` 映射。需�
 | `url` / `headers` | — | streamable-http：端点 URL 与附加请求头 |
 | `enabled` | `true` | 持久意图：`false` 卸载实例但保留条目 |
 | `startupTimeoutMs` | `30,000` | 模板解析、协商、连接与初次工具发现的预算 |
-| `toolCallTimeoutMs` / `closeTimeoutMs` / `reconnect` | mcp-client 默认值 | 逐服务器覆盖 |
+| `toolCallTimeoutMs` / `closeTimeoutMs` / `reconnect` / `toolLoading` | mcp-client 默认值 | 逐服务器覆盖；`toolLoading: on-demand` 让 agent [在需要时加载服务器的工具](../mcp-client/README.zh.md#on-demand-tool-loading) |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-manager)是每个可接受字段的详尽出处。
 

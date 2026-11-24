@@ -357,7 +357,8 @@ function annotation(key: string, place: SourcedAnnotation['annotation']['place']
 /** File threads whose cards share inert actions. */
 function lineThreads(lines: FileThreads['lines']): FileThreads {
   const actions: ThreadActions = {
-    author: null, addToInput: () => true, openLink: vi.fn(), readText: vi.fn(), inputFailed: vi.fn(), focused: null, writes: null,
+    author: null, addToInput: () => true, openLink: vi.fn(), forge: 'github', readText: vi.fn(), inputFailed: vi.fn(), focused: null,
+    writes: null,
   }
   return { lines, file: [], outdated: [], unresolved: lines.length, actions }
 }

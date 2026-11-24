@@ -25,7 +25,7 @@ Use `dsh-subagent` to delegate work through named providers and collect managed 
 <a id="use-this-package"></a>
 ## Use this package
 
-Each start accepts an optional `cwd`; relative paths resolve against the parent's current working directory, and omission captures that current directory. The child keeps its parent's origin metadata and permission roots. A child-owned directory value follows any inherited history, survives continuation and restart, and is independent of later parent changes.
+Each start accepts an optional Host-chosen `cwd`; a relative path resolves against the parent's current directory, and omission starts the child in that directory. The child keeps its parent's origin metadata and enters its starting directory through `ctx.workingDirectory.set`. A child-owned directory value follows any inherited history, survives continuation and restart, and is independent of later parent changes.
 
 This package is the contract every delegation setup shares. You enable it by mounting the service together with one or more provider backends and the model-facing delegation tool; from then on, an agent can delegate work and the service routes each request to the named provider.
 
@@ -52,7 +52,9 @@ The limits section on the **Plugins → Subagent** page edits the Host’s `suba
 
 Set `maxActiveSubagents` on the host plugin to limit live and materializing children in each subagent tree. It defaults to `8` and accepts positive safe integers. A top-level parent starts a pool shared by its local and external descendants; the root parent consumes no slot. Creation and cold resume reserve before yielding, and disposal returns the slot only after cleanup. Instances with pending inbox work and stopping activations remain counted. Sending to a resident child reuses its slot. Delegation depth is a separate policy.
 
-The current `maxActiveSubagents` value is sampled before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
+Consumers read the current limit through `ctx.subagents.maxActiveSubagents`; admission samples the same value before every new or cold-resumed Activation. Raising it admits more children in existing trees; lowering it leaves resident children running and refuses further admissions until usage is below the limit.
+
+`ctx.subagents.capacityOf(caller)` returns `{ running, limit }` for the live caller's tree. `running` counts occupied slots, including starting, idle resident, stopping, and external children; it excludes the root and may exceed `limit` after a decrease. Reading capacity reserves no slot.
 
 At capacity, creation or cold resume rejects with `ACTIVATION_LIMIT_REACHED` (browser prompts receive `subagent/delivery-unavailable`): wait for a child to finish or continue using the existing agents. Admission does not queue, because a parent waiting for descendants must not wait for its own occupied slot. Slots are process-local and do not constrain cumulative Session history or token usage.
 

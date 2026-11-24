@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Conectores",
+    "description": "Agrega a Complementos una pestaña Conectores para ver, instalar y abrir los conectores oficiales.",
+    "detail": "docs/DETAIL.md"
+  }
+}

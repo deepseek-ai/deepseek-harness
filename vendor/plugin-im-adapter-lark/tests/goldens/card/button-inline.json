@@ -1,0 +1,38 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "eaupnw23uehnjbwd",
+              "content": "run Status `/status` to check",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [
+      {
+        "tag": "button",
+        "variant": "input",
+        "via": "text+code",
+        "path": "message/p[0]/button[1]"
+      }
+    ],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

@@ -1,4 +1,5 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { PassThrough, Writable } from 'node:stream'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -72,6 +73,50 @@ function fixture(options: {
 }
 
 describe('native helper transport', () => {
+  it('waits for turn-end mouse release before sending the next request', async () => {
+    const f = fixture()
+    const cleanup = f.client.requestCleanup('releaseSystemButton', {})
+    const next = f.client.request('getState', { appHandle: 'retained-app' }, new AbortController().signal)
+    let settled = false
+    void next.then(() => { settled = true }, () => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    expect(f.requests.map(request => request.method)).toEqual(['releaseSystemButton'])
+    f.reply({ id: f.id(), result: { dispatched: true } })
+    await cleanup
+    expect(f.requests.map(request => request.method)).toEqual(['releaseSystemButton', 'getState'])
+    f.reply({ id: f.id(), result: { snapshotId: 'fresh' } })
+    await expect(next).resolves.toEqual({ snapshotId: 'fresh' })
+  })
+
+  it('keeps a request cancelled during mouse release off the native stream', async () => {
+    const f = fixture()
+    const cleanup = f.client.requestCleanup('releaseSystemButton', {})
+    const controller = new AbortController()
+    const next = f.client.request('getState', {}, controller.signal)
+    const rejected = expect(next).rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
+    controller.abort()
+    f.reply({ id: f.id(), result: { dispatched: true } })
+    await cleanup
+    await rejected
+    expect(f.requests.map(request => request.method)).toEqual(['releaseSystemButton'])
+    expect(f.cancellations).toEqual([])
+    expect(f.client.disposed).toBe(false)
+  })
+
+  it('refuses a waiting request when native mouse release fails', async () => {
+    const f = fixture()
+    const cleanup = f.client.requestCleanup('releaseSystemButton', {})
+    const releaseRejected = expect(cleanup).rejects.toMatchObject({ code: 'RELEASE_REFUSED' })
+    const next = f.client.request('getState', {}, new AbortController().signal)
+    const nextRejected = expect(next).rejects.toMatchObject({ code: 'RELEASE_REFUSED' })
+    f.reply({ id: f.id(), error: { code: 'RELEASE_REFUSED', message: 'Release was not acknowledged' } })
+    f.finish()
+    await Promise.all([releaseRejected, nextRejected])
+    expect(f.requests.map(request => request.method)).toEqual(['releaseSystemButton'])
+    expect(f.client.disposed).toBe(true)
+  })
+
   it('sends run cleanup after an interrupted native request has acknowledged its outcome', async () => {
     const f = fixture()
     const active = f.client.request('getState', {}, new AbortController().signal)
@@ -237,6 +282,7 @@ describe('native helper transport', () => {
   it('reports the native and close failures with screenshot diagnostics through the tool pipeline', async () => {
     const ctx = new Context()
     onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(Tools)
     ctx.tools.setExecutor(new NativeToolExecutor(ctx))

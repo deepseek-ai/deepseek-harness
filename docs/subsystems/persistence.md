@@ -154,7 +154,11 @@ interface SessionHeader {
   readonly id: SessionId
   /** Non-negative safe-integer Unix epoch milliseconds when the session was created. */
   readonly createdAt: number
-  /** Absolute working directory the session was created in (if any). */
+  /**
+   * Canonical absolute working directory the session was created in (if any). Producers resolve the
+   * requested directory through the execution-world filesystem before recording it, so the later
+   * canonical directory records of the working-directory service compare with it lexically.
+   */
   readonly cwd?: string
   /**
    * Direct creator of a subagent Session. Ordinary forks omit this field;
@@ -215,15 +219,25 @@ interface CreateSessionOptions {
    * Storage metadata read once before publication. `isSeeded` marks fork
    * lineage; supplying replay history alone does not make it inherited.
    */
-  readonly meta?: {
-    readonly cwd?: string
-    readonly parentSession?: SessionId
-    readonly createdAt?: number
-    readonly isSeeded?: boolean
-    readonly origin?: 'subagent'
-    readonly delegationDepth?: number
-    readonly agentPreset?: string
-  }
+  readonly meta?: SessionHeaderMeta
+}
+```
+
+`SessionHeaderMeta` names these caller-supplied fields; `buildSessionHeader` folds the same fields into the header of a new Session.
+
+```ts type-equiv
+/**
+ * Caller-supplied storage fields that `buildSessionHeader` folds into a new {@link SessionHeader}.
+ * `isSeeded` marks fork lineage; supplying replay history alone does not make it inherited.
+ */
+interface SessionHeaderMeta {
+  readonly cwd?: string
+  readonly parentSession?: SessionId
+  readonly createdAt?: number
+  readonly isSeeded?: boolean
+  readonly origin?: 'subagent'
+  readonly delegationDepth?: number
+  readonly agentPreset?: string
 }
 ```
 
@@ -339,7 +353,7 @@ The optional `eventCount`/`sizeBytes` fields remain cheap backend observations f
 The shipped providers implement the abstract `SessionPersistence` contract (`create`/`open`/`stat`/`list`, with per-session `SessionHandle`s carrying `read`/`append`/`flush`/`close` and optional cancellation throughout) and pass the shared persistence contract suite:
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)** — an append-only logical JSONL log per session, stored as checksummed concatenated Zstandard frames by default or raw lines by configuration, with crash-safe atomic materialization, per-batch `fsync` appends, and torn-tail truncation before the first new append. `stat`/`list` carry `sizeBytes` and a best-effort `fs.stat`-derived revision.
-- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)** — logical JSON event storage with indexed metadata and predecessor-linked Segments, each write stored as one frame of JSON lines, Zstandard-compressed by default. The optional provider imports existing JSONL on first open and coordinates concurrent readers with a single writer per Session; `stat`/`list` do not import history.
+- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)** — logical JSON event storage with indexed metadata and predecessor-linked Segments; events are stored as frames of JSON lines, Zstandard-compressed by default, and an append merges trailing short frames into full frames. The optional provider imports existing JSONL on first open and coordinates concurrent readers with a single writer per Session; `stat`/`list` do not import history.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

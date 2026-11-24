@@ -22,7 +22,7 @@ import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/cli
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { WorkspaceBrowserProps } from '../contract/slots.ts'
+import type { SessionDragType, WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
 
@@ -32,6 +32,9 @@ const DRAG_PREVIEW_PROPERTIES = [
   '--dsh-sidebar-label-gap',
   '--dsh-sidebar-paint-inset',
 ] as const
+
+/** Drag data type carrying a dragged Session row's id. */
+const SESSION_DRAG_TYPE: SessionDragType = 'application/x-dsh-session'
 
 /** The standard locale seat, prop-passed from the browser root. */
 type RowTranslate = WorkspaceBrowserProps['t']
@@ -109,7 +112,11 @@ export interface RowDragProps {
   /** Report the hovered half while a compatible drag passes over this row. */
   hover: (half: 'before' | 'after') => void
   drop: (half: 'before' | 'after') => void
-  end: () => void
+  /**
+   * End the drag.
+   * @param claimed - another drop target accepted the Session as a copy; the owner discards the insert marker.
+   */
+  end: (claimed: boolean) => void
 }
 
 /** Drag lifecycle owned by a workspace row; its enclosing group owns hit testing. */
@@ -541,7 +548,8 @@ export function SessionNodeItem({
   // their drop targets to fellow pinned rows.
   const renamable = useSessionAccess(node.id, 'session/rename')
   const reorderable = useSessionAccess(node.id, 'workspace/insertSessionBefore')
-  const draggable = drag !== undefined && reorderable && !row.blank && !row.archived
+  const draggable = !row.blank && !row.archived
+  const reorderDraggable = draggable && drag !== undefined && reorderable
   const menuOpen = useContextMenuTarget(target => target?.kind === 'session' && target.value.sessionId === node.id)
   const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
   const rowRef = useRef<HTMLDivElement>(null)
@@ -584,12 +592,15 @@ export function SessionNodeItem({
       onDragStart={!draggable
         ? undefined
         : (e) => {
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/plain', node.id)
-          drag.start()
+          e.dataTransfer.effectAllowed = reorderDraggable ? 'copyMove' : 'copy'
+          e.dataTransfer.setData(SESSION_DRAG_TYPE, node.id)
+          if (reorderDraggable) {
+            e.dataTransfer.setData('text/plain', node.id)
+            drag.start()
+          }
           dragPreview.start(e)
         }}
-      onDragEnd={() => { if (dragPreview.clear()) drag?.end() }}
+      onDragEnd={(e) => { if (dragPreview.clear()) drag?.end(e.dataTransfer.dropEffect === 'copy') }}
       onDragOver={drag === undefined
         ? undefined
         : (e) => {

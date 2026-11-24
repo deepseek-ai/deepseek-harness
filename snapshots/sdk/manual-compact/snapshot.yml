@@ -5,4 +5,6 @@ composition: sdk-desktop
 # The full SDK runtime captures the Session against a controlled model endpoint.
 recording: authored
 header:
-  class: sdk-desktop
+  class: sdk-manual-compact
+  pin: true
+  promptChanges: 1

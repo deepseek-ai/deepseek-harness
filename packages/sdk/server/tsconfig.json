@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../fs/fs"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -58,6 +61,9 @@
     },
     {
       "path": "../../account/deepseek-auth"
+    },
+    {
+      "path": "../../util/time"
     }
   ]
 }

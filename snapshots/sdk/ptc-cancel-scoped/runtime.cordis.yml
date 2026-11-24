@@ -1,0 +1,8 @@
+# Cancels the ptc-cancel program running in the scoped REPL.
+- insert:
+    - id: ptc-runtime
+      name: '@deepseek-ai/dsh-ptc-runtime-node'
+      config:
+        executionMode: persistent-in-memory
+    - id: ptc-cancel-fixture
+      name: '../ptc-cancel/cancel.mjs'

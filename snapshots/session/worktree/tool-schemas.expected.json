@@ -94,23 +94,6 @@
       }
     },
     {
-      "name": "create_worktree",
-      "description": "Create a new Git branch and worktree from a local commit, branch, or tag, then change this session's working directory to it. Uncommitted files stay in the source checkout. Existing names fail. Use working_directory with cd to leave; the checkout and branch remain.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "New branch name, also used as the checkout directory: a few lowercase words joined by hyphens that describe the task, such as fix-login-retry. Omit to generate a unique name."
-          },
-          "from": {
-            "type": "string",
-            "description": "Local commit, branch, or tag to start from. Defaults to HEAD; no fetch is performed."
-          }
-        }
-      }
-    },
-    {
       "name": "edit",
       "description": "Edit an existing UTF-8 text file by replacing literal text.",
       "parameters": {
@@ -150,6 +133,31 @@
           "old_string",
           "new_string"
         ]
+      }
+    },
+    {
+      "name": "enter_worktree",
+      "description": "Change this session's working directory to a Git worktree of the checkout it is in. An existing worktree named name is entered as it is. Otherwise a new branch and worktree are created from a local commit, branch, or tag, and uncommitted files stay in the source checkout. exit_worktree returns to the source checkout.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Worktree to enter, also the branch name and checkout directory of a new one: a few lowercase words joined by hyphens that describe the task, such as fix-login-retry. Omit to create a worktree with a generated name."
+          },
+          "from": {
+            "type": "string",
+            "description": "Local commit, branch, or tag a new worktree starts from. Defaults to HEAD; no fetch is performed. Fails when the worktree already exists."
+          }
+        }
+      }
+    },
+    {
+      "name": "exit_worktree",
+      "description": "Change this session's working directory from the worktree it is in back to the checkout it entered that worktree from, and report the worktree left. The worktree and its branch remain.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
       }
     },
     {
@@ -258,7 +266,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -347,10 +355,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -376,10 +380,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -607,19 +607,6 @@
           "script",
           "meta"
         ]
-      }
-    },
-    {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
       }
     },
     {

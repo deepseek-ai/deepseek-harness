@@ -1081,6 +1081,21 @@ describe('tokenizeSessionFixtureCwd', () => {
     expect(tokenizeSessionFixtureCwd(out)).toBe(out)
   })
 
+  it('preserves an independent Session directory relative to the scenario workspace', () => {
+    const workspace = '/tmp/snapshot-sessions-abc123'
+    const raw = [
+      JSON.stringify({ type: 'session', id: 'recipient', cwd: `${workspace}/recipient` }),
+      JSON.stringify({ type: 'user/message', data: { content: [{
+        type: 'text', text: `Recipient directory: ${workspace}/recipient; sender directory: ${workspace}`,
+      }] } }),
+      '',
+    ].join('\n')
+    const output = tokenizeSessionFixtureCwd(raw, workspace)
+    expect(output).toContain('"cwd":"{{cwd}}/recipient"')
+    expect(output).toContain('Recipient directory: {{cwd}}/recipient; sender directory: {{cwd}}')
+    expect(tokenizeSessionFixtureCwd(output, '{{cwd}}')).toBe(output)
+  })
+
   it('rejects a log without a session cwd', () => {
     expect(() => tokenizeSessionFixtureCwd('')).toThrow(
       'acp-snapshot: cannot tokenize a cwd without a basename',
@@ -1272,6 +1287,31 @@ describe('scrubSessionSnapshot', () => {
 })
 
 describe('scrubSystemPrompts', () => {
+  it('scrubs source and notice text while retaining separators and attribution', () => {
+    const source = { kind: 'system-prompt', sections: [
+      { name: 'workspace', order: 0, state: 'active', contentIndex: 1, noticeIndex: [0] },
+      { name: 'plugin', order: 1, state: 'retired', noticeIndex: [3] },
+    ] }
+    const record = { type: 'system/message', data: { message: {
+      content: [
+        { type: 'text', text: 'Replacement notice.\n\n' },
+        { type: 'text', text: 'Workspace /volatile/path' },
+        { type: 'text', text: '\n\n' },
+        { type: 'text', text: 'Plugin retired.' },
+      ], source,
+    } } }
+    const normalized = scrubSystemPrompts(JSON.stringify(record))
+    expect(JSON.parse(normalized)).toEqual({ type: 'system/message', data: { message: {
+      content: [
+        { type: 'text', text: '{{system}}\n\n' },
+        { type: 'text', text: '{{system}}' },
+        { type: 'text', text: '\n\n' },
+        { type: 'text', text: '{{system}}' },
+      ], source,
+    } } })
+    expect(scrubSystemPrompts(normalized)).toBe(normalized)
+  })
+
   it('scrubs only system/message text while keeping header tools verbatim', () => {
     const header = JSON.stringify({
       type: 'request/header', seq: 1, time: 2,

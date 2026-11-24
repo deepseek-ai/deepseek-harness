@@ -1,0 +1,35 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_interactive",
+    "app_id": "cli_lark",
+    "create_time": "1700000025000"
+  },
+  "event": {
+    "sender": {
+      "sender_id": {
+        "open_id": "ou_user"
+      },
+      "sender_type": "user",
+      "tenant_key": "t1"
+    },
+    "message": {
+      "message_id": "om_interactive",
+      "chat_id": "oc_chat",
+      "chat_type": "group",
+      "message_type": "interactive",
+      "create_time": "1700000025000",
+      "content": "{\"title\":\"构建结果\",\"elements\":[[{\"tag\":\"text\",\"text\":\"分支 main 通过\"}],[{\"tag\":\"at\",\"user_id\":\"@_user_1\"}],[{\"tag\":\"a\",\"text\":\"查看日志\",\"href\":\"https://example.com/log\"}],[{\"tag\":\"img\",\"image_key\":\"img_v2_card\",\"alt\":\"趋势图\"}],[{\"tag\":\"button\",\"text\":\"重试\"}],[{\"tag\":\"note\",\"elements\":[{\"tag\":\"plain_text\",\"content\":\"机器人自动推送\"}]}]]}",
+      "mentions": [
+        {
+          "key": "@_user_1",
+          "id": {
+            "open_id": "ou_bot"
+          },
+          "name": "小助手"
+        }
+      ]
+    }
+  }
+}

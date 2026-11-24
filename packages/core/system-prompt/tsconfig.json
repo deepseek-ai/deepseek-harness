@@ -22,6 +22,12 @@
     },
     {
       "path": "../../core/scope"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-projection"
     }
   ]
 }

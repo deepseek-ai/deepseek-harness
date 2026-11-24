@@ -17,10 +17,10 @@ export class StopSequence {
   private timer: ReturnType<typeof setTimeout> | undefined
 
   /**
-   * @param intervalMs - validated maximum time between independent presses.
+   * @param intervalMs - reads the current validated maximum time between independent presses; each first press reads it.
    * @param release - releases observations retained by the pending first press.
    */
-  constructor(private readonly intervalMs: number, private readonly release: () => void) {}
+  constructor(private readonly intervalMs: () => number, private readonly release: () => void) {}
 
   /** Clear the first press and its expiry timer. */
   reset(): void {
@@ -45,8 +45,9 @@ export class StopSequence {
       target.cancel()
       return true
     }
-    this.first = { target, deadline: performance.now() + this.intervalMs }
-    this.timer = setTimeout(() => { this.reset() }, this.intervalMs + 1)
+    const intervalMs = this.intervalMs()
+    this.first = { target, deadline: performance.now() + intervalMs }
+    this.timer = setTimeout(() => { this.reset() }, intervalMs + 1)
     return false
   }
 }

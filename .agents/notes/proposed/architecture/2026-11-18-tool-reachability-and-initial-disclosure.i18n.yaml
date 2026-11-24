@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-18-tool-reachability-and-initial-disclosure.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/architecture/2026-11-18-tool-reachability-and-initial-disclosure.md
+/agent-note-tool-reachability-and-initial-disclosure:
+  en: 702b42d555430e20
+  zh: d94f3adf52d9d7cb
+/agent-note-tool-reachability-and-initial-disclosure/problem:
+  en: 006eb992e4c0dd4d
+  zh: 530d13e4f832653b
+/agent-note-tool-reachability-and-initial-disclosure/proposal:
+  en: 86ededd59a892229
+  zh: 1ed3ac1f5b160f9d
+/agent-note-tool-reachability-and-initial-disclosure/proposal/reachability:
+  en: 7e8256e97b924e34
+  zh: be334f4469d0b5e1
+/agent-note-tool-reachability-and-initial-disclosure/proposal/initial-disclosure:
+  en: 1c2466dff8ba70e1
+  zh: d0e2c35a0e74008f
+/agent-note-tool-reachability-and-initial-disclosure/alternatives-considered:
+  en: 27bff0dbad805d7a
+  zh: be5b8d1746b5bc02
+/agent-note-tool-reachability-and-initial-disclosure/acceptance-criteria:
+  en: 099ebf6f7c753286
+  zh: 50e29d2522d7fee9
+/agent-note-tool-reachability-and-initial-disclosure/risks:
+  en: 9366e2866f4b2555
+  zh: 5d7b94bb85019f58

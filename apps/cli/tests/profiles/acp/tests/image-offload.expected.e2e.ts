@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url'
+import { realpathSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
 import {
   runScenario,
@@ -140,8 +141,9 @@ it('pins Messages Files offload and inline fallback in assembled requests', asyn
     const fileImage = { type: 'image', source: { type: 'file', file_id: 'file-api-snapshot-1' } }
     const offloadedImage = `[image omitted to fit request image limits; ${attachmentId}.${normalizedAccess}]`
     const imageHandle = `Image ${attachmentId}; request preview 1x1px.${normalizedAccess}`
+    // The Session header records the canonical spelling of the scenario's directory, which is removed by now.
     const runtimeContext = (cwd: string): string => '<system-reminder>\nThe following information describes your current session:\n\n'
-      + `Current working directory: ${JSON.stringify(cwd)}.\n\n`
+      + `Current working directory: ${JSON.stringify(join(realpathSync.native(dirname(cwd)), basename(cwd)))}.\n\n`
       + 'Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\n'
       + 'Approval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`).\n\n'
       + 'You are the root agent. Your name is "lead".\n\n'

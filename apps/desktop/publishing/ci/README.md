@@ -28,7 +28,7 @@ Use this sequence when onboarding a dedicated machine. The deployment operator o
 
 1. Prepare a runner-owned checkout and an external configuration directory. Follow [Windows machine setup and signing](../../windows-signing/README.md#machine-setup) or [macOS runner and signing setup](../../packaging/README.md#macos-actions) for tools, templates and platform credentials.
 2. Register the runner using GitHub **Settings → Actions → Runners**, or the organization's runner administration page. Record its exact registered name, grant this repository access to its runner group, and assign the [required labels](#runner-labels). Keep the default labels during registration.
-3. Install and start the platform supervisor described in the platform guide. Windows Task Scheduler and the macOS LaunchAgent require the configured user's login; they do not provide unattended startup before login. Confirm both GitHub connectivity and `Listening for Jobs`, then check the runner is online in GitHub.
+3. Install and start the platform supervisor described in the platform guide. Windows supports optional Boot tasks for startup before login; its default Interactive task and the macOS LaunchAgent require the configured user's desktop login. Confirm both GitHub connectivity and `Listening for Jobs`, then check the runner is online in GitHub.
 4. Complete [machine publication configuration](#machine-setup), the repository's `DESKTOP_PUBLISH_RUNNERS` variable, and the two deployment Environments. The repository administrator owns routing and reviewers; the COS administrator owns bucket configuration and object read/write permissions; production also needs the configured GitHub App.
 5. Run a signed Windows or notarized macOS **test** package using [Package and publish](#package-and-publish). Confirm the packaging job used the intended registered runner and retained its files. Dispatch publication from `master` with that run ID and attempt; confirm `prepare` actually starts on the same machine and produces the approval summary.
 6. Inspect the summary's environment, version, channel and URLs before approving the test upload. Verify the publication record, public installer download and update feed. Test acceptance does not establish production permissions: provision and approve production separately. Keep the run/attempt and acceptance results for recovery.
@@ -68,6 +68,8 @@ Environment approval gates this workflow, not arbitrary code running under the s
 <a id="package-and-publish"></a>
 
 ## Package and publish
+
+The Windows packaging run shows a Chinese parameter summary with the requested source, environment, channel, version mode, signing mode, compression, test release ID and cache namespace, plus the workflow identity, checked-out commit, resolved version and runner. Once workflow helpers are staged, earlier failures still produce the summary with unavailable results labeled explicitly. The summary reads no machine configuration; a blank test release ID is shown as machine-default selection, not its resolved value. It does not establish build, signature or publication success.
 
 The publication form accepts an optional `staging_percentage` integer from 0 to 100. It applies to the retained package’s channel (nightly or stable), appears in the approval summary, and is included in the published YAML and audit record without modifying retained artifacts. Leave it blank for the packaged default (normally full rollout). Completed publications cannot change this percentage through a retry; same-version feed conflicts remain errors.
 

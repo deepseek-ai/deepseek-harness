@@ -47,7 +47,7 @@ async function boot() {
     .mockResolvedValue({ status: 'saved', path: '/downloads/file.svg' })
   const copyImage = vi.fn<(source: FileActionSource) => Promise<void>>().mockResolvedValue()
   const fileActions = { save, copyImage, canSaveAs: true }
-  const sessions = createSnapshotStore({ byId: { [sessionId]: { cwd: '/workspace' } } })
+  const sessions = createSnapshotStore({ byId: { [sessionId]: { cwd: '/workspace' } }, projectionsBySession: {} })
   const sidebar = { openResourceIn: vi.fn(), openTabIn: vi.fn() }
   const browserTab = vi.fn(() => ({}))
   const directoryFetch = vi.fn(async () => new Response(JSON.stringify({ apps: ['vscode', 'finder'] })))
@@ -316,7 +316,11 @@ it('keeps copy-path available on failed metadata and reports native action failu
 it('opens links in the registered browser, externally, and on the clipboard', async () => {
   const h = await boot()
   const target = { kind: 'url', value: { sessionId, url: 'https://example.com/page' } } as const
-  expect((await h.resolve(target)).source.getSnapshot().find(item => item.id === 'open-in-app.url/sidebar')?.label).toBe('menu.openInSidebar')
+  expect((await h.resolve(target)).source.getSnapshot().map(item => [item.id, item.label, item.icon?.key])).toEqual([
+    ['open-in-app.url/sidebar', 'menu.openInSidebar', 'open-in-app.sidebar'],
+    ['open-in-app.url/external', 'menu.external', 'open-in-app.external'],
+    ['open-in-app.url/copy', 'menu.copyLink', 'open-in-app.copy'],
+  ])
   await h.choose(target, 'open-in-app.url/sidebar')
   expect(h.sidebar.openTabIn).toHaveBeenCalledWith(sessionId, 'browser', { params: { url: target.value.url } })
   const external = vi.spyOn(window, 'open').mockReturnValue(null)
@@ -325,7 +329,7 @@ it('opens links in the registered browser, externally, and on the clipboard', as
   await h.choose(target, 'open-in-app.url/copy')
   expect(h.writeText).toHaveBeenCalledWith(target.value.url)
   h.browserTab.mockReturnValueOnce(undefined as never)
-  expect((await h.resolve(target)).source.getSnapshot()[0]?.disabled).toBe(true)
+  expect((await h.resolve(target)).source.getSnapshot().map(item => item.id)).toEqual(['open-in-app.url/external', 'open-in-app.url/copy'])
 })
 
 it('distinguishes completed, requested and cancelled saves and surfaces rejected saves', async () => {
@@ -406,10 +410,10 @@ it('offers only folder reveal and path copy, retaining the captured directory', 
   const menu = await h.resolve(target)
   expect(menu.source.getSnapshot().map(item => item.id)).toEqual(['open-in-app.directory/reveal', 'open-in-app.directory/copyPath'])
   expect(h.remote.workspaceFiles.stat).not.toHaveBeenCalled()
-  h.sessions.set({ byId: { [sessionId]: { cwd: '/changed' } } })
+  h.sessions.set({ byId: { [sessionId]: { cwd: '/changed' } }, projectionsBySession: {} })
   menu.select('open-in-app.directory/reveal')
   await vi.waitFor(() => { expect(h.remote.session.openWorkspacePath).toHaveBeenCalledWith({ path: '/workspace/src', action: 'reveal' }) })
-  h.sessions.set({ byId: { [sessionId]: { cwd: '/workspace' } } })
+  h.sessions.set({ byId: { [sessionId]: { cwd: '/workspace' } }, projectionsBySession: {} })
   await h.choose(target, 'open-in-app.directory/copyPath')
   expect(h.writeText).toHaveBeenLastCalledWith('/workspace/src')
   h.paths.desktop.set(false)

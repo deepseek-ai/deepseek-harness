@@ -1,0 +1,370 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "header": {
+          "title": {
+            "tag": "plain_text",
+            "content": "Everything at once"
+          },
+          "subtitle": {
+            "tag": "plain_text",
+            "content": "subtitle text"
+          }
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "e2n6zausksui7wbh",
+              "content": "plain **bold***italic*under~~strike~~secret`inline-code`[link-text](https://example.com/everything)<at id=u-alice></at><at id=all></at>@在线成员@Admins\\#general:party:<font color='green'>green-text</font><br>after the break![inline image](fake:fake:test:image:a68ab9e2b4d4)\n\n# Heading one\n\n## Heading two\n\n### Heading three\n\n#### Heading four\n\n##### Heading five\n\n###### Heading six\n\n- first item\n- [x] done task\n- parent item\n    - child item\n\n3. third item\n4. fourth item\n\n> quoted line\n>\n> > deeper quote\n\n```ts\nconst answer = 42\n```",
+              "text_align": "left"
+            },
+            {
+              "tag": "hr",
+              "element_id": "eynrfbdiwynxcxsh"
+            },
+            {
+              "tag": "markdown",
+              "element_id": "eo7xgcqm5rn2n3e5",
+              "content": "| Name | Qty |\n| --- | ---: |\n| apple | 3<br>second paragraph |",
+              "text_align": "left"
+            },
+            {
+              "tag": "collapsible_panel",
+              "element_id": "efyst52xusuzjws7",
+              "expanded": false,
+              "header": {
+                "title": {
+                  "tag": "markdown",
+                  "content": "More information"
+                },
+                "vertical_align": "center",
+                "icon": {
+                  "tag": "standard_icon",
+                  "token": "down-small-ccm_outlined",
+                  "color": "grey",
+                  "size": "12px 12px"
+                },
+                "icon_position": "follow_text",
+                "icon_expanded_angle": -180
+              },
+              "vertical_spacing": "4px",
+              "padding": "2px 0px 2px 0px",
+              "elements": [
+                {
+                  "tag": "markdown",
+                  "element_id": "ez5ukk62b2orx6ui",
+                  "content": "hidden body text",
+                  "text_align": "left"
+                }
+              ]
+            },
+            {
+              "tag": "markdown",
+              "element_id": "emlwt7c5lwmn2y7s",
+              "content": "fine print note",
+              "text_align": "left",
+              "text_size": "notation"
+            },
+            {
+              "tag": "img",
+              "element_id": "ewlg7vqg2vgfliym",
+              "img_key": "fake:fake:test:image:d9d33215365f",
+              "alt": {
+                "tag": "plain_text",
+                "content": "block image"
+              },
+              "preview": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "msg_type": "audio",
+      "content": {
+        "file_key": "fake:fake:test:audio:679dc6bc0bc9"
+      }
+    },
+    {
+      "msg_type": "media",
+      "content": {
+        "file_key": "fake:fake:test:video:336d52e2eddb"
+      }
+    },
+    {
+      "msg_type": "file",
+      "content": {
+        "file_key": "fake:fake:test:file:e4de5288fb5a"
+      }
+    },
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "button",
+              "element_id": "e2h7hddhsgtrgr7y",
+              "text": {
+                "tag": "plain_text",
+                "content": "Stop"
+              },
+              "type": "default",
+              "disabled": false,
+              "behaviors": [
+                {
+                  "type": "callback",
+                  "value": {
+                    "v4": {
+                      "id": "btn-stop"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tag": "button",
+              "element_id": "e5olacumkvzn6fmj",
+              "text": {
+                "tag": "plain_text",
+                "content": "Open"
+              },
+              "type": "default",
+              "disabled": false,
+              "behaviors": [
+                {
+                  "type": "open_url",
+                  "default_url": "https://example.com/open"
+                }
+              ]
+            },
+            {
+              "tag": "markdown",
+              "element_id": "epmreek7m6bry26p",
+              "content": "Compact `/compact`\n\nrun Status `/status` to check",
+              "text_align": "left"
+            },
+            {
+              "tag": "button",
+              "element_id": "eposg4kvyw56sofh",
+              "text": {
+                "tag": "plain_text",
+                "content": "Delete everything"
+              },
+              "type": "danger_filled",
+              "disabled": false,
+              "behaviors": [
+                {
+                  "type": "callback",
+                  "value": {
+                    "v4": {
+                      "id": "btn-danger"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "tag": "form",
+              "element_id": "eubuzwqa33sr5ozr",
+              "name": "order",
+              "elements": [
+                {
+                  "tag": "input",
+                  "element_id": "e2nxz3goytigrdbh",
+                  "name": "title",
+                  "label": {
+                    "tag": "plain_text",
+                    "content": "Title"
+                  },
+                  "placeholder": {
+                    "tag": "plain_text",
+                    "content": "Type a title"
+                  },
+                  "default_value": "Untitled"
+                },
+                {
+                  "tag": "checker",
+                  "element_id": "eynkmaycnwmvp26y",
+                  "name": "agree",
+                  "checked": true,
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "I agree"
+                  }
+                },
+                {
+                  "tag": "select_static",
+                  "element_id": "eguuy3tpumls47ig",
+                  "name": "size",
+                  "placeholder": {
+                    "tag": "plain_text",
+                    "content": "Size"
+                  },
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Small"
+                      },
+                      "value": "s"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Large"
+                      },
+                      "value": "l"
+                    }
+                  ],
+                  "initial_option": "l",
+                  "behaviors": [
+                    {
+                      "type": "callback",
+                      "value": {
+                        "v4": {
+                          "id": "sel-size"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tag": "multi_select_static",
+                  "element_id": "eldmltgrsto7q7li",
+                  "name": "tags",
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Alpha"
+                      },
+                      "value": "a"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Beta"
+                      },
+                      "value": "b"
+                    }
+                  ],
+                  "selected_values": [
+                    "a"
+                  ]
+                },
+                {
+                  "tag": "button",
+                  "element_id": "eznewhkbpcjg3pft",
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Send"
+                  },
+                  "type": "default",
+                  "name": "eznewhkbpcjg3pft",
+                  "form_action_type": "submit",
+                  "disabled": false,
+                  "behaviors": [
+                    {
+                      "type": "callback",
+                      "value": {
+                        "v4": {
+                          "id": "btn-submit"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "tag": "markdown",
+              "element_id": "euzghpvqkkyp5pyc",
+              "content": "\\[合并转发]\n\nraw fallback text",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [
+      {
+        "tag": "u",
+        "via": "text",
+        "path": "message/p[2]/u[3]"
+      },
+      {
+        "tag": "spoiler",
+        "via": "text",
+        "path": "message/p[2]/spoiler[5]"
+      },
+      {
+        "tag": "at",
+        "variant": "here",
+        "via": "text",
+        "path": "message/p[2]/at[10]"
+      },
+      {
+        "tag": "at",
+        "variant": "role",
+        "via": "text",
+        "path": "message/p[2]/at[11]"
+      },
+      {
+        "tag": "channel",
+        "via": "text",
+        "path": "message/p[2]/channel[12]"
+      },
+      {
+        "tag": "emoji",
+        "via": "text",
+        "path": "message/p[2]/emoji[13]"
+      },
+      {
+        "tag": "button-group",
+        "via": "button",
+        "path": "message/button-group[21]"
+      },
+      {
+        "tag": "button",
+        "variant": "input",
+        "via": "p",
+        "path": "message/button-group[21]>/button[2]"
+      },
+      {
+        "tag": "button",
+        "variant": "input",
+        "via": "text+code",
+        "path": "message/p[22]/button[1]"
+      },
+      {
+        "tag": "forward",
+        "via": "p",
+        "path": "message/forward[25]"
+      },
+      {
+        "tag": "raw",
+        "via": "p",
+        "path": "message/raw[26]"
+      }
+    ],
+    "moved": [],
+    "split": 4,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

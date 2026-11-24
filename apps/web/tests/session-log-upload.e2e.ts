@@ -39,7 +39,7 @@ it.skipIf(webSnapshotMode() === 'record')('persists the upload switch and omits 
   }
   const setUpload = async (enabled: boolean) => {
     await openSettings(page, 'en')
-    const toggle = page.getByRole('switch', { name: 'Upload Session Log when using the official model API' })
+    const toggle = page.getByRole('switch', { name: 'Upload session log when using the official model API' })
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(!enabled))
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
@@ -57,7 +57,7 @@ it.skipIf(webSnapshotMode() === 'record')('persists the upload switch and omits 
   await setUpload(false)
   await page.reload()
   await openSettings(page, 'en')
-  await expect.poll(() => page.getByRole('switch', { name: 'Upload Session Log when using the official model API' }).getAttribute('aria-checked')).toBe('false')
+  await expect.poll(() => page.getByRole('switch', { name: 'Upload session log when using the official model API' }).getAttribute('aria-checked')).toBe('false')
   await page.keyboard.press('Escape')
   expect(await send('upload-disabled-marker')).toBe(sessionId)
   expect(server.requests).toHaveLength(2)

@@ -1,0 +1,28 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "above the line"
+            }
+          ],
+          [
+            {
+              "tag": "hr"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "below the line"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

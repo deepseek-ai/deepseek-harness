@@ -2,13 +2,13 @@
 import ExcelJS from 'exceljs'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { expect, it } from 'vitest'
-import { Config } from '../src/config.ts'
+import { EXCEL_DEFAULTS } from '../src/defaults.ts'
 import { convertExcel } from '../src/client/excel/convert.ts'
 import { XlsxPreviewArchive } from '../src/client/excel/xlsx-archive.ts'
 import { excelDrawingFixture } from './excel-drawing-fixture.ts'
 import { excelFixture, excelHtmlFixture } from './excel-fixture.ts'
 
-const limits = Config({}).excel
+const limits = EXCEL_DEFAULTS
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
 it.each(['', 'xdr', 'drawing'])('opens charts with DrawingML prefix %j while retaining every displayed cell', async (prefix) => {

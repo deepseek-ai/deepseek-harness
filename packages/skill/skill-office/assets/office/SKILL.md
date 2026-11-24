@@ -1,16 +1,15 @@
 ---
 name: office
-description: Create or edit Office files; inspect Office files and PDFs. Load before rendering, conversion, or recalculation to enable office_render, office_convert, and office_recalculate next step.
+description: Create, read, edit, and validate Word, PowerPoint, and Excel files; render Office files and PDFs; convert or recalculate. Load first to enable office_render, office_convert, and office_recalculate.
 ---
 
-# Office task routing
+# Office tasks
 
-Load `office-docx`, `office-pptx`, or `office-xlsx` to create, read, or edit; operations alone need no format skill.
+`office_render`, `office_convert`, and `office_recalculate` become available on the next step; if one is missing later, load `office` again. Bundled Python includes `pypdf` for existing PDFs.
 
-If `office_render`, `office_convert`, or `office_recalculate` is not in your tools, load `office` with `skill`; they appear next step.
+- python-docx, python-pptx, and openpyxl cannot open legacy `.doc`, `.ppt`, or `.xls` files; convert them with `office_convert` first.
+- Word: change text inside runs; assigning `paragraph.text` drops the paragraph's run formatting. Chinese, Japanese, and Korean text needs a `w:eastAsia` font in addition to `run.font.name`.
+- PowerPoint: python-pptx cannot measure whether text fits its box; render changed slides to check overflow and overlap.
+- Excel: openpyxl writes formulas without calculated values; use `office_recalculate` when results must show. Writing a pandas DataFrame over an existing workbook drops its other sheets, formulas, and formatting.
 
-- `office_render`: Office or PDF images, visual checks, and appearance or slide checks required by the format skill; skip it when asked.
-- `office_recalculate`: formulas, with `format: "xlsx"` or `"ods"`.
-- `office_convert` with `format`; Office inputs only, not PDFs. For PDF export alone, check the copy is nonempty and starts with `%PDF-`, then deliver it without rendering.
-
-Copy temporary outputs to the destination, keeping existing files unless asked to replace them. Reuse loaded skills.
+Keep the original file unless the user asks to replace it.

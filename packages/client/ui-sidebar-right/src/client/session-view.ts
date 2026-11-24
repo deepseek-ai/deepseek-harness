@@ -30,7 +30,7 @@ export class SidebarSessionView {
     private readonly onDispose: (view: SidebarSessionView) => void,
     private readonly onTabRelease: (view: SidebarSessionView) => void,
   ) {
-    this.reference = sessions.retain(sessionId, { source: 'sidebarView' })
+    this.reference = sessions.retain(sessionId, { source: 'sidebarView', facets: { conversation: true } })
     void this.reference.ready.catch((error: unknown) => { console.error('Sidebar Session opening failed:', error) })
   }
 

@@ -97,7 +97,7 @@ async function bench(): Promise<SlotTestRuntime> {
     }] as never
   })
   await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
-  await runtime.mount({ inject: [...inject], apply })
+  await runtime.mount({ inject: [...inject], apply }, syncedConfig({ recentViewLimit: 10 }))
   await runtime.root.declare({} as never, ImportDialog as never)
   runtime.renderRoot()
   return runtime

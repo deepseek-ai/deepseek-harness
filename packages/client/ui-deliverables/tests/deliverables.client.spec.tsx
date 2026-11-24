@@ -596,7 +596,7 @@ describe('ChangedFiles card', () => {
     changedFile('~/.zshrc', 0, 0, { binary: true, path: '/home/u/.zshrc' }),
   ]
   const changes = { seq: 5 }
-  const served: ChangesSummary = { turn: 1, files, total: 11, added: 1232, deleted: 326 }
+  const served: ChangesSummary = { turn: 1, cwd: '/workspace', files, total: 11, added: 1232, deleted: 326 }
 
   /** A store already holding the summary the Host served for the announced sequence. */
   function servedStore(summary: ChangesSummary = served, seq = 5) {
@@ -616,7 +616,7 @@ describe('ChangedFiles card', () => {
   }
 
   it.each([en, zh])('shows one edited filename without a list and opens its review', (locale) => {
-    const single = servedStore({ turn: 1, files: [changedFile('src/example.scss', 3, 1)], total: 1, added: 3, deleted: 1 })
+    const single = servedStore({ turn: 1, cwd: '/workspace', files: [changedFile('src/example.scss', 3, 1)], total: 1, added: 3, deleted: 1 })
     const { props, view } = renderCard(new PresentedOpenController(), locale, { changes, presented: [] }, single)
     const t = makeTranslate(locale)
     const card = view.container.querySelector('[data-changed-files]')!
@@ -631,7 +631,7 @@ describe('ChangedFiles card', () => {
   })
 
   it.each(['binary', 'oversized'] as const)('keeps the %s status in a single-file header', (flag) => {
-    const single = servedStore({ turn: 1, files: [changedFile('asset.bin', 0, 0, { [flag]: true })], total: 1, added: 0, deleted: 0 })
+    const single = servedStore({ turn: 1, cwd: '/workspace', files: [changedFile('asset.bin', 0, 0, { [flag]: true })], total: 1, added: 0, deleted: 0 })
     const { view } = renderCard(new PresentedOpenController(), en, { changes, presented: [] }, single)
     expect(view.getByText(en[`changes.${flag}`])).toBeTruthy()
     expect(view.queryByText('+0')).toBeNull()
@@ -656,7 +656,7 @@ describe('ChangedFiles card', () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.endsWith('seq=5')) return Response.json(served)
-      if (url.endsWith('seq=6')) return Response.json({ turn: 1, files: [], total: 0, added: 0, deleted: 0 })
+      if (url.endsWith('seq=6')) return Response.json({ turn: 1, cwd: '/workspace', files: [], total: 0, added: 0, deleted: 0 })
       return new Response('gone', { status: 404 })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -690,7 +690,7 @@ describe('ChangedFiles card', () => {
   })
 
   it('sums the header from the Host totals, not from the capped list', () => {
-    const capped = servedStore({ turn: 1, files: files.slice(0, 1), total: 2, added: 50, deleted: 20 })
+    const capped = servedStore({ turn: 1, cwd: '/workspace', files: files.slice(0, 1), total: 2, added: 50, deleted: 20 })
     const { view } = renderCard(new PresentedOpenController(), en, { changes, presented: [] as never[] }, capped)
     expect(view.getByText('Edited 2 files')).toBeTruthy()
     expect(view.getByText('+50')).toBeTruthy()
@@ -809,7 +809,7 @@ describe('ChangedFiles card', () => {
   })
 
   it('renders without a fold for three files or fewer and beside delivery cards', () => {
-    const short = servedStore({ turn: 1, files: [...files.slice(0, 1), changedFile('huge.bin', 0, 0, { oversized: true })], total: 2, added: 185, deleted: 43 })
+    const short = servedStore({ turn: 1, cwd: '/workspace', files: [...files.slice(0, 1), changedFile('huge.bin', 0, 0, { oversized: true })], total: 2, added: 185, deleted: 43 })
     const { view } = renderCard(new PresentedOpenController(), en, { changes, presented: [{ path: 'report.pdf', seq: 6, index: 0 }] as never[] }, short)
     expect(view.getByText('Edited 2 files')).toBeTruthy()
     expect(view.getByText('too large')).toBeTruthy()
@@ -964,9 +964,9 @@ describe('plugin registration', () => {
     fetcher.mockResolvedValueOnce(Response.json({ name: 'desktop', available: true, fileManager: 'finder' }))
     await face.reloadPresentedHost()
     expect(face.hooks.presentedHost.getSnapshot()).toMatchObject({ name: 'desktop' })
-    fetcher.mockResolvedValueOnce(Response.json({ turn: 1, files: [], total: 0, added: 0, deleted: 0 }))
+    fetcher.mockResolvedValueOnce(Response.json({ turn: 1, cwd: '/workspace', files: [], total: 0, added: 0, deleted: 0 }))
     await face.loadChangesSummary(brandString<SessionId>('child-session'), 5)
-    expect(face.hooks.changesSummary.getSnapshot()['api/changes.summary?sessionId=child-session&seq=5']).toEqual({ turn: 1, files: [], total: 0, added: 0, deleted: 0 })
+    expect(face.hooks.changesSummary.getSnapshot()['api/changes.summary?sessionId=child-session&seq=5']).toEqual({ turn: 1, cwd: '/workspace', files: [], total: 0, added: 0, deleted: 0 })
     ctx.emit('connection/reset')
     expect(face.hooks.presentedHost.getSnapshot()).toBeNull()
     // The replaced connection may reach a Host that no longer serves the summaries read so far.
@@ -979,9 +979,9 @@ describe('plugin registration', () => {
     expect(openResource).toHaveBeenCalledWith('dsh-resource://changes-review/session/child-session/5/3', { params: { index: 1 } })
     expect((registered as { title(address: string): string }).title('dsh-resource://changes-review/session/child-session/5/3')).toBe('Review · turn 3')
     const tabFace: ReviewInjected = tabEntry!.inject!(brandString<SessionId>('child-session') as never) as Record<string, unknown> & ReviewInjected
-    fetcher.mockResolvedValueOnce(Response.json({ turn: 3, files: [], total: 0, added: 0, deleted: 0 }))
+    fetcher.mockResolvedValueOnce(Response.json({ turn: 3, cwd: '/workspace', files: [], total: 0, added: 0, deleted: 0 }))
     await tabFace.loadChangesSummary(brandString<SessionId>('child-session'), 6)
-    expect(tabFace.hooks.changesSummary.getSnapshot()['api/changes.summary?sessionId=child-session&seq=6']).toEqual({ turn: 3, files: [], total: 0, added: 0, deleted: 0 })
+    expect(tabFace.hooks.changesSummary.getSnapshot()['api/changes.summary?sessionId=child-session&seq=6']).toEqual({ turn: 3, cwd: '/workspace', files: [], total: 0, added: 0, deleted: 0 })
     fetcher.mockResolvedValueOnce(Response.json({ kind: 'binary', path: 'src/a.ts', display: 'src/a.ts' }))
     await face.loadChangesDiff(brandString<SessionId>('child-session'), 5, 1)
     expect(face.hooks.changesDiff).toBe(tabFace.hooks.changesDiff)
@@ -1098,7 +1098,7 @@ it.each([{}, { turn: '1', callId: 'bad', files: [] },
   const owner = tailOwner(deliverablesOf(value), 6)
   const matched = selectDeliverables(owner)!
   const summaries = new ChangesSummaryStore()
-  summaries.state.set({ [changesSummaryUrl(brandString<SessionId>('session'), 5)]: { turn: 1, files: [{ path: 'a.txt', display: 'a.txt', added: 1, deleted: 0 }], total: 1, added: 1, deleted: 0 } })
+  summaries.state.set({ [changesSummaryUrl(brandString<SessionId>('session'), 5)]: { turn: 1, cwd: '/workspace', files: [{ path: 'a.txt', display: 'a.txt', added: 1, deleted: 0 }], total: 1, added: 1, deleted: 0 } })
   const view = render(<Deliverables {...openProps(new PresentedOpenController(), summaries)} matched={matched} openFile={owner.openFile} sessionId={brandString<SessionId>('session')} t={makeTranslate(en)} />)
   expect(view.getByText('Edited a.txt')).toBeTruthy()
   expect(view.queryByText('Deliverables')).toBeNull()

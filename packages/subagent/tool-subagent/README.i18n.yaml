@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-subagent/use-this-package:
-  en: 93f1701f5209ecb5
-  zh: 6310fd012400aead
+  en: 76236371849f929c
+  zh: 341fb5d40fdb6d36
 /deepseek-ai-dsh-tool-subagent/use-this-package/minimal-configuration:
   en: 1a23808ca32b8f2d
   zh: e637a35220da0564
@@ -81,8 +81,8 @@
   en: cf78b9dd5596495f
   zh: bd44560f8c2435e8
 /deepseek-ai-dsh-tool-subagent/model-experience/system-prompt/what-the-model-sees:
-  en: c02f6b82a7756d03
-  zh: 60ed316d16e34ddf
+  en: c2f02a2a3b4232a3
+  zh: 7f7ca71413ef1abb
 /deepseek-ai-dsh-tool-subagent/model-experience/system-prompt/what-the-model-sees/tool-guidance-section:
   en: 82b3cd08b3961c98
   zh: bdc2a34bcea16cac
@@ -90,8 +90,8 @@
   en: 1dac7ae068a09dab
   zh: 408c273c0bdf88d3
 /deepseek-ai-dsh-tool-subagent/model-experience/system-prompt/kv-cache-effect:
-  en: 6dce9fc6c131fd20
-  zh: 2783a481ee349f1e
+  en: f2224ea48e463d1a
+  zh: 1c69cb360d9271e5
 /deepseek-ai-dsh-tool-subagent/model-experience/runtime-depth-context:
   en: 1e58e87365d88e45
   zh: 7648aa3b3865057f

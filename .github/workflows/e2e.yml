@@ -73,7 +73,7 @@ jobs:
 
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: 24
+          node-version: '^24.22.3'
           cache: pnpm
 
       - name: Install (immutable)

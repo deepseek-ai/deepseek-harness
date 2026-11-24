@@ -4,6 +4,7 @@
  * policy-service dependency. Assertions read files back byte-for-byte rather than trusting tool
  * messages.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
@@ -67,6 +68,7 @@ describe('guarded deployment (with dsh-fs-observation-policy)', () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-'))
     ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -342,6 +344,7 @@ describe('bare provider (no dsh-fs-observation-policy)', () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-bare-'))
     ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -433,6 +436,7 @@ describe('per-session cwd', () => {
     sessionDir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-session-'))
     ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -480,6 +484,7 @@ describe('signal, concurrency, and the fs/observed contract', () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-'))
     ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -589,7 +594,7 @@ describe('signal, concurrency, and the fs/observed contract', () => {
 
 
 describe('current working directory', () => {
-  it('routes subsequent files to the new directory while keeping the original permission root', async () => {
+  it('routes subsequent files to the new directory, and the permission root follows the directory there and back', async () => {
     dir = await mkdtemp(join(tmpdir(), 'dsh-tool-fs-current-'))
     const next = join(dir, 'next')
     await mkdir(next)
@@ -608,9 +613,9 @@ describe('current working directory', () => {
       })
       const agent = handle.agent
       const session = agent.session
-      const policy = ctx.sandboxPolicy.resolve({ session })
       await ctx.workingDirectory.set(agent, next)
       const current = ctx.workingDirectory.get(session)
+      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(current)
       const read = await executeToolFixture(ctx, {
         signal: testToolSignal, callId: brandString<ToolCallId>('read-current'), name: 'read',
         arguments: { file_path: 'note.txt' }, agent,
@@ -659,7 +664,8 @@ describe('current working directory', () => {
       expect(write.meta).toMatchObject({ path: join(current, 'created.txt') })
       expect(await readFile(join(next, 'created.txt'), 'utf8')).toBe('edited')
       await expect(readFile(join(dir, 'created.txt'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(policy.workspaceRoot)
+      expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(ctx.workingDirectory.get(session))
+      expect(ctx.workingDirectory.get(session)).not.toBe(current)
       expect(session.header.cwd).toBe(dir)
     } finally {
       await ctx.fiber.dispose()

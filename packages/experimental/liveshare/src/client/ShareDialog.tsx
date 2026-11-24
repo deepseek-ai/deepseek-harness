@@ -11,8 +11,7 @@ import type { CreatedShare } from '../share-api-types.ts'
 import type { NS } from './locales.ts'
 import type { OwnerShares } from './owner-shares.ts'
 import { mayCreateShare } from './owner-identity.ts'
-import type { OwnerLoginFailure, OwnerLoginPhase } from './owner-login.ts'
-import { useOwnerIdentityLogin } from './owner-identity-login.ts'
+import { useOwnerIdentityLogin, type OwnerLoginAttempt } from './owner-identity-login.ts'
 import { ShareEditPanel, useShareEdit } from './ShareEditPanel.tsx'
 import { ShareCreateForm, useShareCreateForm, type CreatedShareInfo } from './ShareCreateForm.tsx'
 import { useShareRelayAddress } from './share-relay-address.ts'
@@ -45,6 +44,7 @@ export function LiveshareShareDialog({
   const [link, setLink] = useState('')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copiedLoginLink, setCopiedLoginLink] = useState<string>()
   const {
     draft: relayDraft, busy: relayBusy, error: relayError, reverify: relayReverify,
     effectiveRelay, named: relayNamed, connectivity, connectivityError,
@@ -107,6 +107,13 @@ export function LiveshareShareDialog({
     setError(ok ? '' : t('dialog.copyFailed'))
   }
 
+  /** Copy the sign-in address the owner has to open by hand. */
+  const copyLoginLink = async (url: string): Promise<void> => {
+    const ok = await writeClipboard(url)
+    setCopiedLoginLink(ok ? url : undefined)
+    setError(ok ? '' : t('dialog.copyFailed'))
+  }
+
   /**
    * Close the dialog, warning once when the owner has picks that were never saved.
    *
@@ -133,8 +140,11 @@ export function LiveshareShareDialog({
    * outranks the attempt, because signing in cannot start there.
    * @returns The attempt to state, or undefined when the flow's own line stands.
    */
-  const activeLogin = (): { readonly phase: OwnerLoginPhase; readonly failure?: OwnerLoginFailure } | undefined =>
+  const activeLogin = (): OwnerLoginAttempt | undefined =>
     login === undefined || login.phase === 'verified' || !relayNamed || relayDraftUnsaved() ? undefined : login
+
+  /** The Relay address a waiting attempt offers to open by hand. */
+  const manualLogin = activeLogin()?.link
 
   /**
    * The one status line the dialog states right now.
@@ -334,6 +344,24 @@ export function LiveshareShareDialog({
             <span className={statusClass()} role={statusAlerts() ? 'alert' : 'status'}>
               {statusLine()}
             </span>
+            {manualLogin === undefined ? null : (
+              <div className={css.field}>
+                <span className={css.label}>{t('dialog.identity.loginLink')}</span>
+                <div className={css.linkRow}>
+                  <Input
+                    className={css.relayInput as string}
+                    value={manualLogin}
+                    readOnly
+                    aria-label={t('dialog.identity.loginLink')}
+                    onFocus={(event) => { event.target.select() }}
+                  />
+                  <Button variant="outline" onClick={() => { void copyLoginLink(manualLogin) }}>
+                    {t(copiedLoginLink === manualLogin ? 'dialog.copied' : 'dialog.copy')}
+                  </Button>
+                </div>
+                <span className={css.hint}>{t('dialog.identity.loginManual')}</span>
+              </div>
+            )}
             {link === '' ? <ShareCreateForm form={createForm} disabled={!canConfigure()} t={t} /> : null}
             {/* What the share grants, edited here for an existing share. It belongs to the share, not to
             the address and account flow above it, so it renders only once a share exists; the panel

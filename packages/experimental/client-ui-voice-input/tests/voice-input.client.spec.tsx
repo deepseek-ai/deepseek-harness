@@ -27,7 +27,7 @@ function fixture(recording?: Recording, navigable = true) {
     pruneAttachments: vi.fn(), submit: vi.fn() }
   const readiness = createSnapshotStore<SpeechReadiness>({ connected: true, error: null, catalog: {
     providers: [{ id, name: 'SenseVoiceSmall', location: 'host-local', languages: ['auto', 'zh', 'en', 'ja'], preparation: { phase: 'ready' } }],
-    selection: { providerId: id, language: 'auto' }, maxAudioBytes: 100, maxDurationSeconds: 120,
+    selection: { mode: 'explicit', providerId: id, language: 'auto' }, maxAudioBytes: 100, maxDurationSeconds: 120,
   } })
   const transcribe = vi.fn<(request: unknown, signal: AbortSignal) => Promise<RemoteResult<Transcript>>>(
     async () => ({ ok: true, value: transcript }))
@@ -36,6 +36,7 @@ function fixture(recording?: Recording, navigable = true) {
     selectMicrophone: vi.fn(), useMicrophoneDevice: bindSnapshotSelector(createSnapshotStore({ id: '', label: '' })),
     useSpeechReadiness: bindSnapshotSelector(readiness), createRecording: () => recording ?? capture,
     usePluginNavigation: bindSnapshotSelector(createSnapshotStore(navigable)),
+    useAccountSignIn: bindSnapshotSelector(createSnapshotStore(false)), signIn: vi.fn(),
     t: makeTranslate(zh, commonZh) }
   const view = render(<VoiceInput {...props} />)
   return { props, capture, inputActions, readiness, transcribe, view }
@@ -95,7 +96,7 @@ it('keeps provider and language fixed and preserves conflicting text for explici
   const b = fixture(); b.inputActions.insertText.mockReturnValue(false)
   await start()
   const state = b.readiness.getSnapshot()
-  act(() => { b.readiness.set({ ...state, catalog: { ...state.catalog!, selection: { providerId: id, language: 'en' } } }) })
+  act(() => { b.readiness.set({ ...state, catalog: { ...state.catalog!, selection: { mode: 'explicit', providerId: id, language: 'en' } } }) })
   stop()
   const insert = await screen.findByRole('button', { name: zh.insert })
   expect(b.transcribe).toHaveBeenCalledWith(expect.objectContaining({ language: 'auto' }), expect.any(AbortSignal))

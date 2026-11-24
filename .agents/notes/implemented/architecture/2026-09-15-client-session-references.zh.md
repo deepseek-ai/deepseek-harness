@@ -52,7 +52,9 @@ Client Session 对象、Agent 作用域的 Client Context、引用、使用方�
 | `sessions.sessionOf(ctx)` | 返回匹配的活跃 Session 接口或 `undefined`；已结束的 Context 不能解析为同 ID 替代代 |
 | `sessions.create(...)` / `sessions.fork(...)` | 既有 Host 操作，返回 Session 身份；持有与展示仍需显式执行 |
 
-`SessionRetainOptions` 包含必填 `source: SessionReferenceSource` 与可选 `signal: AbortSignal`。两个获取方法均接受 `target: SessionTarget` 和这些 options。来源键由使用方定义，通过声明合并扩展；不提供运行时来源注册协议，也不默认使用主视图来源。来源是使用标签，不是另一种 Session 地址，也不授予操作权限。
+`SessionRetainOptions` 包含必填 `source: SessionReferenceSource`、可选 `facets` 与可选 `signal: AbortSignal`。两个获取方法均接受 `target: SessionTarget` 和这些 options。来源键由使用方定义，通过声明合并扩展；不提供运行时来源注册协议，也不默认使用主视图来源。来源是使用标签，不是另一种 Session 地址，也不授予操作权限。
+
+[Session retain 子要素与最近访问会话](2026-11-15-session-retain-facets-and-recent-views.zh.md) 负责 `facets`，即引用在历史流之外独立计数保活的部分，以及 `recentViews` 来源。
 
 ### 获取、失败与释放
 

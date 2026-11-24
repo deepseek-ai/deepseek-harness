@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-sdk-jsonrpc-server/use-this-package:
-  en: 057b8029e8554035
-  zh: 0bb72b3049b7cb52
+  en: b33675009d503fdd
+  zh: b4a5a391dbfeae60
 /deepseek-ai-dsh-sdk-jsonrpc-server/use-this-package/wiring:
   en: 47a33e9397e36e15
   zh: e6d173820f9ea6e5
@@ -33,8 +33,11 @@
   en: 5100c311c8476f93
   zh: 60d4bc3165731246
 /deepseek-ai-dsh-sdk-jsonrpc-server/use-this-package/shutdown-and-exit:
-  en: 08c3858f53090f39
-  zh: dfae960e11515b06
+  en: bce68765edfb2234
+  zh: f6ebd47a067b5d90
+/deepseek-ai-dsh-sdk-jsonrpc-server/use-this-package/requests-for-a-disposed-agent:
+  en: 88e3905a28a5bf59
+  zh: 1a204018ca53d5fb
 /deepseek-ai-dsh-sdk-jsonrpc-server/understand-the-implementation:
   en: eca39e7027d67d8f
   zh: dd3f494276322857
@@ -42,8 +45,8 @@
   en: fb2166e245c705f5
   zh: df0b1583fe6520f5
 /deepseek-ai-dsh-sdk-jsonrpc-server/understand-the-implementation/source-map:
-  en: 783bd2b6628c0680
-  zh: ca5b6b730893ddec
+  en: ac30da58386e08c3
+  zh: d33b972f0d341c5e
 /deepseek-ai-dsh-sdk-jsonrpc-server/understand-the-implementation/request-flow:
   en: 2658804b2f90b135
   zh: 085aa00c8f0bbbcd
@@ -60,8 +63,8 @@
   en: 04d1b73cd8e06dfe
   zh: cd67fbbfdf39f776
 /deepseek-ai-dsh-sdk-jsonrpc-server/model-experience/sdk-user-message/what-the-model-sees:
-  en: 04c09df4f7053490
-  zh: 236f0f0b97892821
+  en: fe88805ec352a791
+  zh: c9904db2d596f4e8
 /deepseek-ai-dsh-sdk-jsonrpc-server/model-experience/sdk-user-message/token-effect:
   en: 372ed851986b76d2
   zh: 075b94a565275368

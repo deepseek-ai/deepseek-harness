@@ -23,21 +23,21 @@ it('adds the last General row only while served and removes all contributions on
     await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
     const slots = ctx.get('slots') as SlotRegistry
     slots.register({ name: 'root', children: {
-      'settings.general.item': { kind: 'list', scope: 'root' },
+      'settings.general.group.data.item': { kind: 'list', scope: 'root' },
       'shell.overlay': { kind: 'list', scope: 'root' },
     } } as never, () => null)
     const fiber = ctx.plugin({ inject, apply })
     await fiber.await()
     await ctx.configForms.describe().ensure()
-    expect(slots.entries('settings.general.item')).toHaveLength(0)
+    expect(slots.entries('settings.general.group.data.item')).toHaveLength(0)
     describe.mockResolvedValue({ ok: true, value: { writable: true, hasDocument: true, namespaces: [{
       ns: 'session-log-deepseek', schema: {}, value: { enabled: true }, applies: 'live', secrets: [], revision: 1,
     }] } })
     remote.emit('settings/document-updated', ['session-log-deepseek', 1])
-    await vi.waitFor(() => { expect(slots.entries('settings.general.item')).toHaveLength(1) })
-    expect(slots.entries('settings.general.item')[0]!.options).toMatchObject({ id: 'session-log-deepseek', order: 90 })
+    await vi.waitFor(() => { expect(slots.entries('settings.general.group.data.item')).toHaveLength(1) })
+    expect(slots.entries('settings.general.group.data.item')[0]!.options).toMatchObject({ id: 'session-log-deepseek', order: 90 })
     expect(slots.entries('shell.overlay')).toHaveLength(1)
-    const row = slots.entries('settings.general.item')[0]!
+    const row = slots.entries('settings.general.group.data.item')[0]!
     const face = row.inject!() as UploadInjected & Record<string, unknown>
     const form = ctx.configForms.get('session-log-deepseek')
     const set = vi.spyOn(form, 'set').mockResolvedValue(false)
@@ -50,7 +50,7 @@ it('adds the last General row only while served and removes all contributions on
     expect(face.hooks.mutation.getSnapshot().notice).toBeNull()
     describe.mockResolvedValue({ ok: true, value: { writable: true, hasDocument: true, namespaces: [] } })
     remote.emit('settings/document-updated', ['session-log-deepseek', 2])
-    await vi.waitFor(() => { expect(slots.entries('settings.general.item')).toHaveLength(0) })
+    await vi.waitFor(() => { expect(slots.entries('settings.general.group.data.item')).toHaveLength(0) })
     await fiber.dispose()
     expect(slots.entries('shell.overlay')).toHaveLength(0)
   } finally {

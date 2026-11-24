@@ -1624,8 +1624,6 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   }, [highlight, clearHighlight])
   const noticeLine = state.notice === null || state.notice.kind === 'refresh-failed' ? null : noticeText(state.notice, t)
 
-  // The page omits profile bundles and persistent terminals. Other installed or offered bundles and
-  // unreadable selections remain manageable.
   const listed = state.packages.filter(pkg => !HIDDEN_BUNDLES.has(pkg.name)
     && (pkg.listedByDefault !== false || pkg.enabled || pkg.installed || rowsRunning(pkg))
     && (pkg.installed || pkg.official || pkg.error !== undefined))

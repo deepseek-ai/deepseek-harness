@@ -20,6 +20,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
  */
 import type {} from '@deepseek-ai/dsh-client-product-analytics/client'
 import type { Context } from '@deepseek-ai/cordis'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { WorkspaceNavigationConfig } from '../types.ts'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ISessions, SessionForkError } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
@@ -65,7 +67,7 @@ import { en, ja, es, fr, de, ru, pt, zh, type WorkspaceKey } from './locales.ts'
 export type { StartSessionOptions, UiWorkspace } from './navigation.ts'
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
-  MenuOpenState, RowToast, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState, WorkspaceBrowserInjected,
+  MenuOpenState, RowToast, SessionDragType, SessionRenameTarget, SessionRowOwnerProps, UseMenuOpenState, WorkspaceBrowserInjected,
   SessionRowScheduleOwnerProps,
   WorkspaceBrowserProps,
   WorkspacePickerInjected, WorkspacePickerInput, WorkspacePickerProps,
@@ -120,6 +122,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 declare module '@deepseek-ai/dsh-api-session-controller/client' {
   interface SessionReferenceSourceMap {
     workspaceOperation: unknown
+    /** Recently viewed Sessions kept receiving history after leaving the main view. */
+    recentViews: unknown
   }
 }
 
@@ -146,8 +150,9 @@ export const inject = ['contextMenus',
  * ledger. Inject factories return plain callbacks; data reads use the
  * framework's global hooks.
  * @param ctx - client root context.
+ * @param config - Host-synced navigation configuration.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: SyncedConfig<WorkspaceNavigationConfig>): void {
   const sessions = ctx.get('sessions') as ISessions
   const workspaces = ctx.get('workspaces') as IWorkspaces
   // One viewing-store instance, created here as ui-layout does for its layout
@@ -160,7 +165,7 @@ export function apply(ctx: Context): void {
   let toastSeq = 0
   const notify = (toast: RowToast): void => { rowToast.set({ ...toast, seq: ++toastSeq }) }
   const uiWorkspace = new UiWorkspaceService(
-    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify,
+    ctx, ctx.remote.directoryPicker, workspaces, sessions, viewInstance.actions, notify, config.recentViewLimit,
   )
   ctx.slots.provideRoot({
     hooks: { workspaces: workspaces.list },

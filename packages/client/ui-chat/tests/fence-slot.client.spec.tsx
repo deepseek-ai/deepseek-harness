@@ -92,7 +92,7 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
   runtime.remote.provideNamespaces({ session: { openWorkspacePath: vi.fn() } })
   let mainReference: ReturnType<typeof runtime.sessions.retain> | undefined
   const openSession = (id: SessionId): void => {
-    const next = runtime.sessions.retain(id, { source: 'mainView' })
+    const next = runtime.sessions.retain(id, { source: 'mainView', facets: { conversation: true } })
     mainReference?.release()
     mainReference = next
   }
@@ -117,7 +117,8 @@ async function renderChat(events: readonly SessionEventLikeEntry[]) {
   openSession(SID)
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
-    'settings.general.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.display.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.interaction.item': { kind: 'list', scope: 'root' },
   }, AppRoot)
   await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   await runtime.mount({ inject: [...injectChat], apply: applyChat })

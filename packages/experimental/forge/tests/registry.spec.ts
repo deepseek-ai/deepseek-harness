@@ -211,6 +211,8 @@ describe('forge registry', () => {
     await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal))
       .resolves.toEqual({ code: 'unsupported', message: 'This provider requests no reviews' })
     await expect(ctx.forge.updateBranch(ref(3), update, signal)).resolves.toEqual({ code: 'failed', message: 'This provider updates no branches' })
+    const auto = { enabled: true as const, method: 'squash' as const, headSha: 'a'.repeat(40) }
+    await expect(ctx.forge.setAutoMerge(ref(3), auto, signal)).resolves.toEqual({ code: 'failed', message: 'This provider sets no automatic merge' })
     // Requests need both halves of the review request capability.
     const requestReviews = vi.fn(async () => undefined)
     Object.assign(provider, { requestReviews })
@@ -221,7 +223,12 @@ describe('forge registry', () => {
     const reviewerCandidates = vi.fn(async () => candidates)
     const rerunChecks = vi.fn(async () => undefined)
     const updateBranch = vi.fn(async () => ({ code: 'stale' as const, message: 'moved' }))
-    Object.assign(provider, { reviewerCandidates, rerunChecks, updateBranch })
+    const setAutoMerge = vi.fn(async () => undefined)
+    Object.assign(provider, { reviewerCandidates, rerunChecks, updateBranch, setAutoMerge })
+    await expect(ctx.forge.setAutoMerge(ref(3), auto, signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.setAutoMerge(ref(3), { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(setAutoMerge.mock.calls)
+      .toEqual([[ref(3), auto, expect.any(AbortSignal)], [ref(3), { enabled: false }, expect.any(AbortSignal)]])
     await expect(ctx.forge.rerunChecks(ref(3), rerun, signal)).resolves.toBeUndefined()
     await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toBeUndefined()
     await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal)).resolves.toBe(candidates)

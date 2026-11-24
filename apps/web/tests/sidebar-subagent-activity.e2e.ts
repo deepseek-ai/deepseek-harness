@@ -19,7 +19,9 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel } from './support.ts'
+import {
+  connectFreshWorkspace, dismissSessionPanel, newEnglishPage, saveFailureShot, sessionPanelToggle, showSessionPanel,
+} from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/sidebar-subagent-activity', import.meta.url))
@@ -169,9 +171,7 @@ describe('web e2e: sidebar subagent activity', () => {
         await panel.locator(`[data-session-panel-section="${section}"]`).locator('[data-state="ongoing"]').first()
           .waitFor({ timeout: 10_000 })
       }
-      expect(await panel.getAttribute('data-session-panel')).toBe('overlay')
-      await page.keyboard.press('Escape')
-      await panel.waitFor({ state: 'detached' })
+      await dismissSessionPanel(page)
     }
     try {
       await assertRunningSections()

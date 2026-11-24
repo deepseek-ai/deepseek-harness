@@ -50,6 +50,21 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+/* Match the trailing icon box above, retaining its internal glyph whitespace. */
+.externalActions {
+  display: none;
+  flex: none;
+  margin-inline-start: 6px;
+  margin-inline-end: 6px;
+}
+
+.externalActions:has(
+  > [data-slot] > [data-slot-item] > *,
+  > [data-slot] > :not([data-slot-item])
+) {
+  display: flex;
+}
+
 .path {
   margin-right: 12px;
 }

@@ -119,17 +119,6 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(4)
   })
 
-  it('treats unknown mergeability as active work', async () => {
-    const provider = new FakeProvider()
-    provider.results.set(key, snapshot(ref(1), { mergeability: 'unknown' }))
-    const context = await setup(provider)
-    collect(context)
-
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    expect(provider.fetches).toHaveLength(2)
-  })
-
   it('backs off after consecutive failures up to the cap and resets after success', async () => {
     const provider = new FakeProvider()
     const context = await setup(provider)
@@ -371,7 +360,7 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(2)
   })
 
-  it.each(['rerunChecks', 'requestReviews', 'updateBranch'] as const)('polls at once after %s, whatever the host answered', async (action) => {
+  it.each(['rerunChecks', 'requestReviews', 'updateBranch', 'addComment', 'setAutoMerge'] as const)('polls at once after %s, whatever the host answered', async (action) => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1)))
     Object.assign(provider, {
@@ -379,12 +368,16 @@ describe('forge watch', () => {
       requestReviews: vi.fn(async () => undefined),
       reviewerCandidates: vi.fn(async () => []),
       updateBranch: vi.fn(async () => ({ code: 'stale', message: 'moved' })),
+      addComment: vi.fn(async () => ({ code: 'unknown', message: 'no answer' })),
+      setAutoMerge: vi.fn(async () => ({ code: 'failed', message: 'refused' })),
     })
     const context = await setup(provider)
     collect(context)
     await vi.advanceTimersByTimeAsync(0)
     const signal = new AbortController().signal
     if (action === 'rerunChecks') await context.forge.rerunChecks(ref(1), { headSha: 'a'.repeat(40) }, signal)
+    else if (action === 'addComment') await context.forge.addComment(ref(1), 'Thanks', signal)
+    else if (action === 'setAutoMerge') await context.forge.setAutoMerge(ref(1), { enabled: false }, signal)
     else if (action === 'requestReviews') await context.forge.requestReviews(ref(1), { reviewers: [{ kind: 'user', login: 'mona' }] }, signal)
     else await context.forge.updateBranch(ref(1), { method: 'merge', headSha: 'a'.repeat(40) }, signal)
     await vi.advanceTimersByTimeAsync(0)

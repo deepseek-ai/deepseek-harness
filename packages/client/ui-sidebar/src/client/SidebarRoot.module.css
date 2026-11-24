@@ -165,17 +165,21 @@
    rail right edge over the remaining 150ms of the AppFrame track transition.
    The bottom-pinned settings seat shares their opacity timeline but stays
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
-   render stays static.
-   The New Session row renders its content through the `sidebar.session.action`
-   HOC slot, whose `display: contents` outlet anchor sits between the row and
-   its content. The shell's New-session button and the occupant's own controls
-   are that anchor's children, so the fade targets them through the anchor; the
-   boxless anchor itself cannot carry an animation. */
+   render stays static. The New Session row animates each direct output of its
+   slot. Only the slot's children outlets are transparent: a layer's own wrapper
+   moves as one item, not together with a second animation on its descendants. */
 .railIn .iconButton,
 .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
+.railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+  [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
+)) > *,
 .railIn .panelList,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
+}
+
+.railIn .newSessionRow [data-slot-children='sidebar.session.action'] {
+  animation: none;
 }
 
 .railIn .footArea {
@@ -435,7 +439,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px);
+  margin: 0 calc(var(--dsh-sidebar-paint-inset) + 1px) 6px;
 }
 
 /* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
@@ -693,6 +697,27 @@
   outline-offset: -2px;
 }
 
+/* A panel's trailing content follows the title in the row's flow: a row without content keeps its full title width,
+   and the title yields room only to content that shows. Where the pointer hovers, the content rests at the row's end
+   and gives way to the unpin action; elsewhere it stays before the action, which always shows. On the collapsed rail it
+   sits over the icon's top trailing corner. */
+.panelTrailing {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.collapsed .panelTrailing {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+}
+
 @media (hover: hover) {
   .panelUnpin { opacity: 0; }
   .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
@@ -700,6 +725,17 @@
   .panelUnpin:hover { color: var(--dsw-alias-label-primary); }
   .panelEntry:hover .panelUnpin,
   .panelEntry:has(:focus-visible) .panelUnpin { opacity: 1; }
+
+  /* The unpin action shows only while its row is hovered or holds keyboard focus, so trailing content rests in the
+     action's place, as a Session row's time rests in the place of its actions: its trailing edge is the unpin glyph's,
+     7px from the row's, and its box fills the rest of the 38px the row keeps for the action. */
+  .panelEntryWide .panelRow { padding-right: 7px; }
+  .panelEntryWide .panelTrailing {
+    justify-content: flex-end;
+    min-width: 31px;
+  }
+  .panelEntry:has(.panelUnpin):hover .panelTrailing,
+  .panelEntry:has(.panelUnpin):has(:focus-visible) .panelTrailing { opacity: 0; }
 }
 
 .panelList {
@@ -844,6 +880,9 @@
   .fading > *,
   .railIn .iconButton,
   .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
+  .railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+    [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
+  )) > *,
   .railIn .panelList,
   .railIn .footArea,
   .railIn .regionArea {

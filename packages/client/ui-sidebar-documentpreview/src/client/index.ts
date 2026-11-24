@@ -21,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-api-workspace-files/remote'
 import type { WorkspaceFileParams } from '@deepseek-ai/dsh-api-workspace-files/client'
+import { SummaryPreview, SummaryTitle } from './SummaryPreview.tsx'
 import { TextPreview } from './TextPreview.tsx'
 import type { TextPreviewInjected } from './TextPreview.tsx'
 import { TextTitle } from './TextTitle.tsx'
@@ -39,7 +40,9 @@ import { apply as registerPdf } from './pdf/index.ts'
 import { apply as registerCode } from './code/index.ts'
 import { apply as registerOffice } from './office/index.ts'
 import { apply as registerExcel } from './excel/index.ts'
-import { Config } from '../config.ts'
+import type { SyncedConfig } from '@deepseek-ai/dsh-client-config/types'
+import type { DocumentPreviewConfig } from '../types.ts'
+import { EXCEL_DEFAULTS, OFFICE_DEFAULTS } from '../defaults.ts'
 
 // Values stay package-private unless another package needs them; the plugin
 // surface is `apply`, `inject`, and the store factory another registration may
@@ -67,6 +70,11 @@ declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
     /** File line navigation supported by the text preview. */
     file: WorkspaceFileParams
   }
+
+  interface SidebarRightTabParamsMap {
+    /** Transient Markdown supplied when a compaction row is opened. */
+    'compaction-summary': { readonly summaryMarkdown: string }
+  }
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -85,9 +93,9 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs', 'remote', 'remote.
 /**
  * Client plugin body: register the type, its dictionaries, its body, and its chip title.
  * @param ctx - client root context carrying the registry, slots, copy, and file readers.
+ * @param config - Host-synced Office and Excel limits, read once here; an absent value uses the schema defaults.
  */
-export function apply(ctx: ClientContext): void {
-  const config = Config((globalThis as { __DSH_DOCUMENT_PREVIEW_CONFIG__?: unknown }).__DSH_DOCUMENT_PREVIEW_CONFIG__ ?? {})
+export function apply(ctx: ClientContext, config: SyncedConfig<DocumentPreviewConfig>): void {
   const previews = new DocumentPreviewRegistry()
   const disposePreviews = ctx.reflect.provide('documentPreviews', previews)
   ctx.effect(() => disposePreviews)
@@ -126,7 +134,19 @@ export function apply(ctx: ClientContext): void {
   registerHtml(ctx)
   registerImage(ctx)
   registerPdf(ctx)
-  registerOffice(ctx, config.office)
-  registerExcel(ctx, config.excel)
+  registerOffice(ctx, config.office.get() ?? OFFICE_DEFAULTS)
+  registerExcel(ctx, config.excel.get() ?? EXCEL_DEFAULTS)
   registerCode(ctx)
+  const summaryId = '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/compaction'
+  const t = ctx.locale.bind('documentMarkdown')
+  ctx.effect(() => ctx.sidebarRightTabs.register({
+    id: summaryId, kind: 'compaction-summary',
+    priority: 'builtin', title: () => t('summary.title'),
+  }), 'ui-sidebar-documentpreview: compaction summaries')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab', key: summaryId, locale: 'documentMarkdown',
+  }, SummaryPreview)), 'ui-sidebar-documentpreview: summary body')
+  ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
+    name: 'sidebar.right.pane.tab.title', key: summaryId, locale: 'documentMarkdown',
+  }, SummaryTitle)), 'ui-sidebar-documentpreview: summary title')
 }

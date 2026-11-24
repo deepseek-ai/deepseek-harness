@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-fetch-http",
   "description": "Anonymous HTTP(S) fetch provider for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "undici": "8.11.2"
+    "undici": "8.12.4"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

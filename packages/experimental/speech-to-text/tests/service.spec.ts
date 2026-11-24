@@ -64,12 +64,12 @@ it('persists explicit provider and language changes through the profile and publ
     await speech.configure({ providerId: 'cloud' as SpeechProviderId })
     expect((await next).value).toMatchObject({ selection: { providerId: 'cloud', language: 'auto' } })
     await speech.configure({ language: 'en' })
-    expect(speech.snapshot().selection).toEqual({ providerId: 'cloud', language: 'en' })
+    expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'cloud', language: 'en' })
     expect(speech.resolve({ audio })).toMatchObject({ provider: { info: { id: 'cloud' } }, language: 'en' })
     expect(writes).toEqual([{ defaultProvider: 'cloud' }, { language: 'en' }])
     await expect(speech.configure({ providerId: 'missing' as SpeechProviderId })).rejects.toThrow('unavailable')
     await expect(speech.configure({ language: '' })).rejects.toThrow()
-    expect(speech.snapshot().selection).toEqual({ providerId: 'cloud', language: 'en' })
+    expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'cloud', language: 'en' })
   } finally { await ctx.fiber.dispose() }
 })
 
@@ -82,7 +82,7 @@ it('refuses to configure without the settings service or a profile entry', async
     await expect(speech.configure({ language: 'zh' })).rejects.toThrow('settings service')
     ctx.provide('settings', { update: vi.fn() } as never)
     await expect(speech.configure({ language: 'zh' })).rejects.toThrow('profile entry')
-    expect(speech.snapshot().selection).toEqual({ providerId: 'local', language: 'auto' })
+    expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'local', language: 'auto' })
   } finally { await ctx.fiber.dispose() }
 })
 
@@ -173,21 +173,23 @@ describe('speech providers', () => {
   })
 })
 
-it('rejects unsupported language selections before persistence or transcription', async () => {
+it('rejects language selections no provider lists before persistence or transcription', async () => {
   const ctx = new Context()
   try {
     const { speech, writes } = await mounted(ctx, { defaultProvider: 'local', language: 'auto' })
     const transcribe = vi.fn(async () => result)
     speech.register(provider('local', transcribe))
     const cloud = provider('cloud', transcribe)
-    speech.register({ ...cloud, info: { ...cloud.info, languages: ['fr'] } })
-    await expect(speech.configure({ language: 'fr' })).rejects.toThrow('does not support language')
-    await expect(speech.configure({ providerId: cloud.info.id })).rejects.toThrow('does not support language')
+    speech.register({ ...cloud, info: { ...cloud.info, languages: ['auto', 'fr'] } })
+    await expect(speech.configure({ language: 'it' })).rejects.toThrow('No registered speech provider supports language: it')
     expect(writes).toEqual([])
-    expect(() => speech.resolve({ audio, language: 'fr' })).toThrow('does not support language')
+    expect(() => speech.resolve({ audio, language: 'it' })).toThrow('No registered speech provider supports language: it')
     expect(transcribe).not.toHaveBeenCalled()
-    await speech.configure({ providerId: cloud.info.id, language: 'fr' })
-    expect(speech.resolve({ audio })).toMatchObject({ provider: { info: { id: 'cloud', languages: ['fr'] } }, language: 'fr' })
+    await speech.configure({ language: 'fr' })
+    expect(speech.resolve({ audio })).toMatchObject({ provider: { info: { id: 'local' } }, language: 'auto' })
+    await speech.configure({ providerId: cloud.info.id })
+    expect(speech.resolve({ audio })).toMatchObject({ provider: { info: { id: 'cloud' } }, language: 'fr' })
+    expect(writes).toEqual([{ language: 'fr' }, { defaultProvider: 'cloud' }])
   } finally { await ctx.fiber.dispose() }
 })
 

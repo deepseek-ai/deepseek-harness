@@ -194,6 +194,31 @@ describe('the face\'s search', () => {
     expect(two.search).toHaveBeenCalledTimes(4)
   })
 
+  it('searches the checkout a held query\'s pane moves to, with that checkout\'s preferences', async () => {
+    const book = memoryBook()
+    const h = session('s-1', book)
+    h.face.setSearchPreferences('/work/other', { showHidden: true })
+    const release = h.face.hold(PANE, ROOT)
+    h.face.setQuery(PANE, ROOT, 'a')
+    await searchesSettled()
+    expect(h.search).toHaveBeenCalledOnce()
+    expect(h.result()).toMatchObject({ tree: { root: ROOT } })
+    // The Session enters another checkout: the tree restarts there, and so does the held search.
+    const moved = h.face.hold(PANE, '/work/other')
+    release()
+    expect(h.search).toHaveBeenLastCalledWith('s-1', expect.objectContaining({ query: 'a', includeHidden: true }), expect.any(AbortSignal))
+    await searchesSettled()
+    expect(h.result()).toMatchObject({ tree: { root: '/work/other' }, hiddenLeftOut: false })
+    // Holding the same root again searches nothing new; the new root's preferences are followed now.
+    h.face.hold(PANE, '/work/other')()
+    expect(h.search).toHaveBeenCalledTimes(2)
+    h.face.setSearchPreferences(ROOT, { showHidden: true })
+    expect(h.search).toHaveBeenCalledTimes(2)
+    h.face.setSearchPreferences('/work/other', { respectGitignore: false })
+    expect(h.search).toHaveBeenCalledTimes(3)
+    moved()
+  })
+
   it('does not search again when the listed levels change under shown results', async () => {
     const h = session('s-1', memoryBook())
     h.instance.actions.start(PANE, ROOT)

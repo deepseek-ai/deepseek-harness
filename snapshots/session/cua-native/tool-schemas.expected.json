@@ -95,7 +95,7 @@
     },
     {
       "name": "cua",
-      "description": "Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
+      "description": "Inspect desktop access, select an application and window, read accessibility state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
       "parameters": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "oneOf": [
@@ -148,9 +148,10 @@
                 "type": "object",
                 "properties": {
                   "query": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": "\\S"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -182,6 +183,33 @@
                 },
                 "required": [
                   "selector"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "launchApp"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "appHandle"
                 ],
                 "additionalProperties": false
               }
@@ -303,6 +331,10 @@
                     "description": "Include identifiers, global native bounds and complete action names.",
                     "type": "boolean"
                   },
+                  "showDiff": {
+                    "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
+                    "type": "boolean"
+                  },
                   "maxElements": {
                     "description": "Maximum nodes to visit on this read. Omission uses the provider setting.",
                     "type": "number",
@@ -360,6 +392,33 @@
                   "appHandle",
                   "snapshotId",
                   "elementId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "getActionSchema"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "action"
                 ],
                 "additionalProperties": false
               }
@@ -494,6 +553,10 @@
                       "down",
                       "up"
                     ]
+                  },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -540,8 +603,8 @@
                         "minLength": 1,
                         "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -580,8 +643,8 @@
                         "type": "boolean",
                         "const": false
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -623,8 +686,8 @@
                         "const": true,
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -716,6 +779,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -794,6 +861,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -875,6 +946,10 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1093,6 +1168,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
+                  },
                   "windowId": {
                     "type": "string",
                     "minLength": 1
@@ -1134,6 +1213,10 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "useSystemInput": {
+                    "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
+                    "type": "boolean"
                   },
                   "windowId": {
                     "type": "string",
@@ -1352,8 +1435,8 @@
                         "type": "number",
                         "minimum": 0
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -1431,8 +1514,8 @@
                         "minimum": 0,
                         "maximum": 999
                       },
-                      "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                      "useSystemInput": {
+                        "description": "True sends system keyboard or mouse input and presses any requested keyboard modifiers. Omitted or false uses the provider default.",
                         "type": "boolean"
                       }
                     },
@@ -1673,7 +1756,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -1762,10 +1845,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -1791,10 +1870,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -2022,19 +2097,6 @@
           "script",
           "meta"
         ]
-      }
-    },
-    {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
       }
     },
     {

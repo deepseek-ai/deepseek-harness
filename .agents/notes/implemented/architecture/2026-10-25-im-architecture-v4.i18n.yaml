@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-10-25-im-architecture-v4.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-25-im-architecture-v4.md
+/agent-note-im-architecture-in-v4:
+  en: 6d31353cd74e9432
+  zh: f3371b2adcfd5d94
+/agent-note-im-architecture-in-v4/problem:
+  en: 024834c385990be7
+  zh: 7865b32d373f0484
+/agent-note-im-architecture-in-v4/decision:
+  en: 7d8e9449618a1a9e
+  zh: 666b9aa64640af5c
+/agent-note-im-architecture-in-v4/decision/the-host:
+  en: 23e9dbcc7062aefd
+  zh: 11e9e3a2cec281da
+/agent-note-im-architecture-in-v4/decision/message-routing-and-the-default-dispatcher:
+  en: 05e188c631db10aa
+  zh: d034e4f4102fe74e
+/agent-note-im-architecture-in-v4/decision/session-strategies:
+  en: 397eb04ae8dcffe8
+  zh: 5c8469820765a83b
+/agent-note-im-architecture-in-v4/decision/output-renderers:
+  en: 7db1986c5b25cb14
+  zh: 623231c42979666a
+/agent-note-im-architecture-in-v4/decision/platform-layer:
+  en: cc205abec74c247f
+  zh: 62cbb9e36ee97614
+/agent-note-im-architecture-in-v4/alternatives-considered:
+  en: 58392b3805a29cd4
+  zh: 9715f7c9c5b33e34
+/agent-note-im-architecture-in-v4/consequences:
+  en: 8c14d0a1c8fc9368
+  zh: f7bae48c08fae040

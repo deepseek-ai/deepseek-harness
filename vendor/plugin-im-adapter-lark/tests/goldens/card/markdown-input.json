@@ -1,0 +1,31 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "exgdp6odwlzjesqq",
+              "content": "**bold** text\n\n- item one\n- item two\n\n```ts\nconst x = 1\n```",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

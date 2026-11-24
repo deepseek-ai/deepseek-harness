@@ -144,6 +144,11 @@ export interface ChangeRequestSnapshot {
   /** Merge methods the repository accepts, the signed-in user's usual one first. */
   readonly mergeMethods: readonly MergeMethod[]
   /**
+   * How the change request stands with its host's automatic merge; omitted by a provider that sets none, whose change
+   * requests then offer no automatic merge.
+   */
+  readonly autoMerge?: ChangeRequestAutoMerge
+  /**
    * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
    * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
    * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
@@ -179,15 +184,25 @@ export interface ChangeRequestSnapshot {
   readonly closedAt: string | null
 }
 
+/**
+ * The fields of a {@link ChangeRequestSnapshot} that name a change request and its state in a list. A provider can
+ * read them for many change requests in one request, without the checks, reviewers, and merge rules of a snapshot.
+ */
+export type ChangeRequestBrief = Pick<
+  ChangeRequestSnapshot, 'ref' | 'url' | 'title' | 'state' | 'draft' | 'mergeability' | 'reviewDecision' | 'checksRollup'
+>
+
 /** Why a provider could not read a change request. */
 export interface ForgeFailure {
   /**
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
    * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
-   * a later status can succeed; `unsupported`: the provider does not offer the read; `unavailable`: any other failure.
+   * a later status can succeed; `rate-limited`: the host refused the read under its rate limit, so reading again
+   * succeeds only after the limit resets; `unsupported`: the provider does not offer the read; `unavailable`: any other
+   * failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unsupported' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'rate-limited' | 'unsupported' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -205,6 +220,40 @@ export type ChangeRequestUpdate = {
   /** Reason the status could not be read. */
   readonly failure: ForgeFailure
 })
+
+/** Latest brief delivered to brief watchers of one change request, from a brief read or from a snapshot read. */
+export type ChangeRequestBriefUpdate = {
+  /** Canonical identity of the watched change request. */
+  readonly key: ChangeRequestKey
+  /** Epoch milliseconds when the result settled. */
+  readonly fetchedAt: number
+} & ({
+  /** Brief read from the host. */
+  readonly brief: ChangeRequestBrief
+} | {
+  /** Reason the brief could not be read. */
+  readonly failure: ForgeFailure
+})
+
+/** How a change request stands with its host's automatic merge. */
+export interface ChangeRequestAutoMerge {
+  /** Whether the host merges the change request by itself once its merge requirements are met. */
+  readonly enabled: boolean
+  /** How the commits enter the base branch then, while enabled and the host names the method; null otherwise. */
+  readonly method: MergeMethod | null
+  /** Login of the account that turned it on, while enabled and the host names one; null otherwise. */
+  readonly enabledBy: string | null
+  /** Whether the signed-in user can turn it on now through `setAutoMerge`; false while it is on. */
+  readonly canEnable: boolean
+  /** Whether the signed-in user can turn it off now through `setAutoMerge`; false while it is off. */
+  readonly canDisable: boolean
+}
+
+/** Turning a change request's automatic merge on for the head commit the user saw, or off. */
+export type AutoMergeRequest =
+  /** `method` is one of the snapshot's `mergeMethods`; the host refuses once the head is no longer `headSha`. */
+  | { readonly enabled: true; readonly method: MergeMethod; readonly headSha: string }
+  | { readonly enabled: false }
 
 /** A merge the user confirmed for the head commit they saw. */
 export interface MergeRequest {
@@ -491,6 +540,156 @@ export interface ForgeViewedRequest {
   readonly headSha: string
 }
 
+/**
+ * A list of open change requests that involve the signed-in user: `review-requested` asks the user or one of the user's
+ * teams for a review; `authored` names the user as author; `involved` names the user in any other way, as an assignee,
+ * a commenter, a reviewer, or a mention, and holds none of the other two lists' change requests.
+ */
+export type ForgeViewerFilter = 'review-requested' | 'authored' | 'involved'
+
+/** Hosts a provider lists change requests on for the signed-in user, and the lists it offers there. */
+export interface ForgeViewerCapability {
+  /** Lowercase host names, each one this provider serves. */
+  readonly hosts: readonly string[]
+  /** The lists the provider reads on each of `hosts`. */
+  readonly filters: ReadonlySet<ForgeViewerFilter>
+  /** Most change requests one read returns, a positive integer. */
+  readonly maxItems: number
+}
+
+/** A registered provider's viewer lists, as {@link ForgeViewerCapability} with the forge family that offers them. */
+export interface ForgeViewerSource extends ForgeViewerCapability {
+  /** Forge family of the provider. */
+  readonly forge: string
+}
+
+/** One read of a list of open change requests that involve the signed-in user on one host. */
+export interface ForgeViewerQuery {
+  /** Lowercase host name from the provider's {@link ForgeViewerCapability.hosts}. */
+  readonly host: string
+  /** The list to read, from the provider's {@link ForgeViewerCapability.filters}. */
+  readonly filter: ForgeViewerFilter
+  /** One repository to read in, or null for every repository the user can read on `host`. */
+  readonly repository: Pick<ForgeRepository, 'owner' | 'name'> | null
+  /** Most change requests returned, a positive integer no greater than {@link ForgeViewerCapability.maxItems}. */
+  readonly limit: number
+}
+
+/** The signed-in user's latest submitted review of a change request. */
+export interface ChangeRequestViewerReview {
+  /** Outcome of the review. */
+  readonly verdict: ReviewVerdict
+  /** Commit the review was on, or null when the host reports none. */
+  readonly reviewedSha: string | null
+}
+
+/** Status of one change request as a viewer list reports it, without the checks, reviewers, and merge state of a snapshot. */
+export interface ChangeRequestSummary {
+  /** The change request. */
+  readonly ref: ChangeRequestRef
+  /** Web page of the change request. */
+  readonly url: string
+  /** Title as the author wrote it. */
+  readonly title: string
+  /** Whether the author marked the change request as a draft. */
+  readonly draft: boolean
+  /** Author, or null when the host hides the account. */
+  readonly author: ForgeCommentAuthor | null
+  /** Commit object name at the head of the change request. */
+  readonly headSha: string
+  /** Combined check outcome on the head commit. */
+  readonly checksRollup: ChecksRollup
+  /** Aggregate review outcome. */
+  readonly reviewDecision: ReviewDecision
+  /** The signed-in user's latest submitted review, or null before the first. */
+  readonly viewerReview: ChangeRequestViewerReview | null
+  /**
+   * The review request that asks the signed-in user, or null when none does: `team` names the team, as
+   * `organization/slug`, when the request asks a team the user belongs to rather than the user.
+   */
+  readonly viewerRequest: { readonly team: string | null } | null
+  /** ISO 8601 time of the host's last update to the change request. */
+  readonly updatedAt: string
+}
+
+/** One page of a viewer list, most recently updated first. */
+export interface ForgeViewerList {
+  /** Login of the signed-in user the provider read as. */
+  readonly viewer: string
+  /** Change requests most recently updated first, at most the query's limit. */
+  readonly items: readonly ChangeRequestSummary[]
+  /** Number of change requests the host reports in the whole list; more than `items` holds when the list was cut. */
+  readonly total: number
+}
+
+/** The description of a change request as its author wrote it. */
+export interface ChangeRequestDescription {
+  /** Markdown source; it may contain raw HTML, which readers must not render as HTML. Empty without a description. */
+  readonly body: string
+  /** Labels in host order, at most the provider's limit. */
+  readonly labels: readonly ChangeRequestLabel[]
+  /** Whether the change request has more labels than `labels` holds. */
+  readonly labelsTruncated: boolean
+  /**
+   * Image addresses that a browser cannot load without the user's host session, each mapped to an address the host
+   * issued for loading that image without one. Addresses not listed load as written.
+   */
+  readonly images: Readonly<Record<string, string>>
+  /** ISO 8601 time after which the addresses in `images` stop loading, or null when there are none or the host names no time. */
+  readonly imagesExpireAt: string | null
+  /** ISO 8601 time the change request was created. */
+  readonly createdAt: string
+}
+
+/** One label of a change request. */
+export interface ChangeRequestLabel {
+  /** Name as the host spells it. */
+  readonly name: string
+  /** Six-digit hexadecimal color without `#`, or null when the host reports none. */
+  readonly color: string | null
+}
+
+/**
+ * One entry of a change request's activity: a comment in its conversation, a submitted review, a commit, a change of
+ * its state, or a record the host words itself.
+ */
+export type ChangeRequestActivityItem = {
+  /** ISO 8601 time of the entry. */
+  readonly at: string
+  /** Account the entry is by, or null when the host names none or the account no longer exists. */
+  readonly actor: ForgeCommentAuthor | null
+} & (
+  /** A comment in the conversation. `body` is Markdown source; it may contain raw HTML, which readers must not render as HTML. */
+  | { readonly kind: 'comment'; readonly body: string; readonly url: string | null }
+  /**
+   * A submitted review: its decision, its own Markdown text, which follows the rule of a comment's `body` and is empty
+   * without one, and the number of comments it left on lines and files.
+   */
+  | { readonly kind: 'review'; readonly verdict: ReviewVerdict; readonly body: string; readonly comments: number; readonly url: string | null }
+  /**
+   * A commit added to the change request: its object name, abbreviated when the host records only an abbreviation, and
+   * the first line of its message.
+   */
+  | { readonly kind: 'commit'; readonly sha: string; readonly title: string }
+  | { readonly kind: 'merged' | 'closed' | 'reopened' | 'ready-for-review' | 'converted-to-draft' | 'force-pushed' }
+  | { readonly kind: 'auto-merge-enabled' | 'auto-merge-disabled' }
+  /** A review was requested from an account or a team, named as the host spells it; null when the host names neither. */
+  | { readonly kind: 'review-requested'; readonly reviewer: string | null }
+  | { readonly kind: 'renamed'; readonly from: string; readonly to: string }
+  /** A record with no kind of its own, as plain text in the host's own words. */
+  | { readonly kind: 'other'; readonly text: string }
+)
+
+/** The activity of a change request. */
+export interface ChangeRequestActivity {
+  /** Entries oldest first, at most the provider's limit; the latest ones when the change request has more. */
+  readonly items: readonly ChangeRequestActivityItem[]
+  /** Whether the change request has entries older than `items` holds. */
+  readonly truncated: boolean
+  /** Whether the signed-in user can add a comment through `addComment`; false for a provider without it. */
+  readonly viewerCanComment: boolean
+}
+
 /** Whether a provider can reach one host with the current credentials. */
 export interface ForgeReadiness {
   /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
@@ -530,6 +729,31 @@ export interface ForgeProvider {
   readonly label: string
   /** What this provider's hosts call a change request. */
   readonly changeRequestNoun: ChangeRequestNoun
+  /**
+   * Where and which lists of the signed-in user's change requests this provider reads. A provider declares `viewer` and
+   * implements `listForViewer` and `countForViewer` together; omitting any declares that it reads no viewer lists.
+   */
+  readonly viewer?: ForgeViewerCapability
+  /**
+   * Read one viewer list, most recently updated first. A query outside {@link ForgeProvider.viewer} resolves to an
+   * `unsupported` failure.
+   */
+  listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>
+  /** Count the change requests in every list of {@link ForgeViewerCapability.filters} on one of its hosts. */
+  countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
+  /** Read the description and labels of a change request. Omission declares that this provider reads no descriptions. */
+  readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>
+  /**
+   * Read the activity of a change request: the comments in its conversation, its submitted reviews, its commits, and
+   * the changes of its state. Omission declares that this provider reads no activity.
+   */
+  readActivity?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure>
+  /**
+   * Add a comment of Markdown source `body` to a change request's conversation, resolving to undefined once the host
+   * saved it. A comment is never retried. Omission declares that this provider adds no comments, and its `readActivity`
+   * then denies `viewerCanComment`.
+   */
+  addComment?(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
   /**
@@ -555,6 +779,23 @@ export interface ForgeProvider {
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>
+  /**
+   * Read the briefs of several change requests, returning one result per requested key. Omission declares that the
+   * provider reads briefs as snapshots through {@link ForgeProvider.fetch}.
+   */
+  fetchBriefs?(
+    refs: readonly ChangeRequestRef[],
+    signal: AbortSignal,
+  ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestBrief | ForgeFailure>>
+  /**
+   * Most change requests of one host that one polling call of {@link ForgeProvider.fetch} reads, a positive safe
+   * integer. The registry then calls `fetch` once for every that many due change requests of a host, one call after
+   * another, each within its own fetch deadline, and publishes the results of a call when it returns. Omission
+   * declares that one call reads every due change request of the forge.
+   */
+  readonly snapshotBatchSize?: number
+  /** The same bound for one polling call of {@link ForgeProvider.fetchBriefs}. */
+  readonly briefBatchSize?: number
   /** Read all checks for one change request on demand; omission declares that only the polling preview is available. */
   fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>
   /** Find open change requests whose head is `branch` in `repository`, excluding the default branch and forks. */
@@ -565,6 +806,14 @@ export interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /**
+   * Turn the host's automatic merge of a change request on, while its head is still the request's `headSha`, or off,
+   * resolving to undefined once the host accepted it. Omission declares that the provider sets no automatic merge, and
+   * its snapshots then carry no `autoMerge`.
+   */
+  setAutoMerge?(
+    ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined>
   /**
    * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
    * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
@@ -629,19 +878,64 @@ export interface ForgeProvider {
 }
 
 /**
+ * What `ctx.forge.register` returns: the disposer, plus the replacement of the registered provider by another provider
+ * of the same forge family, for a provider whose configuration changes while it runs.
+ */
+export interface ForgeRegistrationHandle {
+  /** Unregister the provider this registration holds and wait for its calls, and those of the providers it replaced, to finish. */
+  (): Promise<void>
+  /**
+   * Replace the registered provider in one synchronous step, so no reader finds the family without a provider. The
+   * replaced provider's in-flight calls are cancelled and their results discarded; watches of the family poll at once
+   * and `forge/providers-changed` announces the change.
+   * @param provider - provider of the same forge family.
+   * @throws when the registration was withdrawn, `provider.forge` is another family, or another family's provider
+   *   serves one of `provider.hosts`, compared without case; the registered provider then keeps serving.
+   */
+  replace(provider: ForgeProvider): void
+}
+
+/**
  * Receives every polling result for one watched change request.
  * @param update - the settled result.
  */
 export type ChangeRequestListener = (update: ChangeRequestUpdate) => void
 
+/**
+ * Receives every polling result for one change request watched for its brief.
+ * @param update - the settled result.
+ */
+export type ChangeRequestBriefListener = (update: ChangeRequestBriefUpdate) => void
+
+/** When a watcher that joins a watched change request, or a refresh of one, needs a status newer than the latest one. */
+export interface ChangeRequestWatchOptions {
+  /**
+   * Age in milliseconds past which the latest status is too old. A watcher that joins a change request whose
+   * snapshot was already read polls at once when the latest snapshot or failure is older and no snapshot poll is in
+   * flight; without it, the watcher waits for the regular poll. A refresh polls at once unless the change request is
+   * merged or its latest poll at either level, in flight or settled, started within it; without it, a refresh always
+   * polls.
+   */
+  readonly maxAgeMs?: number
+}
+
+/**
+ * The state a brief watcher last saw for a change request it starts to watch, which times the first poll as a brief
+ * read at `fetchedAt` would: a merged change request is not polled, and any other one once its interval has passed.
+ */
+export interface ChangeRequestKnownState extends Pick<ChangeRequestBrief, 'state' | 'mergeability' | 'checksRollup'> {
+  /** Epoch milliseconds when the state was read. */
+  readonly fetchedAt: number
+}
+
 /** Poll cadence and fetch deadline for watched change requests. */
 export interface Config {
-  /** Poll interval in milliseconds while checks run or mergeability is unknown. */
+  /** Poll interval in milliseconds while checks run, and for one poll after a status first reports an unknown mergeability. */
   activeIntervalMs?: number
   /** Poll interval in milliseconds for a closed request or an open request whose checks have settled. */
   idleIntervalMs?: number
   /** Largest delay in milliseconds between polls after consecutive failures. */
   maxBackoffMs?: number
-  /** Deadline in milliseconds for one provider fetch. */
+  /** Deadline in milliseconds for one provider fetch: one polling call, or one read of complete checks. */
   fetchTimeoutMs?: number
 }

@@ -1,0 +1,7 @@
+# Bilingual-pair consistency record for frontend.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/core-guidelines/frontend.md
+/f-frontend:
+  en: 4316a532a8a13a76
+  zh: 541fe22ee04024bd

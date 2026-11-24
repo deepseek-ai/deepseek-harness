@@ -1717,12 +1717,16 @@ it('delegates image coordinate projections and preserves images for adapters wit
   try {
     const image = { attachmentId: brandString<AttachmentId>('sha256:' + 'a'.repeat(64)), mediaType: 'image/png' as const, bytes: 200, width: 640, height: 480 }
     ctx.llm.registerAdapter(['identity'], new ScriptedAdapter([]))
-    expect(ctx.llm.imageRequestTarget('identity', 'vision', image)).toEqual({ width: 640, height: 480, maxBytes: 200 })
+    expect(ctx.llm.imageRequestTarget('identity', 'vision', image)).toEqual({
+      width: 640, height: 480, maxImageBytes: 200, imageTargetBytes: 200,
+    })
     class ResizingAdapter extends ScriptedAdapter {
-      override imageRequestTarget() { return { width: 320, height: 240, maxBytes: 100 } }
+      override imageRequestTarget() { return { width: 320, height: 240, maxImageBytes: 100, imageTargetBytes: 100 } }
     }
     ctx.llm.registerAdapter(['resized'], new ResizingAdapter([]))
-    expect(ctx.llm.imageRequestTarget('resized', 'vision', image)).toEqual({ width: 320, height: 240, maxBytes: 100 })
+    expect(ctx.llm.imageRequestTarget('resized', 'vision', image)).toEqual({
+      width: 320, height: 240, maxImageBytes: 100, imageTargetBytes: 100,
+    })
     expect(() => ctx.llm.imageRequestTarget('absent', 'vision', image)).toThrow()
   } finally { await ctx.fiber.dispose() }
 })

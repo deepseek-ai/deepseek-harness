@@ -27,7 +27,34 @@ export interface HostStream<F> extends AsyncIterable<F> {
 /** One open stream of panel states. */
 export type PanelStream = HostStream<ForgePanelState>
 
-/** Stream opener and connection-reset subscription of a source. */
+/** Whether the page is hidden, and when that changes. */
+export interface PageVisibility {
+  /** Whether the page is hidden now. */
+  readonly hidden: () => boolean
+  /**
+   * Subscribe to changes of the page's visibility.
+   * @param listener - called after each change.
+   * @returns the unsubscribe function.
+   */
+  readonly subscribe: (listener: () => void) => () => void
+}
+
+/**
+ * How long a page stays hidden before a source that follows its visibility closes its stream, so a short switch to
+ * another window or tab reopens nothing.
+ */
+export const HIDDEN_GRACE_MS = 30_000
+
+/** The visibility of the document, for the sources whose Host stream polls a code host. */
+export const pageVisibility: PageVisibility = {
+  hidden: () => document.visibilityState === 'hidden',
+  subscribe: (listener) => {
+    document.addEventListener('visibilitychange', listener)
+    return () => { document.removeEventListener('visibilitychange', listener) }
+  },
+}
+
+/** Stream opener, connection-reset subscription, and optional page visibility of a source. */
 export interface StreamSourceDeps<F> {
   /**
    * Open the Host stream.
@@ -41,9 +68,11 @@ export interface StreamSourceDeps<F> {
    * @returns the unsubscribe function.
    */
   readonly subscribeReset: (listener: () => void) => () => void
+  /** The page's visibility, for a source whose Host stream costs requests while nobody can see its value. */
+  readonly visibility?: PageVisibility
 }
 
-/** Stream opener and connection-reset subscription of one Session's panel source. */
+/** Stream opener, connection-reset subscription, and optional page visibility of one Session's panel source. */
 export type PanelSourceDeps = StreamSourceDeps<ForgePanelState>
 
 /** A value built from a Host stream that runs only while a surface subscribes. */
@@ -71,8 +100,11 @@ export interface PanelSource {
  * subscriber opens the stream and the last one closes it; the value stays
  * readable for the next subscriber. A stream that ends or fails while
  * subscribed marks the snapshot disconnected until `reconnect` or a transport
- * reset reopens it.
- * @param deps - stream opener and reset subscription.
+ * reset reopens it. A source given the page's visibility closes its stream
+ * once the page has been hidden for {@link HIDDEN_GRACE_MS} and opens it again
+ * when the page shows; meanwhile the value stays and is not marked
+ * disconnected.
+ * @param deps - stream opener, reset subscription, and the page's visibility for a source that pauses.
  * @param initial - value before the first frame.
  * @param fold - the value after one frame.
  * @returns the source.
@@ -82,6 +114,11 @@ export function createStreamSource<F, S>(deps: StreamSourceDeps<F>, initial: S, 
   const listeners = new Set<() => void>()
   let running: { readonly controller: AbortController; readonly stream: HostStream<F> } | undefined
   let stopReset: (() => void) | undefined
+  let stopVisibility: (() => void) | undefined
+  /** Runs once the page has been hidden for the grace period. */
+  let hiding: ReturnType<typeof setTimeout> | undefined
+  /** Whether the stream is closed because the page is hidden. */
+  let paused = false
   const publish = (next: StreamSnapshot<S>): void => {
     snapshot = next
     for (const listener of [...listeners]) listener()
@@ -115,10 +152,30 @@ export function createStreamSource<F, S>(deps: StreamSourceDeps<F>, initial: S, 
     if (listeners.size === 0 || running !== undefined) return
     start()
   }
+  const visibilityChanged = (): void => {
+    if (deps.visibility?.hidden() === true) {
+      hiding ??= setTimeout(() => {
+        hiding = undefined
+        paused = true
+        stop()
+      }, HIDDEN_GRACE_MS)
+      return
+    }
+    clearTimeout(hiding)
+    hiding = undefined
+    if (!paused) return
+    paused = false
+    reconnect()
+  }
   const close = (): void => {
     listeners.clear()
     stopReset?.()
     stopReset = undefined
+    stopVisibility?.()
+    stopVisibility = undefined
+    clearTimeout(hiding)
+    hiding = undefined
+    paused = false
     stop()
   }
   return {
@@ -129,9 +186,12 @@ export function createStreamSource<F, S>(deps: StreamSourceDeps<F>, initial: S, 
         if (listeners.size === 1) {
           stopReset = deps.subscribeReset(() => {
             stop()
-            reconnect()
+            // A paused source opens its stream on the new connection when the page shows.
+            if (!paused) reconnect()
           })
+          stopVisibility = deps.visibility?.subscribe(visibilityChanged)
           start()
+          visibilityChanged()
         }
         return () => {
           listeners.delete(listener)
@@ -146,7 +206,7 @@ export function createStreamSource<F, S>(deps: StreamSourceDeps<F>, initial: S, 
 
 /**
  * Create the panel source of one Session: the latest state the Host streamed.
- * @param deps - stream opener and reset subscription.
+ * @param deps - stream opener, reset subscription, and the page's visibility for a source that pauses.
  * @returns the source.
  */
 export function createPanelSource(deps: PanelSourceDeps): PanelSource {

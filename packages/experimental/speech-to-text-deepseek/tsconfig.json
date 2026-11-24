@@ -1,0 +1,33 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../util/timeout"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../../account/deepseek-auth"
+    },
+    {
+      "path": "../speech-to-text"
+    }
+  ]
+}

@@ -83,7 +83,7 @@ describe('subagent working directories', () => {
     await vi.waitFor(() => { expect(ctx.agents.get(started.childId)).toBeUndefined() })
     using observed = await ctx.sessionQuery.observeSession(started.childId)
     expect(observed.header.cwd).toBe(origin)
-    const last = observed.events.findLast(event => event.type === 'working-directory/change')
+    const last = observed.events.findLast(event => event.type === 'workspace-root/change')
     expect(last?.data).toMatchObject({ cwd: selected })
   })
 

@@ -1,0 +1,38 @@
+{
+  "op": 0,
+  "s": 1303,
+  "t": "C2C_MESSAGE_CREATE",
+  "id": "C2C_MESSAGE_CREATE:5e6f708192a3b4c5d6e7f8091a2b3c4d",
+  "d": {
+    "id": "ROBOT1.0_c8T9rU7wY2aF4bC6dE0gH3jK5lM7nP9qR1sT3uV5wX7yZ9aB1cD3eF5gH7jK9mN1pQ3rS5tU7",
+    "author": {
+      "id": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+      "user_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+      "union_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+      "username": "",
+      "bot": false
+    },
+    "content": "[卡片消息] 小程序\n摘要: [每日打卡]快来完成今日学习打卡",
+    "message_type": 3,
+    "ark_data": {
+      "ark_type": "miniapp",
+      "ark_name": "小程序",
+      "prompt": "[每日打卡]快来完成今日学习打卡",
+      "fields": {
+        "title": "快来完成今日学习打卡",
+        "source": "学习助手",
+        "tag": "微信小程序",
+        "preview": "https://pubminishare-30161.picsz.qpic.cn/preview_a1b2c3d4",
+        "source_logo": "https://miniapp.gtimg.cn/generated-icon/app_a1b2c3d4.png",
+        "tag_icon": "https://miniapp.gtimg.cn/public/miniwx.png"
+      }
+    },
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "msg_idx=REFIDX_yyyyyyyyyyyyyyy=="
+      ]
+    },
+    "timestamp": "2026-07-21T10:01:00+08:00"
+  }
+}

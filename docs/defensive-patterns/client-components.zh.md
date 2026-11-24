@@ -416,6 +416,35 @@ const HUGE = '...several KB of text...'   // large text inline in the module
 
 包里带上了本该属于 CSS 与资源的文本和二进制数据，diff 里躺着无法阅读的 blob，主题覆盖也再够不到那个颜色。
 
+<a id="keyed-selectors"></a>
+## 选择器经 class 或属性匹配，不靠 `:not`、`:empty`、`:has`
+
+选择器最右侧的复合选择器通过 class、id、属性或标签名指明它所设置样式的元素；设计需要的状态由组件设置成对应的 class 或属性。Chromium 按该复合选择器的键把每条规则归类，只拿带有该键的元素来测试它。没有键的规则会对每个需要重算样式的元素都测试一遍，其中的 `:not()`、`:empty`、`:has()` 也会在每个元素上完整求值；写在祖先上的 `:has()` 则使祖先内部任何变化都重算其整棵子树。在长会话里，一条这样的规则就能把每段流式内容或每一帧滚动变成整文档的工作，而单看任何一处 diff 都发现不了。诸如"非空行之后的间距""行获得焦点时的标签"这类视觉需求都有结构化的写法：组件知道这个状态，就把它命名出来。
+
+- 判定方式：hygiene 检查组中的 [`verify-css-selectors`](../../scripts/verify-css-selectors.ts) 拒绝三类写法：最右侧复合选择器没有键、却通过 `:not()`、`:empty` 或 `:has()` 匹配（`:empty:not([class])`、`.row > :not(.nav)`）；整个选择器没有任何 class、id 或属性（`*`、`body *`、`:hover`）；`:has()` 不在最右侧复合选择器上（`.row:has(.x) .label`）。评审同样拒绝换一种写法绕过检查、表达同一条件的规则。
+- 不在范围内：带键的复合选择器可以使用 `:not()` 或 `:empty`（`.reasoning:empty`、`.row:not([hidden])`），因为键已限定候选元素；以 class 限定的通配和位置选择器（`.card *`、`.list > :first-child`、`.list > * + *`）以及写在被设置样式元素自身上的 `:has()`（`.row:has(> .icon)`）都允许使用。检查列出的基础样式表不受前两类限制。其余选择器写法由[组件规则](../web-styling.zh.md#component-rules)负责。
+- 例外：无法加键的规则在紧邻其上一行写 `/* css-selector-gate: <理由> */` 说明原因，并由评审认可该理由。现有选择器记录在[检查的基线](../../scripts/css-selectors.baseline.json)中；基线只减不增，修掉一处后运行 `pnpm run verify-css-selectors --prune`。
+- 修法：写 `:not`、`:empty` 或 `:has` 之前，先问设计指的是哪个元素、哪种状态，再把两者都命名出来。给规则所设置样式的元素加 class 或 `data-*` 属性；"有状态""已展开""为空"之类的状态在组件中算出，渲染成 class、`aria-*` 或 `data-*` 属性；"位于可见行之后"用带键复合选择器之间的兄弟组合符表达；父元素需要改变子元素样式时，在父元素上设置 CSS 自定义属性，由子元素带键的规则读取。
+
+组件命名状态，每条规则最右侧的复合选择器都带键：
+
+```css
+/* The row renders data-has-status exactly when it renders the status. */
+.heading[data-has-status] .text { flex-basis: auto; }
+/* Visible members carry their key; the sibling combinator spaces them. */
+.content > [data-chat-flow-key]:not([hidden]) ~ [data-chat-flow-key]:not([hidden]) { margin-top: 4px; }
+```
+
+规则从 DOM 推导状态，Chromium 因而对每个需要重算样式的元素求值，并在无关变化时重算子树：
+
+```css
+.body > :empty:not([class]) { margin-bottom: -4px; }
+.heading:has(.statusText) .text { flex-basis: auto; }
+.content > :not([hidden]) ~ :not([hidden]) { margin-top: 4px; }
+```
+
+向 240 轮的历史流式输出时，一条这样的规则就占用了约 3 秒主线程样式重算时间（Issue #8790）。
+
 ## 传 key 就要说明它标识什么
 
 只有当 `key` 指明元素代表哪个实体或实例时才传它，并把这份身份说清楚——例如 `turnId` 在一个 session 内唯一。多数列表本就有稳定的业务 id，不需要额外的 key。为消除警告或编码渲染顺序而造的 key，声明的是一份数据并不具备的身份；数组下标从来不是这份身份，因为插入或删除会把后面每一项挪到另一个元素上。

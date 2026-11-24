@@ -11,7 +11,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-action-cards': ['isPluginStopping'],
   '@deepseek-ai/dsh-agent': [
     'AgentModel', 'agentCarrier', 'agentEvents', 'assembleContextFor', 'emitAgentEvent', 'foldConsumedWork',
-    'installModelSelection', 'modelSelectionProjectionDefinition',
+    'foldConsumedWorkForEvent', 'installModelSelection', 'modelSelectionProjectionDefinition',
   ],
   '@deepseek-ai/dsh-agent-instructions': [
     'discoverBaselineInstructionFiles', 'loadBaselineInstructions', 'renderAgentInstructions',
@@ -135,6 +135,8 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'deriveEventMessage', 'encodeSeqRanges', 'foldRequestHeader', 'foldSurface', 'headerEquals',
     'interruptedTurnClosers', 'isAppendSurfaceEvent', 'isReplacementSurfaceEvent', 'isSurfaceEligibleType',
     'isSurfaceEvent', 'pluginRecordOf', 'snapshotSessionEvent',
+    // SessionData v2 transition: temporary exemption until these values move to a subpath export.
+    'buildSessionHeader', 'needsInheritedSeedMarker', 'validateSessionLog',
   ],
   '@deepseek-ai/dsh-session-log-deepseek': ['acceptedThrough'],
   '@deepseek-ai/dsh-session-log-export': [

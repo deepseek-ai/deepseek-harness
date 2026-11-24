@@ -36,13 +36,6 @@ Promotion requires a named product role, documented public behavior and limitati
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`action-cards`](action-cards/README.md) | Optional action cards below answers: `action-card` blocks, card state, user actions and status notices | `ctx.actionCards` |
-| [`client-ui-action-cards`](client-ui-action-cards/README.md) | Card frame below completed answers, kind bodies and the layer that hides card blocks | — |
-| [`creation-recommendations`](creation-recommendations/README.md) | Explicit-need creation of persistent removable interface plugins | — |
-| [`client-ui-creation-recommendations`](client-ui-creation-recommendations/README.md) | Personalized page card body with location selection and undo | — |
-| [`plugin-recommendations`](plugin-recommendations/README.md) | Explicit-need official plugin recommendations in conversations | `ctx.pluginRecommendations` |
-| [`client-ui-plugin-recommendations`](client-ui-plugin-recommendations/README.md) | Official plugin card body with catalog text and enabling | — |
-| [`personalized-recommendations`](personalized-recommendations/README.md) | Default-disabled bundle of personalized pages, plugin recommendations and their action cards | — |
 | [`tool-session-query`](tool-session-query/README.md) | Workspace-authorized model session search, trace, and event reads | — |
 | [`session-search`](session-search/README.md) | Optional experimental global session search tools | — |
 | [`deepseek-chat-import`](deepseek-chat-import/README.md) | Optional upload of DeepSeek website chat exports as Sessions in a chosen Workspace | `ctx.deepseekChatImport` |
@@ -67,6 +60,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`speech-to-text-sensevoice`](speech-to-text-sensevoice/README.md) | Managed local SenseVoice inference | — |
 | [`api-speech-to-text`](api-speech-to-text/README.md) | Authenticated transient transcription Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.md) | Microphone capture and guarded draft insertion | — |
+| [`client-ui-connectors`](client-ui-connectors/README.md) | Default-disabled Connectors tab of the Plugins page: lists, installs, and opens the official connectors | — |
 | [`plugin-market-bundle`](plugin-market-bundle/README.md) | Default-disabled optional custom plugin indexes: the index service and the Discover tab | — |
 | [`liveshare`](liveshare/README.md) | Opt-in LiveShare host bundle: Relay-backed Session sharing at the `view` or `write` tier, with forking and attachment uploads as independent switches | injects `connection`; serves the viewer page through the Host's web resources |
 | [`liveshare-protocol`](liveshare-protocol/README.md) | Wire frames and the identity contract shared by the owner bundle and the Relay | library and protocol — no ctx key |
@@ -92,10 +86,14 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`inspector`](inspector/README.md) | Cross-realm CDP hub for Host debugging, Client Runtime inspection, network capture, and Cordis trees | `ctx.inspector` |
 | [`session-inspector`](session-inspector/README.md) | Sidebar tables for raw Session logs and Chat nodes | — |
 | [`inspector-profile`](inspector-profile/README.md) | Optional Web bundle for Session log and Chat node inspection | — |
+| [`im`](im/README.md) | IM message admission, hosted sessions, the shared default session, and `im_*` tools | `ctx.im` |
+| [`im-session-commands`](im-session-commands/README.md) | IM chat slash commands | — |
+| [`im-bundle`](im-bundle/README.md) | Explicitly installed Feishu/Lark IM automation layer | — |
 | [`tool-worktree`](tool-worktree/README.md) | Optional bundle and model tool for creating and entering worktrees | `ctx.tools` |
 | [`webworker-packer`](webworker-packer/README.md) | Builds the gzip-compressed VFS image consumed by the browser worker preview | library and CLI — no ctx key |
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |
 | [`worktree`](worktree/README.md) | Creates a named Git worktree and changes the calling Session directory | `ctx.worktrees` |
+| [`sandbox-policy-git`](sandbox-policy-git/README.md) | Grants a Session in a linked worktree write access to its repository's Git directory | — |
 | [`forge`](forge/README.md) | Code host provider registry with shared change request polling | `ctx.forge` |
 | [`forge-github`](forge-github/README.md) | GitHub provider that reads pull requests through the host GitHub CLI | registers a provider on `ctx.forge` |
 | [`forge-gitlab`](forge-gitlab/README.md) | GitLab provider that reads and writes merge requests through the host GitLab CLI | registers a provider on `ctx.forge` |

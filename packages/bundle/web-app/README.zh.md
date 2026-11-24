@@ -42,7 +42,9 @@ dsh --profile web --no-open --port 8080
 
 启动后你会看到 `dsh web:` 行，其根 URL 携带新的进程 token。除非 `--no-open` 或 SSH 会话抑制，否则默认浏览器会打开该 URL、取得签名 cookie，再重定向到不含认证参数的同一目录。页面加载且你可以与 agent 对话，就说明成功了。两种可预期的失败：前端未构建时，启动会以构建提示停止（checkout 中运行 `pnpm run build`）；浏览器无法打开时，stderr 会打印不含凭据的诊断，但服务器会继续运行——请自行打开已打印的启动 URL。
 
-**设置 → 模型**显示 **DeepSeek**，使用 `DEEPSEEK_API_KEY`。默认模型为 `deepseek-official` / `deepseek-flash`（DeepSeek-V4.1-Flash）。[DeepSeek 插件](../../llm/llm-deepseek/README.zh.md#endpoint-and-wire-format)使用 Messages API。
+登录页将令牌输入与配对申请分成独立卡片。可粘贴登录链接或其中的令牌；登录链接可在已登录设备的设置 → 远程连接中复制。只有登录链接或令牌格式正确时“继续”才可用；不可用时激活按钮会显示校验提示。编辑输入内容会关闭提示，只有再次尝试提交时才重新显示。令牌被拒绝时显示占满内容宽度的错误横幅，与配对失败横幅一致。申请访问前即可看到配对操作说明。其他浏览器可以从此页申请访问。在已登录浏览器的**设置 → 远程连接**中核对显示码并批准后，申请浏览器会自动进入应用。[浏览器配对](../../client/remote-connection/README.zh.md)说明审批规则与申请限制。
+
+**设置 → 模型**显示 **DeepSeek API**，使用 `DEEPSEEK_API_KEY`。默认模型为 `deepseek-official` / `deepseek-flash`（DeepSeek-V4.1-Flash）。[DeepSeek 插件](../../llm/llm-deepseek/README.zh.md#endpoint-and-wire-format)使用 Messages API。
 
 已保存的模型选择覆盖组合默认值。设置卡接受兼容 Messages 的 API 地址与凭据引用。
 
@@ -61,7 +63,7 @@ dsh --profile web --no-open --port 8080
 
 WebApp 拥有 `printUrl` 与 `openBrowser`。本组合启用 URL 打印，并把解析后的 `--no-open` 设置传给 runtime。就绪后，同步 `webserver/entry-url` 监听器贡献完整入口。启用打印时，WebApp 按 `label: url` 逐行打印；启用浏览器打开且不在 SSH 下时，仅打开首个 `open: true` 的入口。没有入口则不输出、不打开。
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)列出了本运行时插件接受的字段及其 JSDoc。随发行版交付的组合插入 `schedule` 服务行与 `ui-schedule` 任务页面行，时钟读数与四个提醒工具则属于 `standard`、`cordis` 与 `ptc` 三个 preset。这三个 preset 的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，因此被委派子 agent 的作用域不会列出它们。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)列出了本运行时插件接受的字段及其 JSDoc。随发行版交付的组合插入 `schedule` 服务行与 `ui-schedule` 任务页面行，时钟读数与四个提醒工具则属于 `standard`、`cordis` 与 `ptc` 三个 preset。这三个 preset 的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，因此被委派子 agent 的作用域不会列出它们。组合还插入个性化推荐的六行，从 [`action-cards`](../../interaction/action-cards/README.zh.md) 到 `client-ui-plugin-recommendations`，其 `enabled` 开关位于“设置 → 通用设置”。
 
 `standard`、`cordis` 和 `ptc` 三个 preset 在各自的 `tool-subagent-control` 行中设置 `config.interrupt: false`。如需提供 `interrupt_agent`（也适用于 Team 模式），按[迁移步骤](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.zh.md)覆盖相应 preset 声明；修改已禁用的 Host 行不会改变 preset 的工具。
 
@@ -94,9 +96,9 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 ### 按会话的 agent 设置
 
-每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，标准模式和 Creator 才会启用插件管理工具。
+每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，标准模式、PTC 模式和 Creator 才会启用插件管理工具。
 
-两种模式均通过 `cordis_inspect` 提供只读运行时检查；参见[其上下文影响](../../extensions/tool-cordis/README.zh.md#model-experience)。标准模式和创造模式包含 `dsh-doc` skill，用于 DSH 相关问题以及你要求的插件或预设工作。该 skill 引导 agent 查阅已安装版本的文档和源码。加载方式及其对上下文的影响参见[模型体验](#model-experience)。
+两种模式均通过 `cordis_inspect` 提供只读运行时检查；参见[其上下文影响](../../extensions/tool-cordis/README.zh.md#model-experience)。标准模式、PTC 模式和创造模式包含 `dsh-doc` skill，用于 DSH 相关问题以及你要求的插件或预设工作。该 skill 引导 agent 查阅已安装版本的文档和源码。加载方式及其对上下文的影响参见[模型体验](#model-experience)。
 
 打包的 skill 使用自定义 skill 根目录：同名的项目 skill 会覆盖打包的 skill，打包的 skill 又会覆盖同名的用户 skill。skill 目录中只保留优先级最高的一个条目，不会报错；参见 [skill 根目录优先级](../../skill/skill-filesystem/README.zh.md)。
 
@@ -161,7 +163,7 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 
 #### 模型看到什么
 
-标准模式和创造模式的 skill 目录都列出 `dsh-doc`。`skill` 工具加载其指令，并引导 agent 查阅当前任务所需的参考资料。其他 preset 保留各自的 skill 来源。加载该 skill 不会修改工作区文件或 profile 设置。
+标准模式、PTC 模式和创造模式的 skill 目录都列出 `dsh-doc`，与 SDK profile 相同。`skill` 工具加载其指令，并引导 agent 查阅当前任务所需的参考资料。其他 preset 保留各自的 skill 来源。加载该 skill 不会修改工作区文件或 profile 设置。
 
 #### Token 影响
 
@@ -203,15 +205,15 @@ preset 提供一条目录项。没有其他 skill 的会话还会收到目录的
 
 #### 模型看到什么
 
-所有 profile 的技能目录都列出 Office 路由和三个 Office 创作技能。加载的 Python 技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
+所有 profile 的技能目录都列出 `office` 技能；它内联了 Word、PowerPoint 和 Excel 的易错点以及 Office 工具的精简说明。加载的技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
 
 #### Token 影响
 
-每个初始目录包含四条目录摘要；仅在模型请求时加载技能正文。
+每个初始目录包含一条目录摘要；仅在模型加载时才载入技能正文。
 
 #### KV Cache 影响
 
-资源和配置不变时，内置 Office 摘要和各 Python 环境说明保持稳定；目录何时变化见 [Office 技能](../../skill/skill-office/README.zh.md#model-experience)。
+资源和配置不变时，内置 Office 摘要和 Python 环境说明保持稳定；目录何时变化见 [Office 技能](../../skill/skill-office/README.zh.md#model-experience)。
 
 ## 已知限制与延期工作
 

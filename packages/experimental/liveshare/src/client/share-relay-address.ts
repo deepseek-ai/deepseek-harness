@@ -189,14 +189,8 @@ export function useShareRelayAddress(options: ShareRelayAddressOptions): ShareRe
    * Ask whether the address in force answers at all.
    * @returns True when the address answered.
    */
-  const testConnectivity = async (): Promise<boolean> => {
-    // Nothing is in force to ask about until the host names an address, and a failure this page never
-    // probed for is not a fact about the Relay: the step stays with the address until one is named.
-    if (effective === '') {
-      setConnectivity('idle')
-      setConnectivityError('')
-      return false
-    }
+  const testConnectivity = async (address = effective): Promise<boolean> => {
+    checkedAddress.current = address
     setConnectivity('testing')
     setConnectivityError('')
     try {
@@ -296,9 +290,6 @@ export function useShareRelayAddress(options: ShareRelayAddressOptions): ShareRe
       setRelayNotice(t('dialog.relaySaved'))
       // Every result on hand describes the address that was in force; the saved one starts its own
       // connectivity and permission checks instead of inheriting another address's answer.
-      checkedAddress.current = savedAddress
-      setConnectivity('idle')
-      setConnectivityError('')
       setPermission('idle')
       setPermissionError('')
       // A credential is bound to the address that issued it, so saving a different address means the
@@ -307,7 +298,7 @@ export function useShareRelayAddress(options: ShareRelayAddressOptions): ShareRe
       // The identity read is keyed on the address in force, and asking again here makes the new
       // address's status land with the save instead of after the next unrelated focus.
       identity.refresh()
-      await testConnectivity()
+      await testConnectivity(savedAddress)
     } catch {
       setRelayError(t('dialog.hostUnavailable'))
     } finally {
@@ -324,7 +315,6 @@ export function useShareRelayAddress(options: ShareRelayAddressOptions): ShareRe
   // value here, so the naming itself is a dependency.
   useEffect(() => {
     if (!relayNamed || draftUnsaved() || checkedAddress.current === effective) return
-    checkedAddress.current = effective
     void testConnectivity()
   }, [effective, relayDraft, relayNamed])
 

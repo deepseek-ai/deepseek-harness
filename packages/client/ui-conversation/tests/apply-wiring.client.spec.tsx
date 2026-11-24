@@ -8,7 +8,7 @@ import {
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { apply, inject, type ViewTab } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { apply, inject, type ConversationShellInjected, type ViewTab } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -32,7 +32,7 @@ async function bench(options: { declareConversation?: boolean } = {}) {
   if (options.declareConversation !== false) {
     await runtime.root.declare({
       'main': { kind: 'keyed', scope: 'root' },
-      'settings.general.item': { kind: 'list', scope: 'root' },
+      'settings.general.group.interaction.item': { kind: 'list', scope: 'root' },
     }, (_props: { renderSlot?: unknown }) => null)
   }
   const feature = await runtime.mount({ inject: [...inject], apply }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
@@ -98,13 +98,14 @@ describe('target-neutral Conversation apply wiring', () => {
 
     await b.runtime.root.declare({
       'main': { kind: 'keyed', scope: 'root' },
-      'settings.general.item': { kind: 'list', scope: 'root' },
+      'settings.general.group.interaction.item': { kind: 'list', scope: 'root' },
     }, (_props: { renderSlot?: unknown }) => null)
     b.runtime.renderRoot()
     expect(b.runtime.slots.entries('main').map(row => row.options.key)).toEqual(['conversation'])
     expect(b.runtime.slots.entries('main.conversation')).toHaveLength(1)
-    expect(b.runtime.slots.spec('main.conversation'))
-      .toEqual({ kind: 'single', scope: 'session-maybe' })
+    const shell = b.runtime.slots.spec('main.conversation') as { inject: ConversationShellInjected }
+    expect(shell.inject.openWorkspace).toBeTypeOf('function')
+    expect(shell).toEqual({ kind: 'single', scope: 'session-maybe', inject: shell.inject })
     expect(b.runtime.factoryOf('conversation.content').slots)
       .toMatchObject({ views: { scope: 'session' } })
     expect(b.runtime.slots.entries('conversation.session')).toHaveLength(1)
@@ -133,7 +134,7 @@ describe('target-neutral Conversation apply wiring', () => {
     expect(header?.store).toBe(session?.store)
     expect(b.runtime.slots.spec('conversation.composer'))
       .toEqual({ kind: 'chain', scope: 'session' })
-    expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
+    expect(b.runtime.slots.entries('settings.general.group.interaction.item').map(row => row.options.id))
       .toEqual(['composer-enter'])
     await b.runtime.dispose()
   })

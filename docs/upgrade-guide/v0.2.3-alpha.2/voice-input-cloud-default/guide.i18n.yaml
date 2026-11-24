@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/voice-input-cloud-default/guide.md
+/:
+  en: 8c9e8f882b06156a
+  zh: a024bcbc69bc73b0
+/voice-input-recognizes-in-the-cloud-by-default:
+  en: 07a4c7346fcf4a11
+  zh: 3c799083ccaff973
+/voice-input-recognizes-in-the-cloud-by-default/change:
+  en: 8cd126dd38dd9e34
+  zh: bd2295358eb4f808
+/voice-input-recognizes-in-the-cloud-by-default/migration:
+  en: 6763d148704738d7
+  zh: b79cff3c5e4c0047

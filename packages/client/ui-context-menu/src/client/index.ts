@@ -132,7 +132,7 @@ export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): vo
   }
   ctx.provide('contextMenus', contextMenus)
   ctx.slots.registerFactory({
-    name: 'contextMenu.button', scope: 'root',
+    name: 'contextMenu.button', scope: 'root', inline: true,
     inject: () => ({
       hooks: { opener, registeredKinds: registry.registeredKinds },
       toggle: (button: string, target: ContextMenuTarget, point: MenuPoint) => {

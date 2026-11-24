@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/cordis-inspect-providers-host-runner/guide.md
+/:
+  en: cd7d7ec8cd8afcbf
+  zh: 87d9f7f69dce9f7b
+/host-inspect-providers-move-into-cordis-host-runner:
+  en: bfbfa5fba71725ea
+  zh: 48d3d8a40e30552c
+/host-inspect-providers-move-into-cordis-host-runner/change:
+  en: 8d83a8d6f6bfd08a
+  zh: 5ffc75149aadf2d2
+/host-inspect-providers-move-into-cordis-host-runner/migration:
+  en: 1bb2457a444fc5bb
+  zh: d9555ba92a2faf19

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Document extension registration and dispatch through the production Sidebar and Slot renderer. */
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, syncedConfig } from '@deepseek-ai/dsh-client-test-runtime'
 import { byteResult } from './fixtures.client.ts'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,7 +56,7 @@ async function boot() {
     'conversation.session.header.corner': { kind: 'single', scope: 'session' },
   })
   await rt.sessions.add({ id: SESSION })
-  await rt.sessions.retainFor(rt.ctx, SESSION, { source: 'mainView' }).ready
+  await rt.sessions.retainFor(rt.ctx, SESSION, { source: 'mainView', facets: { conversation: true } }).ready
   await rt.mount({ inject: [...resourcesInject], apply: resourcesApply })
   const read = vi.fn<WorkspaceFilesReadRemote['workspaceFiles']['read']>().mockImplementation(async (_sessionId, _path, range) => ({
     ok: true,
@@ -71,7 +71,7 @@ async function boot() {
     },
   }))
   await rt.mount({ inject: [...sidebarInject], apply: sidebarApply })
-  await rt.mount({ inject: [...inject], apply })
+  await rt.mount({ inject: [...inject], apply }, syncedConfig({}))
   const view = rt.renderSlot('rightbar', { width: 600, viewportWidth: 1440, canShow: true })
   const open = (name: string): void => {
     act(() => { rt.ctx.sidebarRight.openResource('dsh-resource://file/session/documents/' + name) })

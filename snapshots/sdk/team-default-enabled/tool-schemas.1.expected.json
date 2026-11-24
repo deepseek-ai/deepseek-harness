@@ -1,6 +1,34 @@
 {
   "initial": [
     {
+      "name": "apply_patch",
+      "description": "Create, update, delete, or move UTF-8 text files with one patch; prefer it over multiple edit calls when a change spans several files or separated regions.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "description": "Patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory."
+          },
+          "sandbox_permissions": {
+            "type": "string",
+            "description": "The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval.",
+            "enum": [
+              "workspace-write",
+              "danger-full-access"
+            ]
+          },
+          "justification": {
+            "type": "string",
+            "description": "Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request."
+          }
+        },
+        "required": [
+          "input"
+        ]
+      }
+    },
+    {
       "name": "ask_user_question",
       "description": "Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission.",
       "parameters": {
@@ -106,6 +134,45 @@
           "description",
           "command"
         ]
+      }
+    },
+    {
+      "name": "cordis_inspect",
+      "description": "Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "platform": {
+                "type": "string",
+                "description": "Provider platform.",
+                "enum": [
+                  "host",
+                  "client"
+                ]
+              },
+              "provider": {
+                "type": "string",
+                "description": "Provider ID from the directory."
+              },
+              "method": {
+                "type": "string",
+                "description": "Method name from the directory."
+              },
+              "input": {
+                "description": "Arguments matching the method's input schema."
+              }
+            },
+            "required": [
+              "platform",
+              "provider",
+              "method"
+            ]
+          }
+        }
       }
     },
     {
@@ -276,7 +343,7 @@
     },
     {
       "name": "list_agents",
-      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Shared capacity reports running/limit; do not spawn more agents when capacity is limited. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
         "properties": {}
@@ -586,10 +653,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -615,10 +678,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -661,7 +720,7 @@
           },
           "write_scopes": {
             "type": "array",
-            "description": "Advisory workspace-relative file or directory prefixes this task expects to modify.",
+            "description": "Advisory file or directory prefixes relative to the workspace root; no absolute paths or \"..\" segments. Omit or pass [] if no workspace files will be modified.",
             "items": {
               "type": "string"
             }
@@ -772,7 +831,7 @@
           },
           "write_scopes": {
             "type": "array",
-            "description": "Replacement advisory write scopes for edit.",
+            "description": "Replacement workspace-relative write scopes for edit. Omit to keep current scopes; [] clears them.",
             "items": {
               "type": "string"
             }
@@ -997,19 +1056,6 @@
           "script",
           "meta"
         ]
-      }
-    },
-    {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
       }
     },
     {

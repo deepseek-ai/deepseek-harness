@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  PRIMARY_NODE_VERSION: '24'
+  PRIMARY_NODE_VERSION: '^24.22.3'
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:

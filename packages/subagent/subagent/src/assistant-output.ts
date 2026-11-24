@@ -25,14 +25,18 @@ export class AssistantOutputFold {
 
   /**
    * Fold one session event: a non-empty assistant message becomes the
-   * candidate final answer, while its embedded stream and any log-only attempt
-   * extend the streamed fallback; every other event contributes nothing.
+   * candidate final answer and discards the streamed fallback. Before one
+   * exists, the stream of an empty message or of a log-only attempt extends
+   * that fallback. Every other event contributes nothing.
    * @param event - the next observed session event.
    */
   push(event: SessionEvent): void {
     if (event.type === 'assistant/message') {
       const content = event.data.message.content
-      if (content.length > 0) this.message = content
+      if (content.length > 0) {
+        this.message = content
+        this.partial = []
+      }
     }
     if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
       this.pushText(joinAssistantStreamText(event.data.stream))
@@ -41,10 +45,11 @@ export class AssistantOutputFold {
 
   /**
    * Extend the streamed fallback with text observed outside session events.
+   * The fallback is discarded once a non-empty message exists.
    * @param text - the next streamed text piece (an empty piece is a no-op).
    */
   pushText(text: string): void {
-    if (text.length > 0) this.partial.push(text)
+    if (this.message === undefined && text.length > 0) this.partial.push(text)
   }
 
   /**
@@ -65,10 +70,6 @@ export class AssistantOutputFold {
  * @returns the selected output, or `undefined` when the child produced none.
  */
 export function finalAssistantOutput(events: readonly SessionEvent[]): readonly ContentBlock[] | undefined {
-  // TODO: this folds the complete suffix once per run/epoch settlement. If a
-  // long continuable epoch ever profiles hot here, scan backward with early
-  // exit for the last non-empty message and fold text deltas only on the
-  // no-message fallback.
   const fold = new AssistantOutputFold()
   for (const event of events) fold.push(event)
   return fold.collect()

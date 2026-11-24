@@ -128,7 +128,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 [patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、每种 Host 一行的原生提供方（Darwin 上是 macOS，原生 Windows 上是 Windows），以及本前端。只列出本组合包的 profile manifest 选中这套组合；启动器不经模板直接从安装中加载它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后创建工作区、把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 不是启动必需条目：行无法激活时启动器在 stderr 上报告，而不是停止 profile。
 
-[`server.ts`](src/server.ts) 通过协议服务器的低层 `tools/list` 与 `tools/call` handler 提供三个工具：列表把该 Agent 的 `cua_run_code` 注册项按协议的工具类型校验后投影出来，排在该文件定义的两个工具之间。连接的 Agent 挂载注册表的默认 preset，并把工作区记录为自己的工作目录，沙箱策略据此解析其程序的 `workspace-write` 根。`cua_get_api_reference` 通过 `ctx.systemPrompt.assemble` 读取提供方为该 Agent 注册的提示段，不保存任何状态。`cua_run_code` 调用在 `ctx.agents.withInitiator` 内带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 用 `agent.cancel` 取消该 Agent 正在运行的程序，调用 `ctx.cuaPrograms.release`，由提供方的程序运行时释放该 state owner 的环境，并在 Agent 空闲后返回；同一时刻只进行一次释放，程序调用会等待它，因为前一个进程尚在退出时运行时会拒绝程序。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者。`cua_run_code` 调用作为该 Agent 的维护活动运行，因此 Agent 在调用进行中被销毁时会取消该调用，等它及其嵌套调用结算之后才释放本机连接并关闭 Session。
+[`server.ts`](src/server.ts) 通过协议服务器的低层 `tools/list` 与 `tools/call` handler 提供三个工具：列表把该 Agent 的 `cua_run_code` 注册项按协议的工具类型校验后投影出来，排在该文件定义的两个工具之间。服务器在创建连接的 Agent 前解析默认 preset，记录并挂载同一个 ID，再把工作区记录为 Agent 的工作目录，沙箱策略据此解析其程序的 `workspace-write` 根。`cua_get_api_reference` 通过 `ctx.systemPrompt.assemble` 读取提供方为该 Agent 注册的提示段，不保存任何状态。`cua_run_code` 调用在 `ctx.agents.withInitiator` 内带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 用 `agent.cancel` 取消该 Agent 正在运行的程序，调用 `ctx.cuaPrograms.release`，由提供方的程序运行时释放该 state owner 的环境，并在 Agent 空闲后返回；同一时刻只进行一次释放，程序调用会等待它，因为前一个进程尚在退出时运行时会拒绝程序。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者。`cua_run_code` 调用作为该 Agent 的维护活动运行，因此 Agent 在调用进行中被销毁时会取消该调用，等它及其嵌套调用结算之后才释放本机连接并关闭 Session。
 
 </details>
 
@@ -157,7 +157,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 #### Token 影响
 
-工具描述携带注册项的执行规则，约 3,200 个字符；一次 `cua_get_api_reference` 的结果就是 API 参考，使用当前 macOS 提供方时约 13,000 个字符，按仓库四字符/token 估算约 3,300 token，每次调用支付一次。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；文档给出的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。客户端同样限制工具描述和服务器说明：Claude Code 2.1.309 对二者都只转发前 4,096 个字符并追加 `… [truncated]`；DSH 的 `dsh-mcp-client` 原样转发 20,000 个字符的描述。注册项的描述和约 500 个字符的服务器说明都在该预算之内；参考超出预算，因此作为工具结果传递。
+工具描述携带注册项的执行规则，约 3,200 个字符；一次 `cua_get_api_reference` 的结果就是 API 参考，使用当前 macOS 提供方时约 13,000 个字符，按仓库四字符/token 估算约 3,300 token，每次调用支付一次。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；文档给出的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。客户端同样限制工具描述和服务器说明：Claude Code 2.1.309 对二者都只转发前 4,096 个字符并追加 `… [truncated]`；DSH 的 `dsh-mcp-client` 原样转发 20,000 个字符的描述。注册项的描述和约 600 个字符的服务器说明都在该预算之内；参考超出预算，因此作为工具结果传递。
 
 #### KV Cache 影响
 
@@ -167,6 +167,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- 成功结束的程序跨调用保持键盘键和鼠标按钮，并通过 system reminder 报告。程序失败、执行中的 cua_run_code 请求收到取消、重置和断连会释放所属输入。如果一次调用发送 down 后返回，客户端随后在模型思考期间暂停，服务端收不到取消：该输入可能持续按住，直到显式 up 或后续清理。
 - macOS 与原生 Windows Host 有提供方。其他 Host（包括 WSL）列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
 - 在 Windows 上，[提供方的限制](../cua-windows/README.zh.md#known-limitations-and-deferred-work)经 MCP 同样适用：它不启动应用，不提供 `Always allow` 授权，npm 安装需要配置 `helperPath`。
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。

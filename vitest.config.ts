@@ -5,6 +5,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { resolvePwshPath } from './packages/shell/pwsh-local/src/resolve.ts'
 import { defineConfig } from 'vitest/config'
 import { standardDecoratorPlugin, vitestExecArgv } from './vitest.shared.ts'
+import { sourceRemotePlugin } from './scripts/vitest-source-remote.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './scripts/coverage-exempt.ts'
 import { COVERAGE_PARTITION_MODE_ENV, COVERAGE_TEST_TIMEOUT_ENV, coverageTestTimeoutOptions } from './scripts/coverage-partitions.ts'
 import { LOCAL_TEST_PARALLELISM_CAP, defaultParallelism } from './scripts/parallelism.ts'
@@ -36,6 +37,8 @@ const windowsUnsupportedPackages = process.platform === 'win32'
       'packages/experimental/hooks-codex',
       'packages/terminal/terminal-bash',
       'packages/sandbox/sandbox-local',
+      // Registers nothing on Windows, whose process confinement ignores additional writable directories.
+      'packages/experimental/sandbox-policy-git',
       // OpenSSH multiplexing and Unix-socket helper streams require POSIX endpoints.
       'packages/ssh/*',
     ]
@@ -138,6 +141,10 @@ const pwshCoverageExclusions = spawnSync(resolvePwshPath(), ['-NoLogo', '-NoProf
 
 const testIncludes = [
   'packages/*/*/tests/**/*.spec.{ts,tsx}',
+  // Vendor packages carry their own suites (conformance, goldens, decode
+  // fixtures). They are deliberately outside the coverage gate: coverage
+  // measures `packages/*/*/src`, so nothing here is instrumented or thresholded.
+  'vendor/*/tests/**/*.spec.{ts,tsx}',
   'apps/*/tests/**/*.spec.{ts,tsx}',
   'scripts/**/*.spec.ts',
   'website/tests/**/*.spec.ts',
@@ -207,9 +214,14 @@ const generatedRemoteAliases = {
   },
 }
 const testingAliases = { ...claudeCodeTestingAliases, ...generatedRemoteAliases }
+const testPlugins = () => [
+  pathsPlugin(),
+  standardDecoratorPlugin(),
+  sourceRemotePlugin(import.meta.dirname, '@deepseek-ai/dsh-client-remote-connection'),
+]
 
 export default defineConfig({
-  plugins: [pathsPlugin(), standardDecoratorPlugin()],
+  plugins: testPlugins(),
   resolve: { alias: testingAliases },
   test: {
     ...localWorkerBudget,
@@ -223,7 +235,7 @@ export default defineConfig({
     // Node stability; process-bound suites stay separate for inventory control.
     projects: [
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'thread-safe',
@@ -245,7 +257,7 @@ export default defineConfig({
         },
       },
       {
-        plugins: [pathsPlugin(), standardDecoratorPlugin()],
+        plugins: testPlugins(),
         resolve: { alias: testingAliases },
         test: {
           name: 'process-bound',
@@ -369,9 +381,6 @@ export default defineConfig({
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
-        // Built Web replays cover the generated Remote wiring of the card entries; their mount modules are source-covered.
-        'packages/experimental/client-ui-action-cards/src/client/index.ts',
-        'packages/experimental/client-ui-plugin-recommendations/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.
         'packages/experimental/cua/src/client/index.ts',
@@ -411,8 +420,7 @@ export default defineConfig({
         'packages/client/ui-primitives/src/JsonTree.tsx',
         'packages/client/ui-settings-models/src/client/DeepSeekOnboardingDialog.tsx',
         'packages/client/ui-settings-models/src/client/welcome-store.ts',
-        'packages/extensions/*/src/**/*.ts',
-        'packages/extensions/*/src/**/*.tsx',
+        'packages/extensions/{cordis-client-runner,cordis-host-runner,tool-cordis,ui-cordis}/src/**/*.{ts,tsx}',
         // Typert correctness is checked by its uninstrumented suites,
         // including compiler fixtures and byte-for-byte catalog reproduction.
         'packages/typert/*/src/**/*.{ts,tsx}',
