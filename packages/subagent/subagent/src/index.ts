@@ -37,7 +37,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
-import { isModelListed, type ContentBlock, type MessageId, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
@@ -585,7 +585,7 @@ export class SubagentRuntime extends TypertRemoteService {
     if (llm === undefined) {
       throw new SubagentError('cannot validate the selected subagent model because the LLM service is unavailable', 'MODEL_UNAVAILABLE')
     }
-    if (!await isModelListed(llm, selection)) {
+    if (!await llm.isModelListed(selection.provider, selection.model)) {
       throw new SubagentError(`provider "${selection.provider}" does not list model "${selection.model}"`, 'MODEL_UNAVAILABLE')
     }
   }

@@ -3,7 +3,6 @@
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
-import { isModelListed } from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
 import type {
   ModelCatalog,
@@ -79,7 +78,7 @@ export async function buildModelCatalog(
  * @returns whether the exact model is currently advertised as available.
  */
 export async function modelAvailable(ctx: Context, selection: ModelSelection): Promise<boolean> {
-  try { return await isModelListed(ctx.llm, selection) }
+  try { return await ctx.llm.isModelListed(selection.provider, selection.model) }
   catch (error) {
     throw new RemoteError('session/model-unavailable',
       error instanceof Error ? error.message : String(error),

@@ -7,7 +7,6 @@ import LlmRuntime, {
   GenerateOptions,
   HarnessError,
   isContextWindowExceededError,
-  isModelListed,
   isQuotaExceededError,
   LlmAdapter,
   LlmError,
@@ -709,14 +708,14 @@ describe('LlmRuntime', () => {
     ctx.llm.registerAdapter(['catalog'], new CatalogAdapter({ id: 'catalog', name: 'Catalog' }, [
       { provider: 'catalog', id: 'fast', name: 'Fast' },
     ]))
-    await expect(isModelListed(ctx.llm, { provider: 'catalog', model: 'fast' })).resolves.toBe(true)
-    await expect(isModelListed(ctx.llm, { provider: 'catalog', model: 'unlisted' })).resolves.toBe(false)
-    await expect(isModelListed(ctx.llm, { provider: 'missing', model: 'fast' })).resolves.toBe(false)
-    const failure = new LlmError('catalog unavailable', 'INVALID_CATALOG')
-    await expect(isModelListed({
-      listProviders: () => [{ id: 'catalog', name: 'Catalog' }],
-      listModels: () => Promise.reject(failure),
-    }, { provider: 'catalog', model: 'fast' })).rejects.toBe(failure)
+    await expect(ctx.llm.isModelListed('catalog', 'fast')).resolves.toBe(true)
+    await expect(ctx.llm.isModelListed('catalog', 'unlisted')).resolves.toBe(false)
+    await expect(ctx.llm.isModelListed('missing', 'fast')).resolves.toBe(false)
+    const failing = new CatalogAdapter({ id: 'failing', name: 'Failing' }, [])
+    const failure = new Error('catalog unavailable')
+    failing.listModels = () => Promise.reject(failure)
+    ctx.llm.registerAdapter(['failing'], failing)
+    await expect(ctx.llm.isModelListed('failing', 'fast')).rejects.toBe(failure)
   })
 
   it('detaches advertised model badges, including their translations', async () => {
