@@ -10,7 +10,7 @@ import type {} from '@deepseek-ai/dsh-config-editor'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import { redactSecrets, type RedactedSecret } from './redact.ts'
 import { isVolatilePath, plainConfig, projectForm, volatileForm } from './schema.ts'
-import type { SettingsNamespace } from './types.ts'
+import type { SettingsNamespace, SettingsRowView } from './types.ts'
 
 export { redactSecrets } from './redact.ts'
 export type { RedactedSecret, RedactedValue } from './redact.ts'
@@ -28,6 +28,8 @@ export interface SettingsDescriptor {
   user?: unknown
   applies: 'live'
   secrets?: RedactedSecret[]
+  /** The row behind this namespace, as the configuration editor reports it. */
+  row?: SettingsRowView
 }
 
 /** Wire readers always request secret redaction. */
@@ -301,14 +303,14 @@ export class SettingsForms extends Service {
    */
   describe(options?: SettingsDescribeOptions): SettingsDescriptor[] {
     const active = new Set<string>()
-    const descriptors = this.ownerContext.configEditor.configuration().flatMap(({ entry, inherited, override }) => {
+    const descriptors = this.ownerContext.configEditor.configuration().flatMap(({ entry, inherited, override, managed }) => {
       const schema = this.schema(entry)
       if (schema === undefined || entry.fiber === undefined
         || entry.fiber.runtime === null || entry.fiber.state !== FiberState.ACTIVE) return []
       const form = volatileForm(schema)
       if (form === undefined) return []
       active.add(entry.id)
-      const raw = JSON.stringify([entry.fiber.uid, schema.toJSON(), entry.options.config ?? {}])
+      const raw = JSON.stringify([entry.fiber.uid, schema.toJSON(), entry.options.config ?? {}, managed])
       const autoGenerate = this.presentations.get(entry.fiber.ctx.fiber)?.auto ?? true
       const previous = this.revisions.get(entry.id)
       const revision = previous === undefined ? 0 : previous.revision + Number(previous.raw !== raw)
@@ -329,6 +331,7 @@ export class SettingsForms extends Service {
         base: options?.redactSecrets ? redactSecrets(form as z<never>, base).value : base,
         user: options?.redactSecrets ? redactSecrets(form as z<never>, user).value : user,
         ...options?.redactSecrets ? { secrets: redacted.secrets } : {},
+        row: { plugin: entry.options.name, managed },
       }]
     })
     for (const [id, previous] of this.revisions) {

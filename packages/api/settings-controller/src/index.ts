@@ -55,6 +55,7 @@ function namespaceView(descriptor: SettingsDescriptor): SettingsNamespaceView {
     ...descriptor.user === undefined ? {} : { user: descriptor.user as JsonValue },
     applies: descriptor.applies,
     secrets: (descriptor.secrets ?? []).map(secret => ({ path: [...secret.path], set: secret.set })),
+    ...descriptor.row === undefined ? {} : { row: { plugin: descriptor.row.plugin, managed: descriptor.row.managed } },
     revision: descriptor.revision,
   }
 }

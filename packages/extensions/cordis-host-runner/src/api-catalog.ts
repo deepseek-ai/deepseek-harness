@@ -770,8 +770,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Active entries with unique profile patch ids.',
       },
       {
-        signature: 'configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }>',
-        description: 'Read inherited and explicit profile values for the active entries.',
+        signature: 'configuration(): ProfileEntryConfiguration[]',
+        description: 'Read inherited and explicit profile values for the active entries, and whether a later layer decides each row.',
         parameters: [],
         returns: 'Detached layer values alongside their Loader entries.',
       },
@@ -3024,6 +3024,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'set(session: Session, name: string): void',
         description: 'Record a changed preset, then update each changed knob through its own setter. Selecting the effective preset again appends nothing.',
         parameters: [{ name: 'session', description: 'the session the switch belongs to.' }, { name: 'name', description: 'the preset to switch to; unknown names throw.' }],
+      },
+    ],
+  },
+  {
+    key: 'piAiProviders',
+    summary: 'Service through which provider rows add their routes to the pi-ai adapter.',
+    description: 'Service through which provider rows add their routes to the pi-ai adapter.',
+    methods: [
+      {
+        signature: 'register(provider: string, profile: PiAiProviderProfile): PiAiProviderRegistration',
+        description: 'Register one provider route for the calling plugin; the registration is withdrawn with that plugin.',
+        parameters: [{ name: 'provider', description: 'route key.' }, { name: 'profile', description: 'the route\'s profile. Catalog defects are kept as diagnostics on the route; any other invalid field throws.' }],
+        returns: 'the registration handle.',
       },
     ],
   },
@@ -6762,6 +6775,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AllowedModelRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
   },
   {
+    name: 'AlwaysRetryPolicyConfig',
+    declaration: 'export interface AlwaysRetryPolicyConfig {\n    mode: \'always\';\n    backoff?: BackoffConfig;\n}',
+  },
+  {
     name: 'AnalyticsPreset',
     declaration: 'export type AnalyticsPreset = \'creator\' | \'ptc\' | \'minimal\' | \'standard\';',
   },
@@ -6956,6 +6973,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
+  },
+  {
+    name: 'BackoffConfig',
+    declaration: 'export interface BackoffConfig {\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    jitterRatio?: number;\n}',
   },
   {
     name: 'BashEnvContributor',
@@ -9242,6 +9263,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ModDefinition {\n    readonly name: string;\n    readonly version?: string;\n    readonly root?: string;\n    readonly options?: PluginOptions;\n    readonly register: ModRegister;\n}',
   },
   {
+    name: 'Model',
+    declaration: 'export interface Model {\n    current(): Readonly<ModelSelection> | undefined;\n    select(selection: Readonly<ModelSelection>): void;\n}',
+  },
+  {
     name: 'ModelCatalog',
     declaration: 'export interface ModelCatalog {\n    readonly default: ModelSelection;\n    readonly routableProviders: readonly string[];\n    readonly groups: readonly ModelProviderGroup[];\n    readonly failures: readonly ModelCatalogFailure[];\n}',
   },
@@ -9304,6 +9329,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'NativeFileApplication',
     declaration: 'export interface NativeFileApplication {\n    readonly id: string;\n    readonly name: string;\n    readonly default: boolean;\n    readonly icon: string | null;\n}',
+  },
+  {
+    name: 'NormalRetryPolicyConfig',
+    declaration: 'export interface NormalRetryPolicyConfig {\n    mode: \'normal\';\n    maxRetries?: number;\n    retryableCodes?: string[];\n    backoff?: BackoffConfig;\n}',
   },
   {
     name: 'NpmFileSource',
@@ -9514,8 +9543,44 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PermissionSelection {\n    currentValue: string;\n}',
   },
   {
+    name: 'PiAiCompatProfile',
+    declaration: 'export interface PiAiCompatProfile {\n    supportsStore?: boolean;\n    supportsDeveloperRole?: boolean;\n    supportsReasoningEffort?: boolean;\n    supportsUsageInStreaming?: boolean;\n    supportsFinishReason?: boolean;\n    maxTokensField?: NonNullable<OpenAICompletionsCompat[\'maxTokensField\']>;\n    requiresToolResultName?: boolean;\n    requiresAssistantAfterToolResult?: boolean;\n    requiresThinkingAsText?: boolean;\n    requiresReasoningContentOnAssistantMessages?: boolean;\n    thinkingFormat?: PiAiThinkingFormat;\n    chatTemplateKwargs?: NonNullable<OpenAICompletionsCompat[\'chatTemplateKwargs\']>;\n    chatTemplateArgs?: NonNullable<OpenAICompletionsCompat[\'chatTemplateArgs\']>;\n    supportsThinkingTokenBudget?: boolean;\n    thinkingTokenBudgetField?: PiAiThinkingTokenBudgetField;\n    vllmPriority?: number;\n    supportsMaxOutputTokens?: boolean;\n    supportsStrictMode?: boolean;\n    cacheControlFormat?: NonNullable<OpenAICompletionsCompat[\'cacheControlFormat\']>;\n    supportsLongCacheRetention?: boolean;\n    supportsEagerToolInputStreaming?: boolean;\n    supportsCacheControlOnTools?: boolean;\n    supportsTemperature?: boolean;\n    forceAdaptiveThinking?: boolean;\n    allowEmptySignature?: boolean;\n    supportsStrictTools?: boolean;\n}',
+  },
+  {
+    name: 'PiAiModality',
+    declaration: 'export type PiAiModality = Model<Api>[\'input\'][number];',
+  },
+  {
+    name: 'PiAiModelOverride',
+    declaration: 'export type PiAiModelOverride = Omit<PiAiModelProfile, \'id\'>;',
+  },
+  {
+    name: 'PiAiModelProfile',
+    declaration: 'export interface PiAiModelProfile {\n    id: string;\n    name?: string;\n    contextWindow?: number;\n    maxTokens?: number;\n    input?: PiAiModality[];\n    reasoningEfforts?: false | PiAiReasoningEfforts;\n    compat?: PiAiCompatProfile;\n}',
+  },
+  {
+    name: 'PiAiProviderProfile',
+    declaration: 'export interface PiAiProviderProfile {\n    apiKeyEnv?: string;\n    displayName?: string;\n    api?: string;\n    baseURL?: string;\n    models?: PiAiModelProfile[];\n    modelOverrides?: Record<string, PiAiModelOverride>;\n    compat?: PiAiCompatProfile;\n    defaultContextWindow?: number;\n    defaultMaxTokens?: number;\n    defaultInput?: PiAiModality[];\n    headers?: Record<string, string>;\n    reasoning?: ModelThinkingLevel;\n    thinkingBudgets?: ThinkingBudgets;\n    cacheRetention?: CacheRetention;\n    transport?: Transport;\n    timeoutMs?: number;\n    websocketConnectTimeoutMs?: number;\n    streamIdleTimeoutMs?: number;\n    maxRequestImageBytes?: number;\n    maxRequestImages?: number;\n    imageOffloadCountQuantum?: number;\n    requestImageBudgetCount?: number;\n    requestImagePixelBudget?: number;\n    requestImageMaxDimension?: number;\n    requestImageMaxBytes?: number;\n    retryPolicy?: RetryPolicyConfig;\n}',
+  },
+  {
+    name: 'PiAiProviderRegistration',
+    declaration: 'export interface PiAiProviderRegistration {\n    (): void;\n    replace(profile: PiAiProviderProfile): void;\n}',
+  },
+  {
+    name: 'PiAiReasoningEfforts',
+    declaration: 'export type PiAiReasoningEfforts = Partial<Record<ModelThinkingLevel, string | null>>;',
+  },
+  {
     name: 'PiAiRequestHeaderContext',
     declaration: 'export interface PiAiRequestHeaderContext extends Readonly<Pick<GenerateOptions<string>, \'provider\' | \'model\' | \'sessionId\' | \'purpose\'>> {\n    readonly baseURL: string;\n}',
+  },
+  {
+    name: 'PiAiThinkingFormat',
+    declaration: 'export type PiAiThinkingFormat = NonNullable<OpenAICompletionsCompat[\'thinkingFormat\']>;',
+  },
+  {
+    name: 'PiAiThinkingTokenBudgetField',
+    declaration: 'export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat[\'thinkingTokenBudgetField\']>;',
   },
   {
     name: 'PlatformSession',
@@ -9692,6 +9757,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ProductTelemetryRecord',
     declaration: 'export type ProductTelemetryRecord = OTelEventRecord;',
+  },
+  {
+    name: 'ProfileEntryConfiguration',
+    declaration: 'export interface ProfileEntryConfiguration {\n    entry: Entry;\n    inherited: Record<string, unknown>;\n    override: Record<string, unknown>;\n    managed: boolean;\n}',
   },
   {
     name: 'ProfilePnpmInvocation',
@@ -10080,6 +10149,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ResumeAgentOptions',
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+  },
+  {
+    name: 'RetryPolicyConfig',
+    declaration: 'export type RetryPolicyConfig = NormalRetryPolicyConfig | AlwaysRetryPolicyConfig;',
   },
   {
     name: 'ReviewDecision',
@@ -10979,7 +11052,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SettingsDescriptor',
-    declaration: 'export interface SettingsDescriptor {\n    ns: SettingsNamespace;\n    autoGenerate: boolean;\n    schema: unknown;\n    value: unknown;\n    revision: number;\n    base?: unknown;\n    user?: unknown;\n    applies: \'live\';\n    secrets?: RedactedSecret[];\n}',
+    declaration: 'export interface SettingsDescriptor {\n    ns: SettingsNamespace;\n    autoGenerate: boolean;\n    schema: unknown;\n    value: unknown;\n    revision: number;\n    base?: unknown;\n    user?: unknown;\n    applies: \'live\';\n    secrets?: RedactedSecret[];\n    row?: SettingsRowView;\n}',
   },
   {
     name: 'SettingsDocumentOpenValue',
@@ -10991,7 +11064,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SettingsNamespaceView',
-    declaration: 'export interface SettingsNamespaceView {\n    autoGenerate: boolean;\n    ns: string;\n    schema: JsonValue;\n    value: JsonValue;\n    base?: JsonValue;\n    user?: JsonValue;\n    applies: \'live\';\n    secrets: SettingsSecretView[];\n    revision: number;\n}',
+    declaration: 'export interface SettingsNamespaceView {\n    autoGenerate: boolean;\n    ns: string;\n    row?: SettingsRowView;\n    schema: JsonValue;\n    value: JsonValue;\n    base?: JsonValue;\n    user?: JsonValue;\n    applies: \'live\';\n    secrets: SettingsSecretView[];\n    revision: number;\n}',
   },
   {
     name: 'SettingsPathOp',
@@ -11000,6 +11073,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SettingsPathOpView',
     declaration: 'export type SettingsPathOpView = {\n    op: \'set\';\n    path: string[];\n    value: JsonValue;\n} | {\n    op: \'unset\';\n    path: string[];\n};',
+  },
+  {
+    name: 'SettingsRowView',
+    declaration: 'export interface SettingsRowView {\n    plugin: string;\n    managed: boolean;\n}',
   },
   {
     name: 'SettingsSecretView',

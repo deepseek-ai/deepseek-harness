@@ -14,6 +14,8 @@
 
 `settings/document-updated` 在 Loader 配置变化后使表单描述符失效。这是 UI 通知；消费者仅在需要刷新注册信息时使用 `loader/volatile-update`。
 
+每个描述符以 `SettingsRowView` 报告表单背后的条目：插件的模块名，以及该条目的配置是否由 home patch 或命令行 overlay 决定（`managed`）；这种情况下，对该命名空间的写入会被拒绝。`managed` 由[配置编辑器](boot.zh.md#profile-row-configuration)提供。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>

@@ -14,6 +14,17 @@ export interface SettingsSecretView {
   set: boolean
 }
 
+/** The profile row behind one namespace. */
+export interface SettingsRowView {
+  /** Module name of the row's plugin, as the row names it. */
+  plugin: string
+  /**
+   * Whether a home patch or command-line overlay decides the config the row runs with. A write that changes
+   * the namespace of such a row is refused, so a page shows it without editing it.
+   */
+  managed: boolean
+}
+
 /**
  * Wire view of one profile plugin entry, always read under `redactSecrets`. The
  * JSON-valued fields are `JsonValue` rather than the descriptor's `unknown`
@@ -24,6 +35,8 @@ export interface SettingsNamespaceView {
   autoGenerate: boolean
   /** Namespace key (`llm-deepseek`, `llm-pi-ai`, …). */
   ns: string
+  /** The row behind this namespace; absent when the settings provider reports none. */
+  row?: SettingsRowView
   /** Serialized schemastery schema envelope (`schema.toJSON()`); rehydrate with `new Schema(json)`. */
   schema: JsonValue
   /** Redacted resolved value (schema defaults → composition base → user layer). */

@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin when a composition routes model requests through pi-ai's provider catalogs or through gateways that pi-ai's installed catalog does not describe. The `providers` dictionary is the whole configuration surface: each key is the provider route name a request selects with `GenerateOptions.provider`.
+Mount this plugin when a composition routes model requests through pi-ai's provider catalogs or through gateways that pi-ai's installed catalog does not describe. The `providers` dictionary configures the routes of the row itself: each key is the provider route name a request selects with `GenerateOptions.provider`. A composition layer that adds a route without restating that dictionary writes a [provider row](#add-a-route-from-another-composition-layer) instead.
 
 The adapter accepts the LLM service's [request-only user inputs](../llm/README.md#use-this-package) alongside durable history. User identity and attribution do not enter pi-ai content; assistant replay metadata and tool-call correlation remain attached to durable messages.
 
@@ -102,6 +102,29 @@ pi exposes no separate soft-byte target: the shared encoder's `imageTargetBytes`
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-llm-pi-ai) is the exhaustive source for every accepted field and its JSDoc.
 
+<a id="add-a-route-from-another-composition-layer"></a>
+### Add a route from another composition layer
+
+A patch that sets `providers` replaces the whole dictionary of the layers before it, so a layer that only adds a route writes a row of the provider plugin, `@deepseek-ai/dsh-llm-pi-ai/provider`. The row's config is the route key in `provider` and the profile fields of the table above beside it. A deployment's home patch adds its providers this way and leaves the dictionary in the profile patch, which the Models page writes, as it is.
+
+```yaml
+- insert:
+    - id: llm-pi-ai-team-gateway
+      name: '@deepseek-ai/dsh-llm-pi-ai/provider'
+      config:
+        provider: team-gateway
+        displayName: Team Gateway
+        apiKeyEnv: TEAM_GATEWAY_API_KEY
+        api: openai-completions
+        baseURL: https://gateway.team.example/v1
+        models:
+          - id: team-large
+```
+
+The adapter row serves the routes of the provider rows together with its dictionary's. When several declarations name one route, the one that comes last in the composed entry list is in effect, and the dictionary takes the position of the adapter's row: a row that a home patch or a `--patch` overlay adds replaces the dictionary entry of the same route, and that entry serves again once the row is gone. A route key selects one profile, so a deployment whose provider must be offered beside a person's own provider of the same vendor gives its row a route key of its own and a `displayName`. Only a route key that names an installed pi-ai provider inherits that provider's endpoint, protocol, and models; a row under any other key declares `api`, `baseURL`, and `models`.
+
+Settings gives each provider row a form of its own under the row's id. A row that a home patch or an overlay adds is reported as `managed`, and a write to it is refused; the Models page shows such a provider without editing it.
+
 ### Sign in to a provider
 
 A provider pi-ai ships a login for can be signed into through the harness authorization seam: the flow offers OAuth or an interactive key prompt (a key is typed into pi-ai's own login prompt, not into the settings form), and the resulting credential is stored in the harness credential store at `llm-pi-ai/<provider id>`. The stored sign-in authenticates its route beneath any `apiKeyEnv` override and refreshes itself under the store's cross-process lock; signing out deletes the stored record. A hand-declared route key outside the record grammar — a lowercase hyphenated identifier — cannot be signed into, because a record write for it refuses with `LlmError('UNSTORABLE_PROVIDER_ID')`; such a route authenticates through `apiKeyEnv` or ambient provider settings instead.
@@ -120,7 +143,7 @@ For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects t
 
 ### Change configuration at runtime
 
-Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route.
+Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route. A provider row applies a changed profile field in place and validates the changed row before it is stored; a row whose route another adapter owns fails alone. After a configuration reload moves rows, the adapter re-evaluates which declaration of each route is in effect.
 
 ### Discover models from endpoints
 
@@ -166,6 +189,8 @@ This event covers inference calls with or without a Session id, including auxili
 | [`src/index.ts`](src/index.ts) | Config snapshots, directory and route registration |
 | [`src/auth.ts`](src/auth.ts) | The credential store and ambient auth context over the harness credential plane |
 | [`src/login.ts`](src/login.ts) | Authorization flows for the installed providers that ship a login |
+| [`src/registry.ts`](src/registry.ts) | `ctx.piAiProviders`: the routes that provider rows add, ordered by the composed entry list |
+| [`src/provider-row.ts`](src/provider-row.ts) | The provider row plugin, exported as `@deepseek-ai/dsh-llm-pi-ai/provider` |
 | [`src/config.ts`](src/config.ts) | Profile schema, resolution, and serviceability checks |
 | [`src/catalog.ts`](src/catalog.ts) | Installed-catalog integration and drift gates |
 | [`src/provider-data.ts`](src/provider-data.ts) | Generated authentication and endpoint metadata for configuration surfaces |
@@ -179,7 +204,7 @@ This event covers inference calls with or without a Session id, including auxili
 
 ### Registration and directory
 
-The plugin declares every installed catalog provider it can authenticate in the configurable-provider directory, joined with every route the current profiles declare, so configuration surfaces can offer the full catalog before any route exists. A catalog provider whose catalog lists models but no chat model, such as one of classifier models alone, is left out and gets no sign-in flow, because this adapter dispatches chat requests only. Each entry carries `declared` — whether pi-ai ships nothing under that key — because only the adapter can distinguish a hand-declared route from a narrowed catalog route. A catalog entry carries `defaultBaseURL` for a fixed provider endpoint or a fixed endpoint shared by all its models, `baseURLEnv` for endpoint configuration variables, and `nativeAuth` for authentication variables and OAuth availability. Different model endpoints and unresolved URL templates are not presented as one fixed default. Route registration is atomic: a candidate set that collides with another adapter leaves the previous routes serving. A bare mount with zero routes is the dormant posture: nothing registers until the Config supplies profiles, and routes drop when it empties.
+The plugin declares every installed catalog provider it can authenticate in the configurable-provider directory, joined with every route the current profiles declare, so configuration surfaces can offer the full catalog before any route exists. A catalog provider whose catalog lists models but no chat model, such as one of classifier models alone, is left out and gets no sign-in flow, because this adapter dispatches chat requests only. Each entry carries `declared` — whether pi-ai ships nothing under that key — because only the adapter can distinguish a hand-declared route from a narrowed catalog route. A catalog entry carries `defaultBaseURL` for a fixed provider endpoint or a fixed endpoint shared by all its models, `baseURLEnv` for endpoint configuration variables, and `nativeAuth` for authentication variables and OAuth availability. Different model endpoints and unresolved URL templates are not presented as one fixed default. Route registration is atomic: a candidate set that collides with another adapter leaves the previous routes serving. A bare mount with zero routes is the dormant posture: nothing registers until the Config or a provider row supplies a profile, and routes drop when both are empty. The directory addresses a route that a provider row serves by that row, whose whole config section is the profile, and every other route by its entry of the `providers` dictionary.
 
 <a id="generated-provider-metadata"></a>
 ### Generated provider metadata
@@ -269,6 +294,10 @@ These limits define where the adapter stops and future work begins. They are cur
 - **Provider-native discovery answers through this plugin's ambient context** — a route naming no credential defers to the catalog provider's own resolution, which asks for environment values (`AZURE_OPENAI_API_KEY`, `AWS_PROFILE`, and each provider's own set) and for local credential files. Both questions are answered here: the credential seam is consulted before the process environment, and file existence is checked against the host process's filesystem with `~` expanded. What it cannot do is *read* a credential file's contents — a provider that parses `~/.aws/credentials` itself does so directly, outside the seam.
 - **Reset restores inherited configuration** — resetting a route supplied by a lower profile layer restores that route.
 - **Complete Config replacement can remove inherited dictionary entries** — a field reset instead restores its inherited value.
+- **A `providers` dictionary that cannot start stops provider rows too** — the adapter row provides the registry that provider rows register with, so when an entry of the dictionary fails resolution the adapter row fails, every provider row waits for it, and no pi-ai route serves until the dictionary is repaired. A provider row that cannot start fails alone.
+- **A provider row under its own route key inherits no installed catalog** — only a route key that names an installed pi-ai provider takes that provider's endpoint, protocol, and models. A row under another key declares `api`, `baseURL`, and `models`, and a model it lists by id alone gets the route's default capacities and text input.
+- **One route key serves one profile** — when the dictionary and a provider row name one route, the declaration placed last serves it and the other serves nothing while that one runs; nothing reports the overlap.
+- **Rows that move without restarting are re-evaluated only after a profile reconciliation** — the adapter re-reads the places of the provider rows on `app-boot/config-reload`. A composition that reorders running rows by another means keeps serving the previous choice for a shared route until a provider row registers, changes, or is withdrawn.
 - **`headers` can carry a credential the redactor never sees** — profile resolution rejects names and values Fetch cannot represent, but the dict remains plain strings; store credentials as `apiKeyEnv` references.
 - **Discovery does not change configured models** — adopt discovery results explicitly into the route configuration.
 - **Anthropic and Gemini discovery read at most 1,000 models** — the request uses the API's maximum page size but does not traverse `has_more` or `nextPageToken`; entries beyond the first page must be added by hand.

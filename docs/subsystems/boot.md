@@ -61,6 +61,12 @@ interface PendingModule {
 }
 ```
 
+## Profile row configuration
+
+<a id="profile-row-configuration"></a>
+
+The [configuration editor](../../packages/boot/config-editor/README.md) reports each active profile row as a `ProfileEntryConfiguration`: the Loader entry, the config beneath the profile patch's own override of the row (`inherited`), that override (`override`), and whether the row runs with a config that the bundles and the profile patch do not compose (`managed`). A layer applied after them, such as the home patch or a command-line overlay, then adds the row or decides its config, and an edit of the row is refused.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -159,10 +165,10 @@ Persist complete raw configs and apply them through the normal Loader path.
  */
 entries(): Entry[]
 
-/** Read inherited and explicit profile values for the active entries.
+/** Read inherited and explicit profile values for the active entries, and whether a later layer decides each row.
  * @returns Detached layer values alongside their Loader entries.
  */
-configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }>
+configuration(): ProfileEntryConfiguration[]
 
 /** Validate, persist, and reconcile a plugin's next config; ordinary fields keep normal lifecycle rules.
  * @param entry Current Loader entry, also used to detect replacement during the write.

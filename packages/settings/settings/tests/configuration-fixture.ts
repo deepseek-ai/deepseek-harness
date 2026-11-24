@@ -13,7 +13,18 @@ import DefaultModel from '@deepseek-ai/dsh-agent-default-model'
 import Settings from '../src/index.ts'
 
 export async function configurationFixture(
-  options: { schema?: z; apply?: (ctx: Context, config: unknown) => void; hmr?: boolean; overlay?: string } = {},
+  options: {
+    schema?: z
+    apply?: (ctx: Context, config: unknown) => void
+    hmr?: boolean
+    overlay?: string
+    /** Further rows of the bundle. */
+    rows?: readonly object[]
+    /** The profile's own patch at the first start. */
+    patch?: readonly object[]
+    /** The home patch at the first start. */
+    homePatch?: readonly object[]
+  } = {},
 ) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'settings-config-')))
   const dir = join(home, 'profiles', 'test')
@@ -29,8 +40,11 @@ export async function configurationFixture(
     { id: 'default-model', name: 'cordis:model', config: { provider: 'test', model: 'original' } },
     { id: 'first', name: 'cordis:probe', config: { ordinary: 'fixed', token: 'private' } },
     { id: 'second', name: 'cordis:probe', config: { ordinary: 'second' } },
+    ...options.rows ?? [],
   ] }]))
   writeFileSync(join(dir, 'cordis.yml'), '[]\n')
+  if (options.patch !== undefined) writeFileSync(join(dir, 'cordis.patch.yml'), JSON.stringify(options.patch))
+  if (options.homePatch !== undefined) writeFileSync(join(home, 'cordis.patch.yml'), JSON.stringify(options.homePatch))
   const overlayPath = join(home, 'overlay.patch.yml')
   if (options.overlay !== undefined) writeFileSync(overlayPath, options.overlay)
   const profile: ProfileContext = {

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当组合需要通过 pi-ai 的提供方目录、或通过 pi-ai 已安装目录未描述的网关路由模型请求时挂载本插件。`providers` 字典就是整个配置面：每个键都是请求用 `GenerateOptions.provider` 选择的提供方路由名。
+当组合需要通过 pi-ai 的提供方目录、或通过 pi-ai 已安装目录未描述的网关路由模型请求时挂载本插件。`providers` 字典配置本条目自己的路由：每个键都是请求用 `GenerateOptions.provider` 选择的提供方路由名。需要添加路由而又不重写该字典的配置层，改为写一个[提供方条目](#add-a-route-from-another-composition-layer)。
 
 适配器接受 LLM 服务的[仅供请求使用的 user 输入](../llm/README.zh.md#use-this-package)，并可将其与持久历史混用。user 身份与来源不会进入 pi-ai 内容；assistant 回放元数据和工具调用关联仍由持久消息携带。
 
@@ -102,6 +102,29 @@ pi 不暴露单独的软字节目标，共享编码器的 `imageTargetBytes` 等
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
+<a id="add-a-route-from-another-composition-layer"></a>
+### 由其他配置层添加路由
+
+设置 `providers` 的 patch 会替换此前各层的整个字典，因此只需添加路由的配置层改为写一个提供方插件 `@deepseek-ai/dsh-llm-pi-ai/provider` 的条目。条目的配置是 `provider` 中的路由键，以及与它并列的上表各 profile 字段。部署方的 home patch 以这种方式添加自己的提供方，Models 页写入 profile patch 的字典保持原样。
+
+```yaml
+- insert:
+    - id: llm-pi-ai-team-gateway
+      name: '@deepseek-ai/dsh-llm-pi-ai/provider'
+      config:
+        provider: team-gateway
+        displayName: Team Gateway
+        apiKeyEnv: TEAM_GATEWAY_API_KEY
+        api: openai-completions
+        baseURL: https://gateway.team.example/v1
+        models:
+          - id: team-large
+```
+
+适配器条目把各提供方条目的路由与自身字典的路由一并提供。多处声明同一条路由时，组合后条目列表中位置最靠后的那处生效，字典按适配器条目所在的位置计：home patch 或 `--patch` overlay 添加的条目会替换字典中同一路由的条目，该条目移除后字典条目重新生效。一个路由键只选择一份 profile，因此部署方的提供方若要与用户自己的同厂商提供方并列出现，应给条目使用独立的路由键并设置 `displayName`。只有路由键与已安装的 pi-ai 提供方同名时，才继承该提供方的端点、协议和模型；使用其他键的条目需要声明 `api`、`baseURL` 和 `models`。
+
+Settings 以条目 id 为每个提供方条目提供独立表单。由 home patch 或 overlay 添加的条目会报告为 `managed`，对它的写入会被拒绝；Models 页展示这类提供方但不提供编辑。
+
 ### 登录提供方
 
 pi-ai 提供登录的提供方可以通过 harness 授权 seam 登录：流程提供 OAuth 或交互式密钥提示（密钥键入 pi-ai 自己的登录提示，而非设置表单），得到的凭据存储在 harness 凭据存储的 `llm-pi-ai/<provider id>` 记录中。存储的登录在其路由的 `apiKeyEnv` 覆盖之下完成认证，并在存储的跨进程锁下自行刷新；退出登录即删除存储记录。落在记录文法之外——小写连字符标识符——的手工声明路由键无法登录，因为对它的记录写入会以 `LlmError('UNSTORABLE_PROVIDER_ID')` 拒绝；这类路由改用 `apiKeyEnv` 或提供方 ambient 设置认证。
@@ -120,7 +143,7 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 ### 运行时更改配置
 
-每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。
+每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。提供方条目的 profile 字段变化会就地生效，变更后的条目在保存前校验；路由已被其他适配器拥有的条目只让自身失败。配置重载移动条目后，适配器会重新判定每条路由由哪处声明生效。
 
 ### 从端点发现模型
 
@@ -166,6 +189,8 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 | [`src/index.ts`](src/index.ts) | Config 快照、目录及路由注册 |
 | [`src/auth.ts`](src/auth.ts) | 覆盖 harness 凭据平面的凭据存储与 ambient auth context |
 | [`src/login.ts`](src/login.ts) | 面向提供登录的已安装提供方的授权流程 |
+| [`src/registry.ts`](src/registry.ts) | `ctx.piAiProviders`：各提供方条目添加的路由，按组合后的条目列表排序 |
+| [`src/provider-row.ts`](src/provider-row.ts) | 提供方条目插件，以 `@deepseek-ai/dsh-llm-pi-ai/provider` 导出 |
 | [`src/config.ts`](src/config.ts) | Profile schema、解析与可服务性校验 |
 | [`src/catalog.ts`](src/catalog.ts) | 已安装目录集成与漂移门禁 |
 | [`src/provider-data.ts`](src/provider-data.ts) | 配置界面使用的认证与端点生成数据 |
@@ -179,7 +204,7 @@ Config 更新严格验证发生变化的 provider。初始加载将已存储的�
 
 ### 注册与目录
 
-插件会在可配置提供方目录中声明它能认证的每个已安装目录提供方，并加入当前 profile 声明的每条路由，因此配置界面可以在任何路由存在之前提供完整目录。目录列出了模型却没有聊天模型的提供方（例如只有分类器模型）不进入目录，也不注册登录流程，因为本适配器只分派聊天请求。每个条目都携带 `declared`——pi-ai 是否在该键下不提供任何内容——因为只有适配器能区分手工声明路由与收窄目录路由。目录条目以 `defaultBaseURL` 表示提供方的固定端点或全部模型共用的固定端点，以 `baseURLEnv` 表示端点配置变量，以 `nativeAuth` 表示认证变量和 OAuth 可用性。不同模型的端点和未展开的 URL 模板不会显示为单一固定默认值。路由注册具有原子性：与其他适配器冲突的候选集合会让此前路由继续服务。零路由的裸挂载即休眠姿态：settings 分节提供 profile 前不注册任何内容，分节清空时路由随之消失。
+插件会在可配置提供方目录中声明它能认证的每个已安装目录提供方，并加入当前 profile 声明的每条路由，因此配置界面可以在任何路由存在之前提供完整目录。目录列出了模型却没有聊天模型的提供方（例如只有分类器模型）不进入目录，也不注册登录流程，因为本适配器只分派聊天请求。每个条目都携带 `declared`——pi-ai 是否在该键下不提供任何内容——因为只有适配器能区分手工声明路由与收窄目录路由。目录条目以 `defaultBaseURL` 表示提供方的固定端点或全部模型共用的固定端点，以 `baseURLEnv` 表示端点配置变量，以 `nativeAuth` 表示认证变量和 OAuth 可用性。不同模型的端点和未展开的 URL 模板不会显示为单一固定默认值。路由注册具有原子性：与其他适配器冲突的候选集合会让此前路由继续服务。零路由的裸挂载即休眠姿态：settings 分节或提供方条目提供 profile 前不注册任何内容，两者都为空时路由随之消失。提供方条目所服务的路由，目录以该条目寻址，条目的整个配置分节就是 profile；其余路由以 `providers` 字典中的条目寻址。
 
 <a id="generated-provider-metadata"></a>
 ### 生成的提供方元数据
@@ -269,6 +294,10 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **提供方原生发现经本插件的 ambient context 回答**——不点名凭据的路由交由目录提供方自身解析，它会询问环境值（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE` 及各提供方自有集合）与本地凭据文件。两个问题都在这里得到回答：凭据 seam 先于进程环境被查询，文件存在性则针对宿主进程的文件系统以 `~` 展开后检查。它做不到的是*读取*凭据文件内容——自行解析 `~/.aws/credentials` 的提供方会直接读取，不经该 seam。
 - **重置恢复继承配置**——重置下层 profile 提供的路由会恢复该路由。
 - **完整替换 Config 可以移除继承的字典条目**——字段重置则恢复其继承值。
+- **`providers` 字典无法启动时，提供方条目也随之停止**——适配器条目提供各提供方条目注册所用的注册表，因此字典中某个条目解析失败时适配器条目失败，所有提供方条目等待它，字典修复前没有任何 pi-ai 路由可用。无法启动的提供方条目只让自身失败。
+- **使用独立路由键的提供方条目不继承已安装目录**——只有与已安装 pi-ai 提供方同名的路由键才取得该提供方的端点、协议和模型。使用其他键的条目需要声明 `api`、`baseURL` 和 `models`，只按 id 列出的模型取得该路由的默认容量和文本输入。
+- **一个路由键只服务一份 profile**——字典与提供方条目声明同一条路由时，位置最靠后的声明提供服务，另一处在其运行期间不提供任何服务；这种重叠不会被报告。
+- **不重启而移动的条目只在 profile 重新组合后重新判定**——适配器在 `app-boot/config-reload` 时重新读取各提供方条目的位置。以其他方式调整运行中条目顺序的组合，在有提供方条目注册、变更或撤回之前，共享路由仍由此前选定的声明提供服务。
 - **`headers` 可以携带 redactor 永远看不到的凭据**——profile 解析会拒绝 Fetch 无法表示的名称与值，但该字典仍是纯字符串；以 `apiKeyEnv` 引用存储凭据。
 - **发现操作不更改已配置模型**——需显式将发现结果采纳到路由配置中。
 - **Anthropic 与 Gemini 模型发现最多读取 1,000 个模型**——请求使用 API 的最大页大小，但不会遍历 `has_more` 或 `nextPageToken`；第一页之外的条目需要手工添加。

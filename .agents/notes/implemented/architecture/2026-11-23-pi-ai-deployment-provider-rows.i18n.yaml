@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-23-pi-ai-deployment-provider-rows.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-23-pi-ai-deployment-provider-rows.md
+/agent-note-deployment-supplied-pi-ai-providers-as-provider-rows:
+  en: d664c0d5a3233ae9
+  zh: 7a86fc0179873bb9
+/agent-note-deployment-supplied-pi-ai-providers-as-provider-rows/problem:
+  en: 1d2accc1f8dfaa41
+  zh: ca5a8568059f4c19
+/agent-note-deployment-supplied-pi-ai-providers-as-provider-rows/decision:
+  en: 3bb96fcc1d83a5a9
+  zh: ac42bec03b195295
+/agent-note-deployment-supplied-pi-ai-providers-as-provider-rows/alternatives-considered:
+  en: 5a7d0d4eca5f63dd
+  zh: e7fd930cd0417b50
+/agent-note-deployment-supplied-pi-ai-providers-as-provider-rows/consequences:
+  en: 557b85aa0f37020f
+  zh: b6e9d8dc4d563167

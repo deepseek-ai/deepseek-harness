@@ -27,6 +27,7 @@ describe('settings Remote', () => {
     expect(describe).toMatchObject({ writable: true, hasDocument: true })
     expect(JSON.stringify(describe)).not.toContain('private')
     const model = describe.namespaces.find(row => row.ns === 'default-model')!
+    expect(model.row).toEqual({ plugin: 'cordis:model', managed: false })
     const saved = await controller.mutate(model.ns, [{ op: 'set', path: ['model'], value: 'next' }], model.revision)
     expect(saved.value).toEqual({ provider: 'test', model: 'next' })
     expect(ctx.agentDefaultModel.currentSelection().model).toBe('next')
@@ -73,6 +74,13 @@ describe('settings Remote', () => {
     expect(openTextFile).not.toHaveBeenCalled()
   })
 
+})
+
+it('forwards only the declared facts of the row behind a namespace', async () => {
+  const { ctx, controller } = await boot()
+  const row = { plugin: 'cordis:probe', managed: true, internal: 'not for the wire' }
+  vi.spyOn(ctx.settings, 'describe').mockReturnValue([{ ns: 'first' as never, schema: {}, value: {}, autoGenerate: true, applies: 'live', revision: 0, row }])
+  expect(controller.describe().namespaces[0]?.row).toEqual({ plugin: 'cordis:probe', managed: true })
 })
 
 it('omits absent optional descriptor fields and contains primitive write failures', async () => {

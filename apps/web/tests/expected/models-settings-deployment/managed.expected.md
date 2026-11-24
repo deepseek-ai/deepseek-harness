@@ -1,0 +1,64 @@
+- dialog "设置":
+  - text: 设置
+  - navigation:
+    - button "通用设置"
+    - button "模型"
+    - button "插件管理"
+    - button "Agent 预设"
+    - button "远程连接"
+  - button "打开配置文件"
+  - button "关闭"
+  - heading "模型" [level=2]
+  - paragraph: 填入各提供商的 API 密钥即可使用其模型。
+  - list:
+    - listitem:
+      - text: minimax-cn 托管
+      - img "API 密钥缺失"
+      - button "查看 minimax-cn": 查看
+    - listitem:
+      - text: My Proxy 自定义
+      - button "编辑 My Proxy (my-proxy)": 编辑
+      - button "删除 My Proxy (my-proxy)": 删除
+    - listitem:
+      - text: Team Gateway 自定义 托管
+      - img "API 密钥缺失"
+      - button "查看 Team Gateway (team-gateway)": 查看
+      - text: Team Gateway team-gateway API 密钥
+      - button "认证说明": "?"
+      - textbox "API 密钥" [disabled]:
+        - /placeholder: 留空使用环境认证（HUB_TEAM_GATEWAY_API_KEY）
+      - paragraph: 未检测到环境变量。请填写 API 密钥，或设置环境变量 HUB_TEAM_GATEWAY_API_KEY。
+      - group:
+        - text: 自定义设置 显示名称
+        - textbox "显示名称" [disabled]:
+          - /placeholder: Team Gateway
+        - text: API 地址
+        - textbox "API 地址" [disabled]:
+          - /placeholder: https://hub.example/v1
+        - text: API 协议
+        - combobox "API 协议" [disabled]:
+          - option "OpenAI Chat Completions" [selected]
+          - option "OpenAI Responses"
+          - option "Anthropic Messages"
+          - option "Gemini API"
+        - group "重试策略":
+          - text: 重试策略
+          - combobox "重试策略" [disabled]:
+            - option "默认（仅临时错误）" [selected]
+            - option "仅临时错误"
+            - option "所有错误"
+        - region "模型目录":
+          - text: 模型目录 正在使用适配器默认模型
+          - button "获取可用模型" [disabled]
+          - button "调整模型顺序 1" [disabled]
+          - textbox "模型 ID 1" [disabled]:
+            - /placeholder: 模型 ID
+            - text: team-model
+          - button "模型选项 1"
+          - button "删除模型 1" [disabled]
+          - textbox "显示名称 1" [disabled]:
+            - /placeholder: 显示名称
+          - button "添加模型" [disabled]
+      - button "取消"
+      - button "保存" [disabled]
+  - button "添加模型提供商"

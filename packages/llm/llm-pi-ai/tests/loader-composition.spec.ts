@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import Loader, { type ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import LlmRuntime, { createMessage, createUserMessage, userAgent } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -16,6 +16,7 @@ import { profileComposition } from '../../../settings/settings/tests/profile-com
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { recordKeyFor } from '../src/auth.ts'
 import { assemble } from './assemble.ts'
+import { sourceModules } from './composition.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -72,19 +73,7 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
     ['@deepseek-ai/dsh-authorization', AuthorizationService],
     ['@deepseek-ai/dsh-llm-pi-ai', LlmPiAi],
   ])
-  const internal: ModuleLoaderV2 = {
-    version: 'v2',
-    loadCache: new Map(),
-    import: (specifier: string) => {
-      if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
-      return Promise.resolve(modules.get(specifier))
-    },
-    register(): never { throw new Error('unexpected module hook registration') },
-    getOrCreateModuleJob(): never { throw new Error('unexpected module job creation') },
-    resolveSync(): never { throw new Error('unexpected synchronous module resolution') },
-    load(): never { throw new Error('unexpected module load') },
-  }
-  ctx.loader.internal = internal
+  ctx.loader.internal = sourceModules(modules)
   const patchPath = await profileComposition(ctx, root, configPath)
   return { ctx, settingsPath: patchPath }
 }

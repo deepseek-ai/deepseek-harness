@@ -40,7 +40,7 @@ kind: "package-reference"
 
 [编辑器](src/index.ts) 在派生候选配置前应用外部更改，与其他 profile 操作共同锁定 profile manifest，并原子替换配置覆盖项。它保留替换值以外的 YAML 注释和 `!!js` 表达式。应用失败时恢复之前的文档并重新加载之前的 patch。
 
-读取配置时，没有 profile config 覆盖项的条目共用一次组合结果。有覆盖项的条目分别组合，仅移除自身的覆盖项；profile 插入的条目和其他条目的覆盖项仍然生效。返回的配置为独立副本，组合结果不跨读取缓存。
+读取配置时，没有 profile config 覆盖项的条目共用一次组合结果。有覆盖项的条目分别组合，仅移除自身的覆盖项；profile 插入的条目和其他条目的覆盖项仍然生效。返回的配置为独立副本，组合结果不跨读取缓存。每个条目还报告 `managed`：它运行所用的配置是否不同于各 bundle 与 profile patch 组合出的配置；home patch 或命令行 overlay 添加该条目或改变其配置时即为此情形，这也是对该条目的编辑被拒绝的条件。读取时不打开任何 home patch 或 overlay 文件。后续层设置的配置若与这些层组合出的配置相同，则不报告；手工编辑的 profile patch 在 Loader 应用之前，其条目会被报告；文件中没有 `id` 的条目始终被报告。
 
 </details>
 
