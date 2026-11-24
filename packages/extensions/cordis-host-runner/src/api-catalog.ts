@@ -760,8 +760,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'configEditor',
-    summary: 'Persist complete raw configs and apply them through the normal Loader path.',
-    description: 'Persist complete raw configs and apply them through the normal Loader path.',
+    summary: 'Persist complete raw configs and profile rows, and apply them through the normal Loader path.',
+    description: 'Persist complete raw configs and profile rows, and apply them through the normal Loader path.',
     methods: [
       {
         signature: 'entries(): Entry[]',
@@ -770,16 +770,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Active entries with unique profile patch ids.',
       },
       {
-        signature: 'configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }>',
+        signature: 'configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown>; inserted: boolean }>',
         description: 'Read inherited and explicit profile values for the active entries.',
         parameters: [],
-        returns: 'Detached layer values alongside their Loader entries.',
+        returns: 'Detached layer values alongside their Loader entries. `inserted` marks a row that an `insert` item of the profile patch lists directly; `remove()` accepts only such a row.',
       },
       {
         signature: 'async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>',
         description: 'Validate, persist, and reconcile a plugin\'s next config; ordinary fields keep normal lifecycle rules.',
         parameters: [{ name: 'entry', description: 'Current Loader entry, also used to detect replacement during the write.' }, { name: 'change', description: 'Derive a raw config from the current entry and its inherited layer.' }],
         returns: 'Fulfillment after Loader reconciliation completes.',
+      },
+      {
+        signature: 'async editRow( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>',
+        description: 'Persist and reconcile a row\'s next config whether or not its plugin runs. An active plugin validates the config as edit requires. A row that is switched off or failed stores the config as given, and its plugin validates it when the row next starts. A row that is switched on must be active after the reconciliation, so a row that fails again, or that waits for a service, rejects the write.',
+        parameters: [{ name: 'entry', description: 'Current Loader entry, also used to detect replacement during the write.' }, { name: 'change', description: 'Derive a raw config from the current entry and its inherited layer.' }],
+        returns: 'Fulfillment after Loader reconciliation completes.',
+        throws: ['When the entry is gone, an active plugin rejects the config, a higher layer overrides the stored config, or a row that is switched on does not start. In the last case the file gets its prior content back, and the Loader is reconciled with the prior patches.'],
+      },
+      {
+        signature: 'async insert(row: { id: string; name: string; config: Record<string, unknown> }): Promise<void>',
+        description: 'Add a row at the end of the profile patch, where no existing profile patch item applies to it, and start it.',
+        parameters: [{ name: 'row', description: 'Row id, module name of the row\'s plugin, and the row\'s complete raw config.' }],
+        returns: 'Fulfillment after Loader reconciliation completes with the row active, or switched off by a higher layer.',
+        throws: ['When a row of the composed profile uses the id, a higher layer overrides the stored config, or the row does not start. In the last case the file gets its prior content back, and the Loader is reconciled with the prior patches.'],
+      },
+      {
+        signature: 'async remove(entry: Entry): Promise<void>',
+        description: 'Remove a row that an `insert` item of the profile patch lists directly, together with the profile patch\'s override items for that row.',
+        parameters: [{ name: 'entry', description: 'Current Loader entry of the row.' }],
+        returns: 'Fulfillment after Loader reconciliation completes.',
+        throws: ['When the entry is gone, or no `insert` item of the profile patch lists the row: a bundle or a higher layer adds it. After a rejected reconciliation the file gets its prior content back, and the Loader is reconciled with the prior patches.'],
       },
     ],
   },

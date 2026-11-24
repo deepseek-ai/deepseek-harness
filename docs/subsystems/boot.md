@@ -151,7 +151,7 @@ Source: [`packages/connector/cli-account/src/index.ts`](../../packages/connector
 
 ### `ctx.configEditor` — `ConfigEditor`
 
-Persist complete raw configs and apply them through the normal Loader path.
+Persist complete raw configs and profile rows, and apply them through the normal Loader path.
 
 ```ts cordis-catalog
 /** Addressable profile rows; nested Includes have independent configuration ownership.
@@ -160,9 +160,10 @@ Persist complete raw configs and apply them through the normal Loader path.
 entries(): Entry[]
 
 /** Read inherited and explicit profile values for the active entries.
- * @returns Detached layer values alongside their Loader entries.
+ * @returns Detached layer values alongside their Loader entries. `inserted` marks a row that an `insert` item of
+ * the profile patch lists directly; `remove()` accepts only such a row.
  */
-configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }>
+configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown>; inserted: boolean }>
 
 /** Validate, persist, and reconcile a plugin's next config; ordinary fields keep normal lifecycle rules.
  * @param entry Current Loader entry, also used to detect replacement during the write.
@@ -170,6 +171,38 @@ configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; overr
  * @returns Fulfillment after Loader reconciliation completes.
  */
 async edit( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>
+
+/** Persist and reconcile a row's next config whether or not its plugin runs. An active plugin validates the config
+ * as {@link edit} requires. A row that is switched off or failed stores the config as given, and its plugin
+ * validates it when the row next starts. A row that is switched on must be active after the reconciliation, so a
+ * row that fails again, or that waits for a service, rejects the write.
+ * @param entry Current Loader entry, also used to detect replacement during the write.
+ * @param change Derive a raw config from the current entry and its inherited layer.
+ * @returns Fulfillment after Loader reconciliation completes.
+ * @throws When the entry is gone, an active plugin rejects the config, a higher layer overrides the stored config, or
+ * a row that is switched on does not start. In the last case the file gets its prior content back, and the Loader is
+ * reconciled with the prior patches.
+ */
+async editRow( entry: Entry, change: (current: Record<string, unknown>, inherited: Record<string, unknown>) => Record<string, unknown>, ): Promise<void>
+
+/** Add a row at the end of the profile patch, where no existing profile patch item applies to it, and start it.
+ * @param row Row id, module name of the row's plugin, and the row's complete raw config.
+ * @returns Fulfillment after Loader reconciliation completes with the row active, or switched off by a higher layer.
+ * @throws When a row of the composed profile uses the id, a higher layer overrides the stored config, or the row does
+ * not start. In the last case the file gets its prior content back, and the Loader is reconciled with the prior
+ * patches.
+ */
+async insert(row: { id: string; name: string; config: Record<string, unknown> }): Promise<void>
+
+/** Remove a row that an `insert` item of the profile patch lists directly, together with the profile patch's
+ * override items for that row.
+ * @param entry Current Loader entry of the row.
+ * @returns Fulfillment after Loader reconciliation completes.
+ * @throws When the entry is gone, or no `insert` item of the profile patch lists the row: a bundle or a higher
+ * layer adds it. After a rejected reconciliation the file gets its prior content back, and the Loader is reconciled
+ * with the prior patches.
+ */
+async remove(entry: Entry): Promise<void>
 ```
 
 Source: [`packages/boot/config-editor/src/index.ts`](../../packages/boot/config-editor/src/index.ts)

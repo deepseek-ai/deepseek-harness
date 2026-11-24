@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-将插件配置保存到当前 profile 的 patch 并立即应用。写入在改动磁盘前验证完整候选值，并与 profile 更改及 HMR 串行执行。无效值和更高层覆盖不会改动文件。
+将插件配置保存到当前 profile 的 patch 并立即应用。调用方还可以新增一行、移除该 patch 新增的行，并替换已停用或启动失败的行的配置。写入与 profile 更改及 HMR 串行执行。运行中的插件在文件改动前验证完整候选值，更高层覆盖不会改动文件。写入的行未能启动时，文件恢复为之前的内容。
 
 ## 目录
 
@@ -32,13 +32,17 @@ kind: "package-reference"
 
 使用 [settings](../../settings/settings/README.zh.md) 提供只编辑即时字段的表单。编辑完整配置的调用方可使用 `ctx.configEditor.edit()`；普通字段保留 Loader 的正常生命周期。
 
+管理行的调用方还有三个操作。`insert()` 把一行追加到 profile patch 并启动它。`remove()` 删除 profile patch 插入的行，以及该 patch 对这一行的覆盖项；`configuration()` 用 `inserted` 标记这样的行，`remove()` 拒绝其他所有行。`editRow()` 与 `edit()` 一样替换一行的配置，并且接受已停用或启动失败的行：这样的行按原样保存配置，由其插件在下次启动时验证。
+
+`insert()` 或 `editRow()` 写入的行在写入后必须处于激活状态，已停用的行除外。该行启动失败或等待服务时，调用以激活诊断拒绝，文件恢复为之前的内容。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-[编辑器](src/index.ts) 在派生候选配置前应用外部更改，与其他 profile 操作共同锁定 profile manifest，并原子替换配置覆盖项。它保留替换值以外的 YAML 注释和 `!!js` 表达式。应用失败时恢复之前的文档并重新加载之前的 patch。
+[编辑器](src/index.ts) 在派生候选配置前应用外部更改，与其他 profile 操作共同锁定 profile manifest，并原子替换 profile patch。配置编辑替换该行的配置覆盖项。插入写在文件末尾：最后一个 patch 项插入顶层行时写入该项，否则写入新的 insert 项，因此已有的 profile patch 项都不作用于新行。编辑器保留替换值以外的 YAML 注释和 `!!js` 表达式；被删除的顶层 patch 项上方的注释保留在文件中，对第一项而言它就是文件头注释。应用失败时恢复之前的文档并重新加载之前的 patch，调用方收到自身写入的拒绝。
 
 读取配置时，没有 profile config 覆盖项的条目共用一次组合结果。有覆盖项的条目分别组合，仅移除自身的覆盖项；profile 插入的条目和其他条目的覆盖项仍然生效。返回的配置为独立副本，组合结果不跨读取缓存。
 
@@ -67,6 +71,9 @@ kind: "package-reference"
 - 编辑写入当前 profile patch。Home patch 和命令行 overlay 参与优先级解析，但不作为写入目标。
 - 完整配置覆盖保留普通字段，但会在 profile 层固定其当前原始值。
 - 仅可编辑 profile 根 Include 拥有且可唯一定位的条目。
+- `remove()` 只接受 profile patch 的 `insert` 项直接列出的行。位于被插入的 group 内的行，以及由组合包或更高层添加的行，无法移除。移除被插入的 group 时，profile patch 中以其嵌套行为目标、或向该 group 插入行的项会留在文件中，这些项不再生效。
+- `insert()` 与 `editRow()` 无法为等待服务的行保存配置，因为写入的行未停用时必须在写入后处于激活状态。
+- 写入被拒绝后，编辑器应用之前的 patch。这次应用也被拒绝时，编辑器把它的拒绝记录为警告，其中指名的行保持未激活，调用方只收到自身写入的拒绝。
 
 <a id="dev-note"></a>
 ### 开发备注
