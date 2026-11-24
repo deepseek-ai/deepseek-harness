@@ -477,13 +477,13 @@ export function parseVendoredRows(text: string): VendoredRow[] {
 }
 
 /**
- * The vendored package trees: each directory holds one package per
- * subdirectory, listed in the manifest table of its README. `vendor/im` is a
- * tree of its own, not a package of `vendor/`.
+ * The vendored package trees: each subdirectory holding a `package.json` is one
+ * package, listed in the manifest table of the tree's README. `vendor/im` has
+ * no manifest of its own, so it is a tree, not a package of `vendor/`.
  */
 export const VENDORED_TREES = [
-  { directory: 'vendor', readme: 'vendor/README.md', nested: ['im'] },
-  { directory: 'vendor/im', readme: 'vendor/im/README.md', nested: [] },
+  { directory: 'vendor', readme: 'vendor/README.md' },
+  { directory: 'vendor/im', readme: 'vendor/im/README.md' },
 ] as const
 
 /**
@@ -493,13 +493,12 @@ export const VENDORED_TREES = [
  * error rather than a package that quietly vanishes from the notices.
  */
 function collectVendored(): (VendoredRow & { sourceDirectory: string })[] {
-  return VENDORED_TREES.flatMap(({ directory, readme, nested }) => {
+  return VENDORED_TREES.flatMap(({ directory, readme }) => {
     const rows = parseVendoredRows(readFileSync(resolve(root, readme), 'utf8'))
     const onDisk = new Map<string, string>()
     for (const entry of readdirSync(resolve(root, directory), { withFileTypes: true })) {
-      if (!entry.isDirectory() || (nested as readonly string[]).includes(entry.name)) continue
-      // An ignored leftover such as `lib/` of a moved package is not a package.
-      if (!existsSync(resolve(root, directory, entry.name, 'package.json'))) continue
+      // A tree directory or an ignored leftover such as `lib/` of a moved package has no manifest.
+      if (!entry.isDirectory() || !existsSync(resolve(root, directory, entry.name, 'package.json'))) continue
       const manifest = readManifest(`${directory}/${entry.name}/package.json`)
       if (manifest.name !== undefined) onDisk.set(manifest.name, entry.name)
     }

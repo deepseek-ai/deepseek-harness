@@ -42,8 +42,8 @@ Status: implemented
 ### 1. React 类型包只由根 manifest 声明
 
 - **目的：** 把 Client 测试聚合程序看到的 `@types/react` 位置数 N 从 65 降到 1，消除随 N 线性增长的 module specifier 计算。
-- **改动：** 根 `package.json` 的 `devDependencies` 声明 `@types/react` `~18.3.1` 与 `@types/react-dom` `~18.3.0`，沿用各包原先统一的版本范围；`apps/*`、`packages/*/*` 与 `vendor/*` 的 manifest 在任何依赖区段都不声明它们。TypeScript 从任一包向上查找时都解析到根 `node_modules/@types/react`。runtime `react` 与 `react-dom` 仍按 [Client 依赖声明规则](../../../../packages/client/AGENTS.md#dependency-declaration)由各包声明；只通过 `import type` 引用 React 的 `packages/client/ui-slots` 在 `devDependencies` 中声明 `react`。pnpm `dedupeDirectDeps` 保持关闭。lockfile 的变化集中在 importers 区段（另有一条 integrity 相同的 `papaparse` 条目重排）。
-- **防回退：** [`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) 在 `hygiene` 与 CI 中要求根 manifest 的 `devDependencies` 声明这两个包，并拒绝 `apps/*`、`packages/*/*`、`vendor/*` 中任一 manifest 在 `dependencies`、`devDependencies`、`optionalDependencies` 或 `peerDependencies` 中声明它们；诊断指明要删除的条目，并链接 Client 依赖声明规则第 8 条。规则只匹配这两个精确包名，其他 `@types/*` 包仍按 DefinitelyTyped 类型提供方处理。依赖区段推导不把这两个包视为 `react`/`react-dom` 的类型提供方：包缺少 `react` 声明时，验证器报告 `react` 缺失，`--fix` 拒绝修复并要求先声明版本范围；`--fix` 也不写回或删除这两个包。[`verify-package-dependencies.spec.ts`](../../../../scripts/verify-package-dependencies.spec.ts) 覆盖各依赖区段的拒绝、根 manifest 缺失声明、被接受的布局，以及类型提供方排除。
+- **改动：** 根 `package.json` 的 `devDependencies` 声明 `@types/react` `~18.3.1` 与 `@types/react-dom` `~18.3.0`，沿用各包原先统一的版本范围；`apps/*`、`packages/*/*`、`vendor/*` 与 `vendor/im/*` 的 manifest 在任何依赖区段都不声明它们。TypeScript 从任一包向上查找时都解析到根 `node_modules/@types/react`。runtime `react` 与 `react-dom` 仍按 [Client 依赖声明规则](../../../../packages/client/AGENTS.md#dependency-declaration)由各包声明；只通过 `import type` 引用 React 的 `packages/client/ui-slots` 在 `devDependencies` 中声明 `react`。pnpm `dedupeDirectDeps` 保持关闭。lockfile 的变化集中在 importers 区段（另有一条 integrity 相同的 `papaparse` 条目重排）。
+- **防回退：** [`verify-package-dependencies`](../../../../scripts/verify-package-dependencies.ts) 在 `hygiene` 与 CI 中要求根 manifest 的 `devDependencies` 声明这两个包，并拒绝 `apps/*`、`packages/*/*`、`vendor/*`、`vendor/im/*` 中任一 manifest 在 `dependencies`、`devDependencies`、`optionalDependencies` 或 `peerDependencies` 中声明它们；诊断指明要删除的条目，并链接 Client 依赖声明规则第 8 条。规则只匹配这两个精确包名，其他 `@types/*` 包仍按 DefinitelyTyped 类型提供方处理。依赖区段推导不把这两个包视为 `react`/`react-dom` 的类型提供方：包缺少 `react` 声明时，验证器报告 `react` 缺失，`--fix` 拒绝修复并要求先声明版本范围；`--fix` 也不写回或删除这两个包。[`verify-package-dependencies.spec.ts`](../../../../scripts/verify-package-dependencies.spec.ts) 覆盖各依赖区段的拒绝、根 manifest 缺失声明、被接受的布局，以及类型提供方排除。
 - **性能：**
 
   | 测量项 | 各包自声明（N = 65） | 根 manifest 声明（N = 1） |
@@ -55,7 +55,7 @@ Status: implemented
   | 76 个 client-only 包项目的 wall | 55.7 s（2 个样本的中位数） | 44.5 s（2 个样本的中位数） |
 
 - **无损依据：** 66 个包级链接与根链接指向同一个 realpath（`.pnpm/@types+react@18.3.31`），因此程序读取的声明内容相同；程序文件数保持 2,613，`tsc -b --force tsconfig.client.json` 以 0 退出且无诊断。`devDependencies` 不随已发布的包安装，[发布依赖面](2026-08-26-published-dependency-faces.zh.md)中独立 TypeScript 消费者自行安装所引用类型包的结论不变；runtime 解析不读取 `@types/*`。
-- **取舍：** 包 manifest 不列出自己的 React 类型依赖，所有 workspace 包共用同一个 React 类型版本；某个包需要不同版本时，需要新的 Agent Note 推翻本项。检查只覆盖 `apps/*`、`packages/*/*` 与 `vendor/*`；`website`、`benchmarks`、`native/system` 与 `python/sdk-runtime` 等其他 pnpm 成员不在范围内，目前它们都不声明 React 类型包。
+- **取舍：** 包 manifest 不列出自己的 React 类型依赖，所有 workspace 包共用同一个 React 类型版本；某个包需要不同版本时，需要新的 Agent Note 推翻本项。检查只覆盖 `apps/*`、`packages/*/*`、`vendor/*` 与 `vendor/im/*`；`website`、`benchmarks`、`native/system` 与 `python/sdk-runtime` 等其他 pnpm 成员不在范围内，目前它们都不声明 React 类型包。
 
 ### 2. Typert 先按 manifest 选择包
 

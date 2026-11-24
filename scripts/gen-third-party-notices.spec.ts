@@ -269,11 +269,10 @@ describe('parseVendoredRows', () => {
     expect(parseVendoredRows('| `cordis/` | `@deepseek-ai/cordis` | cordis | 4.0.0 | https://example.com | `abc123` |\n')).toEqual([])
   })
 
-  it.each(VENDORED_TREES)('covers every directory of $directory, so no package can drop out of the notices', ({ directory, readme, nested }) => {
+  it.each(VENDORED_TREES)('covers every directory of $directory, so no package can drop out of the notices', ({ directory, readme }) => {
     const parsed = new Set(parseVendoredRows(readFileSync(resolve(root, readme), 'utf8')).map(row => row.npmName))
     const onDisk = readdirSync(resolve(root, directory), { withFileTypes: true })
-      .filter(entry => entry.isDirectory() && !(nested as readonly string[]).includes(entry.name))
-      .filter(entry => existsSync(resolve(root, directory, entry.name, 'package.json')))
+      .filter(entry => entry.isDirectory() && existsSync(resolve(root, directory, entry.name, 'package.json')))
       .map(entry => (JSON.parse(readFileSync(resolve(root, directory, entry.name, 'package.json'), 'utf8')) as Manifest).name)
 
     expect(onDisk.length).toBeGreaterThan(0)
