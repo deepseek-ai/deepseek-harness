@@ -145,6 +145,7 @@ const testIncludes = [
   // fixtures). They are deliberately outside the coverage gate: coverage
   // measures `packages/*/*/src`, so nothing here is instrumented or thresholded.
   'vendor/*/tests/**/*.spec.{ts,tsx}',
+  'vendor/im/*/tests/**/*.spec.{ts,tsx}',
   'apps/*/tests/**/*.spec.{ts,tsx}',
   'scripts/**/*.spec.ts',
   'website/tests/**/*.spec.ts',

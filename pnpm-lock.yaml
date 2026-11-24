@@ -11964,7 +11964,7 @@ importers:
         version: link:../../../vendor/http
       '@deepseek-ai/cordis-plugin-im-core':
         specifier: workspace:~
-        version: link:../../../vendor/plugin-im-core
+        version: link:../../../vendor/im/core
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:~
         version: link:../../../vendor/include
@@ -12054,16 +12054,16 @@ importers:
         version: link:../../../vendor/http
       '@deepseek-ai/cordis-plugin-im-adapter-lark':
         specifier: workspace:~
-        version: link:../../../vendor/plugin-im-adapter-lark
+        version: link:../../../vendor/im/adapter-lark
       '@deepseek-ai/cordis-plugin-im-adapter-qq':
         specifier: workspace:~
-        version: link:../../../vendor/plugin-im-adapter-qq
+        version: link:../../../vendor/im/adapter-qq
       '@deepseek-ai/cordis-plugin-im-core':
         specifier: workspace:~
-        version: link:../../../vendor/plugin-im-core
+        version: link:../../../vendor/im/core
       '@deepseek-ai/cordis-plugin-im-markdown':
         specifier: workspace:~
-        version: link:../../../vendor/plugin-im-markdown
+        version: link:../../../vendor/im/markdown
       '@deepseek-ai/dsh-im':
         specifier: workspace:*
         version: link:../im
@@ -12146,7 +12146,7 @@ importers:
         version: link:../../../vendor/cordis
       '@deepseek-ai/cordis-plugin-im-core':
         specifier: workspace:~
-        version: link:../../../vendor/plugin-im-core
+        version: link:../../../vendor/im/core
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:../../core/agent
@@ -21531,6 +21531,133 @@ importers:
         specifier: workspace:~
         version: link:../logger-console
 
+  vendor/im/adapter-lark:
+    dependencies:
+      '@deepseek-ai/cordis-plugin-im-markdown':
+        specifier: workspace:~
+        version: link:../markdown
+      '@deepseek-ai/schemastery':
+        specifier: link:../../schemastery
+        version: link:../../schemastery
+      mdast-util-gfm:
+        specifier: ^3.1.0
+        version: 3.1.0(supports-color@9.4.0)
+      mdast-util-to-markdown:
+        specifier: ^2.1.2
+        version: 2.1.2
+      protobufjs:
+        specifier: ^8.0.0
+        version: 8.8.1
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../cordis
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../../http
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../core
+      '@deepseek-ai/cosmokit':
+        specifier: link:../../cosmokit
+        version: link:../../cosmokit
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../element
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
+
+  vendor/im/adapter-qq:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../schemastery
+        version: link:../../schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../cordis
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../../http
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../core
+      '@deepseek-ai/cordis-plugin-im-markdown':
+        specifier: workspace:~
+        version: link:../markdown
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../element
+
+  vendor/im/core:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../cordis
+      '@deepseek-ai/cosmokit':
+        specifier: link:../../cosmokit
+        version: link:../../cosmokit
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../element
+      '@deepseek-ai/schemastery':
+        specifier: link:../../schemastery
+        version: link:../../schemastery
+      path-to-regexp:
+        specifier: ^8.3.0
+        version: 8.4.2
+      path-to-regexp-typed:
+        specifier: ^8.0.0
+        version: 8.0.0(path-to-regexp@8.4.2)
+    devDependencies:
+      '@deepseek-ai/cordis-plugin-http':
+        specifier: workspace:~
+        version: link:../../http
+
+  vendor/im/element:
+    dependencies:
+      '@deepseek-ai/cordis-element':
+        specifier: workspace:~
+        version: link:../../element
+      '@deepseek-ai/cosmokit':
+        specifier: link:../../cosmokit
+        version: link:../../cosmokit
+
+  vendor/im/markdown:
+    dependencies:
+      hast-util-raw:
+        specifier: ~9.1.1
+        version: 9.1.1
+      mdast-util-from-markdown:
+        specifier: ^2.0.3
+        version: 2.1.0(supports-color@9.4.0)
+      mdast-util-gfm:
+        specifier: ^3.1.0
+        version: 3.1.0(supports-color@9.4.0)
+      mdast-util-to-hast:
+        specifier: ^13.2.1
+        version: 13.2.1
+      micromark-extension-gfm:
+        specifier: ^3.0.0
+        version: 3.0.0
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../cordis
+      '@deepseek-ai/cordis-plugin-im-core':
+        specifier: workspace:~
+        version: link:../core
+      '@deepseek-ai/satori-element':
+        specifier: workspace:~
+        version: link:../element
+      '@types/hast':
+        specifier: ^3.0.5
+        version: 3.0.5
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
+
   vendor/include:
     dependencies:
       '@deepseek-ai/cordis':
@@ -21575,133 +21702,6 @@ importers:
       supports-color:
         specifier: ^9.4.0
         version: 9.4.0
-
-  vendor/plugin-im-adapter-lark:
-    dependencies:
-      '@deepseek-ai/cordis-plugin-im-markdown':
-        specifier: workspace:~
-        version: link:../plugin-im-markdown
-      '@deepseek-ai/schemastery':
-        specifier: link:../schemastery
-        version: link:../schemastery
-      mdast-util-gfm:
-        specifier: ^3.1.0
-        version: 3.1.0(supports-color@9.4.0)
-      mdast-util-to-markdown:
-        specifier: ^2.1.2
-        version: 2.1.2
-      protobufjs:
-        specifier: ^8.0.0
-        version: 8.8.1
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-http':
-        specifier: workspace:~
-        version: link:../http
-      '@deepseek-ai/cordis-plugin-im-core':
-        specifier: workspace:~
-        version: link:../plugin-im-core
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      '@deepseek-ai/satori-element':
-        specifier: workspace:~
-        version: link:../satori-element
-      '@types/mdast':
-        specifier: ^4.0.4
-        version: 4.0.4
-
-  vendor/plugin-im-adapter-qq:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: link:../schemastery
-        version: link:../schemastery
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-http':
-        specifier: workspace:~
-        version: link:../http
-      '@deepseek-ai/cordis-plugin-im-core':
-        specifier: workspace:~
-        version: link:../plugin-im-core
-      '@deepseek-ai/cordis-plugin-im-markdown':
-        specifier: workspace:~
-        version: link:../plugin-im-markdown
-      '@deepseek-ai/satori-element':
-        specifier: workspace:~
-        version: link:../satori-element
-
-  vendor/plugin-im-core:
-    dependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../cordis
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
-      '@deepseek-ai/satori-element':
-        specifier: workspace:~
-        version: link:../satori-element
-      '@deepseek-ai/schemastery':
-        specifier: link:../schemastery
-        version: link:../schemastery
-      path-to-regexp:
-        specifier: ^8.3.0
-        version: 8.4.2
-      path-to-regexp-typed:
-        specifier: ^8.0.0
-        version: 8.0.0(path-to-regexp@8.4.2)
-    devDependencies:
-      '@deepseek-ai/cordis-plugin-http':
-        specifier: workspace:~
-        version: link:../http
-
-  vendor/plugin-im-markdown:
-    dependencies:
-      hast-util-raw:
-        specifier: ~9.1.1
-        version: 9.1.1
-      mdast-util-from-markdown:
-        specifier: ^2.0.3
-        version: 2.1.0(supports-color@9.4.0)
-      mdast-util-gfm:
-        specifier: ^3.1.0
-        version: 3.1.0(supports-color@9.4.0)
-      mdast-util-to-hast:
-        specifier: ^13.2.1
-        version: 13.2.1
-      micromark-extension-gfm:
-        specifier: ^3.0.0
-        version: 3.0.0
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../cordis
-      '@deepseek-ai/cordis-plugin-im-core':
-        specifier: workspace:~
-        version: link:../plugin-im-core
-      '@deepseek-ai/satori-element':
-        specifier: workspace:~
-        version: link:../satori-element
-      '@types/hast':
-        specifier: ^3.0.5
-        version: 3.0.5
-      '@types/mdast':
-        specifier: ^4.0.4
-        version: 4.0.4
-
-  vendor/satori-element:
-    dependencies:
-      '@deepseek-ai/cordis-element':
-        specifier: workspace:~
-        version: link:../element
-      '@deepseek-ai/cosmokit':
-        specifier: link:../cosmokit
-        version: link:../cosmokit
 
   vendor/schemastery:
     dependencies:

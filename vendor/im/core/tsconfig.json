@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
@@ -15,19 +15,19 @@
   ],
   "references": [
     {
-      "path": "../cordis"
+      "path": "../../cordis"
     },
     {
-      "path": "../cosmokit"
+      "path": "../../cosmokit"
     },
     {
-      "path": "../http"
+      "path": "../../http"
     },
     {
-      "path": "../satori-element"
+      "path": "../element"
     },
     {
-      "path": "../schemastery"
+      "path": "../../schemastery"
     }
   ]
 }

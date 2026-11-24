@@ -25,7 +25,7 @@ import {
 // ---------------------------------------------------------------------------------------------------------------
 // Fixtures
 
-const goldenDir = 'vendor/plugin-im-adapter-lark/tests/goldens/card'
+const goldenDir = 'vendor/im/adapter-lark/tests/goldens/card'
 const mounted: { dispose(): Promise<void> }[] = []
 
 afterEach(async () => {

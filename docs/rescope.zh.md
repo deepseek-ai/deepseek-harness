@@ -20,11 +20,11 @@ Cordis 框架及其基础库以源码形式 vendored 在 [`vendor/`](../vendor/R
 | `vendor/element/` | `@cordisjs/element` | `@deepseek-ai/cordis-element` | 0.3.0 | 元素解析与序列化 |
 | `vendor/fetch-file/` | `@cordisjs/fetch-file` | `@deepseek-ai/cordis-fetch-file` | 1.0.3 | 文件 URL 资源读取 |
 | `vendor/http/` | `@cordisjs/http` | `@deepseek-ai/cordis-plugin-http` | 1.6.0 | HTTP 与 WebSocket 客户端 |
-| `vendor/satori-element/` | `@satorijs/element` | `@deepseek-ai/satori-element` | 4.0.0-alpha.0 | IM 消息元素 |
-| `vendor/plugin-im-core/` | `@satorijs/core` | `@deepseek-ai/cordis-plugin-im-core` | 5.0.0-alpha.0 | 通用 IM 运行时 |
-| `vendor/plugin-im-adapter-lark/` | `@satorijs/adapter-lark` | `@deepseek-ai/cordis-plugin-im-adapter-lark` | 4.0.0-alpha.0 | 飞书 WebSocket 适配器 |
-| `vendor/plugin-im-adapter-qq/` | `@satorijs/adapter-qq` | `@deepseek-ai/cordis-plugin-im-adapter-qq` | 5.0.0-alpha.0 | QQ 官方机器人适配器 |
-| `vendor/plugin-im-markdown/` | `@satorijs/markdown` | `@deepseek-ai/cordis-plugin-im-markdown` | 4.0.0-alpha.0 | GFM 转元素插件 |
+| `vendor/im/element/` | `@satorijs/element` | `@deepseek-ai/satori-element` | 4.0.0-alpha.0 | IM 消息元素 |
+| `vendor/im/core/` | `@satorijs/core` | `@deepseek-ai/cordis-plugin-im-core` | 5.0.0-alpha.0 | 通用 IM 运行时 |
+| `vendor/im/adapter-lark/` | `@satorijs/adapter-lark` | `@deepseek-ai/cordis-plugin-im-adapter-lark` | 4.0.0-alpha.0 | 飞书 WebSocket 适配器 |
+| `vendor/im/adapter-qq/` | `@satorijs/adapter-qq` | `@deepseek-ai/cordis-plugin-im-adapter-qq` | 5.0.0-alpha.0 | QQ 官方机器人适配器 |
+| `vendor/im/markdown/` | `@satorijs/markdown` | `@deepseek-ai/cordis-plugin-im-markdown` | 4.0.0-alpha.0 | GFM 转元素插件 |
 
 子路径导出保持原路径：`@cordisjs/plugin-loader/repository` 变成 `@deepseek-ai/cordis-plugin-loader/repository`。
 

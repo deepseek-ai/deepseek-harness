@@ -5,6 +5,7 @@ import { PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES } from './experimental-package
 
 const PACKAGE_PATTERNS = [
   'vendor/*/package.json',
+  'vendor/im/*/package.json',
   'packages/*/*/package.json',
   'apps/*/package.json',
 ] as const

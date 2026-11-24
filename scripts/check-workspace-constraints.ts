@@ -34,6 +34,7 @@ const root = resolve(import.meta.dirname, '..')
 // Publication rules cover these package trees; dependency rules read all pnpm members.
 const workspaceGlobs = [
   { dir: 'vendor', depth: 1 },
+  { dir: 'vendor/im', depth: 1 },
   { dir: 'packages', depth: 2 },
   { dir: 'native', depth: 1 },
   { dir: 'native/system/packages', depth: 1 },
@@ -78,7 +79,7 @@ const desktopPublisherDirectory = 'apps/desktop-publisher'
  * market generator is a private repository tool, not a published application.
  */
 const standardReleaseMemberDirectory = new RegExp(
-  `^(?:packages/(?!experimental/)[^/]+/[^/]+|apps/(?!desktop(?:-host)?$|${pluginMarketGeneratorDirectory.slice('apps/'.length)}$|${desktopPublisherDirectory.slice('apps/'.length)}$)[^/]+|vendor/[^/]+)$`,
+  `^(?:packages/(?!experimental/)[^/]+/[^/]+|apps/(?!desktop(?:-host)?$|${pluginMarketGeneratorDirectory.slice('apps/'.length)}$|${desktopPublisherDirectory.slice('apps/'.length)}$)[^/]+|vendor/(?:im/)?[^/]+)$`,
   'u',
 )
 /** Installable application assembled by electron-builder rather than published to npm. */

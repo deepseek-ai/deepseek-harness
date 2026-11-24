@@ -32,7 +32,7 @@ The host aggregates agent events for each turn of a hosted session into an `ImAc
 
 ### Platform layer
 
-Below `ctx.im` sit the vendored Satori packages: [`plugin-im-core`](../../../../vendor/plugin-im-core/src/index.ts) (protocol, per-mode element registry, transformation and fallback table, capability evaluation, degradation scoring, stream scheduler, and test conformance kit), [`satori-element`](../../../../vendor/satori-element/src/index.ts) (element types and GFM markdown conversion), and the [`plugin-im-adapter-lark`](../../../../vendor/plugin-im-adapter-lark/src/bot.ts) and [`plugin-im-adapter-qq`](../../../../vendor/plugin-im-adapter-qq/src/bot.ts) adapters.
+Below `ctx.im` sit the vendored Satori packages: [`plugin-im-core`](../../../../vendor/im/core/src/index.ts) (protocol, per-mode element registry, transformation and fallback table, capability evaluation, degradation scoring, stream scheduler, and test conformance kit), [`satori-element`](../../../../vendor/im/element/src/index.ts) (element types and GFM markdown conversion), and the [`plugin-im-adapter-lark`](../../../../vendor/im/adapter-lark/src/bot.ts) and [`plugin-im-adapter-qq`](../../../../vendor/im/adapter-qq/src/bot.ts) adapters.
 
 ## Alternatives considered
 

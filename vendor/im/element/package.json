@@ -30,7 +30,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "vendor/satori-element"
+    "directory": "vendor/im/element"
   },
   "bugs": {
     "url": "https://github.com/satorijs/satori/issues"

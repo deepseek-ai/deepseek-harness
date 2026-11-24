@@ -429,10 +429,10 @@ class DshFamily extends ReleaseFamily {
   readonly installedEntry = { packageName: '@deepseek-ai/dsh', binPath: 'lib/bin.js' }
 }
 
-/** `vendor/*`: every package keeps its own version line, so every package has its own tag. */
+/** `vendor/*` and `vendor/im/*`: every package keeps its own version line, so every package has its own tag. */
 class VendorFamily extends ReleaseFamily {
   readonly id = 'vendor'
-  readonly patterns = ['vendor/*/package.json'] as const
+  readonly patterns = ['vendor/*/package.json', 'vendor/im/*/package.json'] as const
   readonly tagPrefix = 'vendor-'
 
   /**

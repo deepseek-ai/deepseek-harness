@@ -39,7 +39,7 @@ Local relative imports/exports in vendored TypeScript source use explicit `.ts` 
 |---|---|
 | `tsconfig.base.json` | add `"<npm-name>": ["./vendor/<dir>/src"]` to `paths` |
 | `tsconfig.host.json` | add `{ "path": "./vendor/<dir>" }` to `references` (before the `packages/*` entries; vendored code enters the graph through the host aggregate only) |
-| `vendor/README.md` | add a manifest table row (dir, npm name, version, upstream repo, commit SHA) and log any local modifications |
+| `vendor/README.md` | add a manifest table row (dir, npm name, version, upstream repo, commit SHA) and log any local modifications under Build, Upstream or Patches; an IM package goes under `vendor/im/` and into `vendor/im/README.md` instead |
 | `scripts/rescope-vendor.ts` | add the upstream/scoped mapping and update `docs/rescope.md` and its Chinese counterpart |
 | `scripts/check-workspace-constraints.ts` | add the package to the source-publication exemption set |
 
@@ -47,7 +47,7 @@ Covered automatically by globs — no edits needed: root `package.json` workspac
 
 ## 3. Mind the manifest guard
 
-`scripts/check-vendor-manifest.sh` (a pre-commit hook) fails if anything under `vendor/*/src` is staged without `vendor/README.md` also staged. Stage the manifest update alongside the source so the commit passes.
+`scripts/check-vendor-manifest.sh` (a pre-commit hook) fails if anything under `vendor/*/src` is staged without `vendor/README.md` also staged, or anything under `vendor/im/*/src` without `vendor/im/README.md`. Stage the manifest update alongside the source so the commit passes.
 
 ## 4. Verify
 

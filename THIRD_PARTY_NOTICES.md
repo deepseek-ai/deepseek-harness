@@ -9,9 +9,9 @@ This file lists **direct** dependencies declared by the workspace, the explicitl
 
 The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [`pnpm-lock.yaml`](pnpm-lock.yaml) — inspect it with `pnpm licenses list`. The Python SDK closure is recorded separately in [`python/sdk/uv.lock`](python/sdk/uv.lock).
 
-## Vendored source (`vendor/`)
+## Vendored source (`vendor/`, `vendor/im/`)
 
-The Cordis framework and its foundation libraries are source-vendored into this repository rather than consumed from npm, and republished under the `@deepseek-ai` scope. All are MIT-licensed; each directory preserves its upstream `LICENSE` file. Exact upstream commits and local modifications are recorded in [`vendor/README.md`](vendor/README.md).
+The Cordis framework and its foundation libraries are source-vendored into this repository rather than consumed from npm, and republished under the `@deepseek-ai` scope. All are MIT-licensed; each directory preserves its upstream `LICENSE` file. Exact upstream commits and local modifications are recorded in [`vendor/README.md`](vendor/README.md) and, for the IM packages derived from Satori, [`vendor/im/README.md`](vendor/im/README.md).
 
 | Package | Upstream name | Source | License |
 | --- | --- | --- | --- |
@@ -27,11 +27,11 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | `@deepseek-ai/cordis-element` | `@cordisjs/element` | [vendor/element](vendor/element/) | MIT |
 | `@deepseek-ai/cordis-fetch-file` | `@cordisjs/fetch-file` | [vendor/fetch-file](vendor/fetch-file/) | MIT |
 | `@deepseek-ai/cordis-plugin-http` | `@cordisjs/http` | [vendor/http](vendor/http/) | MIT |
-| `@deepseek-ai/satori-element` | `@satorijs/element` | [vendor/satori-element](vendor/satori-element/) | MIT |
-| `@deepseek-ai/cordis-plugin-im-core` | `@satorijs/core` | [vendor/plugin-im-core](vendor/plugin-im-core/) | MIT |
-| `@deepseek-ai/cordis-plugin-im-adapter-lark` | `@satorijs/adapter-lark` | [vendor/plugin-im-adapter-lark](vendor/plugin-im-adapter-lark/) | MIT |
-| `@deepseek-ai/cordis-plugin-im-adapter-qq` | `@satorijs/adapter-qq` | [vendor/plugin-im-adapter-qq](vendor/plugin-im-adapter-qq/) | MIT |
-| `@deepseek-ai/cordis-plugin-im-markdown` | `@satorijs/markdown` | [vendor/plugin-im-markdown](vendor/plugin-im-markdown/) | MIT |
+| `@deepseek-ai/satori-element` | `@satorijs/element` | [vendor/im/element](vendor/im/element/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-core` | `@satorijs/core` | [vendor/im/core](vendor/im/core/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-adapter-lark` | `@satorijs/adapter-lark` | [vendor/im/adapter-lark](vendor/im/adapter-lark/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-adapter-qq` | `@satorijs/adapter-qq` | [vendor/im/adapter-qq](vendor/im/adapter-qq/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-markdown` | `@satorijs/markdown` | [vendor/im/markdown](vendor/im/markdown/) | MIT |
 
 ## Runtime npm dependencies
 

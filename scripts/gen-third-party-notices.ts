@@ -450,7 +450,7 @@ export function tierExternalDeps(
   return tiers
 }
 
-/** A vendored package row parsed out of the `vendor/README.md` manifest table. */
+/** A vendored package row parsed out of a vendored-tree manifest table (`vendor/README.md`, `vendor/im/README.md`). */
 export interface VendoredRow {
   npmName: string
   /** The name this package carries upstream; MIT attribution names the fork's origin, not our scope. */
@@ -459,8 +459,8 @@ export interface VendoredRow {
 }
 
 /**
- * Parse the vendored-package manifest table out of `vendor/README.md`.
- * @param text - the complete `vendor/README.md` contents.
+ * Parse the vendored-package manifest table out of a vendored-tree README.
+ * @param text - the complete README contents.
  * @returns one row per manifest-table entry, in table order.
  */
 export function parseVendoredRows(text: string): VendoredRow[] {
@@ -477,33 +477,46 @@ export function parseVendoredRows(text: string): VendoredRow[] {
 }
 
 /**
- * Parse the vendored manifest table and confirm it accounts for every vendored
- * directory. The `vendor/` tree — not the table — is the set that must be
- * disclosed, so a row that stops matching the table format is a hard error
- * rather than a package that quietly vanishes from the notices.
+ * The vendored package trees: each subdirectory holding a `package.json` is one
+ * package, listed in the manifest table of the tree's README. `vendor/im` has
+ * no manifest of its own, so it is a tree, not a package of `vendor/`.
+ */
+export const VENDORED_TREES = [
+  { directory: 'vendor', readme: 'vendor/README.md' },
+  { directory: 'vendor/im', readme: 'vendor/im/README.md' },
+] as const
+
+/**
+ * Parse the vendored manifest tables and confirm they account for every
+ * vendored directory. The vendored trees — not the tables — are the set that
+ * must be disclosed, so a row that stops matching the table format is a hard
+ * error rather than a package that quietly vanishes from the notices.
  */
 function collectVendored(): (VendoredRow & { sourceDirectory: string })[] {
-  const rows = parseVendoredRows(readFileSync(resolve(root, 'vendor/README.md'), 'utf8'))
-  const onDisk = new Map<string, string>()
-  for (const entry of readdirSync(resolve(root, 'vendor'), { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue
-    const manifest = readManifest(`vendor/${entry.name}/package.json`)
-    if (manifest.name !== undefined) onDisk.set(manifest.name, entry.name)
-  }
-
-  const parsed = new Set(rows.map(row => row.npmName))
-  const missing = [...onDisk.keys()].filter(name => !parsed.has(name))
-  if (missing.length > 0) {
-    throw new Error(`gen-third-party-notices: vendor/README.md has no manifest-table row for ${missing.join(', ')}; its table format changed or the sync is incomplete.`)
-  }
-  return rows.map((row) => {
-    const dir = onDisk.get(row.npmName)
-    if (dir === undefined) throw new Error(`gen-third-party-notices: vendored package ${row.npmName} from vendor/README.md has no vendor/ directory.`)
-    const license = readManifest(`vendor/${dir}/package.json`).license
-    if (license !== 'MIT') {
-      throw new Error(`gen-third-party-notices: vendored ${row.npmName} declares license ${JSON.stringify(license)}; the vendored section assumes MIT throughout.`)
+  return VENDORED_TREES.flatMap(({ directory, readme }) => {
+    const rows = parseVendoredRows(readFileSync(resolve(root, readme), 'utf8'))
+    const onDisk = new Map<string, string>()
+    for (const entry of readdirSync(resolve(root, directory), { withFileTypes: true })) {
+      // A tree directory or an ignored leftover such as `lib/` of a moved package has no manifest.
+      if (!entry.isDirectory() || !existsSync(resolve(root, directory, entry.name, 'package.json'))) continue
+      const manifest = readManifest(`${directory}/${entry.name}/package.json`)
+      if (manifest.name !== undefined) onDisk.set(manifest.name, entry.name)
     }
-    return { ...row, sourceDirectory: `vendor/${dir}` }
+
+    const parsed = new Set(rows.map(row => row.npmName))
+    const missing = [...onDisk.keys()].filter(name => !parsed.has(name))
+    if (missing.length > 0) {
+      throw new Error(`gen-third-party-notices: ${readme} has no manifest-table row for ${missing.join(', ')}; its table format changed or the sync is incomplete.`)
+    }
+    return rows.map((row) => {
+      const dir = onDisk.get(row.npmName)
+      if (dir === undefined) throw new Error(`gen-third-party-notices: vendored package ${row.npmName} from ${readme} has no ${directory}/ directory.`)
+      const license = readManifest(`${directory}/${dir}/package.json`).license
+      if (license !== 'MIT') {
+        throw new Error(`gen-third-party-notices: vendored ${row.npmName} declares license ${JSON.stringify(license)}; the vendored section assumes MIT throughout.`)
+      }
+      return { ...row, sourceDirectory: `${directory}/${dir}` }
+    })
   })
 }
 
@@ -794,9 +807,9 @@ This file lists **direct** dependencies declared by the workspace, the explicitl
 
 The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
 
-## Vendored source (\`vendor/\`)
+## Vendored source (\`vendor/\`, \`vendor/im/\`)
 
-The Cordis framework and its foundation libraries are source-vendored into this repository rather than consumed from npm, and republished under the \`@deepseek-ai\` scope. All are MIT-licensed; each directory preserves its upstream \`LICENSE\` file. Exact upstream commits and local modifications are recorded in [\`vendor/README.md\`](vendor/README.md).
+The Cordis framework and its foundation libraries are source-vendored into this repository rather than consumed from npm, and republished under the \`@deepseek-ai\` scope. All are MIT-licensed; each directory preserves its upstream \`LICENSE\` file. Exact upstream commits and local modifications are recorded in [\`vendor/README.md\`](vendor/README.md) and, for the IM packages derived from Satori, [\`vendor/im/README.md\`](vendor/im/README.md).
 
 | Package | Upstream name | Source | License |
 | --- | --- | --- | --- |

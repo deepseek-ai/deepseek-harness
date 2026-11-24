@@ -20,11 +20,11 @@ The Cordis framework and its foundation libraries are vendored under [`vendor/`]
 | `vendor/element/` | `@cordisjs/element` | `@deepseek-ai/cordis-element` | 0.3.0 | Element parsing and serialization |
 | `vendor/fetch-file/` | `@cordisjs/fetch-file` | `@deepseek-ai/cordis-fetch-file` | 1.0.3 | File URL resource fetching |
 | `vendor/http/` | `@cordisjs/http` | `@deepseek-ai/cordis-plugin-http` | 1.6.0 | HTTP and WebSocket client |
-| `vendor/satori-element/` | `@satorijs/element` | `@deepseek-ai/satori-element` | 4.0.0-alpha.0 | IM message elements |
-| `vendor/plugin-im-core/` | `@satorijs/core` | `@deepseek-ai/cordis-plugin-im-core` | 5.0.0-alpha.0 | Shared IM runtime |
-| `vendor/plugin-im-adapter-lark/` | `@satorijs/adapter-lark` | `@deepseek-ai/cordis-plugin-im-adapter-lark` | 4.0.0-alpha.0 | Feishu WebSocket adapter |
-| `vendor/plugin-im-adapter-qq/` | `@satorijs/adapter-qq` | `@deepseek-ai/cordis-plugin-im-adapter-qq` | 5.0.0-alpha.0 | QQ official bot adapter |
-| `vendor/plugin-im-markdown/` | `@satorijs/markdown` | `@deepseek-ai/cordis-plugin-im-markdown` | 4.0.0-alpha.0 | GFM-to-element conversion plugin |
+| `vendor/im/element/` | `@satorijs/element` | `@deepseek-ai/satori-element` | 4.0.0-alpha.0 | IM message elements |
+| `vendor/im/core/` | `@satorijs/core` | `@deepseek-ai/cordis-plugin-im-core` | 5.0.0-alpha.0 | Shared IM runtime |
+| `vendor/im/adapter-lark/` | `@satorijs/adapter-lark` | `@deepseek-ai/cordis-plugin-im-adapter-lark` | 4.0.0-alpha.0 | Feishu WebSocket adapter |
+| `vendor/im/adapter-qq/` | `@satorijs/adapter-qq` | `@deepseek-ai/cordis-plugin-im-adapter-qq` | 5.0.0-alpha.0 | QQ official bot adapter |
+| `vendor/im/markdown/` | `@satorijs/markdown` | `@deepseek-ai/cordis-plugin-im-markdown` | 4.0.0-alpha.0 | GFM-to-element conversion plugin |
 
 Subpath exports keep their path: `@cordisjs/plugin-loader/repository` becomes `@deepseek-ai/cordis-plugin-loader/repository`.
 

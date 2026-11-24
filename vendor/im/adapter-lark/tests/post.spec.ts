@@ -27,7 +27,7 @@ import {
 // Fixtures
 
 const target = { chat: { id: 'lark:test', type: 'group' as const } }
-const goldenDir = 'vendor/plugin-im-adapter-lark/tests/goldens/post'
+const goldenDir = 'vendor/im/adapter-lark/tests/goldens/post'
 
 const mounted: { dispose(): Promise<void> }[] = []
 

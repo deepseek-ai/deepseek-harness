@@ -15,6 +15,7 @@ const WORKSPACE_MANIFESTS = [
   'packages/*/*/package.json',
   'apps/*/package.json',
   'vendor/*/package.json',
+  'vendor/im/*/package.json',
 ] as const
 
 /**

@@ -108,7 +108,7 @@ pnpm run build:web
 
 PR 产物 builder 运行 `build:artifacts`；必需的 Linux 与 Windows 普通构建以及公开 `typecheck` 还检查仓库级测试和脚本 program。CI benchmark 准备阶段还对其临时 library 输出使用 `--noCheck`，由这些必需构建负责诊断；其他产物 builder 保留包检查（[理由](../.agents/notes/implemented/process/2026-10-05-pr-artifact-typechecks.zh.md)）。
 
-两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`；两者都不扫描构建产物来发现 Client 包，也不维护 Host/Client 包过滤表。包内 tsdown 配置根据 `DSH_BUILD_FACE` 决定当前阶段的入口：普通 Client 插件在 Client 阶段同时生成 Node loader 与 browser bundle；`api-remotes` 通过 `hostPhase: true` 提前生成 Host 入口，再在 Client 阶段只生成 browser bundle。tsdown 只消费 `lib/types` 中由前置 tsc 发射的 JavaScript。tsdown 并发构建匹配到的 workspace 成员；`apps/desktop` 的主进程 bundle 需要从工作区 devDependencies 的 `lib/` 产物内联这些包，因此在 Host 阶段之后单独一步打 bundle（[Desktop README](../apps/desktop/README.zh.md#bundled-workspace-dependencies)）。
+两次 tsdown 都匹配 `vendor/*`、`vendor/im/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`；两者都不扫描构建产物来发现 Client 包，也不维护 Host/Client 包过滤表。包内 tsdown 配置根据 `DSH_BUILD_FACE` 决定当前阶段的入口：普通 Client 插件在 Client 阶段同时生成 Node loader 与 browser bundle；`api-remotes` 通过 `hostPhase: true` 提前生成 Host 入口，再在 Client 阶段只生成 browser bundle。tsdown 只消费 `lib/types` 中由前置 tsc 发射的 JavaScript。tsdown 并发构建匹配到的 workspace 成员；`apps/desktop` 的主进程 bundle 需要从工作区 devDependencies 的 `lib/` 产物内联这些包，因此在 Host 阶段之后单独一步打 bundle（[Desktop README](../apps/desktop/README.zh.md#bundled-workspace-dependencies)）。
 
 Typert 通过 `tsconfig.host.json` 分析 Host 类型，在包编译之前生成 Host 反射和 Host-for-Client Remote 声明。仅源码的 [`generate-typert.ts`](../scripts/generate-typert.ts) 阶段拒绝依赖构建产物的工作区导入，包括经由依赖回到生成声明的元数据依赖。Host tsdown 转换源码装饰器，但不重复生成元数据；Client tsdown 同样使用已有元数据。`pnpm run typecheck` 生成元数据，按 reference 顺序编译 Host 与 Client 包，并在每个 aggregate 的包编译完成后以 `tsc -b` 检查它。该命令跳过 native addon、bundle、Web 和 client build record。`lint`、`lint:fix` 与 `doc-typecheck` 通过 `compile-referenced-projects.ts host-contracts` 准备元数据与 Host 包声明；生成失败时不启动依赖它的编译。这些仅生成声明的命令不更新运行时 bundle；启动或测试构建产物之前应运行 `build:artifacts`。 文档围栏用 `ts` 表示 Host API，用 `ts client` 表示 Client API；检查器使用各自的聚合选项与包引用分别编译两侧。
 
@@ -150,7 +150,7 @@ lefthook 在 `lefthook.yml` 中配置，作为快速的本地检查点：
 - `pre-merge-commit` 在 Git 创建自动合并提交前执行同样以索引为准的配对检查；
 - `pre-push` 运行 `pnpm run typecheck`；该命令先不打包地生成 Typert 约定，再运行 Client TypeScript 检查，并检查两个 aggregate。
 
-vendor manifest 守卫检查 `vendor/*/src` 下的改动是否连同对应的 `vendor/README.md` manifest 更新一起暂存。请在编辑 vendor 代码前先阅读 `vendor/README.md`。
+vendor manifest 守卫检查 `vendor/*/src` 下的改动是否连同对应的 `vendor/README.md` manifest 更新一起暂存，`vendor/im/*/src` 下的改动则对应 `vendor/im/README.md`。请在编辑 vendor 代码前先阅读负责该包的 README。
 
 pi-ai 检查会在内存中重新生成预期元数据。数据过期时，检查拒绝提交，不改写或暂存文件。修改 pi-ai 依赖或生成器后，请按包内的[提供方元数据更新步骤](../packages/llm/llm-pi-ai/README.zh.md#generated-provider-metadata)操作。
 

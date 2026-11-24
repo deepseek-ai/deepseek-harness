@@ -71,8 +71,8 @@ function discover(): string[] {
   for (const group of ['packages', 'vendor']) {
     const groupDirectory = join(repositoryRoot, group)
     for (const entry of subdirectories(groupDirectory)) {
-      // `packages/<group>/<package>/lib/index.js`, `vendor/<package>/lib/index.js`.
-      const candidates = group === 'vendor'
+      // `packages/<group>/<package>/lib/index.js`, `vendor/<package>/lib/index.js`, `vendor/im/<package>/lib/index.js`.
+      const candidates = group === 'vendor' && entry !== 'im'
         ? [join(groupDirectory, entry, 'lib', 'index.js')]
         : subdirectories(join(groupDirectory, entry))
           .map(child => join(groupDirectory, entry, child, 'lib', 'index.js'))

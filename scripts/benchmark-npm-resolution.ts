@@ -16,6 +16,7 @@ const WORKSPACE_MANIFEST_GLOBS = [
   'apps/*/package.json',
   'packages/*/*/package.json',
   'vendor/*/package.json',
+  'vendor/im/*/package.json',
   'native/system/package.json',
   'native/system/packages/*/package.json',
 ]
@@ -131,7 +132,7 @@ export function parseBenchmarkOptions(args: readonly string[]): BenchmarkOptions
 }
 
 function workspaceManifestPath(path: string): boolean {
-  return /^(?:apps\/[^/]+|packages\/[^/]+\/[^/]+|vendor\/[^/]+|native\/system(?:\/packages\/[^/]+)?)\/package\.json$/.test(path)
+  return /^(?:apps\/[^/]+|packages\/[^/]+\/[^/]+|vendor\/(?:im\/)?[^/]+|native\/system(?:\/packages\/[^/]+)?)\/package\.json$/.test(path)
 }
 
 function workspaceManifestPaths(root: string, ref: string | undefined): string[] {

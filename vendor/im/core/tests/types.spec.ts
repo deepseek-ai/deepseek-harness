@@ -2,7 +2,7 @@
  * Type-level contract tests for the IM core contracts.
  *
  * Vitest does not typecheck: the `@ts-expect-error` lines and `Expect<Equal<…>>` assertions are checked by `tsc`
- * through the host aggregate (`tsconfig.host.json` includes `vendor/*\/tests/**\/*.ts`).
+ * through the host aggregate (`tsconfig.host.json` includes `vendor/im/*\/tests/**\/*.ts`).
  */
 
 import { describe, expect, expectTypeOf, it } from 'vitest'
