@@ -17,10 +17,13 @@ const SCHEDULE = '@deepseek-ai/dsh-client-ui-schedule'
 const FORGE_UI = '@deepseek-ai/dsh-experimental-client-ui-forge'
 const SIDEBAR = '@deepseek-ai/dsh-client-ui-sidebar'
 
-it('loads opted-in packages in separate iframe Realms and replaces the iframe of the rebuilt package', async () => {
+it('keeps each opted-in package in its own iframe across rebuilds until the package is removed', async () => {
   const fixture = await mkdtemp(join(tmpdir(), 'dsh-client-isolation-'))
   onTestFinished(() => rm(fixture, { recursive: true, force: true }))
   await cp(FIXTURE, fixture, { recursive: true })
+  const file = join(fixture, 'client.js')
+  const source = await readFile(file, 'utf8')
+  await writeFile(file, `globalThis.fixtureLiveCounters = document.documentElement.dataset\n${source}`)
   const scaffold = await launchWebScaffold({
     extraOverlayPath: [fileURLToPath(new URL('cordis.patch.yml', FORGE)), OVERLAY],
     extraInstallAnchors: [fileURLToPath(new URL('package.json', FORGE)), join(fixture, 'package.json')],
@@ -35,19 +38,23 @@ it('loads opted-in packages in separate iframe Realms and replaces the iframe of
   await page.getByRole('button', { name: 'Automation tasks', exact: true }).click({ timeout: 60_000 })
   await page.getByRole('heading', { name: 'Automation tasks', exact: true }).waitFor()
 
-  const frame = (id: string) => page.locator(`iframe[data-realm^="${id}#"]`)
-  const frameRevision = async (id: string) => {
-    const observed = await frame(id).contentFrame().locator('html').evaluate(() => ({
+  const frame = (id: string) => page.locator(`iframe[data-realm="${id}"]`)
+  const frameRoot = (id: string) => frame(id).contentFrame().locator('html')
+  const frameRevisions = async (id: string) => {
+    const observed = await frameRoot(id).evaluate(() => ({
       separate: window !== window.parent,
       facade: '__ModuleLoader__' in window && '__ModuleLoader__' in window.parent
         && window.__ModuleLoader__ === window.parent.__ModuleLoader__,
       scripts: performance.getEntriesByType('resource').map(entry => entry.name)
         .filter(name => new URL(name).pathname.startsWith('/plugins/')),
     }))
-    expect(observed).toEqual({ separate: true, facade: true, scripts: [expect.stringContaining(`/plugins/??${id}/client.js&rev=`)] })
-    const revision = new URL(observed.scripts[0]!).searchParams.get('rev')
-    expect(revision).toBeTruthy()
-    return revision
+    expect(observed).toMatchObject({ separate: true, facade: true })
+    return observed.scripts.map((script) => {
+      expect(script).toContain(`/plugins/??${id}/client.js&rev=`)
+      const revision = new URL(script).searchParams.get('rev')
+      expect(revision).toBeTruthy()
+      return revision
+    })
   }
   const boot = await page.evaluate(() => {
     const { entries, batches } = (window as { __DSH_BOOT__?: WebBootGraph }).__DSH_BOOT__!
@@ -63,26 +70,43 @@ it('loads opted-in packages in separate iframe Realms and replaces the iframe of
   for (const id of [SCHEDULE, FORGE_UI]) {
     expect(boot.batched).not.toContain(id)
     expect(boot.main).not.toContainEqual(expect.stringContaining(`${id}/client.js`))
-    await frameRevision(id)
+    expect(await frameRevisions(id)).toHaveLength(1)
   }
-  const scheduleFrame = await frame(SCHEDULE).elementHandle()
 
-  const liveId = await scaffold.ctx.loader.create({ name: LIVE, __unstable_enable_client_isolation: 'script' })
+  const installLive = () => scaffold.ctx.loader.create({ name: LIVE, __unstable_enable_client_isolation: 'script' })
+  const liveId = await installLive()
   await page.getByText('Live plugin enabled', { exact: true }).waitFor()
-  const original = await frame(LIVE).elementHandle()
-  const originalRevision = await frameRevision(LIVE)
-  const file = join(fixture, 'client.js')
-  const source = await readFile(file, 'utf8')
-  await writeFile(file, source.replace('Live plugin enabled', 'Rebuilt live plugin enabled'))
+  expect(await frameRoot(LIVE).getAttribute('data-live-mounts')).toBe('1')
+  const original = await frame(LIVE).evaluateHandle(node => ({ frame: node, window: (node as HTMLIFrameElement).contentWindow }))
+  const sameRealm = () => frame(LIVE).evaluate((node, before) => ({
+    frame: node === before.frame, window: (node as HTMLIFrameElement).contentWindow === before.window,
+  }), original)
+  const initial = await frameRevisions(LIVE)
+  expect(initial).toHaveLength(1)
+
+  await writeFile(file, source.replace(
+    "'Live plugin enabled'", "'Rebuilt live plugin enabled: ' + (globalThis.fixtureLiveCounters?.liveMounts ?? 'fresh')",
+  ))
   scaffold.ctx.clientModules.rebuilt(LIVE)
-  await page.getByText('Rebuilt live plugin enabled', { exact: true }).waitFor()
-  expect(await frameRevision(LIVE)).not.toBe(originalRevision)
-  expect(await original!.evaluate(node => node.isConnected)).toBe(false)
-  expect(await scheduleFrame!.evaluate(node => node.isConnected)).toBe(true)
+  const live = page.locator('[data-live-client]')
+  await live.filter({ hasText: 'Rebuilt live plugin enabled:' }).waitFor()
+  expect(await sameRealm()).toEqual({ frame: true, window: true })
+  expect(await live.textContent()).toBe('Rebuilt live plugin enabled: 2')
+  const revisions = await frameRevisions(LIVE)
+  expect(revisions).toHaveLength(2)
+  expect(revisions[0]).toBe(initial[0])
+  expect(revisions[1]).not.toBe(initial[0])
+  const hasFixtureGlobal = () => Object.hasOwn(globalThis, 'fixtureLiveCounters')
+  expect(await frameRoot(SCHEDULE).evaluate(hasFixtureGlobal)).toBe(false)
+  expect(await page.evaluate(hasFixtureGlobal)).toBe(false)
 
   scaffold.ctx.loader.remove(liveId)
   await frame(LIVE).waitFor({ state: 'detached' })
-  await page.locator('[data-live-client]').waitFor({ state: 'detached' })
+  await live.waitFor({ state: 'detached' })
+  await installLive()
+  await page.getByText('Rebuilt live plugin enabled: fresh', { exact: true }).waitFor()
+  expect(await sameRealm()).toEqual({ frame: false, window: false })
+  expect(await frameRoot(LIVE).getAttribute('data-live-mounts')).toBe('1')
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 }, 120_000)

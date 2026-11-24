@@ -4,7 +4,7 @@ import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { parseBootManifest, readRelease } from './manifest.ts'
 import type { BootManifest, ClientModuleLoader } from './manifest.ts'
-import { ISOLATED_REALM_PROVIDER_ROWS, type IsolatedRealms } from './isolated-realms.ts'
+import { ISOLATED_REALM_PROVIDER_ROWS } from './isolated-realms.ts'
 import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
 import { notifySubscribers } from './notify.ts'
 import { tearDownEntryFiber } from './entry-lifecycle.ts'
@@ -20,7 +20,7 @@ export interface ClientEntryState {
 
 /** Module-table capabilities used within serialized entry operations. */
 interface ModuleIndex {
-  readonly realms: IsolatedRealms
+  connectRealms(ctx: Loader['ctx']): void
   update(manifest: BootManifest, managed: Iterable<string>): void
   /** Reset a package's code while its previous records stay active for the runtime that is still running. */
   invalidateForReplacement(id: string, rev: string): void
@@ -94,7 +94,7 @@ export class ClientEntries {
   start(loader: Loader, manifest: BootManifest): Promise<void> {
     if (this.loader !== undefined) throw new Error('client-modules: entries already started')
     this.loader = loader
-    this.index.realms.context = loader.ctx
+    this.index.connectRealms(loader.ctx)
     this.desired = manifest
     this.applyConfig(manifest)
     // Prepended so the Loader's interpolation runs inside this listener and cannot copy the returned object.

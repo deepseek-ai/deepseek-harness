@@ -1,6 +1,7 @@
-/** Owns each script-isolated package's current Realm. */
+/** Script execution in the Main Realm or a package's resident iframe. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ScriptRealm, ScriptRealmCreateOptions, ScriptRealmId } from '@deepseek-ai/dsh-client-script-realm/client'
+import type { BootModuleRow } from './manifest.ts'
 
 /** Ordinary Loader rows whose activation supplies the iframe provider at cold boot. */
 export const ISOLATED_REALM_PROVIDER_ROWS: readonly string[] = [
@@ -8,69 +9,85 @@ export const ISOLATED_REALM_PROVIDER_ROWS: readonly string[] = [
   '@deepseek-ai/dsh-client-script-realm-iframe',
 ]
 
-interface RealmSlot {
+interface Frame {
   readonly ready: Promise<ScriptRealm>
-  readonly dispose: () => void
+  readonly close: () => void
 }
 
-/** An entry and its lazy chunks share one Realm until their generation is invalidated. */
-export class IsolatedRealms {
-  /** The Loader context, available once entry startup begins. Providers can still come and go. */
-  context?: Context
-  private readonly current = new Map<string, RealmSlot>()
+/** Script placement lasts until the package and its dependents no longer need its code. */
+export class PackageRealms {
+  private readonly places = new Map<string, 'main' | 'iframe' | Frame>()
   private readonly disposals = new Set<Promise<void>>()
-  private sequence = 0
+  private context?: Context
   private closed = false
 
-  /** @param bindings - Globals installed in every Realm before a package script executes. */
-  constructor(private readonly bindings: Readonly<Record<string, unknown>>) {}
+  /**
+   * @param main - Page carrier for ordinary bundles.
+   * @param bindings - Globals exposed before the first iframe script.
+   */
+  constructor(private readonly main: Pick<ScriptRealm, 'execute'>, private readonly bindings: Readonly<Record<string, unknown>>) {}
 
   /**
-   * Check whether this generation has an iframe Realm in use or being acquired.
-   * @param ownerId - Owning package.
-   * @returns Whether its current slot belongs to this owner.
+   * Connect the page Loader so an iframe can be acquired on demand.
+   * @param context - Loader context.
    */
-  has(ownerId: string): boolean {
-    return this.current.has(ownerId)
+  connect = (context: Context): void => { this.context = context }
+
+  /**
+   * Keep a factory that arrived in another package's Main batch in the Main Realm.
+   * @param id - Owning package.
+   */
+  registered(id: string): void {
+    if (!this.closed && !this.places.has(id)) this.places.set(id, 'main')
   }
 
   /**
-   * Share the package's first acquisition even when several scripts arrive together.
-   * @param ownerId - Owning package.
-   * @param url - Entry or chunk URL.
-   * @returns After script execution; creation, exposure, or script failure rejects.
+   * Execute the entry, a chunk, or rebuilt code in the same package environment.
+   * @param row - Descriptor of the package whose script is loading.
+   * @param url - Revisioned script URL.
+   * @returns After execution; an unavailable iframe provider never falls back to Main.
    */
-  async execute(ownerId: string, url: string): Promise<void> {
-    if (this.closed) throw new Error('client-modules: isolated Realms are disposed')
-    const slot = this.current.get(ownerId) ?? this.open(ownerId)
-    const realm = await slot.ready
+  async execute(row: Pick<BootModuleRow, 'id' | 'isolation'>, url: string): Promise<void> {
+    if (this.closed) throw new Error('client-modules: package Realms are disposed')
+    const { id } = row
+    let place = this.places.get(id)
+    if (place === undefined) {
+      place = row.isolation === 'script' ? 'iframe' : 'main'
+      this.places.set(id, place)
+    }
+    if (place === 'main') return this.main.execute({ url })
+    const frame = place === 'iframe' ? this.open(id) : place
+    const realm = await frame.ready
     await realm.execute({ url })
   }
 
-  private open(ownerId: string): RealmSlot {
+  private open(id: string): Frame {
     const controller = new AbortController()
     const { signal } = controller
-    const id = `${ownerId}#${++this.sequence}` as ScriptRealmId
-    const acquired = this.create({ id, signal })
+    const acquired = this.create({ id: id as ScriptRealmId, signal })
     const ready = acquired.then(async (realm) => {
       signal.throwIfAborted()
       await realm.expose(this.bindings)
       signal.throwIfAborted()
       return realm
     })
-    const dispose = (): void => {
-      controller.abort(new Error('client-modules: isolated Realm retired'))
-      // A provider may return its Realm after cancellation, or exposure may have failed.
+    const close = (): void => {
+      controller.abort(new Error('client-modules: package iframe closed'))
+      // A provider may return its iframe after cancellation, or exposing the bindings may fail.
       const disposal = acquired.then(realm => realm.dispose(), () => {})
       this.disposals.add(disposal)
       disposal.then(() => { this.disposals.delete(disposal) }, (error: unknown) => {
         console.error(`client-modules: could not dispose isolated Realm ${id}`, error)
       })
     }
-    const slot = { ready, dispose }
-    this.current.set(ownerId, slot)
-    ready.catch(() => { if (this.current.get(ownerId) === slot) this.take(ownerId)?.() })
-    return slot
+    const frame = { ready, close }
+    this.places.set(id, frame)
+    ready.catch(() => {
+      if (this.places.get(id) !== frame) return
+      this.places.set(id, 'iframe')
+      close()
+    })
+    return frame
   }
 
   private async create(options: ScriptRealmCreateOptions): Promise<ScriptRealm> {
@@ -80,24 +97,22 @@ export class IsolatedRealms {
   }
 
   /**
-   * Detach the current generation so subsequent scripts get a fresh Realm.
-   * @param id - Invalidated package.
-   * @returns Its Realm's disposer, if any; the caller owns it.
+   * Release a package's placement and close its iframe, if any.
+   * @param id - Package evicted by the module table.
    */
-  take(id: string): (() => void) | undefined {
-    const slot = this.current.get(id)
-    this.current.delete(id)
-    return slot?.dispose
+  evict(id: string): void {
+    const place = this.places.get(id)
+    this.places.delete(id)
+    if (typeof place === 'object') place.close()
   }
 
   /**
-   * Stop accepting scripts and retire the remaining slots.
-   * @returns After disposal settles for all acquired Realms; failures reject together.
+   * Stop accepting scripts and release every package.
+   * @returns After all iframe disposals settle; failures reject together.
    */
   async dispose(): Promise<void> {
     this.closed = true
-    for (const slot of this.current.values()) slot.dispose()
-    this.current.clear()
+    for (const id of this.places.keys()) this.evict(id)
     const results = await Promise.allSettled(this.disposals)
     const failures: unknown[] = []
     for (const result of results) if (result.status === 'rejected') failures.push(result.reason)

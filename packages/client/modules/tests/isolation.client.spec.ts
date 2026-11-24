@@ -7,7 +7,7 @@ import * as iframeProvider from '@deepseek-ai/dsh-client-script-realm-iframe/cli
 import { IFrameScriptRealm } from '../../script-realm-iframe/src/client/iframe.ts'
 import { DocumentStyles } from '../../ui-renderer/src/client/styles/document-styles.ts'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { IsolatedRealms } from '../src/client/isolated-realms.ts'
+import { PackageRealms } from '../src/client/isolated-realms.ts'
 import { apply, createClientModuleSystem, parseBootManifest } from '../src/client/index.ts'
 import type {
   ClientBundleRegistration, ClientModuleLoaderTarget, WebBootEntry, WebBootGraph,
@@ -159,9 +159,10 @@ async function controlled(behavior: Parameters<typeof realms>[2] = {}) {
   await ctx.plugin(ScriptRealmRegistry)
   const provider = realms({}, () => [], behavior)
   ctx.scriptRealms.register('iframe', { create: provider.factory })
-  const isolated = new IsolatedRealms({ __ModuleLoader__: {} })
-  isolated.context = ctx
-  return { isolated, provider }
+  const isolated = new PackageRealms({ execute: () => Promise.reject(new Error('unexpected Main script')) }, { __ModuleLoader__: {} })
+  isolated.connect(ctx)
+  const execute = (url: string) => isolated.execute({ id: 'a', isolation: 'script' }, url)
+  return { isolated, provider, execute }
 }
 
 describe('script-isolated execution', () => {
@@ -187,11 +188,11 @@ describe('script-isolated execution', () => {
 
     expect(main).toEqual([BATCH_URL])
     expect(provider.created.map(realm => [realm.id, realm.executed])).toEqual([
-      ['a#1', [url('a'), chunkUrl('a', 'client.details.js')]],
-      ['b#2', [url('b')]],
+      ['a', [url('a'), chunkUrl('a', 'client.details.js')]],
+      ['b', [url('b')]],
     ])
-    expect(a.environment).toBe('a#1')
-    expect(b.environment).toBe('b#2')
+    expect(a.environment).toBe('a')
+    expect(b.environment).toBe('b')
     expect(a.shared).toBe(shared)
     expect(b.shared).toBe(shared)
     for (const realm of provider.created) expect(realm.bindings).toEqual({ __ModuleLoader__: target })
@@ -211,23 +212,23 @@ describe('script-isolated execution', () => {
   })
 
   it('retries failed creation and exposure, but reuses a ready Realm after a script error', async () => {
-    const { isolated, provider } = await controlled({
+    const { isolated, provider, execute } = await controlled({
       create: vi.fn(() => Promise.resolve()).mockRejectedValueOnce(new Error('iframe unavailable')),
       expose: vi.fn(() => Promise.resolve()).mockRejectedValueOnce(new Error('binding rejected')),
       execute: vi.fn(() => Promise.resolve()).mockRejectedValueOnce(new Error('script error')),
     })
     for (const message of ['iframe unavailable', 'binding rejected', 'script error']) {
-      await expect(isolated.execute('a', url('a'))).rejects.toThrow(message)
+      await expect(execute(url('a'))).rejects.toThrow(message)
     }
-    await isolated.execute('a', url('a'))
-    expect(provider.created.map(realm => [realm.id, realm.disposed])).toEqual([['a#2', 1], ['a#3', 0]])
+    await execute(url('a'))
+    expect(provider.created.map(realm => realm.disposed)).toEqual([1, 0])
     await isolated.dispose()
   })
 
   it('shares a pending creation between simultaneous scripts of one package', async () => {
     const gate = Promise.withResolvers<undefined>()
-    const { isolated, provider } = await controlled({ create: () => gate.promise })
-    const both = Promise.all([isolated.execute('a', url('a')), isolated.execute('a', chunkUrl('a', 'client.details.js'))])
+    const { isolated, provider, execute } = await controlled({ create: () => gate.promise })
+    const both = Promise.all([execute(url('a')), execute(chunkUrl('a', 'client.details.js'))])
     expect(provider.factory).toHaveBeenCalledOnce()
     gate.resolve(undefined)
     await both
@@ -239,17 +240,17 @@ describe('script-isolated execution', () => {
     const created = Promise.withResolvers<undefined>()
     const disposing = Promise.withResolvers<undefined>()
     const disposed = Promise.withResolvers<undefined>()
-    const { isolated, provider } = await controlled({
+    const { isolated, provider, execute } = await controlled({
       create: () => created.promise,
       dispose: () => { disposing.resolve(undefined); return disposed.promise },
     })
-    const first = isolated.execute('a', url('a'))
-    isolated.take('a')!()
+    const first = execute(url('a'))
+    isolated.evict('a')
     expect(provider.factory.mock.calls[0]![0].signal.aborted).toBe(true)
     let finished = false
     const closing = isolated.dispose().then(() => { finished = true })
     created.resolve(undefined)
-    await expect(first).rejects.toThrow('isolated Realm retired')
+    await expect(first).rejects.toThrow('package iframe closed')
     await disposing.promise
     expect(finished).toBe(false)
     disposed.resolve(undefined)
@@ -270,10 +271,10 @@ describe('script-isolated execution', () => {
     ctx.scriptRealms.register('iframe', { create: provider.factory })
     await start(modules, ctx)
     await expect(modules.dispose()).rejects.toMatchObject({ errors: [failure] })
-    expect(reported).toHaveBeenCalledWith('client-modules: could not dispose isolated Realm a#1', failure)
+    expect(reported).toHaveBeenCalledWith('client-modules: could not dispose isolated Realm a', failure)
     expect(provider.created.map(realm => realm.disposed)).toEqual([1, 1])
     modules.invalidate('a')
-    await expect(modules.import('a')).rejects.toThrow('isolated Realms are disposed')
+    await expect(modules.import('a')).rejects.toThrow('package Realms are disposed')
   })
 })
 
@@ -323,8 +324,8 @@ describe('Realm provider startup order', () => {
   it('activates the Realm provider entries before it creates a script-isolated entry listed ahead of them', async () => {
     const mounted: string[] = []
     const b = await page([entry('a', { isolation: 'script' }), ...PROVIDERS, entry('plain')], { a: mounting(mounted), plain: mounting(mounted) })
-    expect(mounted.sort()).toEqual(['+a#1', '+main'])
-    expect(b.provider.created.map(realm => realm.id)).toEqual(['a#1'])
+    expect(mounted.sort()).toEqual(['+a', '+main'])
+    expect(b.provider.created.map(realm => realm.id)).toEqual(['a'])
     expect(b.modules.importError('a')).toBeUndefined()
     expect(b.settling).toHaveBeenCalledTimes(2)
   })
@@ -346,17 +347,20 @@ describe('Realm provider startup order', () => {
     expect(b.provider.created).toEqual([])
   })
 
-  it('keeps a running Realm when its provider unloads but cannot load a replacement through Main', async () => {
+  it('reuses a resident iframe after provider removal; a new installation still needs the provider', async () => {
     const mounted: string[] = []
     const a = entry('a', { isolation: 'script' })
+    const registry = entry(REGISTRY_ID)
     const b = await page([...PROVIDERS, a], { a: mounting(mounted) })
-    await b.sync([entry(REGISTRY_ID), a], 'without-iframe')
-    await expect(b.modules.entries.reload('a', '1')).rejects.toThrow('provider "iframe" is not registered')
-    expect(mounted).toEqual(['+a#1'])
-    expect(b.provider.created[0]?.disposed).toBe(0)
-    expect(b.main).not.toContain(url('a', '1'))
-    await b.sync([], 'removed')
-    expect(b.provider.created[0]?.disposed).toBe(1)
+    await b.sync([registry, a], 'without-provider')
+    await b.modules.entries.reload('a', '1')
+    expect(mounted).toEqual(['+a', '-a', '+a'])
+    expect(b.provider.created.map(realm => realm.disposed)).toEqual([0])
+    await b.sync([registry], 'removed')
+    expect(b.provider.created.map(realm => realm.disposed)).toEqual([1])
+    await b.sync([registry, a], 'new-installation')
+    expect(b.modules.entries.state.getSnapshot().failures[0]?.message).toContain('provider "iframe" is not registered')
+    expect(b.main).not.toContain(url('a'))
   })
 
   it('fails closed for a newly installed isolated package until its ordinary providers are available', async () => {
@@ -369,6 +373,9 @@ describe('Realm provider startup order', () => {
     expect(failures[0]?.message).toContain('Realm registry is not active')
     expect(mounted).toEqual(['+main'])
     expect(b.main).not.toContain(url('a'))
+    await b.sync([entry('a'), entry('plain')], 'still-no-provider')
+    expect(mounted).toEqual(['+main'])
+    expect(b.main).not.toContain(url('a'))
     await b.sync([...PROVIDERS, ...rows], 'providers')
     await b.modules.entries.retry()
     expect(mounted).toEqual(['+main', `+${b.provider.created[0]!.id}`])
@@ -377,34 +384,6 @@ describe('Realm provider startup order', () => {
 })
 
 describe('page-local placement and code replacement', () => {
-  it.each([false, true])('keeps delayed chunks with the loaded entry and selects placement again for rebuilt code (initially isolated: %s)', async (isolated) => {
-    const mounted: string[] = []
-    let loadDetails!: () => Promise<unknown>
-    const bundles: Record<string, Bundle> = {
-      a: environment => (require) => {
-        loadDetails = () => require.async('./client.details.js')
-        return mounting(mounted)(environment)(require)
-      },
-      'a/client.details.js': reporting(), plain: mounting(mounted, 'plain:'),
-    }
-    const row = (script: boolean) => entry('a', script ? { isolation: 'script' } : {})
-    const b = await page([...PROVIDERS, row(isolated)], bundles)
-    const first = isolated ? 'a#1' : 'main'
-    const next = isolated ? 'main' : 'a#1'
-    await b.sync([...PROVIDERS, row(!isolated), entry('plain')], 'changed')
-    expect(mounted).toEqual([`+${first}`, '+plain:main'])
-    await expect(loadDetails()).resolves.toEqual({ environment: first })
-    await b.modules.entries.reload('a', '1')
-    expect(mounted).toEqual([`+${first}`, '+plain:main', `-${first}`, `+${next}`])
-    await expect(loadDetails()).resolves.toEqual({ environment: next })
-    await b.sync([...PROVIDERS, entry('plain')], 'removed')
-    expect(mounted.at(-1)).toBe(`-${next}`)
-    const iframeRev = isolated ? '0' : '1'
-    expect(b.provider.created.map(realm => [realm.executed, realm.disposed])).toEqual([
-      [[url('a', iframeRev), chunkUrl('a', 'client.details.js', iframeRev)], 1],
-    ])
-  })
-
   it.each([false, true])('uses the row at first load, not a superseded installation graph (initially isolated: %s)', async (isolated) => {
     const mounted: string[] = []
     const b = await page([...PROVIDERS], { a: mounting(mounted) })
@@ -412,21 +391,10 @@ describe('page-local placement and code replacement', () => {
     const adding = b.sync(rows(isolated), 'added')
     const flipping = b.sync(rows(!isolated), 'changed')
     await Promise.all([adding, flipping])
-    expect(mounted).toEqual([isolated ? '+main' : '+a#1'])
+    expect(mounted).toEqual([isolated ? '+main' : '+a'])
   })
 
-  it('does not bind a package to a failed load that never registered a factory', async () => {
-    const mounted: string[] = []
-    const b = await page([], { a: mounting(mounted) })
-    await b.sync([entry('a', { isolation: 'script' })], 'no-provider')
-    expect(b.modules.entries.state.getSnapshot().failures.map(failure => failure.id)).toEqual(['a'])
-    expect(b.main).toEqual([])
-    await b.sync([entry('a')], 'main')
-    expect(b.modules.entries.state.getSnapshot().failures).toEqual([])
-    expect(mounted).toEqual(['+main'])
-  })
-
-  it('keeps an unmaterialized factory delivered by a sibling’s Main batch in Main for its chunks', async () => {
+  it('keeps a factory delivered by a sibling’s Main batch in Main for lazy chunks and rebuilds', async () => {
     const entries = [entry('first'), entry('sibling')]
     const { modules, main } = system(entries, {
       first: mounting([]),
@@ -442,22 +410,11 @@ describe('page-local placement and code replacement', () => {
     const sibling = await modules.import('sibling') as { environment: string; details(): Promise<unknown> }
     expect(sibling.environment).toBe('main')
     await expect(sibling.details()).resolves.toEqual({ environment: 'main' })
-    expect(main).toEqual([BATCH_URL, chunkUrl('sibling', 'client.details.js')])
-  })
-
-  it('releases an iframe that failed before registration when a later load runs in Main', async () => {
-    const mounted: string[] = []
-    const b = await page([...PROVIDERS], { a: (environment) => {
-      if (environment !== 'main') throw new Error('script error')
-      return mounting(mounted)(environment)
-    } })
-    await b.sync([...PROVIDERS, entry('a', { isolation: 'script' })], 'failed')
-    expect(b.modules.entries.state.getSnapshot().failures[0]?.message).toContain('script error')
-    expect(b.provider.created.map(realm => realm.disposed)).toEqual([0])
-    await b.sync([...PROVIDERS, entry('a')], 'main')
-    expect(b.modules.entries.state.getSnapshot().failures).toEqual([])
-    expect(mounted).toEqual(['+main'])
-    expect(b.provider.created.map(realm => realm.disposed)).toEqual([1])
+    await modules.entries.reload('sibling', '1')
+    const rebuilt = await modules.import('sibling') as typeof sibling
+    expect(rebuilt.environment).toBe('main')
+    await expect(rebuilt.details()).resolves.toEqual({ environment: 'main' })
+    expect(main).toEqual([BATCH_URL, chunkUrl('sibling', 'client.details.js'), url('sibling', '1'), chunkUrl('sibling', 'client.details.js', '1')])
   })
 
   it('ignores the mode of an installation withdrawn before any script request', async () => {
@@ -471,59 +428,73 @@ describe('page-local placement and code replacement', () => {
     expect(mounted).toEqual(['+main'])
   })
 
-  it.each([false, true])('retains materialized chunks, but not empty candidates, across failed rebuilds (isolated: %s)', async (isolated) => {
+  it('keeps the same physical iframe and globals across successful and failed code rebuilds until eviction', async () => {
     const mounted: string[] = []
     let offline = false
     let loadLate!: () => Promise<unknown>
-    const entries = [...PROVIDERS, entry('a', isolated ? { isolation: 'script' } : {})]
+    const entries = [...PROVIDERS, entry('a', { isolation: 'script' }), entry('consumer', { external: ['a'] })]
     const bundles: Record<string, Bundle> = {
       [REGISTRY_ID]: () => () => ({ default: ScriptRealmRegistry }),
       [IFRAME_ID]: () => () => iframeProvider,
-      'a': (environment) => {
+      a: (environment) => {
         if (offline) throw new Error('download failed')
         return (require) => {
           loadLate = () => require.async('./client.late.js')
           return mounting(mounted)(environment)(require)
         }
       },
+      consumer: () => (require) => { require('a'); return { apply() {} } },
       'a/client.late.js': Object.assign(reporting(), { meta: () => ({ stylesheets: { 'late.css': { text: () => '.late { color: blue }' } } }) }),
     }
     const { modules } = system(entries, bundles)
-    // jsdom does not fetch external scripts. Only transport is substituted; the provider owns real iframe nodes.
+    // jsdom does not fetch external scripts. The provider still owns the actual iframe, document and Window.
+    const windows: Window[] = []
     vi.spyOn(IFrameScriptRealm.prototype, 'execute').mockImplementation(async function (this: IFrameScriptRealm, script) {
       await Promise.resolve()
+      windows.push(this.window)
       deliver(Reflect.get(this.window, '__ModuleLoader__') as ClientModuleLoaderTarget, script.url, this.id, entries, bundles)
     })
     onTestFinished(() => modules.dispose())
     await start(modules)
+    const frame = document.querySelector<HTMLIFrameElement>('iframe[data-realm]')!
+    const resident = frame.contentWindow!
+    const marker = {}
+    Reflect.set(resident, 'packageState', marker)
+    await modules.entries.sync(graph([...PROVIDERS, entry('a'), entry('consumer', { external: ['a'] })]))
+    await modules.entries.reload('a', '1')
+    expect(mounted).toEqual(['+a', '-a', '+a'])
+    expect(document.querySelector('iframe[data-realm]')).toBe(frame)
+    expect(frame.contentWindow).toBe(resident)
+    expect(Reflect.get(resident, 'packageState')).toBe(marker)
+    const active = [...mounted]
     const styles = new DocumentStyles(document.head, modules)
     onTestFinished(() => { styles.dispose() })
     styles.mount()
     const lateStyle = () => document.head.querySelector('style[data-plugin="a"][data-path="late.css"]')
-    const frames = () => [...document.querySelectorAll<HTMLIFrameElement>('iframe[data-realm]')].map(frame => frame.dataset.realm)
-    const first = isolated ? 'a#1' : 'main'
     offline = true
-    await expect(modules.entries.reload('a', '1')).rejects.toThrow('download failed')
-    expect(frames()).toEqual(isolated ? ['a#1', 'a#2'] : [])
     await expect(modules.entries.reload('a', '2')).rejects.toThrow('download failed')
-    expect(frames()).toEqual(isolated ? ['a#1', 'a#3'] : [])
-    expect(mounted).toEqual([`+${first}`])
-
-    // The still-mounted plugin can acquire a chunk from the current revision after entry prefetch failed.
-    await expect(loadLate()).resolves.toEqual({ environment: isolated ? 'a#3' : 'main' })
+    await loadLate()
     const late = modules.loadCache.get('a/client.late.js')!
     const style = lateStyle()
     expect(style?.isConnected).toBe(true)
     await expect(modules.entries.reload('a', '3')).rejects.toThrow('download failed')
-    expect(mounted).toEqual([`+${first}`])
+    expect(mounted).toEqual(active)
     expect([...modules.activeRecords()]).toContain(late)
     expect(lateStyle()).toBe(style)
-    expect(frames()).toEqual(isolated ? ['a#1', 'a#3', 'a#4'] : [])
+    expect(document.querySelectorAll('iframe[data-realm]')).toHaveLength(1)
+    expect(windows.every(win => win === resident)).toBe(true)
+    await modules.entries.sync(graph([...PROVIDERS, entry('consumer')]))
+    expect(frame.isConnected).toBe(true) // the running consumer still holds its require('a') exports
     await modules.entries.sync(graph(PROVIDERS))
-    expect(mounted).toEqual([`+${first}`, `-${first}`])
     expect([...modules.activeRecords()]).not.toContain(late)
     expect(lateStyle()).toBeNull()
-    expect(frames()).toEqual([])
+    expect(frame.isConnected).toBe(false)
+    expect(document.querySelector('iframe[data-realm]')).toBeNull()
+    offline = false
+    await modules.entries.sync(graph(entries))
+    const reinstalled = document.querySelector<HTMLIFrameElement>('iframe[data-realm]')!
+    expect(reinstalled).not.toBe(frame)
+    expect(Reflect.get(reinstalled.contentWindow!, 'packageState')).toBeUndefined()
   })
 
   it('does not retry an in-flight dependency import into an orphan iframe after both packages are removed', async () => {
@@ -552,7 +523,7 @@ describe('page-local placement and code replacement', () => {
     const pending = importA().catch((error: unknown) => error)
     // jsdom holds the real script element until the iframe provider cancels it during removal.
     await vi.waitFor(() => {
-      const frame = document.querySelector<HTMLIFrameElement>('iframe[data-realm="a#2"]')
+      const frame = document.querySelector<HTMLIFrameElement>('iframe[data-realm="a"]')
       expect(frame?.contentDocument?.querySelector('script')).toBeTruthy()
     })
     attempts.mockRejectedValue(offline)
@@ -560,27 +531,8 @@ describe('page-local placement and code replacement', () => {
     expect(await pending).toBeInstanceOf(Error)
     expect(attempts.mock.calls.map(([script]) => script.url)).toEqual([url('a'), url('a', '1'), url('a', '1'), url('a', '1')])
     expect(modules.importError('a')).toBeUndefined()
-    expect(mounted.sort()).toEqual(['+a#1', '+main', '-a#1', '-main'])
+    expect(mounted.sort()).toEqual(['+a', '+main', '-a', '-main'])
     expect([...modules.activeRecords()].filter(record => ['a', 'b'].includes(record.ownerId))).toEqual([])
     expect(document.querySelectorAll('iframe[data-realm]')).toHaveLength(0)
-  })
-
-  it('disposes a Realm retained for a runtime under replacement when the system is disposed', async () => {
-    const gates: (() => void)[] = []
-    let blockTeardown = true
-    const blocking: Bundle = environment => () => ({
-      apply(ctx: Context) {
-        ctx.effect(() => () => blockTeardown ? new Promise<void>((resolve) => { gates.push(resolve) }) : undefined, environment)
-      },
-    })
-    const b = await page([...PROVIDERS, entry('a', { isolation: 'script' })], { a: blocking })
-    const replacing = b.sync([...PROVIDERS, entry('a', { isolation: 'script', rev: '1' })], 'one')
-    await vi.waitFor(() => { expect(gates).toHaveLength(1) })
-    expect(b.provider.created.map(realm => realm.disposed)).toEqual([0, 0])
-    await b.modules.dispose()
-    expect(b.provider.created.map(realm => realm.disposed)).toEqual([1, 1])
-    blockTeardown = false
-    gates.shift()!()
-    await replacing
   })
 })

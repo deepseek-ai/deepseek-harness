@@ -6,12 +6,12 @@
  */
 import { stripClientSuffix } from './manifest.ts'
 import { ClientEntries } from './entries.ts'
-import { IsolatedRealms } from './isolated-realms.ts'
+import { PackageRealms } from './isolated-realms.ts'
 import { MainScriptRealm } from './main-realm.ts'
 import { notifySubscribers } from './notify.ts'
 import type {
-  BootManifest, BootModuleRow, ClientBundleRegistration, ClientBundleRequire, ClientModuleLoader,
-  ClientModuleRecord, ClientModuleSystemOptions,
+  BootManifest, BootModuleRow, ClientBundleRegistration, ClientBundleRequire, ClientModuleLoader, ClientModuleRecord,
+  ClientModuleSystemOptions,
 } from './manifest.ts'
 
 /** Replace the rev query while preserving absolute, protocol-relative, or path-relative form. */
@@ -62,18 +62,17 @@ export class ClientModuleSystem implements ClientModuleLoader {
   readonly entries: ClientEntries
   readonly loadCache = new Map<string, ClientModuleRecord>()
   readonly mainRealm: MainScriptRealm
-  /** One dedicated Realm per script-isolated package. */
-  private readonly isolatedRealms: IsolatedRealms
+  private readonly packageRealms: PackageRealms
   /** Previous records of packages under replacement, by package id, until their old runtime is released. */
-  private readonly replaced = new Map<string, { records: ClientModuleRecord[]; disposeRealm: (() => void) | undefined }[]>()
+  private readonly replaced = new Map<string, ClientModuleRecord[]>()
   private readonly moduleListeners = new Set<() => void>()
   private readonly factories = new Map<string, { manifest: ClientBundleRegistration; factory: ClientBundleRegistration['factory']; rev: string | undefined }>()
   private readonly bootstrapIds = new Set<string>()
   private readonly staticIds = new Set<string>()
   /** In-flight script transport per URL. */
   private readonly pendingArrival = new Map<string, Promise<void>>()
-  /** In-flight chunks compare generation identity. A factory registration fixes that generation's execution environment. */
-  private readonly generations = new Map<string, { inIframe?: boolean }>()
+  /** Owner generation captured by in-flight chunk requests and advanced on invalidation. */
+  private readonly generations = new Map<string, number>()
   /** Single-resource combo URL selected by HMR after invalidating one row. */
   private readonly reloadTargets = new Map<string, { url: string; rev: string }>()
   /** Materialization re-entrancy guard: factory-form CJS cannot deliver partial exports, so a cycle is fatal. */
@@ -93,20 +92,20 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   constructor(options: ClientModuleSystemOptions) {
     this.manifest = options.manifest
-    this.isolatedRealms = new IsolatedRealms({ __ModuleLoader__: options.registrationTarget })
+    this.mainRealm = new MainScriptRealm(options.loadBundle)
+    this.packageRealms = new PackageRealms(this.mainRealm, { __ModuleLoader__: options.registrationTarget })
     this.entries = new ClientEntries(this, {
-      realms: this.isolatedRealms,
+      connectRealms: this.packageRealms.connect,
       update: (manifest, managed) => { this.updateManifest(manifest, managed) },
       invalidateForReplacement: (id, rev) => {
         if (this.bootstrapIds.has(id)) throw new Error(`client-modules: replacing bootstrap module ${id} requires a page reload`)
         this.drop(id, rev, true)
       },
       releaseReplaced: (id) => {
-        if (this.releaseReplaced(this.resolveModuleId(id))) this.publishModules()
+        if (this.replaced.delete(this.resolveModuleId(id))) this.publishModules()
       },
       prune: (roots) => { this.prune(roots) },
     })
-    this.mainRealm = new MainScriptRealm(options.loadBundle)
     this.resolveAsset = options.resolveAsset ?? (reference => reference)
 
     for (const row of options.manifest.modules) {
@@ -145,7 +144,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   * activeRecords(): Iterable<ClientModuleRecord> {
-    for (const id of this.replaced.keys()) yield * this.heldRecords(id)
+    for (const records of this.replaced.values()) yield * records
     yield * this.loadCache.values()
   }
 
@@ -153,22 +152,12 @@ export class ClientModuleSystem implements ClientModuleLoader {
     notifySubscribers(this.moduleListeners, 'modules')
   }
 
-  /** Stop accepting script execution, dispose isolated Realms, and await the startup carrier's pending operations. */
+  /** Close the script environments and wait for any script already in flight. */
   async dispose(): Promise<void> {
-    for (const id of this.replaced.keys()) this.releaseReplaced(id)
-    const [main, isolated] = await Promise.allSettled([
-      this.mainRealm.dispose(), this.isolatedRealms.dispose(), ...this.pendingArrival.values(),
+    const [main, packages] = await Promise.allSettled([
+      this.mainRealm.dispose(), this.packageRealms.dispose(), ...this.pendingArrival.values(),
     ])
-    for (const result of [main, isolated]) if (result.status === 'rejected') throw result.reason
-  }
-
-  private * heldRecords(id: string): Iterable<ClientModuleRecord> {
-    for (const { records } of this.replaced.get(id) ?? []) yield * records
-  }
-
-  private releaseReplaced(id: string): boolean {
-    for (const { disposeRealm } of this.replaced.get(id) ?? []) disposeRealm?.()
-    return this.replaced.delete(id)
+    for (const result of [main, packages]) if (result.status === 'rejected') throw result.reason
   }
 
   private resolveModuleId(specifier: string): string {
@@ -187,9 +176,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const registrationName = registration.chunk === undefined ? registration.id : id
       throw new Error(`client-modules: duplicate factory registration for "${registrationName}" (bundle executed twice without invalidate?)`)
     }
-    const generation = this.generations.get(ownerId) ?? {}
-    generation.inIframe ??= this.isolatedRealms.has(ownerId)
-    this.generations.set(ownerId, generation)
+    if (this.graphRows.has(ownerId)) this.packageRealms.registered(ownerId)
     this.factories.set(id, {
       manifest: registration,
       factory: registration.factory,
@@ -197,15 +184,11 @@ export class ClientModuleSystem implements ClientModuleLoader {
     })
   }
 
-  /** Run one shared script transport per URL, in the owning package's Realm. */
+  /** Run one shared script transport per URL. */
   private loadShared(url: string, row: BootModuleRow): Promise<void> {
-    const ownerId = row.id
     let transport = this.pendingArrival.get(url)
     if (transport === undefined) {
-      const isolated = this.generations.get(ownerId)?.inIframe ?? row.isolation === 'script'
-      // An unsuccessful isolated load may have opened a frame without registering any code.
-      if (!isolated) this.isolatedRealms.take(ownerId)?.()
-      transport = (isolated ? this.isolatedRealms.execute(ownerId, url) : this.mainRealm.execute({ url }))
+      transport = this.packageRealms.execute(row, url)
         .then(() => { this.executedBundleUrls.add(url) })
         .finally(() => { this.pendingArrival.delete(url) })
       this.pendingArrival.set(url, transport)
@@ -246,7 +229,6 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const fallback = reload === undefined && row.url !== preferred ? row.url : undefined
     const failures: string[] = []
     const attempt = async (url: string): Promise<'registered' | 'transport-failed' | 'not-registered'> => {
-      // Removal can cancel a pending script. Its retry must not allocate a new Realm for the evicted row.
       this.arrivalRow(id)
       try {
         await this.loadShared(url, row)
@@ -310,7 +292,6 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const dependency = this.graphRows.get(packageName)
       if (dependency !== undefined) await this.arriveDependency(row.id, dependency, [], visited)
     }
-    // Dependencies may have waited while reconciliation replaced this descriptor and its startup batch URL.
     await this.arrive(this.arrivalRow(row.id))
   }
 
@@ -409,14 +390,14 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const existing = this.loadCache.get(id)
     if (existing !== undefined) return existing.exports
     if (!this.factories.has(id)) {
-      const generation = this.generations.get(ownerId)
+      const generation = this.generations.get(ownerId) ?? 0
       const row = this.graphRows.get(ownerId)
       if (row === undefined) throw new Error(`client-modules: chunk owner "${ownerId}" is not a boot graph entry`)
       /* v8 ignore next -- the final fallback needs an impossible graph-owned factory with no recorded revision. */
       const revision = this.factories.get(ownerId)?.rev ?? this.reloadTargets.get(ownerId)?.rev ?? row.rev
       const url = chunkUrl(row, fileName, revision)
       await this.loadShared(url, row)
-      if (this.generations.get(ownerId) !== generation) {
+      if ((this.generations.get(ownerId) ?? 0) !== generation) {
         this.factories.delete(id)
         if (this.loadCache.delete(id)) this.publishModules()
         return await this.importChunk(ownerId, fileName)
@@ -503,7 +484,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       retained.add(id)
       const row = this.graphRows.get(id)
       // A replaced runtime that is still mounted keeps the modules its previous records requested.
-      const observed = [this.loadCache.get(id), ...this.heldRecords(id)].flatMap(record => [...record?.edges ?? []])
+      const observed = [this.loadCache.get(id), ...this.replaced.get(id) ?? []].flatMap(record => [...record?.edges ?? []])
       for (const request of [...row?.external ?? [], ...row?.inject ?? [], ...observed]) {
         visit(request)
       }
@@ -514,6 +495,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     for (const id of this.graphRows.keys()) {
       if (retained.has(id)) continue
       this.graphRows.delete(id)
+      this.packageRealms.evict(id)
       this.invalidate(id)
     }
   }
@@ -531,7 +513,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     if (this.bootstrapIds.has(normalized)) throw new Error(`client-modules: replacing bootstrap module ${normalized} requires a page reload`)
     if (this.staticIds.has(normalized)) return
     this.importErrors.delete(normalized)
-    this.generations.set(normalized, {})
+    this.generations.set(normalized, (this.generations.get(normalized) ?? 0) + 1)
     const row = this.graphRows.get(normalized)
     if (row !== undefined) {
       const revision = rev ?? row.rev
@@ -547,13 +529,10 @@ export class ClientModuleSystem implements ClientModuleLoader {
         removed.push(record)
       }
     }
-    const disposeRealm = this.isolatedRealms.take(normalized)
-    if (retain && removed.length > 0) {
-      // After a failed prefetch the running plugin can still materialize a chunk from the new revision.
-      this.replaced.set(normalized, [...this.replaced.get(normalized) ?? [], { records: removed, disposeRealm }])
+    if (retain) {
+      if (removed.length > 0) this.replaced.set(normalized, [...this.replaced.get(normalized) ?? [], ...removed])
       return
     }
-    disposeRealm?.()
-    if ((!retain && this.releaseReplaced(normalized)) || removed.length > 0) this.publishModules()
+    if (this.replaced.delete(normalized) || removed.length > 0) this.publishModules()
   }
 }

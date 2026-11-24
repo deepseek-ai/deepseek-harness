@@ -86,14 +86,14 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### Main 执行环境
 
-模块系统围绕 `loadBundle` 构造自身的 Main Realm；未提供载体 hook 时使用原有页面脚本传输。默认启动仍先预取 immediate 层级，再创建 Loader entries，不要求 Realm 注册表或隔离配置。`dispose()` 停止接受新脚本、销毁隔离 Realm，并等待进行中的载体操作，不取消这些操作。默认 Web 名册把 [Realm 注册表](../script-realm/README.zh.md)和 [iframe 提供方](../script-realm-iframe/README.zh.md)作为普通 entry 加载；只有在某个包请求脚本隔离时启动才等待它们，否则它们不创建 frame。
+模块系统围绕 `loadBundle` 构造自身的 Main Realm；未提供载体 hook 时使用原有页面脚本传输。默认启动仍先预取 immediate 层级，再创建 Loader entries，不要求 Realm 注册表或隔离配置。`dispose()` 停止接受新脚本、释放各包的 iframe，并等待进行中的操作结束；它不会取消 Main Realm 中的脚本请求。默认 Web 名册把 [Realm 注册表](../script-realm/README.zh.md)和 [iframe 提供方](../script-realm-iframe/README.zh.md)作为普通 entry 加载；只有在某个包请求脚本隔离时启动才等待它们，否则它们不创建 frame。
 
 <a id="script-isolated-packages"></a>
 ### 脚本隔离的包
 
 在 Client 包的 Loader 条目上设置 `__unstable_enable_client_isolation: script`，或使用 [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.zh.md)。省略此项或设为 `null` 时选用 Main Realm。不支持的值，或对第一阶段（`immediately`）行请求脚本隔离，都会导致组合失败。浏览器开始加载包的脚本时才选择执行环境。入口与后续懒加载的 chunk 沿用这个选择。
 
-隔离包的 `client.js` 和包内 chunk 不进入启动批次，同一制品版本共用一个 iframe。如果替换预取失败，仍在运行的插件请求新 chunk 时会使用当前制品版本，而非一份私有的旧模块图。它们使用页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。缺少注册表或 `iframe` 提供方时，隔离包加载失败，不会回退到 Main。如果在已打开的页面上同时安装提供方和隔离包后加载失败，刷新页面即可。代码重建会保留运行中的 iframe，直到旧运行时卸载完毕；下载失败不会影响仍在运行的插件。
+只要页面还保留这个包，它的入口脚本和懒加载 chunk 就在同一个专属 iframe 中执行。代码重建和重试都复用同一个 `window`；HMR 不清除插件写入的全局变量。模块系统移除这个包或关闭时才移除 iframe。脚本通过页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。创建 iframe 需要注册表和 `iframe` 提供方；缺少其中任一项时，不会回退到 Main。如果在已打开的页面上同时安装提供方和隔离包后加载失败，刷新页面即可。
 
 ### 增量组合
 
