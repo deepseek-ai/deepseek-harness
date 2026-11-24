@@ -4,6 +4,8 @@ import { Context } from '@deepseek-ai/cordis'
 import type { WslPreparation } from '../src/windows-host.ts'
 import type { NativeBuildSpec } from '../src/native-build.ts'
 import type { installCua } from '@deepseek-ai/dsh-cua'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CuaApplicationId } from '@deepseek-ai/dsh-cua/types'
 import { beforeEach, expect, it, onTestFinished, vi } from 'vitest'
 import { apply, Config } from '../src/index.ts'
 import { GUIDANCE } from '../src/guidance.ts'
@@ -54,6 +56,10 @@ it('provides the Host runtime cleanup to CUA when using an absolute helper overr
   expect(backend.capabilities.methods).toContain('findApps')
   expect(backend.capabilities.methods).toContain('launchApp')
   expect(backend.heldInputState).toBe(true)
+  const saved = { id: brandString<CuaApplicationId>('a'.repeat(64)), name: 'Stored application',
+    executablePath: resolve('fixture.exe') }
+  expect(backend.applicationReview?.needsReview(saved)).toBe(true)
+  expect(backend.applicationReview?.needsReview({ ...saved, iconPath: 'shell:AppsFolder\\Package!App' })).toBe(false)
   expect(GUIDANCE).toContain('Key and mouse holds use desktop input.')
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)
