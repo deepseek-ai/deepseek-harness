@@ -1748,7 +1748,7 @@ export class ForgePanelController extends TypertRemoteService {
     try {
       running = agent.runMaintenance(async (signal) => { await work(agent, signal) })
     } catch (error) {
-      throw new RemoteError('forgePanel/session-busy', 'The Session is busy', {}, { cause: error })
+      throw new RemoteError('forgePanel/session-busy', `The Session is busy: ${messageOf(error)}`, {}, { cause: error })
     }
     await running
   }

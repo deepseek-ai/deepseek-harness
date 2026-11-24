@@ -328,7 +328,7 @@ describe('subagent interrupt Remote', () => {
     const { subagents } = await bench()
     vi.spyOn(subagents, 'interrupt').mockImplementation(() => { throw new Error('boom') })
     expect(() => subagents.interruptByUser(CHILD)).toThrow(
-      expect.objectContaining({ code: 'gateway/internal', message: 'subagent interrupt failed', details: {} }),
+      expect.objectContaining({ code: 'gateway/internal', message: 'subagent interrupt failed: Error: boom', details: {} }),
     )
   })
 })
