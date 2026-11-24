@@ -375,7 +375,7 @@ export class ScheduleService extends TypertRemoteService {
    * @param id - Task to deliver to.
    * @param candidate - Observed text to send alongside the task's stored instruction.
    * @returns Resolves when the Session inbox and task receipt are both persisted, not when the model responds.
-   * @throws If the caller is unloading, the runtime or task is unavailable, or delivery fails.
+   * @throws If the caller is unloading or disposed, the runtime or task is unavailable, or delivery fails.
    * A receipt write can fail after the inbox is persisted; submission does not retry.
    */
   async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
