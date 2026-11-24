@@ -433,7 +433,8 @@ it('publishes new Windows grants and revocations while icons are pending', async
   expect(await f.ctx.cuaAccess.applications()).toMatchObject({ allowedApps: [], reviewApps: [legacy] })
   pending.resolve({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
   expect(await icons).toEqual({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
-  expect(control.request.mock.calls.map(([method]) => method)).toEqual(['permissionStatus', 'applicationIcons'])
+  expect(control.request).toHaveBeenCalledTimes(2)
+  expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [executablePath] }, expect.any(AbortSignal))
 })
 
 it('keeps a saved Windows app current when only its Shell icon target is available', async () => {
@@ -444,7 +445,8 @@ it('keeps a saved Windows app current when only its Shell icon target is availab
   control.request.mockResolvedValueOnce({ [grant.iconPath]: 'data:image/png;base64,aWNvbg==' })
   expect(await f.ctx.cuaAccess.applications()).toMatchObject({ allowedApps: [grant], reviewApps: [] })
   expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({ [grant.iconPath]: 'data:image/png;base64,aWNvbg==' })
-  expect(control.request.mock.calls.map(([method]) => method)).toEqual(['permissionStatus', 'applicationIcons'])
+  expect(control.request).toHaveBeenCalledTimes(2)
+  expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [grant.iconPath] }, expect.any(AbortSignal))
   expect(f.answer).not.toHaveBeenCalled()
 })
 
