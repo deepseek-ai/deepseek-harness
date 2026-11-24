@@ -13,12 +13,15 @@ describe('official recommendations', () => {
   it('offers the live catalog through a skill, adds no tools of its own, and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
     const tools = () => f.ctx.tools.definitions().map(tool => tool.name).sort()
+    const changeListeners = () => f.ctx.events._hooks['plugin-manager/changed']?.length ?? 0
     const withPlugin = tools()
+    expect(changeListeners()).toBe(1)
     const discovered = (await f.ctx.skills.list()).filter(skill => skill.name === 'official-plugins')
     expect(discovered).toMatchSnapshot('skill discovery')
     // The skill catalog cuts entries longer than its default 500 characters, which would drop the exclusions at the end.
     expect(discovered[0]!.description.length).toBeLessThanOrEqual(500)
-    expect(f.manager.listBundles).not.toHaveBeenCalled()
+    // Listing reads the profile once to compose the entry.
+    expect(f.manager.listBundles).toHaveBeenCalledOnce()
     const noMeta = { ...bundle }
     delete noMeta.meta
     f.manager.listBundles.mockResolvedValue([
@@ -42,6 +45,7 @@ describe('official recommendations', () => {
     f.propose()
     await f.fiber.dispose()
     expect(tools()).toEqual(withPlugin)
+    expect(changeListeners()).toBe(0)
     expect(f.ctx.get('pluginRecommendations')).toBeUndefined()
     expect((await f.ctx.skills.list()).some(skill => skill.name === 'official-plugins')).toBe(false)
     expect(await f.ctx.actionCards.act(f.agent, cardId, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
@@ -118,6 +122,7 @@ describe('official recommendations', () => {
 
   it.each([
     ['restart-required', { phase: 'enabled', data: { application: 'restart-required' } }, false],
+    ['overridden', { phase: 'enabled' }, false],
     ['failed', { phase: 'failed' }, true],
   ] as const)('records the %s outcome and retries only failures', async (application, recorded, retried) => {
     const f = await fixture()

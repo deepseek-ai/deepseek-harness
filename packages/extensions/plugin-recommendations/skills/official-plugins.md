@@ -1,6 +1,6 @@
 # Official plugins
 
-Use this workflow in the main conversation when the user wants DSH itself to work differently or gain an ability. The catalog at the end lists DSH's built-in optional plugins and whether each is enabled. An `action-card` block at the end of your answer shows an Enable card below the answer; nothing changes until the user clicks Enable. Match from the catalog descriptions alone: do not read files, configuration or source, call plugin management tools, or change settings yourself.
+Use this workflow in the main conversation when the user wants DSH itself to work differently or gain an ability, or when their request needs an app that a connector in the catalog reaches. The catalog at the end lists DSH's built-in optional plugins and official connectors, and whether each is enabled. An `action-card` block at the end of your answer shows an Enable card below the answer; nothing changes until the user clicks Enable. Match from the catalog descriptions alone: do not read files, configuration or source, call plugin management tools, or change settings yourself.
 
 ## When to offer
 
@@ -13,6 +13,10 @@ Offer no card in these cases:
 - The user only wants to discuss, asks you not to recommend anything, or has declined: stay silent on plugins for the rest of this conversation.
 - No entry fits, or the need is too vague to match: answer normally or ask one question; do not stretch a description.
 - Something DSH already shows covers it, such as the sidebar search for finding a session by keyword yourself. Letting the agent search and read past sessions is a different need.
+
+## Connectors
+
+Entries that carry `installed` are official connectors to third-party apps. Offer one when the user's own request in this turn needs that app, such as reading a document, sending a message or updating an issue there, and the connector is not enabled; this holds for ordinary tasks, and the cases above that offer no card still apply. Offer none when one of your tools already belongs to that app, such as its MCP server: use that tool. For an entry with `installed: false`, the card's button reads Install and enable instead of Enable: a click downloads the connector, then enables it. The invitation names that button in the user's language. After a connector is enabled the user connects their account from the card, so the answer says in one sentence that the task can continue once that is done.
 
 ## One card per turn
 
