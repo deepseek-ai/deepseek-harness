@@ -134,3 +134,18 @@ it('updates reading labels and availability while retaining the captured Session
   expect(b.actions.markSession).toHaveBeenCalledOnce()
   restricted.dispose()
 })
+
+it('offers Copy Session ID in the Session Header menu for the captured Session', async () => {
+  const b = bench()
+  await b.fiber.await()
+  const menu = b.registry.resolve({ kind: 'sessionHeader', value: { sessionId: brandString<SessionId>('header') } })
+  expect(menu.source.getSnapshot().map(({ id, label, separatorBefore }) => [id, label, separatorBefore]))
+    .toEqual([['session.id/copy', 'Copy Session ID', false]])
+  b.locale.setLocale('zh')
+  expect(menu.source.getSnapshot()[0]?.label).toBe('复制 Session ID')
+  menu.select('session.id/copy')
+  expect(b.actions.copySessionId).toHaveBeenCalledExactlyOnceWith('header')
+  await b.fiber.dispose()
+  expect(menu.source.getSnapshot()).toEqual([])
+  menu.dispose()
+})
