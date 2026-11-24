@@ -1,6 +1,6 @@
 /**
  * Bundle details: the voice preference with its audition, what keeps the read-aloud control hidden, how reading is
- * billed, and where the service is documented.
+ * billed, which languages are read, and where the service is documented.
  */
 import { useEffect, useId, useState } from 'react'
 import { Button, IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -56,7 +56,7 @@ const HOLD_MS = 6000
  * Render the read-aloud section of the bundle's details.
  * @param props - the injected state hooks and verbs, and the translator.
  * @returns the voice preference while the Host reports voices, the availability line while the control is hidden, then
- * the billing note with the guide link.
+ * the billing and language notes with the guide link.
  */
 export function ReadAloudSettings(props: ReadAloudSettingsProps) {
   const { useReadAloudStatus, useReader, useAccountSignIn, signIn, configure, toggleSample, stopSample, dismissSampleNotice, t } = props
@@ -112,6 +112,7 @@ export function ReadAloudSettings(props: ReadAloudSettingsProps) {
       )}
       <p className={css.billing}>
         <span>{t('settings.billing')}</span>
+        <span>{t('settings.languages')}</span>
         <a className={css.link} href={t('settings.guideUrl')} target="_blank" rel="noopener noreferrer">{t('settings.guide')}</a>
       </p>
       {notice !== null && (

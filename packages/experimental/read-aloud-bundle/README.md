@@ -25,7 +25,7 @@ This optional bundle adds a Read aloud control under assistant replies. It compo
 <a id="use-this-package"></a>
 ## Use this package
 
-Turn the bundle on in **Plugins**. With a DeepSeek account sign-in or a DeepSeek API key, a speaker control appears under each finished assistant reply; without either, the bundle's details explain what is missing and offer sign-in.
+Turn the bundle on in **Plugins**. With a DeepSeek account sign-in or a DeepSeek API key, a speaker control appears under each finished assistant reply; without either, the bundle's details explain what is missing and offer sign-in. The details open with a feature preview: a reply, its action row with the read-aloud control highlighted, and the speech it becomes.
 
 A reply is submitted for synthesis one segment at a time as playback advances, so a reading stopped early is billed only for the segments already requested. The `read-aloud` row sets the segment length (`segmentSeconds`, 30) and when the next segment is requested (`dispatchBelowSeconds`, 15); the voice is chosen in the bundle's details and saved in the `text-to-speech` row (`voice`, `stella` or `tide`).
 
@@ -63,7 +63,7 @@ No effect; no model request, message, or Session event changes.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- DeepSeek cloud synthesis is the only provider, so reading needs a DeepSeek credential and a network connection. The bundle's detail document is text; it has no feature preview image.
+- DeepSeek cloud synthesis is the only provider, so reading needs a DeepSeek credential and a network connection. Code blocks, tables, and formulas are not read; the Plugins page does not say so.
 
 -----
 

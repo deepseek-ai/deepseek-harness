@@ -25,7 +25,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用此包
 
-在 **插件** 中开启这个 Bundle。登录 DeepSeek 账号或配置 DeepSeek API Key 后，每条已完成的助手回复下方会出现喇叭按钮；两者都没有时，Bundle 详情会说明缺少什么，并提供登录入口。
+在 **插件** 中开启这个 Bundle。登录 DeepSeek 账号或配置 DeepSeek API Key 后，每条已完成的助手回复下方会出现喇叭按钮；两者都没有时，Bundle 详情会说明缺少什么，并提供登录入口。详情以一张功能预览图开头：一条回复、高亮了朗读按钮的操作栏，以及它变成的语音。
 
 回复随播放进度逐段提交合成，所以提前停止的朗读只为已经请求的段计费。`read-aloud` 行设置段长（`segmentSeconds`，30）和请求下一段的时机（`dispatchBelowSeconds`，15）；音色在 Bundle 详情里选择，保存在 `text-to-speech` 行（`voice`，`stella` 或 `tide`）。
 
@@ -63,7 +63,7 @@ kind: "package-bundle"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- DeepSeek 云端合成是唯一的 Provider，所以朗读需要 DeepSeek 凭据和网络连接。Bundle 的详情文档是文字，没有功能预览图。
+- DeepSeek 云端合成是唯一的 Provider，所以朗读需要 DeepSeek 凭据和网络连接。代码块、表格和公式不会朗读，插件页没有说明这一点。
 
 -----
 

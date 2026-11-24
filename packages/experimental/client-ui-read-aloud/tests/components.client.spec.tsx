@@ -132,9 +132,10 @@ function settings(initial: ReadAloudStatus, account = true) {
   }
 }
 
-it('states the billing and links the speech synthesis guide when reading is available', () => {
+it('states the billing and the supported languages and links the speech synthesis guide when reading is available', () => {
   settings({ state: 'ready', synthesis: SYNTHESIS })
   expect(screen.getByText(zh['settings.billing'])).toBeTruthy()
+  expect(screen.getByText(zh['settings.languages'])).toBeTruthy()
   const link = screen.getByRole('link', { name: '语音合成指南' })
   expect([link.getAttribute('href'), link.getAttribute('target'), link.getAttribute('rel')])
     .toEqual(['https://api-docs.deepseek.com/zh-cn/guides/tts', '_blank', 'noopener noreferrer'])
