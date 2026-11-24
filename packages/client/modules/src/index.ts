@@ -41,7 +41,7 @@ import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
-import { exactPackageSpecifier, isolatesScript, parseClientIsolation, parseDshClient, stripClientSuffix } from './client/manifest.ts'
+import { exactPackageSpecifier, parseClientIsolation, parseDshClient, stripClientSuffix } from './client/manifest.ts'
 import { SyncedConfigPublisher } from './config-sync.ts'
 import type {
   ClientIsolation, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
@@ -64,7 +64,8 @@ declare module '@deepseek-ai/cordis-plugin-loader' {
     /**
      * Execute this Client package's scripts in a dedicated iframe Realm instead of a startup batch.
      * Omission or null keeps the Main Realm. An unsupported mode or a stage-one (`immediately`) row
-     * with script isolation fails composition. This is an unstable test switch, not a product setting.
+     * with script isolation fails composition. Reload an open page to change a known package's mode;
+     * its Host entry does not restart. This is an unstable test switch, not a product setting.
      */
     __unstable_enable_client_isolation?: ClientIsolation | null
   }
@@ -710,7 +711,11 @@ export class ClientModuleRegistry extends Service {
       if (entryName !== undefined) markDirty(entryName)
     })
     // An option edit outside `config` patches the running fiber without restarting it.
-    ctx.on('loader/partial-dispose', (entry) => { markDirty(entry.options.name) })
+    ctx.on('loader/partial-dispose', (entry, previous, active) => {
+      if (active && (entry.options.__unstable_enable_client_isolation ?? null) !== (previous.__unstable_enable_client_isolation ?? null)) {
+        markDirty(entry.options.name)
+      }
+    })
 
     // Activation pass: the initial scan IS the incremental path over the
     // current entries, flushed synchronously (nothing async between subscribe,
@@ -820,7 +825,7 @@ export class ClientModuleRegistry extends Service {
     if (rev === record.entry.rev) return rev
     const bundle = readFileSync(record.meta.clientPath)
     record.baseline = baseline
-    record.entry = graphRow(id, rev, record.meta, record.entry.isolation)
+    record.entry = { ...record.entry, rev, url: comboReference([id], rev) }
     record.bundle = bundle
     this.composed = this.compose()
     for (const notify of this.rebuildListeners) {
@@ -868,7 +873,7 @@ export class ClientModuleRegistry extends Service {
     const bootstrapIds = new Set(bootstrap.map(record => record.entry.id))
     // A script-isolated row executes in its own Realm, never inside a Main Realm batch.
     const application = entries
-      .filter(entry => !bootstrapIds.has(entry.id) && !isolatesScript(entry.isolation))
+      .filter(entry => !bootstrapIds.has(entry.id) && entry.isolation !== 'script')
       .map(entry => this.table.get(entry.id))
       .filter((record): record is WebPluginRecord => record !== undefined)
     const artifacts: BatchArtifact[] = []
@@ -1127,7 +1132,7 @@ export class ClientModuleRegistry extends Service {
       '__unstable_enable_client_isolation',
       entry.options.__unstable_enable_client_isolation,
     )
-    if (isolatesScript(isolation) && resolved.meta.immediately) {
+    if (isolation === 'script' && resolved.meta.immediately) {
       throw new Error(`client-modules: ${resolved.packageName} is a stage-one (immediately) row and cannot isolate its scripts`)
     }
     return { ...resolved, loaderName, isolation, baseUrl, sourceKey: this.sourceKey(loaderName, baseUrl) }

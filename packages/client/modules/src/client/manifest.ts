@@ -34,7 +34,7 @@ import type {
   DshClientManifest, ClientModuleMetaFactory,
   DshClientModuleManifest,
 } from '@deepseek-ai/dsh-package-manifest'
-import type { ScriptRealm, ScriptRealmCreateOptions } from '@deepseek-ai/dsh-client-script-realm/client'
+import type { ScriptRealm } from '@deepseek-ai/dsh-client-script-realm/client'
 export type { ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientEntries } from './entries.ts'
 import type { ClientModuleSystem } from './system.ts'
@@ -63,15 +63,6 @@ export function parseClientIsolation(subject: string, field: string, value: unkn
     throw new Error(`client-modules: ${subject} ${field} must be "script", received ${JSON.stringify(value)}`)
   }
   return value
-}
-
-/**
- * Whether an isolation value moves the package's scripts out of the Main Realm.
- * @param isolation - Validated isolation, or undefined for none.
- * @returns true when the package requests script isolation.
- */
-export function isolatesScript(isolation: ClientIsolation | undefined): boolean {
-  return isolation === 'script'
 }
 
 /**
@@ -309,7 +300,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
       throw new Error(`client-modules: boot manifest entry ${where} immediately must be a boolean`)
     }
     const isolation = parseClientIsolation(subject, 'isolation', row.isolation)
-    if (row.immediately === true && isolatesScript(isolation)) {
+    if (row.immediately === true && isolation === 'script') {
       throw new Error(`client-modules: boot manifest entry ${where} cannot isolate scripts of a stage-one row`)
     }
     moduleFields.push({
@@ -332,7 +323,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
   }
 
   const entryIds = new Set(moduleFields.map(row => row.id))
-  const scriptIsolated = new Set(moduleFields.filter(row => isolatesScript(row.isolation)).map(row => row.id))
+  const scriptIsolated = new Set(moduleFields.filter(row => row.isolation === 'script').map(row => row.id))
   const initialUrls = new Map<string, string>()
   const batchUrls = new Set<string>()
   for (const value of graph.batches as unknown[]) {
@@ -402,9 +393,6 @@ export function readRelease(wire: unknown): WebBootRelease | undefined {
   if (typeof wire !== 'object' || wire === null) return undefined
   return decodeRelease((wire as Record<string, unknown>).release) ?? undefined
 }
-
-/** Create one dedicated Script Realm for a script-isolated package; the module system owns and disposes the result. */
-export type IsolatedRealmFactory = (options: ScriptRealmCreateOptions) => Promise<ScriptRealm>
 
 /** Registration face of one shared browser artifact manifest. */
 export type ClientBundleRegistration = DshClientModuleManifest
@@ -498,18 +486,6 @@ export interface ClientModuleLoader {
   loadCache: Map<string, ClientModuleRecord>
   /** Initial execution environment, fixed when the module system is constructed. */
   readonly mainRealm: Pick<ScriptRealm, 'id' | 'execute' | 'dispose'>
-  /**
-   * Isolation the current graph requests for one package.
-   * @param id - Graph entry name, or its `/client` specifier.
-   * @returns The row's isolation, or undefined when the package is not isolated or not a graph row.
-   */
-  isolationOf(id: string): ClientIsolation | undefined
-  /**
-   * Install the factory for script-isolated packages. Entry startup installs one that reads the Realm
-   * registry; a script-isolated load that starts while none is installed fails.
-   * @param factory - Factory creating one dedicated Realm per package.
-   */
-  useIsolatedRealms(factory: IsolatedRealmFactory): void
   /** Stop accepting scripts, dispose isolated Realms, and await pending carrier operations. */
   dispose(): Promise<void>
   /**

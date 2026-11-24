@@ -26,7 +26,7 @@ export type { ClientEntries, ClientEntryState } from './entries.ts'
 export { exactPackageSpecifier, parseBootManifest, parseDshClient, stripClientSuffix } from './manifest.ts'
 export type {
   BootManifest, BootModuleRow, BootPluginRow, ClientBootstrapModule, ClientBundleRegistration, ClientIsolation,
-  ClientModuleCreateOptions, IsolatedRealmFactory, ClientModuleLoader, ClientModuleLoaderTarget, ClientModuleRecord,
+  ClientModuleCreateOptions, ClientModuleLoader, ClientModuleLoaderTarget, ClientModuleRecord,
   ClientModuleSystemOptions, DshWindow,
   WebBootEntry, WebBootGraph, WebBootRelease,
 } from './manifest.ts'

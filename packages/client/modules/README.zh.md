@@ -91,9 +91,9 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 <a id="script-isolated-packages"></a>
 ### 脚本隔离的包
 
-在 Client 包的 Loader 条目上设置 `__unstable_enable_client_isolation: script`，或使用 [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.zh.md)。省略此项或设为 `null` 时，脚本在 Main Realm 中执行。模式不受支持，或对第一阶段（`immediately`）行请求脚本隔离时，组合失败。Host 将模式发布到图行的 `isolation`；修改它会替换 Client 包，不重启 Host 条目。`ctx.modules.isolationOf(id)` 读取当前模式。
+在 Client 包的 Loader 条目上设置 `__unstable_enable_client_isolation: script`，或使用 [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.zh.md)。省略此项或设为 `null` 时选用 Main Realm。不支持的值，或对第一阶段（`immediately`）行请求脚本隔离，都会导致组合失败。页面第一次收到某个包的图行时就确定其模式，新安装的包也一样。修改设置后，刷新页面即可应用新模式，无需重启 Host；已打开页面上的懒加载 chunk 和代码重建仍使用原模式。
 
-每个包的 `client.js` 和包内 chunk 从各自带 revision 的 URL 加载，不进入任何启动批次，在该包独享的 iframe 中执行。它们使用页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。启动或更新图时，先激活注册表及其 `iframe` 提供方，再创建隔离条目。缺少注册表或提供方时，隔离包加载失败。代码失效时销毁包的 Realm；实时替换则保留旧 Realm，直到旧运行时完成卸载。
+隔离包的 `client.js` 和包内 chunk 不进入启动批次，同一制品版本共用一个 iframe。如果替换预取失败，仍在运行的插件请求新 chunk 时会使用当前制品版本，而非一份私有的旧模块图。它们使用页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。缺少注册表或 `iframe` 提供方时，隔离包加载失败，不会回退到 Main。如果在已打开的页面上同时安装提供方和隔离包后加载失败，刷新页面即可。代码重建会保留运行中的 iframe，直到旧运行时卸载完毕；下载失败不会影响仍在运行的插件。
 
 ### 增量组合
 

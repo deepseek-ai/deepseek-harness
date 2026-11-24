@@ -1510,13 +1510,26 @@ describe('unstable client isolation switch', () => {
     const packageName = '@fixture/iso-live'
     writeBuiltPackage(packageName, {})
     const entryOptions: Record<string, Record<string, unknown>> = { [packageName]: {} }
-    const { context, service } = constructWithRoute([packageName], { entryOptions })
+    const scans = vi.fn()
+    const { context, service } = constructWithRoute([packageName], { entryOptions, onEntries: scans })
     const before = service.graph()
     const changed = vi.fn()
     service.onGraphChanged(changed)
+    const patch = (previous: Record<string, unknown>, options: Record<string, unknown>, active = true) => {
+      entryOptions[packageName] = options
+      context.emit('loader/partial-dispose', { options: { name: packageName, ...options } } as never, previous, active)
+    }
+    scans.mockClear()
+    patch({ config: {} }, { config: { note: 'unrelated' } })
+    patch({}, { [FIELD]: null })
+    patch({ [FIELD]: null }, {})
+    patch({ [FIELD]: 'script' }, { [FIELD]: 'script' })
+    patch({ [FIELD]: 'script' }, {}, false)
+    await Promise.resolve()
+    expect(scans).not.toHaveBeenCalled()
+    expect(service.graph()).toBe(before)
 
-    entryOptions[packageName] = { [FIELD]: 'script' }
-    context.emit('loader/partial-dispose', { options: { name: packageName } } as never, {}, true)
+    patch({}, { [FIELD]: 'script' })
     await Promise.resolve()
     expect(changed).toHaveBeenCalledOnce()
     const after = service.graph()

@@ -4,14 +4,14 @@
  * documented on the public interfaces in `./manifest.ts`; this file owns the
  * state tables and the load/materialize machinery.
  */
-import { isolatesScript, stripClientSuffix } from './manifest.ts'
+import { stripClientSuffix } from './manifest.ts'
 import { ClientEntries } from './entries.ts'
 import { IsolatedRealms } from './isolated-realms.ts'
 import { MainScriptRealm } from './main-realm.ts'
 import { notifySubscribers } from './notify.ts'
 import type {
-  BootManifest, BootModuleRow, ClientBundleRegistration, ClientBundleRequire, ClientIsolation, ClientModuleLoader,
-  ClientModuleRecord, ClientModuleSystemOptions, IsolatedRealmFactory,
+  BootManifest, BootModuleRow, ClientBundleRegistration, ClientBundleRequire, ClientModuleLoader,
+  ClientModuleRecord, ClientModuleSystemOptions,
 } from './manifest.ts'
 
 /** Replace the rev query while preserving absolute, protocol-relative, or path-relative form. */
@@ -65,7 +65,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   /** One dedicated Realm per script-isolated package. */
   private readonly isolatedRealms: IsolatedRealms
   /** Previous records of packages under replacement, by package id, until their old runtime is released. */
-  private readonly replaced = new Map<string, ClientModuleRecord[]>()
+  private readonly replaced = new Map<string, { records: ClientModuleRecord[]; disposeRealm: (() => void) | undefined }[]>()
   private readonly moduleListeners = new Set<() => void>()
   private readonly factories = new Map<string, { manifest: ClientBundleRegistration; factory: ClientBundleRegistration['factory']; rev: string | undefined }>()
   private readonly bootstrapIds = new Set<string>()
@@ -93,22 +93,20 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   constructor(options: ClientModuleSystemOptions) {
     this.manifest = options.manifest
+    this.isolatedRealms = new IsolatedRealms({ __ModuleLoader__: options.registrationTarget })
     this.entries = new ClientEntries(this, {
+      realms: this.isolatedRealms,
       update: (manifest, managed) => { this.updateManifest(manifest, managed) },
       invalidateForReplacement: (id, rev) => {
         if (this.bootstrapIds.has(id)) throw new Error(`client-modules: replacing bootstrap module ${id} requires a page reload`)
         this.drop(id, rev, true)
       },
       releaseReplaced: (id) => {
-        const normalized = this.resolveModuleId(id)
-        this.isolatedRealms.release(normalized)
-        if (this.replaced.delete(normalized)) this.publishModules()
+        if (this.releaseReplaced(this.resolveModuleId(id))) this.publishModules()
       },
       prune: (roots) => { this.prune(roots) },
     })
     this.mainRealm = new MainScriptRealm(options.loadBundle)
-    // Isolated bundles register through the same facade the page installed.
-    this.isolatedRealms = new IsolatedRealms({ __ModuleLoader__: options.registrationTarget })
     this.resolveAsset = options.resolveAsset ?? (reference => reference)
 
     for (const row of options.manifest.modules) {
@@ -147,7 +145,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   * activeRecords(): Iterable<ClientModuleRecord> {
-    for (const records of this.replaced.values()) yield * records
+    for (const id of this.replaced.keys()) yield * this.heldRecords(id)
     yield * this.loadCache.values()
   }
 
@@ -157,16 +155,20 @@ export class ClientModuleSystem implements ClientModuleLoader {
 
   /** Stop accepting script execution, dispose isolated Realms, and await the startup carrier's pending operations. */
   async dispose(): Promise<void> {
-    const [main, isolated] = await Promise.allSettled([this.mainRealm.dispose(), this.isolatedRealms.dispose()])
+    for (const id of this.replaced.keys()) this.releaseReplaced(id)
+    const [main, isolated] = await Promise.allSettled([
+      this.mainRealm.dispose(), this.isolatedRealms.dispose(), ...this.pendingArrival.values(),
+    ])
     for (const result of [main, isolated]) if (result.status === 'rejected') throw result.reason
   }
 
-  isolationOf(id: string): ClientIsolation | undefined {
-    return this.graphRows.get(this.resolveModuleId(id))?.isolation
+  private * heldRecords(id: string): Iterable<ClientModuleRecord> {
+    for (const { records } of this.replaced.get(id) ?? []) yield * records
   }
 
-  useIsolatedRealms(factory: IsolatedRealmFactory): void {
-    this.isolatedRealms.use(factory)
+  private releaseReplaced(id: string): boolean {
+    for (const { disposeRealm } of this.replaced.get(id) ?? []) disposeRealm?.()
+    return this.replaced.delete(id)
   }
 
   private resolveModuleId(specifier: string): string {
@@ -196,7 +198,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   private loadShared(url: string, ownerId: string): Promise<void> {
     let transport = this.pendingArrival.get(url)
     if (transport === undefined) {
-      const isolated = isolatesScript(this.graphRows.get(ownerId)?.isolation)
+      const isolated = this.isolatedRealms.isolates(ownerId)
       transport = (isolated ? this.isolatedRealms.execute(ownerId, url) : this.mainRealm.execute({ url }))
         .then(() => { this.executedBundleUrls.add(url) })
         .finally(() => { this.pendingArrival.delete(url) })
@@ -222,7 +224,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   private async arrive(row: BootModuleRow): Promise<void> {
     const { id } = row
-    if (isolatesScript(row.isolation) && this.staticIds.has(id)) {
+    if (this.isolatedRealms.isolates(id) && this.staticIds.has(id)) {
       throw new Error(`client-modules: "${id}" is loaded by the page shell and cannot isolate its scripts`)
     }
     if (this.loadCache.has(id) || this.factories.has(id)) return
@@ -231,6 +233,8 @@ export class ClientModuleSystem implements ClientModuleLoader {
     const fallback = reload === undefined && row.url !== preferred ? row.url : undefined
     const failures: string[] = []
     const attempt = async (url: string): Promise<'registered' | 'transport-failed' | 'not-registered'> => {
+      // Removal can cancel a pending script. Its retry must not allocate a new Realm for the evicted row.
+      if (!this.graphRows.has(id)) throw new Error(`client-modules: package "${id}" was removed before loading ${url}`)
       try {
         await this.loadShared(url, id)
       } catch (error) {
@@ -453,7 +457,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       this.importErrors.delete(id)
       return result
     } catch (error) {
-      this.importErrors.set(id, error instanceof Error ? error : new Error(describeError(error)))
+      if (this.graphRows.has(id)) this.importErrors.set(id, error instanceof Error ? error : new Error(describeError(error)))
       throw error
     }
   }
@@ -467,10 +471,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
     }
     const owned = new Set(managed)
     for (const row of manifest.modules) {
-      const realmChanged = isolatesScript(this.graphRows.get(row.id)?.isolation) !== isolatesScript(row.isolation)
       this.graphRows.set(row.id, { ...row, initialUrl: row.url })
       const cachedRevision = this.factories.get(row.id)?.rev ?? this.reloadTargets.get(row.id)?.rev
-      if (!owned.has(row.id) && cachedRevision !== undefined && (cachedRevision !== row.rev || realmChanged)) {
+      if (!owned.has(row.id) && cachedRevision !== undefined && cachedRevision !== row.rev) {
         this.invalidate(row.id, row.rev)
       }
     }
@@ -486,7 +489,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       retained.add(id)
       const row = this.graphRows.get(id)
       // A replaced runtime that is still mounted keeps the modules its previous records requested.
-      const observed = [this.loadCache.get(id), ...this.replaced.get(id) ?? []].flatMap(record => [...record?.edges ?? []])
+      const observed = [this.loadCache.get(id), ...this.heldRecords(id)].flatMap(record => [...record?.edges ?? []])
       for (const request of [...row?.external ?? [], ...row?.inject ?? [], ...observed]) {
         visit(request)
       }
@@ -514,7 +517,6 @@ export class ClientModuleSystem implements ClientModuleLoader {
     if (this.bootstrapIds.has(normalized)) throw new Error(`client-modules: replacing bootstrap module ${normalized} requires a page reload`)
     if (this.staticIds.has(normalized)) return
     this.importErrors.delete(normalized)
-    this.isolatedRealms.retire(normalized, retain)
     this.generations.set(normalized, (this.generations.get(normalized) ?? 0) + 1)
     const row = this.graphRows.get(normalized)
     if (row !== undefined) {
@@ -531,10 +533,13 @@ export class ClientModuleSystem implements ClientModuleLoader {
         removed.push(record)
       }
     }
-    if (retain) {
-      if (removed.length > 0) this.replaced.set(normalized, [...this.replaced.get(normalized) ?? [], ...removed])
+    const disposeRealm = this.isolatedRealms.take(normalized)
+    if (retain && removed.length > 0) {
+      // After a failed prefetch the running plugin can still materialize a chunk from the new revision.
+      this.replaced.set(normalized, [...this.replaced.get(normalized) ?? [], { records: removed, disposeRealm }])
       return
     }
-    if (this.replaced.delete(normalized) || removed.length > 0) this.publishModules()
+    disposeRealm?.()
+    if ((!retain && this.releaseReplaced(normalized)) || removed.length > 0) this.publishModules()
   }
 }
