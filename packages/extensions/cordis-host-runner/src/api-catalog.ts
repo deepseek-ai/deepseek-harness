@@ -7280,7 +7280,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ClientIsolation',
-    declaration: 'export type ClientIsolation = \'script\';',
+    declaration: 'export type ClientIsolation = \'script\' | \'style\' | \'scriptandstyle\';',
   },
   {
     name: 'CliOperationControl',

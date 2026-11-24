@@ -46,23 +46,46 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Unstable test switch: execute one package's scripts in a dedicated Script Realm. */
-export type ClientIsolation = 'script'
+/** Unstable per-package test modes: a dedicated Script Realm, scoped stylesheets, or both. */
+export type ClientIsolation = 'script' | 'style' | 'scriptandstyle'
+
+/** Script placement and stylesheet scoping selected for a package. */
+export interface ClientIsolationFlags {
+  readonly script: boolean
+  readonly style: boolean
+}
+
+/** Isolation of modules supplied by the shell or registered without a graph row. */
+export const NO_ISOLATION = Object.freeze({ script: false, style: false })
+const ISOLATION_FLAGS: Record<ClientIsolation, ClientIsolationFlags> = {
+  script: Object.freeze({ script: true, style: false }),
+  style: Object.freeze({ script: false, style: true }),
+  scriptandstyle: Object.freeze({ script: true, style: true }),
+}
 
 /**
- * Validate an optional isolation value read from a Loader entry or from the boot wire.
+ * Recognize an explicit mode in a Loader entry, boot graph or development overlay.
+ * @param value - Unvalidated mode.
+ * @returns Whether the value names a Client isolation mode.
+ */
+export function isClientIsolation(value: unknown): value is ClientIsolation {
+  return typeof value === 'string' && Object.hasOwn(ISOLATION_FLAGS, value)
+}
+
+/**
+ * Decode the isolation mode in a Loader entry or a boot graph row.
  * @param subject - Diagnostic prefix naming the entry or wire row.
  * @param field - Field name as it appears in the diagnostic.
  * @param value - Raw field value; `undefined` and `null` mean no isolation.
- * @returns The validated isolation, or undefined when the field is absent.
+ * @returns Read-only script and style flags; both are false for an absent mode.
  * @throws {Error} when the value is present but is not a {@link ClientIsolation}.
  */
-export function parseClientIsolation(subject: string, field: string, value: unknown): ClientIsolation | undefined {
-  if (value === undefined || value === null) return undefined
-  if (value !== 'script') {
-    throw new Error(`client-modules: ${subject} ${field} must be "script", received ${JSON.stringify(value)}`)
+export function parseClientIsolation(subject: string, field: string, value: unknown): ClientIsolationFlags {
+  if (value === undefined || value === null) return NO_ISOLATION
+  if (!isClientIsolation(value)) {
+    throw new Error(`client-modules: ${subject} ${field} must be "script", "style", or "scriptandstyle", received ${JSON.stringify(value)}`)
   }
-  return value
+  return ISOLATION_FLAGS[value]
 }
 
 /**
@@ -151,8 +174,8 @@ export interface BootModuleRow {
   inject: string[]
   /** Module specifiers this row requests from the module table ([] when the wire omits them). */
   external: string[]
-  /** Isolation requested for this package; absent when the wire omits it. */
-  isolation?: ClientIsolation
+  /** Script and style isolation requested for this package; both false when the wire omits the mode. */
+  isolation: ClientIsolationFlags
 }
 
 /** The cordis-plugin view of one boot row: what entry composition needs (optional wire fields normalized). */
@@ -300,7 +323,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
       throw new Error(`client-modules: boot manifest entry ${where} immediately must be a boolean`)
     }
     const isolation = parseClientIsolation(subject, 'isolation', row.isolation)
-    if (row.immediately === true && isolation === 'script') {
+    if (row.immediately === true && isolation.script) {
       throw new Error(`client-modules: boot manifest entry ${where} cannot isolate scripts of a stage-one row`)
     }
     moduleFields.push({
@@ -309,7 +332,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
       rev: row.rev,
       inject: inject === undefined ? [] : [...inject],
       external: external === undefined ? [] : [...external],
-      ...(isolation === undefined ? {} : { isolation }),
+      isolation,
     })
     if (row.config !== undefined && (typeof row.config !== 'object' || row.config === null || Array.isArray(row.config))) {
       throw new Error(`client-modules: boot manifest entry ${where} config must be an object`)
@@ -323,7 +346,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
   }
 
   const entryIds = new Set(moduleFields.map(row => row.id))
-  const scriptIsolated = new Set(moduleFields.filter(row => row.isolation === 'script').map(row => row.id))
+  const scriptIsolated = new Set(moduleFields.filter(row => row.isolation.script).map(row => row.id))
   const initialUrls = new Map<string, string>()
   const batchUrls = new Set<string>()
   for (const value of graph.batches as unknown[]) {
@@ -360,7 +383,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
     }
   }
   const modules = moduleFields.map((row): BootModuleRow => {
-    if (scriptIsolated.has(row.id)) return { ...row, initialUrl: row.url }
+    if (row.isolation.script) return { ...row, initialUrl: row.url }
     const initialUrl = initialUrls.get(row.id)
     if (initialUrl === undefined) {
       throw new Error(`client-modules: boot manifest entry "${row.id}" belongs to no initial-load batch`)
@@ -443,6 +466,8 @@ export interface ClientModuleRecord {
   id: string
   /** Package identity shared by its entry and package-local chunks. */
   readonly ownerId: string
+  /** Isolation of the owning package when its factory was loaded. */
+  readonly isolation: ClientIsolationFlags
   /** Materialized exports (`module.exports` from a factory or bootstrap registration). */
   exports: unknown
   /** Deferred metadata producer; JavaScript materialization does not evaluate it. */

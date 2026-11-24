@@ -4,7 +4,7 @@
  * documented on the public interfaces in `./manifest.ts`; this file owns the
  * state tables and the load/materialize machinery.
  */
-import { stripClientSuffix } from './manifest.ts'
+import { NO_ISOLATION, stripClientSuffix } from './manifest.ts'
 import { ClientEntries } from './entries.ts'
 import { PackageRealms } from './isolated-realms.ts'
 import { MainScriptRealm } from './main-realm.ts'
@@ -67,7 +67,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
   /** Previous records of packages under replacement, by package id, until their old runtime is released. */
   private readonly replaced = new Map<string, ClientModuleRecord[]>()
   private readonly moduleListeners = new Set<() => void>()
-  private readonly factories = new Map<string, { manifest: ClientBundleRegistration; factory: ClientBundleRegistration['factory']; rev: string | undefined }>()
+  private readonly factories = new Map<string, { manifest: ClientBundleRegistration; factory: ClientBundleRegistration['factory']; isolation: BootModuleRow['isolation']; rev: string | undefined }>()
   private readonly bootstrapIds = new Set<string>()
   private readonly staticIds = new Set<string>()
   /** In-flight script transport per URL. */
@@ -118,6 +118,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     this.loadCache.set(bootstrapId, {
       id: bootstrapId,
       ownerId: bootstrapId,
+      isolation: NO_ISOLATION,
       exports: options.bootstrapModule.exports,
       edges: new Set(),
     })
@@ -177,11 +178,14 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const registrationName = registration.chunk === undefined ? registration.id : id
       throw new Error(`client-modules: duplicate factory registration for "${registrationName}" (bundle executed twice without invalidate?)`)
     }
-    if (this.graphRows.has(ownerId)) this.packageRealms.registered(ownerId)
+    const row = this.graphRows.get(ownerId)
+    if (row !== undefined) this.packageRealms.registered(ownerId)
     this.factories.set(id, {
       manifest: registration,
       factory: registration.factory,
-      rev: this.reloadTargets.get(ownerId)?.rev ?? this.graphRows.get(ownerId)?.rev,
+      isolation: this.staticIds.has(ownerId) || this.bootstrapIds.has(ownerId) ? NO_ISOLATION
+        : this.factories.get(ownerId)?.isolation ?? row?.isolation ?? NO_ISOLATION,
+      rev: this.reloadTargets.get(ownerId)?.rev ?? row?.rev,
     })
   }
 
@@ -221,7 +225,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   private async arrive(row: BootModuleRow): Promise<void> {
     const { id } = row
-    if (row.isolation === 'script' && this.staticIds.has(id)) {
+    if (row.isolation.script && this.staticIds.has(id)) {
       throw new Error(`client-modules: "${id}" is loaded by the page shell and cannot isolate its scripts`)
     }
     if (this.loadCache.has(id) || this.factories.has(id)) return
@@ -330,7 +334,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const exports = registered.factory(this.makeRequire(registered.manifest.id, edges, () => {
         if (this.loadCache.get(id)?.edges === edges) this.publishModules()
       }))
-      record = { id, ownerId: registered.manifest.id, exports, edges,
+      record = { id, ownerId: registered.manifest.id, isolation: registered.isolation, exports, edges,
         ...(registered.manifest.meta === undefined ? {} : { meta: registered.manifest.meta }) }
       this.loadCache.set(id, record)
     } finally {

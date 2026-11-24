@@ -1467,32 +1467,39 @@ describe('unstable client isolation switch', () => {
   const FIELD = '__unstable_enable_client_isolation'
 
   it('copies the entry isolation onto the graph row and keeps script-isolated rows out of every batch', () => {
-    for (const name of ['@fixture/iso-plain', '@fixture/iso-script']) writeBuiltPackage(name, {})
-    const { service } = constructWithRoute(['@fixture/iso-plain', '@fixture/iso-script'], {
-      entryOptions: {
-        '@fixture/iso-plain': { [FIELD]: null },
-        '@fixture/iso-script': { [FIELD]: 'script' },
-      },
-    })
+    const names = ['@fixture/iso-plain', '@fixture/iso-style', '@fixture/iso-script', '@fixture/iso-both']
+    for (const name of names) writeBuiltPackage(name, { immediately: name === '@fixture/iso-style' })
+    const { service } = constructWithRoute(names, { entryOptions: {
+      '@fixture/iso-plain': { [FIELD]: null },
+      '@fixture/iso-style': { [FIELD]: 'style' },
+      '@fixture/iso-script': { [FIELD]: 'script' },
+      '@fixture/iso-both': { [FIELD]: 'scriptandstyle' },
+    } })
     const graph = service.graph()
     expect(graph.entries.map(row => [row.id, row.isolation])).toEqual([
       ['@fixture/iso-plain', undefined],
+      ['@fixture/iso-style', 'style'],
       ['@fixture/iso-script', 'script'],
+      ['@fixture/iso-both', 'scriptandstyle'],
     ])
     expect(graph.entries[0]).not.toHaveProperty('isolation')
-    expect(graph.batches.flatMap(batch => batch.entries)).toEqual(['@fixture/iso-plain'])
+    expect(graph.batches.flatMap(batch => batch.entries)).toEqual(['@fixture/iso-plain', '@fixture/iso-style'])
     const manifest = modulesClient.parseBootManifest(graph)
     expect(manifest.modules.find(row => row.id === '@fixture/iso-script')?.initialUrl)
       .toBe(graph.entries.find(row => row.id === '@fixture/iso-script')?.url)
   })
 
-  it.each(['style', 'scriptandstyle', 'shadow'])('rejects unsupported mode %s and script isolation of a stage-one row', (mode) => {
+  it.each([
+    { invalid: 'shadow', earlyMode: 'script' },
+    { invalid: { script: true, style: false }, earlyMode: 'scriptandstyle' },
+    { invalid: ['script'], earlyMode: 'script' },
+  ])('rejects invalid Loader mode $invalid and $earlyMode isolation of a stage-one row', ({ invalid, earlyMode }) => {
     writeBuiltPackage('@fixture/iso-invalid', {})
     writeBuiltPackage('@fixture/iso-early', { immediately: true })
     let failure: unknown
     try {
       constructWithRoute(['@fixture/iso-invalid', '@fixture/iso-early'], {
-        entryOptions: { '@fixture/iso-invalid': { [FIELD]: mode }, '@fixture/iso-early': { [FIELD]: 'script' } },
+        entryOptions: { '@fixture/iso-invalid': { [FIELD]: invalid }, '@fixture/iso-early': { [FIELD]: earlyMode } },
       })
     } catch (error) {
       failure = error
@@ -1501,20 +1508,20 @@ describe('unstable client isolation switch', () => {
     expect((failure as Error).message).toBe([
       'client-modules: 2 client packages failed to compose:',
       '  other failures:',
-      `    - client-modules: loader entry "@fixture/iso-invalid" (@fixture/iso-invalid) __unstable_enable_client_isolation must be "script", received "${mode}"`,
+      `    - client-modules: loader entry "@fixture/iso-invalid" (@fixture/iso-invalid) __unstable_enable_client_isolation must be "script", "style", or "scriptandstyle", received ${JSON.stringify(invalid)}`,
       '    - client-modules: @fixture/iso-early is a stage-one (immediately) row and cannot isolate its scripts',
     ].join('\n'))
   })
 
-  it('keeps a rebuilt script-isolated bundle out of Main Realm batches', () => {
+  it.each(['script', 'scriptandstyle'] as const)('keeps a rebuilt %s bundle out of Main Realm batches', (mode) => {
     const name = '@fixture/iso-rebuilt'
     writeBuiltPackage(name, {})
-    const { service } = constructWithRoute([name], { entryOptions: { [name]: { [FIELD]: 'script' } } })
+    const { service } = constructWithRoute([name], { entryOptions: { [name]: { [FIELD]: mode } } })
     const before = service.graph().entries[0]!.rev
     writeFileSync(service.clientPath(name)!, 'module.exports = { rebuilt: true }\n')
     service.rebuilt(name)
     const graph = service.graph()
-    expect(graph.entries[0]).toMatchObject({ id: name, isolation: 'script' })
+    expect(graph.entries[0]).toMatchObject({ id: name, isolation: mode })
     expect(graph.entries[0]!.rev).not.toBe(before)
     expect(graph.batches).toEqual([])
   })

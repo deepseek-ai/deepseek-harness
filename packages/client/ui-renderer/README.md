@@ -35,9 +35,14 @@ This package is infrastructure: the web shell and the boot kernel are its only d
 
 A business plugin registers an ordinary Slot entry or a reusable Component Factory; the renderer binds the runtime's session and workspace observable sources into selector hooks at the render position. The plugin receives standard scope props through its derived Component props — it never imports the renderer or touches React internals. Every renderer-created Component can render a Factory occurrence, and a Factory can expose caller-selected local Components without sharing implementation values between packages.
 
-Each winning `list` registration has one [item root](../../../docs/subsystems/slots.md#list-item-roots), marked with `data-slot-item` and styled with `display: contents`.
+<a id="package-style-isolation"></a>
+### Scope one package's styles
 
-When a [hoc layer](../../../docs/subsystems/slots.md#hoc-layers) renders its React `children`, the renderer marks that position with `data-slot-children`. The plugin does not need to add its own wrapper or forward DOM attributes.
+Client stylesheets are global by default. To limit a built-in or external plugin's own selectors to its content, set `__unstable_enable_client_isolation: style` on its [Loader entry](../modules/README.md#script-isolated-packages) in `cordis.yml`. A loaded package adopts a changed style setting when it reloads; reloading the page also applies the published setting. `scriptandstyle` also selects script isolation; `script` alone leaves CSS global. Dependency stylesheets keep their own settings, and an unscoped theme can still reach the plugin.
+
+Inspect the [slot roots](../../../docs/subsystems/slots.md#slot-style-ownership) for `data-plugin`, the supplying package. To see whether a stylesheet is scoped, inspect its `<style data-plugin="…" data-path="…">` in the document head for an `@scope` rule. The renderer marks each winning [list item](../../../docs/subsystems/slots.md#list-item-roots) and the place where a [hoc layer forwards children](../../../docs/subsystems/slots.md#hoc-layers); components need no wrapper or extra props. If a selected package depends on an ancestor outside its root, use an inherited theme token or put the relevant state on its own content.
+
+If a selected stylesheet is missing, check the browser console for its package and path. The browser must parse the sheet inside one native `@scope` rule. Compile out top-level `@import` and `@namespace` before enabling isolation. A failure omits the affected sheet rather than installing it globally.
 
 -----
 
@@ -51,9 +56,9 @@ The package realizes one boundary: the object layer (runtime, React-free) owns b
 
 ### Activation and mount
 
-The plugin injects `modules`, installs the Slot renderer, and publishes an instance of [`UiRenderer`](src/client/renderer.ts). Its [`DocumentStyles`](src/client/styles/document-styles.ts) constructor only retains dependencies; explicit `mount()` subscribes to module-record changes and installs CSS before React mounts. Later materialization, dependency changes, and invalidation update the installed resources synchronously. Metadata and per-file text caches belong to this renderer and are keyed by module records, so replacement records do not reuse old text.
+The plugin injects `modules`, installs the Slot renderer, and publishes [`UiRenderer`](src/client/renderer.ts). On `mount()`, [`DocumentStyles`](src/client/styles/document-styles.ts) installs CSS before React mounts and subscribes to module records. Materialization, dependency changes, and invalidation update installed resources synchronously. The installer wraps the text from `record.meta().stylesheets` in native `@scope` only when `record.isolation.style` is true. A replacement record supplies fresh metadata, text and flags.
 
-For modules with `meta`, stylesheets are collected from its optional `stylesheets` record, keyed by each stylesheet's path within the owning package, with descriptors that expose `text(context)`. Each installed style element carries `data-plugin` with the owning package and `data-path` with that path. Loaded dependency resources precede consumers; within one package, identical paths share one style node. Component mount/unmount does not register styles. A failure affects only its own stylesheet: when a module's `meta()` or a descriptor's `text()` throws, or a path already carries different CSS from another module of the same package, the renderer leaves that stylesheet out, reports it once through `console.error`, and installs every other stylesheet. A path conflict keeps the text already installed. A failed producer runs again only for a replacement module record. During live replacement, the previous styles stay installed until the replaced plugin has been torn down.
+Each installed `<style>` carries `data-plugin` (package) and `data-path` (that stylesheet's key in `meta().stylesheets`). Loaded dependencies precede consumers. A package and path share one style node; conflicting CSS keeps the installed text. If `meta()` fails, that record supplies no sheets; if `text(context)` fails, only that sheet is missing. The renderer reports the failure once through `console.error` and installs the remaining styles. Failed producers run again only for a replacement record. During live replacement, previous styles remain until the old plugin is torn down; component mounts do not own them.
 
 ### Slot bindings
 
@@ -98,7 +103,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define when the application frame appears and how far per-region readiness goes; they are current package constraints.
 
 - **The first application frame waits for the whole client roster** — the boot kernel hands over the mount point only after the loader roster settles and the boot audit accepts it; per-region readiness remains deferred.
-- **Only the main document is supported** — there is no Document Scope or Shadow DOM placement, and styles are retained at module rather than component granularity.
+- **Styles target the main document.** Native `@scope` limits selector matches, not inherited values. A Portal or arbitrary JSX moved through props does not carry its source package's scope to the destination. There is no separate presentation document or Shadow DOM; styles follow module, not component, lifetimes.
 - **Slot rendering has no Suspense integration or per-entry lazy loading** — the complete plugin roster settles before the renderer mounts the root.
 
 <a id="dev-note"></a>

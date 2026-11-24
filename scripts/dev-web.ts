@@ -19,9 +19,10 @@
  * MUST NOT run beside `pnpm run build` or `build:artifacts`: they write the same `lib/` and
  * `apps/web/dist/` trees. The build stage here finishes before any watcher starts.
  *
- * Usage: `pnpm run dev:web [--skip-build] [--no-serve] [--poll[=ms]] [--isolate <entry-id>[:script]]... [dsh web arguments]`.
- * Each `--isolate` sets `__unstable_enable_client_isolation: script` on one Loader entry through a temporary overlay
- * passed to `dsh web` as its last `--patch`, so it wins over the profile and every forwarded overlay.
+ * Usage: `pnpm run dev:web [--skip-build] [--no-serve] [--poll[=ms]] [--isolate <entry-id>[:mode]]... [dsh web arguments]`.
+ * Each `--isolate` sets `__unstable_enable_client_isolation` on one Loader entry (`script` by default,
+ * `style`, or `scriptandstyle`). Its temporary overlay is the last `--patch` passed to `dsh web`,
+ * so it wins over the profile and every forwarded overlay.
  * An entry id absent from the composed profile only produces the Loader's `patch: entry "<id>" not found`
  * warning naming that overlay; the server still starts with the entry unisolated.
  * `--skip-build` requires the artifact tree from a prior `build` or `build:artifacts`: every
@@ -120,7 +121,9 @@ function parseIsolation(value: string): DevWebIsolation {
   const entryId = separator === -1 ? value : value.slice(0, separator)
   const mode = separator === -1 ? 'script' : value.slice(separator + 1)
   if (entryId === '' || entryId.startsWith('--')) throw new Error(`dev-web: --isolate needs a Loader entry id, received "${value}"`)
-  if (mode !== 'script') throw new Error(`dev-web: --isolate mode must be script, received "${mode}" in "${value}"`)
+  if (mode !== 'script' && mode !== 'style' && mode !== 'scriptandstyle') {
+    throw new Error(`dev-web: --isolate mode must be script, style, or scriptandstyle, received "${mode}" in "${value}"`)
+  }
   return { entryId, mode }
 }
 
@@ -139,7 +142,7 @@ export function renderIsolationOverlay(isolate: readonly DevWebIsolation[]): str
 
 /**
  * Parse the script's command line. `--skip-build`, `--no-serve`, `--poll[=ms]`, and
- * `--isolate <entry-id>[:script]` (repeatable, also accepts `=`) belong to this script; a bare `--` is
+ * `--isolate <entry-id>[:mode]` (repeatable, also accepts `=`) belong to this script; a bare `--` is
  * dropped; every other token is forwarded to `dsh web`.
  * @param argv - arguments after the script path.
  * @returns the resolved flags and forwarded arguments.
@@ -393,7 +396,7 @@ if (isMain) {
     options = parseDevWebArguments(process.argv.slice(2))
   } catch (error) {
     console.error(error instanceof Error ? error.message : error)
-    console.error('dev-web: usage: pnpm run dev:web [--skip-build] [--no-serve] [--poll[=ms]] [--isolate <entry-id>[:script]]... [dsh web arguments]')
+    console.error('dev-web: usage: pnpm run dev:web [--skip-build] [--no-serve] [--poll[=ms]] [--isolate <entry-id>[:mode]]... [dsh web arguments]')
     process.exit(1)
   }
 

@@ -54,7 +54,7 @@ export class PackageRealms implements ScriptRealmRegistryHost {
     const { id } = row
     let place = this.places.get(id)
     if (place === undefined) {
-      place = row.isolation === 'script' ? 'iframe' : 'main'
+      place = row.isolation.script ? 'iframe' : 'main'
       this.places.set(id, place)
     }
     if (place === 'main') return this.main.execute({ url })

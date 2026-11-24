@@ -29,7 +29,7 @@ const PROVIDERS = [entry(REGISTRY_ID), entry(IFRAME_ID)]
 
 /** Graph whose single application batch holds every entry that keeps its scripts in the Main Realm. */
 function graph(entries: readonly WebBootEntry[], rev = 'graph'): WebBootGraph {
-  const batched = entries.filter(row => row.isolation !== 'script').map(row => row.id)
+  const batched = entries.filter(row => row.isolation !== 'script' && row.isolation !== 'scriptandstyle').map(row => row.id)
   return {
     rev, entries: [...entries],
     batches: batched.length === 0 ? [] : [{ phase: 'application', url: BATCH_URL, rev: 'batch', entries: batched }],
@@ -124,20 +124,31 @@ afterEach(async () => {
 })
 
 describe('boot wire isolation', () => {
-  it('carries isolation onto module rows and loads script-isolated rows outside every batch', () => {
-    const manifest = parseBootManifest(graph([
-      entry('plain'), entry('scripted', { isolation: 'script' }),
-    ]))
-    expect(manifest.modules.map(row => [row.id, row.isolation, row.initialUrl])).toEqual([
-      ['plain', undefined, BATCH_URL],
-      ['scripted', 'script', url('scripted')],
+  it('decodes wire modes into independent script and style flags and batches only Main scripts', () => {
+    const wire = graph([
+      entry('plain'), entry('styled', { isolation: 'style' }),
+      entry('scripted', { isolation: 'script' }), entry('both', { isolation: 'scriptandstyle' }),
     ])
-    expect(manifest.modules[0]).not.toHaveProperty('isolation')
+    const manifest = parseBootManifest(wire)
+    expect(manifest.modules.map(row => [row.id, row.isolation, row.initialUrl])).toEqual([
+      ['plain', { script: false, style: false }, BATCH_URL],
+      ['styled', { script: false, style: true }, BATCH_URL],
+      ['scripted', { script: true, style: false }, url('scripted')],
+      ['both', { script: true, style: true }, url('both')],
+    ])
   })
 
-  it.each(['style', 'scriptandstyle', 'shadow'])('rejects unsupported isolation mode %s on the wire', (mode) => {
+  it('treats an explicit null on the wire like an omitted isolation mode', () => {
+    const wire = graph([entry('plain')])
+    const decoded = parseBootManifest({ ...wire, entries: [{ ...entry('plain'), isolation: null }] })
+    expect(decoded).toEqual(parseBootManifest(wire))
+  })
+
+  it.each([
+    { mode: 'shadow' }, { mode: 'toString' }, { mode: { script: true, style: false } }, { mode: ['script'] },
+  ])('rejects invalid wire isolation $mode', ({ mode }) => {
     expect(() => parseBootManifest({ rev: 'g', entries: [{ ...entry('bad'), isolation: mode }], batches: [] }))
-      .toThrow(`client-modules: boot manifest entry "bad" isolation must be "script", received "${mode}"`)
+      .toThrow(`client-modules: boot manifest entry "bad" isolation must be "script", "style", or "scriptandstyle", received ${JSON.stringify(mode)}`)
   })
 
   it('rejects a batched isolated row, an unbatched plain row, and stage-one script isolation', () => {
@@ -150,6 +161,22 @@ describe('boot wire isolation', () => {
     expect(() => parseBootManifest(graph([entry('early', { isolation: 'script', immediately: true })])))
       .toThrow('boot manifest entry "early" cannot isolate scripts of a stage-one row')
   })
+
+  it('carries the package flags on entry and chunk records, but never on the bootstrap or shell seeds', async () => {
+    const pkg = '@example/client'
+    const styled = { isolation: 'style' } as const
+    const { modules, target } = system([entry(pkg, styled), entry(MODULES_ID, styled), entry('shell-library', styled)],
+      {}, [{ id: 'shell-library', factory: () => ({}) }])
+    target.load({ id: pkg, factory: require => ({ open: () => require.async('./client.lazy.js') }) })
+    target.load({ id: pkg, chunk: 'client.lazy.js', factory: () => ({}) })
+    const plugin = await modules.import(`${pkg}/client`) as { open(): Promise<unknown> }
+    await plugin.open()
+    await modules.import('shell-library')
+    for (const id of [pkg, `${pkg}/client.lazy.js`]) {
+      expect(modules.loadCache.get(id)).toMatchObject({ ownerId: pkg, isolation: { script: false, style: true } })
+    }
+    for (const id of [MODULES_ID, 'shell-library']) expect(modules.loadCache.get(id)?.isolation).toEqual({ script: false, style: false })
+  })
 })
 
 /** A controllable external provider for acquisition and cancellation races. */
@@ -161,15 +188,15 @@ async function controlled(behavior: Parameters<typeof realms>[2] = {}) {
   ctx.scriptRealms.register('iframe', { create: provider.factory })
   const isolated = new PackageRealms({ execute: () => Promise.reject(new Error('unexpected Main script')) }, { __ModuleLoader__: {} })
   ctx.effect(() => isolated.installRealmRegistry(ctx.scriptRealms))
-  const execute = (url: string) => isolated.execute({ id: 'a', isolation: 'script' }, url)
+  const execute = (url: string) => isolated.execute({ id: 'a', isolation: { script: true, style: false } }, url)
   return { isolated, provider, execute }
 }
 
 describe('script-isolated execution', () => {
   it('executes each script-isolated package and its chunks in its own Realm while sharing the module table', async () => {
     const shared = { identity: 'react' }
-    const entries = [...PROVIDERS, entry('plain'),
-      entry('a', { isolation: 'script' }), entry('b', { isolation: 'script' })]
+    const entries = [...PROVIDERS, entry('plain', { isolation: 'style' }),
+      entry('a', { isolation: 'script' }), entry('b', { isolation: 'scriptandstyle' })]
     let loadDetails!: () => Promise<unknown>
     const bundles: Record<string, Bundle> = {
       'plain': () => () => ({ environment: 'main', apply() {} }), 'b': environment => require => ({ environment, shared: require('react'), apply() {} }),
@@ -322,9 +349,9 @@ const mounting = (mounted: string[], name = ''): Bundle => environment => () => 
 })
 
 describe('Realm provider startup order', () => {
-  it('activates the Realm provider entries before it creates a script-isolated entry listed ahead of them', async () => {
+  it.each(['script', 'scriptandstyle'] as const)('activates the Realm providers before an earlier %s entry', async (isolation) => {
     const mounted: string[] = []
-    const b = await page([entry('a', { isolation: 'script' }), ...PROVIDERS, entry('plain')], { a: mounting(mounted), plain: mounting(mounted) })
+    const b = await page([entry('a', { isolation }), ...PROVIDERS, entry('plain')], { a: mounting(mounted), plain: mounting(mounted) })
     expect(mounted.sort()).toEqual(['+a', '+main'])
     expect(b.provider.created.map(realm => realm.id)).toEqual(['a'])
     expect(b.modules.importError('a')).toBeUndefined()
@@ -400,15 +427,40 @@ describe('Realm provider startup order', () => {
   })
 })
 
+it('keeps loaded records unchanged until replacement and gives late chunks the replacement’s flags', async () => {
+  const mounted: string[] = []
+  const bundles: Record<string, Bundle> = {
+    a: environment => require => ({ ...mounting(mounted)(environment)(require), details: () => require.async('./client.details.js') }),
+    b: mounting(mounted), 'a/client.details.js': reporting(),
+  }
+  const b = await page([...PROVIDERS, entry('a'), entry('b', { isolation: 'scriptandstyle' })], bundles)
+  const first = b.modules.loadCache.get('a')
+  const scripted = b.modules.loadCache.get('b')
+  await b.sync([...PROVIDERS, entry('a', { isolation: 'style' }), entry('b', { isolation: 'script' })], 'flipped')
+  expect(b.modules.loadCache.get('a')).toBe(first)
+  expect(b.modules.loadCache.get('b')).toBe(scripted)
+  await b.modules.entries.reload('a', '1')
+  expect(b.modules.loadCache.get('a')).not.toBe(first)
+  const reloaded = await b.modules.import('a') as { details(): Promise<unknown> }
+  await expect(reloaded.details()).resolves.toEqual({ environment: 'main' })
+  const chunk = b.modules.loadCache.get('a/client.details.js')!
+  expect(chunk.ownerId).toBe('a')
+  expect(first?.isolation).toEqual({ script: false, style: false })
+  expect(chunk.isolation).toEqual({ script: false, style: true })
+  expect(b.modules.loadCache.get('a')?.isolation).toEqual(chunk.isolation)
+  expect(scripted?.isolation).toEqual({ script: true, style: true })
+})
+
 describe('page-local placement and code replacement', () => {
-  it.each([false, true])('uses the row at first load, not a superseded installation graph (initially isolated: %s)', async (isolated) => {
+  it.each([false, true])('loads scripts and styles with the current row (initially isolated: %s)', async (isolated) => {
     const mounted: string[] = []
     const b = await page([...PROVIDERS], { a: mounting(mounted) })
-    const rows = (script: boolean) => [...PROVIDERS, entry('a', script ? { isolation: 'script' } : {})]
+    const rows = (isolate: boolean) => [...PROVIDERS, entry('a', isolate ? { isolation: 'scriptandstyle' } : {})]
     const adding = b.sync(rows(isolated), 'added')
     const flipping = b.sync(rows(!isolated), 'changed')
     await Promise.all([adding, flipping])
     expect(mounted).toEqual([isolated ? '+main' : '+a'])
+    expect(b.modules.loadCache.get('a')?.isolation).toEqual({ script: !isolated, style: !isolated })
   })
 
   it('keeps a factory delivered by a sibling’s Main batch in Main for lazy chunks and rebuilds', async () => {

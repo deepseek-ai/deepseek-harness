@@ -2,6 +2,7 @@
 
 exports[`single-slot mounting (declare + renderSlot) > folds class hashes and collapses svg internals in snapshots, leaving the live DOM alone 1`] = `
 <div
+  data-plugin=""
   data-slot="trt.panel"
   style="display: contents;"
 >
@@ -24,6 +25,7 @@ exports[`single-slot mounting (declare + renderSlot) > folds class hashes and co
 
 exports[`single-slot mounting edge arms > serializes childless svg untouched next to scoped classes 1`] = `
 <div
+  data-plugin=""
   data-slot="trt.panel"
   style="display: contents;"
 >

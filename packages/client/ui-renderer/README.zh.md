@@ -35,9 +35,14 @@ kind: "package-reference"
 
 业务插件注册普通 Slot entry 或可复用 Component Factory；渲染器在渲染位置把运行时的会话与 Workspace observable source 绑定为 selector 钩子。插件通过推导出的 Component props 收到标准 scope props——它绝不导入渲染器，也不触碰 React 内部机制。每个由 renderer 创建的 Component 都能渲染 Factory occurrence，Factory 也能暴露由调用方选择的局部 Component，而无需在包之间共享实现值。
 
-`list` 中每个胜出的注册项都有一个使用 `display: contents` 的[行根](../../../docs/subsystems/slots.zh.md#list-item-roots)，由 `data-slot-item` 标记。
+<a id="package-style-isolation"></a>
+### 单独限制一个包的样式范围
 
-当 [hoc 层](../../../docs/subsystems/slots.zh.md#hoc-layers)渲染 React 的 `children` 时，渲染器会用 `data-slot-children` 标记该位置。插件不需要自己添加包装元素或转发 DOM 属性。
+客户端样式表默认全局生效。要让某个内置或外部插件的选择器只匹配它自己提供的内容，在 `cordis.yml` 中该插件的 [Loader 配置项](../modules/README.zh.md#script-isolated-packages)上设置 `__unstable_enable_client_isolation: style`。已加载的包在重新加载时采用新的样式设置；刷新页面也会采用已发布的设置。`scriptandstyle` 还会开启脚本隔离；只选 `script` 时 CSS 仍然全局生效。依赖包的样式表遵循各自的设置，未隔离的主题仍可作用于该插件。
+
+检查 [slot 根元素](../../../docs/subsystems/slots.zh.md#slot-style-ownership)上的 `data-plugin` 可确认内容由哪个包提供。要确认某张样式表是否隔离，查看文档 head 中对应的 `<style data-plugin="…" data-path="…">` 是否包含 `@scope` 规则。渲染器负责标记每个胜出的[列表项](../../../docs/subsystems/slots.zh.md#list-item-roots)及 [hoc 层转发 `children` 的位置](../../../docs/subsystems/slots.zh.md#hoc-layers)，组件不必添加包装元素或透传属性。若选中包的样式依赖根元素以外的祖先，可改用继承的主题变量，或在包自己的内容上标明相关状态。
+
+开启隔离后若缺少一张样式表，可在浏览器控制台查看出错的包名与路径。浏览器必须能将整张表作为一条原生 `@scope` 规则来解析。若包依赖顶层 `@import` 或 `@namespace`，请在启用隔离前通过编译消除这些指令。解析失败时只跳过受影响的样式表，不会将其改按全局样式安装。
 
 -----
 
@@ -51,9 +56,9 @@ kind: "package-reference"
 
 ### 激活与挂载
 
-插件注入 `modules`，安装 Slot renderer，并发布 [`UiRenderer`](src/client/renderer.ts) 实例。其 [`DocumentStyles`](src/client/styles/document-styles.ts) 构造器只保留依赖；显式 `mount()` 订阅模块记录变化，并在 React 挂载前安装 CSS。后续物化、依赖变化和失效会同步更新资源。元信息及逐文件文本缓存由 renderer 持有，并以模块记录为键，替换后的记录不会复用旧文本。
+插件注入 `modules`，安装 Slot 渲染器，并提供 [`UiRenderer`](src/client/renderer.ts)。调用 `mount()` 时，[`DocumentStyles`](src/client/styles/document-styles.ts) 在 React 挂载前安装 CSS，随后通过模块记录的订阅保持同步。模块物化、依赖变化或模块失效都会同步更新已安装的资源。仅当 `record.isolation.style` 为真时，安装器才把 `record.meta().stylesheets` 生成的文本包进原生 `@scope`。替换后的记录提供新的元数据、文本和隔离标志。
 
-对于带有 `meta` 的模块，样式来自其可选的 `stylesheets` 字典：以样式在所属包内的路径为键，每份描述提供 `text(context)`。安装的每个 style 元素以 `data-plugin` 携带所属包名，以 `data-path` 携带该路径。已加载依赖的资源先于消费者；同一包内相同路径共用一个 style 节点。组件挂载和卸载不登记样式。失败只影响其自身的样式：模块的 `meta()` 或某份描述的 `text()` 抛错，或某路径已有同一包内另一模块提供的不同 CSS 时，renderer 不安装该样式，通过 `console.error` 报告一次，并照常安装其余样式。路径冲突时保留已安装的文本。失败的生产函数只会在替换后的模块记录上重新运行。实时替换期间，旧样式保留到被替换的插件完成卸载。
+每个已安装的 `<style>` 都带有 `data-plugin`（包名）和 `data-path`（该表在 `meta().stylesheets` 中的键）。已加载依赖包的样式排在使用方之前。同一个包的同一路径共用一个样式节点；若文本冲突，保留已安装的文本。`meta()` 执行失败时，该模块记录不提供样式表；`text(context)` 失败则只跳过对应的表。渲染器通过 `console.error` 报告一次错误，照常安装其余样式。生成函数失败后，仅在模块记录被替换时重试。实时替换期间，旧样式保留到旧插件卸载完成，与组件挂载无关。
 
 ### Slot 绑定
 
@@ -98,7 +103,7 @@ React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静�
 这些限制说明应用首帧何时出现、按区域就绪能走多远；它们是当前包约束。
 
 - **应用首帧会等待整个客户端名册**：启动内核只在 loader 名册稳定且启动审计通过后交出挂载点；按区域就绪仍属暂缓事项。
-- **仅支持主文档**：没有 Document Scope 或 Shadow DOM 放置，样式按模块而不是组件粒度保留。
+- **样式安装在主文档中。** 原生 `@scope` 限制选择器匹配，但不阻断属性继承。通过 Portal 渲染或在 props 中任意移动 JSX 时，来源包的样式作用域不会随内容转移。没有单独的展示文档或 Shadow DOM；样式遵循模块而不是组件的生命周期。
 - **slot 渲染没有 Suspense 集成或逐 entry 惰性加载**：完整插件名册稳定后，渲染器才挂载根节点。
 
 <a id="dev-note"></a>

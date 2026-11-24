@@ -1,0 +1,3 @@
+- insert:
+    - id: style-scope-global
+      name: '@fixture/style-scope-global'

@@ -72,13 +72,29 @@ Slot 声明固定两个相互独立的维度。
 
 对于 `single`、`list`、`keyed` 和 `hoc` cell，`priority` 是遮蔽优先级；对于 `chain`，它是选举顺序。数值越小越先运行或渲染。普通增量贡献应选用新的 list 或 hoc `id`，或 keyed `key`；复用已有 cell 表示有意替换其展示。
 
+<a id="slot-style-ownership"></a>
+
+### 当前位置渲染的内容由哪个包提供？
+
+`data-slot` 标记位置；`data-plugin` 标出内容由哪个包提供，与该包的 CSS 设置无关。对于[隔离样式](../../packages/client/ui-renderer/README.zh.md#package-style-isolation)，不同包名会截断外层包的作用域；里面再次出现同名包的根时，该包的样式可重新生效。提供方未知或框架显示错误时，使用 `data-plugin=""`。共享出口不带 `data-plugin`，不影响外层作用域。
+
+| 位置 | 哪个已有元素 | `data-plugin` 写谁的包名？ |
+|---|---|---|
+| `root`、`single`、`keyed` | `[data-slot]` | 胜出的注册项；`single` 或 `keyed` 渲染后备内容时写调用方。匹配项全部失败则显示框架错误。`root` 从未注册属于装配错误。 |
+| `chain` | `[data-slot]`；使用 `overlay` 时，后备内容另有 `[data-chain-overlay-fallback]` | 选中的注册项；无匹配或指定 `fallbackOnly` 时写调用方。后备元素始终标记其内容的提供方，即使暂时隐藏也一样。 |
+| `list`，包括指定 `only` 时 | 胜出项用 `[data-slot-item]`；后备内容用 `[data-slot]` | 每行写该行胜出注册项的包名。只要有行，出口就不写 `data-plugin`，即使只有一行。没有匹配的 `id` 时，出口标记调用方；某个 `id` 的注册全部失败时，在出口直属的错误元素上写 `data-plugin=""`。 |
+| `hoc` | `[data-slot]`；各层转发子内容处的 `[data-slot-children]` | 最外面的适用层；没有适用层则写调用方。每个 `children` 出口标记**里面这份内容**的提供方：有下一层就是下一层，到了最内层就是最初的调用方。 |
+| Component Factory | `[data-slot-factory]`；已挂载的局部替换用 `[data-slot-factory-children]` | 本体由定义方提供，局部替换由调用方提供。默认局部组件没有独立的根。缺少定义时直接返回调用方的后备内容，没有 Factory 根。 |
+
+这些属性不增加 DOM 元素，也不赋予额外的渲染权限。[样式作用域的设计说明](../../.agents/notes/implemented/architecture/2026-11-23-slot-module-boundaries-for-css-scope.zh.md)举例说明了按钮如何在另一包的 Factory 中保留调用方的样式，以及 HOC 层如何转发 `children`。
+
 <a id="list-item-roots"></a>
 
 ### list 行根
 
 `list` 出口（`[data-slot="key"]`）为每个选中 `id` 的胜出注册项渲染一个直接子元素 `[data-slot-item]`，用 `only` 只选一个 `id` 时也一样。该属性的值为空，不标识注册项或渲染实例。出口和行根默认都用 `div`；list 声明 `inline: true` 时都用 `span`。两者都使用 `display: contents`，自身没有布局盒。
 
-胜出组件返回 `null` 时会留下一个空行根。文本和 React Fragment 在本地渲染的所有节点都在同一个行根内；通过 Portal 渲染的内容仍在目标容器内。行根数量并不代表可见控件数。list 没有注册项或 `only` 未匹配任何 `id` 时，owner 的 `fallback` 直接渲染在出口内（省略时不渲染内容）。若匹配的 `id` 下所有注册项都已渲染失败，`[data-slot-error="key"]` 占位元素会取代行根，成为出口的直接子元素。
+胜出组件返回 `null` 时会留下一个空行根。文本和 React Fragment 在本地渲染的所有节点都在同一个行根内；通过 Portal 渲染的内容仍在目标容器内。行根数量并不代表可见控件数。list 没有注册项或 `only` 未匹配任何 `id` 时，owner 的 `fallback` 直接渲染在出口内（省略时不渲染内容）。若匹配的 `id` 下所有注册项都已渲染失败，`[data-slot-error="key"]` 占位元素会取代行根，成为出口的直接子元素。只要同一注册项仍被选中，重排兄弟行或切换 `only` 都不会重新挂载这一行及其控件，控件状态也会保留。
 
 <a id="hoc-layers"></a>
 

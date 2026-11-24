@@ -522,9 +522,9 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     const dot = toggle.locator('[data-jobs-running]')
     expect(await dot.evaluate((element) => {
       const box = element.getBoundingClientRect()
-      const style = getComputedStyle(element)
-      return [box.width, box.height, style.position, style.top, style.right]
-    })).toEqual([6, 6, 'absolute', '5px', '5px'])
+      const button = element.closest('button')!.getBoundingClientRect()
+      return [box.width, box.height, box.top - button.top, button.right - box.right]
+    })).toEqual([6, 6, 5, 5])
     expect(await page.getByRole('button', { name: /Background jobs running: 1/u }).count()).toBe(1)
     await toggle.click()
     await shows(page, 'docked')

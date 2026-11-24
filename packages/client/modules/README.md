@@ -82,7 +82,7 @@ The package has two sides: the Node half is the composition and serving side (`c
 
 ### Lazy-CJS model
 
-Executing a plugin bundle registers its factory and optional `meta` without calling them. First import or synchronous require materializes JavaScript and caches its exports; recursive require cycles reject. The module record retains `ownerId`, observed dependency edges, and `meta` as supplied, without filling in a missing producer. Modules never evaluates stylesheet metadata: it exposes `activeRecords()`, `subscribeModules()` and the carrier asset resolver for consumers. `activeRecords()` lists every materialized record plus the previous records of a package under live replacement, which stay listed until its old runtime has been torn down. The [renderer](../ui-renderer/README.md) owns metadata evaluation and stylesheet installation. Package-local `require.async()` retains its lazy arrival and owner identity.
+Executing a plugin bundle registers its factory and optional `meta` without calling them. First import or synchronous require materializes JavaScript and caches its exports; recursive require cycles reject. The module record retains `ownerId`, the package’s isolation flags, observed dependency edges, and `meta` as supplied, without filling in a missing producer. Modules never evaluates stylesheet metadata: it exposes `activeRecords()`, `subscribeModules()` and the carrier asset resolver for consumers. `activeRecords()` lists every materialized record plus the previous records of a package under live replacement, which stay listed until its old runtime has been torn down. The [renderer](../ui-renderer/README.md) owns metadata evaluation and stylesheet installation. Package-local `require.async()` retains its lazy arrival and owner identity.
 
 ### Main execution environment
 
@@ -91,13 +91,21 @@ The module system constructs its own Main Realm and runs scripts there without a
 The default Web roster loads the [Realm registry](../script-realm/README.md) and [iframe provider](../script-realm-iframe/README.md) as ordinary entries. Only when the boot graph contains a script-isolated package does cold boot wait for these two entries before creating the rest. Neither installing the registry nor registering the `iframe` factory creates an iframe.
 
 <a id="script-isolated-packages"></a>
-### Script-isolated packages
+### Testing package isolation
 
-Set `__unstable_enable_client_isolation: script` on a Client package’s Loader entry, or use [`pnpm run dev:web --isolate <entry-id>`](../../../docs/development.md). Omission or `null` selects the Main Realm. Unsupported values and script isolation on a stage-one (`immediately`) row fail composition. The browser chooses the package's execution environment when it starts loading its scripts. The entry and its lazy chunks use that choice.
+Set `__unstable_enable_client_isolation` on a Client package’s Loader entry, or use the [development overlay](../../../docs/development.md). `script` executes the package in its own Script Realm, `style` scopes its compiled styles to the content it supplies, and `scriptandstyle` requests both. Omission or `null` selects neither. Unsupported values and script isolation on a stage-one (`immediately`) row fail composition. These test switches are not security boundaries.
 
-An isolated package’s entry script and lazy chunks execute in one iframe for as long as the page retains that package. Code rebuilds and retries use the same `window` even after the registry or `iframe` provider is removed; HMR does not clear globals set by the plugin. The module system removes the iframe only when it evicts the package or shuts down. Scripts register with the page’s `__ModuleLoader__`, so `require` returns the same React, Cordis and library instances.
+The browser chooses a package's Script Realm from the row it uses to load that package's scripts for the first time. The entry and its lazy chunks use that choice.
 
-Creating a new iframe requires an installed registry with a registered `iframe` provider. If either is missing, the load fails instead of falling back to Main. If you add these two entries and an isolated package to an open page together and the package fails to load, reload the page.
+A script-isolated package’s entry script and lazy chunks execute in one iframe for as long as the page retains that package. A failed script load leaves the iframe in place. Code rebuilds and retries use the same `window` even after the registry or `iframe` provider is removed; HMR does not clear globals set by the plugin. The module system removes the iframe only when it evicts the package or shuts down. Scripts register with the page’s `__ModuleLoader__`, so `require` returns the same React, Cordis and library instances.
+
+The registry plugin installs its registry on the module system when it activates. Creating a new iframe requires an installed registry with a registered `iframe` provider. If either is missing, the load fails instead of falling back to Main. If you add these two entries and an isolated package to an open page together and the package fails to load, reload the page.
+
+When a package registers its factory, it takes the isolation flags from its current graph row. Its module record and lazy chunks keep that declaration. A graph update alone does not restyle code that is already loaded; a rebuilt or reinstalled package takes the current declaration when its new factory arrives.
+
+The renderer uses the record’s `ownerId` and `isolation.style` to install stylesheets. A chunk belongs to its own package, not to the module that requested it. Bootstrap and shell-seeded modules keep their styles global.
+
+To apply a new setting to the whole page, reload after the Host recomposes the entry and publishes its new graph. Editing entry metadata alone does not guarantee that a new graph is published.
 
 ### Incremental composition
 

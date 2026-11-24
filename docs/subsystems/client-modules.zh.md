@@ -8,7 +8,7 @@ Web 插件表：[dsh-client-modules](../../packages/client/modules) 中 client �
 
 ## wire
 
-图是 Node 半与浏览器半之间协议层的唯一真源。宿主从扫描到的包组合出 `WebBootEntry` 行与 `WebBootBatch` 描述，随后在 Vite entry 之前向结构化 index 注入表贡献 registration facade、application preload、bootstrap 脚本与图全局量。`global` 行渲染为 `globalThis["__DSH_BOOT__"]`，其中 `<` 已转义，插件可控的字符串因此无法逃出 script 元素。没有有效 manifest 的页面无法启动：浏览器解析器会拒绝畸形 row 或批次、未知成员，以及 combo 归属与 isolation 矛盾的 entry——isolation 不含 `script` 的 entry 必须恰好归属一个初始 combo 描述，script 隔离的 entry 不归属任何描述。
+图是 Node 半与浏览器半之间协议层的唯一真源。宿主从扫描到的包组合出 `WebBootEntry` 行与 `WebBootBatch` 描述，随后在 Vite entry 之前向结构化 index 注入表贡献 registration facade、application preload、bootstrap 脚本与图全局量。`global` 行渲染为 `globalThis["__DSH_BOOT__"]`，其中 `<` 已转义，插件可控的字符串因此无法逃出 script 元素。没有有效 manifest 的页面无法启动：浏览器解析器会拒绝畸形 row 或批次、未知成员，以及 combo 归属与 isolation 矛盾的 entry——`isolation: style` 或未开启隔离的 entry 必须恰好归属一个初始 combo 描述，`script` 或 `scriptandstyle` 的 entry 则不能归属任何描述。
 
 ```ts type-equiv
 /**

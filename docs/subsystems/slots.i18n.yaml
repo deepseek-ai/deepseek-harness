@@ -9,11 +9,14 @@
   en: f2d2c0d3b8f14ec7
   zh: 441ed13ff3f81d2a
 /web-client-slots/cardinality-and-scope:
-  en: b876910e9e1ee281
-  zh: 68d6d8afd276a590
+  en: 53a6af350e6fcd10
+  zh: a1ddbc9f718b4877
+/web-client-slots/cardinality-and-scope/which-package-supplies-the-rendered-content:
+  en: d25989b253bf5909
+  zh: 6c8fbf78e63fd7c4
 /web-client-slots/cardinality-and-scope/list-item-roots:
-  en: 77749f3ddcc63d3a
-  zh: 429028f658db2ab9
+  en: 04eb09f7ec2b8a97
+  zh: 693a1509f932d2ed
 /web-client-slots/cardinality-and-scope/hoc-layers:
   en: cfa4900c7b399345
   zh: ccfc5ed194e9abf6

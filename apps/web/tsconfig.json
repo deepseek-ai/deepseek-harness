@@ -139,6 +139,7 @@
     "tests/plugin-install-github.e2e.ts",
     "tests/plugin-install-silent-failure.e2e.ts",
     "tests/client-plugin-live.e2e.ts",
+    "tests/client-style-scope.e2e.ts",
     "tests/client-config-sync.e2e.ts",
     "tests/icon-skin.e2e.ts",
     "tests/draft-initialization.e2e.ts",

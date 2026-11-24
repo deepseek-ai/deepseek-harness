@@ -34,12 +34,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.session.panel.section.actions': { kind: 'keyed'; scope: 'session' }
     /**
-     * Marks over the panel toggle, such as an attention dot. Each occupant is
-     * one element: the toggle sizes it to a 6px dot at the glyph's corner, and
-     * the occupant sets its `background` and includes text that names it for
-     * assistive technology, which becomes part of the toggle's name. Occupants
-     * overlap, and a higher `order` paints above a lower one. An occupant that
-     * only repeats what the panel shows renders nothing while `panelShown`.
+     * Status marks share a 6×6 px area at the panel toggle icon's top-right corner.
+     * Draw the mark on your own element; `position: absolute; inset: 0` fills
+     * the area. Supply its shape, color, and any ring. Include status text for
+     * the toggle's accessible name. Marks overlap; higher `order` paints on top.
+     * Render nothing when there is no status to report or when `panelShown` is
+     * true and the mark only repeats the panel.
      */
     'conversation.session.panel.indicator': {
       kind: 'list'

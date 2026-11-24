@@ -70,7 +70,8 @@ describe('UI renderer plugin', () => {
     expect(renderer).toBeDefined()
     const el = container()
     act(() => { mounted.push(renderer!.mount(el)) })
-    expect(el.querySelector('[data-testid="root-probe"]')).toBeTruthy()
+    const probe = el.querySelector('[data-testid="root-probe"]')
+    expect(probe?.parentElement?.matches('[data-slot="root"][data-plugin=""]')).toBe(true)
   })
 
   it('installs module CSS before rendering and removes it after the React root unmounts', async () => {

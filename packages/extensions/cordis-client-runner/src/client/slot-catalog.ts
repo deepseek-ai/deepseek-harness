@@ -2621,8 +2621,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'conversation.session.panel.indicator',
     kind: 'list',
     scope: 'session',
-    summary: 'Marks over the panel toggle, such as an attention dot.',
-    doc: 'Marks over the panel toggle, such as an attention dot. Each occupant is\none element: the toggle sizes it to a 6px dot at the glyph\'s corner, and\nthe occupant sets its `background` and includes text that names it for\nassistive technology, which becomes part of the toggle\'s name. Occupants\noverlap, and a higher `order` paints above a lower one. An occupant that\nonly repeats what the panel shows renders nothing while `panelShown`.',
+    summary: 'Status marks share a 6×6 px area at the panel toggle icon\'s top-right corner.',
+    doc: 'Status marks share a 6×6 px area at the panel toggle icon\'s top-right corner.\nDraw the mark on your own element; `position: absolute; inset: 0` fills\nthe area. Supply its shape, color, and any ring. Include status text for\nthe toggle\'s accessible name. Marks overlap; higher `order` paints on top.\nRender nothing when there is no status to report or when `panelShown` is\ntrue and the mark only repeats the panel.',
     registerOptions: [
       {
         name: 'id',

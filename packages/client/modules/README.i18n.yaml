@@ -48,14 +48,14 @@
   en: 49dcadc166c2d06e
   zh: bbf67c6dc47f4ead
 /deepseek-ai-dsh-client-modules/understand-the-implementation/lazy-cjs-model:
-  en: 49b1c7274a67945c
-  zh: 6ec2fdf6f6af7d21
+  en: c87fb35ad5800144
+  zh: b5dd02f4d5e9821e
 /deepseek-ai-dsh-client-modules/understand-the-implementation/main-execution-environment:
   en: 3b2d663c0304e78a
   zh: 32aa738248e6080b
-/deepseek-ai-dsh-client-modules/understand-the-implementation/script-isolated-packages:
-  en: 7d386328616d3fe9
-  zh: a252722f4d8f1610
+/deepseek-ai-dsh-client-modules/understand-the-implementation/testing-package-isolation:
+  en: a27f06a4f165ccd5
+  zh: c3f43faa67e1287f
 /deepseek-ai-dsh-client-modules/understand-the-implementation/incremental-composition:
   en: 99483432e6390ca4
   zh: f92c018273aa07e4

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createClientModuleSystem, type ClientModuleLoaderTarget, type ClientModuleRecord } from '@deepseek-ai/dsh-client-modules/client'
 import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
 import { DocumentStyles } from '../src/client/styles/document-styles.ts'
+import { scopeStylesheet } from '../src/client/styles/style-scope.ts'
 
 const disposers: (() => void)[] = []
 afterEach(() => {
@@ -11,12 +12,16 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function fixture(staticModules: readonly DshClientModuleManifest[] = [], resolveAsset?: (reference: string) => string) {
+function fixture(
+  staticModules: readonly DshClientModuleManifest[] = [], resolveAsset?: (reference: string) => string, scoped: string[] = [],
+) {
   const target: ClientModuleLoaderTarget = {
     mode: 'queue', pendingQueue: [], load: () => {},
     create: options => createClientModuleSystem(target, { id: 'bootstrap', exports: {} }, options),
   }
-  const modules = target.create({ boot: { rev: '0', entries: [], batches: [] }, staticModules,
+  const entries = scoped.map(id => ({ id, url: `plugins/??${id}/client.js&rev=0`, rev: '0', isolation: 'style' }))
+  const batches = scoped.length ? [{ phase: 'application', url: 'plugins/batch', rev: '0', entries: scoped }] : []
+  const modules = target.create({ boot: { rev: '0', entries, batches }, staticModules,
     ...(resolveAsset === undefined ? {} : { resolveAsset }) })
   const register = (id: string, css: string, dependency?: string) => {
     const manifest: DshClientModuleManifest = {
@@ -32,6 +37,7 @@ function fixture(staticModules: readonly DshClientModuleManifest[] = [], resolve
 const paths = () => [...document.head.querySelectorAll('style[data-path]')].map(style => style.getAttribute('data-path'))
 
 const metadata = (path: string, css = '.fixture { display: block }') => () => ({ stylesheets: { [path]: { text: () => css } } })
+const installed = (path: string, head: ParentNode = document.head) => head.querySelector<HTMLStyleElement>(`style[data-path="${path}"]`)
 
 describe('main Document module styles', () => {
   it('ignores modules without metadata while retaining their transitive dependency order', async () => {
@@ -250,7 +256,8 @@ describe('main Document module styles', () => {
 
   it('keeps a running stylesheet when a record ordered before it later claims the same path', () => {
     const listeners = new Set<() => void>()
-    const record = (id: string, css: string): ClientModuleRecord => ({ id, ownerId: 'a', exports: {}, edges: new Set(), meta: metadata('shared.css', css) })
+    const record = (id: string, css: string): ClientModuleRecord => ({ id, ownerId: 'a', isolation: { script: false, style: true },
+      exports: {}, edges: new Set(), meta: metadata('shared.css', css) })
     const running = record('a/client.running.js', '.running { display: block }')
     let active: ClientModuleRecord[] = [running]
     const styles = new DocumentStyles(document.head, {
@@ -263,13 +270,14 @@ describe('main Document module styles', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     active = [record('a', '.late { display: flex }'), running]
     for (const listener of listeners) listener()
-    expect(document.head.querySelector('style[data-path="shared.css"]')?.textContent).toBe('.running { display: block }')
+    expect(installed('shared.css')?.sheet?.cssRules[0]).toBeInstanceOf(CSSScopeRule)
+    expect(installed('shared.css')?.textContent).toContain('.running { display: block }')
     expect(error.mock.calls).toEqual([[
       'module styles: "shared.css" of "a" is not installed; another module of "a" provides different CSS for the same path',
     ]])
     active = active.slice(0, 1)
     for (const listener of listeners) listener()
-    expect(document.head.querySelector('style[data-path="shared.css"]')?.textContent).toBe('.late { display: flex }')
+    expect(installed('shared.css')?.textContent).toContain('.late { display: flex }')
   })
 
   it('installs only materialized modules synchronously, with dependencies before consumers', async () => {
@@ -397,8 +405,9 @@ describe('main Document module styles', () => {
 
   it('keeps the styles of a replaced module until its previous records are released', () => {
     const listeners = new Set<() => void>()
-    const record = (css: string): ClientModuleRecord => ({ id: 'feature', ownerId: 'feature', exports: {}, edges: new Set(), meta: metadata('feature.css', css) })
-    const previous = record('.old { display: block }')
+    const record = (css: string, style: boolean): ClientModuleRecord => ({ id: 'feature', ownerId: 'feature', isolation: { script: false, style },
+      exports: {}, edges: new Set(), meta: metadata('feature.css', css) })
+    const previous = record('.old { display: block }', true)
     let active: ClientModuleRecord[] = [previous]
     const styles = new DocumentStyles(document.head, {
       subscribeModules: (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
@@ -409,14 +418,15 @@ describe('main Document module styles', () => {
     styles.mount()
     const installed = document.head.querySelector('style[data-path="feature.css"]')
     // Replacement invalidates the code without notifying; an unrelated module arriving meanwhile must not release the styles.
-    active = [previous, { id: 'other', ownerId: 'other', exports: {}, edges: new Set(), meta: metadata('other.css') }]
+    active = [previous, { id: 'other', ownerId: 'other', isolation: { script: false, style: false }, exports: {}, edges: new Set(), meta: metadata('other.css') }]
     for (const listener of listeners) listener()
     expect(paths()).toEqual(['feature.css', 'other.css'])
     expect(document.head.querySelector('style[data-path="feature.css"]')).toBe(installed)
+    expect(installed?.textContent).toContain('@scope')
     active = active.slice(1)
     for (const listener of listeners) listener()
     expect(paths()).toEqual(['other.css'])
-    active = [record('.new { display: flex }'), ...active]
+    active = [record('.new { display: flex }', false), ...active]
     for (const listener of listeners) listener()
     expect(document.head.querySelector('style[data-path="feature.css"]')?.textContent).toBe('.new { display: flex }')
   })
@@ -443,5 +453,96 @@ describe('main Document module styles', () => {
     f.register('later', '.later { display: grid }')
     await f.modules.import('later')
     expect(paths()).toEqual([])
+  })
+})
+
+describe('package stylesheet policy', () => {
+  it('wraps the chunk owner’s compiled sheet and leaves the dependency theme global', async () => {
+    const owner = '@fixture/panel'
+    const chunk = `${owner}/client.panel.js`
+    const theme = ':root { --ink: red }'
+    const css = 'button { color: var(--ink) }\n@media screen { p { display: flex } }'
+    const text = vi.fn(() => css)
+    const f = fixture([{ id: 'theme', factory: () => ({}), meta: metadata('theme.css', theme) }], undefined, [owner])
+    f.target.load({ id: owner, chunk: 'client.panel.js', factory: () => ({}), meta: () => ({ stylesheets: { 'panel.css': { text } } }) })
+    f.target.load({ id: owner, factory: (require) => { require(chunk); require('theme'); return {} } })
+    await f.modules.import(owner)
+    const styles = new DocumentStyles(document.head, f.modules)
+    disposers.push(() => { styles.dispose() })
+    styles.mount()
+    const sheet = installed('panel.css')!
+    expect(sheet.dataset.plugin).toBe(owner)
+    expect(sheet.getAttributeNames().sort()).toEqual(['data-path', 'data-plugin'])
+    const own = '[data-plugin="@fixture/panel"]'
+    expect(sheet.textContent).toBe(`@scope (${own}) to ([data-plugin]:not(${own})) {\n${css}\n}`)
+    expect(sheet.sheet?.cssRules).toHaveLength(1)
+    expect(sheet.sheet?.cssRules[0]).toBeInstanceOf(CSSScopeRule)
+    expect((sheet.sheet?.cssRules[0] as CSSScopeRule).cssRules).toHaveLength(2)
+    expect(installed('theme.css')?.textContent).toBe(theme)
+    expect(paths()).toEqual(['theme.css', 'panel.css'])
+    expect(text).toHaveBeenCalledTimes(1)
+    f.modules.invalidate(owner)
+    expect(paths()).toEqual(['theme.css'])
+    styles.dispose()
+    expect(paths()).toEqual([])
+  })
+
+  it('omits a sheet that exits its scope without publishing its rules, then accepts its replacement', async () => {
+    const f = fixture([], undefined, ['a'])
+    const bad = '} .outside { display: flex }'
+    f.target.load({ id: 'a', factory: () => ({}), meta: () => ({ stylesheets: {
+      'bad.css': { text: () => bad }, 'good.css': { text: () => 'p { display: grid }' },
+    } }) })
+    await f.modules.import('a')
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const styles = new DocumentStyles(document.head, f.modules)
+    disposers.push(() => { styles.dispose() })
+    const changes = new MutationObserver(() => {})
+    changes.observe(document.head, { childList: true })
+    disposers.push(() => { changes.disconnect() })
+    styles.mount()
+    expect(changes.takeRecords().flatMap(change => [...change.addedNodes])).toEqual([installed('good.css')])
+    f.target.load({ id: 'unrelated', factory: () => ({}) })
+    await f.modules.import('unrelated')
+    expect(paths()).toEqual(['good.css'])
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(error.mock.calls[0]?.[0]).toContain('"bad.css" of "a" failed and is not installed')
+    f.modules.invalidate('a')
+    f.target.load({ id: 'a', factory: () => ({}), meta: metadata('bad.css', '.replacement {}') })
+    await f.modules.import('a')
+    expect(installed('bad.css')?.sheet?.cssRules[0]).toBeInstanceOf(CSSScopeRule)
+  })
+
+  it('omits only the selected stylesheet in a document without CSS @scope support', async () => {
+    const head = document.implementation.createHTMLDocument('').head
+    const f = fixture([], undefined, ['a'])
+    f.register('a', '.a {}'); f.register('theme', ':root { --ink: red }')
+    await f.modules.import('a'); await f.modules.import('theme')
+    const styles = new DocumentStyles(head, f.modules)
+    disposers.push(() => { styles.dispose() })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    styles.mount()
+    expect(installed('a', head)).toBeNull()
+    expect(installed('theme', head)?.textContent).toBe(':root { --ink: red }')
+    expect(error.mock.calls[0]?.[1]).toHaveProperty('message', expect.stringContaining('CSS @scope support'))
+  })
+
+  it('serializes quotes, backslashes and controls inside the root attribute string', () => {
+    const css = scopeStylesheet(document, 'a"\\\n\u007f\0b', '.x {}')
+    expect(css).toContain(String.raw`[data-plugin="a\"\\\a \7f �b"]`)
+  })
+
+  it('rejects top-level imports and namespaces, not matching text inside a CSS string', () => {
+    const imported = '@layer foundation; @import url("data:text/css,"); p {}'
+    // JSDOM parses style elements only in a document that has a window.
+    expect(() => scopeStylesheet(document, 'a', imported)).toThrow('cannot check')
+    const frame = document.body.appendChild(document.createElement('iframe'))
+    disposers.push(() => { frame.remove() })
+    vi.spyOn(document.implementation, 'createHTMLDocument').mockReturnValue(frame.contentDocument!)
+    for (const css of [imported, '@namespace svg url("http://www.w3.org/2000/svg"); svg|rect {}']) {
+      expect(() => scopeStylesheet(document, 'a', css)).toThrow('@import and @namespace need the top level')
+    }
+    const content = 'p::before { content: "@import" }'
+    expect(scopeStylesheet(document, 'a', content)).toContain(content)
   })
 })

@@ -127,7 +127,7 @@ export class ClientEntries {
         await this.create(loader, id).catch((error: unknown) => { loader.ctx.logger.error(error) })
       }
       // The registry must be installed and its iframe factory registered before an isolated bundle executes.
-      if (manifest.modules.some(row => row.isolation === 'script')) {
+      if (manifest.modules.some(row => row.isolation.script)) {
         await Promise.all(manifest.plugins.filter(row => ISOLATED_REALM_PROVIDER_ROWS.includes(row.id)).map(create))
         await loader.await()
       }

@@ -72,13 +72,29 @@ The slot declaration fixes two independent axes.
 
 `priority` is a shadowing rank for `single`, `list`, `keyed`, and `hoc` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list or hoc `id`, or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
 
+<a id="slot-style-ownership"></a>
+
+### Which package supplies the rendered content?
+
+`data-slot` identifies a position; `data-plugin` identifies the package supplying its content, regardless of that package's CSS settings. For [scoped styles](../../packages/client/ui-renderer/README.md#package-style-isolation), a different package name ends the enclosing package's scope; a nested root with the original name starts it again. An unknown supplier or framework error has `data-plugin=""`. A shared outlet with no `data-plugin` leaves the enclosing scope unchanged.
+
+| Position | Existing element | Whose package name goes in `data-plugin`? |
+|---|---|---|
+| `root`, `single`, `keyed` | `[data-slot]` | The winner, or the caller for a `single` or `keyed` fallback. An exhausted cell shows a framework error instead. An unregistered `root` is an assembly error. |
+| `chain` | `[data-slot]`; `[data-chain-overlay-fallback]` for an overlay's fallback | The elected registration, or the caller for no match or `fallbackOnly`. The separate fallback element always names its supplier, even while hidden. |
+| `list`, including `only` | `[data-slot-item]` for a winner; `[data-slot]` for a fallback | Each item's winner. An outlet with rows is unmarked, even for a single row. With no matching `id`, the outlet names the caller; an exhausted `id` gets `data-plugin=""` on its direct error element. |
+| `hoc` | `[data-slot]`; `[data-slot-children]` where a layer forwards children | The outermost applicable layer, or the caller with no layers. Each children outlet names the supplier of its *contents*: the next layer, or the original caller at the innermost layer. |
+| Component Factory | `[data-slot-factory]`; `[data-slot-factory-children]` for a mounted local replacement | The definition supplies the body; the caller supplies the selected local. A default local has no separate root. A missing definition returns the caller's fallback without a Factory root. |
+
+No additional DOM element or render permission comes with these attributes. The [style scoping decision](../../.agents/notes/implemented/architecture/2026-11-23-slot-module-boundaries-for-css-scope.md) shows how a button keeps its caller's styles inside another package's Factory and how HOC layers forward children.
+
 <a id="list-item-roots"></a>
 
 ### List item roots
 
 A `list` outlet (`[data-slot="key"]`) has one direct `[data-slot-item]` child for the winning registration of each selected `id`, even when `only` selects a single `id`. The attribute has an empty value; it does not identify the registration or the render instance. The outlet and its item roots are `div`s by default or `span`s when the list declares `inline: true`. Both use `display: contents` and have no layout box of their own.
 
-A winner that returns `null` leaves an empty item. Text and all local nodes of a React Fragment stay inside one item; portal content stays at its destination. Counting item roots does not tell you how many controls are visible. If the list has no registrations or `only` matches no `id`, the owner's `fallback` renders directly inside the outlet (nothing if omitted). If all registrations for a matching `id` have failed, its `[data-slot-error="key"]` placeholder is a direct child of the outlet instead of an item.
+A winner that returns `null` leaves an empty item. Text and all local nodes of a React Fragment stay inside one item; portal content stays at its destination. Counting item roots does not tell you how many controls are visible. If the list has no registrations or `only` matches no `id`, the owner's `fallback` renders directly inside the outlet (nothing if omitted). If all registrations for a matching `id` have failed, its `[data-slot-error="key"]` placeholder is a direct child of the outlet instead of an item. Reordering siblings or switching `only` preserves the item, its controls and their state while the same registration remains selected.
 
 <a id="hoc-layers"></a>
 

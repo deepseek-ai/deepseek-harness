@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/style-scope-addon",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./index.js", "./client": "./client.js" },
+  "dsh": { "client": { "platform": "web" } }
+}
