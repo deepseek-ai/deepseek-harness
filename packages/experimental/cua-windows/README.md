@@ -41,6 +41,10 @@ Each result contains `id`, `displayName`, `identity: null`, and `isRunning`. The
 
 ### Application and window selection
 
+The first time a conversation selects an application without a saved grant, the approval card offers **Reject**, **Allow for this session**, and, when the profile can save grants, **Always allow**. **Always allow** is the primary button. Selecting it grants access across conversations in the same profile until revoked on the Computer Use plugin page. Pressing Enter in the approval details grants access for the current conversation.
+
+Consent follows the exact AUMID or, for an executable selection, the resolved file path. Windows and processes declaring the same AUMID share consent, regardless of publisher. Replacing an executable at an approved path retains its grant. Moving it to another path requires separate consent.
+
 - `cua.getApp(id)` requests application consent and returns an App on success. It does not read accessibility state or activate the application. Stopped applications are launched through Explorer after consent.
 - `app.getWindows()` reads the application's current window list. One application can have multiple windows across multiple processes. Previously admitted HWNDs remain listed while valid, including hidden windows.
 - `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Windows checks application ownership on first admission, then trusts the HWND while it remains valid.
@@ -58,7 +62,7 @@ Each result contains `id`, `displayName`, `identity: null`, and `isRunning`. The
 2. Read an accessibility tree before using element IDs. Absolute pointer coordinates use pixels in the latest returned screenshot, relative to that window. `relative: true` uses integer thousandths from 0 to 999 after an appropriate AX observation or screenshot. Capture again after a resize.
 3. `pressKey`, `click`, and `drag` accept `ctrl` (or `control`), `alt`, and `shift`. Only `click` and `drag` accept `win`. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
-5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
+5. Respect denial and revocation. After a reconnect, select the application again to obtain a fresh handle.
 
 `win.toggleMouse(button, direction)` sends one system mouse button event at the current pointer. A down requires the selected window to be in the foreground and under the pointer. Release through the original Window object. An up releases the desktop button without switching focus or moving the pointer.
 
@@ -94,7 +98,6 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - App-level accessibility is unavailable; select an explicit window before reading its tree.
 - If `getWindows()` is empty after launch, ask the user to open the required window.
 - Observation and input require an accessible, unlocked interactive Windows session. Screenshots require Windows Graphics Capture support; a listed window can still be unavailable for capture or input.
-- Application consent does not offer an **Always allow** grant. Another conversation needs its own consent.
 
 <a id="dev-note"></a>
 ### Dev Note

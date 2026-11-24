@@ -295,16 +295,10 @@ internal static class DesktopWindows
             var processName = ReadProcessName(processId);
             if (string.IsNullOrEmpty(processName)) return null;
             context.Check();
-            var windowAumid = ReadWindowAumid(handle, context);
-            string? executablePath = null;
-            string? appId = null;
-            if (!string.IsNullOrEmpty(windowAumid)) appId = windowAumid;
-            else
-            {
-                appId = ReadProcessAumid(process, context);
-                if (string.IsNullOrEmpty(appId)) executablePath = ReadExecutablePath(process, context);
-                appId ??= executablePath;
-            }
+            var appId = ApplicationAuthorization.AsAumid(ReadWindowAumid(handle, context))
+                ?? ApplicationAuthorization.AsAumid(ReadProcessAumid(process, context));
+            var executablePath = appId is null ? ReadExecutablePath(process, context) : null;
+            appId ??= executablePath;
             if (appId is null) return null;
             context.Check();
             return new(handle, appId, executablePath, processName);

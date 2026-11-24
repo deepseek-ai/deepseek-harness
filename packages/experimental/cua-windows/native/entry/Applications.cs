@@ -3,22 +3,11 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
 
 internal sealed record RunningApplication(int Pid, long Started, string Path, string Name);
-
-internal sealed record ApplicationAuthorization(string Id, string Name,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutablePath)
-{
-    /// <summary>Not eligible for a permanent grant; the Host still persists conversation grants and denials.</summary>
-    public bool Persistable => false;
-
-    internal static ApplicationAuthorization Create(string appId, string name, string? executablePath)
-        => new(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("windows-aumid\0" + appId))), name, executablePath);
-}
 
 internal sealed class AppState(string handle, string appId, string name, ApplicationAuthorization authorization,
     bool isRunning) : IDisposable

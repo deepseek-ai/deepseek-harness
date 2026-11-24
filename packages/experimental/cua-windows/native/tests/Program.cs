@@ -19,6 +19,22 @@ void Refuses(Action action, string code)
     catch (NativeFailure failure) { Check(failure.Code == code, "Unexpected refusal: " + failure.Code); }
 }
 
+var editorId = "Fixture.Editor!App";
+var editor = ApplicationAuthorization.Create(editorId, "Editor", null);
+var originalPath = Path.GetFullPath("Editor.exe");
+var movedPath = Path.GetFullPath(Path.Combine("moved", "Editor.exe"));
+var fileGrant = ApplicationAuthorization.Create(originalPath, "Editor", originalPath);
+Check(editor.Persistable && fileGrant.Persistable, "Both AUMID and executable selections offer profile consent");
+Check(editor.Id == "21862b004156dda19d73095999bd1e37dd539d0eb199555a45ac707b1f036010", "Existing Windows session decisions retain their key");
+Check(editor.Id == ApplicationAuthorization.Create(editorId, "Renamed editor", movedPath).Id,
+    "Display name and installation changes retain AUMID consent");
+Check(editor.Id != ApplicationAuthorization.Create("Fixture.editor!App", "Editor", null).Id,
+    "Different ordinal AUMIDs with the same display name require separate consent");
+Check(fileGrant.Id != editor.Id && fileGrant.Id != ApplicationAuthorization.Create(movedPath, "Editor", movedPath).Id,
+    "An executable grant applies only to the selected path");
+Check(ApplicationAuthorization.AsAumid(originalPath) is null && ApplicationAuthorization.AsAumid(editorId) == editorId,
+    "Window and process AUMIDs cannot claim executable-path grants");
+
 var handshakeConfig = new JsonObject
 {
     ["maxRequestBytes"] = 8192, ["maxResponseBytes"] = 8192, ["axTimeoutMs"] = 10, ["textEventIntervalMs"] = 0,
