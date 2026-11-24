@@ -26,7 +26,7 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | `@deepseek-ai/cordis-plugin-logger-console` | `@cordisjs/plugin-logger-console` | [vendor/logger-console](vendor/logger-console/) | MIT |
 | `@deepseek-ai/cordis-element` | `@cordisjs/element` | [vendor/element](vendor/element/) | MIT |
 | `@deepseek-ai/cordis-fetch-file` | `@cordisjs/fetch-file` | [vendor/fetch-file](vendor/fetch-file/) | MIT |
-| `@deepseek-ai/cordis-plugin-http` | `@cordisjs/plugin-http` | [vendor/http](vendor/http/) | MIT |
+| `@deepseek-ai/cordis-plugin-http` | `@cordisjs/http` | [vendor/http](vendor/http/) | MIT |
 | `@deepseek-ai/satori-element` | `@satorijs/element` | [vendor/satori-element](vendor/satori-element/) | MIT |
 | `@deepseek-ai/cordis-plugin-im-core` | `@satorijs/core` | [vendor/plugin-im-core](vendor/plugin-im-core/) | MIT |
 | `@deepseek-ai/cordis-plugin-im-adapter-lark` | `@satorijs/adapter-lark` | [vendor/plugin-im-adapter-lark](vendor/plugin-im-adapter-lark/) | MIT |
