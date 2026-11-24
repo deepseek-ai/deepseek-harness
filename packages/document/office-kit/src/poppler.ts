@@ -31,10 +31,8 @@ type ImagesOperation = Extract<OfficeOperation, { kind: 'images' }>
 const DEFAULT_DPI = 144
 /** Retained stderr tail of one process, kept only as a failure cause. */
 const STDERR_BYTES = 8192
-/** Retained pdfinfo stdout tail before the page lines; the document properties precede `Pages:`. */
+/** Retained pdfinfo stdout tail; the document properties precede `Pages:`, and only short fixed fields follow it. */
 const PDFINFO_STDOUT_BYTES = 65536
-/** Retained pdfinfo stdout per listed page for its `size` and `rot` lines. */
-const PDFINFO_PAGE_BYTES = 256
 /** Bytes written to stdin before waiting for the process to read them. */
 const STDIN_CHUNK_BYTES = 65536
 /** Termination grace for a canceled or timed-out process. */
@@ -66,7 +64,10 @@ export async function locatePoppler(ctx: Context, executables: PopplerExecutable
 }
 
 /**
- * Render selected PDF pages with Poppler under one deadline.
+ * Render selected PDF pages with Poppler under one deadline. One `pdfinfo` reads the page count, then one
+ * `pdftoppm -cropbox` renders each run of consecutive pages. Page dimensions are checked only after rendering, from
+ * each PNG header; Poppler renders inclusive page ranges and a check before rendering would send the whole PDF to one
+ * more process.
  * @param tools - located Poppler executables.
  * @param pdf - complete source bytes, written to each process's stdin.
  * @param operation - selection, resolution, and complete-result limits.
@@ -88,13 +89,7 @@ export async function renderPdf(
   const run = AbortSignal.any([signal, deadline.signal])
   try {
     const pageCount = parsePageCount(await runTool(tools, 'pdfinfo', ['-'], pdf, run, PDFINFO_STDOUT_BYTES))
-    const pages = selectPages(operation, pageCount)
-    const runs = contiguousRuns(pages)
-    const spanFirst = Math.min(...pages)
-    const spanLast = Math.max(...pages)
-    const sizes = await runTool(tools, 'pdfinfo', ['-f', String(spanFirst), '-l', String(spanLast), '-'], pdf, run,
-      PDFINFO_STDOUT_BYTES + (spanLast - spanFirst + 1) * PDFINFO_PAGE_BYTES)
-    for (const [first, last] of runs) checkPageSizes(sizes, first, last, dpi, operation)
+    const runs = contiguousRuns(selectPages(operation, pageCount))
     const images: OfficeImage[] = []
     let remaining = operation.maxBytes
     for (const [first, last] of runs) {
@@ -168,27 +163,6 @@ function parsePageCount(stdout: string): number {
   const match = [...stdout.matchAll(/^Pages:\s+(\d+)\s*$/gmu)].at(-1)
   if (match === undefined) throw new OfficeKitError('invalid-output', 'pdfinfo did not report the page count.')
   return Number(match[1])
-}
-
-/** Refuse pages whose crop box at `dpi` exceeds the pixel or dimension limit. */
-function checkPageSizes(stdout: string, first: number, last: number, dpi: number, operation: ImagesOperation): void {
-  // pdfinfo prints the real page lines after the document properties, so they overwrite any line a property value forges.
-  const sizes = new Map<number, { width: number; height: number }>()
-  const rotations = new Map<number, number>()
-  for (const match of stdout.matchAll(/^Page\s+(\d+)\s+size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/gmu)) {
-    sizes.set(Number(match[1]), { width: Number(match[2]), height: Number(match[3]) })
-  }
-  for (const match of stdout.matchAll(/^Page\s+(\d+)\s+rot:\s+(\d+)/gmu)) rotations.set(Number(match[1]), Number(match[2]))
-  for (let page = first; page <= last; page++) {
-    const size = sizes.get(page)
-    if (size === undefined) throw new OfficeKitError('invalid-output', `pdfinfo did not report the size of page ${page}.`)
-    const turned = (rotations.get(page) ?? 0) % 180 === 90
-    const width = Math.ceil((turned ? size.height : size.width) * dpi / 72)
-    const height = Math.ceil((turned ? size.width : size.height) * dpi / 72)
-    if (width > operation.maxDimension || height > operation.maxDimension || width * height > operation.maxPixels) {
-      throw new OfficeKitError('output-too-large', `Page ${page} renders at ${width}x${height} px, above maxPixels or maxDimension; reduce DPI or raise the image limits.`)
-    }
-  }
 }
 
 /** One complete PNG and the dimensions its IHDR chunk declares. */

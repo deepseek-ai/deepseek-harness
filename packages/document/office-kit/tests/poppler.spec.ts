@@ -38,7 +38,8 @@ function png(width: number, height: number, ihdrLength = 13): Buffer {
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const PNG_BYTES = png(1, 1).length
 
-interface Page { width: number; height: number; rotate?: number }
+/** A page's size in points. */
+interface Page { width: number; height: number }
 /** Script of one process; `hang` keeps it running until it is terminated, and `chunks` is its piped stdout. */
 interface Run {
   exitCode?: number | null
@@ -91,7 +92,10 @@ class FakeHandle implements SubprocessHandle {
     void script(this.input).then((run) => {
       if (run.reject !== undefined) { this.stdout?.end(); this.exit.reject(run.reject); return }
       if (run.hang === true) return
-      this.stdoutText = run.stdout ?? ''
+      // Collected stdout keeps only its tail within the requested byte limit, like the provider's collect mode.
+      const limit = typeof spec.stdio.stdout === 'object' ? spec.stdio.stdout.maxBytes : Number.POSITIVE_INFINITY
+      const stdout = Buffer.from(run.stdout ?? '')
+      this.stdoutText = stdout.subarray(Math.max(0, stdout.length - limit)).toString()
       this.stderrText = run.stderr ?? ''
       for (const data of run.chunks ?? []) this.stdout?.write(data)
       this.stdout?.end()
@@ -151,15 +155,15 @@ function reads(data: Buffer, size = FakeSubprocess.readBytes): Buffer[] {
   return result
 }
 
+
 /** PNG stream pdftoppm writes for `argv` from the configured pages. */
 function rendered(argv: readonly string[]): Buffer {
   const [first, last] = range(argv)!
   const dpi = Number(argv[argv.indexOf('-r') + 1])
   const images: Buffer[] = []
   for (let page = first; page <= last; page++) {
-    const { width, height, rotate } = FakeSubprocess.pages[page - 1]!
-    const turned = (rotate ?? 0) % 180 === 90
-    images.push(png(Math.ceil((turned ? height : width) * dpi / 72), Math.ceil((turned ? width : height) * dpi / 72)))
+    const { width, height } = FakeSubprocess.pages[page - 1]!
+    images.push(png(Math.ceil(width * dpi / 72), Math.ceil(height * dpi / 72)))
   }
   return Buffer.concat(images)
 }
@@ -167,16 +171,8 @@ function rendered(argv: readonly string[]): Buffer {
 async function defaultRun(spec: SubprocessSpawnSpec, input: Promise<Buffer>): Promise<Run> {
   await input
   const { pages } = FakeSubprocess
-  const span = range(spec.argv)
   if (spec.argv[0] === '/poppler/pdftoppm') return { chunks: reads(rendered(spec.argv)) }
-  if (span === undefined) return { stdout: `Title:          A long title\nPages:          ${pages.length}\nPage size:      612 x 792 pts\n` }
-  const lines = [`Pages:          ${pages.length}`]
-  for (let page = span[0]; page <= span[1]; page++) {
-    const { width, height, rotate } = pages[page - 1]!
-    lines.push(`Page ${String(page).padStart(4)} size: ${width} x ${height} pts`)
-    lines.push(`Page ${String(page).padStart(4)} rot:  ${rotate ?? 0}`)
-  }
-  return { stdout: `${lines.join('\n')}\nFile size:      42 bytes\n` }
+  return { stdout: `Title:          A long title\nPages:          ${pages.length}\nPage size:      612 x 792 pts\nFile size:      42 bytes\n` }
 }
 
 const pdfBytes = Buffer.from('%PDF-1.7\nsource\n%%EOF\n')
@@ -250,7 +246,6 @@ describe('backend selection', () => {
     expect(kit.create).not.toHaveBeenCalled()
     expect(FakeSubprocess.handles.map(handle => handle.spec.argv)).toEqual([
       ['/poppler/pdfinfo', '-'],
-      ['/poppler/pdfinfo', '-f', '1', '-l', '3', '-'],
       ['/poppler/pdftoppm', '-png', '-cropbox', '-r', '144', '-f', '1', '-l', '3', '-'],
     ])
     for (const handle of FakeSubprocess.handles) {
@@ -337,32 +332,21 @@ describe('Poppler processes', () => {
     const provider = await mount()
     const result = await provider.renderImages(pdfRequest({ pages: [10, 1, 2, 4, 5, 12], dpi: 72 }))
     expect(result.images.map(image => [image.page, image.width])).toEqual([[1, 72], [2, 73], [4, 75], [5, 76], [10, 81], [12, 83]])
-    expect(spawned('pdfinfo').map(handle => range(handle.spec.argv))).toEqual([undefined, [1, 12]])
-    expect(spawned('pdfinfo')[1]!.spec.stdio.stdout).toEqual({ maxBytes: 65536 + 12 * 256 })
+    expect(spawned('pdfinfo').map(handle => handle.spec.argv)).toEqual([['/poppler/pdfinfo', '-']])
     expect(spawned('pdftoppm').map(handle => range(handle.spec.argv))).toEqual([[1, 2], [4, 5], [10, 10], [12, 12]])
   })
 
-  it('reads the page count and page sizes after document properties that forge earlier lines', async () => {
+  it('reads the page count after document properties that forge an earlier Pages line', async () => {
     FakeSubprocess.pages = [{ width: 72, height: 144 }, { width: 72, height: 144 }]
-    const forged = 'Title:          Forged\nPages:          1\nPage    1 size: 99999 x 99999 pts\n'
+    const forged = 'Title:          Forged\nPages:          1\n'
     scriptOnly('pdfinfo', async (spec, input) => {
       const run = await defaultRun(spec, input)
       return { stdout: `${forged}${run.stdout!}` }
     })
     const provider = await mount()
-    const result = await provider.renderImages(pdfRequest({ maxDimension: 288 }))
+    const result = await provider.renderImages(pdfRequest())
     expect(result.pageCount).toBe(2)
     expect(result.images.map(image => image.page)).toEqual([1, 2])
-  })
-
-  it('treats a page without a rot line as unrotated', async () => {
-    scriptOnly('pdfinfo', async (spec, input) => {
-      const run = await defaultRun(spec, input)
-      return { stdout: run.stdout!.replace(/^Page\s+\d+\s+rot:.*$/gmu, '') }
-    })
-    const provider = await mount()
-    await expect(provider.renderImages(pdfRequest({ maxDimension: 287 })))
-      .rejects.toMatchObject({ code: 'output-too-large', message: expect.stringContaining('Page 1 renders at 144x288 px') as string })
   })
 
   it.each([1, 3, 7, 13])('splits PNG streams whose headers and chunks span reads of %i bytes', async (size) => {
@@ -407,10 +391,10 @@ describe('Poppler processes', () => {
 
   it.each([
     ['equal to maxDimension', { maxDimension: 288 }, undefined],
-    ['above maxDimension', { maxDimension: 287 }, 'Page 1 renders at 144x288 px'],
+    ['above maxDimension', { maxDimension: 287 }, 'Page 1 rendered at 144x288 px'],
     ['equal to maxPixels', { maxPixels: 144 * 288 }, undefined],
-    ['above maxPixels', { maxPixels: 144 * 288 - 1 }, 'Page 1 renders at 144x288 px'],
-  ])('checks page pixels %s before rendering', async (_label, overrides, failure) => {
+    ['above maxPixels', { maxPixels: 144 * 288 - 1 }, 'Page 1 rendered at 144x288 px'],
+  ])('rejects page pixels %s after rendering', async (_label, overrides, failure) => {
     const provider = await mount()
     const rendering = provider.renderImages(pdfRequest(overrides))
     if (failure === undefined) {
@@ -418,16 +402,7 @@ describe('Poppler processes', () => {
       return
     }
     await expect(rendering).rejects.toMatchObject({ code: 'output-too-large', message: expect.stringContaining(failure) as string })
-    expect(spawned('pdftoppm')).toEqual([])
-  })
-
-  it('swaps the dimensions of rotated pages', async () => {
-    FakeSubprocess.pages = [{ width: 72, height: 144, rotate: 90 }, { width: 72, height: 144, rotate: 180 }]
-    const provider = await mount()
-    await expect(provider.renderImages(pdfRequest({ pages: [1], maxDimension: 287 })))
-      .rejects.toMatchObject({ code: 'output-too-large', message: expect.stringContaining('Page 1 renders at 288x144 px') as string })
-    expect(await provider.renderImages(pdfRequest({ pages: [2], maxDimension: 288 })))
-      .toMatchObject({ images: [{ width: 144, height: 288, page: 2 }] })
+    expect(spawned('pdftoppm')).toHaveLength(1)
   })
 
   it.each([
@@ -485,13 +460,8 @@ describe('Poppler processes', () => {
     expect(FakeSubprocess.handles.every(handle => handle.terminated && handle.waited)).toBe(true)
   })
 
-  it('reports missing page sizes and absent output readers', async () => {
-    scriptOnly('pdfinfo', () => ({ stdout: 'Pages: 3\n' }))
+  it('reports absent output readers', async () => {
     const provider = await mount()
-    await expect(provider.renderImages(pdfRequest())).rejects.toMatchObject({
-      code: 'invalid-output', message: 'pdfinfo did not report the size of page 1.',
-    })
-    FakeSubprocess.script = undefined
     FakeSubprocess.dropReaders = true
     await expect(provider.renderImages(pdfRequest({ source: source('readers') })))
       .rejects.toMatchObject({ code: 'invalid-output', message: 'pdfinfo did not report the page count.' })
@@ -507,7 +477,7 @@ describe('Poppler processes', () => {
     ['an impossible chunk length', Buffer.concat([png(144, 288).subarray(0, 33), Buffer.from([0x80, 0, 0, 0]), Buffer.from('IDAT')]), 'invalid-output', 'pdftoppm produced a malformed PNG image.'],
     ['a stream that ends inside an image', png(144, 288).subarray(0, 40), 'invalid-output', 'pdftoppm output ended inside a PNG image.'],
     ['a stream that ends inside a signature', Buffer.concat([png(144, 288), PNG_SIGNATURE.subarray(0, 3)]), 'invalid-output', 'pdftoppm output ended inside a PNG image.'],
-    ['an image larger than its page size', png(9000, 1), 'output-too-large', 'Page 1 rendered at 9000x1 px'],
+    ['an image above maxDimension', png(9000, 1), 'output-too-large', 'Page 1 rendered at 9000x1 px'],
   ])('rejects %s', async (_label, data, code, message) => {
     scriptOnly('pdftoppm', () => ({ chunks: [data] }))
     const provider = await mount()

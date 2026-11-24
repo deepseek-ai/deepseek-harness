@@ -40,7 +40,7 @@ kind: "package-reference"
 
 `renderImages()` 在准入前选定渲染后端。请求的 `renderer` 只使用该后端：`poppler` 用于非 PDF 输入时以 `unsupported-format` 失败，后端不可用时以 `unavailable` 失败。未指定 `renderer` 时，PDF 输入取 `renderers.pdf`、其他输入取 `renderers.office` 中第一个可用的后端，最后一项不预先检查，直接使用。只有「不可用」才会换下一项；选中的后端运行失败、超时或输出无效时直接拒绝请求。Kit 能导入时 LibreOffice 可用。`subprocess` 服务存在，且能在其执行环境中找到两个已配置的可执行文件时，Poppler 可用；组合了 SSH 提供方时，该执行环境是 SSH 主机。结果注明所用后端，缓存的渲染结果按后端分别保存。
 
-Poppler 渲染 PDF 页面时不占用 LibreOffice 转换器槽位，但仍共用队列准入、并发和源字节预留。每个进程从 stdin 读取 PDF，提供方与进程之间不传递任何文件。第一个 `pdfinfo` 报告页数，取其最后一行 `Pages:`，因为标题等文档属性先输出；第二个报告从第一个到最后一个所选页面中每页的裁剪框尺寸和旋转，提供方在渲染前按 LibreOffice 路径的错误码拒绝选择：页数超过 `maxImages`，或某页在所请求的 DPI（默认 144）下超过 `maxPixels` 或 `maxDimension`，为 `output-too-large`；页码超出文档为 `invalid-request`。随后 `pdftoppm` 对每段连续页码各渲染一次，把 PNG 图片首尾相接写到 stdout。提供方在数据到达时按 PNG chunk 边界切分，字节数超过剩余的 `maxBytes` 时终止 `pdftoppm` 并报 `output-too-large`，要求该段每页恰好一张图片，按每张图片头部的尺寸再次核对上限，并返回空的 `missingFonts` 列表。退出码 1 映射为 `invalid-document`，超过 `timeoutMs` 期限映射为 `timeout`，其他失败映射为 `failed`。
+Poppler 渲染 PDF 页面时不占用 LibreOffice 转换器槽位，但仍共用队列准入、并发和源字节预留。每个进程从 stdin 读取 PDF，提供方与进程之间不传递任何文件。一个 `pdfinfo` 报告页数，取其最后一行 `Pages:`，因为标题等文档属性先输出。随后提供方按 LibreOffice 路径的错误码检查选择：页数超过 `maxImages` 为 `output-too-large`，页码超出文档为 `invalid-request`。每段连续页码由一个 `pdftoppm -cropbox` 按所请求的 DPI（默认 144）渲染，把 PNG 图片首尾相接写到 stdout。提供方在数据到达时按 PNG chunk 边界切分，字节数超过剩余的 `maxBytes` 时终止 `pdftoppm` 并报 `output-too-large`，并要求该段每页恰好一张图片。页面像素与尺寸上限只在渲染后按每张图片的 PNG 头校验：超过 `maxPixels` 或 `maxDimension` 的图片以 `output-too-large` 失败。结果的 `missingFonts` 为空列表。退出码 1 映射为 `invalid-document`，超过 `timeoutMs` 期限映射为 `timeout`，其他失败映射为 `failed`。
 
 此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `0.2.3`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
@@ -126,7 +126,8 @@ Poppler 进程通过 `subprocess` 服务以 argv 启动，从不经过 shell 命
 - 渲染的图片以字节返回。转换和重算后的文件存放在提供方的输出目录中，不写入工作区；由调用方把每个文件复制到目标位置。
 - 映射原生路径时不验证解包副本是否存在。Kit 会拒绝缺失的清单或资源，而不会将其视为原生包缺失。
 - Poppler 作为 subprocess 提供方的普通进程运行，不受 DSH 沙箱约束，也没有内存上限；只有 `timeoutMs` 约束它。提供方既不安装 Poppler，也不检查其版本。
-- 每个 Poppler 进程都从 stdin 接收完整的 PDF，因此一次渲染会把源文件发给两个 `pdfinfo` 进程，并为每段连续页码发给一个 `pdftoppm` 进程；使用 SSH 提供方时，每份副本都经过 SSH 连接。
+- 每个 Poppler 进程都从 stdin 接收完整的 PDF，因此一次渲染会把源文件发给一个 `pdfinfo` 进程，并为每段连续页码发给一个 `pdftoppm` 进程；使用 SSH 提供方时，每份副本都经过 SSH 连接。
+- 页面尺寸上限在 `pdftoppm` 渲染之后才检查，因此超限的页面会先被栅格化再被拒绝，期间短暂占用 `pdftoppm` 和提供方 PNG 缓冲区的内存。
 - Poppler 与 LibreOffice 光栅化 PDF 页面的方式不同，同一页由不同后端渲染的图片可能有差异。
 
 <a id="dev-note"></a>
