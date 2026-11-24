@@ -22,6 +22,7 @@ import {
   installFailLoud,
   loadProfile,
   reportSkippedBundles,
+  reportBundlePluginWarnings,
   PluginPackages,
   PROFILE_PATCH_FILENAME,
   resolveProfileDir,
@@ -229,6 +230,7 @@ async function composeProfile(
   if (resolvedProfile !== undefined) writeFileSync(join(profile.dir, PROFILE_ROOT_FILENAME), PROFILE_ROOT_CONFIG)
   const resolutionOptions = { installAnchor: resolvedProfile?.installAnchor ?? INSTALL_ANCHOR, profile }
   const resolution = await createRuntimeResolution(resolutionOptions)
+  reportBundlePluginWarnings(NAME, resolution)
   return { profile, resolution, overlayPaths: patchFiles.map(file => resolve(file)) }
 }
 

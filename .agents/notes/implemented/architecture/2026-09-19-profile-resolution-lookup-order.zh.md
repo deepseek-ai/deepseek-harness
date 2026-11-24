@@ -75,7 +75,11 @@ hook 只在 importer 位于 `$DSH_HOME/profiles/**` 或某个 linked root 之下
 
 ESM 与 CommonJS 两个适配器调用同一个路由函数，主线程与 Harness 自有 Worker 都安装同一份 runtime resolution。实现位于 `packages/boot/app-boot/src/profile-resolution/resolver.ts`，runtime resolution 的构造位于 `packages/boot/app-boot/src/profile.ts`。
 
-#### 6. 包目录与模块文件
+#### 6. 配置树请求的行
+
+根配置树从 profile 目录的 URL 请求它的行，其中大多数由 bundle 插入，包括 bundle 的 agent preset 里的行。对 bundle 作为行插入、并声明为自身依赖的每个插件包名，runtime resolution 记录第一个这样的 bundle。importer 是当前 profile 目录的裸包名请求，对这样的包名先于 ① 和 ② 按该 bundle 自己 import 的方式重新解析。其他 importer，包括 profile 里的文件和它的 `node_modules` 里的包，按上面的主线查找。绑定规则见 [bundle 插件行](2026-11-23-bundle-plugin-rows-load-bundle-selected-packages.zh.md)。
+
+#### 7. 包目录与模块文件
 
 `packageDir('pkg', parentURL)` 与 `packageDir('pkg/sub', parentURL)` 定位包目录，不加载代码，也不校验子路径。普通入口与文件请求仍由 Node 应用 `exports`、`main`、conditions 和文件存在性规则。因此，包目录查询可以成功，同时导入缺失或未导出的文件会失败。`import.meta.resolve` 可以为不存在的已导出文件返回 URL，但导入该 URL 仍然失败，这与原生 Node 一致。
 
@@ -129,7 +133,7 @@ ESM 与 CommonJS 两个适配器调用同一个路由函数，主线程与 Harne
 
 `dsh plugin --profile <name> add <包名 | git spec | file:../本地检出>` 把参数转发给 pnpm，在 profile 目录内以 hoisted 布局安装。profile 的 `pnpm-workspace.yaml` 设置 `autoInstallPeers: false`，插件声明为 peer 的 dsh 包不会被装进 profile，由拦截层提供当前运行安装的那一份，插件与 dsh 共用同一个模块实例。
 
-插件自己的第三方依赖被 hoist 到 `$DSH_HOME/profiles/<name>/node_modules`，按主线 ② 找到。与 installation 闭包同名时最近者优先，插件使用自己声明的版本。`file:` 形式把本地检出复制进 profile，随后的解析与注册表安装完全相同。
+插件自己的第三方依赖被 hoist 到 `$DSH_HOME/profiles/<name>/node_modules`，按主线 ② 找到。与 installation 闭包同名时最近者优先，插件使用自己声明的版本；bundle 插入并声明的行仍然从该 bundle 解析（第一部分第 6 节）。`file:` 形式把本地检出复制进 profile，随后的解析与注册表安装完全相同。
 
 #### 2. 开发模式：插件仓库在 profile 树外
 

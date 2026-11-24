@@ -34,6 +34,7 @@ import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugi
 import { readProfileVersionExemptions } from './profile-compatibility.ts'
 import { loadOverlayPatches } from './index.ts'
 import { realModuleDirectory } from './profile-resolution/legacy-links.ts'
+import { barePackageName } from './profile-resolution/resolver.ts'
 
 /** Directory under the Harness home holding every profile. */
 export const PROFILES_DIR = 'profiles'
@@ -117,6 +118,17 @@ export function reportSkippedBundles(binName: string, profile: Pick<Profile, 'sk
   }
 }
 
+/**
+ * Print each bundle plugin warning once; computing a resolution never prints, so launchers call this once per start.
+ * @param binName - the diagnostic prefix.
+ * @param resolution - the computed resolution.
+ */
+export function reportBundlePluginWarnings(
+  binName: string, resolution: { readonly bundlePluginWarnings: readonly string[] },
+): void {
+  for (const warning of resolution.bundlePluginWarnings) process.stderr.write(`${binName}: warning: ${warning}\n`)
+}
+
 /** One package the runtime resolution supplies at the interception layer. */
 export interface RuntimeResolutionEntry {
   /** Bare package name. */
@@ -129,6 +141,17 @@ export interface RuntimeResolutionEntry {
   readonly declarer: string
   /** Whether every profile or only the active profile receives this entry. */
   readonly scope: 'installation' | 'profile'
+}
+
+/** The bundle that the rows of one plugin package name are bound to. */
+export interface BundlePlugin {
+  /** Bare package name of the rows. */
+  readonly name: string
+  /**
+   * Package directory, as its layer spells it, of the first bundle that inserts a row of that name and declares the
+   * package as its own dependency. The rows resolve again from this directory.
+   */
+  readonly bundleDir: string
 }
 
 /**
@@ -152,6 +175,12 @@ export interface RuntimeResolution {
   readonly localPackageNames: readonly string[]
   /** Installation-scope entries followed by profile-scope entries in precedence order. */
   readonly entries: readonly RuntimeResolutionEntry[]
+  /**
+   * The bundle each plugin package name is bound to; absent means none. The root config tree requests its rows from
+   * the active profile directory itself, and such a request for a bound name resolves again from the bundle's
+   * directory, as an import of that bundle does. No other importer uses this list.
+   */
+  readonly bundlePlugins?: readonly BundlePlugin[]
   /** Active profile links to external directories, sorted by name. */
   readonly linkedRoots: readonly LinkedRoot[]
 }
@@ -399,6 +428,7 @@ export async function createRuntimeResolution(
     ? new Map<string, string>()
     : collectProfileScopePackages(profile, packageNames, profileDeclarers, profileVersions)
   const linkedRoots = profile === undefined ? [] : linkedProfileRoots(profile, profilesDir)
+  const bundlePlugins = profile === undefined ? { plugins: [], warnings: [] } : mergeBundlePlugins(profile)
   // The Promise return type is the pre-stable API; construction has no asynchronous step.
   return await Promise.resolve(new ProfileRuntimeResolution({ installAnchor, profileDir: profile?.dir, home }, {
     profilesDir,
@@ -415,7 +445,73 @@ export async function createRuntimeResolution(
         declarer: profileDeclarers.get(name) as string, scope: 'profile' as const,
       })),
     ]),
-  }))
+    bundlePlugins: Object.freeze(bundlePlugins.plugins),
+  }, Object.freeze(bundlePlugins.warnings)))
+}
+
+/**
+ * Bare package names of the rows a patch list inserts, each once, in the order the configuration first names them:
+ * the inserted rows, the rows of inserted groups, and the rows an inserted row lists under `config.plugins`, as an
+ * agent preset does.
+ */
+function insertedPackageNames(patches: readonly PatchOptions[]): Set<string> {
+  const names = new Set<string>()
+  // The patch parser accepts a row whose name is not a string, and a `plugins` list need not hold rows.
+  const visit = (entry: EntryOptions | null | undefined): void => {
+    const name = typeof entry?.name === 'string' ? barePackageName(entry.name) : undefined
+    if (name !== undefined) names.add(name)
+    const config: unknown = entry?.config
+    // The group plugin mounts its configuration as rows with or without the `group` marker.
+    const group = entry?.group || entry?.name === 'cordis:group' || entry?.name === '@deepseek-ai/cordis-plugin-group'
+    const rows = group ? config : (config as { plugins?: unknown } | null | undefined)?.plugins
+    if (Array.isArray(rows)) rows.forEach(visit)
+  }
+  for (const patch of patches) patch.insert?.forEach(visit)
+  return names
+}
+
+/**
+ * Bind each plugin package name that the bundle layers insert as rows to the first layer that inserts it and declares
+ * the package as its own dependency. A name the bundle does not declare, or declares only as a peer or a development
+ * dependency, is not bound by that bundle: its directory does not say which copy the row uses. No package is looked
+ * up, except to describe two layers that bind the same name and declare different ranges for it.
+ */
+function mergeBundlePlugins(profile: Profile): { plugins: BundlePlugin[]; warnings: string[] } {
+  const selected = new Map<string, { layer: ProfileLayer; range: string }>()
+  const warnings: string[] = []
+  for (const layer of profile.layers) {
+    const manifest = readPackageManifest(join(layer.packageDir, 'package.json'))
+    const declared = { ...manifest.optionalDependencies, ...manifest.dependencies }
+    for (const name of insertedPackageNames(layer.patches)) {
+      const range = Object.hasOwn(declared, name) ? declared[name] : undefined
+      if (range === undefined) continue
+      const first = selected.get(name)
+      if (first === undefined) selected.set(name, { layer, range })
+      // Bundles that declare the same range are taken to reach the same copy, without reading the disk.
+      else if (first.range !== range) warnings.push(...bundlePluginConflict(name, first.layer, layer))
+    }
+  }
+  return {
+    plugins: Array.from(selected, ([name, { layer }]) => Object.freeze({ name, bundleDir: layer.packageDir })),
+    warnings,
+  }
+}
+
+/** Describe two layers that bind one name and reach different copies of the package; none when they agree. */
+function bundlePluginConflict(name: string, first: ProfileLayer, later: ProfileLayer): string[] {
+  const copy = (layer: ProfileLayer): string | undefined => {
+    const dir = packageDirFromAnchor(join(layer.packageDir, 'package.json'), name)
+    return dir === undefined ? undefined : realModuleDirectory(dir)
+  }
+  const kept = copy(first)
+  const other = copy(later)
+  if (kept === undefined || other === undefined || kept === other) return []
+  const version = (dir: string): string => String(readPackageManifest(join(dir, 'package.json')).version)
+  return [
+    `bundle ${JSON.stringify(later.packageName)} resolves plugin ${JSON.stringify(name)} to ${other} (version ${version(other)}), `
+    + `but bundle ${JSON.stringify(first.packageName)} already resolved it to ${kept} (version ${version(kept)}); `
+    + `every ${JSON.stringify(name)} row loads ${kept}`,
+  ]
 }
 
 /** Inputs a {@link ProfileRuntimeResolution} reuses to compute its successor. */
@@ -434,20 +530,26 @@ export class ProfileRuntimeResolution implements RuntimeResolution {
   readonly profileDir: string | undefined
   readonly localPackageNames: readonly string[]
   readonly entries: readonly RuntimeResolutionEntry[]
+  readonly bundlePlugins: readonly BundlePlugin[]
   readonly linkedRoots: readonly LinkedRoot[]
+  /** One line per later bundle that binds a name another bundle holds, declares another range, and reaches another copy. */
+  readonly bundlePluginWarnings: readonly string[]
   readonly #source: ResolutionSource
 
   /**
    * @param source - inputs of {@link createRuntimeResolution}, reused by {@link computeLatestResolution}.
    * @param table - the computed package table.
+   * @param bundlePluginWarnings - the warnings recorded while `table.bundlePlugins` was bound.
    */
-  constructor(source: ResolutionSource, table: RuntimeResolution) {
+  constructor(source: ResolutionSource, table: RuntimeResolution, bundlePluginWarnings: readonly string[] = []) {
     this.#source = source
     this.profilesDir = table.profilesDir
     this.profileDir = table.profileDir
     this.localPackageNames = table.localPackageNames
     this.entries = table.entries
+    this.bundlePlugins = table.bundlePlugins ?? []
     this.linkedRoots = table.linkedRoots
+    this.bundlePluginWarnings = bundlePluginWarnings
     Object.freeze(this)
   }
 
