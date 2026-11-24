@@ -1,6 +1,6 @@
 /**
  * Multipart request bodies reach the fetch implementation the HTTP service dispatches with, and request
- * configuration resolves through the Core rc.12 intercept API the vendored `@cordisjs/http` 1.6.0 source uses.
+ * configuration resolves through the Core rc.12 intercept API the vendored http 1.6.0 source uses.
  */
 import { createServer, type IncomingHttpHeaders } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
