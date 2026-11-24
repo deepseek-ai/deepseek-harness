@@ -30,12 +30,10 @@ export class SidechatControl {
    * the right Sidebar of the Session on screen. Forking from a side conversation therefore adds the child
    * beside it, not inside it. A subagent source reports that it cannot start a side conversation: its child
    * would inherit the delegated approval policy and preset without the delegation itself. The Host refuses a
-   * source without a completed Turn, which the notice reports as nothing to branch. Every other call forks;
-   * a disposed control ignores the call.
+   * source without a completed Turn, which the notice reports as nothing to branch. Every other call forks.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {
-    if (this.closed) return
     const main = this.ctx.sidebarRight.mounted.getSnapshot()
     if (main === undefined) return
     if (this.ctx.sessions.list.getSnapshot().byId[sessionId]?.origin === 'subagent') {

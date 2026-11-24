@@ -109,8 +109,6 @@ describe('SidechatControl.fork', () => {
     h.fork.mockImplementation(async (opts) => { opts.onCreated?.(CHILD); return slow.promise })
     h.control.fork(SOURCE)
     h.control.dispose()
-    h.control.fork(MAIN)
-    expect(h.fork).toHaveBeenCalledTimes(1)
     slow.resolve(CHILD)
     await vi.waitFor(() => { expect(h.fork.mock.results[0]?.type).toBe('return') })
     await Promise.resolve()

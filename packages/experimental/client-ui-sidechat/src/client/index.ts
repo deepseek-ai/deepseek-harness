@@ -46,7 +46,7 @@ export function apply(ctx: Context): void {
     id, kind: 'sidechat', multiple: true, priority: 'builtin',
     patterns: [`${SIDECHAT_ADDRESS}**`],
     canOpen: address => parseSidechatAddress(address) !== undefined,
-    title: () => ctx.locale.bind(NS)('title'),
+    title: () => t('title'),
   }), 'sidechat: tab type')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: id, locale: NS,
