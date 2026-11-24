@@ -1,9 +1,7 @@
-/** `/side` forks a started source at its newest durable event, opens the child beside the on-screen Session, and reports outcomes once. */
+/** `/side` forks at the latest completed Turn, opens the child beside the on-screen Session, and reports outcomes once. */
 import { Context } from '@deepseek-ai/cordis'
-import type { SessionEventLikeEntry, SessionEventWindow } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { SidechatControl } from '../src/client/control.ts'
 import { sidechatAddress } from '../src/client/resource.ts'
@@ -12,40 +10,30 @@ const SOURCE = 'session-source' as SessionId
 const MAIN = 'session-main' as SessionId
 const CHILD = 'session-child' as SessionId
 
-function durable(seq: number, event: Omit<SessionEvent<'turn/start'>, 'seq' | 'time'>): SessionEventLikeEntry {
-  return { type: 'event', event: { ...event, seq: SessionSeq(seq), time: seq } }
+interface ForkCall {
+  sessionId: SessionId
+  atSeq?: number | undefined
+  increaseTitle?: boolean | undefined
+  onCreated?: (id: SessionId) => void
 }
 
-function transient(seq: number): SessionEventLikeEntry {
-  const event: Extract<SessionEventLikeEntry, { type: 'transient' }>['event'] = {
-    type: 'assistant/live-chunk', seq, time: seq,
-    data: { attemptId: 'attempt-1' as never, turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'partial' } },
-  }
-  return { type: 'transient', event }
+/** The Host refusal as the Client sees it: name and code survive bundle boundaries, class identity does not. */
+function unavailable(): Error {
+  return Object.assign(new Error('no completed turn'), { name: 'SessionForkError', rpcError: { code: 'session/fork-unavailable' } })
 }
 
-interface ForkCall { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean | undefined; onCreated?: (id: SessionId) => void }
-
-const STARTED: SessionEventWindow = (() => {
-  const entries = [durable(0, { type: 'turn/start', data: { turn: 1 } })]
-  return { entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } }
-})()
-
-function harness(window: SessionEventWindow | null = STARTED, mounted: SessionId | null = MAIN, origin?: 'subagent') {
+function harness(mounted: SessionId | null = MAIN, origin?: 'subagent') {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   const forks: ForkCall[] = []
   const opened: { main: SessionId; address: string }[] = []
   const fork = vi.fn((opts: ForkCall) => {
-    forks.push({ sessionId: opts.sessionId, increaseTitle: opts.increaseTitle, ...('atSeq' in opts ? { atSeq: opts.atSeq } : {}) })
+    forks.push({ sessionId: opts.sessionId, atSeq: opts.atSeq, increaseTitle: opts.increaseTitle })
     opts.onCreated?.(CHILD)
     return Promise.resolve(CHILD)
   })
   ctx.provide('sessions', {
     list: createSnapshotStore({ ids: [SOURCE], byId: { [SOURCE]: { id: SOURCE, ...(origin === undefined ? {} : { origin }) } } }),
-    binding: (id: SessionId) => id === SOURCE && window !== null
-      ? { sessionId: id, eventSource: { getSnapshot: () => window, subscribe: () => () => {} } }
-      : undefined,
     fork,
   })
   ctx.provide('sidebarRight', {
@@ -57,45 +45,12 @@ function harness(window: SessionEventWindow | null = STARTED, mounted: SessionId
 }
 
 describe('SidechatControl.fork', () => {
-  it('cuts at the newest durable event on screen, skipping live chunk rows', async () => {
-    const entries = [
-      durable(0, { type: 'turn/start', data: { turn: 1 } }),
-      durable(1, { type: 'turn/start', data: { turn: 1 } }),
-      transient(1.5),
-    ]
-    const { control, forks, opened } = harness({ entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } })
+  it('leaves the cut to the Host, asks for a numbered title, and opens the child in the mounted Session', async () => {
+    const { control, forks, opened } = harness()
     control.fork(SOURCE)
     await vi.waitFor(() => { expect(opened).toHaveLength(1) })
-    expect(forks).toEqual([{ sessionId: SOURCE, atSeq: 1, increaseTitle: true }])
+    expect(forks).toEqual([{ sessionId: SOURCE, atSeq: undefined, increaseTitle: true }])
     expect(opened).toEqual([{ main: MAIN, address: sidechatAddress(CHILD) }])
-  })
-
-  it.each([
-    { name: 'no retained event window', window: null },
-    { name: 'only configuration events before the first Turn', window: ((): SessionEventWindow => {
-      const entries: SessionEventLikeEntry[] = [{ type: 'event', event: { type: 'approval/policy', seq: SessionSeq(0), time: 0, data: { policy: 'ask' } } }]
-      return { entries, hasMore: false, revision: 1, change: { kind: 'replace', entries } }
-    })() },
-  ])('reports that there is nothing to branch with $name', ({ window }) => {
-    const { control, forks } = harness(window)
-    control.fork(SOURCE)
-    expect(forks).toEqual([])
-    expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'noTurn' })
-  })
-
-  it('declines a subagent source with a notice', () => {
-    const { control, forks } = harness(STARTED, MAIN, 'subagent')
-    control.fork(SOURCE)
-    expect(forks).toEqual([])
-    expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'subagentSource' })
-  })
-
-  it('treats a window with older pages as inside a Turn even when the page shows no turn/start', async () => {
-    const entries = [durable(7, { type: 'step/end', data: { turn: 1, step: 3 } } as never)]
-    const { control, forks, opened } = harness({ entries, hasMore: true, revision: 1, change: { kind: 'replace', entries } })
-    control.fork(SOURCE)
-    await vi.waitFor(() => { expect(opened).toHaveLength(1) })
-    expect(forks).toEqual([{ sessionId: SOURCE, atSeq: 7, increaseTitle: true }])
   })
 
   it('forks on every call and never without a mounted Session', async () => {
@@ -104,9 +59,25 @@ describe('SidechatControl.fork', () => {
     h.control.fork(SOURCE)
     await vi.waitFor(() => { expect(h.opened).toHaveLength(2) })
     expect(h.fork).toHaveBeenCalledTimes(2)
-    const none = harness(STARTED, null)
+    const none = harness(null)
     none.control.fork(SOURCE)
     expect(none.fork).not.toHaveBeenCalled()
+  })
+
+  it('declines a subagent source with a notice', () => {
+    const { control, forks } = harness(MAIN, 'subagent')
+    control.fork(SOURCE)
+    expect(forks).toEqual([])
+    expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'subagentSource' })
+  })
+
+  it('reports a source without a completed Turn as nothing to branch, without logging', async () => {
+    const h = harness()
+    h.fork.mockRejectedValueOnce(unavailable())
+    h.control.fork(SOURCE)
+    await vi.waitFor(() => { expect(h.control.notice.getSnapshot()).toEqual({ serial: 1, key: 'noTurn' }) })
+    expect(h.error).not.toHaveBeenCalled()
+    expect(h.opened).toEqual([])
   })
 
   it('reports a failed creation as a dismissable notice and logs it', async () => {

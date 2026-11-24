@@ -1,4 +1,4 @@
-/** Browser plugin: `/side` forks the conversation at its newest event into the right Sidebar. */
+/** Browser plugin: `/side` forks the conversation at its latest completed Turn into the right Sidebar. */
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -31,7 +31,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => () => { control.dispose() }, 'sidechat: in-flight forks')
   const t = ctx.locale.bind(NS)
   // Always available: an unavailable command lets a typed `/side` reach the model as a message.
-  // The control reports a source without a Turn instead of forking it.
+  // The Host refuses a source without a completed Turn; the control reports that refusal.
   ctx.effect(() => ctx.commandUi.register({
     name: 'side', label: () => t('command'), description: () => t('command.description'), icon: IconCompareSplitOutlineRegular,
     available: () => true,
