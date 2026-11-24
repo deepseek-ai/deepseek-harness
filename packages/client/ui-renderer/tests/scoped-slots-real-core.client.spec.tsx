@@ -7,8 +7,9 @@
  * references (the cache axis), and ledger-fed stale bindings are the
  * real-core semantics the fake-host suite cannot vouch for.
  */
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { act, render } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import {
   SlotCore, StaleAuthorizationError, type PropsRenderSlots, type SlotRendererHost,
   type SlotScopeAdapter, type StandardSourceBinding,
@@ -105,6 +106,73 @@ describe('createSlotRenderer over the real SlotCore', () => {
     })
     expect(notified).toHaveBeenCalledTimes(1)   // two same-tick mutations, one batch
     expect(view.container.textContent).toBe('12')
+  })
+
+  it('gives each list winner one root, including filtered, text, Fragment and empty results', async () => {
+    const core = new SlotCore()
+    const { view } = mountFrame(core, renderSlot => <>
+      {renderSlot('spec.list', {}, { fallback: <i>fallback</i> })}
+      {renderSlot('spec.list', {}, { only: 'pair', fallback: <i>no match</i> })}
+    </>)
+    const [all, only] = Array.from(view.container.querySelectorAll<HTMLElement>('[data-slot="spec.list"]'))
+    expect(all!.innerHTML).toBe('<i>fallback</i>')
+    expect(only!.innerHTML).toBe('<i>no match</i>')
+    await act(async () => { core.register({ name: 'spec.list', id: 'text' }, () => 'text') })
+    expect(all!.children).toHaveLength(1)
+    expect(only!.innerHTML).toBe('<i>no match</i>')
+    await act(async () => {
+      core.register({ name: 'spec.list', id: 'pair', order: 1 }, () => <><b>A</b><i>B</i></>)
+      core.register({ name: 'spec.list', id: 'pair', priority: 1 }, () => 'shadowed')
+      core.register({ name: 'spec.list', id: 'null', order: 2 }, () => null)
+    })
+    const roots = Array.from(all!.querySelectorAll<HTMLElement>(':scope > *'))
+    expect(roots.map(row => row.innerHTML)).toEqual(['text', '<b>A</b><i>B</i>', ''])
+    expect(roots.every(row => row.matches('div[data-slot-item]') && row.style.display === 'contents')).toBe(true)
+    expect(only!.children).toHaveLength(1)
+    expect(only!.firstElementChild?.outerHTML).toBe(roots[1]!.outerHTML)
+  })
+
+  it('keeps the winning row and its component state across reordering and only filters', async () => {
+    const core = new SlotCore()
+    function FilterableList({ renderSlot }: FrameSlots) {
+      const [only, setOnly] = useState(false)
+      return <>
+        <button type="button" onClick={() => { setOnly(value => !value) }}>Filter counter</button>
+        {renderSlot('spec.list', {}, only ? { only: 'counter' } : {})}
+      </>
+    }
+    const { view } = mountFrame(core, renderSlot => <FilterableList renderSlot={renderSlot} />)
+    function Count() {
+      const [count, setCount] = useState(0)
+      return <button type="button" onClick={() => { setCount(count + 1) }}>{count}</button>
+    }
+    await act(async () => {
+      core.register({ name: 'spec.list', id: 'neighbor', order: 1 }, () => 'after')
+      core.register({ name: 'spec.list', id: 'counter', order: 0 }, Count)
+    })
+    const button = view.getByRole('button', { name: '0' })
+    const outlet = view.container.querySelector('[data-slot="spec.list"]')!
+    const row = outlet.firstElementChild!
+    expect(row.contains(button)).toBe(true)
+    fireEvent.click(button)
+    let remove = () => {}
+    await act(async () => {
+      remove = core.register({ name: 'spec.list', id: 'neighbor', priority: -1, order: -1 }, () => 'before')
+    })
+    expect(outlet.textContent).toBe('before1')
+    expect(outlet.lastElementChild).toBe(row)
+    await act(async () => { remove() })
+    expect(outlet.textContent).toBe('1after')
+    expect(outlet.firstElementChild).toBe(row)
+    const toggle = view.getByRole('button', { name: 'Filter counter' })
+    fireEvent.click(toggle)
+    expect(outlet.children).toHaveLength(1)
+    expect(outlet.firstElementChild).toBe(row)
+    expect(view.getByRole('button', { name: '1' })).toBe(button)
+    fireEvent.click(toggle)
+    expect(outlet.textContent).toBe('1after')
+    expect(outlet.firstElementChild).toBe(row)
+    expect(view.getByRole('button', { name: '1' })).toBe(button)
   })
 
   it('passes owner props through and keeps sibling entries() references stable across mutations', async () => {

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Automatisation de messagerie",
+    "description": "Stocke et distribue les messages des discussions Feishu/Lark ou QQ admises, héberge des sessions d'agent et publie les réponses avec des accusés durables."
+  }
+}

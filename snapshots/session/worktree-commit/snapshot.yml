@@ -1,0 +1,15 @@
+version: 1
+scenario: worktree-commit
+profile: headless
+composition: worktree-commit
+recording: authored
+header:
+  class: worktree-commit
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: worktree
+platform: posix
+permission: workspace-write
+workspace:
+  setup: git-worktree
+  final: true

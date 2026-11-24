@@ -1,0 +1,33 @@
+{
+  "op": 0,
+  "s": 1302,
+  "t": "C2C_MESSAGE_CREATE",
+  "id": "C2C_MESSAGE_CREATE:4d5e6f708192a3b4c5d6e7f8091a2b3c",
+  "d": {
+    "id": "ROBOT1.0_b7S8qT6vX1zE3aB5cD9fG2hJ4kL6mN8oP0qR2sT4uV6wX8yZ0aB2cD4eF6gH8jK0mN2pQ4rS6",
+    "author": {
+      "id": "C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6",
+      "user_openid": "C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6",
+      "union_openid": "",
+      "username": "",
+      "bot": false
+    },
+    "content": "这个建议很有帮助，谢谢你！",
+    "message_type": 103,
+    "msg_elements": [
+      {
+        "msg_idx": "REFIDX_aaaaaaaaaaaaaaa==",
+        "message_type": 103,
+        "content": "每天坚持阅读半小时，一个月后你会发现自己的变化"
+      }
+    ],
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "ref_msg_idx=REFIDX_aaaaaaaaaaaaaaa==",
+        "msg_idx=REFIDX_zzzzzzzzzzzzzzz=="
+      ]
+    },
+    "timestamp": "2026-07-21T10:02:00+08:00"
+  }
+}

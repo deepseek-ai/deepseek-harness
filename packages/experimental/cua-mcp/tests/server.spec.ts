@@ -47,6 +47,8 @@ function batch(text: string, isError = false): ToolBatchResult {
 }
 
 interface SetupOptions {
+  /** The registry's default preset; `null` models a registry configured without one. */
+  defaultPreset?: string | null
   createFailures?: number
   programs?: Partial<CuaPrograms> | false
   elicitation?: boolean
@@ -88,7 +90,11 @@ function fixture(options: SetupOptions = {}) {
   })
   const initiators: Agent[] = []
   const withInitiator = vi.fn(<T>(initiator: Agent, operation: () => T): T => { initiators.push(initiator); return operation() })
-  const mount = vi.fn(async () => ({ id: 'cua-mcp' }))
+  const resolve = vi.fn(async () => {
+    if (options.defaultPreset === null) throw new Error('no default preset')
+    return { id: options.defaultPreset ?? 'cua-mcp' }
+  })
+  const mount = vi.fn(async (_ctx: Context, id: string) => ({ id }))
   const execute = vi.fn(async (input: ToolBatchInput): Promise<ToolBatchResult> => {
     const call = input.calls[0]
     if (call === undefined) throw new Error('no call')
@@ -102,7 +108,7 @@ function fixture(options: SetupOptions = {}) {
   }))
   const release = vi.fn(async () => {})
   ctx.provide('agents', { create, withInitiator } as never)
-  ctx.provide('agentPresets', { defaultId: 'cua-mcp', mount } as never)
+  ctx.provide('agentPresets', { resolve, mount } as never)
   ctx.provide('tools', { execute, get } as never)
   ctx.provide('systemPrompt', { assemble } as never)
   ctx.provide('attachments', {} as never)
@@ -144,11 +150,32 @@ function texts(result: CallToolResult): string[] {
 }
 
 describe('Computer Use MCP server', () => {
+  it('mounts the recorded preset when the default changes during Agent creation', async () => {
+    const options = { defaultPreset: 'first' }
+    const { ctx, agent, create, mount } = fixture(options)
+    const createAgent = create.getMockImplementation()!
+    create.mockImplementationOnce((request) => {
+      options.defaultPreset = 'second'
+      return createAgent(request)
+    })
+    const adapter = await createCuaMcpServer(ctx, { consent: 'allow', cwd: '/workspace', signal: new AbortController().signal })
+    onTestFinished(() => adapter.dispose())
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ meta: { agentPreset: 'first' } })
+    expect(mount).toHaveBeenCalledWith(agent.ctx, 'first')
+  })
+
+  it('reports a missing default before creating the private Agent', async () => {
+    const { ctx, create } = fixture({ defaultPreset: null })
+    await expect(createCuaMcpServer(ctx, { consent: 'elicit', cwd: '/workspace', signal: new AbortController().signal }))
+      .rejects.toThrow('no default preset')
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it('creates the Agent before serving, projects its registration verbatim, and runs programs as Agent maintenance inside the initiator scope', async () => {
     const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent, runMaintenance } = await setup()
     expect(create).toHaveBeenCalledOnce()
     expect(create.mock.calls[0]?.[0]).toMatchObject({ meta: { cwd: '/workspace', agentPreset: 'cua-mcp' } })
-    expect(mount).toHaveBeenCalledWith(agent.ctx)
+    expect(mount).toHaveBeenCalledWith(agent.ctx, 'cua-mcp')
     expect(adapter.agent).toBe(agent)
     const listed = await client.listTools()
     expect(listed.tools.map(tool => tool.name)).toEqual(['cua_get_api_reference', 'cua_run_code', 'cua_reset'])

@@ -10,6 +10,8 @@ Read an existing file before overwriting it with write and prefer edit for targe
 
 Read a file before editing it unless you just created or edited it in this session.
 
+Prefer apply_patch over separate edit calls for changes across files or separated regions. Give every hunk enough surrounding context lines to match one place in the current file. The whole patch is checked first (syntax, hunk matching, missing files) and a rejected patch changes nothing; once applying starts, operations run in order, stop at the first failure, and are not rolled back, so re-read affected files before retrying when needed.
+
 Use the glob tool — not shell find — to discover files by path pattern.
 
 Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.

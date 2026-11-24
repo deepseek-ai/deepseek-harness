@@ -135,7 +135,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when clock context is a poor fit. They are current package constraints.
 
-- **State and replay cost** — timestamps and the current turn number have fixed size. Zone state grows with distinct reported strings in the latest entered turn, not all messages; each new distinct zone copies that list. Formatters remain discardable process caches. The standard AgentLoop requests its latest entered turn. If a typed pre-step caller requests another turn, the original full-prefix synchronous scan includes later entered messages. Retiring this fallback requires limiting pre-step requests to the latest entered turn and updating callers together.
+- **State and replay cost** — timestamps and the current turn number have fixed size. Zone state grows with distinct reported strings in the latest entered turn, not all messages; each new distinct zone copies that list. Formatters remain discardable process caches.
 - **Prompt guidance only** — browser-zone context guides natural-language interpretation but does not silently supply another tool's required zone field.
 - **Mixed turns ask** — if one open turn contains prompts from different browser zones, the model is told to clarify rather than guess which one owns an unqualified time.
 - **Fallback is not user authority** — the configured or process zone formats the clock when current-turn browser zones are missing or mixed, but the model-facing policy still says to clarify.

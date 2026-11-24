@@ -512,6 +512,23 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
       JSON.parse(await page.evaluate(() => localStorage.getItem('dsh.sessionPanel.sectionOrder')) ?? 'null')
     const registered = ['environment', 'subagents', 'background-jobs']
     await expect.poll(order, { timeout: 20_000 }).toEqual(registered)
+    expect(await panel.locator('[data-session-panel-section]:visible').evaluateAll(sections => sections.map(element => [
+      getComputedStyle(element).marginTop, getComputedStyle(element).borderTopStyle,
+    ]))).toEqual([['0px', 'none'], ['2px', 'solid'], ['2px', 'solid']])
+
+    const toggle = page.locator('[data-session-panel-toggle]')
+    await toggle.click()
+    await shows(page, null)
+    const dot = toggle.locator('[data-jobs-running]')
+    expect(await dot.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return [box.width, box.height, style.position, style.top, style.right]
+    })).toEqual([6, 6, 'absolute', '5px', '5px'])
+    expect(await page.getByRole('button', { name: /Background jobs running: 1/u }).count()).toBe(1)
+    await toggle.click()
+    await shows(page, 'docked')
+    expect(await dot.count()).toBe(0)
 
     // At rest the handle does not show and takes no room: the title's trailing count runs to the row's 6px padding.
     // Over the title row the handle shows on the rows' More column in place of the count, which keeps its box.
@@ -537,6 +554,8 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     await expect.poll(async () => (await handle('subagents')).opacity).toBe('1')
     expect(await handle('subagents')).toEqual({ ...resting, opacity: '1', shown: false })
     expect(await head('background-jobs').locator('[data-session-panel-grip]').evaluate(element => getComputedStyle(element).opacity)).toBe('0')
+    await head('background-jobs').hover()
+    expect(await handle('background-jobs')).toMatchObject({ cursor: 'grab', opacity: '1', shown: false })
     // Environment does not move: its title row is no drag source and has no handle.
     expect(await head('environment').evaluate(element => ({
       draggable: (element as HTMLElement).draggable,

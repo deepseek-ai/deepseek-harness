@@ -89,7 +89,7 @@ kind: "package-reference"
 
 面板把上一次渲染时显示的内容与现在比较。显示与否变了而停靠空间没变，就是用户的一次按下造成的：面板给自己加上 `data-session-panel-motion`（`enter` 或 `exit`），给探针加上 `data-session-panel-moving`，直到面板的动画结束；另一条 `:has()` 规则在此期间给 Conversation 主体设置 `--dsh-chat-end-reserve-transition`。面板挂载后在第一帧得知自己的停靠空间，这属于空间变化，因此它直接显示，不播放进入动画。
 
-面板把分栏列表的实时注册（`entriesOfSlot`，因此同 `id` 且优先级更高的注册会替换已发布的分栏）投影为 `{ id, label }` 行，并按用户保存的顺序排列，只在台账版本、语言版本或该顺序变化时重新计算。它在各分栏自己的标题和正文容器里用 `renderSlot(..., { only: id })` 渲染内容；CSS `:has()` 规则隐藏正文出口为空的分栏，也包括行出口为空的共享分栏。
+面板把分栏列表的实时注册（`entriesOfSlot`，因此同 `id` 且优先级更高的注册会替换已发布的分栏）投影为 `{ id, label }` 行，并按用户保存的顺序排列，只在台账版本、语言版本或该顺序变化时重新计算。面板用 `renderSlot(..., { only: id })` 在各分栏标题下方渲染正文。正文未渲染任何内容时，即使还留有空的 [list 行根](../../../docs/subsystems/slots.zh.md#list-item-roots)，CSS 也会隐藏整个分栏。「环境」分栏的所有行都未渲染内容时，该分栏也会隐藏。
 
 | 文件 | 作用 |
 |---|---|

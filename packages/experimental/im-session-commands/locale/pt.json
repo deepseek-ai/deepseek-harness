@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comandos de sessão de mensagens",
+    "description": "Processa /clear, /new, /stop, /status e /help enviados em uma conversa antes que a mensagem chegue ao agente."
+  }
+}

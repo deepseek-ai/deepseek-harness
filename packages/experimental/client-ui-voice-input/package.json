@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-client-ui-voice-input",
   "description": "Record speech and insert editable text into the conversation draft",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -60,7 +60,8 @@
     "@testing-library/react": "^16.3.3",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-settings-account": "workspace:*"
   },
   "dsh": {
     "client": {
@@ -71,7 +72,8 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-primitives",
         "@deepseek-ai/dsh-api-gateway",
-        "@deepseek-ai/dsh-client-ui-plugin-manager"
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-settings-account"
       ],
       "platform": "web",
       "external": [

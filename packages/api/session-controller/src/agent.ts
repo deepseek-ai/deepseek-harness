@@ -224,7 +224,8 @@ export class ApiSessionAgentController {
    * @returns the reused or created Session and the preset it ran when this request finished.
    * @throws ApiSessionCwdConflict when the named Session belongs to another directory.
    * @throws ApiSessionSubagentOwnership when subagent routing owns the named Session.
-   * @throws RemoteError `agent-preset/not-found` or `agent-preset/invalid` for the requested or default preset.
+   * @throws RemoteError `agent-preset/no-default` when a preset is required but none was selected or configured,
+   * or `agent-preset/not-found` or `agent-preset/invalid` for an unavailable preset.
    * @throws ApiSessionPresetConflict when no roster is composed and the request names a preset for a reused Session.
    */
   async createSession(request: ApiSessionCreateRequest): Promise<ApiSessionCreated> {

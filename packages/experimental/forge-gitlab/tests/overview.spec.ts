@@ -1,10 +1,12 @@
-import type { ChangeRequestCheck, ChangeRequestSnapshot, ForgeCheckId, ForgeFailure } from '@deepseek-ai/dsh-experimental-forge'
+import type {
+  AutoMergeRequest, ChangeRequestCheck, ChangeRequestSnapshot, ForgeCheckId, ForgeFailure,
+} from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
 import { GitLabApi } from '../src/api.ts'
 import type { GlabOutput } from '../src/glab.ts'
 import {
-  CANDIDATES_QUERY, gitLabReviewerCandidates, REREVIEW_MUTATION, requestGitLabReviews, rerunGitLabChecks, REVIEWERS_QUERY,
-  SET_REVIEWERS_MUTATION, updateGitLabBranch,
+  AUTO_MERGE_MUTATION, CANDIDATES_QUERY, gitLabReviewerCandidates, REREVIEW_MUTATION, requestGitLabReviews, rerunGitLabChecks,
+  REVIEWERS_QUERY, setGitLabAutoMerge, SET_REVIEWERS_MUTATION, updateGitLabBranch,
 } from '../src/overview.ts'
 import { fakeGlab, HOST, json, merge, mrPath, output, sent, sha } from './fixtures.ts'
 
@@ -150,5 +152,63 @@ describe('GitLab rebases', () => {
     await expect(update({ [read]: output('', 1, 'glab: (HTTP 401)') })).resolves.toMatchObject({ result: { code: 'unauthenticated' } })
     await expect(update({ [read]: output('', 1, 'glab: (HTTP 404)') })).resolves.toMatchObject({ result: { code: 'failed' } })
     await expect(update({ [read]: json({ sha: HEAD }), [`${mrPath(6)}/rebase`]: refused(403) })).resolves.toMatchObject({ result: { code: 'failed', message: 'no (HTTP 403)' } })
+  })
+})
+
+describe('GitLab automatic merges', () => {
+  const set = async (request: AutoMergeRequest, answer: GlabOutput) => {
+    const glab = fakeGlab(() => answer)
+    const result = await setGitLabAutoMerge(new GitLabApi(glab.run), merge(6), request, signal)
+    return { result, calls: glab.calls }
+  }
+  const accepted = json({ data: { mergeRequestAccept: { errors: [] } } })
+  const refusing = (error: string): GlabOutput => json({ data: { mergeRequestAccept: { errors: [error] } } })
+  const failure = (code: string, message: string) => ({ code, message })
+  const MOVED = 'The merge-head is not at the anticipated SHA'
+  const SCHEDULED = 'The merge request is already scheduled to be merged'
+  const forbidden = output(JSON.stringify({ errors: [{ message: 'no permission' }], data: { mergeRequestAccept: null } }), 1)
+
+  it.each([
+    ['squash', true],
+    ['merge', false],
+    ['rebase', false],
+  ] as const)('turns it on at the confirmed head for the %s method, waiting for the merge checks', async (method, squash) => {
+    const { result, calls } = await set({ enabled: true, method, headSha: HEAD }, accepted)
+    expect(result).toBeUndefined()
+    expect(calls.map(call => call.args.slice(3))).toEqual([['graphql', '--input', '-', '-H', 'Content-Type: application/json']])
+    expect(sent(calls[0])).toEqual({ query: AUTO_MERGE_MUTATION, variables: { path: 'group/sub/app', iid: '6', sha: HEAD, squash } })
+    expect(AUTO_MERGE_MUTATION).toContain('strategy: MERGE_WHEN_CHECKS_PASS')
+  })
+
+  it.each([
+    ['a moved head', refusing(MOVED), failure('stale', MOVED)],
+    ['an automatic merge that is on', refusing(SCHEDULED), failure('failed', SCHEDULED)],
+    ['a merge request the user may not merge', forbidden, failure('failed', 'no permission')],
+    ['rejected credentials', refused(401, '401 Unauthorized'), failure('unauthenticated', '401 Unauthorized (HTTP 401)')],
+    ['a server error', refused(502, '502 Bad Gateway'), failure('unknown', '502 Bad Gateway (HTTP 502)')],
+    ['an answer without the mutation', json({ data: {} }), failure('unknown', 'unexpected GitLab response to mergeRequestAccept')],
+  ])('reports %s when turning it on, sending the request once', async (_label, answer, expected) => {
+    const { result, calls } = await set({ enabled: true, method: 'merge', headSha: HEAD }, answer)
+    expect(result).toEqual(expected)
+    expect(calls).toHaveLength(1)
+  })
+
+  it('turns it off through one request that cancels it', async () => {
+    const { result, calls } = await set({ enabled: false }, json({ iid: 6, merge_when_pipeline_succeeds: false }))
+    expect(result).toBeUndefined()
+    expect(calls.map(call => call.args)).toEqual([['api', '--hostname', HOST, '-X', 'POST', `${mrPath(6)}/cancel_auto_merge`]])
+    expect(calls[0]?.input).toBeUndefined()
+  })
+
+  it.each([
+    ['an automatic merge that is off', refused(409, '409 Conflict'), failure('failed', '409 Conflict (HTTP 409)')],
+    ['a user who may not cancel it', refused(403, '403 Forbidden'), failure('failed', '403 Forbidden (HTTP 403)')],
+    ['a GitLab without the request', refused(404, '404 Not Found'), failure('failed', '404 Not Found (HTTP 404)')],
+    ['rejected credentials', refused(401, '401 Unauthorized'), failure('unauthenticated', '401 Unauthorized (HTTP 401)')],
+    ['a server error', refused(502, '502 Bad Gateway'), failure('unknown', '502 Bad Gateway (HTTP 502)')],
+  ])('reports %s when turning it off, sending the request once', async (_label, answer, expected) => {
+    const { result, calls } = await set({ enabled: false }, answer)
+    expect(result).toEqual(expected)
+    expect(calls).toHaveLength(1)
   })
 })

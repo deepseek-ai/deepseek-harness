@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "> quoted line\\\n> second quoted line\n>\n> > deeper quote"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

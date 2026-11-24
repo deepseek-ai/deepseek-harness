@@ -1,0 +1,55 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "collapsible_panel",
+              "element_id": "ez2ymq7oi3dbwqhw",
+              "expanded": false,
+              "header": {
+                "title": {
+                  "tag": "markdown",
+                  "content": "More information"
+                },
+                "vertical_align": "center",
+                "icon": {
+                  "tag": "standard_icon",
+                  "token": "down-small-ccm_outlined",
+                  "color": "grey",
+                  "size": "12px 12px"
+                },
+                "icon_position": "follow_text",
+                "icon_expanded_angle": -180
+              },
+              "vertical_spacing": "4px",
+              "padding": "2px 0px 2px 0px",
+              "elements": [
+                {
+                  "tag": "markdown",
+                  "element_id": "euhu45hlwfrac4le",
+                  "content": "hidden body text",
+                  "text_align": "left"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

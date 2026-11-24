@@ -77,18 +77,18 @@ export function apply(ctx: Context, config: Config): void {
     set: VENDOR_SKILLS,
     skillsDir: config.skillsDir,
   })
-  skills.watch((state) => { ctx.logger.info(`vendor: upstream skills ${state}`) })
+  if (!skills.installed()) ctx.logger.info('vendor: downloading the upstream skills')
 }
 ```
 
-`register` reads the entry's name and description from its YAML frontmatter, registers a skill provider under `name`, and starts the download unless the files are already in place. The registration belongs to the plugin whose `ctx` made the call: unloading that plugin aborts the download, removes the provider, and ends the notifications. A second registration under one `name` throws and leaves the first in place.
+`register` reads the entry's name and description from its YAML frontmatter, registers a skill provider under `name`, and starts the download unless the files are already in place. The registration belongs to the plugin whose `ctx` made the call: unloading that plugin aborts the download and removes the provider. A second registration under one `name` throws and leaves the first in place.
 
 - `name` is the skill provider's name, the prefix of the plugin's errors and log records, and the directory under `$DSH_HOME/cache` that receives the download.
 - `entry` is the absolute path of the packaged entry `SKILL.md`, whose body refers to the upstream files by their repository paths, such as `skills/<guide>/SKILL.md`.
 - `set` is the pin that `scripts/upstream-skills-digest.ts` prints.
-- `skillsDir` is the plugin's own optional config field: a directory that already holds the kept files at their repository paths. When it is set, nothing is downloaded, and a path that is not a directory makes `register` throw.
+- `skillsDir` is the plugin's own optional config field: a directory that already holds the kept files at their repository paths. When it is set, nothing is downloaded: a path that is not a directory makes `register` throw, and a directory removed later makes `install` reject.
 
-The returned handle serves the plugin's account view and check. `directory` is `skillsDir`; otherwise it is `$DSH_HOME/cache/<name>/<profile>/skills-<first 16 digest digits>` in a profile and `$DSH_HOME/cache/<name>/skills-<first 16 digest digits>` without one. `state` is `downloading` while a download runs, otherwise `installed` when that directory exists and `failed` when it does not. `watch(listener)` reports each start and end of a download, and `retry()` starts another download after a failure and returns at once. A plugin shows the state beside its account and calls `retry()` from its check without waiting, so a slow download never holds its account operations. A failed download is logged as a warning. `dispose()` withdraws the registration before the plugin unloads. The contracts in [`src/index.ts`](src/index.ts) and [`src/types.ts`](src/types.ts) are authoritative.
+The returned handle serves the plugin's account check. `directory` is `skillsDir`; otherwise it is `$DSH_HOME/cache/<name>/<profile>/skills-<first 16 digest digits>` in a profile and `$DSH_HOME/cache/<name>/skills-<first 16 digest digits>` without one. `installed()` tells whether that directory exists. `install(signal)` returns at once when it does; otherwise it waits for the running download, or starts one when none runs, and rejects when that download fails. Aborting `signal` stops the download, also for every other caller that waits for it. A plugin registered with `ctx.cliAccounts` passes the two as its [`prepare` step](../cli-account/README.md#prepare-before-a-check), `ready: () => skills.installed()` and `run: signal => skills.install(signal)`: its account check then waits for the files, the model gets the CLI's path only once they are in place, and the Plugins page's retry downloads them again. A failed download is logged as a warning. `dispose()` withdraws the registration before the plugin unloads. The contracts in [`src/index.ts`](src/index.ts) and [`src/types.ts`](src/types.ts) are authoritative.
 
 ### Kept files and verification
 
@@ -110,7 +110,7 @@ Each profile that `dsh` launches has a directory of its own for a plugin's files
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`register` runs in the calling plugin's context, so the skill provider is an effect of that plugin and is removed with it. The provider lists the entry only while the handle's `directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead, as does a failed download that finds a directory another process published. One download runs at a time, and the provider registration's signal aborts it when the plugin unloads. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
+`register` runs in the calling plugin's context, so the skill provider is an effect of that plugin and is removed with it. The provider lists the entry only while the handle's `directory` exists, with source `bundled` at the bundled rank, so a project or user skill of the same name wins. It returns a complete, empty list before publishing, because an incomplete observation would make the whole skill catalog incomplete; publishing invalidates the catalog instead, as does a failed download that finds a directory another process published. One download runs at a time: every `install` call made while it runs waits for it, the abort of any such caller's signal stops it, and the provider registration's signal aborts it when the plugin unloads. Kept files are held in memory, bounded by `bytes`, until they match the digest, so no unverified file reaches the disk; files outside the selection are read and dropped, so `skillsTimeoutMs` bounds the time spent on them.
 
 | File | Role |
 |---|---|
@@ -146,7 +146,7 @@ A load that finds the files in place lists the entry in the session's first cata
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The first load after a new pin needs GitHub or a configured mirror; until a download succeeds, the entry skill is not listed and the plugin shows the `failed` state.
+- The first load after a new pin needs GitHub or a configured mirror; until a download succeeds, the entry skill is not listed, and a plugin whose account check waits for the files reports the failed download instead of the account.
 - Each profile that loads a plugin downloads its own copy of the pin.
 - Processes of one profile can run different versions of a plugin at the same time, such as one started before a plugin update and one started after it. The later one deletes the pin the earlier one reads: the earlier process lists no entry skill, and its agents cannot open the guides, until its next check has downloaded the pin again. Both pins then stay until a process of the profile loads the plugin again.
 - Removing a plugin leaves its pin in the cache. A process that exits while it writes a download leaves its `.skills-<digest>-<uuid>` staging directory there too. Nothing deletes either.

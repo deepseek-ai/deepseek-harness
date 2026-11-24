@@ -34,6 +34,12 @@
     },
     {
       "path": "../../util/values"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../settings/settings"
     }
   ]
 }

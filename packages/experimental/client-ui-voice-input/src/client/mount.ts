@@ -12,6 +12,7 @@ import { Recording } from './audio.ts'
 import { createMicrophoneDeviceStore } from './microphone-device.ts'
 import { en, ja, es, fr, de, ru, pt, NS, zh } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings-account/client'
 import { observeReadiness } from './readiness.ts'
 import { VoicePreparation } from './PreparationCard.tsx'
 import { VoiceSetupPrompt } from './VoiceSetupPrompt.tsx'
@@ -33,16 +34,26 @@ function registerUi(ctx: Context): void {
       return () => { pluginNavigation.set(false) }
     }, 'voice-input: plugin navigation presence')
   })
+  // The account UI provides sign-in only while the current Peer may watch the account.
+  const accountSignIn = createSnapshotStore(false)
+  ctx.inject(['accountSignIn'], (scope: Context) => {
+    scope.effect(() => {
+      accountSignIn.set(true)
+      return () => { accountSignIn.set(false) }
+    }, 'voice-input: account sign-in presence')
+  })
   const actions: VoiceInputInjected = {
     openSettings: () => { ctx.get('pluginNavigation')?.openBundle('@deepseek-ai/dsh-experimental-voice-input-bundle') },
-    hooks: { speechReadiness: readiness.state, microphoneDevice: microphone, pluginNavigation },
+    signIn: () => { ctx.get('accountSignIn')?.open() },
+    hooks: { speechReadiness: readiness.state, microphoneDevice: microphone, pluginNavigation, accountSignIn },
     selectMicrophone: (device) => { microphone.set(device) },
     createRecording: () => {
       const recording = new Recording(() => { recordings.delete(recording) }, microphone.getSnapshot().id)
       recordings.add(recording)
       return recording
     },
-    transcribe: async (request, signal) => await ctx.remote.speech.transcribe(request, signal),
+    transcribe: async (request, signal) =>
+      await ctx.remote.speech.transcribe(request, signal),
     configure: async (patch) => { const result = await ctx.remote.speech.configure(patch); if (!result.ok) throw result.error },
     prepare: async (providerId, options) => {
       const result = await ctx.remote.speech.prepare(providerId, options); if (!result.ok) throw result.error

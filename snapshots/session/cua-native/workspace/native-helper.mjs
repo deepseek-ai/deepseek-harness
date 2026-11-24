@@ -110,6 +110,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
   const scope = connectionId === 1 ? 'fixture' : `fixture-${connectionId}`
   const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture', running: true }
+  const identity = '/Applications/Fixture.app'
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
   const window = { windowId: '7', appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
   const axlessWindow = { ...window, windowId: '8', title: 'AXless canvas' }
@@ -148,7 +149,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
     if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
-    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId, isRunning: true }]
+    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId, isRunning: true, identity }]
+    if (method === 'findApps') return [{ id: app.bundleId, displayName: app.name, identity, isRunning: true, pid: app.pid }]
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
         const denied = params.selector === 'Denied Fixture'
@@ -156,12 +158,12 @@ function createApplicationState(socket, record, application, captureBroker, conn
           authorization: { id: (denied ? 'b' : 'c').repeat(64), name: params.selector,
             executablePath: denied ? '/fixture/denied' : '/fixture/revocable', persistable: false } }
       }
-      if (!['Fixture', 'test.fixture', '9'].includes(params.selector)) refuse('APP_NOT_FOUND', 'Select the running Fixture application')
+      if (!['Fixture', 'test.fixture', '9', identity].includes(params.selector)) refuse('APP_NOT_FOUND', 'Select the running Fixture application')
       acquired = true
       return { ...app, applicationIcon: `data:image/png;base64,${png}`, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
     }
     if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
-    if (method === 'show') return { dispatched: true, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
+    if (method === 'show') return { dispatched: false, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
     if (method === 'activate') {
       const before = { frontPid: application.frontPid, focusedWindowId: window.windowId, frontWindowId: application.frontWindowId, frontWindowPid: application.frontPid }
       const activationRequested = application.frontPid !== app.pid

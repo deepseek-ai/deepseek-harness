@@ -30,6 +30,16 @@ export interface ConsumedWork {
   readonly droppedUnrun: boolean
 }
 
+/** A {@link ConsumedWork} account and the open turns that {@link foldConsumedWorkForEvent} reads its next event against. */
+export interface ConsumedWorkFoldState extends ConsumedWork {
+  /** The turn currently open, which a claim is credited to. */
+  readonly open: number | undefined
+  /** Turns that entered a model step and have not closed. */
+  readonly stepped: Set<number>
+  /** Turns that claimed inbox input and have not closed. */
+  readonly claimed: Set<number>
+}
+
 /**
  * Whether a turn that consumed input but never reached a step ends in a way
  * that accounts for that input. Only a `completed` end does not: it had
@@ -67,43 +77,56 @@ function accountsForClaim(reason: TurnEndReason): boolean {
  * @returns the accounting turn when one closed, and whether work was dropped unrun after it.
  */
 export function foldConsumedWork(events: readonly SessionEvent[]): ConsumedWork {
-  const stepped = new Set<number>()
-  const claimed = new Set<number>()
-  let open: number | undefined
-  let end: SessionEvent<'turn/end'> | undefined
-  let droppedUnrun = false
-  for (const event of events) {
-    switch (event.type) {
-      case 'turn/start':
-        open = event.data.turn
-        break
-      case 'step/start':
-        stepped.add(event.data.turn)
-        break
-      case 'agent/inbox/spliced': {
-        const { removedCount, outcome, inserted } = event.data
-        if (removedCount === undefined) break
-        // A replacement keeps the work pending under a new identity, so only a
-        // cancellation that leaves nothing behind drops it.
-        if (outcome === 'canceled') droppedUnrun ||= inserted.length === 0
-        // Claims are the loop's own step-boundary reads, always inside a turn.
-        else if (open !== undefined) claimed.add(open)
-        break
-      }
-      case 'turn/end': {
-        const { turn, reason } = event.data
-        open = undefined
-        if (stepped.delete(turn) || (claimed.delete(turn) && accountsForClaim(reason))) {
-          end = event
-          // Anything dropped before this turn closed is what its own ending
-          // reports; only a later drop is still unaccounted for.
-          droppedUnrun = false
-        }
-        break
-      }
-      default:
-        break
+  let state: ConsumedWorkFoldState | undefined
+  for (const event of events) state = foldConsumedWorkForEvent(state, event)
+  return { ...state?.end === undefined ? {} : { end: state.end }, droppedUnrun: state?.droppedUnrun ?? false }
+}
+
+/**
+ * Advance a {@link foldConsumedWork} fold by the next event of its log or suffix.
+ * @param state - the fold over the preceding events, `undefined` before the first.
+ *   Its turn sets are updated and carried into the result, so advance each state once.
+ * @param event - the next event.
+ * @returns the fold that includes `event`.
+ */
+export function foldConsumedWorkForEvent(state: ConsumedWorkFoldState | undefined, event: SessionEvent): ConsumedWorkFoldState {
+  const stepped = state?.stepped ?? new Set<number>()
+  const claimed = state?.claimed ?? new Set<number>()
+  let open = state?.open
+  let end = state?.end
+  let droppedUnrun = state?.droppedUnrun ?? false
+  switch (event.type) {
+    case 'turn/start':
+      open = event.data.turn
+      break
+    case 'step/start':
+      stepped.add(event.data.turn)
+      break
+    case 'agent/inbox/spliced': {
+      const { removedCount, outcome, inserted } = event.data
+      if (removedCount === undefined) break
+      // A replacement keeps the work pending under a new identity, so only a
+      // cancellation that leaves nothing behind drops it.
+      if (outcome === 'canceled') droppedUnrun ||= inserted.length === 0
+      // Claims are the loop's own step-boundary reads, always inside a turn.
+      else if (open !== undefined) claimed.add(open)
+      break
     }
+    case 'turn/end': {
+      const { turn, reason } = event.data
+      open = undefined
+      const hadStep = stepped.delete(turn)
+      const hadClaim = claimed.delete(turn)
+      if (hadStep || (hadClaim && accountsForClaim(reason))) {
+        end = event
+        // Anything dropped before this turn closed is what its own ending
+        // reports; only a later drop is still unaccounted for.
+        droppedUnrun = false
+      }
+      break
+    }
+    default:
+      break
   }
-  return { ...end === undefined ? {} : { end }, droppedUnrun }
+  return { ...end === undefined ? {} : { end }, droppedUnrun, open, stepped, claimed }
 }

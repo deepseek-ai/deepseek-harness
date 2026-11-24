@@ -2,6 +2,7 @@
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { Attributes } from '@opentelemetry/api'
 import { SeverityNumber } from '@opentelemetry/api-logs'
+import type { SessionLogBatch } from './session-log-batch.ts'
 import { ExportResultCode } from '@opentelemetry/core'
 import { JsonLogsSerializer } from '@opentelemetry/otlp-transformer'
 import { resourceFromAttributes } from '@opentelemetry/resources'
@@ -214,6 +215,42 @@ export class SessionLogReporter {
       timestamp: record.event.time, observedTimestamp: record.event.time,
       severityNumber, severityText: SeverityNumber[severityNumber],
       attributes: { ...record.attributes, sessionId: record.sessionId, content: JSON.stringify(record.event) },
+    })
+  }
+
+  /**
+   * Enqueue one complete delivery batch as a single record. The record's body
+   * carries the canonical events JSON; batch attributes identify the covered
+   * cursor range and its idempotency key. Network delivery is not acknowledged.
+   * @param batch - one contiguous per-Session range with already-redacted payloads; must not be empty.
+   * @throws when the batch carries no event, so it has no covered cursor range.
+   */
+  reportSessionLogBatch(batch: SessionLogBatch): void {
+    const last = batch.events.at(-1)
+    if (last === undefined) throw new Error('Session log batch must carry at least one event')
+    const events = batch.events.map(event => JSON.stringify(event))
+    // The record timestamp is the batch's newest event time.
+    const time = last.time
+    const severityNumber = batch.severityNumber ?? SeverityNumber.INFO
+    this.logger.emit({
+      eventName: 'session-log',
+      body: `{"events":[${events.join(',')}]}`,
+      timestamp: time,
+      observedTimestamp: time,
+      severityNumber,
+      severityText: SeverityNumber[severityNumber],
+      attributes: {
+        'session.id': batch.sessionId,
+        'session.format_version': batch.formatVersion,
+        ...batch.cwd === undefined ? {} : { 'session.cwd': batch.cwd },
+        ...batch.parentSessionId === undefined ? {} : { 'session.parent_id': batch.parentSessionId },
+        ...batch.seedLength === undefined ? {} : { 'session.seed_length': batch.seedLength },
+        'delivery.batch_id': batch.batchId,
+        'delivery.after_seq': batch.afterSeq,
+        'delivery.through_seq': batch.throughSeq,
+        'delivery.event_count': batch.events.length,
+        'delivery.purpose': batch.purpose,
+      },
     })
   }
 

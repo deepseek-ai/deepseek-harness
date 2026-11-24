@@ -61,14 +61,16 @@ const toggle = z.object({ ...window, mouseButton: pointer.mouseButton.unwrap(), 
 function requestSchema<I extends z.ZodRawShape>(input: I) {
   return z.discriminatedUnion('method', [
     operation('getCapabilities', {}), operation('listApps', {}),
-    operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
+    operation('findApps', { query: z.string().nullable() }),
     operation('getApp', { selector: z.string().min(1) }),
+    operation('launchApp', app),
     operation('activate', app),
     operation('show', { ...app, windowId: windowId.optional() }),
     operation('listWindows', app),
     operation('getState', { ...app, windowId: windowId.optional(),
       includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
       details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
+      showDiff: z.boolean().optional().describe('Request changes since the previous comparable tree. Omit or pass false to request the full tree.'),
       maxElements: traversalLimit.optional().describe('Maximum nodes to visit on this read. Omission uses the provider setting.'),
       maxDepth: traversalLimit.optional().describe('Maximum depth to traverse on this read. Omission uses the provider setting.'),
     }),
@@ -116,9 +118,9 @@ export const NativeResourceParameters = {
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),
 }
-/** Host-only launch, permission, and held-input operations; absent from model arguments. */
+/** Native permission, application-icon, and held-input operations; absent from model arguments. */
 export const NativeOnlyOperations = [
-  operation('launchApp', app), operation('permissionStatus', {}),
+  operation('permissionStatus', {}),
   operation('applicationIcons', { paths: z.array(z.string().min(1)) }),
   operation('requestPermission', { permission: z.enum(['accessibility', 'screenRecording']) }),
   operation('openPermissionSettings', { permission: z.enum(['accessibility', 'screenRecording']) }),
@@ -135,16 +137,17 @@ const appProcess = z.discriminatedUnion('isRunning', [
   z.object({ isRunning: z.literal(true), pid: processId.optional() }),
   z.object({ isRunning: z.literal(false) }),
 ])
-/** Application records exposed for selection. Running macOS records carry a process ID. */
-export const AppsResult = z.array(z.intersection(z.union([
+const appIdentity = z.string().min(1).nullable()
+/** Native list records before application names and identifiers are normalized. */
+export const NativeAppsResult = z.array(z.intersection(z.union([
   appProcess,
   z.object({ isRunning: z.literal(true).default(true), pid: processId }),
 ]), z.object({
-  id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional(),
+  id: z.string().min(1).optional(), identity: appIdentity, name: z.string(), bundleId: z.string().optional(),
 })))
-/** Installed matches preserve their installation selector and the PID of a running macOS instance. */
-export const FoundAppsResult = z.array(z.intersection(appProcess, z.object({
-  id: z.string().min(1), displayName: z.string(), path: z.string().min(1),
+/** Application discovery records with opaque selectors distinguishing applications sharing an id. */
+export const AppsResult = z.array(z.intersection(appProcess, z.object({
+  id: z.string().min(1), identity: appIdentity, displayName: z.string(),
 })))
 /** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({

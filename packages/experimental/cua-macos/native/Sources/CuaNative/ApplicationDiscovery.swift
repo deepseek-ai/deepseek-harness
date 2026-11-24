@@ -30,7 +30,7 @@ struct InstalledApplication: Sendable, Equatable {
     }
     func json(catalog: ApplicationCatalogSnapshot) -> JSONValue {
         let process = catalog.applications.first(where: matchesProcess)
-        var value: [String: JSONValue] = ["id": .string(bundleID ?? path), "displayName": .string(name), "path": .string(path),
+        var value: [String: JSONValue] = ["id": .string(bundleID ?? path), "displayName": .string(name), "identity": .string(path),
                                         "isRunning": .bool(process != nil)]
         if let process { value["pid"] = .number(Double(process.pid)) }
         return .object(value)
@@ -40,8 +40,9 @@ struct InstalledApplication: Sendable, Equatable {
 @MainActor enum ApplicationDiscovery {
     static func applications(matching query: String, exact: Bool, limit: Int, cancellation: CancellationLatch,
                              roots: [URL]? = nil) throws -> [InstalledApplication] {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw RequestParameters.invalid("Application query must not be empty")
+        let all = !exact && query.isEmpty
+        guard all || !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw RequestParameters.invalid("Application query must contain non-whitespace characters")
         }
         if query.hasPrefix("/") {
             guard let app = InstalledApplication.read(URL(fileURLWithPath: query)) else { return [] }
@@ -59,17 +60,17 @@ struct InstalledApplication: Sendable, Equatable {
                 try cancellation.check()
                 if url.pathExtension.lowercased() == "app" {
                     entries.skipDescendants()
-                    if let app = InstalledApplication.read(url), app.matches(query, exact: exact) { apps[app.path] = app }
+                    if let app = InstalledApplication.read(url), all || app.matches(query, exact: exact) { apps[app.path] = app }
                 }
-                if apps.count > limit { throw NativeFailure(code: "AMBIGUOUS_APP", message: "Too many matching applications; use a more specific name or path") }
+                if !all && apps.count > limit { throw NativeFailure(code: "AMBIGUOUS_APP", message: "Too many matching applications; use a more specific name or path") }
             }
         }
-        if roots.isEmpty || apps.isEmpty, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: query),
+        if !all, roots.isEmpty || apps.isEmpty, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: query),
            let app = InstalledApplication.read(url), app.matches(query, exact: exact) { apps[app.path] = app }
         return apps.values.sorted { $0.path < $1.path }
     }
 
-    static func launch(_ app: InstalledApplication, cancellation: CancellationLatch) async throws -> Int32 {
+    static func launch(_ app: InstalledApplication, newInstance: Bool, cancellation: CancellationLatch) async throws -> Int32 {
         try cancellation.check()
         try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
         let configuration = NSWorkspace.OpenConfiguration()
@@ -77,6 +78,7 @@ struct InstalledApplication: Sendable, Equatable {
         configuration.addsToRecentItems = false
         // Reuse is limited to this installation, even if another copy has the same bundle identifier.
         configuration.allowsRunningApplicationSubstitution = false
+        configuration.createsNewApplicationInstance = newInstance
         let running = try await NSWorkspace.shared.openApplication(
             at: URL(fileURLWithPath: app.path), configuration: configuration)
         while !running.isFinishedLaunching {
@@ -92,5 +94,18 @@ struct InstalledApplication: Sendable, Equatable {
             throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch")
         }
         return pid
+    }
+
+    /// Resolve the installation behind a running process, rejecting bundle metadata changed since it started.
+    nonisolated static func installedApplication(for process: ApplicationInfo) throws -> InstalledApplication {
+        guard let path = process.path, let executable = process.executablePath,
+              let installed = InstalledApplication.read(URL(fileURLWithPath: path)) else {
+            throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application bundle is unavailable; select the application again")
+        }
+        guard installed.executablePath == URL(fileURLWithPath: executable).resolvingSymlinksInPath().path,
+              process.bundleID == nil || installed.bundleID == process.bundleID else {
+            throw NativeFailure(code: "STALE_APP", message: "Application metadata changed after selection; select the application again")
+        }
+        return installed
     }
 }

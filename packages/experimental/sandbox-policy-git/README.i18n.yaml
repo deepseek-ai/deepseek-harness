@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/sandbox-policy-git/README.md
+/:
+  en: 28fcfcf9499fab12
+  zh: b9621d4ef0b12a13
+/deepseek-ai-dsh-sandbox-policy-git:
+  en: 4c562fc39a6ae1e0
+  zh: e65a9b54a11b9271
+/deepseek-ai-dsh-sandbox-policy-git/summary:
+  en: d555e1e256a98159
+  zh: 8fb95630cf75c600
+/deepseek-ai-dsh-sandbox-policy-git/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-sandbox-policy-git/use-this-package:
+  en: 822d79406fb80942
+  zh: 794eff73d13301bb
+/deepseek-ai-dsh-sandbox-policy-git/use-this-package/what-a-session-may-write:
+  en: 8e4fac916a46c93e
+  zh: a060753a5b065af8
+/deepseek-ai-dsh-sandbox-policy-git/use-this-package/when-the-layout-is-read:
+  en: 69aa7d76ed355415
+  zh: c77b13669c840dc6
+/deepseek-ai-dsh-sandbox-policy-git/use-this-package/which-directories-qualify:
+  en: c9dfe589dc066b47
+  zh: 8a9fe5081b90ba28
+/deepseek-ai-dsh-sandbox-policy-git/use-this-package/failures:
+  en: fa7b83cb44207716
+  zh: f8b2b2a676e15299
+/deepseek-ai-dsh-sandbox-policy-git/understand-the-implementation:
+  en: fcf6a55afe32152c
+  zh: 4be8ecec4c620ccc
+/deepseek-ai-dsh-sandbox-policy-git/further-exploration:
+  en: 6ac9724906c1f5eb
+  zh: 65a2779142ef5162
+/deepseek-ai-dsh-sandbox-policy-git/model-experience:
+  en: a353cf13db40037b
+  zh: e908fd15f52fd391
+/deepseek-ai-dsh-sandbox-policy-git/model-experience/kv-cache-effect:
+  en: 39668a8c6491389c
+  zh: 549fe3d9d619a98d
+/deepseek-ai-dsh-sandbox-policy-git/known-limitations-and-deferred-work:
+  en: dbac27d254a8ffb2
+  zh: cac21cb408f865cf
+/deepseek-ai-dsh-sandbox-policy-git/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

@@ -157,6 +157,14 @@ describe('FileSystem provider seam', () => {
       .rejects.toMatchObject({ code: 'FS_IO_ERROR' })
   })
 
+  it('rejects a byte write when a provider cannot store bytes', async () => {
+    const ctx = new Context()
+    await ctx.plugin(FakeFileSystem)
+    const fs = ctx.fs as FakeFileSystem
+    await expect(fs.writeBytes(await fs.resolve('a.bin'), new Uint8Array([1, 2])))
+      .rejects.toThrow('This filesystem provider cannot write bytes.')
+  })
+
   it('listDir returns child entry targets without reading file content', async () => {
     const ctx = new Context()
     await ctx.plugin(FakeFileSystem)

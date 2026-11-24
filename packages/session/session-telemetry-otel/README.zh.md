@@ -53,6 +53,10 @@ kind: "package-reference"
       headers:
         authorization: !!js `Bearer ${process.env.OTLP_TOKEN}`
     processor: {}            # optional; byte/count batching and per-request watchdog
+    recordFormat: per-event  # optional; per-event (default) or per-batch
+    maxBatchEvents: 128      # optional; per-batch only
+    maxBatchBytes: 1048576   # optional; per-batch only
+    batchDelayMillis: 1000   # optional; per-batch only
 ```
 
 | 字段 | 默认值 | 含义 |
@@ -62,20 +66,41 @@ kind: "package-reference"
 | `exporter`, `processor` | — | SDK 传输及字节/条数聚合；不继承环境中的头部和 TLS 身份。agent 工厂负责返回实例的设置，包括 keepAlive |
 | `shutdownTimeoutMillis` | `3,000` | 所有排队 HTTP 请求的外层期限；到期后停止剩余排队发送 |
 | `maxRequestBytes` | `4,000,000` | gzip 前完整 OTLP JSON 请求的最大字节数；只能调低 |
+| `recordFormat` | `per-event` | OTLP 记录粒度：`per-event` 保持现有逐事件记录格式；`per-batch` 每次连续 Session 投递批次一个记录 |
+| `maxBatchEvents` | `128` | 仅 `per-batch`：单条记录最多事件数 |
+| `maxBatchBytes` | `1,048,576` | 仅 `per-batch`：单条记录 body JSON 字节上限；单条超限事件仍独立成批 |
+| `batchDelayMillis` | `1,000` | 仅 `per-batch`：最早缓冲事件的最长等待时间 |
 
 直接调用 `ctx.sessionTelemetry.emit()` 在任何模式下都是空操作，不能绕过反馈授权。继承的父会话反馈不授权子会话导出：子会话需要新的自身反馈。授权后的前缀包含继承的上下文。
 
 模型请求、请求头、Session 创建或接纳、恢复，以及插件挂载或 HMR（热模块替换）均不授权捕获。仅凭已存储的反馈不会触发任何操作。定时刷新和关闭可以完成先前已授权的批次，但绝不捕获新记录。
 
+### 灰度启用 per-batch
+
+默认值为 `per-event`。按部署启用新格式时，profile overlay 必须**重复该条目的完整 `config`**——overlay 整体替换这个对象而不是按字段合并。把部署原有的 `mode`、`exporter`、`processor` 一并写上，只修改 `recordFormat`：
+
+```yaml
+- id: session-telemetry-otel
+  config:
+    mode: FEEDBACK_ONLY
+    exporter:
+      url: https://dsh-otel-collector.deepseeksvc.com/v1/logs
+    processor: {}
+    recordFormat: per-batch
+```
+
+启用 `per-batch` 的部署需先确认两件事：采集端接受更大的单条记录（默认 body 上限 1 MB），下游查询会展开 `body.events`。
+
 ### 哪些数据会离开本机
 
 每条 Session 事件对应一个 `eventName: "session-log"` 记录。`attributes.sessionId` 是 collector 使用的 Session 身份；`attributes.content` 编码完整事件 envelope 和脱敏后的 `event.data`。保留的是 JSON 值，不保证原 JSONL 字节或键顺序相同。为现有消费者保留 `session.id`、`event.seq` 和 `event.type` 元数据。Resource 携带应用和匿名用户身份；scope 携带后端包名和版本。基础配置使用 `https://dsh-otel-collector.deepseeksvc.com/v1/logs`，可用 `DSH_TELEMETRY_OTLP_URL` 覆盖。不隐式添加 channel 头。
+
 
 共享 OTel 通道使用 SDK 的 OTLP JSON 序列化器对每条记录计量一次，包含其 resource/scope envelope，再按保守大小顺序组包。单条超限事件产生一次拒绝诊断且不截断。Session 日志不会与产品埋点混在一个请求中。捕获交接和关闭完成不代表 collector 确认。
 
 ### 失败与关闭
 
-无效字节上限、非正队列/计时值、`maxExportBatchSize > maxQueueSize`、无效 endpoint 或关闭期限在加载时失败。processor 默认队列为 2,048 条、单请求最多 512 条、调度延迟 1,000 ms、请求监测期限 30,000 ms。字节上限可能将按条数划分的批次拆成多个串行 HTTP 请求。每个请求在回调后等待 SDK 导出队列清理完成，才启动下一个请求。`exportTimeoutMillis` 针对每个请求告警，但不会释放未结束的传输槽位；SDK transport 负责网络超时和重试。关闭时发送这些请求直到 `shutdownTimeoutMillis`，到期后丢弃剩余队列并禁止后续发送，在途请求仍可能结束。因此较大的授权前缀在 CLI 退出时可能只发送了一部分。
+无效字节上限、非正队列/计时值、`maxExportBatchSize > maxQueueSize`、无效 endpoint、关闭期限、未知 `recordFormat` 以及非正或越界的 `per-batch` 上限在加载时失败。processor 默认队列为 2,048 条、单请求最多 512 条、调度延迟 1,000 ms、请求监测期限 30,000 ms。字节上限可能将按条数划分的批次拆成多个串行 HTTP 请求。每个请求在回调后等待 SDK 导出队列清理完成，才启动下一个请求。`exportTimeoutMillis` 针对每个请求告警，但不会释放未结束的传输槽位；SDK transport 负责网络超时和重试。关闭时发送这些请求直到 `shutdownTimeoutMillis`，到期后丢弃剩余队列并禁止后续发送，在途请求仍可能结束。因此较大的授权前缀在 CLI 退出时可能只发送了一部分。
 
 -----
 
@@ -95,7 +120,8 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：模式解析、fail-closed 校验、SDK 流水线接线、协调器组装、关闭截止时间 |
+| [`src/index.ts`](src/index.ts) | 插件入口：模式与记录格式解析、fail-closed 校验、SDK 流水线接线、协调器组装、关闭截止时间 |
+| [`src/batch.ts`](src/batch.ts) | 投递批次组装：按会话缓冲、四个刷新触发条件、seq 水位、批次 id |
 
 ### 捕获接线
 
@@ -103,7 +129,7 @@ kind: "package-reference"
 
 ### 字段映射
 
-每条采集记录向 `SessionLogReporter` 提供单独复制的事件信封和脱敏后的载荷；序列化保留可选的呈现元数据及事件序号和时间。反馈授权整个尚未交接的前缀，而不只是反馈载荷。
+每条采集记录向 `SessionLogReporter` 提供单独复制的事件信封和脱敏后的载荷；序列化保留可选的呈现元数据及事件序号和时间。反馈授权整个尚未交接的前缀，而不只是反馈载荷。`per-batch` 模式下，组装器按会话缓冲这些记录，每次刷新恰好形成一个连续区间，使用每个事件的权威 seq 和记录 `session.format_version` attribute 中的格式代际。
 
 </details>
 
@@ -140,6 +166,8 @@ kind: "package-reference"
 - **上游实验性源码树**——`@opentelemetry/sdk-logs` 从上游实验性源码树发布；SDK API 的变动落在[共享 OTel 插件](../../telemetry/otel/README.zh.md)，而 seam 约定不动。
 - **真实 collector 行为属于 SDK 导出器**——身份验证、TLS、限流及其他真实 OTLP 部署行为遵循上游 SDK，不由本包自有兼容层处理。
 - **尽力交接**——新冷快照以及重启后的新反馈提交可能重复前缀；接收方按 Session id、格式版本和事件 seq 去重。没有持久化 outbox、投递水位、自动重试承诺或采集端接受保证。OTel 与需显式启用的 DeepSeek API 路径可能重叠。撤回导出删除事件，不是远端擦除。
+
+- **批次游标范围**——会话的 seq 水位随其组装器状态存活；会话关闭即被丢弃，因此同一 Session id 的后续生命周期重新开始该游标，可能重发接收方已持有的前缀。去重方式是展开批次 body，按 Session id、格式版本和事件 seq 作键；批次自身的 `(after_seq, through_seq)` 区间只能缩小范围，不是稳定键，因为刷新时机会改变批次边界。
 
 - **后端可用性**——本插件禁用或卸载期间提交的反馈会记录在本地，但恢复插件不会自动重放。捕获要求订阅方保持挂载直到观察到提交；在冷写入尚未完成时卸载，可能错过其 flush 后通知。
 

@@ -7,7 +7,7 @@ import type { SpeechCatalog } from '@deepseek-ai/dsh-experimental-api-speech-to-
 import { expect, it, vi, onTestFinished } from 'vitest'
 import { observeReadiness } from '../src/client/readiness.ts'
 
-const catalog: SpeechCatalog = { providers: [], selection: { providerId: 'local' as SpeechProviderId, language: 'auto' },
+const catalog: SpeechCatalog = { providers: [], selection: { mode: 'explicit', providerId: 'local' as SpeechProviderId, language: 'auto' },
   maxAudioBytes: 100, maxDurationSeconds: 120 }
 
 function fixture(failure?: unknown) {

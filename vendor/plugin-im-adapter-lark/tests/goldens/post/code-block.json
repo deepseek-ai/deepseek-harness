@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "```ts\nconst answer = 42\nconsole.log(answer)\n```"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

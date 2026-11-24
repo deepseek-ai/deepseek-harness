@@ -47,3 +47,13 @@ export function useForgeCopy(translate: TranslateNS<typeof NS>, url: string | nu
 function hostOf(url: string): string {
   return /^[a-z][a-z\d+.-]*:\/\/([^/?#]+)/i.exec(url)?.[1] ?? url
 }
+
+/**
+ * Name the action that opens a change request on its code host.
+ * @param translate - forge panel copy.
+ * @param forge - product name of the code host, or null when no provider names one.
+ * @returns the label that names the code host, or the one that names the browser without a name.
+ */
+export function openOnLabel(translate: TranslateNS<typeof NS>, forge: string | null): string {
+  return forge === null ? translate('change.view') : translate('change.viewOn', { forge })
+}

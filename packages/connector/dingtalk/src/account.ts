@@ -3,7 +3,6 @@
 import z from 'zod'
 import type { CliOperationControl } from '@deepseek-ai/dsh-cli-account/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { DwsRelease } from './release.ts'
 import type { DingtalkAccountState, DingtalkCommand, DingtalkOperationKind, DingtalkPhase } from './types.ts'
 
 /** `auth login --no-browser` prints the authorization link alone on an indented stderr line. */
@@ -43,17 +42,13 @@ function readProfile(status: Status): string | undefined {
   return `${status.corp_id}:${status.user_id}`
 }
 
-/** The dws and skill installation each check prepares before its first command. */
-type Release = Pick<DwsRelease, 'installed' | 'install'>
-
 /**
- * Bind the DingTalk account operations to the dws installation.
- * @param release - the dws and skill installation.
+ * Create the DingTalk account operations of one plugin instance, which share the signed-in account a check found.
  * @returns the function that carries out one operation with dws and publishes the account each check observes; it
- *   throws when the installation or a command fails, `auth status` prints an unknown status, a sign-in leaves no
- *   signed-in account, or a sign-out finds none to sign out.
+ *   throws when a command fails, `auth status` prints an unknown status, a sign-in leaves no signed-in account, or a
+ *   sign-out finds none to sign out.
  */
-export function performWith(release: Release): (kind: DingtalkOperationKind, control: Control, signal: AbortSignal) => Promise<void> {
+export function createPerform(): (kind: DingtalkOperationKind, control: Control, signal: AbortSignal) => Promise<void> {
   /** The account the latest check found signed in, kept on the Host because the view carries no account ids. */
   let profile: string | undefined
 
@@ -81,21 +76,8 @@ export function performWith(release: Release): (kind: DingtalkOperationKind, con
     await check(control, signal)
   }
 
-  /**
-   * Install dws and its skills while either is missing, a step the page may cancel, then read the current account,
-   * publish it, and return it.
-   */
+  /** Read the current account, publish it, and return it. */
   async function check(control: Control, signal: AbortSignal): Promise<DingtalkAccountState> {
-    if (!release.installed()) {
-      control.stage('downloading')
-      try {
-        await release.install(signal)
-      } catch (error) {
-        control.publish({ state: 'not-installed' })
-        throw error
-      }
-      control.stage('checking')
-    }
     const result = await control.run('auth-status', ['auth', 'status', '--format', 'json'], signal)
     const status = result.exitCode === 0 ? parseStatus(result.stdout) : undefined
     if (status === undefined) throw new Error(`dingtalk: auth status exited with ${String(result.exitCode)} or printed an unknown status`)

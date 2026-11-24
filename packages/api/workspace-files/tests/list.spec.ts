@@ -1,4 +1,4 @@
-/** The `list` endpoint: the same containment gates as `read`, plus the entry cap. */
+/** The `list` endpoint: file-kind gates, the workspace check for directories, and the entry cap. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -77,6 +77,39 @@ describe('workspaceFiles.list — the happy path', () => {
     expect(listing.path).toBe('real-dir')
     expect(listing.entries).toEqual([{ name: 'child.txt', type: 'file', size: 1 }])
   })
+
+  it('lists a directory link that resolves outside the workspace, and the directories below it, by the requested path', async () => {
+    await mkdir(join(outside, 'nested'))
+    await writeFile(join(outside, 'nested', 'child.txt'), 'x', 'utf8')
+    await directoryLink(outside, join(workspace, 'escape'))
+    const link = await endpoint().list(harness.scope, 'escape', signal())
+    expect(link).toEqual({ path: 'escape', entries: [{ name: 'nested', type: 'directory' }], truncated: false })
+    const nested = await endpoint().list(harness.scope, join(workspace, 'escape', 'nested'), signal())
+    expect(nested).toEqual({ path: 'escape/nested', entries: [{ name: 'child.txt', type: 'file', size: 1 }], truncated: false })
+  })
+
+  it('lists a link cycle outside the workspace level by level until the platform refuses the path', async () => {
+    await directoryLink(outside, join(workspace, 'escape'))
+    await directoryLink(outside, join(outside, 'again'))
+    const listing = await endpoint().list(harness.scope, 'escape/again/again', signal())
+    expect(listing).toEqual({ path: 'escape/again/again', entries: [{ name: 'again', type: 'directory' }], truncated: false })
+    // No cycle is detected: each level lists again, and the platform's limit on links in one path ends the descent.
+    const descend = async (path: string, depth: number): Promise<{ depth: number; refusal: unknown }> => {
+      const refusal = await endpoint().list(harness.scope, path, signal()).then(() => undefined, (error: unknown) => error)
+      return refusal !== undefined || depth === 128 ? { depth, refusal } : descend(`${path}/again`, depth + 1)
+    }
+    const end = await descend('escape/again', 1)
+    expect(end.refusal).toBeInstanceOf(Error)
+    expect(end.depth).toBeGreaterThan(2)
+  })
+
+  it('names a workspace directory by its resolved position when a link outside the workspace leads back to it', async () => {
+    await mkdir(join(workspace, 'src'))
+    await directoryLink(outside, join(workspace, 'escape'))
+    await directoryLink(join(workspace, 'src'), join(outside, 'back'))
+    const listing = await endpoint().list(harness.scope, 'escape/back', signal())
+    expect(listing).toEqual({ path: 'src', entries: [], truncated: false })
+  })
 })
 
 describe('workspaceFiles.list — the entry cap', () => {
@@ -106,10 +139,20 @@ describe('workspaceFiles.list — gates', () => {
     expect(failure.code).toBe('workspace-file/outside-workspace')
   })
 
-  it('rejects a directory link that resolves outside the workspace', async () => {
+  // Windows drops `link/..` from the written path before any link is followed, so there it names the workspace root.
+  it.skipIf(process.platform === 'win32')('rejects a `..` segment after a directory link that resolves outside the workspace', async () => {
     await directoryLink(outside, join(workspace, 'escape'))
-    const failure = await failureOf(endpoint().list(harness.scope, 'escape', signal()))
-    expect(failure.code).toBe('workspace-file/outside-workspace')
+    for (const path of ['escape/..', `${workspace}/escape/..`]) {
+      const failure = await failureOf(endpoint().list(harness.scope, path, signal()))
+      expect(failure).toEqual({ code: 'workspace-file/outside-workspace', details: { path } })
+    }
+  })
+
+  it('rejects the home directory, which the backend expands from `~` without any link in the workspace', async () => {
+    for (const path of ['~', '~/']) {
+      const failure = await failureOf(endpoint().list(harness.scope, path, signal()))
+      expect(failure).toEqual({ code: 'workspace-file/outside-workspace', details: { path } })
+    }
   })
 
   it('rejects a directory link whose target is gone', async () => {

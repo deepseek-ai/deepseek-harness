@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。启用后，详情页在配图下方、设置项上方显示使用建议，Windows 用户还可查看辅助程序的配置步骤。
+在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启“自动电脑操作”。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。启用后，详情页在配图下方、设置项上方显示使用建议，Windows 用户还可查看辅助程序的配置步骤。
 
 在 macOS 上，组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。请为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。
 
@@ -37,7 +37,7 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。PTC 会话获得原始 `cua` 绑定；其他 Agent 无论是否组合 preset 都获得 `cua_run_code`，其中自动初始化 `cua` 对象，并保留独立的持久状态。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。其他 preset 的 CUA 程序状态独立于此设置。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。PTC 会话获得原始 `cua` 绑定；其他 Agent 无论是否组合 preset 都获得 `cua_run_code`，其中自动初始化 `cua` 对象，并保留独立的持久状态。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
@@ -55,7 +55,7 @@ pnpm dsh web
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件确保 macOS 提供方仅在 macOS 加载，Windows 提供方仅在原生 Windows 加载。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件确保 macOS 提供方仅在 macOS 加载，Windows 提供方仅在原生 Windows 加载。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 

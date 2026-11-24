@@ -1,0 +1,25 @@
+{
+  "op": 0,
+  "s": 1301,
+  "t": "C2C_MESSAGE_CREATE",
+  "id": "C2C_MESSAGE_CREATE:3c4d5e6f708192a3b4c5d6e7f8091a2b",
+  "d": {
+    "id": "ROBOT1.0_a6R7pS5uW0yD2zA4bC8eF1gH3jK5lM7nP9qR1sT3uV5wX7yZ9aB1cD3eF5gH7kL9mN1pQ3rS5",
+    "author": {
+      "id": "DD8246C68EC19CAF8D2AA76941180EA4",
+      "user_openid": "DD8246C68EC19CAF8D2AA76941180EA4",
+      "union_openid": "",
+      "username": "",
+      "bot": false
+    },
+    "content": "你好，今天有什么推荐的活动吗？",
+    "message_type": 0,
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "msg_idx=REFIDX_xxxxxxxxxxxxxxx=="
+      ]
+    },
+    "timestamp": "2026-07-21T10:00:00+08:00"
+  }
+}

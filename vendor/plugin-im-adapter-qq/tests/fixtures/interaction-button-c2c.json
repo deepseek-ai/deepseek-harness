@@ -1,0 +1,23 @@
+{
+  "op": 0,
+  "s": 3102,
+  "t": "INTERACTION_CREATE",
+  "id": "INTERACTION_CREATE:1b13d569-4610-4ab9-bc51-feecc5def6d4",
+  "d": {
+    "application_id": "1904842048",
+    "chat_type": 2,
+    "data": {
+      "resolved": {
+        "button_data": "confirm:once",
+        "button_id": "allow-once"
+      },
+      "type": 11
+    },
+    "id": "1b13d569-4610-4ab9-bc51-feecc5def6d4",
+    "scene": "c2c",
+    "timestamp": "2026-07-20T21:53:54+08:00",
+    "type": 11,
+    "user_openid": "DD8246C68EC19CAF8D2AA76941180EA4",
+    "version": 1
+  }
+}

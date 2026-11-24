@@ -253,8 +253,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-forge-gitlab` | yes | GitLab provider for the experimental forge registry, read and written through the GitLab CLI on the host |
 | `@deepseek-ai/dsh-hooks-claude-code` | yes | Bridge plugin: run a Claude Code hooks.json / settings hook config on the DeepSeek Harness interception seams |
 | `@deepseek-ai/dsh-hooks-codex` | yes | Bridge plugin: run a Codex hooks.json hook config on the DeepSeek Harness interception seams |
+| `@deepseek-ai/dsh-im` | yes | Platform-neutral IM host: intake, message store, im/message waterfall, hosted sessions, send funnel and output renderers |
+| `@deepseek-ai/dsh-im-session-commands` | yes | Slash-command handling at the head of the dsh-im message waterfall |
+| `@deepseek-ai/dsh-sandbox-policy-git` | no | Grants a Session that works in a linked Git worktree write access to its repository's Git directory |
 | `@deepseek-ai/dsh-session-title-all-prompts-llm` | yes | All-user-messages LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-skill-badge` | no | Bundled dsh badge skill provider for DeepSeek Harness |
+| `@deepseek-ai/dsh-speech-to-text-deepseek` | yes | DeepSeek speech recognition through the /v1/tools/asr API, authenticated by the DeepSeek account or API key |
 | `@deepseek-ai/dsh-terminal-panel` | yes | Persistent Agent terminals shown in the Web sidebar, plus read-only access to the user's terminals |
 | `@deepseek-ai/dsh-timeline` | yes | Replace Todo in long-running sessions with task trees, a live progress bar, and timed reports |
 | `@deepseek-ai/dsh-tool-ralph` | yes | Model-facing fresh-agent Ralph loop over the workflow and subagent seams |

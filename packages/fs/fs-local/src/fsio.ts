@@ -592,7 +592,7 @@ function writeIoError(path: string, error: unknown): unknown {
  * onto the empty temp before writing and preserves the target descriptor at publication.
  * Node write errors become FsError; permission refusals use FS_PERMISSION_DENIED and other I/O uses FS_IO_ERROR.
  * @param absolutePath - destination; missing parent directories are created.
- * @param content - the full UTF-8 text to write.
+ * @param content - the full UTF-8 text to write, or exact bytes stored without decoding.
  * @param mode - POSIX mode to apply, or undefined to retain the new-file default.
  * @param signal - cancellation checked before final publication.
  * @param internals - Test hook for pinning temp names and observing the staged file.
@@ -604,7 +604,7 @@ function writeIoError(path: string, error: unknown): unknown {
  */
 export async function writeFileAtomic(
   absolutePath: string,
-  content: string,
+  content: string | Uint8Array,
   mode: number | undefined,
   signal: AbortSignal | undefined,
   internals: FsIoInternals = {},
@@ -641,7 +641,11 @@ export async function writeFileAtomic(
     if (platform === 'win32' && existingDestination) {
       await copyFileDacl(absolutePath, tempPath)
     }
-    await handle.writeFile(content, { encoding: 'utf8', ...signal ? { signal } : {} })
+    // Text is written as UTF-8; bytes are stored verbatim, so no encoding is named for them.
+    await handle.writeFile(content, {
+      ...typeof content === 'string' ? { encoding: 'utf8' as const } : {},
+      ...signal ? { signal } : {},
+    })
     await handle.sync()
     await internals.inspectTemp?.({ stagingDir, tempPath })
     if (mode !== undefined) await handle.chmod(mode)

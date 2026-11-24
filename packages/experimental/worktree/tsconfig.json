@@ -30,6 +30,9 @@
       "path": "../../sandbox/sandbox-policy"
     },
     {
+      "path": "../sandbox-policy-git"
+    },
+    {
       "path": "../../subprocess/subprocess"
     },
     {

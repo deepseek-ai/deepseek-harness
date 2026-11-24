@@ -50,7 +50,7 @@ shell 选择解析出 target 或 target source 收到首个 subscriber 时，该
 
 Group 注册时缺少 View 目标会报错。已注册的 View Definition 被移除后，其分组计算暂停并清空已发布结果，但保留 Group Definition；重新注册该 View 后，沿现有替换流程从当前已加载时间线重建。切换 View 页签不会移除 View Definition。
 
-target package 通过 declaration merge 扩展 snapshot 与 Location data map，再调用 `ctx.uiConversation.events.register(...)` 和 `ctx.uiConversation.views.register(...)`。target 通过 `ctx.uiConversation.binding(binding).target(targetId)` 读取其 Session-owned source。注册属于 Cordis effect，返回的 disposer 从同一个 registry 移除 contribution。共享的请求检查服务于每个 target：`ctx.uiConversation.inspectSystemPrompt(previous, event)` 将系统消息与位置替换解释为不可变的已加载 surface 状态。它按 surface 顺序拼接所有非空的存活系统节点，为连续重写只保留存活的替换位置；遇到未建立索引的更早端点后，提示词保持不可用，直到向前补页回放提供其顺序。target 自有的 Definition 独立保留历史卡片。`ctx.uiConversation.inspectRequestPrompt(previous, header, system)` 根据该有效提示词分类请求变更；普通消息与流式分片无需处理系统状态。
+target package 通过 declaration merge 扩展 snapshot 与 Location data map，再调用 `ctx.uiConversation.events.register(...)` 和 `ctx.uiConversation.views.register(...)`。target 通过 `ctx.uiConversation.binding(binding).target(targetId)` 读取其 Session-owned source。注册属于 Cordis effect，返回的 disposer 从同一个 registry 移除 contribution。共享的请求检查服务于每个 target：`ctx.uiConversation.inspectSystemPrompt(previous, event)` 将系统消息与位置替换解释为不可变的已加载 surface 状态。它按 surface 顺序拼接所有非空的存活系统节点，为连续重写只保留存活的替换位置；遇到未建立索引的更早端点后，提示词保持不可用，直到向前补页回放提供其顺序。对带章节元数据的消息，它还给出按来源划分的生效指令；对历史中的更新，还给出按来源的解读：新增、更新、清空、调整顺序、移除或未变化，并附关联通知。由位置替换（如压缩或重建的头节点）确立的提示词标记为重建，不带解读。消息引入的节点同样带有此后生效的指令；有效提示词在文本或按来源划分的指令变化时都会更新；只要仍保留不带章节元数据的非空消息，按来源划分的指令就不可用。target 自有的 Definition 独立保留历史卡片。`ctx.uiConversation.inspectRequestPrompt(previous, header, system)` 根据该有效提示词分类请求变更；普通消息与流式分片无需处理系统状态。
 
 <a id="sent-user-text"></a>
 ## 已发送用户文本

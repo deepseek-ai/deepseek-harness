@@ -40,7 +40,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 插件加载后，技能目录中会多一个 `tencent-meeting` skill。Agent 用 `skill` 工具加载它，用文件工具打开 `tmeet-skill` 子指南及其参考文件，并在当前沙箱和审批策略下通过普通 Shell 工具按这个路径运行 `tmeet`。命令报告未登录或登录过期时，Agent 会请用户在插件页面连接腾讯会议；只有用户要求在对话中完成时，它才运行 `tmeet auth login --no-browser`，并且因为该命令会写入工作区之外，第一次尝试就带 `justification` 申请 `sandbox_permissions`。
 
-子指南来自 `TencentCloud/tencentmeeting-cli` 标签 `v1.0.18`（提交 `e631b35`）中的 `skills/tmeet-skill/`，不含 `scripts/agent_init.py`。该行加载时下载这个提交的归档，并把校验后的文件保存在 `$DSH_HOME/cache/tencent-meeting/`；文件就位之前，skill 目录中没有 `tencent-meeting` skill，插件页会报告下载状态。下载失败时，由插件页的检查重试。
+子指南来自 `TencentCloud/tencentmeeting-cli` 标签 `v1.0.18`（提交 `e631b35`）中的 `skills/tmeet-skill/`，不含 `scripts/agent_init.py`。该行加载时下载这个提交的归档，并把校验后的文件保存在 `$DSH_HOME/cache/tencent-meeting/`；文件就位之前，skill 目录中没有 `tencent-meeting` skill，运行时上下文不给出 `tmeet` 路径，插件页显示的是下载而不是账号。插件页的检查会等待下载，并把它显示为一个带**取消**的步骤。没有完成的下载使账号处于 `not-installed`：页面提示没能下载技能并提供**重试**，下一次检查会重新下载。
 
 在 Plugin Manager 中关闭插件会撤下这个 skill、运行时上下文中的路径和账号区块。CLI 的登录和已下载的子指南会保留。
 
@@ -51,12 +51,12 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 | 操作 | 效果 |
 |---|---|
-| `check` | 重新检查账号；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
+| `check` | 子指南缺失时先等待它下载完成（没有下载在运行时发起一次），然后重新检查账号；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
 | `sign-in` | 运行 `auth login --no-browser`，等待用户在腾讯会议页面授权，然后检查服务端是否接受新的登录 |
 | `sign-out` | 用户确认后运行 `auth logout`，这也会退出用户自己终端里的登录，然后重新检查 |
-| 取消 | 在登录等待授权时取消它，并等待其命令退出；其他步骤会被忽略 |
+| 取消 | 在登录等待授权期间取消登录，或在检查等待子指南下载期间取消检查，并等待命令或下载停止；其他步骤会被忽略 |
 
-检查运行 `auth status`。在 tmeet 1.0.18 中，它只输出纯文本，无论是否有用户登录，退出码都是 0。输出 `Not logged in.` 或 `Session has expired.`，或 `Logged in` 伴随已过期的 refresh token 时，账号为 `signed-out`；`Logged in` 伴随 `UserName:` 行时为 `connected` 并带用户名，CLI 只有在向服务端请求用户信息成功后才会打印这一行；其他 `Logged in` 为 `unverified`，例如该请求连不上服务端。退出码非零或其他输出会使检查失败，并保留之前的账号状态。`auth login` 在 stdout 的 `authorize url:` 行打印的链接，只有是 `meeting.tencent.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有一次性授权码，因此会被省略。运行 DSH 的进程需要能访问 `~/.tmeet` 中的 CLI 配置、`~/Library/Application Support/tmeet` 中的加密凭据，以及保存其密钥的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
+检查运行 `auth status`。在 tmeet 1.0.18 中，它只输出纯文本，无论是否有用户登录，退出码都是 0。输出 `Not logged in.` 或 `Session has expired.`，或 `Logged in` 伴随已过期的 refresh token 时，账号为 `signed-out`；`Logged in` 伴随 `UserName:` 行时为 `connected` 并带用户名，CLI 只有在向服务端请求用户信息成功后才会打印这一行；其他 `Logged in` 为 `unverified`，例如该请求连不上服务端。退出码非零或其他输出会使检查失败，并保留之前的账号状态，只是下载就位之后 `not-installed` 会换成 `unchecked`；没有完成的下载使状态成为 `not-installed`。`auth login` 在 stdout 的 `authorize url:` 行打印的链接，只有是 `meeting.tencent.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有一次性授权码，因此会被省略。运行 DSH 的进程需要能访问 `~/.tmeet` 中的 CLI 配置、`~/Library/Application Support/tmeet` 中的加密凭据，以及保存其密钥的 macOS 钥匙串项；`DSH_HOME` 不会改变它们的位置。
 
 ### 配置
 
@@ -77,7 +77,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `tencent-meeting` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它解析 `tmeet` 可执行文件，按 [`src/skills.ts`](src/skills.ts) 中的固定信息把 `tencent-meeting` skill 注册到 `ctx.upstreamSkills`，并把这个路径和账号注册到 `ctx.cliAccounts`。账号视图携带下载状态，每次检查都会在不等待的情况下重新开始失败的下载。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号 Service](../cli-account/README.zh.md) 在运行时上下文中把这个路径告诉模型，按同一路径运行每条命令，同一时间只运行一个操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用 tmeet 命令完成每个操作，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时会取消进行中的操作、中止正在运行的命令，并在其进程退出后结束。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `tencent-meeting` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它解析 `tmeet` 可执行文件，按 [`src/skills.ts`](src/skills.ts) 中的固定信息把 `tencent-meeting` skill 注册到 `ctx.upstreamSkills`，并把这个路径和账号注册到 `ctx.cliAccounts`。这次注册的 [`prepare` 步骤](../cli-account/README.zh.md#prepare-before-a-check)就是 skill 句柄的 `installed` 和 `install`，因此每次检查都先等待子指南下载完成，没有下载在运行时发起一次。`@tencentcloud/tmeet` 在 `dist/` 下为每个平台提供一个按平台命名的可执行文件，其 `bin` 是一个 Node 启动器。因此 [`src/directory.ts`](src/directory.ts) 按 `process.platform` 和 `process.arch`，用与该启动器相同的文件名选出可执行文件，运行时上下文和插件自己的命令都使用这个路径。[CLI 账号 Service](../cli-account/README.zh.md) 在子指南就位期间于运行时上下文中把这个路径告诉模型，在它缺失时于检查的第一条命令之前运行 `prepare` 步骤，按同一路径运行每条命令，同一时间只运行一个操作，并以退出码报告失败的命令。[`src/account.ts`](src/account.ts) 用 tmeet 命令完成每个操作，从 `auth login` 的输出行读取授权链接，并解析 `auth status` 的文本。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时会取消进行中的操作、中止正在运行的命令和子指南的下载，并在这些命令的进程退出后结束。
 
 [`skills/tencent-meeting/SKILL.md`](skills/tencent-meeting/SKILL.md) 是本包携带的唯一 skill：DSH 指引、子指南索引，以及打开子指南的方式。上游只在其仓库中发布这个子指南，npm 包里没有，因此由[上游技能 Service](../upstream-skills/README.zh.md) 下载；它是 skill 基础目录下的一组文件，不是独立的 skill。固定信息排除了 `scripts/agent_init.py`，它用于把调用方 Agent 和模型记录到 CLI 配置中供上游统计。DSH 指引与子指南不一致时，入口要求 Agent 以 DSH 指引为准：使用插件提供的 `tmeet` 而不是自行安装，跳过 `agent_init.py`，并把登录交给插件页面。参考文件是子指南目录中的普通文件。
 
@@ -131,7 +131,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-tencent-meeting
 
 #### 模型看到的内容
 
-该行加载期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出可执行文件的路径：`binDir` 中的 `tmeet`，或者默认使用当前平台已安装的 `@tencentcloud/tmeet` 可执行文件，例如 `dist/tmeet-macOS-AppleSilicon`。
+该行加载且子指南就位期间，[CLI 账号 Service](../cli-account/README.zh.md#model-experience) 添加一条必需的运行时上下文，给出可执行文件的路径：`binDir` 中的 `tmeet`，或者默认使用当前平台已安装的 `@tencentcloud/tmeet` 可执行文件，例如 `dist/tmeet-macOS-AppleSilicon`。
 
 ##### 运行时上下文条目
 
@@ -151,7 +151,7 @@ Tencent Meeting CLI: run `tmeet` by its absolute path with the call operator, & 
 
 #### KV Cache 影响
 
-系统提示词不变；加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
+系统提示词不变；子指南下载完成、加载或卸载该行、或路径变化时，追加一份运行时上下文快照。
 
 ## 已知限制与延期工作
 
@@ -163,7 +163,7 @@ Tencent Meeting CLI: run `tmeet` by its absolute path with the call operator, & 
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，没有 DSH 专用的账号，也没有账号选择。
 - 账号状态来自 tmeet 1.0.18 `auth status` 的纯文本输出，登录链接来自它的 `authorize url:` 行；改变这些文本的 CLI 版本会使检查或登录失败，并给出可重试的结果。服务端没有返回用户名的账号会显示为待确认。
 - 子指南对应上游标签 `v1.0.18`；更新它要用 `scripts/upstream-skills-digest.ts` 生成新的固定信息，之后对照新的子指南检查入口的索引和 DSH 指引。
-- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，Agent 没有 `tencent-meeting` skill。
+- 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，Agent 既没有 `tencent-meeting` skill 也没有 `tmeet` 路径，页面也不提供登录。两者都访问不到的电脑需要设置 `skillsDir`。headless profile 没有页面的检查，因此加载时失败的下载要到下一次加载才会重试。
 - 插件卸载或改为固定其他提交后，已下载的子指南仍留在 `$DSH_HOME/cache/tencent-meeting/`。
 
 <a id="dev-note"></a>

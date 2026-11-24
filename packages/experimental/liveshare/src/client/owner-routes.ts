@@ -15,6 +15,6 @@
 /** Same-origin owner endpoints the share sign-in calls. */
 export const OWNER_ROUTES = {
   ownerLoginCancel: 'api/liveshare.ownerLoginCancel',
-  ownerLoginRedeem: 'api/liveshare.ownerLoginRedeem',
   ownerLoginStart: 'api/liveshare.ownerLoginStart',
+  ownerLoginStatus: 'api/liveshare.ownerLoginStatus',
 } as const

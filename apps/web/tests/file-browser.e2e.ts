@@ -3,7 +3,8 @@
  * workspace and the real dock, across docked and floating panes and a
  * phone-width viewport. The package README owns the behavior asserted here.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Locator, type Page } from 'playwright'
@@ -47,7 +48,7 @@ async function resizeFloat(page: Page, panel: Locator, width: number, height: nu
 async function openWorkspace(
   shot: string,
   openInAppEnvironment?: LaunchEnvironmentSnapshot,
-): Promise<{ page: Page; input: Locator; errors: ReturnType<typeof watchConsole> }> {
+): Promise<{ page: Page; input: Locator; cwd: string; errors: ReturnType<typeof watchConsole> }> {
   const scaffold = await launchWebScaffold({
     replayFixture: fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.v3.jsonl', import.meta.url)),
     paceMs: 5, compareReplaySession: false, ...openInAppEnvironment === undefined ? {} : { openInAppEnvironment },
@@ -76,7 +77,7 @@ async function openWorkspace(
   await writeFile(join(cwd, 'README.md'), '# Readme\n')
   await writeFile(join(cwd, 'focus.html'), '<!doctype html><button>Preview focus</button>')
   await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
-  return { page, input, errors }
+  return { page, input, cwd, errors }
 }
 
 it('browses workspace files in tabs that share one pane tree', async () => {
@@ -537,6 +538,31 @@ it('moves a file between the docked column and a floating panel from the file me
   await expect.poll(() => docked('a.txt').count()).toBe(0)
   expect(await expand.count()).toBe(0)
   await expect.poll(() => floatBody.evaluate(node => node.scrollTop)).toBe(600)
+  expect(errors).toEqual({ warnings: [], pageErrors: [] })
+})
+
+it('browses a directory link that resolves outside the workspace', async () => {
+  const { page, cwd, errors } = await openWorkspace('web-e2e-file-browser-outside-link')
+  const outside = await mkdtemp(join(tmpdir(), 'dsh-web-e2e-linked-'))
+  onTestFinished(() => rm(outside, { recursive: true, force: true }))
+  await mkdir(join(outside, 'nested'))
+  await writeFile(join(outside, 'nested', 'note.txt'), 'outside note\n')
+  await symlink(outside, join(cwd, 'linked'), process.platform === 'win32' ? 'junction' : 'dir')
+  await page.locator('[data-sidebar-right-expand]').click()
+  const column = page.locator('[data-rightbar-col]')
+  await column.locator('[data-sidebar-right-guide-entry="files"]').click()
+  const navigator = column.locator('[data-files-navigator]:visible')
+  const row = (name: string): Locator => navigator.getByRole('button', { name, exact: true })
+  // The link and the directory below it list like workspace directories, and neither listing nor watch is refused.
+  await row('linked').click()
+  await row('nested').click()
+  await row('note.txt').waitFor()
+  expect(await navigator.locator('[data-files-row="failed"]').count()).toBe(0)
+  // A file below the link opens from the tree.
+  await row('note.txt').click()
+  await expect.poll(() => column.locator('[data-textpreview-state]:visible [data-textpreview-body]').textContent())
+    .toContain('outside note')
+  expect(await navigator.locator('[data-files-row="failed"]').count()).toBe(0)
   expect(errors).toEqual({ warnings: [], pageErrors: [] })
 })
 

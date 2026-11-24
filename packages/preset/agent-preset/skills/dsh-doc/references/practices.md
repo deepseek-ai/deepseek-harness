@@ -30,6 +30,7 @@ These rules follow from Harness mechanisms. Confirm every Service method, Event 
 
 ## UI
 
+- Show a progress bar for a long-running operation the user waits for or monitors: measured progress when available, indeterminate otherwise.
 - Render plugin pages as React components in a slot. Do not serve an HTML page from the Host and embed it in an iframe: an iframe document does not receive the host's theme tokens, light/dark switching, or `ctx.locale`.
 - Style with the theme tokens (`--dsw-alias-*`) that `cordis_inspect` `Theme` lists when available; literal colors are for artwork only. A renamed token degrades appearance but never breaks rendering. Copy spacing, type sizes, and row patterns from an existing host page of the same kind; the Plugin Manager page is the reference for management lists.
 - Do not `require('@deepseek-ai/dsh-client-ui-primitives')` or load any other Harness Client package as a module; `dsh.client.inject` entries only order activation and stay allowed. They change without notice, and a throwing component blanks your slot entry (console: `slot entry crashed in '<slot>'`). Write your own controls instead: copy markup, CSS, and behavior from the primitive's `src/*.tsx` and `*.module.css`, or from the rendered host control in the connected page. Rename copied classes under your plugin's prefix, keep only `--dsw-alias-*` token references, and keep behavior users rely on, such as Modal focus and Escape handling, `role="switch"` with `aria-checked`, and Tooltip placement.

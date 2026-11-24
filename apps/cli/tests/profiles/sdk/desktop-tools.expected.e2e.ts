@@ -1,9 +1,10 @@
 /**
- * Keyless comparison of actual SDK and Desktop/Web step-admitted tool sets.
- * Keep intentional differences in tool-parity.ts; unused exceptions fail.
- * Team mode is excluded while its known composition mismatch is tracked in #7172.
- * SDK minimal, other presets, graphical context and optional runtime payloads
- * are outside this fixed standard/PTC, top-level-session comparison.
+ * Keyless comparison of the first model request of the shipped SDK profile with native tool execution and the Desktop
+ * standard agent preset: tool names and schemas, system prompt sections, runtime context values, the session skill
+ * catalog, the other injected messages, and the order of each sequence, for the top-level Agent with Team off and on.
+ * Paths, clock readings and the time zone are normalized. Record differences in parity-exceptions.ts; unused
+ * exceptions fail. Teammate scopes, PTC execution, SDK minimal, other presets, graphical context and optional runtime
+ * payloads are outside this comparison.
  */
 import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -16,23 +17,100 @@ import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
 import { expect, it, type TestContext } from 'vitest'
 import { profileEnvironment } from './fixtures/profile-environment.ts'
 import { messagesResponse } from './fixtures/messages-response.ts'
-import { assertToolParity, type ToolMode } from './tool-parity.ts'
+import { assertParity, compareEntries, compareOrder, type ParityDifference } from './parity.ts'
 
 const repo = fileURLToPath(new URL('../../../../../', import.meta.url))
 const observer = new URL('./fixtures/tool-parity.mjs', import.meta.url).href
 const probe = new URL('./fixtures/parity-probe.mjs', import.meta.url).href
-const inventorySchema = z.object({ names: z.array(z.string()).min(1), hmr: z.boolean() })
-type Inventory = z.infer<typeof inventorySchema>
+const inventorySchema = z.object({
+  tools: z.array(z.looseObject({ name: z.string() })).min(1),
+  sections: z.array(z.object({ name: z.string(), text: z.string() })).min(1),
+  contexts: z.array(z.object({ name: z.string(), text: z.string() })),
+  hmr: z.boolean(),
+})
+type Observation = z.infer<typeof inventorySchema>
+/** One side's model context: the assembly observation and the injected messages of its first model request. */
+type Inventory = Observation & { skills: ReadonlyMap<string, string>; messages: ReadonlyMap<string, string> }
+const runtimeLayers = ['tool', 'schema', 'section', 'skill', 'message', 'order'] as const
+/** Both sides run in UTC, and the Desktop user message reports it as the browser time zone, as the GUI client does. */
+const TIME_ZONE = 'UTC'
+const TIMESTAMP = /\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)/g
+/** Messages compared in other layers: the user prompt, the rendered runtime context entries and the skill catalog. */
+const STRUCTURED_MESSAGES = ['Inspect tools', 'The following information describes your current session', 'A skill is a reusable set of task-specific instructions.']
+
+const requestMessagesSchema = z.array(z.object({
+  content: z.union([z.string(), z.array(z.looseObject({ type: z.string(), text: z.string().optional() }))]),
+}))
+
+/** The text blocks of a Messages API request's messages, in order. */
+function texts(messages: unknown): string[] {
+  return requestMessagesSchema.parse(messages).flatMap(({ content }) => typeof content === 'string'
+    ? [content]
+    : content.flatMap(block => block.type === 'text' && block.text !== undefined ? [block.text] : []))
+}
+
+/**
+ * Read the session skill catalog that tool-skill sends as a user message rather than a prompt section.
+ * @param messages - the first model request's messages.
+ * @returns skill descriptions by name.
+ */
+function skillCatalog(messages: unknown): Map<string, string> {
+  const catalog = texts(messages).map(text => /<available_skills>\n([^]*?)<\/available_skills>/.exec(text)).find(match => match !== null)
+  if (catalog === undefined) throw new Error('The first model request carries no skill catalog')
+  return new Map([...catalog[1]!.matchAll(/^- `([^`]+)`: (.*)$/gm)].map(([, name, description]) => [name!, description!]))
+}
+
+/**
+ * Key each injected text message of the first request by its first line up to a colon, with clock readings replaced.
+ * @param messages - the first model request's messages.
+ * @returns message text by first line, without the messages other layers compare.
+ */
+function injectedMessages(messages: unknown): Map<string, string> {
+  const injected = new Map<string, string>()
+  for (const text of texts(messages)) {
+    const normalized = text.replaceAll(TIMESTAMP, '<time>')
+    const label = normalized.replace(/^<system-reminder>\n/, '').split('\n', 1)[0]!.split(':', 1)[0]!
+    if (STRUCTURED_MESSAGES.some(prefix => label.startsWith(prefix))) continue
+    if (injected.has(label)) throw new Error(`Two injected messages start with ${JSON.stringify(label)}`)
+    injected.set(label, normalized)
+  }
+  return injected
+}
+
+function names(inventory: Inventory): string[] {
+  return inventory.tools.map(tool => tool.name)
+}
+
+function differences(sdk: Inventory, desktop: Inventory): ParityDifference[] {
+  const prompt = (inventory: Inventory) => new Map<string, unknown>([
+    ...inventory.sections.map(({ name, text }) => [name, text] as const),
+    ...inventory.contexts.map(({ name, text }) => [`runtime-context/${name}`, text] as const),
+  ])
+  return [
+    ...compareEntries('tool', 'schema', new Map(sdk.tools.map(tool => [tool.name, tool])), new Map(desktop.tools.map(tool => [tool.name, tool]))),
+    ...compareEntries('section', 'section', prompt(sdk), prompt(desktop)),
+    ...compareEntries('skill', 'skill', sdk.skills, desktop.skills),
+    ...compareEntries('message', 'message', sdk.messages, desktop.messages),
+    ...compareOrder('section', sdk.sections.map(({ name }) => name), desktop.sections.map(({ name }) => name)),
+    ...compareOrder('runtime-context', sdk.contexts.map(({ name }) => name), desktop.contexts.map(({ name }) => name)),
+    ...compareOrder('message', [...sdk.messages.keys()], [...desktop.messages.keys()]),
+    ...compareOrder('tool', names(sdk), names(desktop)),
+  ]
+}
+
+function assertContextParity(sdk: Inventory, desktop: Inventory): void {
+  assertParity(runtimeLayers, differences(sdk, desktop))
+}
 
 async function fixture(test: TestContext) {
   const root = await mkdtemp(join(tmpdir(), 'sdk-desktop-tools-'))
-  const requests: { tools: { name: string }[] }[] = []
+  const requests: { tools: { name: string }[]; messages: unknown }[] = []
   const server = createServer((request, response) => {
     let body = ''
     request.setEncoding('utf8')
     request.on('data', (chunk: string) => { body += chunk })
     request.on('end', () => {
-      requests.push(JSON.parse(body) as { tools: { name: string }[] })
+      requests.push(JSON.parse(body) as { tools: { name: string }[]; messages: unknown })
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       response.end(messagesResponse({ type: 'text', text: 'tools inspected' }, 'end_turn'))
     })
@@ -49,24 +127,25 @@ async function fixture(test: TestContext) {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('model fixture has no TCP address')
-  const env = profileEnvironment(root, `http://127.0.0.1:${address.port}`)
+  const env = { ...profileEnvironment(root, `http://127.0.0.1:${address.port}`), TZ: TIME_ZONE }
 
-  async function collect(side: 'sdk' | 'desktop', mode: ToolMode, mutations: object[] = []): Promise<Inventory> {
-    const cwd = await mkdtemp(join(root, `${side}-${mode}-`))
+  async function collect(side: 'sdk' | 'desktop', mutations: object[] = []): Promise<Inventory> {
+    const cwd = await mkdtemp(join(root, `${side}-`))
     const output = join(cwd, 'tools.json')
     const patch = join(cwd, 'observer.patch.yml')
     await writeFile(patch, JSON.stringify([
       { id: 'session-title-llm', disabled: true },
       { insert: [{ id: 'tool-parity-observer', name: observer,
-        config: { output, cwd, ...(side === 'desktop' ? { preset: mode } : {}) } }] },
+        config: { output, cwd, directories: { '<cwd>': cwd, '<root>': root },
+          ...(side === 'desktop' ? { preset: 'standard', clientTimeZone: TIME_ZONE } : {}) } }] },
       ...mutations,
     ]))
     const before = requests.length
-    let inventory: Inventory
+    let inventory: Observation
     if (side === 'sdk') {
       const harness = new DeepSeekHarness({
         cwd, processCwd: cwd, dshHome: join(cwd, 'home'), env, model: 'deepseek-v4-pro',
-        patches: [...mode === 'ptc' ? [join(repo, 'apps/cli/config/examples/ptc.yml')] : [], patch],
+        patches: [patch],
       })
       const abort = (): void => { void harness.close() }
       test.signal.addEventListener('abort', abort, { once: true })
@@ -80,6 +159,8 @@ async function fixture(test: TestContext) {
       }
       expect(inventory.hmr).toBe(false)
     } else {
+      // Desktop composes the Web template's bundles; the CLI reserves the `desktop` name for the Electron Host. The
+      // rows that switch on that name and reach the model read DSH_PRIMARY_RUNTIME, which both sides leave empty.
       const child = execa(process.execPath, [join(repo, 'apps/cli/lib/bin.js'), '--profile', 'web',
         '--patch', patch, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
         cwd, env: { ...env, DSH_HOME: join(cwd, 'home') }, extendEnv: false,
@@ -121,41 +202,50 @@ async function fixture(test: TestContext) {
     }
     expect(requests.length).toBeGreaterThan(before)
     const presented = requests[before]!.tools.map(tool => tool.name).sort()
-    if (mode === 'ptc') expect(presented).toEqual(['run_code'])
-    else expect(presented).toEqual(inventory.names)
-    return inventory
+    expect(presented).toEqual(inventory.tools.map(tool => tool.name))
+    const { messages } = requests[before]!
+    return { ...inventory, skills: skillCatalog(messages), messages: injectedMessages(messages) }
   }
   return collect
 }
 
-it.for(['standard', 'ptc'] as const)('compares the shipped %s tool sets and permits explicit opt-out', async (mode, test) => {
+it('compares the shipped model context and permits explicit opt-out', async (test) => {
   const collect = await fixture(test)
-  const sdk = await collect('sdk', mode)
-  const desktop = await collect('desktop', mode)
-  assertToolParity(mode, sdk.names, desktop.names)
-  expect(sdk.names).toContain('plugin_manager')
-  const optOut = await collect('sdk', mode, [{ id: 'tool-plugin-manager', disabled: true }])
-  expect(optOut.names).not.toContain('plugin_manager')
-  expect(() => { assertToolParity(mode, optOut.names, desktop.names) }).toThrow('Missing from SDK: plugin_manager')
+  const sdk = await collect('sdk')
+  const desktop = await collect('desktop')
+  assertContextParity(sdk, desktop)
+  expect(names(sdk)).toContain('plugin_manager')
+  const optOut = await collect('sdk', [{ id: 'tool-plugin-manager', disabled: true }])
+  expect(names(optOut)).not.toContain('plugin_manager')
+  expect(() => { assertContextParity(optOut, desktop) }).toThrow('tool plugin_manager (desktop only)')
 })
 
-it.for(['standard', 'ptc'] as const)('detects missing shared tools in %s', async (mode, test) => {
+it('compares the shipped top-level Agent context with Team on', async (test) => {
   const collect = await fixture(test)
-  const desktop = await collect('desktop', mode)
+  const team = [{ id: 'agent-team', config: { maxTasks: 256, defaultEnabled: true } }]
+  const sdk = await collect('sdk', team)
+  const desktop = await collect('desktop', team)
+  for (const side of [sdk, desktop]) expect(names(side)).toEqual(expect.arrayContaining(['team_task_create', 'team_task_list']))
+  assertContextParity(sdk, desktop)
+})
+
+it('detects missing shared tools', async (test) => {
+  const collect = await fixture(test)
+  const desktop = await collect('desktop')
   for (const [id, tool] of [['present', 'present'], ['tool-ask-user', 'ask_user_question'], ['tool-schedule', 'schedule_create']]) {
-    const missing = await collect('sdk', mode, [{ id, disabled: true }])
-    expect(() => { assertToolParity(mode, missing.names, desktop.names) }).toThrow(new RegExp(`Missing from SDK:.*${tool}`))
+    const missing = await collect('sdk', [{ id, disabled: true }])
+    expect(() => { assertContextParity(missing, desktop) }).toThrow(`tool ${tool} (desktop only)`)
   }
 })
 
-it.for(['standard', 'ptc'] as const)('detects one-sided additions in %s', async (mode, test) => {
+it('detects one-sided additions', async (test) => {
   const collect = await fixture(test)
-  const sdk = await collect('sdk', mode)
-  const desktop = await collect('desktop', mode)
+  const sdk = await collect('sdk')
+  const desktop = await collect('desktop')
   const addition = [{ insert: [{ id: 'parity-probe', name: probe }] }]
-  const desktopExtra = await collect('desktop', mode, addition)
-  expect(() => { assertToolParity(mode, sdk.names, desktopExtra.names) }).toThrow('Missing from SDK: parity_probe')
-  const sdkExtra = await collect('sdk', mode, addition)
-  expect(() => { assertToolParity(mode, sdkExtra.names, desktop.names) }).toThrow('Only in SDK: parity_probe')
-  assertToolParity(mode, sdkExtra.names, desktopExtra.names)
+  const desktopExtra = await collect('desktop', addition)
+  expect(() => { assertContextParity(sdk, desktopExtra) }).toThrow('tool parity_probe (desktop only)')
+  const sdkExtra = await collect('sdk', addition)
+  expect(() => { assertContextParity(sdkExtra, desktop) }).toThrow('tool parity_probe (sdk only)')
+  assertContextParity(sdkExtra, desktopExtra)
 })

@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.3-alpha.1",
+  "version": "0.2.3-alpha.2",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -329,6 +329,9 @@
     "@deepseek-ai/dsh-forge-gitlab": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
-    "@deepseek-ai/dsh-tool-session-list": "workspace:*"
+    "@deepseek-ai/dsh-tool-session-list": "workspace:*",
+    "ws": "^8.18.3",
+    "@types/ws": "^8.18.1",
+    "protobufjs": "^8.0.0"
   }
 }

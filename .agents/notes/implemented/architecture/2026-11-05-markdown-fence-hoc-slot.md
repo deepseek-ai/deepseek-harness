@@ -52,7 +52,7 @@ The API guarantees:
 | Nesting | Ascending `order`, then `priority`, then registration order; lowest `order` outermost |
 | children | Rendered at most once; omitting it replaces everything inside the layer |
 | Crash | The failed occurrence renders `children` for the rest of its mount and the error is reported; the layer stays registered (`abdicate: false`) and other occurrences keep it; the occurrence retries when it remounts |
-| Compilation | One chain per `(host, slot declaration, entryKey)`, shared by every outlet; each ledger version reselects that key's layers and recompiles only when they change, so a registration for another key leaves mounted content in place, while switching an outlet's `entryKey` switches chains |
+| Compilation | Outlets with the same host, spec object, slot name, and `entryKey` [share one compiled chain](../../../../docs/subsystems/slots.md#hoc-layers); each ledger version reselects that key's layers and recompiles only when they change, so a registration for another key leaves mounted content in place, while switching an outlet's `entryKey` switches chains |
 
 These hoc semantics apply to every hoc slot, including `conversation.hero.frame`, whose layers are all wildcards. This note partially supersedes four decisions of [hoc slot kind](2026-11-03-hoc-slot-kind.md): rendering `children` exactly once, rejecting `entryKey`, per-outlet `useMemo` composition, and abdicating a crashed layer.
 

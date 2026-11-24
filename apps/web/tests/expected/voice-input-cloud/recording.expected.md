@@ -1,0 +1,5 @@
+- textbox "Describe what you want to build, / commands, @ files or sessions"
+- button "Cancel"
+- img "Recording…"
+- button "Stop and transcribe"
+- button "Send message" [disabled]

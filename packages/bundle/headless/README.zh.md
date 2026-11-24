@@ -74,7 +74,7 @@ DeepSeek Search 与 Fetch API [跟随会话的 DeepSeek 凭据](../../web/web-de
 
 ### 选择 Session 标识
 
-每次调用默认使用全新的 `session-<uuid>` 标识，`--json` 会在开头的 `session` 事件里报告它。传入 `--session-id <id>` 延续这段对话：runner 沿用该 id 对应的持久化 Session，而该 id 没有持久化 Session 时会在任务运行前失败，而不是悄悄开出一段空历史。沿用要求已组合 `sessionPersistence` 与 `sessionQuery` 服务，因此缺少任一服务的 profile 会显式失败，而不会返回一个历史随进程消失的 id。本进程中已存在持有该 id 的存活 Agent 时会被拒绝：它的原 owner 可能仍在驱动它，runner 无法取得独占的运行区间。标识是不透明的，因此会原样使用调用方给出的字符串，包括空白字符。工作目录通过已挂载的文件系统提供方解析（`fs.resolve('.')` 与 `fs.processPath()`）；未挂载文件系统服务时使用进程 cwd，新 Session 会记录该目录。沿用会将已记录 cwd 与同一提供方解析出的目录比较，并拒绝子 agent 会话、未记录工作目录的会话、运行在本 profile 不组合的 agent preset 下的会话，以及 preset 记录畸形的会话——该检查读取 Session 日志当前记录的 preset，因此在空白期切换过 preset 的会话同样会被拒绝。因此监督进程无法在另一套组合下悄悄驱动他人的会话；任一不匹配都会在任务运行前失败。
+每次调用默认使用全新的 `session-<uuid>` 标识，`--json` 会在开头的 `session` 事件里报告它。传入 `--session-id <id>` 延续这段对话：runner 沿用该 id 对应的持久化 Session，而该 id 没有持久化 Session 时会在任务运行前失败，而不是悄悄开出一段空历史。沿用要求已组合 `sessionPersistence`、`sessionQuery` 与 `agentPresets` 服务，因此缺少其中任一服务的 profile 会显式失败，而不会返回一个历史随进程消失的 id。本进程中已存在持有该 id 的存活 Agent 时会被拒绝：它的原 owner 可能仍在驱动它，runner 无法取得独占的运行区间。标识是不透明的，因此会原样使用调用方给出的字符串，包括空白字符。工作目录通过已挂载的文件系统提供方解析（`fs.resolve('.')` 与 `fs.processPath()`）；未挂载文件系统服务时使用进程 cwd，新 Session 会记录该目录。沿用会将已记录 cwd 与同一提供方解析出的目录比较，并拒绝子 agent 会话、未记录工作目录的会话、以及运行在本 profile 不组合的 agent preset 下的会话——该检查读取 Session 的 `agentPreset` 投影，因此在空白期切换过 preset 的会话同样会被拒绝。因此监督进程无法在另一套组合下悄悄驱动他人的会话；任一不匹配都会在任务运行前失败。
 
 接管会话时，运行器会在提交任务前记录当前部署路由。未声明推理强度时，仅在路由相同的情况下保留已保存的显式强度。本进程中已准备的步骤保留捕获的路由，后续步骤读取共享的 Session 选择。
 
@@ -125,11 +125,11 @@ runner 是核心 API 载体之上的直接驱动器：它确定 Agent 标识—�
 
 ### 运行流程
 
-runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，在读取 stdin 前验证请求的权限预设、审批服务与 CLI 目录授权，解析任务和共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它先应用所选预设，再应用显式审批策略，然后把任务作为用户消息提交。Auto 根据消息已有的 user source 判断任务权威。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。随后它对会话执行 flush，并把所属区间（从 `firstSeq` 起）折叠为最后一条非空 `assistant/message` 文本与最后一轮的终止原因。未闭合的最后一轮没有终止原因，不能继承更早的完成结果。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
+runner 等待整个应用结算（`ctx.get('loader')?.await()`），确保已组合的工具与适配器不会半挂载，在读取 stdin 前验证请求的权限预设、审批服务与 CLI 目录授权，解析任务和共享的 [`agentDefaultModel`](../../core/agent-default-model/README.zh.md) 选择，然后确定 Agent 标识：默认是全新的 `session-<uuid>`，或是 `--session-id` 指名的持久化 Session——通过 [`sessionQuery`](../../session-query/session-query/README.zh.md) 沿用，日志不存在时拒绝。它先应用所选预设，再应用显式审批策略，然后把任务作为用户消息提交。Auto 根据消息已有的 user source 判断任务权威。不带 `--json` 时，它把该 Agent 的非空推理增量流式写入 stderr；带 `--json` 时改为投影本次运行。它等待子级工作，并在结束前复核父级仍空闲且 Session 序号未变，让结算通知可以驱动父级生成最终答案。收件箱消息处于停放状态的空闲子级不会延迟完成；进程关闭时丢弃这些未领取消息。它把其 Agent 的会话在所属区间内（从 `firstSeq` 起）提交的事件折叠为最后一条非空 `assistant/message` 文本与最后一轮的终止原因，并在读取它们之前对会话执行 flush。未闭合的最后一轮没有终止原因，不能继承更早的完成结果。最后，它把最终文本写入 stdout（或 `final` 事件）并请求退出。
 
 ### 基于 base 的 patch 内容
 
-patch 叠加在 `dsh-base` 之上：继承投影缓存与共享 PTC 运行时，在基础 `system-prompt` 行上设置编码 persona 前缀与独立的 cwd 后缀，继承原生工具执行，并支持 [PTC overlay](../../../apps/cli/config/examples/ptc.yml)，禁用共享的 HMR（热模块替换）行，并挂载启动提供方与 runner。缓存为每个已持久化的一次性会话写入检查点，供后续消费方使用；其持久性屏障会在发布缓存行前 flush 所覆盖的日志前缀，因此可能拆分原本会合并的 JSONL 连续段。启动提供方（[`src/startup.ts`](src/startup.ts)）注入 `ctx.cmdlineArgs`（[`dsh-cmdline`](../../boot/cmdline/README.zh.md)），读取任务和调用选项、打印应用自己的 `--help`，并提供 `headlessStartup`；runner 从延迟配置读取任务、Session 标识与输出模式。它直接从 `headlessStartup` 读取显式 CLI 权限预设与审批策略，以 runner 配置作为默认值。sandbox-policy 行也等待此服务，在保留基础模式和工作区默认值的同时接收显式目录授权。
+patch 叠加在 `dsh-base` 之上：继承投影缓存与共享 PTC 运行时，在基础 `system-prompt` 行上设置编码 persona 前缀与独立的 cwd 后缀，继承原生工具执行，并支持 [PTC overlay](../../../apps/cli/config/examples/ptc.yml)，禁用共享的 HMR（热模块替换）行，按已有配置启用基础组合包中的 [agent preset 注册表](../../preset/agent-preset-registry/README.zh.md)，并挂载启动提供方与 runner。注册表维护沿用所读取的 `agentPreset` 投影。缓存为每个已持久化的一次性会话写入检查点，供后续消费方使用；其持久性屏障会在发布缓存行前 flush 所覆盖的日志前缀，因此可能拆分原本会合并的 JSONL 连续段。启动提供方（[`src/startup.ts`](src/startup.ts)）注入 `ctx.cmdlineArgs`（[`dsh-cmdline`](../../boot/cmdline/README.zh.md)），读取任务和调用选项、打印应用自己的 `--help`，并提供 `headlessStartup`；runner 从延迟配置读取任务、Session 标识与输出模式。它直接从 `headlessStartup` 读取显式 CLI 权限预设与审批策略，以 runner 配置作为默认值。sandbox-policy 行也等待此服务，在保留基础模式和工作区默认值的同时接收显式目录授权。
 
 ### 退出映射
 
@@ -188,7 +188,7 @@ runner 不向请求前缀添加任何内容；它只是驱动组合出的配置�
 - **首个 token 前没有心跳**——默认模式下，提供方发出第一个非空推理增量前，stderr 保持静默；延迟首个 token 的提供方不会更早给出进度信号。
 - **推理进入 stderr 日志**——默认模式下，重定向与监督进程可能保留显著更多且可能敏感的模型输出；需要时应把 stderr 路由到受控位置。
 - **默认 stdout 只承载最终答案**——没有 assistant 消息的运行向 stdout 打印空行并以 1 退出；中间工具输出不会打印，除非显式启用 `--json`。
-- **沿用受 cwd、归属与 preset 限制**——`--session-id` 会拒绝记录在其他工作目录、未记录工作目录、属于子 agent 会话，或运行在本 profile 不组合的 agent preset 下的 Session、preset 记录畸形的 Session，并要求已组合的 Session 查询与持久化服务；本进程中已存活的身份同样会被拒绝，因为 runner 无法对它取得独占的运行区间。
+- **沿用受 cwd、归属与 preset 限制**——`--session-id` 会拒绝记录在其他工作目录、未记录工作目录、属于子 agent 会话，或其 `agentPreset` 投影记录了 agent preset 的 Session（本 profile 不声明任何 preset），并要求已组合的 Session 查询、持久化与 agent preset 注册表服务；本进程中已存活的身份同样会被拒绝，因为 runner 无法对它取得独占的运行区间。
 - **事件流是投影而非日志**——`--json` 除终止 `final` 外把每个字符串与对象键限制在 8 KiB，并省略投影未建模的事件，因此它不是 Session 日志的无损副本。
 
 <a id="dev-note"></a>

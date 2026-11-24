@@ -35,9 +35,6 @@
       "path": "../../client/ui-plugin-manager/tsconfig.client.json"
     },
     {
-      "path": "../../client/ui-settings/tsconfig.client.json"
-    },
-    {
       "path": "../../client/ui-layout"
     },
     {

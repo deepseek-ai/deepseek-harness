@@ -47,6 +47,7 @@
           "tools": [
             "apply_patch",
             "ask_user_question",
+            "cordis_inspect",
             "create_goal",
             "edit",
             "get_goal",
@@ -109,6 +110,7 @@
           "tools": [
             "apply_patch",
             "ask_user_question",
+            "cordis_inspect",
             "create_goal",
             "edit",
             "get_goal",
@@ -186,6 +188,7 @@
           "tools": [
             "apply_patch",
             "ask_user_question",
+            "cordis_inspect",
             "create_goal",
             "edit",
             "get_goal",

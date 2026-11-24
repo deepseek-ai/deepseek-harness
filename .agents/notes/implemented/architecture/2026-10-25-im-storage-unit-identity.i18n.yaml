@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-25-im-storage-unit-identity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-25-im-storage-unit-identity.md
+/agent-note-im-storage-unit-identity-in-v4:
+  en: dfe7222b2c39ed68
+  zh: 437376ab9dd5fa6d
+/agent-note-im-storage-unit-identity-in-v4/problem:
+  en: e797e295bb466f4c
+  zh: 6710f2fb5a6ce0f4
+/agent-note-im-storage-unit-identity-in-v4/decision:
+  en: bb21e01ff613b3fb
+  zh: 8a6c7a132541ff85
+/agent-note-im-storage-unit-identity-in-v4/alternatives-considered:
+  en: 87c050a966f70cc5
+  zh: 80f678f0390db637
+/agent-note-im-storage-unit-identity-in-v4/consequences:
+  en: 491e0391ce6ee905
+  zh: 943510bea0b14e07

@@ -1,0 +1,138 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "form",
+              "element_id": "ebya2pz7p64axlte",
+              "name": "order",
+              "elements": [
+                {
+                  "tag": "input",
+                  "element_id": "eb2oeiku2gffzijp",
+                  "name": "title",
+                  "label": {
+                    "tag": "plain_text",
+                    "content": "Title"
+                  },
+                  "placeholder": {
+                    "tag": "plain_text",
+                    "content": "Type a title"
+                  },
+                  "default_value": "Untitled"
+                },
+                {
+                  "tag": "checker",
+                  "element_id": "eyno4r344ik7v3kr",
+                  "name": "agree",
+                  "checked": true,
+                  "text": {
+                    "tag": "lark_md",
+                    "content": "I agree"
+                  }
+                },
+                {
+                  "tag": "select_static",
+                  "element_id": "esyvbwcrvxaoaihh",
+                  "name": "size",
+                  "placeholder": {
+                    "tag": "plain_text",
+                    "content": "Size"
+                  },
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Small"
+                      },
+                      "value": "s"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Large"
+                      },
+                      "value": "l"
+                    }
+                  ],
+                  "initial_option": "l",
+                  "behaviors": [
+                    {
+                      "type": "callback",
+                      "value": {
+                        "v4": {
+                          "id": "sel-size"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "tag": "multi_select_static",
+                  "element_id": "ew4yzlxrp2dzbayp",
+                  "name": "tags",
+                  "options": [
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Alpha"
+                      },
+                      "value": "a"
+                    },
+                    {
+                      "text": {
+                        "tag": "plain_text",
+                        "content": "Beta"
+                      },
+                      "value": "b"
+                    }
+                  ],
+                  "selected_values": [
+                    "a"
+                  ]
+                },
+                {
+                  "tag": "button",
+                  "element_id": "ebz7gzqm5yls3nmb",
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Send"
+                  },
+                  "type": "default",
+                  "name": "ebz7gzqm5yls3nmb",
+                  "form_action_type": "submit",
+                  "disabled": false,
+                  "behaviors": [
+                    {
+                      "type": "callback",
+                      "value": {
+                        "v4": {
+                          "id": "btn-submit"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

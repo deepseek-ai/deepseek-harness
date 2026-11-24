@@ -5,14 +5,11 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GraphqlReader } from './commits.ts'
-import { checksRollup, closingIssuesSchema, reviewDecision, VERDICTS } from './graphql.ts'
+import { checksRollup, reviewDecision, VERDICTS } from './graphql.ts'
 import { isSegment } from './urls.ts'
 
 /** The lists GitHub search reads, each the same search the GitHub pull request page offers. */
 export const VIEWER_FILTERS: ReadonlySet<ForgeViewerFilter> = new Set(['review-requested', 'authored', 'involved'])
-
-/** Most closing issues one list item names. */
-const CLOSING_ISSUES = 3
 
 /**
  * Search qualifiers of each list. `involved` leaves out the other two lists, so the three never share a pull request;
@@ -29,8 +26,7 @@ const ROW_FIELDS = `number title url isDraft updatedAt headRefOid reviewDecision
   author { __typename login avatarUrl }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
   viewerLatestReview { state commit { oid } }
-  viewerLatestReviewRequest { requestedReviewer { __typename ... on Team { combinedSlug } } }
-  closingIssuesReferences(first: ${CLOSING_ISSUES}) { totalCount nodes { number title state url repository { name owner { login } } } }`
+  viewerLatestReviewRequest { requestedReviewer { __typename ... on Team { combinedSlug } } }`
 
 /** One page of one list with the signed-in user; variables `q` and the integer `first`. */
 export const VIEWER_LIST_QUERY = `query($q: String!, $first: Int!) {
@@ -63,7 +59,6 @@ const rowSchema = z.object({
   viewerLatestReviewRequest: z.object({
     requestedReviewer: z.object({ __typename: z.string(), combinedSlug: z.string().optional() }).nullable(),
   }).nullable(),
-  closingIssuesReferences: closingIssuesSchema,
 })
 
 const listSchema = z.object({
@@ -168,18 +163,6 @@ function summaryOf(host: string, row: z.infer<typeof rowSchema>): ChangeRequestS
     reviewDecision: reviewDecision(row.reviewDecision),
     viewerReview: review === null || verdict === undefined ? null : { verdict, reviewedSha: review.commit?.oid ?? null },
     viewerRequest: reviewer == null ? null : { team: reviewer.__typename === 'Team' ? reviewer.combinedSlug ?? null : null },
-    closingIssues: row.closingIssuesReferences.nodes.flatMap((issue) => {
-      const { owner: { login: issueOwner }, name: issueName } = issue.repository
-      if (!isSegment(issueOwner) || !isSegment(issueName)) return []
-      return [{
-        repository: { forge: 'github', host, owner: issueOwner, name: issueName },
-        number: issue.number,
-        title: issue.title,
-        state: issue.state === 'OPEN' ? 'open' as const : 'closed' as const,
-        url: issue.url,
-      }]
-    }),
-    closingIssuesTruncated: row.closingIssuesReferences.totalCount > row.closingIssuesReferences.nodes.length,
     updatedAt: row.updatedAt,
   }
 }

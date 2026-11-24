@@ -9,7 +9,7 @@ internal static class HeldInputChecks
     {
         var a = Guid.NewGuid();
         var b = Guid.NewGuid();
-        var target = new HeldInputs.Target("app", 72, 122, 100);
+        var target = new HeldInputs.Target("app", 72);
         var events = new List<string>();
         var blocked = false;
         void Receive(Win32.Input input)
@@ -40,9 +40,14 @@ internal static class HeldInputChecks
             new() { Data = new() { Mouse = new() { Flags = 4 } } }, default), "Record the accepted mouse down");
         check(Key(a, 87, "w") && !Key(a, 87, "w"), "A repeated key does not duplicate a hold");
         refuses(() => Key(b, 87, "w"), "INPUT_BUSY");
+        foreach (var other in new[] { new HeldInputs.Target("app", 73), new HeldInputs.Target("other-app", 72) })
+            refuses(() => inputs.Down(a, other, 87, "w",
+                new() { Type = 1, Data = new() { Keyboard = new() { Key = 87 } } },
+                new() { Type = 1, Data = new() { Keyboard = new() { Key = 87, Flags = 2 } } }, default), "INPUT_BUSY");
         refuses(() => inputs.RequireAvailable(1), "INPUT_BUSY");
         refuses(() => inputs.Up(b, "app", 72, "w", true), "INPUT_NOT_HELD");
         refuses(() => inputs.Up(a, "app", 73, "w", true), "INPUT_NOT_HELD");
+        refuses(() => inputs.Up(a, "other-app", 72, "w", true), "INPUT_NOT_HELD");
         check(inputs.Release(b, default).Length == 0, "Another connection releases nothing");
         check(inputs.Get(b).Length == 0 && inputs.Get(a).Length == 3, "State query is connection-scoped");
         var described = JsonSerializer.SerializeToElement(inputs.Get(a), WireJson.Options);

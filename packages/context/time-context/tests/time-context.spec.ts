@@ -283,17 +283,6 @@ describe('durable step context', () => {
     )
   })
 
-  it('reports an unavailable later-step baseline when event lookup is exhausted', async () => {
-    const { ctx } = await mount()
-    const session = Session.create(brandString<SessionId>('later-step-exhausted'))
-
-    await fire(ctx, sessionAgent(session), 1, 2)
-
-    expect(contextTexts(session)[0]).toContain(
-      'Elapsed since the preceding step context: unavailable.',
-    )
-  })
-
   it('injects after backward wall-clock movement and clamps elapsed time to zero', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 60_000 })
     const session = Session.create(brandString<SessionId>('backward'))
@@ -526,10 +515,10 @@ describe('time-context projection fold edges', () => {
     expect(contextTexts(session)).toHaveLength(1)
   })
 
-  it('keeps the historical requested-turn fallback and resets distinct zones on the next turn', async () => {
+  it('collects distinct zones inside each turn and resets them on the next turn', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 0 })
     onTestFinished(() => ctx.fiber.dispose())
-    const session = Session.create(brandString<SessionId>('browser-historical-turn'))
+    const session = Session.create(brandString<SessionId>('browser-next-turn'))
     session.append('user/message', createUserMessage({
       content: [],
       source: { kind: 'user', rpcId: 'before-turn', clientTimeZone: 'Europe/London' } as never,
@@ -549,8 +538,8 @@ describe('time-context projection fold edges', () => {
     expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       browserTurn: 2, browserTimeZones: ['America/New_York'],
     })
-    await fire(ctx, sessionAgent(session), 1, 1)
-    expect(contextTexts(session).at(-1)).toContain('mixed ["America/New_York","Asia/Shanghai"]')
+    await fire(ctx, sessionAgent(session), 2, 1)
+    expect(contextTexts(session).at(-1)).toContain('Browser time zone for this request: America/New_York. ')
   })
 
   it('clears the open-turn injection time at the next turn start', async () => {

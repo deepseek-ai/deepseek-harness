@@ -53,7 +53,7 @@ interface Binding {
 export class AgentPresetRegistry extends TypertRemoteService {
   static inject = ['loader', 'sessionProjections', 'agents']
   static Config = z.object({
-    default: z.string().required(),
+    default: z.string(),
     selectedDefault: z.string().volatile(),
   })
   private agentPresetProjectionHandle!: ProjectionHandle<string | null>
@@ -77,8 +77,19 @@ export class AgentPresetRegistry extends TypertRemoteService {
     })
   }
 
-  /** Default preset for a subsequently created session. */
-  get defaultId(): string { return this.config.selectedDefault.get() ?? this.config.default }
+  /** Default preset for a subsequently created session; undefined when the deployment configures none. */
+  get defaultId(): string | undefined { return this.config.selectedDefault.get() ?? this.config.default }
+
+  /** The requested preset, or the default for a caller that names none. */
+  private requested(id: string | undefined): string {
+    const wanted = id ?? this.defaultId
+    if (wanted === undefined) {
+      throw new RemoteError('agent-preset/no-default', 'No default agent preset is configured. Specify a preset or configure `default`.', {
+        available: [...this.definitions.keys()],
+      })
+    }
+    return wanted
+  }
 
   /**
    * Read the preset recorded for a Session, including selections no longer in the roster.
@@ -215,9 +226,10 @@ export class AgentPresetRegistry extends TypertRemoteService {
   /** Resolve an identity without starting an Agent.
    * @param id Explicit preset or the current default.
    * @returns Current metadata, including failure when activation failed.
+   * @throws RemoteError `agent-preset/no-default` when `id` is omitted and no default is configured.
    */
   async resolve(id?: string): Promise<AgentPreset> {
-    const wanted = id ?? this.defaultId
+    const wanted = this.requested(id)
     const record = this.definitions.get(wanted)
     if (record === undefined) throw new RemoteError('agent-preset/not-found', `Unknown agent preset: ${wanted}`,
       { agentPreset: wanted, available: [...this.definitions.keys()] })
@@ -245,7 +257,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
   }
 
   private async retain(id?: string): Promise<Generation> {
-    const wanted = id ?? this.defaultId
+    const wanted = this.requested(id)
     while (true) {
       const record = this.definitions.get(wanted)
       if (record === undefined) throw new RemoteError('agent-preset/not-found', `Unknown agent preset: ${wanted}`,

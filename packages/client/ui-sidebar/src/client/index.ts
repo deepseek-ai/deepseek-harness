@@ -87,11 +87,11 @@ export function apply(ctx: ClientContext): void {
   })
   ctx.slots.inject('sidebar', function* () {
     yield ctx.slots.registerFactory({
-      name: 'sidebar.panel.icon', scope: 'root',
+      name: 'sidebar.panel.icon', scope: 'root', inline: true,
       children: { 'sidebar.panellist': { kind: 'list', scope: 'root' } },
     }, PanelIcon)
     yield ctx.slots.registerFactory({
-      name: 'sidebar.panel.trailing', scope: 'root',
+      name: 'sidebar.panel.trailing', scope: 'root', inline: true,
       children: { 'sidebar.panellist.trailing': { kind: 'list', scope: 'root', inline: true } },
     }, PanelTrailing)
     yield ctx.slots.register({

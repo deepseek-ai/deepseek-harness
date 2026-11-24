@@ -1,0 +1,54 @@
+{
+  "name": "@deepseek-ai/cordis-element",
+  "description": "Element Manipulation",
+  "version": "0.3.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./jsx-runtime": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "vendor/element"
+  },
+  "bugs": {
+    "url": "https://github.com/cordiverse/element/issues"
+  },
+  "keywords": [
+    "cordis",
+    "element",
+    "segment",
+    "component",
+    "message",
+    "utilities"
+  ],
+  "dependencies": {
+    "@deepseek-ai/cosmokit": "workspace:~"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts"
+}

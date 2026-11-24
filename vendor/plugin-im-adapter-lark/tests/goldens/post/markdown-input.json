@@ -1,0 +1,29 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "**bold** text"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "- item one\n- item two"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "```ts\nconst x = 1\n```"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

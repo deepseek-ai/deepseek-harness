@@ -13,7 +13,10 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  ChangeRequestDescription, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeRerunRequest, ForgeReviewData,
+  AutoMergeRequest, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList,
+  ForgeReadiness,
+  ForgeRerunRequest,
+  ForgeReviewData,
   ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewedFiles,
   ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -31,8 +34,10 @@ import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
 import {
   CheckoutRow, ConnectionRow, LocalChangesRow, type CheckoutRowInjected, type ConnectionRowInjected, type LocalChangesRowInjected,
 } from '../src/client/EnvironmentRows.tsx'
+import { HostSettings, type HostSettingsInjected } from '../src/client/HostSettings.tsx'
+import type { HostSettings as HostSettingsFields } from '../src/client/host-settings-form.ts'
 import { en, NS, zh } from '../src/client/locales.ts'
-import { inject, mountForgePanel, WORKTREE_NS, WORKTREE_ROW_KEY } from '../src/client/mount.ts'
+import { FORGE_BUNDLE, HOST_ROWS, inject, mountForgePanel, WORKTREE_NS, WORKTREE_ROW_KEY } from '../src/client/mount.ts'
 import type { SessionListInjected } from '../src/client/session-list.ts'
 import { SessionHoverForge } from '../src/client/SessionHoverForge.tsx'
 import { SessionRowForge } from '../src/client/SessionRowForge.tsx'
@@ -96,6 +101,8 @@ function stream<F = ForgePanelState>(signal: AbortSignal) {
 }
 
 const OK: RemoteResult<void> = { ok: true, value: undefined }
+/** The automatic merge turned on for a confirmed head. */
+const AUTO_ON = { enabled: true as const, method: 'squash' as const, headSha: 'b'.repeat(40) }
 
 /** What a Remote read resolves to. */
 type Read<T> = Promise<RemoteResult<T>>
@@ -162,6 +169,10 @@ function isReviewPageFace(value: Record<string, unknown>): value is Record<strin
   return typeof value.openLists === 'function' && typeof value.actionsFor === 'function'
 }
 
+function isHostFace(value: Record<string, unknown>): value is Record<string, unknown> & HostSettingsInjected {
+  return typeof value.add === 'function' && typeof value.checkSignIn === 'function'
+}
+
 function isReviewCountFace(value: Record<string, unknown>): value is Record<string, unknown> & ReviewNavCountInjected {
   return typeof value.hooks === 'object' && value.hooks !== null && 'count' in value.hooks
 }
@@ -215,6 +226,7 @@ async function base() {
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     merge: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
+    setAutoMerge: vi.fn(async (_sessionId: SessionId, _url: string, _request: AutoMergeRequest): Promise<RemoteResult<void>> => OK),
     rerunChecks: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeRerunRequest): Promise<RemoteResult<void>> => OK),
     requestReviews: vi.fn(async (
       _sessionId: SessionId, _url: string, _reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[],
@@ -270,9 +282,12 @@ async function base() {
     reviewRefresh: vi.fn(async (): Promise<RemoteResult<void>> => OK),
     reviewDescription: vi.fn(async (_url: string, _signal: AbortSignal): Read<ChangeRequestDescription> =>
       ({ ok: true, value: description('Body') })),
+    reviewActivity: vi.fn(async (_url: string, _signal: AbortSignal): Read<ChangeRequestActivity | null> => ({ ok: true, value: null })),
+    reviewComment: vi.fn(async (_url: string, _body: string): Promise<RemoteResult<void>> => OK),
     reviewPoll: vi.fn(async (_url: string): Promise<RemoteResult<void>> => OK),
     reviewMarkReady: vi.fn(async (_url: string): Promise<RemoteResult<void>> => OK),
     reviewMerge: vi.fn(async (_url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
+    reviewSetAutoMerge: vi.fn(async (_url: string, _request: AutoMergeRequest): Promise<RemoteResult<void>> => OK),
     reviewChecks: vi.fn(async (_url: string, _headSha: string, _signal: AbortSignal): Read<ChangeRequestSnapshot> =>
       ({ ok: true, value: snapshot(7) })),
     reviewRerunChecks: vi.fn(async (_url: string, _request: ForgeRerunRequest): Promise<RemoteResult<void>> => OK),
@@ -298,6 +313,8 @@ async function base() {
     reviewSubmit: vi.fn(async (_url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> =>
       ({ ok: true, value: { ok: true, url: 'https://github.com/review/2' } })),
     reviewStage: vi.fn(async (_sessionId: SessionId, _url: string | null): Promise<RemoteResult<void>> => OK),
+    hostReadiness: vi.fn(async (_forge: string, _host: string, _signal: AbortSignal): Read<ForgeReadiness> =>
+      ({ ok: true, value: { state: 'ready', message: null, signIn: null } })),
   }
   ctx.provide('remote.forgePanel', forgePanel)
   ctx.provide('locale', new LocaleRuntime(ctx))
@@ -319,7 +336,14 @@ async function base() {
   }
   ctx.provide('sessions', sessions)
   const worktreeForm = stubConfigForm<WorktreeSettingsFields>()
-  ctx.provide('configForms', { get: (name: string) => { expect(name).toBe(WORKTREE_NS); return worktreeForm.scope } } as never)
+  const hostForms = { 'forge-github': stubConfigForm<HostSettingsFields>(), 'forge-gitlab': stubConfigForm<HostSettingsFields>() }
+  ctx.provide('configForms', {
+    get: (name: string) => {
+      if (name === WORKTREE_NS) return worktreeForm.scope
+      if (name === 'forge-github' || name === 'forge-gitlab') return hostForms[name].scope
+      throw new Error(`no form expected for the entry ${name}`)
+    },
+  } as never)
   ctx.provide('sidebarRight', sidebarRight)
   const remoteAccess = {
     whenAccess: vi.fn((_action: string, callback: () => Iterable<() => unknown>) => {
@@ -358,7 +382,7 @@ async function base() {
   } as never, () => null)
   return {
     ctx, remote, unmount, streams, stateStreams, extensionStreams, countStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight,
-    sessions, scopes, worktreeForm, remoteAccess, workspaces, uiWorkspace,
+    sessions, scopes, worktreeForm, hostForms, remoteAccess, workspaces, uiWorkspace,
   }
 }
 
@@ -992,6 +1016,21 @@ describe('mountForgePanel change request actions', () => {
     expect(f.notice()).toMatchObject(notice)
     await f.dispose()
   })
+
+  it.each([
+    ['turns it on and confirms it', AUTO_ON, OK, { key: 'toast.autoMergeEnabled', tone: 'success', params: { name: '#7' } }],
+    ['turns it off and confirms it', { enabled: false as const }, OK, { key: 'toast.autoMergeCancelled', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', AUTO_ON, REFUSED.stale, { key: 'toast.autoMergeStale', tone: 'failure', params: { name: '#7' } }],
+    ['reports why the host refused', AUTO_ON, REFUSED.refused,
+      { key: 'toast.autoMergeFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+  ])('sets the automatic merge through the Remote and %s', async (_label, request, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.setAutoMerge.mockResolvedValueOnce(result)
+    await f.section(S1).autoMerge(entry(7, snapshot(7)), request)
+    expect(f.forgePanel.setAutoMerge).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', request)
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
 })
 
 describe('mountForgePanel overview actions', () => {
@@ -1349,6 +1388,115 @@ describe('worktree row settings', () => {
   })
 })
 
+describe('provider row host settings', () => {
+  /** The host page faces of the GitHub and GitLab rows. */
+  function hostPages(f: Awaited<ReturnType<typeof fixture>>): Record<'github' | 'gitlab', HostSettingsInjected> {
+    const rows = f.ctx.slots.entries('plugins.row.config').filter(candidate => candidate.component === HostSettings)
+    expect(rows.map(row => row.options)).toMatchObject([{ key: `${FORGE_BUNDLE}#forge-github` }, { key: `${FORGE_BUNDLE}#forge-gitlab` }])
+    const [github, gitlab] = rows.map(row => row.inject?.())
+    assert(github !== undefined && isHostFace(github) && gitlab !== undefined && isHostFace(gitlab))
+    return { github, gitlab }
+  }
+
+  /** Serve a row's form with `hosts`. */
+  function serve(f: Awaited<ReturnType<typeof fixture>>, row: 'forge-github' | 'forge-gitlab', hosts: string[]): void {
+    f.hostForms[row].publish({ status: 'ready', value: { hosts }, base: { hosts }, user: {}, writable: true, revision: 1 })
+  }
+
+  it('registers a host page for each provider row over the entry of the same id and writes the staged list on save', async () => {
+    const f = await fixture()
+    try {
+      expect(HOST_ROWS).toEqual([{ forge: 'github', row: 'forge-github' }, { forge: 'gitlab', row: 'forge-gitlab' }])
+      const pages = hostPages(f)
+      expect([pages.github.forge, pages.gitlab.forge]).toEqual(['github', 'gitlab'])
+      serve(f, 'forge-gitlab', ['gitlab.com'])
+      expect(pages.gitlab.hooks.hostForm.getSnapshot()).toMatchObject({ available: true, dirty: false, saved: ['gitlab.com'], draft: ['gitlab.com'] })
+      expect(pages.github.hooks.hostForm.getSnapshot()).toMatchObject({ available: false, saved: [] })
+
+      expect(pages.gitlab.add('gitlab.example.com')).toBeUndefined()
+      pages.gitlab.save()
+
+      await vi.waitFor(() => { expect(f.hostForms['forge-gitlab'].mutate).toHaveBeenCalledOnce() })
+      expect(f.hostForms['forge-gitlab'].mutate.mock.calls[0]?.[0]).toEqual([{ op: 'set', path: ['hosts'], value: ['gitlab.com', 'gitlab.example.com'] }])
+      expect(f.hostForms['forge-github'].mutate).not.toHaveBeenCalled()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('refuses a host the other provider row serves now', async () => {
+    const f = await fixture()
+    try {
+      const pages = hostPages(f)
+      serve(f, 'forge-gitlab', ['gitlab.com'])
+      // The GitHub row is not served yet, so it holds no host.
+      expect(pages.gitlab.add('ghe.corp.example')).toBeUndefined()
+      pages.gitlab.discard()
+
+      serve(f, 'forge-github', ['github.com', 'ghe.corp.example'])
+
+      expect(pages.gitlab.add('ghe.corp.example')).toEqual({ kind: 'taken', host: 'ghe.corp.example' })
+      expect(pages.github.add('gitlab.com')).toEqual({ kind: 'taken', host: 'gitlab.com' })
+      expect(pages.github.add('ghe.corp.example')).toEqual({ kind: 'duplicate', host: 'ghe.corp.example' })
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('reads sign-in state through the Remote under the row\'s forge family', async () => {
+    const f = await fixture()
+    try {
+      const pages = hostPages(f)
+      const signIn: ForgeReadiness = { state: 'unauthenticated', message: 'not signed in', signIn: { command: 'glab auth login --hostname gitlab.example.com' } }
+      f.forgePanel.hostReadiness.mockResolvedValueOnce({ ok: true, value: signIn })
+
+      pages.gitlab.checkSignIn(['gitlab.example.com'], true)
+
+      expect(f.forgePanel.hostReadiness).toHaveBeenCalledWith('gitlab', 'gitlab.example.com', expect.any(AbortSignal))
+      expect(pages.gitlab.hooks.signIn.getSnapshot().get('gitlab.example.com')).toEqual({ state: 'checking' })
+      await settle()
+      expect(pages.gitlab.hooks.signIn.getSnapshot().get('gitlab.example.com')).toEqual(signIn)
+      expect(pages.github.hooks.signIn.getSnapshot().size).toBe(0)
+
+      pages.github.checkSignIn(['github.com'], false)
+      expect(f.forgePanel.hostReadiness).toHaveBeenLastCalledWith('github', 'github.com', expect.any(AbortSignal))
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('copies a sign-in command and confirms it', async () => {
+    const f = await fixture()
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    try {
+      hostPages(f).gitlab.copyCommand('glab auth login --hostname gitlab.example.com')
+      await settle()
+
+      expect(writeText).toHaveBeenCalledWith('glab auth login --hostname gitlab.example.com')
+      expect(f.notice()).toMatchObject({ key: 'toast.commandCopied', tone: 'success' })
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('withdraws both host pages, releases their forms, and ends the sign-in reads under way with its fiber', async () => {
+    const b = await base()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply: (plugin: Context) => mountForgePanel(plugin, REMOTE) })
+    await fiber
+    const rows = () => b.ctx.slots.entries('plugins.row.config').filter(candidate => candidate.component === HostSettings)
+    expect(rows()).toHaveLength(2)
+    const github = rows()[0]?.inject?.()
+    assert(github !== undefined && isHostFace(github))
+    const signals: AbortSignal[] = []
+    b.forgePanel.hostReadiness.mockImplementation((_forge, _host, signal) => {
+      signals.push(signal)
+      return new Promise(() => {})
+    })
+    github.checkSignIn(['github.com'], true)
+    expect(b.hostForms['forge-github'].listenerCount()).toBe(1)
+
+    await fiber.dispose()
+
+    expect(rows()).toHaveLength(0)
+    expect(signals.map(signal => signal.aborted)).toEqual([true])
+    expect(b.hostForms['forge-github'].listenerCount()).toBe(0)
+    expect(b.hostForms['forge-gitlab'].listenerCount()).toBe(0)
+  })
+})
+
 describe('archive notices', () => {
   it('uses the scheduled cleanup notice and reports a later failure', async () => {
     const f = await fixture()
@@ -1507,18 +1655,22 @@ describe('mountForgePanel review page', () => {
     await f.dispose()
   })
 
-  it('reads the lists of every repository or one, the change request, and its description through the Remote', async () => {
+  it('reads the lists, the change request, its description and activity, and adds a comment through the Remote', async () => {
     const f = await fixture()
     const page = reviewPage(f)
     const signal = new AbortController().signal
-    page.openLists('', signal)
+    page.openLists(null, signal)
     expect(f.forgePanel.reviewLists).toHaveBeenLastCalledWith(null, signal)
-    page.openLists('octo/demo', signal)
-    expect(f.forgePanel.reviewLists).toHaveBeenLastCalledWith({ owner: 'octo', name: 'demo' }, signal)
+    page.openLists({ host: 'gitlab.example', owner: 'group/sub', name: 'app' }, signal)
+    expect(f.forgePanel.reviewLists).toHaveBeenLastCalledWith({ host: 'gitlab.example', owner: 'group/sub', name: 'app' }, signal)
     page.openChangeRequest(url, signal)
     expect(f.forgePanel.reviewChangeRequest).toHaveBeenCalledWith(url, signal)
     expect(await page.readDescription(url, signal)).toEqual({ ok: true, value: description('Body') })
     expect(f.forgePanel.reviewDescription).toHaveBeenCalledWith(url, signal)
+    expect(await page.readActivity(url, signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.reviewActivity).toHaveBeenCalledWith(url, signal)
+    expect(await page.addComment(url, 'Thanks')).toEqual({ ok: true, value: undefined })
+    expect(f.forgePanel.reviewComment).toHaveBeenCalledWith(url, 'Thanks')
     expect(page.hooks.locale.getSnapshot()).toBe(f.ctx.locale.getLocale().active)
     const reset = vi.fn()
     const unsubscribe = page.subscribeReset(reset)
@@ -1528,6 +1680,25 @@ describe('mountForgePanel review page', () => {
     f.ctx.emit('connection/reset')
     expect(reset).toHaveBeenCalledOnce()
     await f.dispose()
+  })
+
+  it('opens the Forge bundle on the Plugins page for the host lists while the Plugins page provides its navigation', async () => {
+    const f = await fixture()
+    try {
+      const page = reviewPage(f)
+      expect(page.hooks.pluginNavigation.getSnapshot()).toBe(false)
+      expect(() => { page.openHostSettings() }).not.toThrow()
+      const openBundle = vi.fn()
+      const navigation = f.ctx.plugin({ apply: (ctx: Context) => { ctx.provide('pluginNavigation', { openBundle } as never) } })
+      await navigation
+      await vi.waitFor(() => { expect(page.hooks.pluginNavigation.getSnapshot()).toBe(true) })
+
+      page.openHostSettings()
+
+      expect(openBundle).toHaveBeenCalledWith(FORGE_BUNDLE)
+      await navigation.dispose()
+      expect(page.hooks.pluginNavigation.getSnapshot()).toBe(false)
+    } finally { await f.ctx.fiber.dispose() }
   })
 
   it('reads every list again and reports only a failure', async () => {
@@ -1567,12 +1738,11 @@ describe('mountForgePanel review page card actions', () => {
     f.actions.viewChanges?.(entry(7, snapshot(7)))
     expect(f.showChanges).toHaveBeenCalledOnce()
 
-    f.actions.retry()
-    await settle()
+    // The read settles with the Host's answer, so a surface can show the refresh while it runs.
+    await f.actions.retry()
     expect(f.forgePanel.reviewPoll).toHaveBeenCalledWith(url)
     f.forgePanel.reviewPoll.mockResolvedValueOnce(REFUSED.failed)
-    f.actions.retry()
-    await settle()
+    await f.actions.retry()
     expect(f.notice()).toMatchObject({ key: 'toast.refreshFailed', tone: 'failure' })
     await f.dispose()
   })
@@ -1604,6 +1774,21 @@ describe('mountForgePanel review page card actions', () => {
     f.forgePanel.reviewMerge.mockResolvedValueOnce(result)
     await f.actions.merge?.(entry(7, snapshot(7)), { method: 'squash', headSha: 'b'.repeat(40) })
     expect(f.forgePanel.reviewMerge).toHaveBeenCalledWith(url, 'squash', 'b'.repeat(40))
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+
+  it.each([
+    ['turns it on and confirms it', AUTO_ON, OK, { key: 'toast.autoMergeEnabled', tone: 'success', params: { name: '#7' } }],
+    ['turns it off and confirms it', { enabled: false as const }, OK, { key: 'toast.autoMergeCancelled', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', AUTO_ON, REFUSED.stale, { key: 'toast.autoMergeStale', tone: 'failure', params: { name: '#7' } }],
+    ['tells the reader to check an outcome the host did not confirm', AUTO_ON, REFUSED.unknown,
+      { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
+  ])('sets the automatic merge by its URL and %s', async (_label, request, result, notice) => {
+    const f = await card()
+    f.forgePanel.reviewSetAutoMerge.mockResolvedValueOnce(result)
+    await f.actions.autoMerge?.(entry(7, snapshot(7)), request)
+    expect(f.forgePanel.reviewSetAutoMerge).toHaveBeenCalledWith(url, request)
     expect(f.notice()).toMatchObject(notice)
     await f.dispose()
   })

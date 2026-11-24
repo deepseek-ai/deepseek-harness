@@ -25,7 +25,7 @@ The extensions group provides read-only runtime API discovery for agents, proces
 | Package | Role | ctx key |
 |---|---|---|
 | [`tool-cordis`](tool-cordis/README.md) | One read-only tool for runtime API discovery | registers on `ctx.tools` |
-| [`cordis-host-runner`](cordis-host-runner/README.md) | Host half: definition registry, sandboxed host-half lifecycle, and the inspect registry that answers browser queries | provides `ctx.dynamicCordisRunner` and `ctx.cordisInspect` |
+| [`cordis-host-runner`](cordis-host-runner/README.md) | Host half: definition registry, sandboxed host-half lifecycle, and the inspect registry with its Host providers that answers browser queries | provides `ctx.dynamicCordisRunner` and `ctx.cordisInspect` |
 | [`cordis-client-runner`](cordis-client-runner/README.md) | Browser half: evaluates a browser-half source into a live plugin and answers run requests | client face; provides browser `ctx.dynamicCordisRunner` |
 | [`ui-cordis`](ui-cordis/README.md) | Browser panel and historical lifecycle tool cards | client face; registers slots |
 | [`creation-recommendations`](creation-recommendations/README.md) | Explicit-need creation of persistent removable interface plugins | — |

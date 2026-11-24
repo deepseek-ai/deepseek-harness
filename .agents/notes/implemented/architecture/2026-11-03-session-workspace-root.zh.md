@@ -18,7 +18,7 @@ Status: implemented
 
 每个消费方都读取这个目录。模型的文件、搜索与进程工具从它解析相对路径，用户看到的、以及描述项目的一切都以它为界：沙箱 `workspace-write` 边界、工作区文件服务与桌面文件拖拽、变更记录器、文件树、交付物、在应用中打开操作与 Session 行、新开的侧栏终端、`@` 文件候选、技能目录、项目指令发现和 LSP 工作区。
 
-沙箱策略不读取任何 Git 布局：它以 Session 的目录为界，只加入部署配置的目录，以及 Host 插件通过 `registerWritableRoot` 为该 Session 注册的目录。仓库的 Git 目录位于链接工作树之外，因此移入工作树之后，写入它的 Git 命令（例如 `git commit`）在 `workspace-write` 下会被拒绝，直到有授权覆盖该目录；原始项目也不再可写。为 Session 所在检出目录授权其 Git 目录，属于一个读取 Git 布局并注册该目录的独立插件，本决策将其延后。Host 对 Session 并不在其中工作的检出目录做维护时保留原来的边界：归档时移除 worktree、恢复被删除的 worktree、在源仓库中读取其分支，都在 worktree 服务与 forge 面板自己构造的策略下运行，即沿用 Session 的模式与授权、以记录中的源检出目录为根。Session 自身的根可能正是被删除的目录，而进程沙箱无法绑定缺失或正在消失的根。
+沙箱策略不读取任何 Git 布局：它以 Session 的目录为界，只加入部署配置的目录，以及 Host 插件通过 `registerWritableRoot` 为该 Session 注册的目录。仓库的 Git 目录位于链接工作树之外，因此移入工作树之后，写入它的 Git 命令（例如 `git commit`）在 `workspace-write` 下会被拒绝，直到有授权覆盖该目录；原始项目也不再可写。[链接工作树授权](2026-11-18-linked-worktree-git-directory-grant.zh.md)是 worktree 服务挂载的插件，它读取 Git 布局并为该 Session 注册该目录。Host 对 Session 并不在其中工作的检出目录做维护时保留原来的边界：归档时移除 worktree、恢复被删除的 worktree、在源仓库中读取其分支，都在 worktree 服务与 forge 面板自己构造的策略下运行，即沿用 Session 的模式与授权、以记录中的源检出目录为根。Session 自身的根可能正是被删除的目录，而进程沙箱无法绑定缺失或正在消失的根。
 
 ## Alternatives considered
 

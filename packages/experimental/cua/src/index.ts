@@ -71,7 +71,7 @@ export interface CuaConfig {
   axTimeoutMs: number
   /** Maximum bytes retained for one helper response frame. */
   maxResponseBytes: number
-  /** Maximum installed application matches returned for one discovery query. */
+  /** Maximum matches when a search query is provided. */
   maxAppMatches: number
   /** Provider-specific clipboard byte limit for paste. */
   maxClipboardBytes: number
@@ -229,7 +229,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const formatGuidance = (text: string): string => {
     const inputGuidance = heldInputs ? withHeldInputGuidance(text) : text
     const instructions = systemInput ? withSystemInputGuidance(inputGuidance) : inputGuidance
-    return `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+    return `${instructions}\n\nAccessibility tree defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   }
   const guidance = formatGuidance(backend.getGuidance('raw'))
   const programGuidance = formatGuidance(backend.getGuidance('standalone'))
@@ -400,7 +400,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     }
     const tool: ToolDefinition = {
       name: 'cua',
-      description: 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
+      description: 'Inspect desktop access, select an application and window, read accessibility state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
       parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(requestSchema)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {

@@ -50,6 +50,7 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  * blocks. A package moves on or off this list with its context behavior.
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
+  'packages/experimental/im-bundle': { kind: 'indirect', reason: 'The application bundle delegates message context and tools to the IM packages.' },
   'packages/client/config': { kind: 'none', reason: 'Browser configuration types register nothing and add no model input.' },
   'packages/client/script-realm': { kind: 'none', reason: 'Optional browser execution-provider registration contributes no model input.' },
   'packages/client/script-realm-iframe': { kind: 'none', reason: 'Same-origin browser script environments contribute no model input.' },
@@ -62,6 +63,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/speech-to-text': { kind: 'none', reason: 'Routes transient recognition without adding model requests or Session events.' },
   'packages/experimental/api-speech-to-text': { kind: 'none', reason: 'Transports audio and preparation state; ordinary user submission owns model-visible text.' },
   'packages/experimental/speech-to-text-sensevoice': { kind: 'none', reason: 'Local recognition returns transient text without modifying model context.' },
+  'packages/experimental/speech-to-text-deepseek': { kind: 'none', reason: 'Cloud recognition returns transient text without modifying model context.' },
   'packages/experimental/client-ui-voice-input': { kind: 'none', reason: 'Inserts reviewable text into the unsent draft without submitting to the Agent.' },
   'packages/experimental/liveshare': { kind: 'indirect', reason: 'The host drives viewer prompts into the shared Session, so model requests follow the viewer input the host forwards.' },
   'packages/experimental/plugin-market-bundle': { kind: 'indirect', reason: 'Mounts the pluginMarket service, which lets the Creator preset register the plugin_market tool documented in packages/boot/plugin-market.' },
@@ -82,6 +84,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/client-ui-forge': { kind: 'indirect', reason: 'Switching a Session directory from the panel reaches the model through the working-directory notice; inspection and status stay on the host.' },
   'packages/experimental/forge-bundle': { kind: 'indirect', reason: 'The worktree tool and panel own the model-visible schemas, results, and directory notices selected by the bundle.' },
   'packages/experimental/forge-session': { kind: 'none', reason: 'Bindings, discovery records, and polled status stay on the host; binding records never enter model requests.' },
+  'packages/experimental/sandbox-policy-git': { kind: 'indirect', reason: 'The sandbox policy renders registered directories in its policy context; this package only registers one.' },
   'packages/experimental/worktree': { kind: 'indirect', reason: 'The worktree tool renders creation results; the working-directory service owns model-visible directory context.' },
   'packages/experimental/client-ui-stats': { kind: 'none', reason: 'The panel reads Session events and renders them in the browser; it registers no tool, prompt section, or model input.' },
   'packages/ssh/ssh': { kind: 'none', reason: 'The connection owner transports private provider operations; consumers own all model-facing content.' },
@@ -277,6 +280,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/web/web': { kind: 'indirect', reason: 'The provider registry delegates model rendering to dsh-tool-web.' },
   'packages/web/web-fetch-http': { kind: 'indirect', reason: 'The provider backend delegates model rendering to dsh-tool-web.' },
   'packages/workflow/workflow': { kind: 'indirect', reason: 'The service delegates parent and child model rendering to its consumer and engine.' },
+  'packages/experimental/im-session-commands': { kind: 'indirect', reason: 'Built-in commands answer in chat without calling a model; passthrough commands (default /compact) delegate through ctx.commands to the owning plugin.' },
 }
 
 interface Failure {

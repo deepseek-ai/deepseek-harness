@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-02-im-file-media-admission.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-02-im-file-media-admission.md
+/agent-note-im-media-admission-keeps-non-images-as-verbatim-files:
+  en: 717f477ade0b46d9
+  zh: a1be749bdfcef95e
+/agent-note-im-media-admission-keeps-non-images-as-verbatim-files/problem:
+  en: 178f6a04fb7a0ed2
+  zh: fca0244178df74bf
+/agent-note-im-media-admission-keeps-non-images-as-verbatim-files/decision:
+  en: ca514fc2df5ce15a
+  zh: d23baa204ab5d0cc
+/agent-note-im-media-admission-keeps-non-images-as-verbatim-files/alternatives-considered:
+  en: ebe114e43895f8f2
+  zh: f28eeecf91bb46a7
+/agent-note-im-media-admission-keeps-non-images-as-verbatim-files/consequences:
+  en: 098a547db5748ad8
+  zh: 037f50c170152071

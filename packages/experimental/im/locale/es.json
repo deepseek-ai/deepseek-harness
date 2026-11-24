@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Automatización de mensajería",
+    "description": "Almacena y distribuye mensajes de chats de Feishu/Lark o QQ admitidos, aloja sesiones de agente y publica respuestas con acuses duraderos."
+  }
+}
