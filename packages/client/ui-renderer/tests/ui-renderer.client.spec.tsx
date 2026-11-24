@@ -81,14 +81,14 @@ describe('UI renderer plugin', () => {
     const capture = vi.fn()
     slots.register({ name: 'root' }, ({ useDocumentPortal, useDocumentViewport }) => {
       const Portal = useDocumentPortal()
-      const { width } = useDocumentViewport()
-      return <Portal onKeyDownCapture={capture}><output>{width}</output></Portal>
+      const { width, height } = useDocumentViewport()
+      return <Portal onKeyDownCapture={capture}><output>{width}×{height}</output></Portal>
     })
     const frame = document.createElement('iframe')
     document.body.append(frame)
     const page = frame.contentDocument!
-    let width = 800
-    Object.defineProperty(page.documentElement, 'clientWidth', { get: () => width })
+    let width = 800, height = 500
+    Object.defineProperties(page.documentElement, { clientWidth: { get: () => width }, clientHeight: { get: () => height } })
     const target = page.createElement('main')
     page.body.append(target)
     let unmount!: () => void
@@ -96,12 +96,15 @@ describe('UI renderer plugin', () => {
     mounted.push(unmount)
     const output = page.body.querySelector('output')!
     expect(target.contains(output)).toBe(false)
-    expect(output.textContent).toBe('800')
+    expect(output.textContent).toBe('800×500')
     width = 600
     fireEvent.resize(window)
-    expect(output.textContent).toBe('800')
+    expect(output.textContent).toBe('800×500')
     fireEvent.resize(frame.contentWindow!)
-    expect(output.textContent).toBe('600')
+    expect(output.textContent).toBe('600×500')
+    height = 400
+    fireEvent.resize(frame.contentWindow!)
+    expect(output.textContent).toBe('600×400')
     fireEvent.keyDown(page.body, { key: 'Escape' })
     expect(capture).toHaveBeenCalledOnce()
     act(() => { unmount() })

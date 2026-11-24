@@ -1,10 +1,23 @@
 /** Observable layout viewport of the document that contains the application root. */
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import { bindSnapshotSelector } from './bind.ts'
 
 /** Layout viewport dimensions in CSS pixels, excluding scrollbars. */
 export interface DocumentViewport {
   readonly width: number
   readonly height: number
+}
+
+const wholeViewport = (viewport: DocumentViewport): DocumentViewport => viewport
+
+/**
+ * Bind the complete viewport snapshot to the mount's zero-argument standard prop.
+ * @param page - Document of this application mount.
+ * @returns Hook that reads the current width and height together.
+ */
+export function bindDocumentViewport(page: Document): () => DocumentViewport {
+  const useSelection = bindSnapshotSelector(documentViewport(page))
+  return function useDocumentViewport() { return useSelection(wholeViewport) }
 }
 
 /**

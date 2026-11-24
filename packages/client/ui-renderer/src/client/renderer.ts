@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { UiRendererService } from './index.ts'
 import { buildRenderApp } from './app.tsx'
 import { createDocumentPortal } from './document-portal.tsx'
-import { documentViewport } from './document-viewport.ts'
+import { bindDocumentViewport } from './document-viewport.ts'
 import { DocumentStyles } from './styles/document-styles.ts'
 
 interface BootSnapshot {
@@ -74,8 +74,7 @@ export class UiRenderer implements UiRendererService {
       mounted.styles.mount()
       const Portal = createDocumentPortal(page)
       mounted.releaseDocumentProps = this.ctx.slots.provideRoot({
-        hooks: { documentViewport: documentViewport(page) },
-        props: { useDocumentPortal: () => Portal },
+        props: { useDocumentPortal: () => Portal, useDocumentViewport: bindDocumentViewport(page) },
       })
       const root = mountApp(container, buildRenderApp({ ctx: this.ctx }))
       if (this.current !== mounted) {
