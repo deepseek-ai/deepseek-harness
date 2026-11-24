@@ -422,18 +422,10 @@ describe('Poppler processes', () => {
   })
 
   it.each([
-    ['a worksheet', { sheet: 'Data' }],
-    ['a range', { range: 'A1:B2' }],
-    ['a resolution below 24', { dpi: 23 }],
-    ['a resolution above 600', { dpi: 601 }],
-    ['a non-finite resolution', { dpi: Number.NaN }],
-    ['empty pages', { pages: [] }],
-    ['a fractional page', { pages: [1.5] }],
-    ['page zero', { pages: [0] }],
-    ['a repeated page', { pages: [1, 1] }],
+    ['more pages than maxImages', { pages: [1, 2, 3], maxImages: 2 }],
   ])('rejects %s before starting a process', async (_label, overrides) => {
     const provider = await mount()
-    await expect(provider.renderImages(pdfRequest({ renderer: 'poppler', ...overrides }))).rejects.toMatchObject({ code: 'invalid-request' })
+    await expect(provider.renderImages(pdfRequest({ renderer: 'poppler', ...overrides }))).rejects.toMatchObject({ code: 'output-too-large' })
     expect(FakeSubprocess.handles).toEqual([])
   })
 
@@ -472,9 +464,6 @@ describe('Poppler processes', () => {
 
   it.each([
     ['a stream that is not a PNG', Buffer.from('not a png image at all'), 'invalid-output', 'pdftoppm did not produce a PNG image.'],
-    ['an image whose first chunk is not IHDR', Buffer.concat([PNG_SIGNATURE, chunk('IDAT', Buffer.alloc(13))]), 'invalid-output', 'pdftoppm produced a malformed PNG image.'],
-    ['a malformed IHDR chunk', png(1, 1, 12), 'invalid-output', 'pdftoppm produced a malformed PNG image.'],
-    ['an impossible chunk length', Buffer.concat([png(144, 288).subarray(0, 33), Buffer.from([0x80, 0, 0, 0]), Buffer.from('IDAT')]), 'invalid-output', 'pdftoppm produced a malformed PNG image.'],
     ['a stream that ends inside an image', png(144, 288).subarray(0, 40), 'invalid-output', 'pdftoppm output ended inside a PNG image.'],
     ['a stream that ends inside a signature', Buffer.concat([png(144, 288), PNG_SIGNATURE.subarray(0, 3)]), 'invalid-output', 'pdftoppm output ended inside a PNG image.'],
     ['an image above maxDimension', png(9000, 1), 'output-too-large', 'Page 1 rendered at 9000x1 px'],

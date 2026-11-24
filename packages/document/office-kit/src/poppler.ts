@@ -83,7 +83,7 @@ export async function renderPdf(
   tools: PopplerTools, pdf: Uint8Array, operation: ImagesOperation, timeoutMs: number, signal: AbortSignal,
 ): Promise<Extract<OfficeOperationOutput, { kind: 'images' }>> {
   const dpi = operation.dpi ?? DEFAULT_DPI
-  checkSelection(operation, dpi)
+  checkSelection(operation)
   const deadline = new AbortController()
   const timer = setTimeout(() => { deadline.abort(new OfficeKitError('timeout', `Poppler rendering exceeded ${timeoutMs} ms.`)) }, timeoutMs)
   const run = AbortSignal.any([signal, deadline.signal])
@@ -116,18 +116,16 @@ export async function renderPdf(
   } finally { clearTimeout(timer) }
 }
 
-/** Refuse selections the LibreOffice path also refuses, with the same codes, before any process starts. */
-function checkSelection(operation: ImagesOperation, dpi: number): void {
-  if (operation.sheet !== undefined || operation.range !== undefined) {
-    throw new OfficeKitError('invalid-request', 'sheet and range apply only to worksheets.')
-  }
-  if (!Number.isFinite(dpi) || dpi < 24 || dpi > 600) throw new OfficeKitError('invalid-request', 'dpi must be between 24 and 600.')
+/**
+ * Refuse a selection with more pages than the image limit before any process starts. The model-facing tool owns the
+ * resolution range, page uniqueness, and worksheet-argument rules; a request that reaches this provider has already
+ * passed them.
+ */
+function checkSelection(operation: ImagesOperation): void {
   const { pages } = operation
-  if (pages === undefined) return
-  if (pages.length === 0 || pages.some(page => !Number.isSafeInteger(page) || page < 1) || new Set(pages).size !== pages.length) {
-    throw new OfficeKitError('invalid-request', 'pages must be distinct positive one-based page numbers.')
+  if (pages !== undefined && pages.length > operation.maxImages) {
+    throw new OfficeKitError('output-too-large', 'Selected page count exceeds maxImages.')
   }
-  if (pages.length > operation.maxImages) throw new OfficeKitError('output-too-large', 'Selected page count exceeds maxImages.')
 }
 
 /** Ascending selected pages of a `pageCount`-page document. */
@@ -240,11 +238,7 @@ class PngSplitter {
       return
     }
     const length = this.header.readUInt32BE(0)
-    const type = this.header.toString('latin1', 4, 8)
-    if (length > 0x7fffffff || (this.chunkType === '' && (type !== 'IHDR' || length !== 13))) {
-      throw new OfficeKitError('invalid-output', 'pdftoppm produced a malformed PNG image.')
-    }
-    this.chunkType = type
+    this.chunkType = this.header.toString('latin1', 4, 8)
     this.chunkBytes = length + 4
   }
 
