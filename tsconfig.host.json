@@ -283,6 +283,7 @@
     "apps/web/tests/tencent-docs-connection.e2e.ts",
     "apps/web/tests/tencent-docs-oauth-fixture.ts",
     "apps/web/tests/feishu-connection.e2e.ts",
+    "apps/web/tests/client-isolation.e2e.ts",
     "apps/web/stress-tests/reasoning-chunks.stress.ts",
     "apps/cli/tests/**/*.ts",
     "apps/plugin-market-generator/tests/**/*.ts",

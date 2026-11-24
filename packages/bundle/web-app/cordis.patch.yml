@@ -238,6 +238,14 @@
     - id: modules
       name: '@deepseek-ai/dsh-client-modules'
 
+    # Script Realm registry and its iframe provider. Neither creates a Realm
+    # until a package is script-isolated; only then does startup wait for them.
+    - id: script-realm
+      name: '@deepseek-ai/dsh-client-script-realm'
+
+    - id: script-realm-iframe
+      name: '@deepseek-ai/dsh-client-script-realm-iframe'
+
     # Owns both ends of the web transport: node half binds the gateway to the
     # webserver under /api; browser half is the fetch/SSE client. Every API
     # request and upgrade passes the loopback, listener-bind, or trustedHosts

@@ -6,6 +6,7 @@
  */
 import { stripClientSuffix } from './manifest.ts'
 import { ClientEntries } from './entries.ts'
+import { PackageRealms } from './isolated-realms.ts'
 import { MainScriptRealm } from './main-realm.ts'
 import { notifySubscribers } from './notify.ts'
 import type {
@@ -61,6 +62,8 @@ export class ClientModuleSystem implements ClientModuleLoader {
   readonly entries: ClientEntries
   readonly loadCache = new Map<string, ClientModuleRecord>()
   readonly mainRealm: MainScriptRealm
+  private readonly packageRealms: PackageRealms
+  readonly installRealmRegistry: PackageRealms['installRealmRegistry']
   /** Previous records of packages under replacement, by package id, until their old runtime is released. */
   private readonly replaced = new Map<string, ClientModuleRecord[]>()
   private readonly moduleListeners = new Set<() => void>()
@@ -90,6 +93,9 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   constructor(options: ClientModuleSystemOptions) {
     this.manifest = options.manifest
+    this.mainRealm = new MainScriptRealm(options.loadBundle)
+    this.packageRealms = new PackageRealms(this.mainRealm, { __ModuleLoader__: options.registrationTarget })
+    this.installRealmRegistry = this.packageRealms.installRealmRegistry
     this.entries = new ClientEntries(this, {
       update: (manifest, managed) => { this.updateManifest(manifest, managed) },
       invalidateForReplacement: (id, rev) => {
@@ -101,7 +107,6 @@ export class ClientModuleSystem implements ClientModuleLoader {
       },
       prune: (roots) => { this.prune(roots) },
     })
-    this.mainRealm = new MainScriptRealm(options.loadBundle)
     this.resolveAsset = options.resolveAsset ?? (reference => reference)
 
     for (const row of options.manifest.modules) {
@@ -148,9 +153,12 @@ export class ClientModuleSystem implements ClientModuleLoader {
     notifySubscribers(this.moduleListeners, 'modules')
   }
 
-  /** Stop accepting script execution and await the startup carrier's pending operations. */
-  dispose(): Promise<void> {
-    return this.mainRealm.dispose()
+  /** Close the script environments and wait for any script already in flight. */
+  async dispose(): Promise<void> {
+    const [main, packages] = await Promise.allSettled([
+      this.mainRealm.dispose(), this.packageRealms.dispose(), ...this.pendingArrival.values(),
+    ])
+    for (const result of [main, packages]) if (result.status === 'rejected') throw result.reason
   }
 
   private resolveModuleId(specifier: string): string {
@@ -169,6 +177,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const registrationName = registration.chunk === undefined ? registration.id : id
       throw new Error(`client-modules: duplicate factory registration for "${registrationName}" (bundle executed twice without invalidate?)`)
     }
+    if (this.graphRows.has(ownerId)) this.packageRealms.registered(ownerId)
     this.factories.set(id, {
       manifest: registration,
       factory: registration.factory,
@@ -177,15 +186,22 @@ export class ClientModuleSystem implements ClientModuleLoader {
   }
 
   /** Run one shared script transport per URL. */
-  private loadShared(url: string): Promise<void> {
+  private loadShared(url: string, row: BootModuleRow): Promise<void> {
     let transport = this.pendingArrival.get(url)
     if (transport === undefined) {
-      transport = this.mainRealm.execute({ url })
+      transport = this.packageRealms.execute(row, url)
         .then(() => { this.executedBundleUrls.add(url) })
         .finally(() => { this.pendingArrival.delete(url) })
       this.pendingArrival.set(url, transport)
     }
     return transport
+  }
+
+  /** Dependencies and transport retries can outlast the graph row that requested them. */
+  private arrivalRow(id: string): BootModuleRow {
+    const row = this.graphRows.get(id)
+    if (!row) throw new Error(`client-modules: package "${id}" was removed before its script could load`)
+    return row
   }
 
   /**
@@ -205,14 +221,18 @@ export class ClientModuleSystem implements ClientModuleLoader {
    */
   private async arrive(row: BootModuleRow): Promise<void> {
     const { id } = row
+    if (row.isolation === 'script' && this.staticIds.has(id)) {
+      throw new Error(`client-modules: "${id}" is loaded by the page shell and cannot isolate its scripts`)
+    }
     if (this.loadCache.has(id) || this.factories.has(id)) return
     const reload = this.reloadTargets.get(id)
     const preferred = reload?.url ?? row.initialUrl
     const fallback = reload === undefined && row.url !== preferred ? row.url : undefined
     const failures: string[] = []
     const attempt = async (url: string): Promise<'registered' | 'transport-failed' | 'not-registered'> => {
+      this.arrivalRow(id)
       try {
-        await this.loadShared(url)
+        await this.loadShared(url, row)
       } catch (error) {
         failures.push(`${url}: ${describeError(error)}`)
         return 'transport-failed'
@@ -273,7 +293,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       const dependency = this.graphRows.get(packageName)
       if (dependency !== undefined) await this.arriveDependency(row.id, dependency, [], visited)
     }
-    await this.arrive(row)
+    await this.arrive(this.arrivalRow(row.id))
   }
 
   /** Arrive one dependency, naming the consumer it failed for so a cascade reads as a chain, not as 44 unrelated failures. */
@@ -377,7 +397,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       /* v8 ignore next -- the final fallback needs an impossible graph-owned factory with no recorded revision. */
       const revision = this.factories.get(ownerId)?.rev ?? this.reloadTargets.get(ownerId)?.rev ?? row.rev
       const url = chunkUrl(row, fileName, revision)
-      await this.loadShared(url)
+      await this.loadShared(url, row)
       if ((this.generations.get(ownerId) ?? 0) !== generation) {
         this.factories.delete(id)
         if (this.loadCache.delete(id)) this.publishModules()
@@ -433,7 +453,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       this.importErrors.delete(id)
       return result
     } catch (error) {
-      this.importErrors.set(id, error instanceof Error ? error : new Error(describeError(error)))
+      if (this.graphRows.has(id)) this.importErrors.set(id, error instanceof Error ? error : new Error(describeError(error)))
       throw error
     }
   }
@@ -476,6 +496,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     for (const id of this.graphRows.keys()) {
       if (retained.has(id)) continue
       this.graphRows.delete(id)
+      this.packageRealms.evict(id)
       this.invalidate(id)
     }
   }

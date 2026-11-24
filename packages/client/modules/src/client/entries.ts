@@ -4,6 +4,7 @@ import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import { parseBootManifest, readRelease } from './manifest.ts'
 import type { BootManifest, ClientModuleLoader } from './manifest.ts'
+import { ISOLATED_REALM_PROVIDER_ROWS } from './isolated-realms.ts'
 import { ReleaseChangeGate, type ClientReleaseChange } from './release-change.ts'
 import { notifySubscribers } from './notify.ts'
 import { tearDownEntryFiber } from './entry-lifecycle.ts'
@@ -122,9 +123,15 @@ export class ClientEntries {
       return this.queue
     }, 'client-modules: entry reconciliation')
     return this.enqueue(async () => {
-      await Promise.all(this.desired.plugins.map(async ({ id }) => {
+      const create = async ({ id }: { readonly id: string }): Promise<void> => {
         await this.create(loader, id).catch((error: unknown) => { loader.ctx.logger.error(error) })
-      }))
+      }
+      // The registry must be installed and its iframe factory registered before an isolated bundle executes.
+      if (manifest.modules.some(row => row.isolation === 'script')) {
+        await Promise.all(manifest.plugins.filter(row => ISOLATED_REALM_PROVIDER_ROWS.includes(row.id)).map(create))
+        await loader.await()
+      }
+      await Promise.all(manifest.plugins.filter(row => !this.managed.has(row.id)).map(create))
       await loader.await()
       for (const row of this.modules.manifest.modules) this.revisions.set(row.id, row.rev)
     })

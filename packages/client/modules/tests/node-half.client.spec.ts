@@ -165,6 +165,8 @@ function constructWithRoute(
     entryBaseUrl?: string
     internal?: NonNullable<Context['loader']['internal']>
     onEntries?: () => void
+    /** Extra Loader entry options per package name, read at every enumeration. */
+    entryOptions?: Record<string, Record<string, unknown>>
   } = {},
 ): { context: Context; service: ClientModuleRegistry; route: Promise<WebResourceRoute> } {
   const ctx = new Context()
@@ -177,7 +179,7 @@ function constructWithRoute(
       options.onEntries?.()
       for (const packageName of packageNames) {
         yield {
-          options: { name: packageName },
+          options: { id: packageName, ...options.entryOptions?.[packageName], name: packageName },
           // The Loader addresses an entry's plugin instance as `entry.fiber.ctx.fiber`.
           fiber: { ctx: { fiber: {} } },
           disabled: false,
@@ -1458,5 +1460,62 @@ describe('package manifest refresh', () => {
     emitLoaderEntryChange(context, packageName)
     await Promise.resolve()
     expect(service.graph().entries).toEqual([])
+  })
+})
+
+describe('unstable client isolation switch', () => {
+  const FIELD = '__unstable_enable_client_isolation'
+
+  it('copies the entry isolation onto the graph row and keeps script-isolated rows out of every batch', () => {
+    for (const name of ['@fixture/iso-plain', '@fixture/iso-script']) writeBuiltPackage(name, {})
+    const { service } = constructWithRoute(['@fixture/iso-plain', '@fixture/iso-script'], {
+      entryOptions: {
+        '@fixture/iso-plain': { [FIELD]: null },
+        '@fixture/iso-script': { [FIELD]: 'script' },
+      },
+    })
+    const graph = service.graph()
+    expect(graph.entries.map(row => [row.id, row.isolation])).toEqual([
+      ['@fixture/iso-plain', undefined],
+      ['@fixture/iso-script', 'script'],
+    ])
+    expect(graph.entries[0]).not.toHaveProperty('isolation')
+    expect(graph.batches.flatMap(batch => batch.entries)).toEqual(['@fixture/iso-plain'])
+    const manifest = modulesClient.parseBootManifest(graph)
+    expect(manifest.modules.find(row => row.id === '@fixture/iso-script')?.initialUrl)
+      .toBe(graph.entries.find(row => row.id === '@fixture/iso-script')?.url)
+  })
+
+  it.each(['style', 'scriptandstyle', 'shadow'])('rejects unsupported mode %s and script isolation of a stage-one row', (mode) => {
+    writeBuiltPackage('@fixture/iso-invalid', {})
+    writeBuiltPackage('@fixture/iso-early', { immediately: true })
+    let failure: unknown
+    try {
+      constructWithRoute(['@fixture/iso-invalid', '@fixture/iso-early'], {
+        entryOptions: { '@fixture/iso-invalid': { [FIELD]: mode }, '@fixture/iso-early': { [FIELD]: 'script' } },
+      })
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(AggregateError)
+    expect((failure as Error).message).toBe([
+      'client-modules: 2 client packages failed to compose:',
+      '  other failures:',
+      `    - client-modules: loader entry "@fixture/iso-invalid" (@fixture/iso-invalid) __unstable_enable_client_isolation must be "script", received "${mode}"`,
+      '    - client-modules: @fixture/iso-early is a stage-one (immediately) row and cannot isolate its scripts',
+    ].join('\n'))
+  })
+
+  it('keeps a rebuilt script-isolated bundle out of Main Realm batches', () => {
+    const name = '@fixture/iso-rebuilt'
+    writeBuiltPackage(name, {})
+    const { service } = constructWithRoute([name], { entryOptions: { [name]: { [FIELD]: 'script' } } })
+    const before = service.graph().entries[0]!.rev
+    writeFileSync(service.clientPath(name)!, 'module.exports = { rebuilt: true }\n')
+    service.rebuilt(name)
+    const graph = service.graph()
+    expect(graph.entries[0]).toMatchObject({ id: name, isolation: 'script' })
+    expect(graph.entries[0]!.rev).not.toBe(before)
+    expect(graph.batches).toEqual([])
   })
 })

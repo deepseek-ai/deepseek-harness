@@ -1,4 +1,4 @@
-/** Cordis-owned script-environment providers, independent from module placement. */
+/** Cordis registry for script-environment providers; installs itself on the page module system when present. */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ScriptRealm, ScriptRealmCreateOptions, ScriptRealmFactory, ScriptRealmId } from './types.ts'
@@ -29,6 +29,16 @@ export class ScriptRealmError extends Error {
   }
 }
 
+/** A page module system that can use a registry to open isolated package Realms. */
+export interface ScriptRealmRegistryHost {
+  /**
+   * Use this registry for subsequent Realm creation without changing existing Realms.
+   * @param registry - Registry supplied by the activating plugin.
+   * @returns A disposer that detaches this registry only while it is still installed.
+   */
+  installRealmRegistry(registry: ScriptRealmRegistry): () => void
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Registered execution-environment providers; instances belong to their creators. */
@@ -42,6 +52,9 @@ export class ScriptRealmRegistry extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'scriptRealms')
+    const loader = ctx.get('loader') as { internal?: ScriptRealmRegistryHost } | undefined
+    const modules = loader?.internal
+    if (modules?.installRealmRegistry) ctx.effect(() => modules.installRealmRegistry(this))
   }
 
   /**
