@@ -29,7 +29,7 @@ import type { LlmNativeAuth, SettingsNamespaceView } from '@deepseek-ai/dsh-api-
 // Type-only: pulls this package's SlotMap merge (the two Models child slots).
 import type {} from './slot-contract.ts'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
-import { deriveKeyRef, protocolChoices, providerUsable, reasoningLevelChoices } from './store.ts'
+import { deriveKeyRef, PI_AI_ADAPTER_NS, PI_AI_PROFILE_PATH, protocolChoices, providerUsable, reasoningLevelChoices } from './store.ts'
 import type { ModelsSettingsStore, ProviderRow } from './store.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -121,13 +121,22 @@ interface ProviderEditorRenderProps extends Pick<
   row: ProviderRow
 }
 
+/** Whether a settings layer holds no field: an absent layer, or one without a key. */
+function emptyLayer(layer: unknown): boolean {
+  return typeof layer !== 'object' || layer === null || Object.keys(layer).length === 0
+}
+
 /** Render an editor for either the setup posture or an expanded provider row. */
 function renderProviderEditor({ target, row, ...props }: ProviderEditorRenderProps): ReactNode {
   return (
     <ProviderEditor
+      // A route's settings address changes when a provider row starts or stops serving it; a draft and
+      // revision read at one address must not be written to the other.
+      key={[target.settingsNs, ...target.settingsPath].join('\n')}
       provider={target.provider}
       displayName={target.displayName}
       settingsPath={target.settingsPath}
+      adapterNs={row.adapterNs}
       {...target.declared === true ? { declared: true } : {}}
       {...target.defaultBaseURL === undefined ? {} : { defaultBaseURL: target.defaultBaseURL }}
       {...target.baseURLEnv === undefined ? {} : { baseURLEnv: target.baseURLEnv }}
@@ -170,17 +179,20 @@ export async function removeProviderProfile(
 }
 
 /**
- * Whether a whole-section provider still needs its first key: an unconfigured
- * credential opens the setup card instead of showing a row. This is the
- * first-run posture alone — a user who can already reach some provider gets an
- * ordinary row with the missing-key dot, since nothing here is blocking them.
+ * Whether a provider configured in its adapter's whole section still needs its
+ * first key: an unconfigured credential opens the setup card instead of
+ * showing a row. A profile at a path inside a section, or a pi-ai provider
+ * row, is one that somebody added, and waits for its key as an ordinary row.
+ * This is the first-run posture alone — a user who can already reach some
+ * provider gets an ordinary row with the missing-key dot, since nothing here
+ * is blocking them.
  * @param row - the joined provider row.
  * @param anyUsable - whether any joined row can already serve requests.
  * @returns whether to render the setup card.
  */
 export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
   if (anyUsable || row.entry.provider === 'deepseek-account') return false
-  if (row.entry.settingsPath.length > 0) return false
+  if (row.entry.settingsPath.length > 0 || row.adapterNs !== row.entry.settingsNs) return false
   return row.credential?.configured !== true
 }
 
@@ -374,9 +386,9 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   // Hand-declared routes live in the pi-ai namespace, which is also the only
   // one whose schema names the protocols one may speak; without it mounted
   // there is nothing to declare and the mode is not offered.
-  const piAi = state.namespaces.get('llm-pi-ai')
-  const protocols = protocolChoices(piAi, schema)
-  const reasoningLevels = reasoningLevelChoices(piAi, schema)
+  const piAi = state.namespaces.get(PI_AI_ADAPTER_NS)
+  const protocols = protocolChoices(piAi, PI_AI_PROFILE_PATH, schema)
+  const reasoningLevels = reasoningLevelChoices(piAi, PI_AI_PROFILE_PATH, schema)
   // Each mode is offered while its namespace is mounted and enabled while it
   // has something to offer; the card shows the chosen mode where both are
   // offered, else the only one there is. A mode's panel is mounted while it is
@@ -452,7 +464,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 {renderSlot(
                   'settings.models.provider-card',
                   { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
-                  { entryKey: row.entry.settingsNs },
+                  { entryKey: row.adapterNs },
                 )}
               </li>
             )
@@ -549,13 +561,18 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
               {renderSlot(
                 'settings.models.provider-card',
                 { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
-                { entryKey: row.entry.settingsNs },
+                { entryKey: row.adapterNs },
               )}
               {open
                 ? renderProviderEditor({
                   target,
                   row,
-                  namespace,
+                  // A provider row that the profile patch does not override runs with what its own layer
+                  // gives it, so that is what a cleared field returns to; it differs from the composed base
+                  // when a layer after the profile adds the row or sets its config.
+                  namespace: row.adapterNs !== namespace.ns && emptyLayer(namespace.user)
+                    ? { ...namespace, base: namespace.value }
+                    : namespace,
                   schema,
                   operations,
                   t,
@@ -660,7 +677,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       : renderSlot(
                         'settings.models.provider-card',
                         { provider: addRow.entry, configured: addRow.configured, keyConfigured: keyConfiguredOf(addRow) },
-                        { entryKey: addRow.entry.settingsNs },
+                        { entryKey: addRow.adapterNs },
                       )}
                   </div>
                 )

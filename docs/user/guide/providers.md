@@ -234,7 +234,7 @@ A deployment can supply providers to every profile on a machine by writing provi
           - id: team-model
 ```
 
-The Models page lists such a provider beside your own. It cannot be deleted there, and **Edit** shows the section of the file that holds its settings instead of its fields. Your own providers stay in your profile's file and are not affected when the deployment replaces its file. A provider ID selects one configuration, so when both files use the same ID the deployment's row is in effect, your provider of that ID is not shown, and it serves again once the deployment removes its row. A deployment that offers a vendor you may also configure yourself gives its row an ID of its own and a display name. Only an ID that names a built-in provider takes that provider's address and models; any other ID declares `api`, `baseURL`, and `models`, as in the example.
+The Models page lists such a provider beside your own and opens it with the settings the deployment gave it. It cannot be deleted there. You can enter your own API key for it; a change to any other field is refused when you save, because the deployment's file holds that provider. Your own providers stay in your profile's file and are not affected when the deployment replaces its file. A provider ID selects one configuration, so when both files use the same ID the deployment's row is in effect, your provider of that ID is not shown, and it serves again once the deployment removes its row. A deployment that offers a vendor you may also configure yourself gives its row an ID of its own and a display name. Only an ID that names a built-in provider takes that provider's address and models; any other ID declares `api`, `baseURL`, and `models`, as in the example.
 
 ## Troubleshooting
 

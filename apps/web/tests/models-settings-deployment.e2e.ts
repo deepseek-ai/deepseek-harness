@@ -2,8 +2,9 @@
  * A deployment's pi-ai provider rows on the assembled Models settings page. The profile patch holds a person's
  * providers in the `llm-pi-ai` row's `providers` dict; the home patch adds provider rows, whose keys the
  * deployment supplies through the environment. The page lists the rows' routes without a delete control and
- * opens them without a field, and the person's own providers stay editable beside them. No model is called:
- * every step is settings, credentials, and LLM-directory traffic.
+ * opens them as pi-ai routes with the config they run with; a typed key is stored for the row, a changed field
+ * is refused by the Host, and the person's own providers stay editable beside them. No model is called: every
+ * step is settings, credentials, and LLM-directory traffic.
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -58,6 +59,11 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
   let tripwire: ReturnType<typeof watchConsole>
   const profilePatchPath = (): string => join(home, 'profiles', 'scaffold', 'cordis.patch.yml')
   const homePatchPath = (): string => join(home, 'cordis.patch.yml')
+  const teamGateway = () => {
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    const edit = page.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true })
+    return { dialog, edit, card: dialog.locator('li', { has: edit }) }
+  }
 
   beforeAll(async () => {
     home = await mkdtemp(join(tmpdir(), 'dsh-models-deployment-'))
@@ -90,9 +96,9 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     }
   })
 
-  it('lists the deployment\'s providers without a delete control and opens them without a field', async () => {
+  it('lists the deployment\'s providers without a delete control and opens them with the config they run with', async () => {
     onTestFailed(() => saveFailureShot(page, 'models-settings-deployment'))
-    const dialog = page.getByRole('dialog', { name: '设置' })
+    const { dialog, edit, card } = teamGateway()
     // A provider row is the deployment's: the page offers no deletion for it.
     for (const provider of ['Team Gateway (team-gateway)', 'minimax-cn']) {
       expect(await dialog.getByRole('button', { name: `编辑 ${provider}`, exact: true }).count()).toBe(1)
@@ -102,12 +108,40 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     expect(await dialog.getByRole('button', { name: '编辑 My Proxy (my-proxy)', exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '删除 My Proxy (my-proxy)', exact: true }).count()).toBe(1)
 
-    // The page has no layout for a provider row's form: the card names the row's section and takes no input.
-    await dialog.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true }).click()
-    const card = dialog.locator('li', { has: page.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true }) })
-    await card.getByText('其余字段在 cordis.patch.yml 中，请直接编辑对应段。 (llm-pi-ai-dsh-hub-team-gateway)', { exact: true }).waitFor()
-    expect(await card.locator('input, select, textarea').count()).toBe(0)
-    expect(await card.getByRole('button', { name: '保存', exact: true }).isDisabled()).toBe(true)
+    // The row's form is a pi-ai profile, so its card is the pi-ai card, filled from the home patch.
+    await edit.click()
+    await card.getByText('已检测到环境变量（HUB_TEAM_GATEWAY_API_KEY）', { exact: true }).waitFor()
+    await card.getByText('自定义设置', { exact: true }).click()
+    expect(await card.getByLabel('显示名称', { exact: true }).first().getAttribute('placeholder')).toBe('Team Gateway')
+    expect(await card.getByLabel('API 地址', { exact: true }).getAttribute('placeholder')).toBe('https://hub.example/v1')
+    expect(await card.getByLabel('API 协议', { exact: true }).inputValue()).toBe('openai-completions')
+    expect(await card.getByLabel('模型 ID 1', { exact: true }).inputValue()).toBe('team-model')
+    await card.getByRole('button', { name: '取消', exact: true }).click()
+  })
+
+  it('stores a key typed for a deployment\'s provider and leaves both patch files as they are', async () => {
+    const { dialog, edit, card } = teamGateway()
+    const profilePatch = await readFile(profilePatchPath(), 'utf8')
+    await edit.click()
+    await card.getByLabel('API 密钥', { exact: true }).fill('sk-e2e-team-gateway')
+    await card.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByText('已保存 Team Gateway (team-gateway)。', { exact: true }).waitFor()
+    // The key goes to the credential store under the reference the row names; no settings write is made.
+    expect(await readFile(join(home, '.credentials.yaml'), 'utf8')).toContain('HUB_TEAM_GATEWAY_API_KEY: sk-e2e-team-gateway')
+    expect(await readFile(homePatchPath(), 'utf8')).toBe(HOME_PATCH)
+    expect(await readFile(profilePatchPath(), 'utf8')).toBe(profilePatch)
+  })
+
+  it('shows the Host\'s refusal when a field of a row that the home patch adds is changed', async () => {
+    const { edit, card } = teamGateway()
+    const profilePatch = await readFile(profilePatchPath(), 'utf8')
+    await edit.click()
+    await card.getByText('自定义设置', { exact: true }).click()
+    await card.getByLabel('API 地址', { exact: true }).fill('https://hub.example/v2')
+    await card.getByRole('button', { name: '保存', exact: true }).click()
+    await card.getByText('Configuration for "llm-pi-ai-dsh-hub-team-gateway" is overridden by a home patch or command-line overlay', { exact: true }).waitFor()
+    expect(await readFile(homePatchPath(), 'utf8')).toBe(HOME_PATCH)
+    expect(await readFile(profilePatchPath(), 'utf8')).toBe(profilePatch)
     await card.getByRole('button', { name: '取消', exact: true }).click()
   })
 
