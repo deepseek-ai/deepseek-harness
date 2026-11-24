@@ -65,7 +65,7 @@
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-util-crypto": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.6.6"
+    "zod": "~4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

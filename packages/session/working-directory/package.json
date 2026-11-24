@@ -61,6 +61,6 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:~",
-    "zod": "4.6.6"
+    "zod": "~4.6.6"
   }
 }

@@ -72,7 +72,7 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "zod": "4.6.6",
+    "zod": "~4.6.6",
     "@deepseek-ai/schemastery": "workspace:~"
   }
 }

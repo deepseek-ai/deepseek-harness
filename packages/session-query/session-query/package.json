@@ -65,6 +65,6 @@
   },
   "dependencies": {
     "@deepseek-ai/dsh-session-format-catalog": "workspace:*",
-    "zod": "4.6.6"
+    "zod": "~4.6.6"
   }
 }

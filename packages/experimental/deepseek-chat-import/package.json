@@ -66,7 +66,7 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "fflate": "^0.8.2",
-    "zod": "4.6.6"
+    "zod": "~4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

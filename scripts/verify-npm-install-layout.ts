@@ -1,7 +1,11 @@
-/** Verify npm's physical package placement for two incompatible DSH releases. */
+/**
+ * Verify npm's physical package placement for two incompatible DSH releases, and that one DSH release
+ * installs the external package its packages share only once.
+ */
 
 import { readFileSync } from 'node:fs'
 import { posix, resolve } from 'node:path'
+import { inc, rsort } from 'semver'
 import {
   buildRegistryIndex,
   resolveNpmPackageLock,
@@ -15,6 +19,8 @@ const CORDIS_PACKAGE = '@deepseek-ai/cordis'
 const NESTED_DSH_ALIAS = 'dsh-previous'
 const NESTED_DSH_PATH = `node_modules/${NESTED_DSH_ALIAS}`
 const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
+/** External package that about a hundred DSH packages declare with one range; each installation is about 9 MB. */
+const SHARED_EXTERNAL_PACKAGE = 'zod'
 
 /**
  * Resolution work accepted from the dual-release graph, in
@@ -241,6 +247,47 @@ export function assertResolutionWorkBudget(summary: DshInstallLayoutSummary): nu
   return units
 }
 
+/**
+ * Add the release a later registry holds: one minor above the newest indexed version of an external package.
+ *
+ * The local index lists only the versions in the pnpm lockfile, so every range resolves to the locked version
+ * and npm cannot hoist anything else. A release above the DSH range that a third-party peer range accepts is
+ * the input that makes npm hoist a version DSH packages cannot share.
+ * @param index - Registry metadata for one DSH release.
+ * @param name - External package that receives the newer release.
+ * @returns Registry metadata with that release added; `index` is unchanged.
+ */
+export function withNewerExternalRelease(index: RegistryIndex, name: string): RegistryIndex {
+  const versions = index.get(name)
+  const newest = rsort([...versions?.keys() ?? []])[0]
+  const manifest = newest === undefined ? undefined : versions?.get(newest)
+  const next = newest === undefined ? null : inc(newest, 'minor')
+  if (manifest === undefined || next === null) throw new Error(`registry contains no release of ${name}`)
+  return new Map(index).set(name, new Map(versions).set(next, { ...manifest, version: next }))
+}
+
+/**
+ * Assert that npm installs an external package shared by DSH packages exactly once, at the top level.
+ * @param packageLock - Metadata-only package lock npm produced for one DSH release.
+ * @param name - External package that must have a single installation.
+ */
+export function assertSingleExternalInstallation(packageLock: NpmPackageLock, name: string): void {
+  const expected = `node_modules/${name}`
+  const paths = Object.entries(packageLock.packages).flatMap(([path, manifest]) =>
+    packageNameAtPath(path, manifest) === name ? [path] : [])
+  if (paths.length === 1 && paths[0] === expected) return
+  const hoisted = packageLock.packages[expected]?.version
+  const others = paths.filter(path => path !== expected)
+  throw new Error(
+    `expected one ${name} installation at ${expected}, got ${String(paths.length)}: `
+    + `${hoisted === undefined ? `no ${expected}` : `${expected}@${hoisted}`} and ${String(others.length)} other(s)`
+    + `${others.length === 0 ? '' : ` such as ${others.slice(0, 3).join(', ')}`}\n`
+    + `  A ${name} release outside the range DSH packages declare reached the top level, so each of them\n`
+    + `  installs its own copy. A DSH package whose external dependency requires ${name} as a peer must declare\n`
+    + `  ${name} with the DSH range, so npm places that range first.`,
+  )
+}
+
 function workspaceVersion(root: string): string {
   const manifest = JSON.parse(readFileSync(resolve(root, 'apps/cli/package.json'), 'utf8')) as { version?: unknown }
   if (typeof manifest.version !== 'string') throw new Error('apps/cli/package.json has no string version')
@@ -249,7 +296,16 @@ function workspaceVersion(root: string): string {
 
 async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '..')
-  const index = buildDualDshRegistry(buildRegistryIndex(root), workspaceVersion(root))
+  const version = workspaceVersion(root)
+  const release = buildRegistryIndex(root)
+  const shared = await resolveNpmPackageLock(
+    withNewerExternalRelease(release, SHARED_EXTERNAL_PACKAGE),
+    { [DSH_PACKAGE]: version },
+    NPM_HANG_GUARD_MS,
+    'npm resolution hang guard',
+  )
+  assertSingleExternalInstallation(shared.packageLock, SHARED_EXTERNAL_PACKAGE)
+  const index = buildDualDshRegistry(release, version)
   const [nestedVersion, rootVersion] = SYNTHETIC_DSH_VERSIONS
   const result = await resolveNpmPackageLock(index, {
     [DSH_PACKAGE]: rootVersion,
@@ -262,8 +318,9 @@ async function main(): Promise<void> {
     `verify-npm-install-layout: ${String(summary.dshPackagesPerVersion)} DSH package(s) per release and `
     + `${String(summary.checkedDshEdges)} internal edge(s) verified in ${(result.durationMs / 1000).toFixed(2)} s; `
     + `${String(units)} of ${String(MAX_RESOLUTION_WORK_UNITS)} budgeted resolution work unit(s); `
-    + `both releases share one Cordis installation; ${String(result.unknownPackages.length)} unavailable optional `
-    + 'package name(s) ignored by npm.',
+    + `both releases share one Cordis installation; one release installs ${SHARED_EXTERNAL_PACKAGE} once beside a `
+    + `newer registry release; ${String(result.unknownPackages.length)} unavailable optional package name(s) `
+    + 'ignored by npm.',
   )
 }
 
