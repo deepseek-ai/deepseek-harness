@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types"
@@ -9,13 +9,13 @@
   ],
   "references": [
     {
-      "path": "../cordis"
+      "path": "../../cordis"
     },
     {
-      "path": "../plugin-im-core"
+      "path": "../core"
     },
     {
-      "path": "../satori-element"
+      "path": "../element"
     }
   ]
 }

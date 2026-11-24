@@ -22,7 +22,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "vendor/plugin-im-markdown"
+    "directory": "vendor/im/markdown"
   },
   "bugs": {
     "url": "https://github.com/satorijs/satori/issues"

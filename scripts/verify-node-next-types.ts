@@ -37,6 +37,7 @@ function readPackage(path: string): WorkspacePackage | null {
 function workspacePackages(): WorkspacePackage[] {
   return [
     ...globSync('vendor/*/package.json', { cwd: root }),
+    ...globSync('vendor/im/*/package.json', { cwd: root }),
     ...globSync('packages/*/*/package.json', { cwd: root }),
   ]
     .map(path => readPackage(resolve(root, path)))
@@ -51,6 +52,7 @@ function relativeSpecifiersMissingExtensions(): string[] {
   const errors: string[] = []
   const files = [
     ...globSync('vendor/*/lib/types/**/*.d.ts', { cwd: root }),
+    ...globSync('vendor/im/*/lib/types/**/*.d.ts', { cwd: root }),
     ...globSync('packages/*/*/lib/types/**/*.d.ts', { cwd: root }),
   ].sort()
 

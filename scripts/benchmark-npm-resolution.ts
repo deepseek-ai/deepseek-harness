@@ -16,6 +16,7 @@ const WORKSPACE_MANIFEST_GLOBS = [
   'apps/*/package.json',
   'packages/*/*/package.json',
   'vendor/*/package.json',
+  'vendor/im/*/package.json',
   'native/system/package.json',
   'native/system/packages/*/package.json',
 ]

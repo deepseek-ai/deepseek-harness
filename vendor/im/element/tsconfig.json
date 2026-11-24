@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib/types",
@@ -14,10 +14,10 @@
   ],
   "references": [
     {
-      "path": "../cosmokit"
+      "path": "../../cosmokit"
     },
     {
-      "path": "../element"
+      "path": "../../element"
     }
   ]
 }

@@ -106,7 +106,7 @@ export async function createPackedInstallation(temporaryPrefix: string, extraPac
   }
   const packages = new Map<string, WorkspacePackage>()
   for (const path of globSync([
-    'apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json', 'native/system/packages/*/package.json',
+    'apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json', 'vendor/im/*/package.json', 'native/system/packages/*/package.json',
   ], { cwd: root })) {
     const manifest = JSON.parse(await readFile(join(root, path), 'utf8')) as Record<string, unknown>
     if (typeof manifest.name !== 'string') throw new Error(`${path} has no package name`)
