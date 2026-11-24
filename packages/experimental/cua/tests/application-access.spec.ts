@@ -92,6 +92,15 @@ it('does not retain a broad legacy grant when the replacement application is den
   expect((await f.access.status()).blockedApps).toEqual([expect.objectContaining({ id: identity.id })])
 })
 
+it('preserves existing consent when native retirement IDs include the current identity', async () => {
+  const f = await setup('Always allow', { initial: [identity] })
+  const authorization = ApplicationAuthorizationResult.parse({ ...identity, supersedes: [identity.id, identity.id] })
+  await f.access.select(f.agent, f.client, handle, authorization, signal)
+  expect(f.answer).not.toHaveBeenCalled()
+  expect(f.grants()).toEqual([expect.objectContaining({ id: identity.id })])
+  await expect(f.access.run(f.client, handle, signal, async () => 'read')).resolves.toBe('read')
+})
+
 it('reads cached activity outside the desktop lock and discards it if another writer revokes consent', async () => {
   const f = await setup('Always allow')
   const query = vi.fn(async () => 'window activity')

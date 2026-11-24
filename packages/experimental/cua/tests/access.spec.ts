@@ -441,6 +441,20 @@ it('publishes new grants and revocations while Windows discovery is pending, wit
   expect(control.request.mock.calls.filter(([method]) => method === 'applicationMetadata')).toHaveLength(1)
 })
 
+it('keeps a saved Windows app current when only its Shell icon target is available', async () => {
+  const grant = { id: identity.id, name: identity.name, iconPath: 'shell:AppsFolder\\Package!App' }
+  const f = await setup('Always allow', { applicationMetadata: true, initial: [grant] })
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  control.request.mockResolvedValueOnce([grant]).mockResolvedValueOnce({ [grant.iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(await f.ctx.cuaAccess.applications()).toMatchObject({ allowedApps: [grant], reviewApps: [] })
+  expect(await f.ctx.cuaAccess.applicationPresentation()).toEqual({
+    applications: [grant], icons: { [grant.iconPath]: 'data:image/png;base64,aWNvbg==' },
+  })
+  expect(control.request).toHaveBeenCalledWith('applicationMetadata', { applications: [grant] }, expect.any(AbortSignal))
+  expect(f.answer).not.toHaveBeenCalled()
+})
+
 it('keeps pathless grants manageable without requesting their icons', async () => {
   const grant = { id: identity.id, name: identity.name }
   const f = await setup('Always allow', { initial: [grant] })

@@ -1,5 +1,5 @@
 /** Real local pipes exercise Host ownership, Agent isolation, cancellation, and startup admission. */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection, createServer, type Socket } from 'node:net'
@@ -216,6 +216,13 @@ it('changes the shared runtime identity when a managed DLL changes without repla
   await writeFile(join(f.directory, 'dsh-cua-windows.dll'), 'second implementation')
   await f.client().request('updated', {}, signal)
   expect(key(f.spawn.mock.calls[1]![0])).not.toBe(before)
+})
+
+it('refuses startup when an existing managed artifact cannot be read', async () => {
+  const f = await fixture()
+  await mkdir(join(f.directory, 'dsh-cua-windows.dll'))
+  await expect(f.client().request('input', {}, new AbortController().signal)).rejects.toThrow()
+  expect(f.spawn).not.toHaveBeenCalled()
 })
 
 it.each(['wrong-runtime', 'wrong-instance', 'extra', 'malformed', 'oversized', 'invalid-utf8', 'exit'] as const)(
