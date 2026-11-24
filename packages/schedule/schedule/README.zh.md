@@ -221,7 +221,7 @@ source、手动与定时投递共用单任务准入：复用目标共用执行�
 
 任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝；任务正在执行、处于每目标最小投递间隔内，或正在恢复上一条未完成的收件箱投递时，本次候选以 `SOURCE_TASK_BUSY` 拒绝。任务不会消费或排队该候选。错误直接传播给调用方。恢复持有的是 `lastDelivery` 中的上一条消息，而不是被拒绝的候选。
 
-调用方 context 正在卸载或已不活动时，`submit` 返回以 Cordis `INACTIVE_EFFECT` 拒绝的 Promise；Schedule 尚未就绪或正在停止时，以 `SOURCE_TASK_RECEIVER_UNAVAILABLE` 拒绝。runtime 准入可能以 `SOURCE_CLOSED` 拒绝。已进入 FIFO 的工作即使在生产者 context 随后卸载时仍会排空。Schedule 在销毁 runtime 和关闭存储前排空已接受工作。从已停止服务捕获的回调不会重新绑定到替代服务；重新激活的生产者在自己的 effect 中捕获替代服务。
+调用方的 fiber 正在卸载但仍保留 uid 时可以提交。调用方 context 已销毁时，`submit` 返回以 Cordis `INACTIVE_EFFECT` 拒绝的 Promise；Schedule 尚未就绪或正在停止时，以 `SOURCE_TASK_RECEIVER_UNAVAILABLE` 拒绝。runtime 准入可能以 `SOURCE_CLOSED` 拒绝。已进入 FIFO 的工作即使在生产者 context 随后卸载时仍会排空。Schedule 在销毁 runtime 和关闭存储前排空已接受工作。从已停止服务捕获的回调不会重新绑定到替代服务；重新激活的生产者在自己的 effect 中捕获替代服务。
 
 目标、provider 和持久化失败传播给 source，不聚合为投递错误。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；提交不会自动重试。生产者拥有观测大小限制、输出速率、观测状态持久化及停止／排空清理。Source 实例和中间观测仅存在于进程内，不是任务记录；提交不增加纯事件任务 schema 或 source 专属权限策略。
 

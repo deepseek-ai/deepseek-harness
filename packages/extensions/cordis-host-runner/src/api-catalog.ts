@@ -3472,7 +3472,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Deliver an observation to an existing task without consuming its scheduled occurrence.',
         parameters: [{ name: 'id', description: 'Task to deliver to.' }, { name: 'candidate', description: 'Observed text to send alongside the task\'s stored instruction.' }],
         returns: 'Resolves when the Session inbox and task receipt are both persisted, not when the model responds.',
-        throws: ['If the caller is unloading or disposed, the runtime or task is unavailable, or delivery fails. A receipt write can fail after the inbox is persisted; submission does not retry.'],
+        throws: ['If the caller is disposed, the runtime or task is unavailable, or delivery fails. A receipt write can fail after the inbox is persisted; submission does not retry.'],
       },
       {
         signature: '@Remote(\'deliveryLimits\') deliveryLimits(): { readonly newSessionIntervalSeconds: number }',

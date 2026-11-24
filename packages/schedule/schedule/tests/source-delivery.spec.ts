@@ -489,7 +489,7 @@ it('refuses an unloaded caller while its accepted submission still completes in 
   }
 })
 
-it('refuses a caller while its native fiber restarts without disposing its uid', async () => {
+it('delivers an observation while the caller is unloading during restart', async () => {
   const test = await setup()
   const entered = Promise.withResolvers<undefined>()
   const release = releaseGate()
@@ -506,12 +506,9 @@ it('refuses a caller while its native fiber restarts without disposing its uid',
     await entered.promise
     expect(consumer.uid).not.toBeNull()
     expect(consumer.state).toBe(FiberState.UNLOADING)
-    await expect(scoped!.submit(ID, { text: 'During consumer restart' })).rejects.toMatchObject({ code: 'INACTIVE_EFFECT' })
-    expect(test.agent.followup).not.toHaveBeenCalled()
-    release.resolve(undefined)
-    await restarting
-    await scoped!.submit(ID, { text: INPUT })
+    await scoped!.submit(ID, { text: 'During consumer restart' })
     expect(test.agent.followup).toHaveBeenCalledOnce()
+    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
   } finally {
     release.resolve(undefined)
     await restarting

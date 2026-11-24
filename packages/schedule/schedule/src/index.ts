@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
-import { Context, CordisError, FiberState, Service } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
 import { rethrowAfterCleanup } from './cleanup-failure.ts'
@@ -375,13 +375,11 @@ export class ScheduleService extends TypertRemoteService {
    * @param id - Task to deliver to.
    * @param candidate - Observed text to send alongside the task's stored instruction.
    * @returns Resolves when the Session inbox and task receipt are both persisted, not when the model responds.
-   * @throws If the caller is unloading or disposed, the runtime or task is unavailable, or delivery fails.
+   * @throws If the caller is disposed, the runtime or task is unavailable, or delivery fails.
    * A receipt write can fail after the inbox is persisted; submission does not retry.
    */
   async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
     this.ctx.fiber.assertActive()
-    // A restarting caller retains its fiber uid while unloading, so assertActive() alone admits new work.
-    if (this.ctx.fiber.state === FiberState.UNLOADING) throw new CordisError('INACTIVE_EFFECT')
     const runtime = this.runtime
     if (this.stopping || runtime === undefined) {
       throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
