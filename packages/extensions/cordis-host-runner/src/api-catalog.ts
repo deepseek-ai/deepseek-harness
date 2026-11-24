@@ -2833,6 +2833,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'coalesced server lists until the subscriber or the manager stops.',
       },
       {
+        signature: 'async whenSettled(signal: AbortSignal): Promise<string[]>',
+        description: 'Wait until no listed server is in the first attempt of a connection: `list()` reports none as `connecting` with `attempt: 0`. Every later state counts, including failures, reconnect attempts, and waiting for credentials or authorization. Servers that join while the wait runs are included. Host callers only; this is not a Remote method.',
+        parameters: [{ name: 'signal', description: 'ends the wait before every server leaves its first attempt.' }],
+        returns: 'the names still in their first attempt when the signal or manager disposal ended the wait; empty once settled.',
+      },
+      {
         signature: '@Remote async restart(name: string): Promise<void>',
         description: 'Rebuild one server from its current entry: dispose the live instance (if any) and mount a fresh one with a fresh reconnect budget. Incomplete cleanup blocks replacement until the Host restarts.',
         parameters: [{ name: 'name', description: 'the configured or registered server key.' }],

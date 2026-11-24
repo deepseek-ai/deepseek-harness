@@ -19,6 +19,9 @@
       inject: [sdkAppStartup, loader]
       config:
         maxTokensAsSuccess: !!js "process.env.DSH_MAX_TOKENS_AS_SUCCESS === undefined ? true : JSON.parse(process.env.DSH_MAX_TOKENS_AS_SUCCESS)"
+        # Clients prompt right after initialize; MCP servers that connect within
+        # this wait reach the first prompt, and later ones join afterwards.
+        startupWaitMs: 5000
 
 - id: hmr
   disabled: true
@@ -114,3 +117,14 @@
 
     - id: tool-cordis
       name: '@deepseek-ai/dsh-tool-cordis'
+
+# The shared MCP server fleet that Desktop mounts on its Host: servers that
+# the `mcp-manager` row's `servers` configures, plus servers that installed
+# plugins register. Credential templates and saved OAuth grants resolve through
+# the credentials provider, so the manager starts after it. Starting an OAuth
+# authorization needs a Web server, so the SDK omits the Plugins page account
+# row `mcp-account` and connects OAuth servers only with a saved grant.
+- insert:
+    - id: mcp-manager
+      name: '@deepseek-ai/dsh-mcp-manager'
+      inject: [credentials]

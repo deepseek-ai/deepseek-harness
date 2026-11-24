@@ -24,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 
 import type {} from '@deepseek-ai/dsh-schedule'
+import type {} from '@deepseek-ai/dsh-mcp-manager'
 import type { SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
 import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -124,6 +125,8 @@ export interface HarnessSdkJsonRpcServerOptions {
   maxTokensAsSuccess?: boolean
   /** Runtime state that a liveness failure reports; without it the failure makes no statement about the runtime. */
   runtime?: RuntimeObservation
+  /** Longest `initialize` wait, in milliseconds, for startup work that finishes after Loader settlement; omission or `0` skips it. */
+  startupWaitMs?: number
 }
 
 function successStatus(reason: string, options: HarnessSdkJsonRpcServerOptions): 'ok' | 'error' {
@@ -275,7 +278,8 @@ export class HarnessSdkJsonRpcServer {
   }
 
   /**
-   * Validate and configure the SDK route, mounting the DeepSeek fallback only when unowned.
+   * Validate and configure the SDK route, mounting the DeepSeek fallback only when unowned, then hold the answer for
+   * startup work for at most the configured `startupWaitMs`.
    * @param params - SDK handshake parameters.
    * @returns server identity for the handshake.
    */
@@ -319,6 +323,7 @@ export class HarnessSdkJsonRpcServer {
       ...reasoningEffort === undefined ? {} : { reasoningEffort },
       ...params.maxTokens === undefined ? {} : { maxTokens: params.maxTokens },
     })
+    await this.awaitStartup()
     this.cwd = cwd
     this.provider = provider
     this.model = model
@@ -329,6 +334,21 @@ export class HarnessSdkJsonRpcServer {
     this.initialized = true
     this.initialization.resolve()
     return { serverInfo: { name: 'deepseek-harness-sdk-runtime', version: '0.0.1' } }
+  }
+
+  /**
+   * Wait, for at most `startupWaitMs`, for startup work that finishes after Loader settlement, so its results reach the
+   * first prompt: MCP manager servers in their first connection attempt. An exhausted budget logs the work still
+   * pending and returns; that work keeps running and its results join later requests.
+   */
+  private async awaitStartup(): Promise<void> {
+    const timeoutMs = this.options.startupWaitMs
+    const manager = this.ctx.get('mcpManager')
+    if (manager === undefined || timeoutMs === undefined || timeoutMs === 0) return
+    const pending = await manager.whenSettled(AbortSignal.timeout(timeoutMs))
+    if (pending.length > 0) {
+      this.ctx.logger.warn(`sdk-jsonrpc-server: initialize continues after ${String(timeoutMs)} ms while MCP servers are still connecting: ${pending.join(', ')}`)
+    }
   }
 
   /**

@@ -1,0 +1,51 @@
+# SDK snapshot composition: the shipped `mcp-manager` row serves one configured
+# server and one plugin-registered server, both at the HTTP MCP fixture.
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  config:
+    thinking: enabled
+    reasoningEffort: max
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: !!js "process.env.DSH_SNAPSHOT === undefined ? 'zstd' : 'none'"
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    maxDepth: 1
+
+- id: session-log-deepseek
+  config:
+    enabled: false
+
+# Time sampling is wall-clock dependent and unrelated to the MCP tools.
+- id: time-context
+  disabled: true
+
+# A server configured on the `mcp-manager` row, as Settings writes it.
+- id: mcp-manager
+  config:
+    servers:
+      configured:
+        transport: streamable-http
+        url: !!js process.env.DSH_MCP_DEMO_URL
+
+# The installed Linear connector registers its OAuth server with the manager;
+# the snapshot seeds its saved grant.
+- insert:
+    - id: linear
+      name: '@deepseek-ai/dsh-linear'
+      config:
+        url: !!js process.env.DSH_MCP_DEMO_URL
+        toolLoading: eager

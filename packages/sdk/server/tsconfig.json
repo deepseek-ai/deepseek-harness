@@ -64,6 +64,12 @@
     },
     {
       "path": "../../util/time"
+    },
+    {
+      "path": "../../mcp/mcp-manager"
+    },
+    {
+      "path": "../../util/timeout"
     }
   ]
 }

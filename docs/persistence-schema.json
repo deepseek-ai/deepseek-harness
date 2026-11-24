@@ -566,7 +566,7 @@
     {"digest":"b81e9de81a481b24e1e1f9adf038bfc59e57b4f35ce62f8f1e45284186f4f812","names":[],"sources":["packages/session/session-title/src/types.ts:30"]},
     {"digest":"b8327af7ee5767952d1300cb4f03b7fc04197ae5ba275e13981c689ff7506172","names":["packages/goal/goal/src/types.ts#GoalPhase"],"sources":["packages/goal/goal/src/types.ts:45"]},
     {"digest":"b8cce99008f6354056db88916f496253e5a85a151339eccba55a87fc07430fbe","names":[],"sources":[]},
-    {"digest":"b8ed92a5ca59733f046ea3506d64c35c64044b6a084fd51daee4c6c72727d39f","names":[],"sources":["packages/sdk/server/src/server.ts:54"]},
+    {"digest":"b8ed92a5ca59733f046ea3506d64c35c64044b6a084fd51daee4c6c72727d39f","names":[],"sources":["packages/sdk/server/src/server.ts:55"]},
     {"digest":"b8fc636a2121df9d8423c242e03c9d23b7ab7c6fdce00e45746932c60b730f97","names":["packages/deliverables/tool-present/src/types.ts#PresentedFile"],"sources":["packages/deliverables/tool-present/src/types.ts:5"]},
     {"digest":"b9305f0ea75ccd6a6061c27fde19f2ab85534f9f3c1a717b573b077ebae0f611","names":[],"sources":[]},
     {"digest":"b978cff734e62143eb56c9125423ec275405eda969802d42aaf73ecb987d3b26","names":[],"sources":[]},
