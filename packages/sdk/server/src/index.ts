@@ -12,9 +12,11 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import { observeRuntime, type RuntimeProcessEvents } from './process-events.ts'
 import { HarnessSdkJsonRpcServer } from './server.ts'
+import type {} from '@deepseek-ai/dsh-mcp-manager'
 
 export * from './server.ts'
 
@@ -25,6 +27,8 @@ export const inject = ['agents', 'workingDirectory']
 export interface JsonRpcConfig {
   /** Report max-token turn/subagent termination as a successful SDK result. */
   maxTokensAsSuccess?: boolean
+  /** Longest `initialize` wait, in milliseconds, for MCP manager servers in their first connection attempt; `0` skips it. */
+  mcpStartupTimeoutMs?: number
   /** Transport input override; production uses `process.stdin`. */
   input?: Readable
   /** Transport output override; production uses `process.stdout`. */
@@ -37,6 +41,7 @@ export interface JsonRpcConfig {
 
 export const Config: Schema<JsonRpcConfig> = Schema.object({
   maxTokensAsSuccess: Schema.boolean().default(false),
+  mcpStartupTimeoutMs: Schema.natural().max(MAX_TIMER_DELAY_MS).default(30_000),
 })
 
 /**
@@ -47,7 +52,7 @@ export const Config: Schema<JsonRpcConfig> = Schema.object({
  */
 export function apply(ctx: Context, config: JsonRpcConfig): void {
   // Cordis applies the schema default before invoking the plugin.
-  const resolvedConfig = config as JsonRpcConfig & { maxTokensAsSuccess: boolean }
+  const resolvedConfig = config as JsonRpcConfig & { maxTokensAsSuccess: boolean; mcpStartupTimeoutMs: number }
   // Protocol shutdown owns the complete runtime process, so it must await the
   // root lifecycle (including persistence) before exiting.
   const rootFiber = ctx[Context.root].fiber
@@ -88,9 +93,11 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
     // current tree has settled. Loader settlement joins entry imports, fiber
     // lifecycle work, and synchronous effect registration; no scheduler delay
     // is part of readiness. A hand-built context without Loader remains
-    // immediately usable.
+    // immediately usable. MCP manager servers mount after the manager
+    // activates, outside Loader settlement, so they get their own bounded wait.
     if (method === 'initialize') {
       await ctx.get('loader')?.await()
+      await awaitMcpStartup(ctx, resolvedConfig.mcpStartupTimeoutMs)
     }
     const result = await server.handleRequest(method, params)
     if (method === 'shutdown') {
@@ -107,4 +114,20 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
       transport.close()
     }
   }, 'jsonrpc.serve')
+}
+
+/**
+ * Hold `initialize` until no MCP manager server is in its first connection attempt, so the tools of servers that
+ * connect reach the first prompt. Without the manager, or with a zero budget, it returns at once. An exhausted budget
+ * logs the servers still connecting and returns; their tools join the tool list when they connect.
+ * @param ctx - the plugin context; reads the optional `mcpManager` service.
+ * @param timeoutMs - the longest wait in milliseconds.
+ */
+async function awaitMcpStartup(ctx: Context, timeoutMs: number): Promise<void> {
+  const manager = ctx.get('mcpManager')
+  if (manager === undefined || timeoutMs === 0) return
+  const pending = await manager.whenSettled(AbortSignal.timeout(timeoutMs))
+  if (pending.length > 0) {
+    ctx.logger.warn(`sdk-jsonrpc-server: initialize continues after ${String(timeoutMs)} ms while MCP servers are still connecting: ${pending.join(', ')}`)
+  }
 }

@@ -9,8 +9,6 @@ import { toNodeHandler, type NodeIncomingMessageLike } from '@modelcontextprotoc
 export interface HttpMcpFixture {
   url: string
   calls: string[]
-  /** JSON-RPC request methods, each recorded once the fixture has produced its response. */
-  methods: string[]
   authorization: Array<string | undefined>
   close: () => Promise<void>
 }
@@ -20,7 +18,6 @@ export async function startHttpMcpFixture(
   options: { rejectToolCalls?: boolean; authorizationFailure?: boolean } = {},
 ): Promise<HttpMcpFixture> {
   const calls: string[] = []
-  const methods: string[] = []
   const authorization: Array<string | undefined> = []
   const handler = createMcpHandler(({ requestInfo }) => {
     const mcp = new McpServer(
@@ -48,10 +45,7 @@ export async function startHttpMcpFixture(
           })
         }
       }
-      const body: unknown = request.method === 'POST' ? await request.clone().json() : undefined
-      const response = await handler.fetch(request, context)
-      if (body !== null && typeof body === 'object' && 'method' in body && typeof body.method === 'string') methods.push(body.method)
-      return response
+      return handler.fetch(request, context)
     },
   })
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
@@ -73,7 +67,6 @@ export async function startHttpMcpFixture(
     url: `http://127.0.0.1:${address.port}/mcp`,
     authorization,
     calls,
-    methods,
     close: async () => {
       await handler.close()
       await new Promise<void>((resolve, reject) => {

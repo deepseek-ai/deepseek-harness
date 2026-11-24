@@ -66,7 +66,7 @@ import {
 } from '@deepseek-ai/dsh-sdk-client'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { deriveReplayScript, parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { startHttpMcpFixture, type HttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
+import { startHttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
 
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -140,15 +140,10 @@ interface SdkAssertions {
   expectedToolDescriptions?: Readonly<Record<string, string>>
   /** Expected runtime-context state in the real assembled request. */
   runtimeContext?: false | { includes: readonly string[]; excludes: readonly string[] }
-  /**
-   * An HTTP MCP fixture at `DSH_MCP_DEMO_URL`. The runtime starts managed servers after it reports ready, so the first
-   * prompt waits until the fixture has answered `listings` tool listings.
-   */
+  /** An HTTP MCP fixture at `DSH_MCP_DEMO_URL`; the first prompt follows `initialize` without waiting for it. */
   mcpDemo?: {
     /** OAuth credential keys whose grants for the fixture URL are saved before the runtime starts. */
     oauthCredentialKeys: readonly string[]
-    /** Tool listings that precede the first prompt. */
-    listings: number
     /** Tool calls the fixture serves during the run. */
     calls: readonly string[]
   }
@@ -237,7 +232,7 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   },
   'mcp-manager': {
     expectedFinalResponse: 'MCP_MANAGER_OK',
-    mcpDemo: { oauthCredentialKeys: ['mcp-client/linear'], listings: 2, calls: ['ping', 'ping'] },
+    mcpDemo: { oauthCredentialKeys: ['mcp-client/linear'], calls: ['ping', 'ping'] },
   },
   'tool-scheduler-recovery': {
     patches: [fileURLToPath(new URL('./tool-scheduler-recovery/runtime.cordis.yml', import.meta.url))],
@@ -726,19 +721,6 @@ async function seedMcpGrants(dshHome: string, url: string, keys: readonly string
   await writeFile(join(dshHome, '.credentials.yaml'), JSON.stringify({ version: 1, records }) + '\n', { mode: 0o600 })
 }
 
-/**
- * Wait until an MCP fixture has answered a number of tool listings.
- * @param fixture - the running fixture.
- * @param listings - the required count of answered `tools/list` requests.
- */
-async function waitForMcpListings(fixture: HttpMcpFixture, listings: number): Promise<void> {
-  const deadline = Date.now() + 30_000
-  while (fixture.methods.filter(method => method === 'tools/list').length < listings) {
-    if (Date.now() >= deadline) throw new Error(`MCP fixture answered ${JSON.stringify(fixture.methods)} before the deadline`)
-    await new Promise(resolve => setTimeout(resolve, 10))
-  }
-}
-
 /** Command lifecycle notifications precede the RPC result on the same ordered transport. */
 function collectCommandNotifications(
   subscription: NotificationSubscription,
@@ -969,7 +951,6 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       })
     }
     await harness.start()
-    if (mcpDemo !== undefined) await waitForMcpListings(mcpDemo, assertions.mcpDemo!.listings)
     let subscription = harness.client.subscribeSessionTree(sessionId)
     const titleSubscription = assertions.waitForProviderTitle === true
       ? harness.client.subscribeSessionTree(sessionId)
