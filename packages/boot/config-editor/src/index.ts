@@ -17,24 +17,6 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** One active profile row with the config each layer supplies for it. */
-export interface ProfileEntryConfiguration {
-  /** The row's Loader entry. */
-  entry: Entry
-  /** Config that the bundles and the profile patch compose for the row without the profile patch's own override of it. */
-  inherited: Record<string, unknown>
-  /** Config of the profile patch's last override of the row; empty without one. */
-  override: Record<string, unknown>
-  /**
-   * Whether a home patch or command-line overlay decides the config the row runs with; {@link ConfigEditor.edit}
-   * refuses a change to such a row. Derived without reading those layers: the running config differs from the one
-   * the bundles and the profile patch compose, as it does when a later layer adds the row or changes its config.
-   * Consequently a later layer that sets the config those compose is not reported, a hand-edited profile patch
-   * reports its rows until the Loader has applied it, and a row without an `id` in its file is always reported.
-   */
-  managed: boolean
-}
-
 function flatten(rows: EntryOptions[]): EntryOptions[] {
   return rows.flatMap(row => [row, ...row.group && Array.isArray(row.config) ? flatten(row.config as EntryOptions[]) : []])
 }
@@ -60,10 +42,10 @@ export class ConfigEditor extends Service {
     return candidates.filter(entry => counts.get(entry.options.id) === 1)
   }
 
-  /** Read inherited and explicit profile values for the active entries, and whether a later layer decides each row.
+  /** Read inherited and explicit profile values for the active entries.
    * @returns Detached layer values alongside their Loader entries.
    */
-  configuration(): ProfileEntryConfiguration[] {
+  configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }> {
     const profile = this.ownerContext.profileContext
     const loaded = loadProfileDirectory('dsh', profile.dir, profile.installAnchor)
     const entries = this.entries()
@@ -75,21 +57,15 @@ export class ConfigEditor extends Service {
         if (!composed.has(row.id)) composed.set(row.id, row)
       }
     }
-    return entries.map((entry) => {
-      const id = entry.options.id
-      const composedConfig = structuredClone((composed.get(id)?.config ?? {}) as Record<string, unknown>)
-      const override = structuredClone((loaded.patches.findLast(
-        row => row.id === id && row.config !== undefined,
-      )?.config ?? {}) as Record<string, unknown>)
-      // What the bundles and the profile patch compose for the row: its last profile override, or else its composed config.
-      const own = overridden.has(id) ? override : composed.has(id) ? composedConfig : undefined
-      return {
-        entry,
-        inherited: overridden.has(id) ? this.inherited(entry, loaded) : composedConfig,
-        override,
-        managed: own === undefined || !isDeepStrictEqual(entry.options.config ?? {}, own),
-      }
-    })
+    return entries.map(entry => ({
+      entry,
+      inherited: overridden.has(entry.options.id)
+        ? this.inherited(entry, loaded)
+        : structuredClone((composed.get(entry.options.id)?.config ?? {}) as Record<string, unknown>),
+      override: structuredClone((loaded.patches.findLast(
+        row => row.id === entry.options.id && row.config !== undefined,
+      )?.config ?? {}) as Record<string, unknown>),
+    }))
   }
 
   private inherited(entry: Entry, loaded: ReturnType<typeof loadProfileDirectory>): Record<string, unknown> {

@@ -22,7 +22,7 @@ import {
 } from '../src/client/DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from '../src/client/apiKey.ts'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
-import { deriveKeyRef, ModelsSettingsStore, PI_AI_PROVIDER_PLUGIN } from '../src/client/store.ts'
+import { deriveKeyRef, ModelsSettingsStore } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
 import type { ModelsOperations } from '../src/client/operations.ts'
 import type { ProviderRow } from '../src/client/store.ts'
@@ -361,98 +361,7 @@ async function mountDeepSeekCard(overrides: Parameters<typeof scriptedFace>[0] =
   return mounted
 }
 
-/** Form of a pi-ai provider row: the profile fields at the root of the row's own namespace. */
-const ProviderRowForm = Schema.object({
-  apiKeyEnv: Schema.string().role('credential-ref'),
-  displayName: Schema.string(),
-  api: Schema.union(['openai-completions', 'anthropic-messages']),
-  baseURL: Schema.string(),
-  models: Schema.array(Schema.object({ id: Schema.string().required(), name: Schema.string() })),
-})
-
-/**
- * The scripted page with two pi-ai provider rows beside the dict's routes: `team-gateway`, which a layer after the
- * profile adds, and `bundle-gateway`, which a bundle supplies. Each is a settings namespace of its own.
- */
-async function withProviderRows(scripted = scriptedFace()) {
-  const view = (ns: string, managed: boolean, value: Record<string, JsonValue>): SettingsNamespaceView => ({
-    ns,
-    schema: JSON.parse(JSON.stringify(ProviderRowForm.toJSON())) as JsonValue,
-    // Nothing of the profile configures a row that a later layer adds; a bundle row's config is the inherited layer.
-    value, base: managed ? {} : value, user: {},
-    autoGenerate: false, applies: 'live', secrets: [], revision: 0,
-    row: { plugin: PI_AI_PROVIDER_PLUGIN, managed },
-  })
-  const gateway = (displayName: string, baseURL: string): Record<string, JsonValue> =>
-    ({ apiKeyEnv: 'TEAM_KEY', displayName, api: 'openai-completions', baseURL, models: [{ id: 'team-model' }] })
-  const namespaces = [
-    ...wireNamespaces(),
-    view('hub-team', true, gateway('Team Gateway', 'https://hub.example/v1')),
-    view('bundle-team', false, gateway('Bundle Gateway', 'https://bundle.example/v1')),
-  ]
-  scripted.face.settings.describe.mockResolvedValue(remoteOk({ writable: true, hasDocument: false, namespaces }))
-  const directory = await scripted.face.llm.listConfigurableProviders()
-  scripted.face.llm.listConfigurableProviders.mockResolvedValue(remoteOk([
-    ...directory.value,
-    { provider: 'team-gateway', displayName: 'Team Gateway', settingsNs: 'hub-team', settingsPath: [], declared: true },
-    { provider: 'bundle-gateway', displayName: 'Bundle Gateway', settingsNs: 'bundle-team', settingsPath: [], declared: true },
-  ]))
-  return scripted
-}
-
-const TEAM_TARGET = { provider: 'team-gateway', displayName: 'Team Gateway' }
-const BUNDLE_TARGET = { provider: 'bundle-gateway', displayName: 'Bundle Gateway' }
-
 describe('ModelsSection', () => {
-  it('shows a pi-ai provider row that a later layer supplies as managed: tagged, viewable, and never written', async () => {
-    const { controller, mutate, set, unset } = await mountFace(await withProviderRows())
-    const rows = new Map(controller.store.getSnapshot().rows.map(row => [row.entry.provider, row]))
-    expect(rows.get('team-gateway')).toMatchObject({ managed: true, removable: false, adapterNs: 'llm-pi-ai' })
-    expect(rows.get('bundle-gateway')).toMatchObject({ managed: false, removable: false, adapterNs: 'llm-pi-ai' })
-
-    expect(screen.getAllByText(en.managedTag)).toHaveLength(1)
-    expect(screen.getByText(en.managedTag).getAttribute('title')).toBe(en.managedHint)
-    const view = screen.getByRole('button', { name: providerCopy(en.viewProvider, TEAM_TARGET) })
-    expect(view.textContent).toBe(en.view)
-    expect(screen.queryByRole('button', { name: providerCopy(en.editProvider, TEAM_TARGET) })).toBeNull()
-    expect(screen.queryByRole('button', { name: providerCopy(en.removeProvider, TEAM_TARGET) })).toBeNull()
-
-    fireEvent.click(view)
-    const card = view.closest('li')!
-    fireEvent.click(within(card).getByText(en.customized))
-    const controls = [...card.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea')]
-    expect(controls.length).toBeGreaterThan(0)
-    expect(controls.filter(control => !control.disabled)).toEqual([])
-    expect(within(card).getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(true)
-    // The card shows what the deciding layer sets where an editable card shows what a cleared field returns to,
-    // laid out as a pi-ai route with the protocols of the row's own form.
-    const url = within(card).getByLabelText<HTMLInputElement>(en.baseUrl)
-    expect([url.value, url.placeholder]).toEqual(['', 'https://hub.example/v1'])
-    const protocol = within(card).getByLabelText<HTMLSelectElement>(en.customApi)
-    expect([...protocol.options].map(option => option.value)).toEqual(['openai-completions', 'anthropic-messages'])
-    expect(protocol.value).toBe('openai-completions')
-    expect(mutate).not.toHaveBeenCalled()
-    expect(set).not.toHaveBeenCalled()
-    expect(unset).not.toHaveBeenCalled()
-  })
-
-  it('edits a pi-ai provider row that a bundle supplies through the row\'s own namespace, and offers no removal', async () => {
-    const { mutate } = await mountFace(await withProviderRows())
-    expect(screen.queryByRole('button', { name: providerCopy(en.removeProvider, BUNDLE_TARGET) })).toBeNull()
-    const edit = screen.getByRole('button', { name: providerCopy(en.editProvider, BUNDLE_TARGET) })
-    expect(edit.textContent).toBe(en.edit)
-    fireEvent.click(edit)
-    const card = edit.closest('li')!
-    fireEvent.click(within(card).getByText(en.customized))
-    const url = within(card).getByLabelText<HTMLInputElement>(en.baseUrl)
-    expect(url.disabled).toBe(false)
-    fireEvent.change(url, { target: { value: 'https://bundle.example/v2' } })
-    fireEvent.click(within(card).getByText(en.apply))
-    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
-    // The row's whole config section is the profile, so the field is addressed at the root of the row's namespace.
-    expect(mutate.mock.calls[0]).toEqual(['bundle-team', [{ op: 'set', path: ['baseURL'], value: 'https://bundle.example/v2' }], 0])
-  })
-
   it('keeps the credential state unconfirmed when its redacted read fails', async () => {
     const scripted = scriptedFace()
     scripted.face.credentials.describe.mockResolvedValue(remoteFail('credentials unavailable', 'gateway/internal'))
@@ -754,13 +663,11 @@ describe('ModelsSection', () => {
     expect(within(card).queryByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeNull()
   })
 
-  it('dispatches the provider-card seat per rendered row, keyed by the namespace of the adapter that serves it', async () => {
-    const { renderSlot } = await mountFace(await withProviderRows())
+  it('dispatches the provider-card seat per rendered row, keyed by the owning namespace', async () => {
+    const { renderSlot } = await mountSection()
     const cards = cardSeatCalls(renderSlot)
     expect(cards).toContainEqual(['openai', true, true, 'llm-pi-ai'])
     expect(cards).toContainEqual(['deepseek-official', true, false, 'llm-deepseek'])
-    // A pi-ai provider row is a namespace of its own, and its card goes to the same registrant as a dict route's.
-    expect(cards).toContainEqual(['team-gateway', true, false, 'llm-pi-ai'])
     // The footer seat renders once below the rows and the add controls.
     expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.models.footer')).toEqual([
       ['settings.models.footer', {}],
@@ -888,8 +795,6 @@ describe('ModelsSection', () => {
       entry,
       configured: true,
       removable: false,
-      managed: false,
-      adapterNs: 'llm-deepseek',
       apiKeyEnv: 'X',
       credential,
     })
@@ -897,9 +802,6 @@ describe('ModelsSection', () => {
     expect(needsSetup(row({ configured: true, writable: true }), false)).toBe(false)
     const nested = { ...row(undefined), entry: { ...entry, settingsPath: ['providers', 'x'] } }
     expect(needsSetup(nested, false)).toBe(false)
-    // A pi-ai provider row is one that a composition layer added, so it waits for its key as an ordinary row.
-    const providerRow = { ...row(undefined), entry: { ...entry, settingsNs: 'hub-team' }, adapterNs: 'llm-pi-ai' }
-    expect(needsSetup(providerRow, false)).toBe(false)
     // A user who can already reach some provider is not in the first-run
     // posture, so nothing on the page opens itself.
     expect(needsSetup(row(undefined), true)).toBe(false)

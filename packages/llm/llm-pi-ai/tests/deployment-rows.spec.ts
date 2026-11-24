@@ -57,13 +57,6 @@ function addresses(ctx: Context): Record<string, string> {
     .map(entry => [entry.provider, `${entry.settingsNs} @ ${entry.settingsPath.join('.') || '(the row)'}`]))
 }
 
-/** Whether a layer after the profile patch decides each pi-ai row. */
-function managed(ctx: Context): Record<string, boolean | undefined> {
-  return Object.fromEntries(ctx.settings.describe({ redactSecrets: true })
-    .filter(view => view.ns === NS || view.row?.plugin === PROVIDER)
-    .map(view => [view.ns, view.row?.managed]))
-}
-
 /** State of one row's plugin as the Loader holds it, with the first line of the error of a row that failed. */
 async function rowState(ctx: Context, id: string): Promise<{ state: FiberState | undefined; error?: string | undefined }> {
   const fiber = [...ctx.loader.entries()].find(candidate => candidate.options.id === id)?.fiber
@@ -95,7 +88,6 @@ describe('a providers dict in the profile patch beside provider rows in the home
     expect(addresses(ctx)).toEqual({
       mine: 'llm-pi-ai @ providers.mine', hub: 'llm-pi-ai-dsh-hub-hub @ (the row)', hub2: 'llm-pi-ai-dsh-hub-hub2 @ (the row)',
     })
-    expect(managed(ctx)).toEqual({ 'llm-pi-ai': false, 'llm-pi-ai-dsh-hub-hub': true, 'llm-pi-ai-dsh-hub-hub2': true })
 
     // The writes the Models page makes for a person's own providers.
     await ctx.settings.mutate(NS, [{ op: 'set', path: ['providers', 'other'], value: gateway(server.url, 'Other', 'OTHER_KEY') }])
@@ -121,7 +113,6 @@ describe('a providers dict in the profile patch beside provider rows in the home
     await writeFile(homePatch, '[]\n')
     await reload()
     expect(routes(ctx)).toEqual(['mine=Mine 2', 'other=Other'])
-    expect(managed(ctx)).toEqual({ 'llm-pi-ai': false })
   })
 
   it('serves the deployment row of a route that the dict names too, in either start order, and the dict entry once the row is gone', async () => {
@@ -195,7 +186,6 @@ describe('a providers dict in the profile patch beside provider rows in the home
     })
     expect(routes(ctx)).toEqual(['hub=Hub'])
     expect(addresses(ctx)).toEqual({ hub: 'llm-pi-ai @ providers.hub' })
-    expect(managed(ctx)).toEqual({ 'llm-pi-ai': true })
     await expect(ctx.settings.mutate(NS, [{ op: 'set', path: ['providers', 'other'], value: gateway('https://other.test/v1', 'Other', 'K') }]))
       .rejects.toThrow('Configuration for "llm-pi-ai" is overridden by a home patch or command-line overlay')
   })
@@ -221,6 +211,5 @@ describe('a providers dict in the profile patch beside provider rows in the home
     expect(routes(ctx)).toEqual(['bundle-only=Bundle only', 'shared=Mine'])
     expect(addresses(ctx)).toEqual({ shared: 'llm-pi-ai @ providers.shared', 'bundle-only': 'bundle-row-1 @ (the row)' })
     // A row that a layer below the profile supplies is the profile's to override.
-    expect(managed(ctx)).toEqual({ 'llm-pi-ai': false, 'bundle-row-0': false, 'bundle-row-1': false })
   })
 })

@@ -359,7 +359,6 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   BundleInfo: 'boot.md',
   MarketIndexSummary: 'boot.md',
   MarketListingEntry: 'boot.md',
-  ProfileEntryConfiguration: 'boot.md',
   MarketQuery: 'boot.md',
   MarketSearchResult: 'boot.md',
   MarketSort: 'boot.md',

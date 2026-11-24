@@ -40,7 +40,7 @@ Use [settings](../../settings/settings/README.md) for forms restricted to live f
 
 The [editor](src/index.ts) reconciles external changes before deriving a candidate, locks the profile manifest alongside other profile operations, and atomically replaces its config override. It preserves YAML comments and `!!js` expressions outside replaced values. A failed reconciliation restores the prior document and reloads the prior patches.
 
-Configuration reads share one composition for entries without profile config overrides. Overridden entries are composed separately with only their own override removed; profile inserts and other entries' overrides remain effective. Returned configs are detached, and compositions are not cached between reads. Each entry also reports `managed`: whether the config it runs with differs from the one the bundles and the profile patch compose, which is the case when a home patch or a command-line overlay adds the row or changes its config, and is the condition under which an edit of the row is refused. The read opens no home patch or overlay file. A later layer that sets the config those layers compose is not reported, a hand-edited profile patch reports its rows until the Loader has applied it, and a row without an `id` in its file is always reported.
+Configuration reads share one composition for entries without profile config overrides. Overridden entries are composed separately with only their own override removed; profile inserts and other entries' overrides remain effective. Returned configs are detached, and compositions are not cached between reads.
 
 </details>
 

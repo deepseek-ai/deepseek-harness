@@ -1,22 +1,17 @@
 /**
  * A deployment's pi-ai provider rows on the assembled Models settings page. The profile patch holds a person's
- * providers in the `llm-pi-ai` row's `providers` dict; the home patch adds provider rows. The page lists the
- * rows as managed without editing them, and the person's own providers stay editable beside them. No model is
- * called: every step is settings, credentials, and LLM-directory traffic.
+ * providers in the `llm-pi-ai` row's `providers` dict; the home patch adds provider rows, whose keys the
+ * deployment supplies through the environment. The page lists the rows' routes without a delete control and
+ * opens them without a field, and the person's own providers stay editable beside them. No model is called:
+ * every step is settings, credentials, and LLM-directory traffic.
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Page } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import {
-  captureStableAria, compareOrRefreshGolden, launchWebScaffold,
-  watchConsole, webSnapshotMode, type WebScaffold,
-} from './scaffold.ts'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { openSettings, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
-
-const EXPECTED = fileURLToPath(new URL('./expected/models-settings-deployment/managed.expected.md', import.meta.url))
 
 // minimax-cn stands for a catalog provider that both files name, so that a developer's own OPENAI or ANTHROPIC
 // environment key cannot change what the page shows.
@@ -69,6 +64,8 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     await mkdir(join(home, 'profiles', 'scaffold'), { recursive: true })
     await writeFile(profilePatchPath(), PROFILE_PATCH)
     await writeFile(homePatchPath(), HOME_PATCH)
+    vi.stubEnv('HUB_MINIMAX_CN_API_KEY', 'models-deployment-test-key')
+    vi.stubEnv('HUB_TEAM_GATEWAY_API_KEY', 'models-deployment-test-key')
     scaffold = await launchWebScaffold({ harnessHome: home })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
@@ -77,10 +74,11 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     await openSettings(page, 'zh')
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '模型', exact: true }).click()
-    await dialog.getByRole('button', { name: '查看 Team Gateway (team-gateway)', exact: true }).waitFor()
+    await dialog.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true }).waitFor()
   }, 120_000)
 
   afterAll(async () => {
+    vi.unstubAllEnvs()
     try {
       await browser?.close()
     } finally {
@@ -92,29 +90,24 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     }
   })
 
-  it('lists the deployment\'s providers as managed and opens them without an editable control', async () => {
+  it('lists the deployment\'s providers without a delete control and opens them without a field', async () => {
     onTestFailed(() => saveFailureShot(page, 'models-settings-deployment'))
     const dialog = page.getByRole('dialog', { name: '设置' })
-    // A provider row is viewed, never edited or deleted.
+    // A provider row is the deployment's: the page offers no deletion for it.
     for (const provider of ['Team Gateway (team-gateway)', 'minimax-cn']) {
-      expect(await dialog.getByRole('button', { name: `查看 ${provider}`, exact: true }).count()).toBe(1)
-      expect(await dialog.getByRole('button', { name: `编辑 ${provider}`, exact: true }).count()).toBe(0)
+      expect(await dialog.getByRole('button', { name: `编辑 ${provider}`, exact: true }).count()).toBe(1)
       expect(await dialog.getByRole('button', { name: `删除 ${provider}`, exact: true }).count()).toBe(0)
     }
-    expect(await dialog.getByText('托管', { exact: true }).count()).toBe(2)
     // The person's own provider keeps both actions.
     expect(await dialog.getByRole('button', { name: '编辑 My Proxy (my-proxy)', exact: true }).count()).toBe(1)
     expect(await dialog.getByRole('button', { name: '删除 My Proxy (my-proxy)', exact: true }).count()).toBe(1)
 
-    await dialog.getByRole('button', { name: '查看 Team Gateway (team-gateway)', exact: true }).click()
-    await dialog.getByText('自定义设置', { exact: true }).click()
-    const card = dialog.locator('li', { has: page.getByRole('button', { name: '查看 Team Gateway (team-gateway)', exact: true }) })
-    const controls = card.locator('input, select, textarea')
-    expect(await controls.count()).toBeGreaterThan(0)
-    expect(await controls.evaluateAll(nodes => nodes.filter(node => !(node as HTMLInputElement).disabled).length)).toBe(0)
+    // The page has no layout for a provider row's form: the card names the row's section and takes no input.
+    await dialog.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true }).click()
+    const card = dialog.locator('li', { has: page.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true }) })
+    await card.getByText('其余字段在 cordis.patch.yml 中，请直接编辑对应段。 (llm-pi-ai-dsh-hub-team-gateway)', { exact: true }).waitFor()
+    expect(await card.locator('input, select, textarea').count()).toBe(0)
     expect(await card.getByRole('button', { name: '保存', exact: true }).isDisabled()).toBe(true)
-    expect(await card.getByLabel('API 地址', { exact: true }).getAttribute('placeholder')).toBe('https://hub.example/v1')
-    await compareOrRefreshGolden(EXPECTED, await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
     await card.getByRole('button', { name: '取消', exact: true }).click()
   })
 
@@ -143,7 +136,7 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     expect(stored).toContain('providers:')
     expect(stored).not.toContain('dsh-llm-pi-ai/provider')
     expect(await readFile(homePatchPath(), 'utf8')).toBe(HOME_PATCH)
-    expect(await dialog.getByText('托管', { exact: true }).count()).toBe(2)
+    expect(await dialog.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true }).count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   })
 })

@@ -14,8 +14,6 @@ A form namespace is the local id of a uniquely addressed entry in the active pro
 
 `settings/document-updated` invalidates form descriptors after Loader configuration changes. It is a UI notification; consumers use `loader/volatile-update` only when they need to refresh registration facts.
 
-Each descriptor reports the row behind its form as a `SettingsRowView`: the plugin's module name, and whether a home patch or a command-line overlay decides the row's config (`managed`), in which case a write to the namespace is refused. The [configuration editor](boot.md#profile-row-configuration) supplies `managed`.
-
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>

@@ -29,7 +29,7 @@ import type { LlmNativeAuth, SettingsNamespaceView } from '@deepseek-ai/dsh-api-
 // Type-only: pulls this package's SlotMap merge (the two Models child slots).
 import type {} from './slot-contract.ts'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
-import { deriveKeyRef, PI_AI_ADAPTER_NS, PI_AI_PROFILE_PATH, protocolChoices, providerUsable, reasoningLevelChoices } from './store.ts'
+import { deriveKeyRef, protocolChoices, providerUsable, reasoningLevelChoices } from './store.ts'
 import type { ModelsSettingsStore, ProviderRow } from './store.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -170,20 +170,17 @@ export async function removeProviderProfile(
 }
 
 /**
- * Whether a provider configured in its adapter's whole section still needs its
- * first key: an unconfigured credential opens the setup card instead of
- * showing a row. A profile at a path inside a section, or a pi-ai provider
- * row, is one that somebody added, and waits for its key as an ordinary row.
- * This is the first-run posture alone — a user who can already reach some
- * provider gets an ordinary row with the missing-key dot, since nothing here
- * is blocking them.
+ * Whether a whole-section provider still needs its first key: an unconfigured
+ * credential opens the setup card instead of showing a row. This is the
+ * first-run posture alone — a user who can already reach some provider gets an
+ * ordinary row with the missing-key dot, since nothing here is blocking them.
  * @param row - the joined provider row.
  * @param anyUsable - whether any joined row can already serve requests.
  * @returns whether to render the setup card.
  */
 export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
   if (anyUsable || row.entry.provider === 'deepseek-account') return false
-  if (row.entry.settingsPath.length > 0 || row.adapterNs !== row.entry.settingsNs) return false
+  if (row.entry.settingsPath.length > 0) return false
   return row.credential?.configured !== true
 }
 
@@ -377,9 +374,9 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   // Hand-declared routes live in the pi-ai namespace, which is also the only
   // one whose schema names the protocols one may speak; without it mounted
   // there is nothing to declare and the mode is not offered.
-  const piAi = state.namespaces.get(PI_AI_ADAPTER_NS)
-  const protocols = protocolChoices(piAi, PI_AI_PROFILE_PATH, schema)
-  const reasoningLevels = reasoningLevelChoices(piAi, PI_AI_PROFILE_PATH, schema)
+  const piAi = state.namespaces.get('llm-pi-ai')
+  const protocols = protocolChoices(piAi, schema)
+  const reasoningLevels = reasoningLevelChoices(piAi, schema)
   // Each mode is offered while its namespace is mounted and enabled while it
   // has something to offer; the card shows the chosen mode where both are
   // offered, else the only one there is. A mode's panel is mounted while it is
@@ -455,7 +452,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 {renderSlot(
                   'settings.models.provider-card',
                   { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
-                  { entryKey: row.adapterNs },
+                  { entryKey: row.entry.settingsNs },
                 )}
               </li>
             )
@@ -475,10 +472,6 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       follows its answer and stays off when it gives none. */}
                   {row.entry.declared === true
                     ? <span className={styles['rowTag']}>{t('customTag')}</span>
-                    : null}
-                  {/* A layer after the profile supplies this provider, so the page shows it without editing it. */}
-                  {row.managed
-                    ? <span className={styles['rowTag']} title={t('managedHint')}>{t('managedTag')}</span>
                     : null}
                   {/* The store keeps the account row only while the account lists models. */}
                   {row.entry.provider === 'deepseek-account'
@@ -517,7 +510,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       <button
                         type="button"
                         className={styles['secondaryButton']}
-                        aria-label={providerCopy(t(row.managed ? 'viewProvider' : 'editProvider'), target)}
+                        aria-label={providerCopy(t('editProvider'), target)}
                         disabled={!open && state.status !== 'ready'}
                         onClick={() => {
                           if (!open && controller.store.getSnapshot().status !== 'ready') return
@@ -529,7 +522,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                           setEditing(open ? undefined : target)
                         }}
                       >
-                        {t(row.managed ? 'view' : 'edit')}
+                        {t('edit')}
                       </button>
                     )}
                   {row.removable
@@ -556,19 +549,17 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
               {renderSlot(
                 'settings.models.provider-card',
                 { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
-                { entryKey: row.adapterNs },
+                { entryKey: row.entry.settingsNs },
               )}
               {open
                 ? renderProviderEditor({
                   target,
                   row,
-                  // Nothing of the profile configures a managed row, so its card shows the
-                  // layer that decides the row where an editable card shows the inherited one.
-                  namespace: row.managed ? { ...namespace, base: namespace.value } : namespace,
+                  namespace,
                   schema,
                   operations,
                   t,
-                  readOnly: !state.writable || row.managed,
+                  readOnly: !state.writable,
                   onClose: (changed) => { closeEditor(changed, target) },
                 })
                 : null}
@@ -669,7 +660,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       : renderSlot(
                         'settings.models.provider-card',
                         { provider: addRow.entry, configured: addRow.configured, keyConfigured: keyConfiguredOf(addRow) },
-                        { entryKey: addRow.adapterNs },
+                        { entryKey: addRow.entry.settingsNs },
                       )}
                   </div>
                 )

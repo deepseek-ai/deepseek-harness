@@ -35,7 +35,7 @@ import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import type { ReasoningEffortsFailure } from './ModelReasoningEfforts.tsx'
-import { adapterNsOf, deriveKeyRef, protocolChoices, reasoningLevelChoices } from './store.ts'
+import { deriveKeyRef, protocolChoices, reasoningLevelChoices } from './store.ts'
 import { protocolLabel } from './protocol-label.ts'
 import { protocolNeedsKey, protocolReasoningLevels } from './protocol-rules.ts'
 import type { ModelsOperations } from './operations.ts'
@@ -158,7 +158,7 @@ export function pathOps(
   return ops
 }
 
-/** The editor layout the serving adapter's namespace selects. */
+/** The editor layout the owning namespace selects. */
 function layoutOf(ns: string): EditorLayout {
   if (ns === 'llm-deepseek') return 'deepseek'
   if (ns === 'llm-pi-ai') return 'pi-ai'
@@ -220,17 +220,15 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const node = useMemo(() => schema.nodeAtPath(root, settingsPath), [root, schema, settingsPath])
   const fallback = schema.getPath(namespace.value, settingsPath)
   const disabled = props.readOnly || busy
-  // A pi-ai provider row holds its profile in a namespace of its own, beside its adapter's.
-  const adapterNs = adapterNsOf(namespace)
-  const layout = layoutOf(adapterNs)
+  const layout = layoutOf(namespace.ns)
   const keyRef = refFor(schema, namespace, settingsPath, props.provider)
   // The same schema read the create card makes, so the choices offered here
   // and there cannot drift apart: both come from the adapter's own `Config`.
   // Only the pi-ai layout has a per-route protocol for the read to find, and
   // it rehydrates the whole section schema, so the other layouts skip it.
   const protocols = useMemo(
-    () => layout === 'pi-ai' ? protocolChoices(namespace, settingsPath, schema) : [],
-    [layout, namespace, settingsPath, schema],
+    () => layout === 'pi-ai' ? protocolChoices(namespace, schema) : [],
+    [layout, namespace, schema],
   )
 
   const stringAt = (source: unknown, key: string): string | undefined => {
@@ -256,8 +254,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // alike: the adapter resolves a row's `reasoningEfforts` the same way on
   // both, so the levels are read and the declarations checked for both.
   const schemaReasoningLevels = useMemo(
-    () => layout === 'pi-ai' ? reasoningLevelChoices(namespace, settingsPath, schema) : [],
-    [layout, namespace, settingsPath, schema],
+    () => layout === 'pi-ai' ? reasoningLevelChoices(namespace, schema) : [],
+    [layout, namespace, schema],
   )
   // What the form currently shows, which is what an interrogation must ask and
   // what decides the protocol's own constraints: an edited-but-unsaved protocol.
@@ -299,7 +297,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // An edited-but-unsaved endpoint, and a key typed but not yet stored.
   const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
   const probe = {
-    settingsNs: adapterNs,
+    settingsNs: namespace.ns,
     // Naming the route lets an adapter that already describes it answer from
     // its own registry — better metadata, no network call, no endpoint needed.
     provider: props.provider,

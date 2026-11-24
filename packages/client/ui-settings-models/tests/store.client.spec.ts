@@ -1,12 +1,10 @@
 /** Page-store join: directory × namespaces × credentials, with last-good rows on failure. */
 import { describe, expect, it } from 'vitest'
-import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { settingsSchema } from './settings-schema.client.ts'
-import {
-  adapterNsOf, deriveKeyRef, joinProviderDirectory, ModelsSettingsStore, PI_AI_PROVIDER_PLUGIN, providerUsable,
-} from '../src/client/store.ts'
+import { deriveKeyRef, joinProviderDirectory, ModelsSettingsStore, providerUsable } from '../src/client/store.ts'
 
 it.each([
   ['anthropic', 'ANTHROPIC_API_KEY'],
@@ -108,7 +106,7 @@ const NAMESPACES = [
 function api(overrides: {
   accountAvailable?: boolean
   providers?: () => Promise<RpcResponse<{ providers: typeof DIRECTORY }>>
-  describeSettings?: () => Promise<RemoteAnswer<{ writable: boolean; hasDocument: boolean; namespaces: SettingsNamespaceView[] }>>
+  describeSettings?: () => Promise<RemoteAnswer<{ writable: boolean; hasDocument: boolean; namespaces: typeof NAMESPACES }>>
   describeCredentials?: (refs: readonly string[]) => Promise<RemoteAnswer<Record<string, unknown>>>
 } = {}) {
   const seenRefs: string[][] = []
@@ -193,59 +191,19 @@ describe('ModelsSettingsStore', () => {
     expect(byProvider.get('deepseek-official')).toMatchObject({
       configured: true,
       removable: false,
-      managed: false,
-      adapterNs: 'llm-deepseek',
       apiKeyEnv: 'DEEPSEEK_API_KEY',
       credential: { configured: false, writable: true },
     })
     expect(byProvider.get('openai')).toMatchObject({
       configured: true,
       removable: true,
-      managed: false,
-      adapterNs: 'llm-pi-ai',
       apiKeyEnv: 'OPENAI_API_KEY',
       credential: { configured: true },
     })
     expect(byProvider.get('anthropic')).toMatchObject({ configured: false, removable: false })
     expect(byProvider.get('anthropic')?.apiKeyEnv).toBeUndefined()
-    // A route without a mounted namespace keeps its directory address as its adapter.
-    expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false, managed: false, adapterNs: '' })
+    expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false })
     expect(state.namespaces.get('llm-pi-ai')?.ns).toBe('llm-pi-ai')
-  })
-
-  it('marks a pi-ai provider row that a later layer decides as managed, and names the adapter that serves a provider row', async () => {
-    const row = (ns: string, plugin: string, managed: boolean) => ({
-      ns, schema: {}, value: { apiKeyEnv: 'TEAM_KEY' }, autoGenerate: false, applies: 'live' as const, secrets: [], revision: 0,
-      row: { plugin, managed },
-    })
-    const namespaces = [
-      ...NAMESPACES.map(view => view.ns === 'llm-deepseek' ? { ...view, row: { plugin: '@deepseek-ai/dsh-llm-deepseek', managed: true } } : view),
-      row('hub-team', PI_AI_PROVIDER_PLUGIN, true),
-      row('bundle-team', PI_AI_PROVIDER_PLUGIN, false),
-    ]
-    const providers = [
-      ...DIRECTORY,
-      { provider: 'team', displayName: 'Team', settingsNs: 'hub-team', settingsPath: [], active: true },
-      { provider: 'bundled', displayName: 'Bundled', settingsNs: 'bundle-team', settingsPath: [], active: true },
-    ]
-    const { ctx, mirror } = api({
-      providers: () => Promise.resolve(ok({ providers })),
-      describeSettings: () => Promise.resolve(remoteOk({ writable: true, hasDocument: false, namespaces })),
-    })
-    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
-    await store.load()
-    const byProvider = new Map(store.store.getSnapshot().rows.map(entry => [entry.entry.provider, entry]))
-    // The whole config section of a provider row is the route's profile, and the row is not the page's to remove.
-    expect(byProvider.get('team')).toMatchObject({ configured: true, removable: false, managed: true, adapterNs: 'llm-pi-ai', apiKeyEnv: 'TEAM_KEY' })
-    expect(byProvider.get('bundled')).toMatchObject({ configured: true, removable: false, managed: false, adapterNs: 'llm-pi-ai' })
-    // Only a provider row is shown as managed: another adapter's row keeps its editor, and the Host refuses its write.
-    expect(byProvider.get('deepseek-official')).toMatchObject({ managed: false, adapterNs: 'llm-deepseek' })
-  })
-
-  it('names a namespace as its own adapter unless it is a pi-ai provider row', () => {
-    expect(adapterNsOf({ ns: 'llm-deepseek' })).toBe('llm-deepseek')
-    expect(adapterNsOf({ ns: 'llm-deepseek', row: { plugin: '@deepseek-ai/dsh-llm-deepseek', managed: false } })).toBe('llm-deepseek')
-    expect(adapterNsOf({ ns: 'hub-team', row: { plugin: PI_AI_PROVIDER_PLUGIN, managed: true } })).toBe('llm-pi-ai')
   })
 
   it('degrades the credential badge, not the page, when the credential domain fails', async () => {

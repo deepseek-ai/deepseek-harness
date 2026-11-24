@@ -770,8 +770,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Active entries with unique profile patch ids.',
       },
       {
-        signature: 'configuration(): ProfileEntryConfiguration[]',
-        description: 'Read inherited and explicit profile values for the active entries, and whether a later layer decides each row.',
+        signature: 'configuration(): Array<{ entry: Entry; inherited: Record<string, unknown>; override: Record<string, unknown> }>',
+        description: 'Read inherited and explicit profile values for the active entries.',
         parameters: [],
         returns: 'Detached layer values alongside their Loader entries.',
       },
@@ -9759,10 +9759,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ProductTelemetryRecord = OTelEventRecord;',
   },
   {
-    name: 'ProfileEntryConfiguration',
-    declaration: 'export interface ProfileEntryConfiguration {\n    entry: Entry;\n    inherited: Record<string, unknown>;\n    override: Record<string, unknown>;\n    managed: boolean;\n}',
-  },
-  {
     name: 'ProfilePnpmInvocation',
     declaration: 'export interface ProfilePnpmInvocation {\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: Readonly<Record<string, string>>;\n}',
   },
@@ -11052,7 +11048,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SettingsDescriptor',
-    declaration: 'export interface SettingsDescriptor {\n    ns: SettingsNamespace;\n    autoGenerate: boolean;\n    schema: unknown;\n    value: unknown;\n    revision: number;\n    base?: unknown;\n    user?: unknown;\n    applies: \'live\';\n    secrets?: RedactedSecret[];\n    row?: SettingsRowView;\n}',
+    declaration: 'export interface SettingsDescriptor {\n    ns: SettingsNamespace;\n    autoGenerate: boolean;\n    schema: unknown;\n    value: unknown;\n    revision: number;\n    base?: unknown;\n    user?: unknown;\n    applies: \'live\';\n    secrets?: RedactedSecret[];\n}',
   },
   {
     name: 'SettingsDocumentOpenValue',
@@ -11064,7 +11060,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SettingsNamespaceView',
-    declaration: 'export interface SettingsNamespaceView {\n    autoGenerate: boolean;\n    ns: string;\n    row?: SettingsRowView;\n    schema: JsonValue;\n    value: JsonValue;\n    base?: JsonValue;\n    user?: JsonValue;\n    applies: \'live\';\n    secrets: SettingsSecretView[];\n    revision: number;\n}',
+    declaration: 'export interface SettingsNamespaceView {\n    autoGenerate: boolean;\n    ns: string;\n    schema: JsonValue;\n    value: JsonValue;\n    base?: JsonValue;\n    user?: JsonValue;\n    applies: \'live\';\n    secrets: SettingsSecretView[];\n    revision: number;\n}',
   },
   {
     name: 'SettingsPathOp',
@@ -11073,10 +11069,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SettingsPathOpView',
     declaration: 'export type SettingsPathOpView = {\n    op: \'set\';\n    path: string[];\n    value: JsonValue;\n} | {\n    op: \'unset\';\n    path: string[];\n};',
-  },
-  {
-    name: 'SettingsRowView',
-    declaration: 'export interface SettingsRowView {\n    plugin: string;\n    managed: boolean;\n}',
   },
   {
     name: 'SettingsSecretView',

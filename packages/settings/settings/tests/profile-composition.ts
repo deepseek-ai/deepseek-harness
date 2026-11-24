@@ -2,7 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
+import { parseEntryYaml, stringifyEntryYaml } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { initProfile, mountRootInclude, readProfilePatches, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
@@ -10,14 +10,8 @@ import Hmr from '@deepseek-ai/dsh-hmr'
 import ConfigEditor from '@deepseek-ai/dsh-config-editor'
 import Settings from '../src/index.ts'
 
-/** Attach the profile runtime to an initialized Loader with a source-module importer.
- * @param ctx Context with the Loader mounted.
- * @param home Directory that receives the profile and stands for the Harness home, whose `cordis.patch.yml` is the home patch.
- * @param baseFile Entry list whose rows become the profile's only bundle.
- * @param patches Profile patch stored before the profile mounts; omitted leaves the patch as initialized.
- * @returns Path of the profile patch.
- */
-export async function profileComposition(ctx: Context, home: string, baseFile: string, patches?: PatchOptions[]): Promise<string> {
+/** Attach the profile runtime to an initialized Loader with a source-module importer. */
+export async function profileComposition(ctx: Context, home: string, baseFile: string): Promise<string> {
   const dir = join(home, 'profile')
   initProfile(dir, ['test-profile-bundle'])
   const bundle = join(dir, 'node_modules', 'test-profile-bundle')
@@ -28,7 +22,6 @@ export async function profileComposition(ctx: Context, home: string, baseFile: s
   for (const row of rows) row.id ??= row.name.replace('@deepseek-ai/dsh-', '')
   await writeFile(join(bundle, 'cordis.patch.yml'), stringifyEntryYaml([{ insert: rows }]))
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
-  if (patches !== undefined) await writeFile(join(dir, 'cordis.patch.yml'), stringifyEntryYaml(patches))
   const profile: ProfileContext = {
     name: 'test', startedBundles: ['test-profile-bundle'], dir, patchPath: join(dir, 'cordis.patch.yml'),
     installAnchor: join(home, 'package.json'), cwd: home, home, overlayPaths: [], telemetryDisabledEnv: undefined,

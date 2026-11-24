@@ -1,5 +1,5 @@
 /** Compose the adapter through a real profile: Loader, bundle, profile and home patches, reload coordination, and Settings. */
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -54,7 +54,12 @@ export async function composeProfile(
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   ctx.loader.internal = sourceModules(new Map<string, unknown>([[ADAPTER, LlmPiAi], [PROVIDER, ProviderRow]]))
-  const patchPath = await profileComposition(ctx, home, baseFile, files.profile ?? [])
+  // The profile runtime keeps a patch file it finds, so the stored patch is written before the profile mounts.
+  const stored = join(home, 'profile', 'cordis.patch.yml')
+  await mkdir(join(home, 'profile'), { recursive: true })
+  await writeFile(stored, stringifyEntryYaml(files.profile ?? []))
+  const patchPath = await profileComposition(ctx, home, baseFile)
+  if (patchPath !== stored) throw new Error(`the profile mounted ${patchPath}, not the stored patch ${stored}`)
   return {
     patchPath,
     homePatch,
