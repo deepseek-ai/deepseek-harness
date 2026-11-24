@@ -1,0 +1,51 @@
+{
+  "name": "@deepseek-ai/cordis-plugin-im-adapter-qq",
+  "description": "QQ official bot (group + C2C) Adapter for Satorijs",
+  "version": "4.0.0-alpha.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "vendor/plugin-im-adapter-qq"
+  },
+  "bugs": {
+    "url": "https://github.com/satorijs/satori/issues"
+  },
+  "homepage": "https://satori.chat/",
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/cordis-plugin-im-markdown": "workspace:~",
+    "@deepseek-ai/cordis-plugin-http": "workspace:~",
+    "@deepseek-ai/cordis-plugin-im-core": "workspace:~",
+    "@deepseek-ai/satori-element": "workspace:~"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis-plugin-http": "workspace:~",
+    "@deepseek-ai/cordis-plugin-im-core": "workspace:~",
+    "@deepseek-ai/satori-element": "workspace:~"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:~"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts"
+}

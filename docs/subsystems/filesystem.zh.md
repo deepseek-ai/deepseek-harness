@@ -256,6 +256,22 @@ interface FsWriteOutcome {
 
 `editText` 是提供方级别的变更操作，而非在别处组合的 `read` 加 `write`。带守卫时，它在字面匹配之前先验证预期版本（因此对陈旧内容的编辑报 `FS_STALE_VERSION`，而非对更新内容的匹配失败）；不带守卫时，它编辑当前内容。无论哪种路径，它都应用替换并原子写入——将匹配、行尾处理、陈旧检查和原子替换保持在一个变更临界区内——目标缺失时两条路径都报 `FS_STALE_VERSION`。
 
+`writeBytes` 按原样存储字节：不解码、不做换行归一化、也不带 diff 基础。调用方因此能把已持有的内容——下载的附件、渲染出的文档——写入执行环境中的文件；它接受与 `writeText` 相同的可选意图守卫和逐次调用策略。无法存储任意字节的提供方保留基类拒绝（`FS_IO_ERROR`，并指明缺少的能力），而不是把写入降级。
+
+```ts type-equiv
+/**
+ * Outcome of a full-file byte write. Bytes carry no diff basis, so the outcome
+ * reports only what the write produced: a caller that needs the previous
+ * content reads it first.
+ */
+interface FsWriteBytesOutcome {
+  /** Whether the write created a new file or replaced an existing one. */
+  operation: 'create' | 'update'
+  /** Opaque version of the file after the write. */
+  version: FsVersion
+}
+```
+
 ```ts type-equiv
 /** A literal-replacement edit request. */
 interface FsEditRequest {
@@ -383,7 +399,7 @@ type FsErrorCode = typeof FS_ERROR_CODES[number]
 
 ## 服务与插件
 
-`FileSystem`（`ctx.fs`，abstract）拥有提供方原语：`resolve`、`processPath`、`processPathFromHostPath`、`fileUrl`、`contains`、`stat`、`lstat`、`readText`、`streamText`、`readBytes`、`listDir`、`writeText`、`editText`、`patchText`、`deleteFile` 与 `moveFile`。`dsh-fs-observation-policy` **不注册服务**。它通过 `fs/*` 事件门禁添加策略，根据未见、缺失或存在状态对写入、编辑与删除意图 waterfall 作出决策，并记录 `FsObservation` 值。执行器是 `dsh-tool-fs`：它通过 `ctx.fs` 读取、写入或编辑，分发 waterfall，并 emit 记录事件。下方生成的 [`ctx.fs` 小节](#ctxfs--filesystem-abstract-seam) 展示确切的 `ctx.fs` 签名。
+`FileSystem`（`ctx.fs`，abstract）拥有提供方原语：`resolve`、`processPath`、`processPathFromHostPath`、`fileUrl`、`contains`、`stat`、`lstat`、`readText`、`streamText`、`readBytes`、`readByteRange`、`listDir`、`writeText`、`writeBytes`、`editText`、`patchText`、`deleteFile` 与 `moveFile`。`dsh-fs-observation-policy` **不注册服务**。它通过 `fs/*` 事件门禁添加策略，根据未见、缺失或存在状态对写入、编辑与删除意图 waterfall 作出决策，并记录 `FsObservation` 值。执行器是 `dsh-tool-fs`：它通过 `ctx.fs` 读取、写入或编辑，分发 waterfall，并 emit 记录事件。下方生成的 [`ctx.fs` 小节](#ctxfs--filesystem-abstract-seam) 展示确切的 `ctx.fs` 签名。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -551,6 +567,23 @@ abstract listDir(target: FsTarget, signal?: AbortSignal): Promise<FsDirEntry[]>
  * @returns the outcome, including the version the write produced.
  */
 abstract writeText( target: FsTarget, content: string, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteOutcome>
+
+/**
+ * Atomically create or replace one file from exact bytes: no decoding, no
+ * newline normalization, no diff basis. The bytes are stored as given, which
+ * is how a consumer materializes content it already holds — a downloaded
+ * attachment, a rendered document — inside this execution world. Backends
+ * that cannot store arbitrary bytes keep this default rejection.
+ * @param target - the resolved target to write.
+ * @param data - the exact bytes to store.
+ * @param expected - the write intent guarding the write; omit for unconditional.
+ * @param signal - aborts before atomic publication takes effect.
+ * @param sandboxPolicy - the per-call mode and workspace root this write
+ *   runs under; a sandboxing backend fences the write by it, the bare backend
+ *   ignores it. Omit to leave the backend its own default.
+ * @returns the outcome, including the version the write produced.
+ */
+writeBytes( target: FsTarget, data: Uint8Array, expected?: FsWriteIntent, signal?: AbortSignal, sandboxPolicy?: SandboxExecutionPolicy, ): Promise<FsWriteBytesOutcome>
 
 /**
  * Atomically edit literal text. When supplied, the version guard is checked

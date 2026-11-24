@@ -53,8 +53,10 @@ export default class CliAccounts extends Service {
   /**
    * Register the calling plugin's CLI and account: add the CLI's absolute path to required runtime context, run the
    * plugin's account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is
-   * loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active
-   * operation and the CLI processes it started have stopped.
+   * loaded. With a `prepare` step, the path stays out of runtime context while the step reports that something is
+   * missing, and each check first runs the step; a check that starts with nothing missing replaces an account the
+   * step left `unprepared` with the registration's first account. The registration belongs to the calling plugin:
+   * unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.
    * @param registration - the plugin's CLI, account operations, and Plugins page text.
    * @returns the handle for the plugin's own reads and updates of the account.
    * @throws when the runtime-context name `<name>:cli` is already registered.
@@ -63,7 +65,7 @@ export default class CliAccounts extends Service {
     registration: CliAccountRegistration<Account, Kind, Phase, Command, Key>,
   ): CliAccountHandle<Account, Kind, Phase, Command> {
     const caller = this.ctx
-    const { name, packageName, cli } = registration
+    const { name, packageName, cli, prepare } = registration
     const text = accountText(registration.dictionaries)
     const runtime = new CliAccountRuntime<Account, Kind, Phase, Command>({
       name,
@@ -71,7 +73,23 @@ export default class CliAccounts extends Service {
       check: registration.check,
       cancellable: registration.cancellable,
       authorizationHosts: registration.authorizationHosts,
-      perform: (kind, control, signal) => registration.perform(kind, control, signal),
+      perform: async (kind, control, signal) => {
+        if (kind === registration.check && prepare !== undefined) {
+          if (!prepare.ready()) {
+            control.stage(prepare.phase)
+            try {
+              await prepare.run(signal)
+            } catch (error) {
+              control.publish(prepare.unprepared)
+              throw error
+            }
+            control.stage('checking')
+          }
+          // Nothing is missing here, so `unprepared` from an earlier step must not outlast a check that publishes nothing.
+          if (runtime.snapshot().account === prepare.unprepared) control.publish(registration.account)
+        }
+        await registration.perform(kind, control, signal)
+      },
       executor: new CliCommandExecutor(caller.subprocess, {
         program: cli.program, executable: cli.executable, commandTimeoutMs: this.config.commandTimeoutMs,
       }),
@@ -88,7 +106,7 @@ export default class CliAccounts extends Service {
     // One effect orders the teardown: the page account goes first, then the operation and its processes stop, and
     // the path context goes last.
     const withdraw = caller.effect(function* () {
-      yield registerCliPathContext(caller, `${name}:cli`, cli)
+      yield registerCliPathContext(caller, `${name}:cli`, cli, prepare === undefined ? undefined : () => prepare.ready())
       yield () => runtime.dispose()
       const page = caller.inject(['connectorAccounts'], (scope) => {
         scope.effect(

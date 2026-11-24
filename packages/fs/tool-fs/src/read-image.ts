@@ -266,6 +266,7 @@ function saveFailureDetail(error: AttachmentError, attachments: AttachmentStore,
     case 'ATTACHMENT_CORRUPT':
     case 'ATTACHMENT_NOT_FOUND':
     case 'ATTACHMENT_READ_FAILED':
+    case 'IMAGE_REQUEST_TOO_LARGE':
     case 'ATTACHMENT_PROJECTION_UNSUPPORTED':
     case 'ATTACHMENT_FILES_UNSUPPORTED':
       return undefined

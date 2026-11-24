@@ -20,7 +20,7 @@ import type { SkillCandidate, SkillDefinition, SkillProvider, SkillProviderContr
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { parse as parseYaml } from 'yaml'
 import { downloadSkillSet, writeFiles } from './archive.ts'
-import type { UpstreamSkillsHandle, UpstreamSkillsRegistration, UpstreamSkillsState } from './types.ts'
+import type { UpstreamSkillsHandle, UpstreamSkillsRegistration } from './types.ts'
 
 export type * from './types.ts'
 
@@ -64,11 +64,12 @@ export default class UpstreamSkills extends Service {
   /**
    * Register the calling plugin's entry skill and start downloading the upstream files unless they are in place. The
    * download starts at load so that a session without a client also gets the skill; a failure is logged as a warning
-   * and waits for `retry()`. In a profile, the files go to that profile's own directory for the plugin, and the
-   * registration deletes the other pins there once, the first time its own pin is in place. The registration belongs
-   * to the calling plugin: unloading that plugin aborts the download and removes the entry skill.
+   * and the files stay missing until a call of `install()` downloads them. In a profile, the files go to that
+   * profile's own directory for the plugin, and the registration deletes the other pins there once, the first time its
+   * own pin is in place. The registration belongs to the calling plugin: unloading that plugin aborts the download and
+   * removes the entry skill.
    * @param registration - the plugin's provider name, entry, pinned files, and optional skills directory.
-   * @returns the handle the plugin's view observes and its check retries.
+   * @returns the handle the plugin reads the files' presence from and waits for the download through.
    * @throws when the entry has no skill name or description in its frontmatter, `skillsDir` is not a directory, or a
    *   skill provider named `name` is already registered.
    */
@@ -79,13 +80,12 @@ export default class UpstreamSkills extends Service {
       provider = new UpstreamSkillProvider(registration, this.config, control, caller.logger, caller.get('profileContext'))
       return provider
     })
-    provider.retry()
+    provider.start()
     provider.prune()
     return {
       directory: provider.directory,
-      get state() { return provider.state },
-      watch: listener => provider.watch(listener),
-      retry: () => { provider.retry() },
+      installed: () => provider.installed(),
+      install: signal => provider.install(signal),
       dispose: withdraw,
     }
   }
@@ -93,6 +93,13 @@ export default class UpstreamSkills extends Service {
 
 /** The prefix of the directory name a pin is published under; the first 16 digits of its digest follow. */
 const PIN_PREFIX = 'skills-'
+
+/** One download of the upstream files: the controller that stops it, and its end. */
+interface Download {
+  readonly controller: AbortController
+  /** Resolves once the files are in place; rejects with what stopped or failed the download while they are not. */
+  readonly done: Promise<void>
+}
 
 /** Lists the entry skill while its upstream files are in place, and owns their download. */
 class UpstreamSkillProvider implements SkillProvider {
@@ -108,8 +115,8 @@ class UpstreamSkillProvider implements SkillProvider {
   private pruned = false
   private readonly candidate: SkillCandidate
   private readonly content: string
-  private readonly listeners = new Set<(state: UpstreamSkillsState) => void>()
-  private running = false
+  /** The running download, which every `install()` call made while it runs waits for. */
+  private download: Download | undefined
 
   constructor(
     private readonly options: UpstreamSkillsRegistration,
@@ -123,8 +130,7 @@ class UpstreamSkillProvider implements SkillProvider {
     const pin = `${PIN_PREFIX}${options.set.sha256.slice(0, 16)}`
     if (skillsDir !== undefined) {
       this.directory = resolve(skillsDir)
-      const remedy = `set it to a directory holding the files of ${options.set.directory} at their repository paths`
-      if (!this.installed()) throw new Error(`${options.name}: skillsDir ${skillsDir} is not a directory; ${remedy}`)
+      if (!this.installed()) throw this.missing(skillsDir)
     } else if (profile === undefined) {
       this.directory = dshCachePath(options.name, pin)
     } else {
@@ -147,11 +153,6 @@ class UpstreamSkillProvider implements SkillProvider {
     }
   }
 
-  get state(): UpstreamSkillsState {
-    if (this.running) return 'downloading'
-    return this.installed() ? 'installed' : 'failed'
-  }
-
   list(): Promise<SkillCandidate[]> {
     return Promise.resolve(this.installed() ? [this.candidate] : [])
   }
@@ -162,30 +163,30 @@ class UpstreamSkillProvider implements SkillProvider {
     return Promise.resolve({ ...summary, content: this.content })
   }
 
-  watch(listener: (state: UpstreamSkillsState) => void): () => void {
-    this.listeners.add(listener)
-    return () => { this.listeners.delete(listener) }
+  installed(): boolean {
+    return statSync(this.directory, { throwIfNoEntry: false })?.isDirectory() === true
   }
 
-  retry(): void {
-    const { signal } = this.control
-    if (this.state !== 'failed' || this.options.skillsDir !== undefined || signal.aborted) return
-    this.running = true
-    this.notify()
-    void this.install(signal).then(
-      () => { this.control.invalidate() },
-      (error: unknown) => {
-        if (signal.aborted) return
-        // Another process may have published the directory while this download failed.
-        if (this.installed()) this.control.invalidate()
-        else this.logger.warn(`${this.name}: the upstream skills are not available`, error)
-      },
-    ).finally(() => {
-      this.running = false
-      if (signal.aborted) return
-      this.notify()
-      this.prune()
-    })
+  /** Start the download at load unless the files are in place. No caller waits for it; its failure is logged. */
+  start(): void {
+    if (!this.installed()) this.begin()
+  }
+
+  /** Wait for the files as {@link UpstreamSkillsHandle.install} states: join the running download or begin one. */
+  async install(signal: AbortSignal): Promise<void> {
+    if (this.installed()) return
+    signal.throwIfAborted()
+    this.control.signal.throwIfAborted()
+    const { skillsDir } = this.options
+    if (skillsDir !== undefined) throw this.missing(skillsDir)
+    const download = this.download ?? this.begin()
+    const stop = (): void => { download.controller.abort(signal.reason) }
+    signal.addEventListener('abort', stop, { once: true })
+    try {
+      await download.done
+    } finally {
+      signal.removeEventListener('abort', stop)
+    }
   }
 
   /**
@@ -209,17 +210,45 @@ class UpstreamSkillProvider implements SkillProvider {
     })
   }
 
-  private installed(): boolean {
-    return statSync(this.directory, { throwIfNoEntry: false })?.isDirectory() === true
+  /** The error for a configured `skillsDir` that is not a directory. */
+  private missing(skillsDir: string): Error {
+    const remedy = `set it to a directory holding the files of ${this.options.set.directory} at their repository paths`
+    return new Error(`${this.name}: skillsDir ${skillsDir} is not a directory; ${remedy}`)
   }
 
-  private notify(): void {
-    const { state } = this
-    for (const listener of this.listeners) listener(state)
+  private begin(): Download {
+    const controller = new AbortController()
+    const done = this.run(controller)
+    // The download started at load has no caller; `run` logs its failure.
+    void done.catch(() => {})
+    this.download = { controller, done }
+    return this.download
+  }
+
+  /**
+   * Run one download to its end. It stops when `controller` aborts or the registration is withdrawn, neither of which
+   * is logged; any other failure is logged as a warning.
+   */
+  private async run(controller: AbortController): Promise<void> {
+    const signal = AbortSignal.any([controller.signal, this.control.signal])
+    try {
+      await this.publish(signal)
+    } catch (error) {
+      // Another process may have published the directory while this download failed.
+      if (!this.installed()) {
+        if (!signal.aborted) this.logger.warn(`${this.name}: the upstream skills are not available`, error)
+        throw error
+      }
+    } finally {
+      this.download = undefined
+    }
+    if (this.control.signal.aborted) return
+    this.control.invalidate()
+    this.prune()
   }
 
   /** Download and verify the files, then publish them by renaming a sibling staging directory. */
-  private async install(signal: AbortSignal): Promise<void> {
+  private async publish(signal: AbortSignal): Promise<void> {
     const { skillsUrls, skillsTimeoutMs } = this.config
     const files = await downloadSkillSet(this.options.set, skillsUrls, skillsTimeoutMs, signal, (message, error) => {
       this.logger.warn(`${this.name}: ${message}`, error)

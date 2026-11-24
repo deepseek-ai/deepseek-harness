@@ -1,12 +1,12 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.2.2-rc.5",
+  "version": "0.2.3-alpha.2",
   "license": "MIT",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.28.5",
   "engines": {
-    "node": ">=24.9.0"
+    "node": "^24.22.3 || >=26.13.1"
   },
   "workspaces": [
     "vendor/*",
@@ -62,6 +62,7 @@
     "test:coverage": "pnpm run build:native-system && vitest run --coverage",
     "build:native-system": "tsx native/system/scripts/build.ts --host-addon-only",
     "test:coverage:partitioned": "tsx scripts/run-coverage-partitions.ts",
+    "test:coverage:merge-shards": "tsx scripts/merge-coverage-shards.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:bench": "npm run build:bench && npm run build:web && npm run test:bench:built",
     "test:bench:built": "tsx scripts/run-bench-suite.ts",
@@ -92,8 +93,10 @@
     "check:ci:static": "tsx scripts/run-gates.ts ci-static",
     "check:ci:lint:contracts-ready": "tsx scripts/run-gates.ts ci-lint-contracts-ready",
     "check:ci:coverage": "tsx scripts/run-gates.ts ci-coverage",
+    "check:ci:coverage-shard": "tsx scripts/run-gates.ts ci-coverage-shard",
     "check:ci:unit": "tsx scripts/run-gates.ts ci-unit",
     "check:ci:bench": "tsx scripts/run-gates.ts ci-bench",
+    "check:ci:bench-prebuilt": "tsx scripts/run-gates.ts ci-bench-prebuilt",
     "check:ci:snapshot": "tsx scripts/run-gates.ts ci-snapshot",
     "check:ci:artifacts": "tsx scripts/run-gates.ts ci-artifacts",
     "check:ci:consumers": "tsx scripts/run-gates.ts ci-consumers",
@@ -326,6 +329,9 @@
     "@deepseek-ai/dsh-forge-gitlab": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-session": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
-    "@deepseek-ai/dsh-tool-session-list": "workspace:*"
+    "@deepseek-ai/dsh-tool-session-list": "workspace:*",
+    "ws": "^8.18.3",
+    "@types/ws": "^8.18.1",
+    "protobufjs": "^8.0.0"
   }
 }

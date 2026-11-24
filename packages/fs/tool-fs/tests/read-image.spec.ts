@@ -767,7 +767,7 @@ describe('image admission failures', () => {
 
   it.each([
     'ATTACHMENT_WRITE_FAILED', 'TOO_MANY_IMAGES', 'INVALID_IMAGE_BASE64', 'INVALID_FILE_BASE64', 'INVALID_ATTACHMENT_REF',
-    'ATTACHMENT_CORRUPT', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED',
+    'IMAGE_REQUEST_TOO_LARGE', 'ATTACHMENT_CORRUPT', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED',
     'ATTACHMENT_FILES_UNSUPPORTED',
   ] as const)('passes AttachmentError %s without a read remedy through unchanged', async (code) => {
     const result = await failingSave(() => new AttachmentError('Stored attachment failed.', code))
@@ -927,7 +927,7 @@ describe('registration surface', () => {
 
   it('omits read_image while an attachment store is mounted when readImage is false', async () => {
     const ctx = await setup({ toolFs: { readImage: false } })
-    expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['edit', 'read', 'write'])
+    expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['apply_patch', 'edit', 'read', 'write'])
     expect(ctx.tools.get('read_image')).toBeUndefined()
     expect((await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))).isError).toBe(true)
   })
@@ -968,16 +968,16 @@ describe('registration surface', () => {
     const attachmentsFiber = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
     const toolFsFiber = await ctx.plugin(ToolFs)
     const names = () => ctx.tools.schemas().map(schema => schema.name).sort()
-    expect(names()).toEqual(['edit', 'read', 'read_image', 'write'])
+    expect(names()).toEqual(['apply_patch', 'edit', 'read', 'read_image', 'write'])
 
     // Disposing only the attachment store tears down the scoped inject fiber:
     // read_image withdraws while the unconditional tools stay registered.
     await attachmentsFiber.dispose()
-    expect(names()).toEqual(['edit', 'read', 'write'])
+    expect(names()).toEqual(['apply_patch', 'edit', 'read', 'write'])
 
     // Remounting the store restores the conditional registration.
     const remounted = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
-    expect(names()).toEqual(['edit', 'read', 'read_image', 'write'])
+    expect(names()).toEqual(['apply_patch', 'edit', 'read', 'read_image', 'write'])
 
     // Disposing the whole plugin withdraws every tool, read_image included.
     await toolFsFiber.dispose()

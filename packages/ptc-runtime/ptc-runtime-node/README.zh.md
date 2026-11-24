@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `per-call` 模式在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。显式启用的 `persistent-in-memory` 为每个 Agent 保留 REPL。所有模式都在进程启动时应用文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。未确认的停止请求与单次执行完成后清理受管进程范围；约束不可用时执行失败。
+执行模型编写的 TypeScript，并提供宿主异步函数。默认的 `persistent-in-memory` 模式为每个 Agent 保留 scoped REPL；`per-call` 在全新 Node 进程中运行异步函数体；`vm-script` 支持顶层 await，并可通过 `scriptPersistence` 为每个 Agent 保留 context。所有模式都在进程启动时应用文件沙箱策略，返回捕获日志、无损 JSON 或结构化失败。执行时限、输出上限和 V8 堆上限约束运行。未确认的停止请求与单次执行完成后清理受管进程范围；约束不可用时执行失败。
 
 ## 目录
 
@@ -36,7 +36,7 @@ kind: "package-reference"
 ```yaml
 - name: '@deepseek-ai/dsh-ptc-runtime-node'
   config:
-    executionMode: per-call
+    executionMode: persistent-in-memory
     timeoutMs: 120000
     maxTimeoutMs: 600000
     maxOutputBytes: 67108864
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `executionMode` | `per-call` | `per-call` 在全新进程中运行异步函数体；`vm-script` 求值 Script；`persistent-in-memory` 为每个所有者保留受限 REPL |
+| `executionMode` | `persistent-in-memory` | `persistent-in-memory` 为每个所有者保留受限 REPL；`per-call` 在全新进程中运行异步函数体；`vm-script` 求值 Script |
 | `scriptPersistence` | `false` | 在 `executionMode: vm-script` 下，为每个所有者复用进程与 context；其他模式下设为 `true` 会在加载时拒绝 |
 | `replScoped` | `persistent-in-memory` 下为 `true`，其他模式下为 `false` | 在 `executionMode: persistent-in-memory` 下，按 scoped REPL 语句执行，每次调用拿到之前顶层绑定的拷贝；设为 `false` 时使用 Node 的 REPL 求值器，其他模式下设为 `true` 会在加载时拒绝 |
 | `timeoutMs` | `120,000` | 默认经过时间截止，包括嵌套工具与审批等待 |
@@ -102,12 +102,12 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 <a id="persistent-repl"></a>
 ### 内存保留模式
 
-`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。要保留 REPL，在现有 `@deepseek-ai/dsh-ptc-runtime-node` 插件上设置 `executionMode: persistent-in-memory`；默认运行 scoped REPL，设置 `replScoped: false` 时使用 Node 的 REPL 求值器。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并在进程启动时应用文件沙箱策略。通过配置档补丁显式启用：
+`persistent-in-memory` 模式和启用 `scriptPersistence: true` 的 Script 模式都按所有者保留状态。`persistent-in-memory` 是 `executionMode` 的默认值，运行 scoped REPL，设置 `replScoped: false` 时使用 Node 的 REPL 求值器。所有模式都需要 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy`，并在进程启动时应用文件沙箱策略。如果要改为在全新进程中运行函数体，通过配置档补丁选择 `per-call`：
 
 ```yaml
 - id: ptc-runtime
   config:
-    executionMode: persistent-in-memory
+    executionMode: per-call
 ```
 
 保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。`per-call` 模式和 `scriptPersistence: false` 的 Script 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主默认使用内嵌载体；宿主在每次执行中发送所选的程序格式和保留标志，因此内嵌的 `process.js` bootstrap 同时服务单次执行和保留执行。远端脚本部署使用 `node-script` 启动方式，并将 `launch.bootstrapPath` 指向本包构建出的 `persistent-process.js`。
@@ -247,7 +247,7 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **约束继承所选后端的限制**——完整与部分强制能力分开报告；沙箱策略与受管进程约束是不同保证。
 - **堆上限不是进程树内存限制**——原生分配与后代进程内存不属于 V8 老生代上限。不提供进程树 CPU 计量器。
 - **清理继承子进程的可观测范围**——使用 fallback 的平台上，逃逸的后代可能仍在受管范围之外；参见子进程提供方声明的限制。
-- **默认执行是一次性的**：保留状态需要设置 `persistent-in-memory` 模式，或在 Script 模式下启用 `scriptPersistence: true`；所有模式都不提供 yield/wait API。
+- **`per-call` 执行是一次性的**：保留状态需要使用默认的 `persistent-in-memory` 模式，或在 Script 模式下启用 `scriptPersistence: true`；所有模式都不提供 yield/wait API。
 - **await 转换放宽声明语义**——转换后程序的顶层 `let`、`const` 和 `class` 绑定可修改，且在执行前初始化为 `undefined`，不再具有原生暂时性死区。执行到函数声明时才会为其设置保留的全局变量；没有初始化器的 `var` 声明会将其绑定重置为 `undefined`。直接 eval 中的声明仅在本次求值内有效。不接受顶层 `using` 声明；可释放绑定需放在块内。运行时堆栈位置指向转换后的源码。无需转换即可编译的脚本保持原生语义。
 - **原生词法初始化失败可能占用名称**——顶层 `let`、`const` 或 `class` 的初始化器在完成绑定初始化前抛错时，该名称会在保留的 Script context 中持续处于未初始化状态。读取、赋值和重新声明都会失败；应使用新名称，或释放并重新创建环境。
 - **scoped REPL 在调用开始时拷贝值**——省略 `replScoped` 或设为 `true` 时，之前的代码之后再赋的值，后面的调用看不到；`let`、`const` 或 `class` 重新声明的初始化表达式读不到同名旧值；`var` 重新声明从旧值开始，所以 `var count = count + 1` 在旧值上加 1，之前是同名的 `let` 或 `const` 时也是这样。之后的调用换了目录，相对的 `import()` 仍按这个环境第一次的工作目录解析；读写文件的相对路径跟随当前目录。`codeGeneration` 限制只拒绝程序环境自己的 `eval`、`Function` 和 WebAssembly 编译，不构成隔离：复制进程序环境的主环境函数，例如 `setTimeout.constructor`，仍能编译代码。最后一条表达式所在行，插入完成值之后的列号右移 17；以 `#!` 开头或任何位置含 `__$binding_` 的程序会被拒绝；包含此前缀的 binding-global 和 error-class 名称会在启动进程前失败；存活的函数会留住它那次调用拷贝进来的所有值。[scoped REPL 决策](../../../.agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.zh.md)列出完整行为。

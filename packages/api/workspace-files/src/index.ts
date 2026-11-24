@@ -7,9 +7,12 @@
  * outside the workspace. The selected Session's workspace root supplies the
  * base for relative paths, with the header directory and then the sandbox
  * policy root as fallbacks, not a read-containment restriction. Directory
- * listings, searches, and change observations remain workspace-scoped; a
- * search reports workspace-relative paths. File-kind checks and configured read caps apply to
- * every preview; this service exposes no mutations.
+ * listings and directory watches are rooted at the workspace: the directory
+ * resolves inside the root, or the path the filesystem backend resolved descends
+ * from the root by child names, which admits a link in the workspace that
+ * resolves outside it. Searches stay
+ * inside the root and report workspace-relative paths. File-kind checks and
+ * configured read caps apply to every preview; this service exposes no mutations.
  *
  * A page is cut from `streamText`, which decodes and rejects non-UTF-8 as it
  * goes, so the file is read only up to the first character past the page and
@@ -33,6 +36,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Remote, RemoteError, TypertRemoteService, type TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { WorkspaceChangeFeed } from './changes.ts'
+import { workspaceDescent } from './descent.ts'
 import { searchWorkspace, type SearchLimits } from './search.ts'
 import type {
   WorkspaceByteRange,
@@ -333,7 +337,10 @@ export class WorkspaceFiles extends TypertRemoteService {
   }
 
   /**
-   * List the direct children of one directory inside the Session's workspace.
+   * List the direct children of one directory of the Session's workspace: one
+   * that resolves inside the workspace root, or one whose path, as the backend
+   * spells it before following links, descends from the root by child names
+   * through a link that resolves outside it.
    * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
    * @param path - workspace path, absolute or relative to the workspace root.
    * @param signal - caller cancellation.
@@ -352,7 +359,7 @@ export class WorkspaceFiles extends TypertRemoteService {
         { path, kind: entry.type },
       )
     }
-    const target = await this.confine(root, workspaceRoot, path, signal)
+    const { target, workspacePath } = await this.confine(root, workspaceRoot, path, signal)
     if (entry.type === 'symlink') {
       const info = await this.ctx.fs.stat(target, signal)
       if (info?.type !== 'directory') {
@@ -361,7 +368,7 @@ export class WorkspaceFiles extends TypertRemoteService {
     }
     const children = await this.ctx.fs.listDir(target, signal)
     return {
-      path: workspacePathOf(this.ctx.fs.fileUrl(root), this.ctx.fs.fileUrl(target)),
+      path: workspacePath,
       entries: children.slice(0, this.config.maxEntries).map(directoryEntry),
       truncated: children.length > this.config.maxEntries,
     }
@@ -415,12 +422,13 @@ export class WorkspaceFiles extends TypertRemoteService {
 
   /**
    * Watch one file or a directory's direct entries in the Session's filesystem.
-   * Files use the backend's read authority; directories remain workspace-scoped.
+   * Files use the backend's read authority; a directory passes the same workspace check as `list`.
    * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
-   * @param path - target path; the Host determines its type and confines directories to the workspace.
+   * @param path - target path; the Host determines its type and applies the workspace check to a directory.
    * @param signal - generation cancellation.
    * @returns `ready` once the target watch is active, then current metadata for queued and live invalidations.
-   * @throws RemoteError when watching is unavailable or a directory is outside the workspace.
+   * @throws RemoteError when watching is unavailable, or a directory neither resolves inside the
+   *   workspace root nor has a path that descends from it.
    */
   @Remote({ mode: 'stream' })
   changes(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): AsyncIterable<WorkspaceFileWatchFrame> {
@@ -466,7 +474,7 @@ export class WorkspaceFiles extends TypertRemoteService {
   }
   /**
    * Inspect the requested path itself before resolution follows its final
-   * component. Directory containment is checked separately by `list`.
+   * component. `list` applies the workspace check separately.
    */
   private async inspect(
     workspaceFileScope: WorkspaceFileScope,
@@ -484,13 +492,25 @@ export class WorkspaceFiles extends TypertRemoteService {
     return { root, workspaceRoot, entry }
   }
 
-  /** Resolve an inspected path and refuse it unless the workspace contains it. */
-  private async confine(root: FsTarget, workspaceRoot: string, path: string, signal: AbortSignal): Promise<FsTarget> {
+  /**
+   * Resolve an inspected directory path and name it as a workspace path. A
+   * target inside the workspace root is named by its resolved position; a
+   * target outside it is accepted only when the backend's unresolved spelling
+   * of the path descends from its spelling of the root, and is named by that
+   * descent.
+   */
+  private async confine(
+    root: FsTarget, workspaceRoot: string, path: string, signal: AbortSignal,
+  ): Promise<{ target: FsTarget; workspacePath: string }> {
     const target = await this.ctx.fs.resolve(path, { cwd: workspaceRoot, signal })
-    if (!this.ctx.fs.contains(root, target)) {
+    if (this.ctx.fs.contains(root, target)) {
+      return { target, workspacePath: workspacePathOf(this.ctx.fs.fileUrl(root), this.ctx.fs.fileUrl(target)) }
+    }
+    const workspacePath = workspaceDescent(root.displayPath, target.displayPath)
+    if (workspacePath === undefined) {
       throw new RemoteError('workspace-file/outside-workspace', `"${path}" is outside the workspace`, { path })
     }
-    return target
+    return { target, workspacePath }
   }
 
   /**

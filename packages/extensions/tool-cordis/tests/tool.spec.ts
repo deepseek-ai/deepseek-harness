@@ -44,8 +44,18 @@ it.each(['host', 'client'])('forwards the %s query, Agent, and cancellation sign
 
 it('requires an Agent for a query but not for discovery', async () => {
   const { tool, exec } = await fixture()
-  await expect(tool.execute({ query: { platform: 'host', provider: 'Service', method: 'listService' } }, exec))
-    .rejects.toThrow('Cordis inspection requires an Agent-backed session')
+  await expect(tool.execute({ query: { platform: 'host', provider: 'Service', method: 'listService' } }, exec)).rejects.toMatchObject({
+    name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE', message: 'Cordis inspection requires an Agent-backed session',
+  })
+})
+
+it('declares discovery and valid queries parallel-safe', async () => {
+  const { tool } = await fixture()
+  expect(tool.isConcurrencySafe?.({})).toBe(true)
+  for (const platform of ['host', 'client']) {
+    expect(tool.isConcurrencySafe?.({ query: { platform, provider: 'Service', method: 'listService' } })).toBe(true)
+  }
+  expect(tool.isConcurrencySafe?.({ query: {} })).toBe(false)
 })
 
 it.each([null, {}, { platform: 'host', provider: 'Service' }, { platform: 'other', provider: 'Service', method: 'listService' }])(

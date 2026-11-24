@@ -22,6 +22,7 @@ import SessionStore, { SESSION_FORMAT_VERSION, Session, type SessionId, SessionL
 import MessageFeedbackService from '@deepseek-ai/dsh-message-feedback'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import OpenTelemetrySessionBackend, { Config, DEFAULT_TELEMETRY_MODE, SessionTelemetryMode } from '../src/index.ts'
+import { DEFAULT_RECORD_FORMAT } from '../src/record-format.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 interface Capture {
@@ -102,13 +103,14 @@ async function mockCollector(
   return { url: `http://127.0.0.1:${address.port}/v1/logs`, captures }
 }
 
-async function boot(url: string) {
+async function boot(url: string, overrides: Partial<Config> = {}) {
   const ctx = new Context()
   ctx.plugin(OTel)
   await ctx.plugin(SessionStore)
   const fiber = await ctx.plugin(OpenTelemetrySessionBackend, {
     mode: SessionTelemetryMode.FEEDBACK_ONLY,
     exporter: { url, headers: { authorization: 'Bearer test-token' } },
+    ...overrides,
   })
   return { ctx, fiber }
 }
@@ -725,6 +727,211 @@ describe('OpenTelemetrySessionBackend route and feedback', () => {
   })
 })
 
+/** One captured record's delivery attribute value, or undefined for a per-event record. */
+function deliveryAttribute(record: OtlpLogsRequest['resourceLogs'][number]['scopeLogs'][number]['logRecords'][number], key: string): Record<string, unknown> | undefined {
+  return record.attributes?.find(attribute => attribute.key === key)?.value
+}
+
+function batchRecords(captures: Capture[]) {
+  return allRecords(captures).filter(({ record }) => deliveryAttribute(record, 'delivery.batch_id') !== undefined)
+}
+
+/** Parse the batch body's events array. */
+function batchEvents(record: OtlpLogsRequest['resourceLogs'][number]['scopeLogs'][number]['logRecords'][number]): unknown[] {
+  const body = record.body as { stringValue: string }
+  return (JSON.parse(body.stringValue) as { events: unknown[] }).events
+}
+
+describe('OpenTelemetrySessionBackend per-batch record format', () => {
+  it('ships one contiguous batch record for the authorized prefix', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url, { recordFormat: 'per-batch' })
+    const session = ctx.sessions.create(brandString<SessionId>('batch-wire'), { meta: { cwd: '/tmp/w' } })
+    session.append('request/header', { header: { config: { provider: 'mock', model: 'mock' } }, reason: 'initial' })
+    session.append('turn/start', { turn: 1 })
+    session.append('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: 'batched answer' }],
+        source: { provider: 'mock', model: 'mock' },
+      }),
+      stream: [],
+    }, { surfaceOp: 'append' })
+    recordFeedback(session, { text: 'batch feedback' })
+    const submitted = session.snapshotEvents()
+    await fiber.dispose()
+
+    const batches = batchRecords(captures)
+    expect(batches).toHaveLength(1)
+    const { record } = batches[0]!
+    expect(record).toMatchObject({ eventName: 'session-log', severityNumber: 9 })
+    expect(deliveryAttribute(record, 'session.id')).toEqual({ stringValue: 'batch-wire' })
+    expect(deliveryAttribute(record, 'session.format_version')).toEqual({ intValue: SESSION_FORMAT_VERSION })
+    expect(deliveryAttribute(record, 'delivery.after_seq')).toEqual({ intValue: -1 })
+    expect(deliveryAttribute(record, 'delivery.through_seq')).toEqual({ intValue: submitted.at(-1)!.seq })
+    expect(deliveryAttribute(record, 'delivery.event_count')).toEqual({ intValue: submitted.length })
+    expect(deliveryAttribute(record, 'delivery.purpose')).toEqual({ stringValue: 'conversation' })
+    expect(deliveryAttribute(record, 'delivery.batch_id')?.stringValue).toMatch(/^[0-9a-f-]{36}$/)
+    expect(deliveryAttribute(record, 'event.type')).toBeUndefined()
+    expect(deliveryAttribute(record, 'content')).toBeUndefined()
+    // The events array is the canonical prefix, contiguous and field-identical.
+    expect(batchEvents(record)).toEqual(submitted)
+  })
+
+  it('never mixes two interleaved sessions in one record', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url, { recordFormat: 'per-batch' })
+    const first = ctx.sessions.create(brandString<SessionId>('batch-first'))
+    first.append('turn/start', { turn: 1 })
+    recordFeedback(first, { text: 'first feedback' })
+    const second = ctx.sessions.create(brandString<SessionId>('batch-second'))
+    second.append('turn/start', { turn: 2 })
+    recordFeedback(second, { text: 'second feedback' })
+    await fiber.dispose()
+
+    const batches = batchRecords(captures)
+    expect(batches).toHaveLength(2)
+    const bySession = new Map(batches.map(({ record }) => [
+      deliveryAttribute(record, 'session.id')?.stringValue as string,
+      batchEvents(record),
+    ]))
+    expect([...bySession.keys()].sort()).toEqual(['batch-first', 'batch-second'])
+    expect(bySession.get('batch-first')).toEqual(first.snapshotEvents())
+    expect(bySession.get('batch-second')).toEqual(second.snapshotEvents())
+    expect(new Set(batches.map(({ record }) => deliveryAttribute(record, 'delivery.batch_id')?.stringValue)).size).toBe(2)
+  })
+
+  it('flushes an idle session at its turn boundary', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url, {
+      recordFormat: 'per-batch',
+      batchDelayMillis: 3_600_000,
+      processor: { scheduledDelayMillis: 1 },
+    })
+    const session = ctx.sessions.create(brandString<SessionId>('batch-idle'))
+    session.append('turn/start', { turn: 1 })
+    recordFeedback(session, { text: 'idle feedback' })
+    expect(batchRecords(captures)).toEqual([])
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    await expect.poll(() => batchRecords(captures).length).toBe(1)
+    expect(deliveryAttribute(batchRecords(captures)[0]!.record, 'delivery.through_seq')).toEqual({
+      intValue: session.snapshotEvents().find(event => event.type === 'feedback/record')!.seq,
+    })
+    await fiber.dispose()
+  })
+
+  it('flushes a closed session', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url, {
+      recordFormat: 'per-batch',
+      batchDelayMillis: 3_600_000,
+      processor: { scheduledDelayMillis: 1 },
+    })
+    const session = ctx.sessions.prepare(brandString<SessionId>('batch-closed'), { meta: {} })
+    const detach = ctx.sessions.enter(session)
+    ctx.sessions.announce(session)
+    session.append('turn/start', { turn: 1 })
+    recordFeedback(session, { text: 'closing feedback' })
+    expect(batchRecords(captures)).toEqual([])
+    detach()
+    await expect.poll(() => batchRecords(captures).length).toBe(1)
+    expect(deliveryAttribute(batchRecords(captures)[0]!.record, 'session.id')).toEqual({ stringValue: 'batch-closed' })
+    await fiber.dispose()
+  })
+
+  it('defaults the batch format generation when redaction removes the attribute', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url, { recordFormat: 'per-batch' })
+    ctx.on('session-telemetry/record', (_record, next) => {
+      const record = next()
+      const attributes = { ...record.attributes }
+      delete attributes['session.format_version']
+      return { ...record, attributes }
+    })
+    const session = ctx.sessions.create(brandString<SessionId>('batch-versionless'))
+    session.append('turn/start', { turn: 1 })
+    recordFeedback(session, { text: 'versionless feedback' })
+    await fiber.dispose()
+    expect(deliveryAttribute(batchRecords(captures)[0]!.record, 'session.format_version')).toEqual({ intValue: 0 })
+  })
+
+  it('ignores a record whose redacted envelope reuses a delivered sequence', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url, { recordFormat: 'per-batch', batchDelayMillis: 3_600_000 })
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    ctx.on('session-telemetry/record', (_record, next) => {
+      const record = next()
+      const sourceEvent = record.sourceEvent
+      if (sourceEvent === undefined || sourceEvent.envelope.type !== 'turn/end') return record
+      return {
+        ...record,
+        sourceEvent: { ...sourceEvent, envelope: { ...sourceEvent.envelope, seq: SessionSeq(0) } },
+      }
+    })
+    const session = ctx.sessions.create(brandString<SessionId>('batch-duplicate'))
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    recordFeedback(session, { text: 'duplicate feedback' })
+    await fiber.dispose()
+    expect(warn).toHaveBeenCalledWith(
+      'session telemetry ignored batch event 0 for session "batch-duplicate"; it is already covered',
+    )
+    // The dropped duplicate never enters a batch: every sequence appears once.
+    const emitted = batchRecords(captures).flatMap(({ record }) =>
+      (batchEvents(record) as { seq: number }[]).map(event => event.seq))
+    expect(emitted).toEqual([0, 2])
+  })
+
+  it('reports the same session-level information as the per-event format', async () => {
+    const capture = async (recordFormat: 'per-event' | 'per-batch'): Promise<Capture[]> => {
+      const { url, captures } = await mockCollector()
+      const { ctx, fiber } = await boot(url, { recordFormat })
+      const parent = ctx.sessions.create(brandString<SessionId>('parity-parent'), { meta: { cwd: '/tmp/parity' } })
+      parent.append('turn/start', { turn: 1 })
+      const childId = brandString<SessionId>('parity-child')
+      const child = ctx.sessions.create(childId, {
+        seed: parent.snapshotEvents(),
+        inheritedEventCount: parent.seq,
+        meta: { ...parent.header, parentSession: parent.id, isSeeded: true },
+      })
+      child.append('turn/start', { turn: 2 })
+      recordFeedback(child, { text: 'parity feedback' })
+      await fiber.dispose()
+      return captures
+    }
+    const [perEvent, perBatch] = await Promise.all([capture('per-event'), capture('per-batch')])
+    const sessionAttributes = (captures: Capture[]): Record<string, unknown> => {
+      const [first] = allRecords(captures)
+      return Object.fromEntries((first!.record.attributes ?? [])
+        .filter(attribute => attribute.key.startsWith('session.'))
+        .map(attribute => [attribute.key, attribute.value]))
+    }
+    // Event identity moves into body.events; every Session-level fact stays on the record.
+    expect(sessionAttributes(perBatch)).toEqual(sessionAttributes(perEvent))
+    expect(sessionAttributes(perBatch)).toMatchObject({
+      'session.id': { stringValue: 'parity-child' },
+      'session.cwd': { stringValue: '/tmp/parity' },
+      'session.parent_id': { stringValue: 'parity-parent' },
+      'session.seed_length': { intValue: 1 },
+    })
+  })
+
+  it('keeps the default per-event format and record attributes', async () => {
+    const { url, captures } = await mockCollector()
+    const { ctx, fiber } = await boot(url)
+    const session = ctx.sessions.create(brandString<SessionId>('per-event-default'))
+    session.append('turn/start', { turn: 1 })
+    recordFeedback(session, { text: 'default feedback' })
+    await fiber.dispose()
+    const records = allRecords(captures)
+    expect(records.length).toBeGreaterThan(0)
+    expect(records.every(({ record }) => deliveryAttribute(record, 'delivery.batch_id') === undefined)).toBe(true)
+    expect(records.every(({ record }) => typeof deliveryAttribute(record, 'content')?.stringValue === 'string')).toBe(true)
+    expect(eventTypes(captures)).toEqual(session.snapshotEvents().map(event => event.type))
+  })
+})
+
 describe('OpenTelemetrySessionBackend config fails loud', () => {
   it('exposes modes through the nominal enum', () => {
     expectTypeOf<Config['mode']>().toEqualTypeOf<SessionTelemetryMode | undefined>()
@@ -734,6 +941,9 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
     expect(() => Config({ mode: 'FULL' } as unknown as Config)).toThrow()
     expect(DEFAULT_TELEMETRY_MODE).toBe(SessionTelemetryMode.FEEDBACK_ONLY)
     expect(Config({}).mode).toBe(DEFAULT_TELEMETRY_MODE)
+    expectTypeOf<Config['recordFormat']>().toEqualTypeOf<'per-event' | 'per-batch' | undefined>()
+    expect(Config({}).recordFormat).toBe(DEFAULT_RECORD_FORMAT)
+    expect(Config({ recordFormat: 'per-batch' }).recordFormat).toBe('per-batch')
   })
 
   it.each([
@@ -750,6 +960,10 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
     [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, processor: { maxExportBatchSize: 0.5 } }, /maxExportBatchSize/],
     [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: 0 }, /shutdownTimeoutMillis/],
     [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, shutdownTimeoutMillis: Number.POSITIVE_INFINITY }, /shutdownTimeoutMillis/],
+    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, recordFormat: 'batch' }, /batch/],
+    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, recordFormat: 'per-batch', maxBatchEvents: 0 }, /maxBatchEvents/],
+    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, recordFormat: 'per-batch', maxBatchBytes: 0.5 }, /maxBatchBytes/],
+    [{ mode: SessionTelemetryMode.FEEDBACK_ONLY, exporter: { url: 'http://c/v1/logs' }, recordFormat: 'per-batch', batchDelayMillis: 0 }, /batchDelayMillis/],
   ])('rejects %j at plugin load', async (config, message) => {
     const ctx = new Context()
     ctx.plugin(OTel)
@@ -772,6 +986,77 @@ describe('OpenTelemetrySessionBackend config fails loud', () => {
 
     expect(() => new OpenTelemetrySessionBackend(ctx, config)).toThrow(`unsupported mode "${mode}"`)
     expect(exporterRead).toBe(false)
+  })
+
+  it('rejects a direct record format outside the union before reading transport config', async () => {
+    const ctx = new Context()
+    ctx.plugin(OTel)
+    await ctx.plugin(SessionStore)
+    let exporterRead = false
+    // JSON.parse keeps the invalid runtime value without an unknown-cast baseline entry.
+    const config = JSON.parse('{"recordFormat":"batch"}') as Config
+    Object.defineProperty(config, 'exporter', {
+      get() {
+        exporterRead = true
+        throw new Error('transport config was read')
+      },
+    })
+
+    expect(() => new OpenTelemetrySessionBackend(ctx, config)).toThrow('unsupported record format "batch"')
+    expect(exporterRead).toBe(false)
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a batch ceiling that cannot fit the request ceiling after escaping', async () => {
+    const ctx = new Context()
+    ctx.plugin(OTel)
+    await ctx.plugin(SessionStore)
+    const config = {
+      mode: SessionTelemetryMode.FEEDBACK_ONLY,
+      exporter: { url: 'http://collector.test/logs' },
+      recordFormat: 'per-batch',
+      maxRequestBytes: 500_000,
+    } as Config
+
+    expect(() => new OpenTelemetrySessionBackend(ctx, config)).toThrow(/maxBatchBytes 1048576 cannot fit maxRequestBytes 500000/)
+    await ctx.fiber.dispose()
+  })
+
+  it('accepts the default batch ceiling against the default request ceiling', async () => {
+    const ctx = new Context()
+    ctx.plugin(OTel)
+    await ctx.plugin(SessionStore)
+    const config = {
+      mode: SessionTelemetryMode.FEEDBACK_ONLY,
+      exporter: { url: 'http://collector.test/logs' },
+      recordFormat: 'per-batch',
+    } as Config
+
+    expect(() => new OpenTelemetrySessionBackend(ctx, config)).not.toThrow()
+    await ctx.fiber.dispose()
+  })
+
+  it.each([
+    [{ maxBatchEvents: 0 }, /maxBatchEvents/],
+    [{ maxBatchEvents: 1.5 }, /maxBatchEvents/],
+    [{ maxBatchBytes: 0 }, /maxBatchBytes/],
+    [{ maxBatchBytes: 0.5 }, /maxBatchBytes/],
+    [{ batchDelayMillis: 0 }, /batchDelayMillis/],
+    [{ batchDelayMillis: 1.5 }, /batchDelayMillis/],
+    [{ batchDelayMillis: 2_147_483_648 }, /batchDelayMillis/],
+  ])('rejects direct batch ceiling %j before constructing the reporter', async (overrides, message) => {
+    const ctx = new Context()
+    ctx.plugin(OTel)
+    await ctx.plugin(SessionStore)
+    const config = {
+      mode: SessionTelemetryMode.FEEDBACK_ONLY,
+      exporter: { url: 'http://collector.test/logs' },
+      recordFormat: 'per-batch',
+      ...overrides,
+    } as Config
+
+    expect(() => new OpenTelemetrySessionBackend(ctx, config)).toThrow(message)
+    await ctx.fiber.dispose()
   })
 
   it('does not read any transport setting in disabled mode', async () => {

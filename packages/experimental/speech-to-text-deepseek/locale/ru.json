@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Облачное распознавание DeepSeek",
+    "description": "Распознаёт записи облачным сервисом DeepSeek после входа в аккаунт DeepSeek или с ключом API DeepSeek."
+  }
+}

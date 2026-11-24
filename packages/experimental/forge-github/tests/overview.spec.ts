@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GraphqlReader } from '../src/commits.ts'
 import type { GraphqlWriter } from '../src/mutation.ts'
 import {
-  CANDIDATES_QUERY, gitHubReviewerCandidates, REQUEST_BOT_REVIEWS_MUTATION, REQUEST_REVIEWS_MUTATION, requestGitHubReviews,
-  UPDATE_BRANCH_MUTATION, updateGitHubBranch,
+  CANDIDATES_QUERY, DISABLE_AUTO_MERGE_MUTATION, ENABLE_AUTO_MERGE_MUTATION, gitHubReviewerCandidates, REQUEST_BOT_REVIEWS_MUTATION,
+  REQUEST_REVIEWS_MUTATION, requestGitHubReviews, setGitHubAutoMerge, UPDATE_BRANCH_MUTATION, updateGitHubBranch,
 } from '../src/overview.ts'
 import { pullRequestNode } from '../src/pull-request-node.ts'
 import { pull } from './fixtures.ts'
@@ -138,6 +138,65 @@ describe('branch updates', () => {
     await expect(updateGitHubBranch(none.read, write, pull(7), { method: 'merge', headSha: 'main' }, signal))
       .rejects.toThrow('forge-github: invalid head commit "main"')
     expect(none.calls).toEqual([])
+  })
+})
+
+describe('auto-merge', () => {
+  const MOVED = 'e'.repeat(40)
+  const on = { enabled: true, method: 'squash', headSha: HEAD } as const
+  const refusal = { code: 'failed', message: 'Pull request Pull request is in clean status' } as const
+  const stale = { code: 'stale', message: `the pull request head moved from ${HEAD} to ${MOVED}` } as const
+
+  it.each([['squash', 'SQUASH'], ['merge', 'MERGE'], ['rebase', 'REBASE']] as const)(
+    'turns it on by %s for the confirmed head as GitHub expects it, after one read', async (method, mergeMethod) => {
+      const write = vi.fn<GraphqlWriter>(async () => undefined)
+      const lookup = reader(node())
+      await expect(setGitHubAutoMerge(lookup.read, write, pull(7), { ...on, method }, signal)).resolves.toBeUndefined()
+      expect(write.mock.calls).toEqual([['github.com', { query: ENABLE_AUTO_MERGE_MUTATION, field: 'enablePullRequestAutoMerge',
+        variables: { input: { pullRequestId: 'PR_7', mergeMethod, expectedHeadOid: HEAD } } }, signal]])
+      expect(lookup.calls).toHaveLength(1)
+    })
+
+  it('turns it off at any head, and passes on a refusal without another read', async () => {
+    const write = vi.fn<GraphqlWriter>(async () => undefined)
+    await expect(setGitHubAutoMerge(reader(node(MOVED)).read, write, pull(7), { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(write.mock.calls).toEqual([['github.com', { query: DISABLE_AUTO_MERGE_MUTATION, field: 'disablePullRequestAutoMerge',
+      variables: { input: { pullRequestId: 'PR_7' } } }, signal]])
+    const refused = reader(node())
+    await expect(setGitHubAutoMerge(refused.read, vi.fn<GraphqlWriter>(async () => refusal), pull(7), { enabled: false }, signal))
+      .resolves.toEqual(refusal)
+    expect(refused.calls).toHaveLength(1)
+  })
+
+  it('refuses a moved head and a failed read without writing, and an invalid head without reading', async () => {
+    const write = vi.fn<GraphqlWriter>()
+    await expect(setGitHubAutoMerge(reader(node(MOVED)).read, write, pull(7), on, signal)).resolves.toEqual(stale)
+    await expect(setGitHubAutoMerge(reader(new Error('signed out')).read, write, pull(7), { enabled: false }, signal))
+      .resolves.toEqual({ code: 'unauthenticated', message: 'signed out' })
+    const none = reader()
+    await expect(setGitHubAutoMerge(none.read, write, pull(7), { ...on, headSha: 'main' }, signal))
+      .rejects.toThrow('forge-github: invalid head commit "main"')
+    expect(none.calls).toEqual([])
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['as stale once the head moved after the first read', node(MOVED), stale],
+    ['as GitHub worded it while the head stays', node(), refusal],
+    ['as GitHub worded it when the head cannot be read again', new Error('down'), refusal],
+  ])('reports a refusal to turn it on %s, without sending it again', async (_label, second, failure) => {
+    const write = vi.fn<GraphqlWriter>(async () => refusal)
+    const lookup = reader(node(), second)
+    await expect(setGitHubAutoMerge(lookup.read, write, pull(7), on, signal)).resolves.toEqual(failure)
+    expect(lookup.calls).toHaveLength(2)
+    expect(write).toHaveBeenCalledOnce()
+  })
+
+  it('leaves an outcome GitHub did not confirm unknown, without reading the head again', async () => {
+    const unknown = { code: 'unknown', message: 'Something went wrong' } as const
+    const lookup = reader(node())
+    await expect(setGitHubAutoMerge(lookup.read, vi.fn<GraphqlWriter>(async () => unknown), pull(7), on, signal)).resolves.toEqual(unknown)
+    expect(lookup.calls).toHaveLength(1)
   })
 })
 

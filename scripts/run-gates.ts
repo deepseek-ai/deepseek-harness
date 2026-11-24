@@ -9,9 +9,10 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { parseBenchPhase } from './bench-phase.ts'
 import { CLIENT_BUILD_PROFILE_SELECTOR } from './client-build-environment.ts'
 import { COVERAGE_EXEMPT_ENV, coverageExemptHeavySuites } from './coverage-exempt.ts'
-import { COVERAGE_PARTITIONS_ENV, parseCoveragePartitionCount } from './coverage-partitions.ts'
+import { COVERAGE_PARTITIONS_ENV, COVERAGE_SHARD_ENV, parseCoveragePartitionCount, parseCoverageShard } from './coverage-partitions.ts'
 import { LOCAL_TEST_PARALLELISM_CAP, defaultParallelism, describeDefaultParallelism } from './parallelism.ts'
 import { pnpmInvocation } from './pnpm-invocation.ts'
 
@@ -22,8 +23,10 @@ export type Mode =
   | 'ci-static'
   | 'ci-lint-contracts-ready'
   | 'ci-coverage'
+  | 'ci-coverage-shard'
   | 'ci-unit'
   | 'ci-bench'
+  | 'ci-bench-prebuilt'
   | 'ci-snapshot'
   | 'ci-artifacts'
   | 'ci-consumers'
@@ -103,8 +106,11 @@ type ResultObserver = (result: GateResult) => void
 /** Worker cap of the documentation and hygiene aggregates, locally and in CI, whose leaves each build a full ts.Program. */
 const PROGRAM_MODE_CAP = 8
 
-/** CI pins this minor in .github/workflows/ci.yml; its compatibility leg owns the built CLI smoke. */
-export const BUILD_BACKED_NODE_COMPAT_VERSION = '24.9'
+/**
+ * CI pins this supported-floor release in .github/workflows/ci.yml. Its compatibility leg owns the built CLI smoke and
+ * requests it with `DSH_NODE_COMPAT_BUILD=1`; the primary lanes can run this same release and stay source-only.
+ */
+export const BUILD_BACKED_NODE_COMPAT_VERSION = '24.22.3'
 
 const root = resolve(import.meta.dirname, '..')
 if (import.meta.main) {
@@ -165,8 +171,10 @@ function parseMode(raw: string | undefined): Mode {
     case 'ci-static':
     case 'ci-lint-contracts-ready':
     case 'ci-coverage':
+    case 'ci-coverage-shard':
     case 'ci-unit':
     case 'ci-bench':
+    case 'ci-bench-prebuilt':
     case 'ci-snapshot':
     case 'ci-artifacts':
     case 'ci-consumers':
@@ -185,7 +193,7 @@ function parseMode(raw: string | undefined): Mode {
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-unit | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-build | ci-consumers-prebuilt | ci-web-snapshot-prebuilt | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-coverage-shard | ci-unit | ci-bench | ci-bench-prebuilt | ci-snapshot | ci-artifacts | ci-consumers | ci-build | ci-consumers-prebuilt | ci-web-snapshot-prebuilt | ci-windows-blocking | ci-windows-complete | ci-windows-observational-ready | node-compat | check-all | hygiene | doc-sync | doc-quick | i18n, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -256,7 +264,10 @@ export function ciWorkerEnvironment(
   if (!Number.isSafeInteger(total) || total < 1) {
     throw new Error(`run-gates: DSH_COVERAGE_MAX_WORKERS must be a positive integer, got ${JSON.stringify(coverageBudget)}.`)
   }
-  const instrumented = Math.max(1, total - Math.max(1, Math.floor(total / 3)))
+  // Only the first coverage shard runs the exempt sibling; the others give
+  // their partitions the whole budget.
+  const ownsExempt = mode !== 'ci-coverage-shard' || parseCoverageShard(env[COVERAGE_SHARD_ENV])?.index === 1
+  const instrumented = ownsExempt ? Math.max(1, total - Math.max(1, Math.floor(total / 3))) : total
   if (instrumented > 1) setDefault(COVERAGE_PARTITIONS_ENV, instrumented)
   return additions
 }
@@ -330,10 +341,14 @@ export function gatesForMode(selected: Mode): Gate[] {
       ]
     case 'ci-coverage':
       return coverageGates()
+    case 'ci-coverage-shard':
+      return coverageShardGates()
     case 'ci-unit':
       return ciUnitGates()
     case 'ci-bench':
       return [pnpmExec('bench', ['tsx', 'scripts/run-ci-bench.ts'], { label: 'performance benchmarks' })]
+    case 'ci-bench-prebuilt':
+      return ciBenchPrebuiltGates()
     case 'ci-snapshot':
       return [ciBuildGate(), snapshotGate()]
     case 'ci-artifacts':
@@ -478,8 +493,11 @@ function nodeCompatGates(): Gate[] {
   const typecheck = flagEnabled('DSH_NODE_COMPAT_SKIP_TYPECHECK')
     ? []
     : [pnpmScript('typecheck', 'typecheck')]
-  if (!process.versions.node.startsWith(`${BUILD_BACKED_NODE_COMPAT_VERSION}.`)) {
+  if (!flagEnabled('DSH_NODE_COMPAT_BUILD')) {
     return [...typecheck, ...nodeCompatSmokeGates()]
+  }
+  if (process.versions.node !== BUILD_BACKED_NODE_COMPAT_VERSION) {
+    throw new Error(`run-gates: DSH_NODE_COMPAT_BUILD requires Node ${BUILD_BACKED_NODE_COMPAT_VERSION}, got ${process.versions.node}.`)
   }
   return [
     ...typecheck,
@@ -662,6 +680,17 @@ function ciPrebuiltWebSnapshotGates(): Gate[] {
   return [webSnapshotGate([])]
 }
 
+/**
+ * One benchmark phase (`DSH_BENCH_PHASE`) on a checkout whose build output was
+ * restored from the `ci-build` lane; only the benchmark workers are built here.
+ */
+function ciBenchPrebuiltGates(): Gate[] {
+  const phase = parseBenchPhase(process.env.DSH_BENCH_PHASE)
+  return [pnpmExec('bench', ['tsx', 'scripts/run-ci-bench.ts', `--phase=${phase}`], {
+    label: `performance benchmarks (${phase} phase)`,
+  })]
+}
+
 function webSnapshotGate(needs: string[], after?: string[]): Gate {
   const order = after === undefined ? { needs } : { needs, after }
   const workerRaw = process.env.DSH_WEB_SNAPSHOT_WORKERS
@@ -824,25 +853,55 @@ function coverageGates(platform: NodeJS.Platform = process.platform): Gate[] {
       label: 'test:coverage',
       env: { [COVERAGE_EXEMPT_ENV]: '1' },
     })
-    : pnpmScript('coverage', 'test:coverage:partitioned', {
-      label: 'test:coverage',
-      displayCommand: `${COVERAGE_PARTITIONS_ENV}=${partitions} pnpm run test:coverage:partitioned`,
-      env: { [COVERAGE_EXEMPT_ENV]: '1' },
-      streamOutput: true,
-    })
+    : partitionedCoverageGate(partitions)
   return [
     pnpmScript('native-system', 'build:native-system'),
     ...electron,
     { ...instrumented, needs: ['native-system', ...electron.map(gate => gate.id)] },
-    pnpmExec('coverage-exempt-heavy', [
-      'vitest',
-      'run',
-      ...coverageExemptHeavySuites.map(suite => suite.filter),
-      ...workers.exempt,
-    ], {
-      label: 'test:coverage-exempt-heavy',
-      needs: ['native-system'],
-    }),
+    coverageExemptHeavyGate(workers.exempt),
+  ]
+}
+
+function partitionedCoverageGate(partitions: number): Gate {
+  return pnpmScript('coverage', 'test:coverage:partitioned', {
+    label: 'test:coverage',
+    displayCommand: `${COVERAGE_PARTITIONS_ENV}=${partitions} pnpm run test:coverage:partitioned`,
+    env: { [COVERAGE_EXEMPT_ENV]: '1' },
+    streamOutput: true,
+  })
+}
+
+function coverageExemptHeavyGate(workerArgs: readonly string[]): Gate {
+  return pnpmExec('coverage-exempt-heavy', [
+    'vitest',
+    'run',
+    ...coverageExemptHeavySuites.map(suite => suite.filter),
+    ...workerArgs,
+  ], {
+    label: 'test:coverage-exempt-heavy',
+    needs: ['native-system'],
+  })
+}
+
+// One CI file shard of the instrumented inventory (DSH_COVERAGE_SHARD); the
+// coordinator writes coverage/shard/ and the report job merges and applies
+// thresholds. The first shard also runs the uninstrumented heavy suites with
+// the coverage lane's usual worker split. Sharding needs the partition
+// coordinator, so a missing count is a misconfiguration rather than a
+// whole-inventory fallback.
+function coverageShardGates(): Gate[] {
+  const shard = parseCoverageShard(process.env[COVERAGE_SHARD_ENV])
+  if (shard === undefined) {
+    throw new Error(`run-gates: ci-coverage-shard requires ${COVERAGE_SHARD_ENV}.`)
+  }
+  const partitions = parseCoveragePartitionCount(process.env[COVERAGE_PARTITIONS_ENV])
+  if (partitions === undefined) {
+    throw new Error(`run-gates: ci-coverage-shard requires ${COVERAGE_PARTITIONS_ENV} or a coverage worker budget of at least 2.`)
+  }
+  return [
+    pnpmScript('native-system', 'build:native-system'),
+    { ...partitionedCoverageGate(partitions), needs: ['native-system'] },
+    ...shard.index === 1 ? [coverageExemptHeavyGate(coverageWorkerArgs().exempt)] : [],
   ]
 }
 

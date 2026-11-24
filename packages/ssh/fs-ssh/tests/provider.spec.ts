@@ -118,6 +118,30 @@ describe('SSH filesystem provider', () => {
     expect(dispatch).toHaveBeenLastCalledWith('fs.edit', { target, edit, expected: { version: 'v2' }, policy }, signal)
   })
 
+  it('sends a byte write as base64 under the resolved deployment policy', async () => {
+    const { fs, dispatch } = await setup()
+    const outcome = { operation: 'create', version: 'v1' }
+    dispatch.mockResolvedValueOnce(outcome)
+    const data = new Uint8Array([0, 255, 128])
+    expect(await fs.writeBytes(target, data)).toEqual(outcome)
+    expect(dispatch).toHaveBeenLastCalledWith('fs.writeBytes', {
+      target,
+      data: Buffer.from(data).toString('base64'),
+      expected: undefined,
+      policy: { mode: 'read-only', workspaceRoot: '/remote/work' },
+    }, undefined)
+  })
+
+  it('refuses a byte write above the 8 MiB limit before encoding or sending it', async () => {
+    const { fs, dispatch } = await setup()
+    // 48 MiB encodes to 64 MiB of base64, past the transport frame limit.
+    await expect(fs.writeBytes(target, new Uint8Array(48 * 1024 * 1024))).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
+    await expect(fs.writeBytes(target, new Uint8Array(8 * 1024 * 1024 + 1))).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
+    expect(dispatch).not.toHaveBeenCalled()
+    dispatch.mockResolvedValueOnce({ operation: 'create', version: 'v1' })
+    await expect(fs.writeBytes(target, new Uint8Array(8 * 1024 * 1024))).resolves.toEqual({ operation: 'create', version: 'v1' })
+  })
+
   it('resolves deployment policy for mutations without an explicit policy', async () => {
     const { fs, dispatch } = await setup()
     dispatch.mockResolvedValueOnce({ operation: 'create', version: 'v1', before: null, after: 'new' })

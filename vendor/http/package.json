@@ -1,0 +1,67 @@
+{
+  "name": "@deepseek-ai/cordis-plugin-http",
+  "description": "Fetch-based axios-style HTTP client",
+  "version": "1.5.1",
+  "type": "module",
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
+  ],
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "vendor/http"
+  },
+  "bugs": {
+    "url": "https://github.com/cordiverse/http/issues"
+  },
+  "homepage": "https://github.com/cordiverse/http",
+  "keywords": [
+    "http",
+    "fetch",
+    "axios",
+    "https",
+    "undici",
+    "client",
+    "request",
+    "cordis",
+    "plugin"
+  ],
+  "cordis": {
+    "service": {
+      "implements": [
+        "http"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis-plugin-logger-console": "workspace:~",
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis-fetch-file": "workspace:~",
+    "@deepseek-ai/cosmokit": "workspace:~",
+    "@deepseek-ai/schemastery": "workspace:~",
+    "undici": "8.12.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  }
+}

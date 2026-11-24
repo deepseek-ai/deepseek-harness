@@ -6,7 +6,7 @@ import { SubprocessExecutableNotFoundError } from '@deepseek-ai/dsh-subprocess'
 import { LocalSubprocessRuntime } from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import { createHelperHarness as helper } from './fixtures/helper.ts'
-import { hunkSchema, moveOptionsSchema, moveResultSchema, deleteResultSchema, targetSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema } from '../src/schemas.ts'
+import { hunkSchema, moveOptionsSchema, moveResultSchema, deleteResultSchema, targetSchema, writeBytesResultSchema, writeResultSchema, editResultSchema, infoSchema, entriesSchema } from '../src/schemas.ts'
 
 
 const policy = (workspaceRoot: string) => ({ mode: 'workspace-write', workspaceRoot })
@@ -42,6 +42,27 @@ describe.skipIf(process.platform === 'win32')('SSH helper runtime', () => {
       await test.client.request('fs.edit', { target, edit: { oldString: 'third', newString: 'fourth', replaceAll: false }, policy: policy(test.root) }, editResultSchema)
       expect(await test.client.request('fs.readText', { target }, z.string())).toBe('fourth text')
       await expect(test.client.request('fs.write', { target, content: 'denied', policy: { mode: 'read-only', workspaceRoot: test.root } }, writeResultSchema)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+    } finally { await test.close() }
+  })
+
+  it('writes exact bytes and refuses one above its frame budget', async () => {
+    const test = await helper()
+    try {
+      const target = await test.client.request('fs.resolve', { path: 'blob.bin' }, targetSchema)
+      const data = Buffer.from([0x00, 0xff, 0x0a, 0x89])
+      const created = await test.client.request('fs.writeBytes', {
+        target, data: data.toString('base64'), policy: policy(test.root), expected: { kind: 'createIfAbsent' },
+      }, writeBytesResultSchema)
+      expect(created).toMatchObject({ operation: 'create' })
+      expect(await readFile(`${test.root}/blob.bin`)).toEqual(data)
+      await expect(test.client.request('fs.writeBytes', {
+        target, data: data.toString('base64'), policy: { mode: 'read-only', workspaceRoot: test.root },
+      }, writeBytesResultSchema)).rejects.toMatchObject({ code: 'FS_SANDBOX_DENIED' })
+      // One byte past the helper's 8 MiB limit for a single byte write.
+      const oversized = Buffer.alloc(8 * 1024 * 1024 + 1, 0x41).toString('base64')
+      await expect(test.client.request('fs.writeBytes', {
+        target, data: oversized, policy: policy(test.root),
+      }, writeBytesResultSchema)).rejects.toMatchObject({ code: 'FS_TOO_LARGE' })
     } finally { await test.close() }
   })
 

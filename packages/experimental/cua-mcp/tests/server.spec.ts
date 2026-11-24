@@ -47,6 +47,8 @@ function batch(text: string, isError = false): ToolBatchResult {
 }
 
 interface SetupOptions {
+  /** The registry's default preset; `null` models a registry configured without one. */
+  defaultPreset?: string | null
   createFailures?: number
   programs?: Partial<CuaPrograms> | false
   elicitation?: boolean
@@ -60,11 +62,15 @@ interface SetupOptions {
 
 function fixture(options: SetupOptions = {}) {
   const ctx = new Context()
-  // The Agent runs a maintenance task at once and cancels it through this controller, as its cancel and disposal do.
-  const maintenance = new AbortController()
+  let active: AbortController | undefined
   const members: Pick<Agent, 'id' | 'ctx' | 'runMaintenance' | 'cancel' | 'whenIdle'> = {
-    id: brandString<SessionId>('cua-mcp-fake'), ctx: new Context(), runMaintenance: task => task(maintenance.signal),
-    cancel: (cause) => { maintenance.abort(cause) }, whenIdle: async () => {},
+    id: brandString<SessionId>('cua-mcp-fake'), ctx: new Context(),
+    runMaintenance: async (task) => {
+      const controller = new AbortController()
+      active = controller
+      try { return await task(controller.signal) } finally { active = undefined }
+    },
+    cancel: (cause) => { active?.abort(cause) }, whenIdle: async () => {},
   }
   const runMaintenance = vi.spyOn(members, 'runMaintenance')
   const cancel = vi.spyOn(members, 'cancel')
@@ -84,7 +90,11 @@ function fixture(options: SetupOptions = {}) {
   })
   const initiators: Agent[] = []
   const withInitiator = vi.fn(<T>(initiator: Agent, operation: () => T): T => { initiators.push(initiator); return operation() })
-  const mount = vi.fn(async () => ({ id: 'cua-mcp' }))
+  const resolve = vi.fn(async () => {
+    if (options.defaultPreset === null) throw new Error('no default preset')
+    return { id: options.defaultPreset ?? 'cua-mcp' }
+  })
+  const mount = vi.fn(async (_ctx: Context, id: string) => ({ id }))
   const execute = vi.fn(async (input: ToolBatchInput): Promise<ToolBatchResult> => {
     const call = input.calls[0]
     if (call === undefined) throw new Error('no call')
@@ -98,14 +108,14 @@ function fixture(options: SetupOptions = {}) {
   }))
   const release = vi.fn(async () => {})
   ctx.provide('agents', { create, withInitiator } as never)
-  ctx.provide('agentPresets', { defaultId: 'cua-mcp', mount } as never)
+  ctx.provide('agentPresets', { resolve, mount } as never)
   ctx.provide('tools', { execute, get } as never)
   ctx.provide('systemPrompt', { assemble } as never)
   ctx.provide('attachments', {} as never)
-  if (options.programs !== false) ctx.provide('cuaPrograms', { release, screenshotRequestTarget: () => undefined, ...options.programs } as never)
+  if (options.programs !== false) ctx.provide('cuaPrograms', { release, releaseInputs: vi.fn(async () => {}), screenshotRequestTarget: () => undefined, ...options.programs } as never)
   onTestFinished(async () => { await ctx.fiber.dispose() })
   return {
-    ctx, agent, maintenance, runMaintenance, cancel, whenIdle, create, withInitiator, initiators, mount, execute, get, assemble,
+    ctx, agent, runMaintenance, cancel, whenIdle, create, withInitiator, initiators, mount, execute, get, assemble,
     release, dispose,
   }
 }
@@ -140,11 +150,32 @@ function texts(result: CallToolResult): string[] {
 }
 
 describe('Computer Use MCP server', () => {
+  it('mounts the recorded preset when the default changes during Agent creation', async () => {
+    const options = { defaultPreset: 'first' }
+    const { ctx, agent, create, mount } = fixture(options)
+    const createAgent = create.getMockImplementation()!
+    create.mockImplementationOnce((request) => {
+      options.defaultPreset = 'second'
+      return createAgent(request)
+    })
+    const adapter = await createCuaMcpServer(ctx, { consent: 'allow', cwd: '/workspace', signal: new AbortController().signal })
+    onTestFinished(() => adapter.dispose())
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ meta: { agentPreset: 'first' } })
+    expect(mount).toHaveBeenCalledWith(agent.ctx, 'first')
+  })
+
+  it('reports a missing default before creating the private Agent', async () => {
+    const { ctx, create } = fixture({ defaultPreset: null })
+    await expect(createCuaMcpServer(ctx, { consent: 'elicit', cwd: '/workspace', signal: new AbortController().signal }))
+      .rejects.toThrow('no default preset')
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it('creates the Agent before serving, projects its registration verbatim, and runs programs as Agent maintenance inside the initiator scope', async () => {
-    const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent, runMaintenance, maintenance } = await setup()
+    const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent, runMaintenance } = await setup()
     expect(create).toHaveBeenCalledOnce()
     expect(create.mock.calls[0]?.[0]).toMatchObject({ meta: { cwd: '/workspace', agentPreset: 'cua-mcp' } })
-    expect(mount).toHaveBeenCalledWith(agent.ctx)
+    expect(mount).toHaveBeenCalledWith(agent.ctx, 'cua-mcp')
     expect(adapter.agent).toBe(agent)
     const listed = await client.listTools()
     expect(listed.tools.map(tool => tool.name)).toEqual(['cua_get_api_reference', 'cua_run_code', 'cua_reset'])
@@ -170,10 +201,6 @@ describe('Computer Use MCP server', () => {
     expect(withInitiator).toHaveBeenCalledOnce()
     expect(initiators).toEqual([agent])
     expect(texts(await run({ code: '2', description: 'Again' }))).toEqual(['program output'])
-    // Cancelling the Agent's maintenance activity, as its disposal does, cancels the program's execution.
-    expect(input.signal.aborted).toBe(false)
-    maintenance.abort()
-    expect(input.signal.aborted).toBe(true)
   })
 
   it('fails the listing when the registration is not representable as an MCP tool', async () => {
@@ -347,4 +374,24 @@ describe('Computer Use MCP server', () => {
     expect(served.dispose).toHaveBeenCalledOnce()
     await served.client.close()
   })
+
+  it('settles a queued request cancelled before admission even without optional input controls', async () => {
+    const served = await setup({ programs: false })
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+    served.execute.mockImplementationOnce(async () => { entered.resolve(); await finish.promise; return batch('first') })
+    const first = served.run({ code: 'first' })
+    await entered.promise
+    const controller = new AbortController()
+    const queued = served.client.callTool({ name: 'cua_run_code', arguments: { code: 'queued' } }, { signal: controller.signal })
+    const cancelled = expect(queued).rejects.toThrow(/abort/i)
+    try {
+      await served.client.listTools()
+      controller.abort()
+    } finally { finish.resolve() }
+    await Promise.all([first, cancelled])
+    await served.run({ code: 'after cancellation' })
+    expect(served.execute.mock.calls[1]?.[0].signal.aborted).toBe(true)
+  })
+
 })

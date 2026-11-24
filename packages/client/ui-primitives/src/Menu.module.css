@@ -388,8 +388,26 @@
   display: none;
 }
 
-/* A legacy outlet following structured rows is not the beginning of the menu. */
-.list[data-context-menu] .viewport > .itemWrap ~ [data-slot] .itemWrap:first-child > .separator:first-child {
+/* Count registrations that supply menu rows, not empty item roots. A single
+ * registration may supply a fragment of rows or wrap a row with its controls. */
+.viewport [data-slot-item] {
+  --menu-item-leading-separator: none;
+}
+
+.viewport [data-slot-item]:nth-child(n + 2 of [data-slot-item]:has(
+  > :is(.itemWrap, [role='menuitem']):not([hidden]),
+  > :not([hidden], [role='menu']) > :is(.itemWrap, [role='menuitem']):not([hidden])
+)) {
+  --menu-item-leading-separator: block;
+}
+
+[data-slot-item] > .itemWrap:first-child > .separator:first-child {
+  display: var(--menu-item-leading-separator, none);
+}
+
+/* A slot immediately after a data row continues its group order. A data
+ * separator in that position already draws the line before the first slot row. */
+.viewport > .itemWrap + [data-slot] .itemWrap:first-child > .separator:first-child {
   display: block;
 }
 

@@ -106,6 +106,19 @@ interface ToolArgsMap {
     /** Required with sandbox_permissions: one sentence for the user explaining why this exact command needs the wider access. Use the language of the user’s current request. */
     justification?: string;
   } & Record<string, JsonValue>;
+  /** Inspect runtime APIs before writing or configuring plugins. Omit query to discover providers, methods, and input schemas; then query an exact entry from that directory. Read-only: cannot invoke business Service methods or modify the runtime. Client queries require a connected page. */
+  cordis_inspect: {
+    query?: {
+      /** Provider platform. */
+      platform: "host" | "client";
+      /** Provider ID from the directory. */
+      provider: string;
+      /** Method name from the directory. */
+      method: string;
+      /** Arguments matching the method's input schema. */
+      input?: JsonValue;
+    };
+  } & Record<string, JsonValue>;
   /** Create a persisted goal that keeps this session working across automatic continuation rounds. Use it when the direct human request is a long-running objective, even if the user did not say "goal"; not for single-turn work. */
   create_goal: {
     /** The concrete completion objective inferred from the direct human request. */
@@ -432,6 +445,7 @@ interface ToolOutputMap {
       runnerFailed?: boolean;
     };
   };
+  cordis_inspect: JsonValue;
   create_goal: {
     goal: null;
   } | {

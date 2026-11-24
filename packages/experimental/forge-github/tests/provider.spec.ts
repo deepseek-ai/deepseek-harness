@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
-import { CANDIDATES_QUERY } from '../src/overview.ts'
+import { CANDIDATES_QUERY, DISABLE_AUTO_MERGE_MUTATION, ENABLE_AUTO_MERGE_MUTATION } from '../src/overview.ts'
 import { VIEWED_QUERY } from '../src/viewed.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import type { GitHubLimits } from '../src/provider.ts'
@@ -941,6 +941,56 @@ describe('GitHub provider overview and viewed marks', () => {
     ])
   })
 
+  it('turns auto-merge on for the confirmed head and off, each through one mutation on standard input', async () => {
+    const gh = double(() => node)
+    const subject = provider(gh.run)
+    await expect(subject.setAutoMerge(pull(1), { enabled: true, method: 'rebase', headSha: HEAD }, signal)).resolves.toBeUndefined()
+    await expect(subject.setAutoMerge(pull(1), { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(gh.inputs).toEqual([
+      { query: ENABLE_AUTO_MERGE_MUTATION, variables: { input: { pullRequestId: 'PR_1', mergeMethod: 'REBASE', expectedHeadOid: HEAD } } },
+      { query: DISABLE_AUTO_MERGE_MUTATION, variables: { input: { pullRequestId: 'PR_1' } } },
+    ])
+    const mutation = ['api', 'graphql', '--hostname', 'github.com', '--input', '-']
+    expect(gh.calls.filter(args => args.includes('--input'))).toEqual([mutation, mutation])
+  })
+
+  const MOVED = 'e'.repeat(40)
+  const squash = { enabled: true, method: 'squash', headSha: HEAD } as const
+  /** GitHub's answer to a mutation it refuses, as `gh api graphql` prints it. */
+  const refused = (message: string): GhOutput =>
+    output({ data: { enablePullRequestAutoMerge: null }, errors: [{ type: 'UNPROCESSABLE', message }] }, 1, `gh: ${message}`)
+
+  it.each([
+    ['a refusal while the head stays', HEAD, refused('Pull request Pull request is in clean status'),
+      { code: 'failed', message: 'Pull request Pull request is in clean status' }, 2],
+    ['a refusal after the head moved', MOVED, refused('Head moved'),
+      { code: 'stale', message: `the pull request head moved from ${HEAD} to ${MOVED}` }, 2],
+    ['an error that does not name a refusal', HEAD, output({ data: null, errors: [{ message: 'Something went wrong' }] }, 1),
+      { code: 'unknown', message: 'Something went wrong' }, 1],
+    ['a server error', HEAD, output('', 1, 'gh: HTTP 502'), { code: 'unknown', message: 'gh: HTTP 502' }, 1],
+    ['a timeout', HEAD, new GhTimeoutError('gh timed out'), { code: 'unknown', message: 'gh timed out' }, 1],
+    ['a gh that cannot start', HEAD, new GhUnavailableError('gh could not start'), { code: 'failed', message: 'gh could not start' }, 2],
+  ])('reports turning auto-merge on answered with %s, sending the mutation once', async (_label, later, answer, failure, reads) => {
+    let read = 0
+    const gh = double(() => read++ === 0 ? node : { data: { repository: { pullRequest: { id: 'PR_1', headRefOid: later } } } }, () => {
+      if (answer instanceof Error) throw answer
+      return answer
+    })
+    await expect(provider(gh.run).setAutoMerge(pull(1), squash, signal)).resolves.toEqual(failure)
+    expect(gh.inputs).toHaveLength(1)
+    expect(read).toBe(reads)
+  })
+
+  it.each([
+    ['a head that moved', () => output({ data: { repository: { pullRequest: { id: 'PR_1', headRefOid: MOVED } } } }), 'stale'],
+    ['missing credentials', () => output('', 1, 'gh: HTTP 401: Bad credentials'), 'unauthenticated'],
+    ['a pull request GitHub does not show', () => output({ data: { repository: { pullRequest: null } } }), 'failed'],
+  ] as const)('refuses to turn auto-merge on after %s, without a mutation', async (_label, answer, code) => {
+    const gh = fakeGh(answer)
+    await expect(provider(gh.run).setAutoMerge(pull(1), squash, signal)).resolves.toMatchObject({ code })
+    expect(gh.calls).toHaveLength(1)
+  })
+
   it('reruns each workflow run with a failed Actions job once, after confirming the head', async () => {
     const actions = (name: string, conclusion: string, run: number | null) => ({ ...checkRun(name, 'COMPLETED', conclusion),
       checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: run, event: 'pull_request', workflow: { id: name, name } } } })
@@ -1006,6 +1056,7 @@ describe('GitHub provider overview and viewed marks', () => {
     await expect(subject.requestReviews(unconfigured, { reviewers: [{ kind: 'user', login: 'mona' }] }, signal)).resolves.toEqual(failure)
     await expect(subject.reviewerCandidates(unconfigured, '', signal)).resolves.toEqual({ ...failure, code: 'unavailable' })
     await expect(subject.updateBranch(unconfigured, { method: 'merge', headSha: HEAD }, signal)).resolves.toEqual(failure)
+    await expect(subject.setAutoMerge(unconfigured, { enabled: false }, signal)).resolves.toEqual(failure)
     expect(gh.calls).toEqual([])
   })
 })

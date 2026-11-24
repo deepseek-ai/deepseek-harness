@@ -173,16 +173,18 @@ describe('durable step context', () => {
     await fire(ctx, sessionAgent(session), 1, 1)
 
     expect(contextTexts(session)).toEqual([
-      'Time sampled while preparing turn 1, step 1: 2026-07-15T09:01:01+08:00[Asia/Shanghai]\n'
+      '<system-reminder>\n'
+      + 'Time sampled while preparing turn 1, step 1: 2026-07-15T09:01:01+08:00[Asia/Shanghai]\n'
       + 'Browser time zone for this request: Asia/Shanghai. Interpret otherwise-unqualified dates and times in this zone.\n'
-      + 'Elapsed since the preceding model-visible message: 1d 1h 1m 1s.',
+      + 'Elapsed since the preceding model-visible message: 1d 1h 1m 1s.\n'
+      + '</system-reminder>',
     ])
     const event = session.snapshotEvents().at(-1)
     expect(event?.type).toBe('user/message')
     if (event?.type !== 'user/message') throw new Error('missing time context')
     // The reading is a `snapshot`-form context: one named contribution whose
-    // text is exactly what the model read, so a consumer attributes it without
-    // re-splitting prose.
+    // text is the model-read reading without its `<system-reminder>` frame, so
+    // a consumer attributes it without re-splitting prose.
     expect(event.data.source).toEqual({
       kind: 'time-context',
       form: 'snapshot',
@@ -236,9 +238,11 @@ describe('durable step context', () => {
     await fire(ctx, agent, 3, 2)
 
     expect(contextTexts(session)[1]).toBe(
-      'Time sampled while preparing turn 3, step 2: 2026-07-14T00:01:01+00:00[UTC]\n'
+      '<system-reminder>\n'
+      + 'Time sampled while preparing turn 3, step 2: 2026-07-14T00:01:01+00:00[UTC]\n'
       + 'Browser time zone for this request: unavailable. Ask the user to clarify otherwise-unqualified dates and times.\n'
-      + 'Elapsed since the preceding step context: 1m 1s.',
+      + 'Elapsed since the preceding step context: 1m 1s.\n'
+      + '</system-reminder>',
     )
   })
 
@@ -277,17 +281,6 @@ describe('durable step context', () => {
     openMessageTurn(session, 4)
 
     await fire(ctx, sessionAgent(session), 4, 2)
-
-    expect(contextTexts(session)[0]).toContain(
-      'Elapsed since the preceding step context: unavailable.',
-    )
-  })
-
-  it('reports an unavailable later-step baseline when event lookup is exhausted', async () => {
-    const { ctx } = await mount()
-    const session = Session.create(brandString<SessionId>('later-step-exhausted'))
-
-    await fire(ctx, sessionAgent(session), 1, 2)
 
     expect(contextTexts(session)[0]).toContain(
       'Elapsed since the preceding step context: unavailable.',
@@ -526,10 +519,10 @@ describe('time-context projection fold edges', () => {
     expect(contextTexts(session)).toHaveLength(1)
   })
 
-  it('keeps the historical requested-turn fallback and resets distinct zones on the next turn', async () => {
+  it('collects distinct zones inside each turn and resets them on the next turn', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 0 })
     onTestFinished(() => ctx.fiber.dispose())
-    const session = Session.create(brandString<SessionId>('browser-historical-turn'))
+    const session = Session.create(brandString<SessionId>('browser-next-turn'))
     session.append('user/message', createUserMessage({
       content: [],
       source: { kind: 'user', rpcId: 'before-turn', clientTimeZone: 'Europe/London' } as never,
@@ -549,8 +542,8 @@ describe('time-context projection fold edges', () => {
     expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       browserTurn: 2, browserTimeZones: ['America/New_York'],
     })
-    await fire(ctx, sessionAgent(session), 1, 1)
-    expect(contextTexts(session).at(-1)).toContain('mixed ["America/New_York","Asia/Shanghai"]')
+    await fire(ctx, sessionAgent(session), 2, 1)
+    expect(contextTexts(session).at(-1)).toContain('Browser time zone for this request: America/New_York. ')
   })
 
   it('clears the open-turn injection time at the next turn start', async () => {

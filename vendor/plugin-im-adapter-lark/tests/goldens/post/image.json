@@ -1,0 +1,17 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "img",
+              "image_key": "fake:fake:test:image:d9d33215365f"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

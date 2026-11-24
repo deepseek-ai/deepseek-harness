@@ -11,7 +11,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-action-cards': ['isPluginStopping'],
   '@deepseek-ai/dsh-agent': [
     'AgentModel', 'agentCarrier', 'agentEvents', 'assembleContextFor', 'emitAgentEvent', 'foldConsumedWork',
-    'installModelSelection', 'modelSelectionProjectionDefinition',
+    'foldConsumedWorkForEvent', 'installModelSelection', 'modelSelectionProjectionDefinition',
   ],
   '@deepseek-ai/dsh-agent-instructions': [
     'discoverBaselineInstructionFiles', 'loadBaselineInstructions', 'renderAgentInstructions',

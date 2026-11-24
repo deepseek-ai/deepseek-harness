@@ -53,6 +53,10 @@ Uploading modes require an exporter URL. Processor settings control the independ
       headers:
         authorization: !!js `Bearer ${process.env.OTLP_TOKEN}`
     processor: {}            # optional; byte/count batching and per-request watchdog
+    recordFormat: per-event  # optional; per-event (default) or per-batch
+    maxBatchEvents: 128      # optional; per-batch only
+    maxBatchBytes: 1048576   # optional; per-batch only
+    batchDelayMillis: 1000   # optional; per-batch only
 ```
 
 | Field | Default | Meaning |
@@ -62,20 +66,41 @@ Uploading modes require an exporter URL. Processor settings control the independ
 | `exporter`, `processor` | — | SDK transport plus byte/count batching; headers/TLS identity are not inherited from the environment. Agent factories own their returned agent settings, including keepAlive |
 | `shutdownTimeoutMillis` | `3,000` | Outer deadline for all queued HTTP requests; remaining queued sends stop at expiry |
 | `maxRequestBytes` | `4,000,000` | Maximum complete OTLP JSON request bytes before gzip; may only be lowered |
+| `recordFormat` | `per-event` | OTLP record granularity: `per-event` keeps the existing one-record-per-event format; `per-batch` sends one record per contiguous Session delivery batch |
+| `maxBatchEvents` | `128` | `per-batch` only: maximum events per record |
+| `maxBatchBytes` | `1,048,576` | `per-batch` only: maximum record body JSON bytes; a larger single event still ships as its own batch |
+| `batchDelayMillis` | `1,000` | `per-batch` only: maximum age of the oldest buffered event before the record is emitted |
 
 Direct `ctx.sessionTelemetry.emit()` calls are no-ops in every mode and cannot bypass feedback authorization. Inherited parent feedback does not authorize a child export: the child needs new feedback of its own. Its authorized prefix then includes inherited context.
 
 Model requests, request headers, Session creation or adoption, restoration, and plugin mount or HMR do not authorize capture. Stored feedback alone triggers nothing. Scheduled flush and shutdown may finish batches authorized earlier, but never capture new records.
 
+### Rolling out per-batch
+
+The default is `per-event`. Enable the new format per deployment with a profile overlay that repeats the entry's complete `config`, because an overlay replaces that object instead of merging it. Copy the deployment's existing `mode`, `exporter`, and `processor` values and change only `recordFormat`:
+
+```yaml
+- id: session-telemetry-otel
+  config:
+    mode: FEEDBACK_ONLY
+    exporter:
+      url: https://dsh-otel-collector.deepseeksvc.com/v1/logs
+    processor: {}
+    recordFormat: per-batch
+```
+
+A deployment that enables `per-batch` confirms two things first: the collector accepts the larger single record (default body ceiling 1 MB) and downstream queries unwrap `body.events`.
+
 ### What leaves the machine
 
 Each Session event becomes one `eventName: "session-log"` record. `attributes.sessionId` is the collector Session identity; `attributes.content` encodes the complete event envelope with redacted `event.data`. JSON values are preserved, not the original JSONL bytes or key ordering. Legacy `session.id`, `event.seq`, and `event.type` metadata remain for existing consumers. Resources carry application and anonymous-user identity; scope carries the backend package name and version. The base profile uses `https://dsh-otel-collector.deepseeksvc.com/v1/logs`; `DSH_TELEMETRY_OTLP_URL` overrides it. No channel header is added implicitly.
+
 
 The shared OTel channel measures each record once with the SDK OTLP JSON serializer, including its resource/scope envelope, then greedily packs requests using those conservative sizes. A single oversized event produces one rejection diagnostic without truncation. Session logs never mix with product analytics in a request. Capture handoff and shutdown are not collector acknowledgements.
 
 ### Failures and shutdown
 
-Invalid byte limits, non-positive queue/timer values, `maxExportBatchSize > maxQueueSize`, invalid endpoints, and invalid shutdown deadlines fail at load. Processor defaults are 2,048 queued records, 512 records per request, a 1,000 ms scheduling delay, and a 30,000 ms request watchdog. Byte limits may split a count batch into multiple serial HTTP requests. Each request waits for SDK export-queue cleanup after its callback before the next starts. `exportTimeoutMillis` warns per request but never frees an unsettled transport slot; the SDK transport owns network timeout/retry. Shutdown drains these requests until `shutdownTimeoutMillis`; expiry discards the remaining queue and prevents further sends, while an active request may still settle. Large prefixes can therefore remain partially unsent at CLI exit.
+Invalid byte limits, non-positive queue/timer values, `maxExportBatchSize > maxQueueSize`, invalid endpoints, invalid shutdown deadlines, an unknown `recordFormat`, and non-positive or out-of-range `per-batch` ceilings fail at load. Processor defaults are 2,048 queued records, 512 records per request, a 1,000 ms scheduling delay, and a 30,000 ms request watchdog. Byte limits may split a count batch into multiple serial HTTP requests. Each request waits for SDK export-queue cleanup after its callback before the next starts. `exportTimeoutMillis` warns per request but never frees an unsettled transport slot; the SDK transport owns network timeout/retry. Shutdown drains these requests until `shutdownTimeoutMillis`; expiry discards the remaining queue and prevents further sends, while an active request may still settle. Large prefixes can therefore remain partially unsent at CLI exit.
 
 -----
 
@@ -95,7 +120,8 @@ The backend owns feedback authorization, identity, and shutdown. The shared OTel
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: mode resolution, fail-closed validation, SDK pipeline wiring, coordinator composition, shutdown deadline |
+| [`src/index.ts`](src/index.ts) | Plugin entry: mode and record-format resolution, fail-closed validation, SDK pipeline wiring, coordinator composition, shutdown deadline |
+| [`src/batch.ts`](src/batch.ts) | Delivery-batch assembly: per-Session buffers, the four flush triggers, sequence watermark, batch ids |
 
 ### Capture wiring
 
@@ -103,7 +129,7 @@ The backend captures history on demand through new own feedback events or commit
 
 ### Field mapping
 
-Each capture record supplies a separately copied event envelope and redacted payload to `SessionLogReporter`; serialization retains optional surface metadata and the event sequence/time. Feedback authorizes the complete unhanded prefix, not only the feedback payload.
+Each capture record supplies a separately copied event envelope and redacted payload to `SessionLogReporter`; serialization retains optional surface metadata and the event sequence/time. Feedback authorizes the complete unhanded prefix, not only the feedback payload. In `per-batch` mode the assembler buffers those records per Session and forms exactly one contiguous range per flush, using each event's canonical sequence and the format generation from the record's `session.format_version` attribute.
 
 </details>
 
@@ -140,6 +166,8 @@ These limits define where SDK behavior governs and where export guarantees end. 
 - **Upstream experimental tree** — `@opentelemetry/sdk-logs` is published from the upstream experimental tree; SDK API churn lands in the [shared OTel plugin](../../telemetry/otel/README.md), while the seam contract does not move.
 - **Live-collector behavior belongs to the SDK exporter** — authentication, TLS, throttling, and other real OTLP deployment behavior follow the upstream SDK rather than a package-owned compatibility layer.
 - **Best-effort handoff** — new cold snapshots and a new feedback submission after restart can repeat prefixes; receivers deduplicate by Session id, format version, and event seq. There is no durable outbox, delivery watermark, automatic retry promise, or collector-acceptance guarantee. OTel and the opt-in DeepSeek API path can overlap. Withdrawal exports a deletion event, not remote erasure.
+
+- **Batch-mode cursor scope** — a Session's sequence watermark lives as long as its assembler state; closing the Session drops it, so a later lifecycle of the same Session id restarts that cursor and can resend a prefix the receiver already holds. Deduplicate by unwrapping the batch body and keying on Session id, format version, and event seq. A batch's `(after_seq, through_seq)` range narrows the work but is not a stable key, because flush timing changes batch boundaries.
 
 - **Backend availability** — feedback submitted while this plugin is disabled or unloaded is recorded locally but not automatically replayed when it returns. Capture requires the subscriber to remain mounted until it observes the submission; unloading during a pending cold write can miss its post-flush notification.
 

@@ -239,7 +239,7 @@ describe('ChangeRequestsSection', () => {
     const value = entry(7, snapshot(7))
     const b = section(ready({ changeRequests: [value, entry(8, { code: 'unavailable', message: 'down' })] }))
     const card = b.view.container.querySelector('[data-forge-change="https://github.com/octo/demo/pull/7"]') as HTMLElement
-    chooseAction(card, '#7', en['change.view'])
+    chooseAction(card, '#7', 'Open on GitHub')
     chooseAction(card, '#7', en['change.copy'])
     chooseAction(card, '#7', en['change.viewChanges'])
     chooseAction(card, '#7', en['change.remove'])

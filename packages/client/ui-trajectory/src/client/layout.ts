@@ -6,6 +6,7 @@ import type {
   AssistantBlock,
   AssistantMessageNode,
   ConversationLocation,
+  EffectiveSystemSection,
   RequestInspectionSnapshot,
   RequestPromptChange,
   RequestView,
@@ -97,6 +98,7 @@ type OrderedLayoutEntry =
     seq: number
     request?: AssistantRequestView
     systemPrompt?: string
+    systemSections?: readonly EffectiveSystemSection[]
     change: RequestPromptChange
   }
   | {
@@ -261,7 +263,11 @@ export function deriveTrajectoryLayout(
   const entries: OrderedLayoutEntry[] = [
     ...(input.systemPrompts ?? []).map(prompt => ({
       kind: 'system' as const, seq: prompt.seq, systemPrompt: prompt.text,
-      change: { seq: prompt.seq, time: prompt.time, kind: prompt.update ? 'system' as const : 'initial' as const },
+      ...(prompt.sections === undefined ? {} : { systemSections: prompt.sections }),
+      change: {
+        seq: prompt.seq, time: prompt.time, kind: prompt.update ? 'system' as const : 'initial' as const,
+        ...(prompt.message === undefined ? {} : { message: prompt.message }),
+      },
     })),
     ...nodes.map((node, nodeIndex) => ({
       kind: 'node' as const,
@@ -334,9 +340,10 @@ export function deriveTrajectoryLayout(
           sourceSeq: change.seq,
           ...(request?.prompt === undefined ? {} : { promptDetail: request.prompt }),
           ...(entry.systemPrompt === undefined ? {} : { systemPromptDetail: entry.systemPrompt }),
-          ...(change.previous === undefined
-            ? {}
-            : { previousPromptDetail: change.previous }),
+          ...(entry.systemSections === undefined ? {} : { systemSectionsDetail: entry.systemSections }),
+          ...(change.previous === undefined ? {} : { previousPromptDetail: change.previous }),
+          ...(change.rebuilt === true ? { promptRebuilt: true } : {}),
+          ...(change.message === undefined ? {} : { promptMessageDetail: change.message }),
           timeSeconds: 0,
           startedAt: finiteTime(change.time),
         },

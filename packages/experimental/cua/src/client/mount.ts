@@ -7,7 +7,6 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
@@ -22,7 +21,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Existing browser registries needed by the optional permission UI. */
-export const inject = ['remote', 'slots', 'locale', 'configForms']
+export const inject = ['remote', 'slots', 'locale']
 
 /**
  * Mount the optional permission Remote and its browser controls.
@@ -54,21 +53,10 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
         return () => { unsubscribe(); controller.setChanging(false) }
       })
     })
-    const preset = ctx.configForms.get<{ default: string; selectedDefault?: string }>('agent-preset-registry')
-    const settings = {
-      ...face,
-      hooks: { ...face.hooks, cuaDefaultPreset: preset },
-      setPtcDefault: () => preset.set('selectedDefault', 'ptc'),
-      setPersistentPtc: async () => {
-        const result = await ctx.remote.cuaAccess.enablePersistentPtc(); if (!result.ok) throw result.error
-        face.refresh()
-        return true
-      },
-    }
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
-      name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => settings,
+      name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => face,
     }, PermissionPanel))
     ctx.slots.inject('plugins.bundle.activation', () => ctx.slots.register({
       name: 'plugins.bundle.activation', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => face,

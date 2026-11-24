@@ -15,7 +15,7 @@ const runnerPrivatePnpmDestination = /^\$\{\{ runner\.temp \}\}\/setup-pnpm-\$\{
 const nativeWindowsPnpmDestination = '${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
 
 describe('CI workflow', () => {
-  it('keeps at most fourteen worker jobs active across PR workflows while Python runtime targets follow the SDK suite', () => {
+  it('keeps at most sixteen worker jobs active across PR workflows while Python runtime targets follow the SDK suite', () => {
     const ci = loadWorkflow('.github/workflows/ci.yml')
     const ciWindows = loadWorkflow('.github/workflows/ci-windows.yml')
     const ciPython = loadWorkflow('.github/workflows/ci-python.yml')
@@ -37,7 +37,7 @@ describe('CI workflow', () => {
     expect(compatibilityLimit).toBeGreaterThan(0)
     expect(compatibility.strategy).toMatchObject({
       'fail-fast': false,
-      matrix: { include: [{ node: '24.9' }, { node: 26 }] },
+      matrix: { include: [{ node: '24.22.3' }, { node: 26 }] },
     })
     expect(workflowJob(ci, 'all-checks-passed').needs).toContain('node-compat')
     // The web snapshot shards are the only other matrix: one job, one runner per shard.
@@ -45,8 +45,30 @@ describe('CI workflow', () => {
     expect(webSnapshot.strategy).toEqual({ 'fail-fast': false, matrix: { shard: [1, 2] } })
     const webSnapshotShards = isRecord(webSnapshot.strategy) && isRecord(webSnapshot.strategy.matrix)
       && Array.isArray(webSnapshot.strategy.matrix.shard) ? webSnapshot.strategy.matrix.shard.length : 0
+    // Coverage runs two instrumented file shards as one matrix; its report job
+    // starts only after both finish.
+    const coverage = workflowJob(ci, 'node-24-coverage')
+    expect(coverage.strategy).toEqual({ 'fail-fast': false, matrix: { shard: [1, 2] } })
+    expect(coverage.name).toBe('node 24 / coverage ${{ matrix.shard }}/2')
+    const coverageLanes = isRecord(coverage.strategy) && isRecord(coverage.strategy.matrix)
+      && Array.isArray(coverage.strategy.matrix.shard) ? coverage.strategy.matrix.shard.length : 0
+    expect(coverageLanes).toBe(2)
+    expect(workflowJob(ci, 'node-24-coverage-report').needs).toBe('node-24-coverage')
+    // The merge is CPU- and heap-bound; it runs on 8-vCPU pools.
+    const reportRunner = String(workflowJob(ci, 'node-24-coverage-report')['runs-on'])
+    expect(reportRunner).toContain("'blacksmith-8vcpu-ubuntu-2404'")
+    expect(reportRunner).toContain("'dsh-ubuntu-24-04-8core'")
+    // The two benchmark phases run as one matrix; their report job renders after them.
+    const bench = workflowJob(ci, 'node-24-bench')
+    expect(bench.strategy).toEqual({
+      'fail-fast': false,
+      matrix: { include: [{ shard: 1, phase: 'first' }, { shard: 2, phase: 'last' }] },
+    })
+    const benchPhases = isRecord(bench.strategy) && isRecord(bench.strategy.matrix)
+      && Array.isArray(bench.strategy.matrix.include) ? bench.strategy.matrix.include.length : 0
+    expect(workflowJob(ci, 'node-24-bench-report').needs).toBe('node-24-bench')
     const ordinaryJobs = Object.entries(ci.jobs)
-      .filter(([name]) => !['node-compat', 'all-checks-passed', 'publisher-isolated', 'node-24-web-snapshot'].includes(name))
+      .filter(([name]) => !['node-compat', 'all-checks-passed', 'publisher-isolated', 'node-24-web-snapshot', 'node-24-coverage', 'node-24-coverage-report', 'node-24-bench', 'node-24-bench-report'].includes(name))
     for (const [name, job] of ordinaryJobs) {
       if (!isRecord(job)) throw new TypeError(`${name} must define a job`)
       expect(job).not.toHaveProperty('strategy')
@@ -100,12 +122,14 @@ describe('CI workflow', () => {
     // The lint lane owns its own runner, so it raises the ceiling by one; the
     // self-hosted failover pool is still admitted only up to its own limit.
     // The build job finishes before its downstream jobs start, so the
-    // static count overstates the peak by one.
-    const linuxActive = ordinaryJobs.length + webSnapshotShards
+    // static count overstates the peak by one. Coverage counts its two
+    // shards and the benchmarks their two phases; the coverage and benchmark
+    // report jobs start after them and are not counted.
+    const linuxActive = ordinaryJobs.length + webSnapshotShards + coverageLanes + benchPhases
     const beforeSdk = linuxActive + compatibilityLimit + windowsActive + 1
     const afterSdk = linuxActive + compatibilityLimit + windowsActive + Math.max(1, targets.split(',').length)
-    expect(beforeSdk).toBeLessThanOrEqual(14)
-    expect(afterSdk).toBeLessThanOrEqual(14)
+    expect(beforeSdk).toBeLessThanOrEqual(16)
+    expect(afterSdk).toBeLessThanOrEqual(16)
   })
 
   it('keeps required PR verdicts covering runtime and publisher jobs', () => {
@@ -125,13 +149,32 @@ describe('CI workflow', () => {
       expect(verdict.needs.every(id => typeof id === 'string' && id in jobs)).toBe(true)
       blocking.push(...(verdict.needs as string[]))
     }
+    // A job the verdict does not list must be needed by one it lists: a failed
+    // coverage shard skips its report job, and the verdict fails on a skip.
+    const ci = loadWorkflow('.github/workflows/ci.yml')
+    if (!isRecord(ci.jobs)) throw new TypeError('ci.yml must define jobs')
+    const covered = new Set<string>()
+    const visit = (id: string): void => {
+      if (covered.has(id)) return
+      covered.add(id)
+      const needs = workflowJob(ci, id).needs
+      for (const need of Array.isArray(needs) ? needs : typeof needs === 'string' ? [needs] : []) {
+        if (typeof need === 'string') visit(need)
+      }
+    }
+    for (const id of workflowJob(ci, 'all-checks-passed').needs as string[]) visit(id)
+    // The benchmark report only renders results; node-24-bench owns the verdict.
+    const bookkeeping = ['all-checks-passed', 'node-24-bench-report']
+    expect(Object.keys(ci.jobs).filter(id => !bookkeeping.includes(id) && !covered.has(id))).toEqual([])
+    expect(blocking).not.toContain('node-24-bench-report')
+    expect(blocking).not.toContain('node-24-coverage')
     // Every blocking lane must contribute to a branch-protection verdict.
     expect(blocking.sort()).toEqual([
       'node-24',
       'node-24-bench',
       'node-24-build',
       'node-24-consumers',
-      'node-24-coverage',
+      'node-24-coverage-report',
       'node-24-lint',
       'node-24-web-snapshot',
       'node-compat',
@@ -301,8 +344,39 @@ describe('CI workflow', () => {
     expect(wine.steps).toContainEqual(expect.objectContaining({ name: 'Shut down wineserver', if: 'always()' }))
   })
 
+  it('restores Linux coverage timings on the shards and saves the merged timings only from the report job', () => {
+    const ci = loadWorkflow('.github/workflows/ci.yml')
+    const prefix = "coverage-times-Linux-${{ runner.environment }}-${{ vars.DSH_CI_FAILOVER_LINUX || 'enterprise' }}-"
+    const key = prefix + '${{ github.run_id }}-${{ github.run_attempt }}'
+    const stepsOf = (jobName: string): Record<string, unknown>[] => {
+      const job = workflowJob(ci, jobName)
+      if (!Array.isArray(job.steps)) throw new TypeError(`${jobName} must define steps`)
+      return job.steps.filter(isRecord)
+    }
+    const lanes = stepsOf('node-24-coverage')
+    const restore = lanes.findIndex(step => step.name === 'Restore coverage duration history')
+    expect(restore).toBeGreaterThan(lanes.findIndex(step => step.uses === 'actions/checkout@v7.0.1'))
+    expect(lanes.findIndex(step => step.run === 'pnpm run check:ci:coverage-shard')).toBeGreaterThan(restore)
+    expect(lanes[restore]).toMatchObject({
+      uses: 'actions/cache/restore@v6.1.0',
+      with: { path: '.coverage-times.json', key, 'restore-keys': `${prefix}\n` },
+    })
+    expect(lanes.filter(step => isRecord(step.with) && step.with.path === '.coverage-times.json' && step.uses === 'actions/cache/save@v6.1.0')).toEqual([])
+    const report = stepsOf('node-24-coverage-report')
+    const merge = report.findIndex(step => step.run === 'pnpm run test:coverage:merge-shards "$RUNNER_TEMP/coverage-shards"')
+    expect(report[merge]).toMatchObject({ env: { NODE_OPTIONS: '--max-old-space-size=4096' } })
+    expect(lanes.find(step => step.name === 'Upload coverage shard blobs')).toMatchObject({ with: { overwrite: true } })
+    const save = report.findIndex(step => step.name === 'Save coverage duration history')
+    expect(merge).toBeGreaterThan(report.findIndex(step => step.uses === 'actions/download-artifact@v8.0.1'))
+    expect(save).toBeGreaterThan(merge)
+    expect(report[save]).toMatchObject({
+      uses: 'actions/cache/save@v6.1.0',
+      if: '${{ !cancelled() }}',
+      with: { path: '.coverage-times.json', key },
+    })
+  })
+
   it.each([
-    ['node-24-coverage', 'ci.yml', 'Linux', 'LINUX', 'pnpm run check:ci:coverage'],
     ['windows-coverage', 'ci-windows.yml', 'Windows', 'WINDOWS', 'pnpm run check:ci:coverage'],
   ])('reuses %s coverage timings only within its platform and runner pool', (jobName, file, platform, variable, command) => {
     const job = workflowJob(loadWorkflow('.github/workflows/' + file), jobName)
@@ -357,7 +431,7 @@ describe('CI workflow', () => {
     }
   })
 
-  it.each(['node-24', 'node-24-coverage', 'node-24-build', 'node-24-consumers', 'node-24-web-snapshot'])(
+  it.each(['node-24', 'node-24-coverage', 'node-24-coverage-report', 'node-24-build', 'node-24-consumers', 'node-24-web-snapshot'])(
     '%s keeps tool and fixture temporary files under runner cleanup',
     (jobName) => {
       const job = workflowJob(loadWorkflow('.github/workflows/ci.yml'), jobName)
@@ -606,17 +680,25 @@ describe('CI workflow', () => {
     // The benchmark lane is a required verdict input and runs alone so its
     // wall-clock budgets never share a runner with a concurrent aggregate.
     expect(aggregate.needs).toContain('node-24-bench')
-    expect(node24Bench.name).toBe('node 24 / benchmarks')
-    expect(node24Bench.env).toBeUndefined()
+    expect(node24Bench.name).toBe('node 24 / benchmarks ${{ matrix.shard }}/2')
+    expect(node24Bench.env).toEqual({ DSH_BENCH_PHASE: '${{ matrix.phase }}' })
+    // Browser cases are serial files of phase `last`, so the CPU phase runner
+    // skips the install; the browser phase rewrites APT to HTTPS first.
+    expect(node24Bench.steps).toContainEqual({
+      name: 'Use HTTPS for Ubuntu archives',
+      if: "matrix.phase == 'last'",
+      run: 'bash scripts/prepare-ci-apt-https.sh',
+    })
     expect(node24Bench.steps).toContainEqual({
       name: 'Install benchmark browser and hosted dependencies',
+      if: "matrix.phase == 'last'",
       run: 'pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium',
     })
     expect(JSON.stringify(node24Bench.steps)).not.toContain('DSH_CI_FAILOVER_LINUX')
     expect(node24Bench.steps).toContainEqual({
       name: 'Run performance benchmarks',
       env: { DSH_GATE_VERBOSE: '1' },
-      run: 'pnpm run check:ci:bench',
+      run: 'pnpm run check:ci:bench-prebuilt',
     })
     expect(windowsAggregate.needs).not.toContain('serial-windows')
 
@@ -747,10 +829,19 @@ describe('CI workflow', () => {
     }
     expect(JSON.stringify(benchmark.steps)).not.toContain('DSH_CI_FAILOVER_LINUX')
     expect(benchmark.if).toBe("github.event_name == 'pull_request'")
-    expect(benchmark.needs).toBeUndefined()
+    expect(benchmark.needs).toBe('node-24-build')
     expect(benchmark['continue-on-error']).toBeUndefined()
-    expect(benchmark.env).toBeUndefined()
     expect(aggregate.needs).toContain('node-24-bench')
+
+    // The report job renders on a small hosted runner and installs nothing.
+    const report = workflowJob(workflow, 'node-24-bench-report')
+    expect(evaluateRunsOn(report['runs-on'], { vars: { DSH_CI_FAILOVER_LINUX: 'blacksmith' } }))
+      .toBe('blacksmith-2vcpu-ubuntu-2404')
+    for (const mode of ['', 'selfhosted', 'unexpected']) {
+      expect(evaluateRunsOn(report['runs-on'], { vars: { DSH_CI_FAILOVER_LINUX: mode } })).toBe('ubuntu-latest')
+    }
+    expect(report.if).toBe("${{ !cancelled() && github.event_name == 'pull_request' }}")
+    expect(JSON.stringify(report.steps)).not.toContain('pnpm install')
   })
 
   it('always restores the hosted benchmark pnpm cache', () => {
@@ -768,22 +859,62 @@ describe('CI workflow', () => {
     })
   })
 
-  it('bounds the complete benchmark job to twenty minutes', () => {
+  it('bounds each benchmark phase job to twenty minutes and runs it on the restored shared build', () => {
     const benchmark = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-bench')
+    if (!Array.isArray(benchmark.steps)) throw new TypeError('benchmark job must define steps')
+    const steps = benchmark.steps.filter(isRecord)
+    const index = (name: string): number => steps.findIndex(step => step.name === name)
 
     expect(benchmark['timeout-minutes']).toBe(20)
     expect(benchmark.steps).toContainEqual({
       name: 'Run performance benchmarks',
       env: { DSH_GATE_VERBOSE: '1' },
-      run: 'pnpm run check:ci:bench',
+      run: 'pnpm run check:ci:bench-prebuilt',
     })
+    expect(steps[index('Download build output')]).toMatchObject({ uses: 'actions/download-artifact@v8.0.1', with: { name: 'build-output' } })
+    expect(index('Download build output')).toBeGreaterThan(index('Install (immutable)'))
+    expect(index('Unpack build output')).toBeGreaterThan(index('Download build output'))
+    // A restored addon from another runner pool that does not load is rebuilt here.
+    const addon = index('Rebuild the native addon if the restored one does not load')
+    expect(addon).toBeGreaterThan(index('Unpack build output'))
+    expect(index('Run performance benchmarks')).toBeGreaterThan(addon)
+    expect(String(steps[addon]?.run)).toContain('process.dlopen({ exports: {} }, process.argv[1])')
+    expect(String(steps[addon]?.run)).toContain('pnpm run build:native-system')
+    expect(String(steps[index('Unpack build output')]?.run)).toContain('tar -xmf -')
   })
 
-  it('publishes the scaled benchmark report even when a budget fails', () => {
-    const benchmark = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-bench')
-    if (!Array.isArray(benchmark.steps)) throw new TypeError('benchmark job must define steps')
+  it('uploads the results of each phase and publishes one scaled report even when a budget fails', () => {
+    const workflow = loadWorkflow('.github/workflows/ci.yml')
+    const benchmark = workflowJob(workflow, 'node-24-bench')
+    const report = workflowJob(workflow, 'node-24-bench-report')
+    if (!Array.isArray(benchmark.steps) || !Array.isArray(report.steps)) throw new TypeError('benchmark jobs must define steps')
 
     expect(benchmark.steps).toContainEqual({
+      name: 'Upload benchmark results',
+      if: '${{ !cancelled() }}',
+      uses: 'actions/upload-artifact@v7.0.1',
+      with: {
+        name: 'benchmark-results-${{ matrix.shard }}',
+        path: 'benchmarks/.dsh-report/',
+        'include-hidden-files': true,
+        'if-no-files-found': 'warn',
+        'retention-days': 7,
+        overwrite: true,
+      },
+    })
+    const uploadIndex = benchmark.steps.findIndex(step => isRecord(step) && step.name === 'Upload benchmark results')
+    const benchmarkIndex = benchmark.steps.findIndex(step => isRecord(step) && step.name === 'Run performance benchmarks')
+    expect(uploadIndex).toBeGreaterThan(benchmarkIndex)
+
+    const steps = report.steps.filter(isRecord)
+    const download = steps.findIndex(step => step.name === 'Download benchmark results')
+    const render = steps.findIndex(step => step.name === 'Render scaled benchmark report')
+    const publish = steps.findIndex(step => step.name === 'Upload scaled benchmark report')
+    expect(steps[download]).toMatchObject({ with: { pattern: 'benchmark-results-*' } })
+    expect(String(steps[render]?.run)).toContain('node scripts/render-benchmark-report.ts benchmarks/.dsh-report')
+    expect(render).toBeGreaterThan(download)
+    expect(publish).toBeGreaterThan(render)
+    expect(steps[publish]).toEqual({
       name: 'Upload scaled benchmark report',
       if: '${{ !cancelled() }}',
       uses: 'actions/upload-artifact@v7.0.1',
@@ -795,10 +926,6 @@ describe('CI workflow', () => {
         'retention-days': 7,
       },
     })
-
-    const uploadIndex = benchmark.steps.findIndex(step => isRecord(step) && step.name === 'Upload scaled benchmark report')
-    const benchmarkIndex = benchmark.steps.findIndex(step => isRecord(step) && step.name === 'Run performance benchmarks')
-    expect(uploadIndex).toBeGreaterThan(benchmarkIndex)
   })
 
   it('splits both Wine TypeScript faces and retains their aggregate heap budgets', () => {
@@ -936,6 +1063,7 @@ describe('CI workflow', () => {
     const redirectLanes = [
       [prWorkflow, 'node-24'],
       [prWorkflow, 'node-24-coverage'],
+      [prWorkflow, 'node-24-coverage-report'],
       [prWorkflow, 'node-24-build'],
       [prWorkflow, 'node-24-consumers'],
       [prWorkflow, 'node-24-web-snapshot'],
@@ -1844,6 +1972,29 @@ describe('Git hooks', () => {
 
       expect(pairing).toMatchObject({ exclude: ['.agents/notes/archived/**'] })
     }
+  })
+
+  it('repeats the pre-commit whitespace check in CI over the pull request range, with the history that range needs', () => {
+    const preCommit = loadWorkflow('lefthook.yml')['pre-commit']
+    if (!isRecord(preCommit) || !Array.isArray(preCommit.jobs)) throw new TypeError('lefthook must define pre-commit jobs')
+    expect(preCommit.jobs).toContainEqual({ name: 'whitespace (staged)', run: 'git diff --cached --check' })
+
+    const { steps } = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24')
+    if (!Array.isArray(steps)) throw new TypeError('node-24 must define steps')
+    const names = steps.map((step: unknown) => isRecord(step) ? step.name ?? step.uses : undefined)
+    const whitespace = names.indexOf('Check whitespace in the pull request\'s changes')
+    expect(steps[whitespace]).toEqual({
+      name: 'Check whitespace in the pull request\'s changes',
+      env: {
+        BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+        HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+      },
+      run: 'git diff --check "$BASE_SHA...$HEAD_SHA"',
+    })
+    // The merge base can be any number of commits behind either tip, and the check needs no installed dependency.
+    expect(names[whitespace - 1]).toMatch(/^actions\/checkout@/)
+    expect(steps[whitespace - 1]).toMatchObject({ with: { 'fetch-depth': 0 } })
+    expect(whitespace).toBeLessThan(names.indexOf('Install (immutable)'))
   })
 })
 

@@ -1,7 +1,7 @@
 /* The review page: a list column beside the detail of one change request. Below 880px of page width one column shows:
    the list, or the detail with a back button. */
 .root {
-  container-type: inline-size;
+  container: forge-review / inline-size;
   height: 100%;
   min-height: 0;
 }
@@ -111,6 +111,11 @@
 .menuCheck {
   flex: none;
   color: var(--dsw-alias-label-primary);
+}
+
+/* A repository below the row of its host. */
+.menuNested {
+  padding-left: 16px;
 }
 
 .menuValue {
@@ -223,6 +228,7 @@
 
 .itemText {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
@@ -236,25 +242,84 @@
   overflow-wrap: anywhere;
 }
 
+/* An item's small text on at most two lines: "repository#number · author" and the hint in the first column, the update
+   time in the second. The first column's line does not wrap; the hint follows it where both fit and wraps below it
+   where they do not. */
 .itemMeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 8px;
   min-width: 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
 }
 
-.itemIssues {
-  display: inline-flex;
-  gap: 2px;
+.itemFacts {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.itemLine {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* Where the line is too narrow the author gives way first, then the repository name; the number is never cut. */
+.itemName {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.itemRepository {
+  flex: 0 1 auto;
+  min-width: 2ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemNumber {
+  flex: none;
+}
+
+.itemAuthor {
+  flex: 0 100000 auto;
+  min-width: 3ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemTime {
+  white-space: nowrap;
 }
 
 .itemHint {
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
+  white-space: nowrap;
+}
+
+/* The separator before a hint is drawn in the gap to its left. A hint that starts the second line has that gap outside
+   `.itemFacts`, which clips the separator there. */
+.itemFacts > .itemHint {
+  position: relative;
+  flex: none;
+}
+
+.itemFacts > .itemHint::before {
+  position: absolute;
+  left: -8px;
+  color: var(--dsw-alias-label-tertiary);
+  content: '·';
 }
 
 .itemHint[data-tone='error'] {
@@ -330,7 +395,11 @@
   overflow-wrap: anywhere;
 }
 
-.compactCard .itemMeta {
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  min-width: 0;
   color: var(--dsw-alias-hovercard-label-tertiary);
 }
 
@@ -385,6 +454,21 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.noticeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The notices of the hosts that could not be read, after the sections. */
+.notices {
+  padding-top: 10px;
+}
+
+.notices:first-child {
+  padding-top: 4px;
 }
 
 .noticeCommand code {
@@ -455,6 +539,102 @@
   height: 8px;
 }
 
+/* The detail's skeleton. Each row has the height of the content it stands for: the state chip and the repository in
+   the 32px bar, the 28px title, the 20px line under it, the tabs, 22px lines of text, and 30px rows. */
+.skeletonChip {
+  flex: none;
+  width: 82px;
+  height: 22px;
+  border-radius: 999px;
+  corner-shape: round;
+}
+
+.skeletonRepository {
+  flex: 1000 1 72px;
+  max-width: 236px;
+  height: 10px;
+}
+
+.skeletonTitle {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  margin: 8px 0 4px;
+}
+
+.skeletonTitle > span {
+  width: 62%;
+  height: 14px;
+}
+
+.skeletonDetailMeta {
+  display: flex;
+  align-items: center;
+  height: 20px;
+}
+
+.skeletonDetailMeta > span {
+  width: 46%;
+  height: 8px;
+}
+
+.skeletonTab {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 8px 10px;
+  border-bottom: 2px solid transparent;
+}
+
+.skeletonTab > span {
+  width: 28px;
+  height: 10px;
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeletonLines > span {
+  height: 10px;
+  margin: 6px 0;
+}
+
+.skeletonLines > i {
+  height: 10px;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+}
+
+.skeletonRow > .skeletonBar {
+  margin: 0;
+}
+
+.skeletonAvatar {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  corner-shape: round;
+}
+
+.skeletonSummary {
+  width: 112px;
+  height: 10px;
+  margin-left: auto;
+}
+
+.skeletonHeadless {
+  padding-top: 4px;
+}
+
 .empty,
 .centered {
   display: flex;
@@ -503,7 +683,10 @@
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
+/* The bar is a container of its own: its width, not the page's, decides whether the link actions fold. The page's
+   rules name the page container, since an unnamed query inside the bar would read the bar. */
 .detailBar {
+  container: forge-review-bar / inline-size;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -533,11 +716,24 @@
   font-size: 12px;
 }
 
+/* A flex item wraps by its base size, so the repository link and the labels slot start small and grow: the bar then
+   keeps the actions on its first row. Free room goes to the repository link until its text fits, then to the labels,
+   which fold into a count; with no room left the repository name is cut and its number stays. */
 .repository {
-  flex: none;
+  display: flex;
+  flex: 1000 1 72px;
+  min-width: 0;
+  max-width: max-content;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   text-decoration: none;
+}
+
+.repositoryName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (hover: hover) {
@@ -547,12 +743,14 @@
 }
 
 .number {
+  flex: none;
   margin-left: 4px;
 }
 
+/* The least width holds the count the labels fold into. */
 .labelsSlot {
-  flex: 1 1 120px;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 36px;
 }
 
 .labels {
@@ -600,6 +798,32 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+/* Open on the code host, copy the link, read again: three icon buttons at the bar's end, after the merge action. */
+.linkActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.copied {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+/* The same three actions as one menu, which a narrow bar shows in place of the buttons. */
+.moreAction {
+  display: none;
+}
+
+@container forge-review-bar (max-width: 719px) {
+  .linkActions {
+    display: none;
+  }
+
+  .moreAction {
+    display: inline-flex;
+  }
 }
 
 .primary {
@@ -720,6 +944,245 @@
   min-width: 0;
 }
 
+/* The activity under the description: one line per commit run, review, and change of state, and a card per comment. */
+.activity {
+  margin-top: 28px;
+}
+
+.activityLines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 -8px;
+}
+
+.activityLine {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+  text-align: left;
+}
+
+button.activityLine {
+  cursor: pointer;
+}
+
+button.activityLine:focus-visible,
+.activityMore:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  button.activityLine:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.activityNested {
+  padding-left: 32px;
+}
+
+.activityGlyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.activityGlyph[data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.activityGlyph[data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.activityText {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activityActor {
+  font-weight: 500;
+}
+
+.activityRest {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.activityTime {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.activityEnd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 20px;
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.activitySha {
+  font-family: var(--dsw-font-mono, ui-monospace, monospace);
+}
+
+.activityComment {
+  margin: 6px 8px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md, 8px);
+}
+
+.activityCommentHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 6px;
+}
+
+.activityTag {
+  padding: 0 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-card-fill);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+/* A long comment starts as its first lines; the control under it shows the rest. */
+.activityClamp {
+  max-height: 120px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 60%, transparent);
+}
+
+.activityMore {
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: none;
+  color: var(--dsw-alias-link);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.activityOlder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.activityOlder > .activityMore {
+  margin: 0;
+}
+
+/* The comment field: three lines that grow with the text, over a row that says where the comment goes and holds the
+   button that sends it. */
+.activityCompose {
+  margin-top: 12px;
+}
+
+.activityComposer {
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md, 8px);
+  background: var(--dsw-alias-bg-layer-1, transparent);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.activityComposer:focus-within {
+  border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, transparent);
+}
+
+.activityComposer textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 76px;
+  max-height: 240px;
+  padding: 10px 12px 4px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.activityComposer textarea::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.activityComposerFoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+}
+
+.activityComposerHint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityComposerKeys {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.activitySend {
+  flex: none;
+  min-width: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activityComposer {
+    transition: none;
+  }
+}
+
+.activityError {
+  margin: 6px 0 0;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 12px;
+}
+
 /* The status column: bordered blocks. A card holds rows of the Session panel's change request card on that card's
    row grid, without the indent that aligns them under the card's title there. */
 .statusCard,
@@ -829,6 +1292,11 @@
   font-size: 12px;
 }
 
+/* An action line that anchors a menu spans its block like the lines around it. */
+.statusAnchor {
+  display: flex;
+}
+
 .placeholder {
   justify-content: center;
 }
@@ -865,13 +1333,13 @@
   white-space: nowrap;
 }
 
-@container (max-width: 960px) {
+@container forge-review (max-width: 960px) {
   .summary {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@container (max-width: 880px) {
+@container forge-review (max-width: 880px) {
   .page {
     grid-template-columns: minmax(0, 1fr);
   }

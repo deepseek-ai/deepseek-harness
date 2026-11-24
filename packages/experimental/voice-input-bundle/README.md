@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This optional bundle composes a speech Service Definition, local SenseVoice provider, authenticated Remote and browser microphone control. Shipped profiles leave it disabled.
+This optional bundle composes a speech Service Definition, DeepSeek cloud and local SenseVoice providers, authenticated Remote and browser microphone control. Shipped profiles leave it disabled.
 
 ## Table of Contents
 
@@ -25,7 +25,9 @@ This optional bundle composes a speech Service Definition, local SenseVoice prov
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Plugins in the Web sidebar and enable Voice Input, marked by a blue waveform icon. If models need preparation, a dialog offers Go to setup or Later; Go to setup opens the bundle details. Complete caches need no setup prompt. In the details, choose Download and prepare; the collapsed current-step summary expands to the complete step list. Downloads report actual bytes; verification and loading show elapsed time. Once ready, click the microphone between the model selector and Send, then Stop to insert a transcript. Bundle details store the recognizer and language through the Settings service. Disabling the bundle cancels active work; cached assets remain on disk.
+Open Plugins in the Web sidebar and enable Voice Input, marked by a blue waveform icon. With a DeepSeek account or API key, cloud recognition is ready and no prompt appears. Without either, a dialog offers Sign in to DeepSeek, Download local model, and Later when the local models need preparation; Download local model opens the bundle details. Complete caches need no setup prompt. In the details, choose Download and prepare; the collapsed current-step summary expands to the complete step list. Downloads report actual bytes; verification and loading show elapsed time. Once ready, click the microphone between the model selector and Send, then Stop to insert a transcript. Bundle details store the recognizer and language through the Settings service. Disabling the bundle cancels active work; cached assets remain on disk.
+
+Recognition defaults to Automatic: a signed-in DeepSeek account or a configured DeepSeek API key uses the DeepSeek cloud provider, otherwise the local SenseVoice provider. The cloud provider sends recordings to the DeepSeek service as its [README](../speech-to-text-deepseek/README.md) describes.
 
 -----
 
@@ -35,7 +37,7 @@ Open Plugins in the Web sidebar and enable Voice Input, marked by a blue wavefor
 <details>
 <summary>Maintainer details — click to expand</summary>
 
-The static `cordis.patch.yml` adds the four voice rows, selects `sensevoice-local` as the default recognizer and supplies the provider cache directory with `dshHomePath`. Optional-bundle installation makes the package available to management without selecting it in default profiles. The browser contribution owns its generated Remote mount; stable API Remotes do not import experimental code.
+The static `cordis.patch.yml` adds the five voice rows, sets `defaultProvider: auto` with `autoOrder: [deepseek-asr, sensevoice-local]`, and supplies the local provider cache directory with `dshHomePath`. Optional-bundle installation makes the package available to management without selecting it in default profiles. The browser contribution owns its generated Remote mount; stable API Remotes do not import experimental code.
 
 </details>
 
@@ -61,7 +63,7 @@ No direct effect; ordinary submission owns the message content.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- The initial bundle supplies one local recognizer. Additional providers register with the same service under distinct ids; cloud recognition requires an explicit new provider and credential configuration. The bundle does not add a model tool or change the agent loop.
+- The bundle supplies one cloud and one local recognizer. Additional providers register with the same service under distinct ids. The bundle does not add a model tool or change the agent loop.
 - Installing dsh also installs `sherpa-onnx-node` and its platform-specific native runtime, including ONNX Runtime, even when this bundle is disabled. Runtime installation adds disk and download costs separate from the models downloaded by Download and prepare; the native package size varies by platform and version.
 
 -----

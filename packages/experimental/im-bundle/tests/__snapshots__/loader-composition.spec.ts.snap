@@ -1,0 +1,104 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`IM bundle rows > renders every configurable row through its own schema 1`] = `
+[
+  {
+    "config": {
+      "appId": "process.env.DSH_FEISHU_APP_ID",
+      "appSecret": "process.env.DSH_FEISHU_APP_SECRET",
+      "callbackAnswerMs": 1500,
+      "callbacks": true,
+      "cardStreaming": true,
+      "platform": "feishu",
+      "ws": {
+        "frameTimeoutMs": 30000,
+        "maxFrameBytes": 1048576,
+        "maxFrameParts": 128,
+        "maxPendingEvents": 64,
+        "maxPendingFrames": 64,
+        "retryInterval": 5000,
+        "retryLazy": 60000,
+        "retryTimes": 6,
+      },
+    },
+    "id": "im-feishu",
+  },
+  {
+    "config": {
+      "appId": "process.env.DSH_QQ_APP_ID",
+      "baseUrl": "https://api.sgroup.qq.com/",
+      "intents": 100663296,
+      "keyboard": false,
+      "linkPolicy": "text",
+      "markdown": false,
+      "passive": {
+        "c2cReplies": 4,
+        "c2cWindowMs": 3600000,
+        "groupReplies": 5,
+        "groupWindowMs": 300000,
+        "seqBase": 2,
+      },
+      "sandbox": false,
+      "secret": "process.env.DSH_QQ_APP_SECRET",
+      "stream": false,
+      "tokenUrl": "https://bots.qq.com/app/getAppAccessToken",
+      "transport": "ws",
+      "ws": {
+        "retryInterval": 5000,
+        "retryLazy": 60000,
+        "retryTimes": 6,
+      },
+    },
+    "id": "im-qq",
+  },
+  {
+    "config": {
+      "compositionWarnMs": 30000,
+      "maxInputBytes": 262144,
+      "maxRecords": 10000,
+      "media": {
+        "download": true,
+        "maxBytes": 10485760,
+        "maxItems": 9,
+        "source": {
+          "file": false,
+          "internal": false,
+        },
+        "timeoutMs": 30000,
+      },
+      "platformTimeoutMs": 30000,
+      "retentionMs": 2592000000,
+      "retryIntervalMs": 5000,
+      "send": {
+        "maxMediaBytes": 10485760,
+        "operationTimeoutMs": 30000,
+      },
+      "sources": [],
+      "tools": {
+        "fileDir": ".dsh/im",
+        "maxHistoryItems": 50,
+        "maxMemberPages": 10,
+        "maxMembers": 200,
+        "maxReadBytes": 65536,
+        "readOnly": false,
+      },
+    },
+    "id": "im",
+  },
+  {
+    "config": {
+      "admins": [],
+      "allow": "all",
+      "locale": "zh",
+      "passthrough": [
+        "compact",
+      ],
+      "resettable": [
+        "dispatcher",
+      ],
+      "retentionMs": 604800000,
+    },
+    "id": "im-session-commands",
+  },
+]
+`;

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "链接工作树的 Git 沙箱策略",
+    "description": "为在链接 Git 工作树中工作的会话授予仓库 Git 目录的写权限，使其能在 workspace-write 下暂存和提交。"
+  }
+}

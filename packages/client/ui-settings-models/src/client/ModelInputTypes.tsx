@@ -49,7 +49,7 @@ export function ModelInputTypes({ model, field, position, disabled, fallback, t,
               // DeepSeek rejects image request limits on a text-only model.
               if (field === 'inputModalities' && !nextSelected.includes('image')) {
                 Reflect.deleteProperty(next, 'imagePixelBudget')
-                Reflect.deleteProperty(next, 'imageMaxBytes')
+                Reflect.deleteProperty(next, 'imageTargetBytes')
               }
               onChange(next)
             }}

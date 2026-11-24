@@ -73,9 +73,11 @@
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   position-area: none;
+  /* Anchor insets stay linear because scroll compensation runs after layout;
+     a clamp would drift from a sticky trigger while the transcript grows. */
   top: max(12px, var(--dsh-frame-overlay-top, 12px));
-  bottom: max(12px, calc(anchor(top) + 8px));
-  left: max(12px, anchor(left));
+  bottom: calc(anchor(top) + 8px);
+  left: anchor(left);
   right: 12px;
   position-try-fallbacks: --dsh-context-window, --dsh-context-opposite, --dsh-context-wide-opposite, --dsh-context-tall, --dsh-context-viewport;
   align-self: end;
@@ -179,7 +181,7 @@
 @position-try --dsh-context-window {
   position-area: none;
   top: max(12px, var(--dsh-frame-overlay-top, 12px));
-  bottom: max(12px, calc(anchor(top) + 8px));
+  bottom: calc(anchor(top) + 8px);
   left: 12px;
   right: 12px;
   margin: 0;
@@ -188,13 +190,13 @@
 }
 
 @position-try --dsh-context-opposite {
-  top: max(12px, calc(anchor(bottom) + 8px));
+  top: calc(anchor(bottom) + 8px);
   bottom: 12px;
   align-self: start;
 }
 
 @position-try --dsh-context-wide-opposite {
-  top: max(12px, calc(anchor(bottom) + 8px));
+  top: calc(anchor(bottom) + 8px);
   bottom: 12px;
   left: 12px;
   right: 12px;
@@ -206,7 +208,7 @@
   position-area: none;
   top: max(12px, var(--dsh-frame-overlay-top, 12px));
   bottom: 12px;
-  left: max(12px, anchor(left));
+  left: anchor(left);
   right: 12px;
   margin: 0;
   align-self: safe start;

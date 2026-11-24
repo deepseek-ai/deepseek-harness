@@ -1,0 +1,32 @@
+- dialog "设置":
+  - text: 设置
+  - navigation:
+    - button "通用设置"
+    - button "模型"
+    - button "插件管理"
+    - button "Agent 预设"
+  - button "打开配置文件"
+  - button "关闭"
+  - heading "模型" [level=2]
+  - paragraph: 填入各提供商的 API 密钥即可使用其模型。
+  - list:
+    - listitem:
+      - text: DeepSeek API deepseek-official API 密钥
+      - button "认证说明": "?"
+      - textbox "API 密钥":
+        - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
+      - paragraph: 未检测到环境变量。请填写 API 密钥，或设置环境变量 DEEPSEEK_API_KEY。
+      - region "模型":
+        - button "模型" [expanded]
+        - text: deepseek-flash DeepSeek-V4.1-Flash
+        - button "模型选项 1"
+        - button "删除模型 1"
+        - text: deepseek-v4-pro DeepSeek-V4-Pro
+        - button "模型选项 2"
+        - button "删除模型 2"
+        - button "添加模型"
+      - region "高级设置":
+        - button "高级设置"
+      - button "取消"
+      - button "保存"
+  - button "添加模型提供商"

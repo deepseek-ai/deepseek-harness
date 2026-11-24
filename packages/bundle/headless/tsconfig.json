@@ -24,6 +24,9 @@
       "path": "../../core/agent-default-model"
     },
     {
+      "path": "../../preset/agent-preset-registry"
+    },
+    {
       "path": "../../llm/llm"
     },
     {

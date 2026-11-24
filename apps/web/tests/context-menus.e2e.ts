@@ -299,6 +299,10 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     await expect.poll(() => dockedFirst.count()).toBe(1)
     await page.locator('[data-rightbar-col] [data-textpreview-target="2"]').waitFor()
     await page.getByRole('link', { name: 'Website', exact: true }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Copy link address', exact: true }).waitFor()
+    // This profile registers no Browser tab type, so the menu offers no sidebar entry; every entry leads with an icon.
+    expect(await page.getByRole('menuitem').evaluateAll(items => items.map(item => [item.textContent, item.querySelector('svg') !== null])))
+      .toEqual([['Open in external browser', true], ['Copy link address', true]])
     await page.getByRole('menuitem', { name: 'Copy link address', exact: true }).click()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://example.com/path?q=1#fragment')
     await page.getByRole('img', { name: 'Original', exact: true }).click({ button: 'right' })

@@ -165,17 +165,21 @@
    rail right edge over the remaining 150ms of the AppFrame track transition.
    The bottom-pinned settings seat shares their opacity timeline but stays
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
-   render stays static.
-   The New Session row renders its content through the `sidebar.session.action`
-   HOC slot, whose `display: contents` outlet anchor sits between the row and
-   its content. The shell's New-session button and the occupant's own controls
-   are that anchor's children, so the fade targets them through the anchor; the
-   boxless anchor itself cannot carry an animation. */
+   render stays static. The New Session row animates each direct output of its
+   slot. Only the slot's children outlets are transparent: a layer's own wrapper
+   moves as one item, not together with a second animation on its descendants. */
 .railIn .iconButton,
 .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
+.railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+  [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
+)) > *,
 .railIn .panelList,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
+}
+
+.railIn .newSessionRow [data-slot-children='sidebar.session.action'] {
+  animation: none;
 }
 
 .railIn .footArea {
@@ -876,6 +880,9 @@
   .fading > *,
   .railIn .iconButton,
   .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
+  .railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+    [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
+  )) > *,
   .railIn .panelList,
   .railIn .footArea,
   .railIn .regionArea {

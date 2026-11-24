@@ -422,13 +422,18 @@ describe('web e2e: one-use QR browser login', () => {
   it.each([
     {
       name: 'unreachable', hostname: '127.0.0.1', options: {},
-      warning: '当前地址不能用于其他设备登录，请配置其他设备可访问的地址，例如能连通的局域网地址或已配置的公网、VPN 地址',
+      warning: '当前地址无法用于跨设备登录。请用另一台设备能访问的地址重新启动服务。',
+      steps: [
+        '两台设备在同一局域网时，可用局域网 IP。',
+        '通过 VPN 或公网访问时，可用已开通访问的 VPN 地址或公网 IP。',
+      ],
     },
     {
       name: 'untrusted', hostname: 'untrusted-remote.test', options: { extraOverlayPath: UNTRUSTED_OVERLAY },
       warning: '请先将此访问地址加入 Host 的可信主机配置，才能使用下方的登录方式',
+      steps: [],
     },
-  ])('explains unavailable address prerequisites before sign-in methods for $name', async ({ name, hostname, options, warning }) => {
+  ])('explains unavailable address prerequisites before sign-in methods for $name', async ({ name, hostname, options, warning, steps }) => {
     const scaffold = await launchWebScaffold(options)
     onTestFinished(() => scaffold.close())
     // The shared QR browser's proxy setup rejects the scaffold's loopback URL.
@@ -436,6 +441,8 @@ describe('web e2e: one-use QR browser login', () => {
     onTestFinished(() => localBrowser.close())
     const plainUrl = scaffold.ctx.webApp.getAdvertisedUrl()
     expect(new URL(plainUrl).hostname).toBe(hostname)
+    const loopback = name === 'unreachable'
+    const expectedAddress = loopback ? scaffold.authenticatedUrl : plainUrl
     for (const [viewport, colorScheme, suffix] of [
       [{ width: 1200, height: 1000 }, 'light', 'desktop'],
       [MOBILE, 'dark', 'mobile-dark'],
@@ -452,9 +459,10 @@ describe('web e2e: one-use QR browser login', () => {
           .getByRole('button', { name: '远程连接', exact: true }).click()
         const section = page.getByRole('region', { name: '远程连接', exact: true })
         const address = section.getByRole('region', { name: '访问地址', exact: true })
-        await expect.poll(() => address.locator('code').textContent()).toBe(plainUrl)
+        await expect.poll(async () => await address.locator('code').textContent() === expectedAddress).toBe(true)
         const notice = section.getByRole('status').filter({ hasText: warning })
         await notice.getByText(warning, { exact: true }).waitFor()
+        expect(await notice.getByRole('listitem').allTextContents()).toEqual(steps)
         const pairing = section.getByRole('region', { name: '配对申请', exact: true })
         await waitForPairingList(pairing)
         expect(await section.getByRole('region').count()).toBe(2)
@@ -467,11 +475,12 @@ describe('web e2e: one-use QR browser login', () => {
         expect(await address.getByRole('button').count()).toBe(1)
         await copy.click()
         await page.getByText('链接已复制', { exact: true }).waitFor()
-        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(plainUrl)
+        const copiedAddress = await page.evaluate(() => navigator.clipboard.readText())
+        expect(copiedAddress === expectedAddress).toBe(true)
         expect(await copy.isEnabled()).toBe(true)
-        expect(await section.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(0)
+        expect(await section.getByText('请勿公开分享登录链接', { exact: true }).count()).toBe(loopback ? 1 : 0)
         expect(await section.getByText('请勿分享登录二维码', { exact: true }).count()).toBe(0)
-        expect(new URL((await address.locator('code').textContent())!).searchParams.has('token')).toBe(false)
+        expect(Boolean(new URL(copiedAddress).searchParams.get('token'))).toBe(loopback)
         const titleBox = await section.getByRole('heading', { level: 2 }).boundingBox()
         const noticeBox = await notice.boundingBox()
         const addressBox = await address.boundingBox()
@@ -486,14 +495,24 @@ describe('web e2e: one-use QR browser login', () => {
         expect(noticeBox!.x + noticeBox!.width).toBeLessThanOrEqual(viewport.width)
         await compareOrRefreshGolden(join(EXPECTED, `${name}-${suffix}.expected.md`),
           await captureStableAria(page, 'section[aria-label="远程连接"]', scaffold.workspaceCwd, {
-            replacements: [[plainUrl, '{{access-address}}']],
+            replacements: [[scaffold.authenticatedUrl, '{{access-address}}?token={{login-token}}'], [plainUrl, '{{access-address}}']],
           }), MODE)
         const screenshots = process.env['DSH_REMOTE_CONNECTION_SCREENSHOTS']
         if (screenshots !== undefined) {
           await mkdir(screenshots, { recursive: true })
-          await page.screenshot({ path: join(screenshots, `${name}-${suffix}.png`) })
+          await page.screenshot({ path: join(screenshots, `${name}-${suffix}.png`), mask: loopback ? [address.locator('code')] : [] })
         }
-        if (name === 'unreachable' && suffix === 'desktop') {
+        if (loopback && suffix === 'desktop') {
+          const guest = await localBrowser.newPage({ locale: ZH_BROWSER_LOCALE })
+          try {
+            await guest.goto(copiedAddress)
+            await guest.getByRole('button', { name: '账号菜单', exact: true, includeHidden: true }).waitFor({ state: 'attached' })
+            expect(guest.url() === new URL(plainUrl).href).toBe(true)
+            expect((await guest.context().cookies()).some(cookie => cookie.name.startsWith('dsh-auth-'))).toBe(true)
+          } finally {
+            await guest.close()
+          }
+
           await page.route('**/api/remoteConnection/status', route => route.abort('failed'))
           await page.reload()
           await openSettings(page, 'zh')
@@ -512,7 +531,7 @@ describe('web e2e: one-use QR browser login', () => {
           if (screenshots !== undefined) await page.screenshot({ path: join(screenshots, 'unreachable-load-failed.png') })
           await page.unroute('**/api/remoteConnection/status')
           await retry.click()
-          await expect.poll(() => address.locator('code').textContent()).toBe(plainUrl)
+          await expect.poll(async () => await address.locator('code').textContent() === expectedAddress).toBe(true)
           await notice.getByText(warning, { exact: true }).waitFor()
           expect(await address.getByRole('alert').count()).toBe(0)
         }

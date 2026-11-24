@@ -169,14 +169,10 @@
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
 
+    # Inspection registry plus the process-global Host inspect providers that
+    # every preset's `tool-cordis` row reads.
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
-
-    # The Host inspect providers are process-global: the registry rejects a
-    # duplicate id, so they register here once and every preset's `tool-cordis`
-    # row reads them.
-    - id: cordis-inspect-providers
-      name: '@deepseek-ai/dsh-tool-cordis/host'
 
     # Ordinary provider for the parsed Web flags. Its plugin-level injection
     # waits for cmdlineArgs; no launcher metadata or special row kind is needed.
@@ -411,6 +407,22 @@
     - id: workspace-changes
       name: '@deepseek-ai/dsh-workspace-changes'
 
+    # Personalized recommendations: one optional card below an answer that
+    # offers a new personalized page or an official plugin. The two kinds
+    # register into action-cards; its `enabled` field is the Settings switch.
+    - id: action-cards
+      name: '@deepseek-ai/dsh-action-cards'
+    - id: client-ui-action-cards
+      name: '@deepseek-ai/dsh-client-ui-action-cards'
+    - id: creation-recommendations
+      name: '@deepseek-ai/dsh-creation-recommendations'
+    - id: client-ui-creation-recommendations
+      name: '@deepseek-ai/dsh-client-ui-creation-recommendations'
+    - id: plugin-recommendations
+      name: '@deepseek-ai/dsh-plugin-recommendations'
+    - id: client-ui-plugin-recommendations
+      name: '@deepseek-ai/dsh-client-ui-plugin-recommendations'
+
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
@@ -634,8 +646,7 @@
 # The preset selection registry. The shipped preset declarations follow as
 # separate patch files under `presets/`, listed after this file in
 # `package.json` `dsh.bundle.patch`.
-- insert:
-    - id: agent-preset-registry
-      name: '@deepseek-ai/dsh-agent-preset-registry'
-      config:
-        default: standard
+- id: agent-preset-registry
+  disabled: false
+  config:
+    default: standard

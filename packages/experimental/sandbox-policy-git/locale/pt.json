@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Acesso ao Git em árvores de trabalho vinculadas",
+    "description": "Permite que uma sessão que trabalha numa árvore de trabalho Git vinculada prepare e confirme alterações em workspace-write ao conceder escrita no diretório Git do repositório."
+  }
+}

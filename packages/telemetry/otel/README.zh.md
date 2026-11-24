@@ -27,14 +27,14 @@ base bundle 挂载 `@deepseek-ai/dsh-otel`。独立组合必须在注入 `otel` 
 
 返回的通道由调用方持有。普通事件 `shutdown(signal)` 在传入信号中止时取消请求和重试等待，并在传输清理完成后返回。将关闭注册到调用方的 Cordis fiber，并用配置的期限约束完整清空过程。注入机制使服务替换时卸载依赖方。调用方卸载后不得继续保留通道。产品和 Session 适配器为 UI 和反馈调用方实现这些职责。
 
-普通通道使用 SDK 按条数聚合。Session 通道将每条完整事件保留为一个记录，包含 `eventName: "session-log"`、`sessionId` 和 JSON 字符串 `content`，并保证未压缩请求不超过 4,000,000 字节。字节限制、单条拒绝、串行传输结束和关闭行为见 [Session 适配器](../../session/session-telemetry-otel/README.zh.md)。Session 通道不会与普通事件共享请求或队列。
+普通通道使用 SDK 按条数聚合。Session 通道保证未压缩请求不超过 4,000,000 字节，并接受调用方的两种记录格式。`reportSessionLog` 每条完整事件一个记录，包含 `eventName: "session-log"`、`sessionId` 和 JSON 字符串 `content`。`reportSessionLogBatch` 每次连续的单 Session 投递批次一个记录：attributes 携带 `session.id`、`session.format_version`、会话 header 存在时的 `session.cwd` / `session.parent_id` / `session.seed_length`，以及 `delivery.*` 游标区间（`batch_id`、`after_seq`、`through_seq`、`event_count`、`purpose`），body 为 JSON 字符串 `{"events":[...]}`，其中每个事件与 DeepSeek 会话日志线上事件一致：`seq`、`time`、`type`、`data`，以及可选的 `surfaceOp` / `sourceEventSeqs`。`serializeSessionLogEvent` 产出一个事件的规范线上文本，调用方也用它计量批次字节。字节限制、单条拒绝、串行传输结束和关闭行为见 [Session 适配器](../../session/session-telemetry-otel/README.zh.md)。Session 通道不会与普通事件共享请求或队列。
 
 Header 显式提供。服务不会附加 channel header，也不继承环境中的授权 header 或 TLS 身份。Agent factory 配置返回的 agent，包括 keepAlive。普通事件通道在关闭时销毁自己的 agent；factory 必须为每个通道提供独立 agent。每个调用方提供 scope 名称和版本，因此共享传输不会改变事件归属。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-`src/index.ts` 注册服务；`event-log.ts` 负责普通事件的 SDK 聚合；`session-log.ts` 负责字节和条数调度；`transport.ts` 提供 Session 的 SDK JSON HTTP delegate，并持有共享的 exporter 指标记录器（不接收 meter provider，不记录任何指标）；`event-transport.ts` 使用 Got 实现可取消的普通事件 HTTP 请求和重试等待，序列化与导出计数仍由 SDK 负责。不安装全局 OTel provider；接受的 exporter 选项排除上游的 `selfObsMeterProvider`，Session processor 也只接受它实现的聚合字段，因此 exporter 和 Session processor 的自观测指标都不会被记录。Session processor 对每条记录只计量一次，按保守大小组包，并在每次回调后等待 SDK 并发队列清理完成才发送下一请求。
+`src/index.ts` 注册服务；`event-log.ts` 负责普通事件的 SDK 聚合；`session-log.ts` 负责字节和条数调度；`session-log-batch.ts` 负责投递批次记录序列化；`transport.ts` 提供 Session 的 SDK JSON HTTP delegate，并持有共享的 exporter 指标记录器（不接收 meter provider，不记录任何指标）；`event-transport.ts` 使用 Got 实现可取消的普通事件 HTTP 请求和重试等待，序列化与导出计数仍由 SDK 负责。不安装全局 OTel provider；接受的 exporter 选项排除上游的 `selfObsMeterProvider`，Session processor 也只接受它实现的聚合字段，因此 exporter 和 Session processor 的自观测指标都不会被记录。Session processor 对每条记录只计量一次，按保守大小组包，并在每次回调后等待 SDK 并发队列清理完成才发送下一请求。
 
 本服务及其两个适配器的 OpenTelemetry SDK 依赖使用同一配套版本系列的精确版本。
 

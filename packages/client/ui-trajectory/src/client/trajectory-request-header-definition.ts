@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  ConversationNodeDefinition, RequestPromptInspector, SystemPromptState, SystemPromptInspector,
+  ConversationLocation, ConversationNodeDefinition, RequestPromptInspector, SystemPromptState, SystemPromptInspector,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { trajectoryNode } from './trajectory-definition-common.ts'
 import type { TrajectoryRequestHeaderState } from './trajectory-contract.ts'
@@ -12,6 +12,12 @@ export interface TrajectorySystemMessageState extends SystemPromptState {
    * Context whose start seq equals this header's seq contributes a view Node.
    */
   readonly header?: TrajectoryRequestHeaderState
+}
+
+/** Whether two Locations resolve to the same agent-loop step. */
+function sameStep(left: ConversationLocation, right: ConversationLocation): boolean {
+  return left.kind === 'step' && right.kind === 'step'
+    && left.turn.turn === right.turn.turn && left.step.step === right.step.step
 }
 
 /* jscpd:ignore-start -- Target-owned Definitions intentionally keep their event
@@ -49,11 +55,11 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
           ...state,
           header: {
             seq: match.event.seq, time: match.event.time, location: match.location,
-            prompt: { ...header.prompt, system: '' },
+            prompt: { config: header.prompt.config, system: '', tools: header.prompt.tools },
           },
         }
       }
-      if (node === undefined || node.text === prior?.effective?.text
+      if (node === undefined || node === prior?.effective
         || (state.introduced !== undefined && !state.introduced.update)) {
         return { ...state, ...(prior?.header === undefined ? {} : { header: prior.header }) }
       }
@@ -68,8 +74,17 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
         header: {
           seq: node.seq,
           time: node.time,
-          prompt: { ...previous.prompt, system: node.text },
-          change: { seq: node.seq, time: node.time, kind: 'system', previous: previous.prompt },
+          prompt: {
+            config: previous.prompt.config,
+            system: node.text,
+            tools: previous.prompt.tools,
+            ...(node.sections === undefined ? {} : { sections: node.sections }),
+          },
+          change: {
+            seq: node.seq, time: node.time, kind: 'system', previous: previous.prompt,
+            ...(node.rebuilt === true ? { rebuilt: true } : {}),
+            ...(node.message === undefined ? {} : { message: node.message }),
+          },
           location: match.location,
         },
       }
@@ -81,7 +96,8 @@ function trajectorySystemMessageDefinition(inspect: SystemPromptInspector): Conv
         return trajectoryNode(context, state.header.seq, { kind: 'request-header', header: state.header })
       }
       const prompt = state?.introduced
-      return prompt !== undefined && prompt.text !== ''
+      // An update that only clears or retires sources has no text but still presents its per-source reading.
+      return prompt !== undefined && (prompt.text !== '' || prompt.message !== undefined)
         && context.start?.event.type === 'system/message' && context.start.event.surfaceOp === 'append'
         ? trajectoryNode(context, prompt.seq, { kind: 'system-prompt', prompt })
         : null
@@ -109,15 +125,22 @@ function trajectoryRequestHeaderDefinition(inspect: RequestPromptInspector): Con
       }
       const header = reader.previous<TrajectoryRequestHeaderState>('trajectory-request-header')?.state
       const state = reader.previous<TrajectorySystemMessageState>('trajectory-system-message')?.state
-      const systemHeader = state?.header
-      const previous = systemHeader !== undefined && (header === undefined || systemHeader.seq > header.seq)
-        ? systemHeader.prompt
-        : header?.prompt
+      // An in-history update logged since the last request header; its own step's request already presented it
+      // unless this header belongs to that same step.
+      const pending = state?.header !== undefined && (header === undefined || state.header.seq > header.seq)
+        ? state.header
+        : undefined
+      const previous = pending?.prompt ?? header?.prompt
       const system = state?.effective
       const inspection = inspect(previous, match.event, system)
       const { prompt } = inspection
-      const change = inspection.change ?? (systemHeader !== undefined
-        && (header === undefined || systemHeader.seq > header.seq) ? systemHeader.change : undefined)
+      let change = inspection.change
+      if (change === undefined) {
+        change = pending?.change
+      } else if (change.kind === 'tools' && pending?.change !== undefined && sameStep(pending.location, match.location)) {
+        // One step changed both: present the update from the state before it, so neither part is lost.
+        change = { ...pending.change, kind: 'system-and-tools' }
+      }
       return {
         seq: match.event.seq,
         time: match.event.time,

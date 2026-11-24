@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import type { Mock, MockInstance } from 'vitest'
 import { watch as nativeWatch } from 'node:fs'
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import type { Context } from '@deepseek-ai/cordis'
@@ -406,6 +406,40 @@ describe('workspaceFiles.changes — backends and access', () => {
     const stream = open(harness.endpoint(), harness.outside)
     await expect(failureOf(stream.next())).resolves.toEqual({
       code: 'workspace-file/outside-workspace', details: { path: harness.outside },
+    })
+    expect(watch).not.toHaveBeenCalled()
+  })
+
+  it('watches a directory whose path descends from the workspace root through a link resolving outside', async () => {
+    await mkdir(join(harness.outside, 'nested'))
+    await symlink(harness.outside, join(harness.workspace, 'escape'), process.platform === 'win32' ? 'junction' : 'dir')
+    const path = join(harness.workspace, 'escape', 'nested')
+    const stream = open(harness.endpoint(), path)
+    await ready(stream)
+    const target = await harness.ctx.fs.resolve(join(harness.outside, 'nested'))
+    expect(watch.mock.calls[0]![0]).toEqual({ ...target, displayPath: path })
+    const pending = stream.next()
+    watch.mock.calls[0]![1]()
+    await expect(pending).resolves.toMatchObject({
+      done: false, value: { kind: 'change', change: { absolutePath: harness.ctx.fs.processPath(target) } },
+    })
+  })
+
+  // Windows drops `link/..` from the written path before any link is followed, so there it names the workspace root.
+  it.skipIf(process.platform === 'win32')('rejects a `..` segment after a directory link that resolves outside the workspace', async () => {
+    await symlink(harness.outside, join(harness.workspace, 'escape'), process.platform === 'win32' ? 'junction' : 'dir')
+    const path = `${harness.workspace}/escape/..`
+    const stream = open(harness.endpoint(), path)
+    await expect(failureOf(stream.next())).resolves.toEqual({
+      code: 'workspace-file/outside-workspace', details: { path },
+    })
+    expect(watch).not.toHaveBeenCalled()
+  })
+
+  it('rejects the home directory, which the backend expands from `~` without any link in the workspace', async () => {
+    const stream = open(harness.endpoint(), '~')
+    await expect(failureOf(stream.next())).resolves.toEqual({
+      code: 'workspace-file/outside-workspace', details: { path: '~' },
     })
     expect(watch).not.toHaveBeenCalled()
   })

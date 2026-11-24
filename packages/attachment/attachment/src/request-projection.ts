@@ -10,18 +10,22 @@ export interface ProjectedDimensions {
 }
 
 /**
- * Compute aspect-preserving integer dimensions within a hard total-pixel budget.
+ * Compute aspect-preserving integer dimensions within total-pixel, width, and height limits.
  * @param width - positive source width.
  * @param height - positive source height.
  * @param maxPixels - positive width-times-height cap.
+ * @param maxWidth - optional maximum width in pixels.
+ * @param maxHeight - optional maximum height in pixels.
  * @returns inward-rounded dimensions; small images are not enlarged.
  */
 export function requestImageDimensions(
   width: number,
   height: number,
   maxPixels: number,
+  maxWidth = Infinity,
+  maxHeight = Infinity,
 ): ProjectedDimensions {
-  const scale = Math.min(1, Math.sqrt(maxPixels / (width * height)))
+  const scale = Math.min(1, Math.sqrt(maxPixels / (width * height)), maxWidth / width, maxHeight / height)
   if (scale === 1) return { width, height }
   if (width >= height) {
     let projectedWidth = Math.max(1, Math.floor(width * scale))

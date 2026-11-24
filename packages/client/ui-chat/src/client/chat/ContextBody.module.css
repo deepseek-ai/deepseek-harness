@@ -127,6 +127,14 @@
   overflow-wrap: anywhere;
 }
 
+/* system update: a notice the message attaches to one source, above that source's text. */
+.sectionNotice {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* relay: who sent this, above what they said. */
 .relaySender {
   margin: 0 0 6px;

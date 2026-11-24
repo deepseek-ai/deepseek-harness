@@ -9,8 +9,35 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 30abd845c15aab11
-  zh: 584288adf33e54ac
+  en: b2317acc3fb0e92d
+  zh: 8a1efa6959b25f54
+/tool-schema-catalog/deepseek-ai-dsh-im:
+  en: 707c35f0d3451baa
+  zh: 707c35f0d3451baa
+/tool-schema-catalog/deepseek-ai-dsh-im/im-history:
+  en: 6c1227a2696fab49
+  zh: 6c1227a2696fab49
+/tool-schema-catalog/deepseek-ai-dsh-im/im-members:
+  en: 14319a20e2afa545
+  zh: 14319a20e2afa545
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read:
+  en: 7f4765144673fc36
+  zh: 7f4765144673fc36
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read-file:
+  en: 1259abf38f3e6f73
+  zh: 1259abf38f3e6f73
+/tool-schema-catalog/deepseek-ai-dsh-im/im-read-image:
+  en: 8b705d054087e6f8
+  zh: 8b705d054087e6f8
+/tool-schema-catalog/deepseek-ai-dsh-im/im-reply:
+  en: a3a892b3dee1d1f0
+  zh: a3a892b3dee1d1f0
+/tool-schema-catalog/deepseek-ai-dsh-im/im-send:
+  en: 2869b8da22139254
+  zh: 2869b8da22139254
+/tool-schema-catalog/deepseek-ai-dsh-im/im-send-file:
+  en: 94201ef458696c1b
+  zh: 08383250c6a69f8c
 /tool-schema-catalog/deepseek-ai-dsh-tool-session-control:
   en: 79ab575ea6da86e2
   zh: 79ab575ea6da86e2
@@ -72,8 +99,8 @@
   en: 8c8643ef46fd075f
   zh: 8c8643ef46fd075f
 /tool-schema-catalog/deepseek-ai-dsh-tool-executor-ptc/run-code:
-  en: 93d8526bbc4936d2
-  zh: 963af83582d289c5
+  en: 839345c3b7a0414d
+  zh: 906c029c30394562
 /tool-schema-catalog/deepseek-ai-dsh-plan-mode:
   en: b500b530845e26a9
   zh: b500b530845e26a9
@@ -114,8 +141,8 @@
   en: 76c7c62f9029b6f5
   zh: 76c7c62f9029b6f5
 /tool-schema-catalog/deepseek-ai-dsh-tool-cordis/cordis-inspect:
-  en: f804c4e7fccc1c45
-  zh: 7538d8201ef16ed9
+  en: b00bf7275e14730e
+  zh: 61eb02e91ec980cf
 /tool-schema-catalog/deepseek-ai-dsh-tool-bash-persistent:
   en: bdd9e88c49029e05
   zh: bdd9e88c49029e05
@@ -150,8 +177,8 @@
   en: f6f7a1140066ce04
   zh: d528e01a0939795a
 /tool-schema-catalog/deepseek-ai-dsh-tool-fs/write:
-  en: 22e7c232e157a1e2
-  zh: 176da52cdd4765a9
+  en: 7f2a1de1e6796543
+  zh: c17622849cf3f47b
 /tool-schema-catalog/deepseek-ai-dsh-tool-fs-search:
   en: 703fea005ce84c50
   zh: 703fea005ce84c50

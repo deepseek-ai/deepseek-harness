@@ -73,9 +73,17 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.actionCards` — `ActionCards`
 
-Kind registry, Session projection, user actions and status notices.
+Kind registry, skill switch, Session projection, user actions and status notices.
 
 ```ts cordis-catalog
+/**
+ * Build a kind's skill provider. It lists the skill while recommendations are enabled.
+ * @param candidate - the skill's catalog entry.
+ * @param get - loads the skill's definition.
+ * @returns the factory the kind passes to `ctx.skills.registerProvider`.
+ */
+skillProvider(candidate: SkillCandidate, get: SkillProvider['get']): (control: SkillProviderControl) => SkillProvider
+
 /**
  * Register one action kind for the caller's lifetime.
  * @param kind - the kind's details schema, verbs and handler.
@@ -88,7 +96,7 @@ register<Details>(kind: ActionCardKind<Details>): () => void
  * Record a card decision in the Session log; the next model request reports it.
  * @param agent - agent whose Session owns the card.
  * @param decision - the card's new state.
- * @throws when no kind ever registered the decision's action with this service, or its phase is one the projection derives.
+ * @throws when no kind ever registered the decision's action with this service.
  */
 record(agent: Agent, decision: ActionCardDecision): void
 
@@ -112,9 +120,9 @@ view(session: Session): ActionCardView
 @Remote act(agent: Agent, cardId: ActionCardId, verb: string, payload?: Record<string, JsonValue>): Promise<ActionCardResult>
 ```
 
-Types: [Agent](core.md) · [Session](session.md)
+Types: [Agent](core.md) · [Session](session.md) · [SkillCandidate](skills.md) · [SkillProvider](skills.md) · [SkillProviderControl](skills.md)
 
-Source: [`packages/experimental/action-cards/src/index.ts`](../../packages/experimental/action-cards/src/index.ts)
+Source: [`packages/interaction/action-cards/src/index.ts`](../../packages/interaction/action-cards/src/index.ts)
 
 <a id="ctxcliaccounts--cliaccounts"></a>
 
@@ -126,8 +134,10 @@ Holds what CLI app plugins register: for each plugin, the CLI path the model rea
 /**
  * Register the calling plugin's CLI and account: add the CLI's absolute path to required runtime context, run the
  * plugin's account operations one at a time, and show the account on the Plugins page while `connectorAccounts` is
- * loaded. The registration belongs to the calling plugin: unloading that plugin withdraws it, after the active
- * operation and the CLI processes it started have stopped.
+ * loaded. With a `prepare` step, the path stays out of runtime context while the step reports that something is
+ * missing, and each check first runs the step; a check that starts with nothing missing replaces an account the
+ * step left `unprepared` with the registration's first account. The registration belongs to the calling plugin:
+ * unloading that plugin withdraws it, after the active operation and the CLI processes it started have stopped.
  * @param registration - the plugin's CLI, account operations, and Plugins page text.
  * @returns the handle for the plugin's own reads and updates of the account.
  * @throws when the runtime-context name `<name>:cli` is already registered.
@@ -496,7 +506,7 @@ Catalog lookups for card text and the enabling behind the `enable_official_plugi
 
 Types: [Agent](core.md)
 
-Source: [`packages/experimental/plugin-recommendations/src/index.ts`](../../packages/experimental/plugin-recommendations/src/index.ts)
+Source: [`packages/extensions/plugin-recommendations/src/index.ts`](../../packages/extensions/plugin-recommendations/src/index.ts)
 
 <a id="ctxpluginregistryprobe--pluginregistryprobe"></a>
 

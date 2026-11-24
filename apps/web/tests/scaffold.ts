@@ -58,7 +58,6 @@ import {
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import type { Profile, ProfileContext } from '@deepseek-ai/dsh-app-boot'
-import type { PresetDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type {
@@ -311,6 +310,8 @@ export interface LaunchOptions {
   developerTools?: boolean
   /** Enable the real Open In rows with deterministic launch-environment facts. */
   openInAppEnvironment?: LaunchEnvironmentSnapshot
+  /** Keep the shipped personalized recommendation rows, whose two card skills enter the model-visible skill catalog. */
+  actionCards?: true
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
   /** Fixed JSON-quoted workspace path length for compaction estimates; omitted values use the ordinary prefix. */
@@ -689,6 +690,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     { id: 'open-in-app', disabled: options.openInAppEnvironment === undefined },
     { id: 'ui-open-in-app', disabled: options.openInAppEnvironment === undefined },
     ...options.ptcExecutionMode === undefined ? [] : [{ id: 'ptc-runtime', config: { executionMode: options.ptcExecutionMode } }],
+    // Ordinary scenarios exclude the card skills, so their requests omit two catalog entries that shipped Standard requests carry.
+    ...['action-cards', 'client-ui-action-cards', 'creation-recommendations', 'client-ui-creation-recommendations',
+      'plugin-recommendations', 'client-ui-plugin-recommendations'].map(id => ({ id, disabled: options.actionCards !== true })),
     ...options.agentPresets === undefined ? [] : [
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },
@@ -714,20 +718,6 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     }],
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
-
-  // Recorded standard sessions pin the optional patch tool in their request headers.
-  if (options.replayFixture !== undefined || options.compareReplaySession === true) {
-    const config = composedRows.find(row => row.id === 'preset-standard')!.config as PresetDefinition
-    overlayPatches.push({
-      id: 'preset-standard',
-      config: {
-        ...config,
-        plugins: config.plugins.map(plugin => plugin.id === 'tool-fs'
-          ? { ...plugin, config: { ...plugin.config, applyPatch: true } }
-          : plugin),
-      },
-    })
-  }
 
   // Live fields use a shared deployment layer; process-specific ports and roots stay in CLI overlays.
   const formEntries = new Set(['agent-default-model', 'agent-preset-registry', 'llm-deepseek', 'llm-pi-ai',

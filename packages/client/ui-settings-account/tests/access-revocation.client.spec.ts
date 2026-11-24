@@ -63,6 +63,12 @@ it('withdraws every account surface and the account stream on revocation, and re
         return () => { registered.set(entry.name, registered.get(entry.name)! - 1) }
       },
     },
+    reflect: {
+      provide: (name: string) => {
+        registered.set(name, (registered.get(name) ?? 0) + 1)
+        return () => { registered.set(name, registered.get(name)! - 1) }
+      },
+    },
     remoteAccess: {
       whenAccess: (action: string, install: () => AccessEffect) => {
         guards.push({ action, install, installed: undefined })
@@ -92,22 +98,22 @@ it('withdraws every account surface and the account stream on revocation, and re
     },
   }
   const surfaces = (): Record<string, number | undefined> => Object.fromEntries(
-    ['settings.launcher', 'settings.notice', 'shell.quota-notice', 'settings.models.sign-in', 'settings.section'].map(name => [name, registered.get(name)]),
+    ['settings.launcher', 'settings.notice', 'shell.quota-notice', 'settings.models.sign-in', 'settings.section', 'accountSignIn'].map(name => [name, registered.get(name)]),
   )
   try {
     apply(ctx as never)
     expect(new Set(guards.map(guard => guard.action))).toEqual(new Set(['account/watch']))
     grant(guards)
     await streams[0]!.accepted
-    expect(surfaces()).toEqual({ 'settings.launcher': 1, 'settings.notice': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1 })
+    expect(surfaces()).toEqual({ 'settings.launcher': 1, 'settings.notice': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1, accountSignIn: 1 })
 
     revoke(guards)
     expect(streams[0]!.signal.aborted).toBe(true)
-    expect(surfaces()).toEqual({ 'settings.launcher': 0, 'settings.notice': 0, 'shell.quota-notice': 0, 'settings.models.sign-in': 0, 'settings.section': 0 })
+    expect(surfaces()).toEqual({ 'settings.launcher': 0, 'settings.notice': 0, 'shell.quota-notice': 0, 'settings.models.sign-in': 0, 'settings.section': 0, accountSignIn: 0 })
 
     grant(guards)
     await streams[1]!.accepted
-    expect(surfaces()).toEqual({ 'settings.launcher': 1, 'settings.notice': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1 })
+    expect(surfaces()).toEqual({ 'settings.launcher': 1, 'settings.notice': 1, 'shell.quota-notice': 1, 'settings.models.sign-in': 1, 'settings.section': 1, accountSignIn: 1 })
   } finally {
     revoke(guards)
     for (const dispose of lifetime.reverse()) dispose()
@@ -141,6 +147,12 @@ it('drops reads a revoked grant started, and the next grant shows no account sec
         if (entry.name === 'settings.launcher') operations = entry.inject?.()
         registered.set(entry.name, (registered.get(entry.name) ?? 0) + 1)
         return () => { registered.set(entry.name, registered.get(entry.name)! - 1) }
+      },
+    },
+    reflect: {
+      provide: (name: string) => {
+        registered.set(name, (registered.get(name) ?? 0) + 1)
+        return () => { registered.set(name, registered.get(name)! - 1) }
       },
     },
     remoteAccess: {
@@ -235,6 +247,12 @@ function revocationHarness(scripts: StreamScript[]) {
         if (entry.name === 'settings.launcher') operations = entry.inject?.()
         registered.set(entry.name, (registered.get(entry.name) ?? 0) + 1)
         return () => { registered.set(entry.name, registered.get(entry.name)! - 1) }
+      },
+    },
+    reflect: {
+      provide: (name: string) => {
+        registered.set(name, (registered.get(name) ?? 0) + 1)
+        return () => { registered.set(name, registered.get(name)! - 1) }
       },
     },
     remoteAccess: {

@@ -649,7 +649,8 @@
   scrollbar-gutter: auto;
 }
 
-.scrollBody:has([data-conversation-composer-overlay]) > :global([data-slot='conversation.session']) > .viewArea {
+.scrollBody:has([data-conversation-composer-overlay]) > :global([data-slot='conversation.session']) > .viewArea,
+.scrollBody > :where([data-slot-factory-children='conversation.content:views']) > :global([data-slot='conversation.session']) > .viewArea:has([data-conversation-composer-overlay]) {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;

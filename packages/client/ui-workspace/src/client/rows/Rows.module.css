@@ -333,12 +333,19 @@
   /* Only update timestamps disappear; pending-interaction labels remain visible. */
   .sessionRow .timestamp,
   .sessionRow:has(.pinnedAction) .pinIndicator,
-  .sessionRow .rowQuickActions > :global([data-slot]) > :not(.pinnedAction),
   .projectRow[aria-expanded='false'] .rowActions {
     display: none;
   }
 
+  /* Entries and direct fallbacks have no box beside More, except for Unpin.
+     The renderer's item anchors retain their inline display: contents. */
+  .sessionRow .rowQuickActions > [data-slot] > *,
+  .sessionRow .rowQuickActions > [data-slot] > [data-slot-item] > * {
+    display: var(--workspace-touch-action-display, none);
+  }
+
   .sessionRow .pinnedAction {
+    --workspace-touch-action-display: inline-flex;
     /* Keep More aligned across rows. Tab order remains More, then Unpin. */
     order: -1;
   }

@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for 2026-11-20-fold-run-results-as-session-events-commit.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-20-fold-run-results-as-session-events-commit.md
+/agent-note-fold-run-results-as-session-events-commit:
+  en: 22f317feb01ee16a
+  zh: 73dbd0a2c3642a46
+/agent-note-fold-run-results-as-session-events-commit/problem:
+  en: 90e93ecd802f88be
+  zh: e61e2562c1f1768b
+/agent-note-fold-run-results-as-session-events-commit/decision:
+  en: b2aadce385c90e44
+  zh: 27c64fc149241872
+/agent-note-fold-run-results-as-session-events-commit/decision/local-subagent-backend:
+  en: 8737ae6e1ebfc8bc
+  zh: 50a9b6759e85f197
+/agent-note-fold-run-results-as-session-events-commit/decision/headless-runner:
+  en: 9b546e937eaa5c3d
+  zh: bf518ccb171fe0f2
+/agent-note-fold-run-results-as-session-events-commit/decision/headless-adoption-check:
+  en: 32f7f5b8bd010028
+  zh: d3f8098622be814a
+/agent-note-fold-run-results-as-session-events-commit/decision/fold-functions:
+  en: 8846cdf0a97b542b
+  zh: b8db29c5a64582e6
+/agent-note-fold-run-results-as-session-events-commit/alternatives-considered:
+  en: 75e1e77db6b119ca
+  zh: 06ea492e1ff92927
+/agent-note-fold-run-results-as-session-events-commit/consequences:
+  en: 7be7ce4574f25a62
+  zh: e7105883fcdb6747
+/agent-note-fold-run-results-as-session-events-commit/testing:
+  en: 611da349818fbe6e
+  zh: 2c9afb4548c12bc0

@@ -14,6 +14,8 @@ Read an existing file before overwriting it with write and prefer edit for targe
 
 Read a file before editing it unless you just created or edited it in this session.
 
+Prefer apply_patch over separate edit calls for changes across files or separated regions. Give every hunk enough surrounding context lines to match one place in the current file. The whole patch is checked first (syntax, hunk matching, missing files) and a rejected patch changes nothing; once applying starts, operations run in order, stop at the first failure, and are not rolled back, so re-read affected files before retrying when needed.
+
 Use the glob tool — not shell find — to discover files by path pattern.
 
 Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.
@@ -55,6 +57,15 @@ declare class Image { private constructor(); readonly attachmentId: string; read
 declare function inspect(...values: unknown[]): void;
 
 interface ToolArgsMap {
+  /** Create, update, delete, or move UTF-8 text files with one patch; prefer it over multiple edit calls when a change spans several files or separated regions. */
+  apply_patch: {
+    /** Patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory. */
+    input: string;
+    /** The narrowest wider sandbox mode for a one-shot retry of the exact operation the sandbox just denied; the retry asks the user for approval. */
+    sandbox_permissions?: "workspace-write" | "danger-full-access";
+    /** Required with sandbox_permissions: one sentence for the user explaining why this exact file operation needs the wider access. Use the language of the user’s current request. */
+    justification?: string;
+  } & Record<string, JsonValue>;
   /** Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. An answer item with empty selected and no custom means the user skipped that question: continue without it, do not ask it again, and do not treat the skip as permission. */
   ask_user_question: {
     /** Questions to ask the user before continuing. */
@@ -159,6 +170,27 @@ interface ToolArgsMap {
     provider?: string;
     /** Exact model id; requires provider. */
     model?: string;
+  } & Record<string, JsonValue>;
+  /** List plugins or bundles in the current profile, enable or disable them, install a bundle, or remove an installed bundle. Every action requires danger-full-access permission or approval for this call. Approval does not change the session permission mode. Changes affect every session in this profile. List first to obtain exact identifiers. Package installation can execute allowed build scripts. The application field of a change result is authoritative: applied means the change is in effect and needs no restart; any other value carries nextStep, which says what to do or tell the user. Unmet DSH version requirements (engines.dsh, else DSH peer dependencies) block installation and activation. Version exemptions risk crashes and data loss: warn the user and obtain explicit permission for the exact plugin and runtime versions before granting one. */
+  plugin_manager: {
+    /** Management operation. */
+    action: "list_plugins" | "list_bundles" | "set_plugin" | "set_bundle" | "install_bundle" | "remove_bundle" | "list_version_exemptions" | "set_version_exemption";
+    /** Plugin entry id, bundle package name, or installation spec, according to action. For an Official catalog entry, pass list_bundles installTarget.spec to install_bundle. */
+    target?: string;
+    /** Required for set operations; defaults to true for installation. For set_version_exemption, true grants and false revokes. */
+    enabled?: boolean;
+    /** For set_version_exemption: exact DSH version from list_version_exemptions. Target must be the manifest package-name@version, not an alias or version range. */
+    runtimeVersion?: string;
+    /** For granting an exemption: true only after warning the user about possible crashes and data loss and receiving explicit permission for this exact plugin/runtime pair. General installation permission is not enough. */
+    acceptRisk?: boolean;
+    /** For install_bundle: pass names from pendingBuilds only after the user explicitly approves running their install scripts in the conversation. This grants persistent permission for this profile. */
+    approvedBuilds?: string[];
+    /** For install_bundle: the npm registry URL asked first, when the user names one; otherwise the configured registry is asked, and its configured fallbacks while a registry is unreachable. */
+    registry?: string;
+    /** Zero-based list offset; defaults to 0. */
+    offset?: number;
+    /** List page size, from 1 to 100; defaults to 25. */
+    limit?: number;
   } & Record<string, JsonValue>;
   /** Declare existing files as final deliverables for the user. Hosts may show presented files only after your turn ends, so call it once the files are final. If the user needs to review files earlier, such as before a tool call that waits for their answer, link them in your message instead. Use it when the user needs a separate file, especially Office documents, spreadsheets, and slide decks; prefer your final response when that suffices. The user opens the current files; their contents are not copied. */
   present: {
@@ -335,6 +367,27 @@ interface ToolArgsMap {
 }
 
 interface ToolOutputMap {
+  apply_patch: {
+    phase: "commit";
+    cancelled: boolean;
+    operations: ({
+      index: number;
+      kind: "add" | "update" | "delete" | "move";
+      path: string;
+      destination?: string;
+      patchLine: number;
+      status: "completed" | "failed" | "unknown" | "skipped";
+      code?: string;
+      message?: string;
+      hunkLine?: number;
+      changes?: ({
+        path: string;
+        before: string | null;
+        after: string | null;
+      })[];
+    })[];
+    affectedPaths: string[];
+  };
   ask_user_question: {
     answers: {
       id: string;
@@ -472,6 +525,7 @@ interface ToolOutputMap {
     })[];
   };
   list_subagent_models: string;
+  plugin_manager: string;
   present: {
     turn: number;
     files: {

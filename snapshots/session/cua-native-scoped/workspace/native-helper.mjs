@@ -130,6 +130,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let incompleteInputTargets = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
+    if (method === 'takeWindowActivity') return []
+    if (method === 'clearWindowActivity') return null
     record('call', { requestId, method, params })
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
@@ -151,7 +153,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { ...app, applicationIcon: `data:image/png;base64,${png}`, authorization: {"id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "name": "Fixture", "executablePath": "/fixture/app", "persistable": true} }
     }
     if (!acquired || params.appHandle !== app.appHandle) refuse('APP_NOT_FOUND', 'Acquire an application in this helper first')
-    if (method === 'show') return { dispatched: true, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
+    if (method === 'show') return { dispatched: false, windowId: params.windowId ?? window.windowId, foregroundChanged: false }
     if (method === 'activate') {
       const before = { frontPid: application.frontPid, focusedWindowId: window.windowId, frontWindowId: application.frontWindowId, frontWindowPid: application.frontPid }
       const activationRequested = application.frontPid !== app.pid

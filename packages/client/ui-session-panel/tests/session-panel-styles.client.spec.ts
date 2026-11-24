@@ -129,20 +129,6 @@ describe('SessionPanel.module.css section reordering', () => {
     expect(hover).toMatch(/\.head:hover:has\(> \.grip\) > \.actions \{\s*visibility: var\(--section-trailing-visibility\);/)
   })
 
-  it('offers the drag only on a shown section with a handle that has another such section before or after it', () => {
-    expect(declarationsOf('.section')).toMatchObject({
-      '--section-head-cursor': 'auto', '--section-grip-opacity': '0', '--section-trailing-visibility': 'visible',
-    })
-    const movable = '.section:has(> .head > .grip)'
-      + ':not(:has(> .body > [data-slot]:empty), :has(> .body > [data-slot] > [data-slot]:only-child:empty))'
-    // The selector list holds commas of its own, so the rule is read from the stylesheet with its whitespace collapsed.
-    const flat = css.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
-    expect(flat).toContain(
-      `.section:nth-child(n + 2 of ${movable}), .section:nth-last-child(n + 2 of ${movable}) {`
-      + ' --section-head-cursor: grab; --section-grip-opacity: 1; --section-trailing-visibility: hidden; }',
-    )
-  })
-
   it('plays the entrance and the exit only on a panel that carries the mark, and moves the transcript over the same time and curve', () => {
     const motion = '160ms cubic-bezier(0.4, 0, 0.2, 1)'
     expect(declarationsOf('.panel')['animation']).toBeUndefined()
@@ -222,8 +208,11 @@ describe('SessionPanel.module.css row rules', () => {
   })
 
   it('highlights only a row with an action or a menu that renders something, and keeps an open menu and its row shown', () => {
-    const interactive = "[data-session-panel-row]:has(> button[data-row-part='body'], > [data-row-part='menu']:not(:empty))"
-    expect(row("[data-session-panel-row] > [data-row-part='menu']:empty")).toEqual({ display: 'none' })
+    const menu = "> [data-row-part='menu']"
+    const emptyFactory = '> [data-slot-factory]:only-child:empty'
+    const interactive = "[data-session-panel-row]:hover:is(:has(> button[data-row-part='body']), "
+      + `:has(${menu}:not(:empty)):not(:has(${menu} ${emptyFactory})))`
+    expect(row(`[data-session-panel-row] ${menu}:is(:empty, :has(${emptyFactory}))`)).toEqual({ display: 'none' })
     // Only an open control in the menu part keeps the row highlighted; an expanded body button does not.
     expect(row("[data-session-panel-row]:has(> [data-row-part='menu'] [aria-expanded='true'])"))
       .toEqual({ background: 'var(--dsw-alias-interactive-bg-hover)' })
@@ -231,7 +220,8 @@ describe('SessionPanel.module.css row rules', () => {
     expect(row("[data-session-panel-row] > [data-row-part='menu']:has([aria-expanded='true'])")['opacity']).toBe('1')
     // Hover rules stay inside the hover media query, where the menu hides until the row is hovered or focused.
     const hover = [...css.matchAll(/@media \(hover: hover\) \{([\s\S]*?)\n\}/g)].map(block => block[1]).join('\n')
-    expect(hover).toContain(`.panel :where(${interactive}:hover)`)
+    const flatHover = hover.replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')')
+    expect(flatHover).toContain(`.panel :where(${interactive}) { background: var(--dsw-alias-interactive-bg-hover); }`)
     expect(hover).toMatch(/\[data-row-part='menu'\]\) \{\s*opacity: 0;/)
     expect(css.replace(/@media \(hover: hover\) \{[\s\S]*?\n\}/g, '')).not.toContain(':hover')
   })

@@ -89,7 +89,7 @@ While the docking preference is on, the probe carries `data-session-panel-reserv
 
 The panel compares what it showed at its last render with what it shows now. When that changes while its room to dock stayed the same, a press caused it: the panel marks itself with `data-session-panel-motion` (`enter` or `exit`) and its probe with `data-session-panel-moving` until the panel's animation ends, and a second `:has()` rule sets `--dsh-chat-end-reserve-transition` on the Conversation body for as long. A panel that mounts learns its room in its first frame, which is a change of room, so it shows without the entrance.
 
-The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows and puts them in the reader's stored order, recomputed only when the ledger version, the locale revision, or that order changes. It renders each section through `renderSlot(..., { only: id })` inside its own title and body; a CSS `:has()` rule hides a section whose body outlet stayed empty, including a shared section whose row outlet stayed empty.
+The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows and puts them in the reader's stored order, recomputed only when the ledger version, the locale revision, or that order changes. It renders each body below its title with `renderSlot(..., { only: id })`. CSS hides the section when its body renders nothing, even if an empty [list item root](../../../docs/subsystems/slots.md#list-item-roots) remains. Environment also hides when none of its rows renders content.
 
 | File | Role |
 |---|---|

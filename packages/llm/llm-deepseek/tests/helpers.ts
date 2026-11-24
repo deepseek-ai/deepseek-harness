@@ -90,17 +90,6 @@ export async function server(
   }
 }
 
-/**
- * Parse the `multipart/form-data` body of a recorded Files upload the way a server receives it.
- * @param init - request options that the Files client passed to `fetch`.
- * @returns the decoded form fields.
- */
-export async function uploadedForm(init: RequestInit | undefined): Promise<FormData> {
-  const body = init?.body
-  if (!(body instanceof Uint8Array)) throw new Error('expected an encoded multipart body')
-  return await new Request('http://localhost/v1/files', { method: 'POST', headers: new Headers(init?.headers), body }).formData()
-}
-
 /** Supply only the image projection operation; any unexpected storage work fails. */
 export function requestImageStore(readImageRequest: AttachmentStore['readImageRequest']): AttachmentStore {
   class ProjectedAttachments extends AttachmentStore {

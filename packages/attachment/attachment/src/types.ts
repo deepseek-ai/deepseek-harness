@@ -140,12 +140,14 @@ export interface StoredImageAttachment {
 
 /** Deterministic request-image target selected by one exact model route for one attachment. */
 export interface ImageRequestTarget {
-  /** Target width in pixels; a target above the source keeps the source width. */
+  /** Maximum request width in pixels; byte-limit enforcement can produce a smaller image. */
   width: number
-  /** Target height in pixels; a target above the source keeps the source height. */
+  /** Maximum request height in pixels; byte-limit enforcement can produce a smaller image. */
   height: number
-  /** Encoded-byte target before base64 expansion or Files API upload; the smallest quality-ladder output is kept when no quality fits. */
-  maxBytes: number
+  /** Hard encoded-byte limit before base64 expansion or Files API upload; successful results never exceed it. */
+  maxImageBytes: number
+  /** Preferred encoded-byte target, no greater than maxImageBytes; exceeding only this target does not reduce resolution. */
+  imageTargetBytes: number
 }
 
 /** Cached request version derived from one provider-independent normalized attachment. */

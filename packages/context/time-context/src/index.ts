@@ -8,7 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
-import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import type { PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -17,8 +17,6 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-import type { UserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
 import { Duration } from '@deepseek-ai/dsh-util-time'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import {
@@ -79,20 +77,6 @@ function formatDuration(elapsedMs: number): string {
   if (minutes > 0) parts.push(`${minutes}m`)
   parts.push(`${seconds}s`)
   return parts.join(' ')
-}
-
-/** Preserve the original scan for typed pre-step callers requesting a nonlatest turn. */
-function requestMessages(agent: Agent, turn: number, proposed: readonly UserMessage[]): UserMessage[] {
-  const entered: UserMessage[] = []
-  for (let seq = agent.session.seq - 1; seq >= 0; seq -= 1) {
-    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
-    const event = agent.session.eventAt(SessionSeq(seq))
-    if (event?.type === 'turn/start' && event.data.turn === turn) {
-      return [...entered.reverse(), ...proposed]
-    }
-    if (event?.type === 'user/message') entered.push(event.data)
-  }
-  return [...proposed]
 }
 
 function renderText(
@@ -216,9 +200,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const previous = step === 1
       ? state.lastMessageTime ?? undefined
       : state.lastTurnInjectionTime ?? undefined
-    const browser = state.browserTurn === turn
-      ? deriveBrowserTimeZoneContext(decision.messages, state.browserTimeZones)
-      : deriveBrowserTimeZoneContext(requestMessages(agent, turn, decision.messages))
+    const browser = deriveBrowserTimeZoneContext(decision.messages, state.browserTimeZones)
     const selectedTimeZone = browser.kind === 'resolved' ? browser.timeZone : fallbackTimeZone
     const text = renderText(
       now,
@@ -234,7 +216,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       messages: [
         ...decision.messages,
         createUserMessage({
-          content: [{ type: 'text', text }],
+          // Every interpolated value is a number or canonical zone name, so the body cannot close the frame.
+          content: [{ type: 'text', text: `<system-reminder>\n${text}\n</system-reminder>` }],
           source: { kind: name, form: 'snapshot', sections: [{ name, text }] },
         }),
       ],

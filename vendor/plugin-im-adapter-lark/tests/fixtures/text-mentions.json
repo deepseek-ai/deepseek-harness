@@ -1,0 +1,35 @@
+{
+  "schema": "2.0",
+  "header": {
+    "event_type": "im.message.receive_v1",
+    "event_id": "ev_text_mentions",
+    "app_id": "cli_lark",
+    "create_time": "1700000000000",
+    "token": "verify",
+    "tenant_key": "t1"
+  },
+  "event": {
+    "sender": {
+      "sender_id": { "open_id": "ou_user", "union_id": "on_user" },
+      "sender_type": "user",
+      "tenant_key": "t1"
+    },
+    "message": {
+      "message_id": "om_text_mentions",
+      "chat_id": "oc_chat",
+      "chat_type": "group",
+      "message_type": "text",
+      "create_time": "1700000000000",
+      "content": "{\"text\":\"@_user_1 看一下 @_all 这条 [看板](https://example.com/board)\"}",
+      "mentions": [
+        {
+          "key": "@_user_1",
+          "id": { "open_id": "ou_bot", "union_id": "on_bot" },
+          "name": "小助手",
+          "tenant_key": "t1"
+        },
+        { "key": "@_all", "id": {}, "name": "所有人" }
+      ]
+    }
+  }
+}

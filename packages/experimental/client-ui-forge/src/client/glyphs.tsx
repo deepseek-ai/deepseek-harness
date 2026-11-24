@@ -1,8 +1,8 @@
-/** Lifecycle glyphs of change requests and outcome glyphs of their checks. */
+/** Lifecycle glyphs of change requests, outcome glyphs of their checks, and the marks of their code hosts. */
 
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconCheckCircleFillRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckCircleFillRegular, IconRightUpOutlineRegular, LinkIconRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { CheckState, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ChangeRequestTone } from './status.ts'
 import css from './Forge.module.css'
@@ -147,4 +147,19 @@ export function CheckGlyph({ state, size = 16 }: { readonly state: CheckState; r
       )}
     </span>
   )
+}
+
+/** The public host whose site mark stands for each forge family, self-hosted instances included. */
+const FORGE_SITE: Readonly<Record<string, string>> = { github: 'https://github.com', gitlab: 'https://gitlab.com' }
+
+/**
+ * Draw the mark of a code host on an action that opens it: the site mark of the provider's forge family, whatever the
+ * host name, or the leaving arrow for a family without a mark and for no provider.
+ * @param props.forge - forge family of the change request's provider, such as `github`, or null without one.
+ * @param props.size - width and height in pixels, 14 by default.
+ * @returns the decorative glyph.
+ */
+export function ForgeGlyph({ forge, size = 14 }: { readonly forge: string | null; readonly size?: number | undefined }): ReactNode {
+  const site = forge === null ? undefined : FORGE_SITE[forge]
+  return site === undefined ? <IconRightUpOutlineRegular size={size} /> : <LinkIconRegular kind="url" href={site} size={size} />
 }

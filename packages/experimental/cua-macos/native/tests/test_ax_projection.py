@@ -49,7 +49,7 @@ def check_input(executable, helper_path, root):
                                ("click", {**scoped, "x": 20, "y": 40}),
                                ("typeText", {**owner, "text": "a"}),
                                ("pressKey", {**owner, "key": "a"}),
-                               ("sendKeyEvent", {**owner, "key": "a", "direction": "down", "runId": "fixture"})]:
+                               ("sendKeyEvent", {**owner, "key": "a", "direction": "down"})]:
             failure = helper.call(method, params, "PANEL_NOT_READY")
             assert failure["message"] == "File panel recipient discovery is incomplete. No input was dispatched. Read fresh state before retrying.", failure
         assert json.loads(log.read_text()) == expected

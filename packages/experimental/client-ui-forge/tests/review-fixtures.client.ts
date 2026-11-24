@@ -16,7 +16,7 @@ export function prUrl(number: number): string {
 
 /**
  * Open pull request `number` in `octo/demo` by `octo` with passed checks and no review, updated `2026-10-09T00:00:00Z`,
- * that asks nothing of the signed-in user and closes no issue.
+ * that asks nothing of the signed-in user.
  */
 export function summary(number: number, overrides: Partial<ChangeRequestSummary> = {}): ChangeRequestSummary {
   return {
@@ -30,8 +30,6 @@ export function summary(number: number, overrides: Partial<ChangeRequestSummary>
     reviewDecision: 'none',
     viewerReview: null,
     viewerRequest: null,
-    closingIssues: [],
-    closingIssuesTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     ...overrides,
   }
@@ -51,7 +49,7 @@ export function failedList(code: ForgeFailure['code'], message = 'down'): ForgeR
 export function host(
   lists: Partial<Record<ForgeViewerFilter, ForgeReviewList>>, overrides: Partial<ForgeReviewHost> = {},
 ): ForgeReviewHost {
-  return { forge: 'github', host: 'github.com', viewer: 'octo', lists, ...overrides }
+  return { forge: 'github', host: 'github.com', viewer: 'octo', signIn: null, lists, ...overrides }
 }
 
 /** A frame of `hosts` with no read in flight. */

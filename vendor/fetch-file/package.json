@@ -1,0 +1,47 @@
+{
+  "name": "@deepseek-ai/cordis-fetch-file",
+  "description": "Fetch for `file:` URLs",
+  "version": "1.0.3",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./lib/types/node.d.ts",
+      "node": "./lib/node.js",
+      "default": "./lib/browser.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/node.js",
+    "lib/browser.js",
+    "lib/types/**/*.d.ts",
+    "lib/types/**/*.d.ts.map",
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "vendor/fetch-file"
+  },
+  "bugs": {
+    "url": "https://github.com/cordiverse/fetch-file/issues"
+  },
+  "homepage": "https://github.com/cordiverse/fetch-file",
+  "author": "Shigma <shigma10826@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/cosmokit": "workspace:~",
+    "file-type": "^20.4.1",
+    "mime-types": "^3.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/mime-types": "^3.0.1"
+  },
+  "main": "lib/node.js",
+  "types": "lib/types/node.d.ts"
+}

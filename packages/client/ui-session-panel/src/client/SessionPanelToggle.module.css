@@ -48,7 +48,8 @@
 }
 
 /* One 6px dot at the glyph's corner; the ring separates it from the glyph, and the occupant colors it. */
-.indicators > :global([data-slot='conversation.session.panel.indicator']) > * {
+.indicators > :global([data-slot='conversation.session.panel.indicator']) > :where([data-slot-error]),
+.indicators > :global([data-slot='conversation.session.panel.indicator']) > :where([data-slot-item]) > * {
   position: absolute;
   top: 5px;
   right: 5px;

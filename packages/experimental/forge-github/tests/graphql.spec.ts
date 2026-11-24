@@ -70,6 +70,7 @@ describe('snapshot mapping', () => {
       mergeability: 'mergeable',
       mergeReady: true,
       mergeMethods: ['merge', 'squash'],
+      autoMerge: { enabled: false, method: null, enabledBy: null, canEnable: false, canDisable: false },
       branchUpdates: [],
       reviewDecision: 'none',
       reviewers: [],
@@ -279,6 +280,32 @@ describe('snapshot mapping', () => {
     expect((await single(pullRequestNode(1), null))).toMatchObject({ mergeReady: false, mergeMethods: [] })
     expect((await single(pullRequestNode(1), { squashMergeAllowed: 'yes' }))).toMatchObject({ mergeReady: false, mergeMethods: [] })
   })
+
+  it('reads the auto-merge fields of every pull request with its snapshot', () => {
+    expect(snapshotQuery([pull(1)], MAX_THREADS).document).toContain(
+      'viewerCanEnableAutoMerge viewerCanDisableAutoMerge isMergeQueueEnabled autoMergeRequest { mergeMethod enabledBy { login } }')
+  })
+
+  it.each([
+    ['off where the viewer can turn it on', { mergeStateStatus: 'BLOCKED', viewerCanEnableAutoMerge: true },
+      { enabled: false, method: null, enabledBy: null, canEnable: true, canDisable: false }],
+    ['on by an account, where the viewer can turn it off',
+      { viewerCanDisableAutoMerge: true, autoMergeRequest: { mergeMethod: 'SQUASH', enabledBy: { login: 'mona' } } },
+      { enabled: true, method: 'squash', enabledBy: 'mona', canEnable: false, canDisable: true }],
+    ['on by an account GitHub does not name, for a viewer who cannot turn it off',
+      { autoMergeRequest: { mergeMethod: 'MERGE', enabledBy: null } },
+      { enabled: true, method: 'merge', enabledBy: null, canEnable: false, canDisable: false }],
+    ['off and not offered on a base branch with a merge queue', { viewerCanEnableAutoMerge: true, isMergeQueueEnabled: true },
+      { enabled: false, method: null, enabledBy: null, canEnable: false, canDisable: false }],
+  ])('reports auto-merge %s', async (_label, node, autoMerge) => {
+    expect((await single(pullRequestNode(1, node))).autoMerge).toEqual(autoMerge)
+  })
+
+  it.each([['SQUASH', 'squash'], ['MERGE', 'merge'], ['REBASE', 'rebase'], ['FUTURE_METHOD', null]])(
+    'reads the auto-merge method %s as %s', async (mergeMethod, method) => {
+      const snapshot = await single(pullRequestNode(1, { autoMergeRequest: { mergeMethod, enabledBy: { login: 'mona' } } }))
+      expect(snapshot.autoMerge?.method).toBe(method)
+    })
 
   it('keeps a hidden author, drafts, and a commit without rollup', async () => {
     expect(await single(pullRequestNode(1, { isDraft: true, author: null }))).toMatchObject({ draft: true, author: null })

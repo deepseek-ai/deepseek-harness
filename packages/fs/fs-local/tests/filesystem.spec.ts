@@ -701,6 +701,52 @@ describe('writeText', () => {
   })
 })
 
+describe('writeBytes', () => {
+  const BINARY = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x0a])
+
+  it('stores exact bytes without decoding or newline normalization', async () => {
+    const outcome = await fs.writeBytes(await fs.resolve('blob.bin'), BINARY)
+    expect(outcome.operation).toBe('create')
+    expect(new Uint8Array(await readFile(join(dir, 'blob.bin')))).toEqual(BINARY)
+  })
+
+  it('creates missing parent directories', async () => {
+    const outcome = await fs.writeBytes(await fs.resolve('.dsh/im/12.2-report.pdf'), BINARY)
+    expect(outcome.operation).toBe('create')
+    expect(new Uint8Array(await readFile(join(dir, '.dsh/im/12.2-report.pdf')))).toEqual(BINARY)
+  })
+
+  it('overwrites an existing file and reports its post-write version', async () => {
+    await fs.writeBytes(await fs.resolve('blob.bin'), BINARY)
+    const target = await fs.resolve('blob.bin')
+    const outcome = await fs.writeBytes(target, new Uint8Array([1, 2, 3]))
+    expect(outcome.operation).toBe('update')
+    expect(outcome.version).toBe(await versionOf(target))
+    expect(new Uint8Array(await readFile(join(dir, 'blob.bin')))).toEqual(new Uint8Array([1, 2, 3]))
+  })
+
+  it('honors createIfAbsent and replaceIfVersion guards', async () => {
+    const target = await fs.resolve('blob.bin')
+    await fs.writeBytes(target, BINARY, { kind: 'createIfAbsent' })
+    await expect(fs.writeBytes(target, BINARY, { kind: 'createIfAbsent' }))
+      .rejects.toMatchObject({ code: 'FS_NOT_OBSERVED' })
+    const version = await versionOf(target)
+    await fs.writeBytes(target, new Uint8Array([7]), { kind: 'replaceIfVersion', version })
+    await expect(fs.writeBytes(target, new Uint8Array([8]), { kind: 'replaceIfVersion', version }))
+      .rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+    expect(new Uint8Array(await readFile(join(dir, 'blob.bin')))).toEqual(new Uint8Array([7]))
+  })
+
+  it('refuses a non-file target and an aborted write', async () => {
+    await mkdir(join(dir, 'folder'))
+    await expect(fs.writeBytes(await fs.resolve('folder'), BINARY))
+      .rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
+    await expect(fs.writeBytes(await fs.resolve('blob.bin'), BINARY, undefined, AbortSignal.abort()))
+      .rejects.toMatchObject({ code: 'FS_ABORTED' })
+    await expect(readFile(join(dir, 'blob.bin'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
 describe('editText', () => {
   it('applies a literal edit at the matching version', async () => {
     await writeFile(join(dir, 'a.txt'), 'hello world')

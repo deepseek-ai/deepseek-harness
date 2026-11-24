@@ -24,6 +24,14 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | `@deepseek-ai/cordis-plugin-timer` | `@cordisjs/plugin-timer` | [vendor/timer](vendor/timer/) | MIT |
 | `@deepseek-ai/cordis-plugin-hmr` | `@cordisjs/plugin-hmr` | [vendor/hmr](vendor/hmr/) | MIT |
 | `@deepseek-ai/cordis-plugin-logger-console` | `@cordisjs/plugin-logger-console` | [vendor/logger-console](vendor/logger-console/) | MIT |
+| `@deepseek-ai/cordis-element` | `@cordisjs/element` | [vendor/element](vendor/element/) | MIT |
+| `@deepseek-ai/cordis-fetch-file` | `@cordisjs/fetch-file` | [vendor/fetch-file](vendor/fetch-file/) | MIT |
+| `@deepseek-ai/cordis-plugin-http` | `@cordisjs/plugin-http` | [vendor/http](vendor/http/) | MIT |
+| `@deepseek-ai/satori-element` | `@satorijs/element` | [vendor/satori-element](vendor/satori-element/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-core` | `@satorijs/core` | [vendor/plugin-im-core](vendor/plugin-im-core/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-adapter-lark` | `@satorijs/adapter-lark` | [vendor/plugin-im-adapter-lark](vendor/plugin-im-adapter-lark/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-adapter-qq` | `@satorijs/adapter-qq` | [vendor/plugin-im-adapter-qq](vendor/plugin-im-adapter-qq/) | MIT |
+| `@deepseek-ai/cordis-plugin-im-markdown` | `@satorijs/markdown` | [vendor/plugin-im-markdown](vendor/plugin-im-markdown/) | MIT |
 
 ## Runtime npm dependencies
 
@@ -105,8 +113,10 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`execa`](https://github.com/sindresorhus/execa) | MIT |
 | [`fast-xml-parser`](https://github.com/NaturalIntelligence/fast-xml-parser) | MIT |
 | [`fflate`](https://github.com/101arrowz/fflate) | MIT |
+| [`file-type`](https://github.com/sindresorhus/file-type) | MIT |
 | [`fuzzysort`](https://github.com/farzher/fuzzysort) | MIT |
 | [`got`](https://github.com/sindresorhus/got) | MIT |
+| [`hast-util-raw`](https://github.com/syntax-tree/hast-util-raw) | MIT |
 | [`hosted-git-info`](https://github.com/npm/hosted-git-info) | ISC |
 | [`immer`](https://github.com/immerjs/immer) | MIT |
 | [`ipaddr.js`](https://github.com/whitequark/ipaddr.js) | MIT |
@@ -117,6 +127,8 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`mdast-util-from-markdown`](https://github.com/syntax-tree/mdast-util-from-markdown) | MIT |
 | [`mdast-util-gfm`](https://github.com/syntax-tree/mdast-util-gfm) | MIT |
 | [`mdast-util-math`](https://github.com/syntax-tree/mdast-util-math) | MIT |
+| [`mdast-util-to-hast`](https://github.com/syntax-tree/mdast-util-to-hast) | MIT |
+| [`mdast-util-to-markdown`](https://github.com/syntax-tree/mdast-util-to-markdown) | MIT |
 | [`micromark-core-commonmark`](https://github.com/micromark/micromark/tree/main/packages/micromark-core-commonmark) | MIT |
 | [`micromark-extension-gfm`](https://github.com/micromark/micromark-extension-gfm) | MIT |
 | [`micromark-extension-math`](https://github.com/micromark/micromark-extension-math) | MIT |
@@ -135,8 +147,11 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`open`](https://github.com/sindresorhus/open) | MIT |
 | [`p-limit`](https://github.com/sindresorhus/p-limit) | MIT |
 | [`papaparse`](https://github.com/mholt/PapaParse) | MIT |
+| [`path-to-regexp`](https://github.com/pillarjs/path-to-regexp) | MIT |
+| [`path-to-regexp-typed`](https://github.com/shigma/path-to-regexp-typed) | MIT |
 | [`pdfjs-dist`](https://github.com/mozilla/pdf.js) | Apache-2.0 |
 | [`picomatch`](https://github.com/micromatch/picomatch) | MIT |
+| [`protobufjs`](https://github.com/protobufjs/protobuf.js) | BSD-3-Clause |
 | [`qrcode.react`](https://github.com/zpao/qrcode.react) | ISC |
 | [`react`](https://github.com/facebook/react) | MIT |
 | [`react-dom`](https://github.com/facebook/react) | MIT |
@@ -233,6 +248,7 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`@types/compression`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/d3-time`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/estree`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
+| [`@types/hast`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/hosted-git-info`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/js-yaml`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@types/jsdom`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |

@@ -29,7 +29,7 @@ Mount this plugin when the model should interpret unqualified dates and times in
 
 ### What the model gets
 
-Each injected reading has three lines: an ISO-shaped timestamp with numeric offset and IANA zone, the browser-zone policy for the request, and the elapsed duration in compact whole-second units. Step 1 measures from the latest preceding model-visible message; later steps measure from the preceding time-context event in the same turn. A missing baseline reports `unavailable`, and backward wall-clock movement clamps elapsed time to zero.
+Each injected reading is a `<system-reminder>` block, which marks it as injected context rather than user input. The block has three lines: an ISO-shaped timestamp with numeric offset and IANA zone, the browser-zone policy for the request, and the elapsed duration in compact whole-second units. Step 1 measures from the latest preceding model-visible message; later steps measure from the preceding time-context event in the same turn. A missing baseline reports `unavailable`, and backward wall-clock movement clamps elapsed time to zero.
 
 ### Configuration
 
@@ -64,7 +64,7 @@ This section explains the design of the plugin; the observable behavior is cover
 
 ### Design concept
 
-The plugin prepends an `agent/pre-step` listener that delegates first and appends one sourced `UserMessage` when an injection is due and the downstream decision enters the step. Each reading uses the exact snapshot source `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`.
+The plugin prepends an `agent/pre-step` listener that delegates first and appends one sourced `UserMessage` when an injection is due and the downstream decision enters the step. Each reading uses the exact snapshot source `{ kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text }] }`, where `text` is the reading without its `<system-reminder>` frame.
 
 ### Source map
 
@@ -102,22 +102,26 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-Each injected message contains three lines. `<timestamp>` is an ISO-shaped timestamp with numeric offset and IANA zone; durations use compact whole-second units.
+Each injected message wraps three lines in a `<system-reminder>` block. `<timestamp>` is an ISO-shaped timestamp with numeric offset and IANA zone; durations use compact whole-second units.
 
 ##### First step
 
 ```markdown
+<system-reminder>
 Time sampled while preparing turn <turn>, step 1: <timestamp>
 Browser time zone for this request: <iana-zone-or-mixed-or-unavailable-policy>.
 Elapsed since the preceding model-visible message: <duration-or-unavailable>.
+</system-reminder>
 ```
 
 ##### Later steps
 
 ```markdown
+<system-reminder>
 Time sampled while preparing turn <turn>, step <step>: <timestamp>
 Browser time zone for this request: <iana-zone-or-mixed-or-unavailable-policy>.
 Elapsed since the preceding step context: <duration-or-unavailable>.
+</system-reminder>
 ```
 
 #### Token effect
@@ -135,7 +139,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when clock context is a poor fit. They are current package constraints.
 
-- **State and replay cost** — timestamps and the current turn number have fixed size. Zone state grows with distinct reported strings in the latest entered turn, not all messages; each new distinct zone copies that list. Formatters remain discardable process caches. The standard AgentLoop requests its latest entered turn. If a typed pre-step caller requests another turn, the original full-prefix synchronous scan includes later entered messages. Retiring this fallback requires limiting pre-step requests to the latest entered turn and updating callers together.
+- **State and replay cost** — timestamps and the current turn number have fixed size. Zone state grows with distinct reported strings in the latest entered turn, not all messages; each new distinct zone copies that list. Formatters remain discardable process caches.
 - **Prompt guidance only** — browser-zone context guides natural-language interpretation but does not silently supply another tool's required zone field.
 - **Mixed turns ask** — if one open turn contains prompts from different browser zones, the model is told to clarify rather than guess which one owns an unqualified time.
 - **Fallback is not user authority** — the configured or process zone formats the clock when current-turn browser zones are missing or mixed, but the model-facing policy still says to clarify.

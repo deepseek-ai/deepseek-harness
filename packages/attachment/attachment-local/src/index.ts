@@ -23,12 +23,14 @@ import {
   readFileStreamVerbatim, saveFileStreamVerbatim, saveFileVerbatim, storedFilePath,
 } from './file-store.ts'
 import { readRequestImageFile, requestImageVariantId } from './request-image.ts'
+import type { RequestImageResizePolicy } from './request-image.ts'
 
 export { canPassThroughNormalization, normalizeImage } from './normalization.ts'
 export type { NormalizedImage, NormalizationPolicy } from './normalization.ts'
 export { commitPreparedImageFile, prepareImageFile, readImageFile, saveImageFile, validateImageFile } from './store.ts'
 export type { PreparedImageFile } from './store.ts'
 export { readRequestImageFile, requestImageVariantId } from './request-image.ts'
+export type { RequestImageResizePolicy } from './request-image.ts'
 
 /** Default maximum encoded bytes for one submitted image; oversized sources are refused, not shrunk. */
 export const DEFAULT_MAX_IMAGE_BYTES = 50 * 1024 * 1024
@@ -61,6 +63,9 @@ export const DEFAULT_IMAGE_COMPRESSION_CONCURRENCY = 2
 /** Maximum configurable native image transformations per store. */
 export const MAX_IMAGE_COMPRESSION_CONCURRENCY = 8
 
+const DEFAULT_REQUEST_IMAGE_MIN_SHRINK_FACTOR = 1.1
+const DEFAULT_REQUEST_IMAGE_BYTE_HEADROOM = 0.95
+
 /** Local attachment backend configuration. */
 export interface Config {
   /** Explicit harness home; omitted follows `DSH_HOME`, then `~/.dsh`. */
@@ -86,6 +91,10 @@ export interface Config {
   normalizedImageMaxBytes?: number
   /** Maximum simultaneous normalization or request-image transformations in this service instance. */
   imageCompressionConcurrency?: number
+  /** Minimum long-edge shrink divisor after a request image exceeds its hard byte limit; must be greater than one. Default: 1.1. */
+  requestImageMinShrinkFactor?: number
+  /** Fraction of the hard byte limit used to estimate the next request-image size; in (0, 1]. Default: 0.95. */
+  requestImageByteHeadroom?: number
 }
 
 function abortReason(signal: AbortSignal): Error {
@@ -159,6 +168,8 @@ export class LocalAttachmentStore extends AttachmentStore {
     normalizedImageMaxPixels: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_PIXELS),
     normalizedImageMaxDimension: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION),
     normalizedImageMaxBytes: z.number().step(1).min(1).default(DEFAULT_NORMALIZED_IMAGE_MAX_BYTES),
+    requestImageMinShrinkFactor: z.number().min(1 + Number.EPSILON).max(Number.MAX_VALUE).default(DEFAULT_REQUEST_IMAGE_MIN_SHRINK_FACTOR),
+    requestImageByteHeadroom: z.number().min(Number.MIN_VALUE).max(1).default(DEFAULT_REQUEST_IMAGE_BYTE_HEADROOM),
     imageCompressionConcurrency: z.number().step(1).min(1).max(MAX_IMAGE_COMPRESSION_CONCURRENCY)
       .default(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY),
   })
@@ -170,6 +181,7 @@ export class LocalAttachmentStore extends AttachmentStore {
   readonly normalizationPolicy: Readonly<NormalizationPolicy>
   /** Resolved instance-level compression limit. */
   readonly imageCompressionConcurrency: number
+  private readonly requestImageResizePolicy: Readonly<RequestImageResizePolicy>
   private readonly cacheRoot: string
   private readonly compression: CompressionLimiter
   private readonly requestInflight = new Map<string, SharedRequest<RequestImageAttachment>>()
@@ -192,6 +204,15 @@ export class LocalAttachmentStore extends AttachmentStore {
       maxDimension: config.normalizedImageMaxDimension ?? DEFAULT_NORMALIZED_IMAGE_MAX_DIMENSION,
       maxBytes: config.normalizedImageMaxBytes ?? DEFAULT_NORMALIZED_IMAGE_MAX_BYTES,
     })
+    const minShrinkFactor = config.requestImageMinShrinkFactor ?? DEFAULT_REQUEST_IMAGE_MIN_SHRINK_FACTOR
+    const byteHeadroom = config.requestImageByteHeadroom ?? DEFAULT_REQUEST_IMAGE_BYTE_HEADROOM
+    if (!Number.isFinite(minShrinkFactor) || minShrinkFactor <= 1) {
+      throw new Error('attachment-local: requestImageMinShrinkFactor must be a finite number greater than one')
+    }
+    if (!Number.isFinite(byteHeadroom) || byteHeadroom <= 0 || byteHeadroom > 1) {
+      throw new Error('attachment-local: requestImageByteHeadroom must be a finite number in (0, 1]')
+    }
+    this.requestImageResizePolicy = Object.freeze({ minShrinkFactor, byteHeadroom })
     const compressionConcurrency = config.imageCompressionConcurrency ?? DEFAULT_IMAGE_COMPRESSION_CONCURRENCY
     if (!Number.isSafeInteger(compressionConcurrency)
       || compressionConcurrency < 1
@@ -264,7 +285,7 @@ export class LocalAttachmentStore extends AttachmentStore {
     signal: AbortSignal | undefined,
   ): Promise<RequestImageAttachment> {
     signal?.throwIfAborted()
-    const variantId = requestImageVariantId(ref, target)
+    const variantId = requestImageVariantId(ref, target, this.requestImageResizePolicy)
     const key = String(variantId)
     let operation = this.requestInflight.get(key)
     if (operation?.controller.signal.aborted) {
@@ -277,6 +298,7 @@ export class LocalAttachmentStore extends AttachmentStore {
           this.cacheRoot,
           stored ?? await this.readImage(ref, sharedSignal),
           target,
+          this.requestImageResizePolicy,
           sharedSignal,
         )
         return request
