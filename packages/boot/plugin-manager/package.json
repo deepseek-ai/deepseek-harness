@@ -26,6 +26,10 @@
       "types": "./lib/types/catalog.d.ts",
       "default": "./lib/types/catalog.js"
     },
+    "./grammar": {
+      "types": "./lib/types/grammar.d.ts",
+      "default": "./lib/types/grammar.js"
+    },
     "./registry": {
       "types": "./lib/types/registry.d.ts",
       "default": "./lib/types/registry.js"
@@ -89,6 +93,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
@@ -113,6 +118,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:*",
+    "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-native": "workspace:*",

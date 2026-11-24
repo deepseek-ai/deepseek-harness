@@ -1222,7 +1222,7 @@ describe('PluginManagerPage', () => {
     expect(within(detail).getByText('sidebar', { selector: 'code' })).toBeTruthy()
   })
 
-  it('translates row text, searches current copy and technical identities, and keeps configuration keys unchanged', () => {
+  it('translates row text, searches every declared language and technical identities, and keeps configuration keys unchanged', () => {
     const error = 'locale/zh.json: invalid description'
     const localized = row({
       moduleName: '@acme/dsh-sidebar-widget',
@@ -1234,6 +1234,7 @@ describe('PluginManagerPage', () => {
     })
     const rows = [localized, ...Array.from({ length: 10 }, (_, index) => row({
       rowId: `extra-${String(index)}`, entryId: `include:extra-${String(index)}` as PluginEntryId, moduleName: '@acme/other',
+      ...index === 0 ? { meta: { title: 'Plain extra row' } } : {},
     }))]
     const { actions, setLanguage } = renderTab(
       { packages: [pkg({ meta: { title: { en: 'Personal tools', zh: '个人工具' } }, rows })] },
@@ -1248,6 +1249,11 @@ describe('PluginManagerPage', () => {
       expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
       expect(screen.getByRole('button', { name: zh.configureRow.replace('{name}', '导航组件') })).toBeTruthy()
     }
+    // A literal title remains matchable alongside the translated ones.
+    fireEvent.change(search, { target: { value: 'Plain extra row' } })
+    expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+    expect(document.querySelector('[data-plugin-row="include:extra-0"]')).toBeTruthy()
+    fireEvent.change(search, { target: { value: '' } })
     expect(screen.getByText('sidebar')).toBeTruthy()
     expect(screen.getByText('@acme/dsh-sidebar-widget')).toBeTruthy()
     expect(screen.getByText('侧边导航')).toBeTruthy()
@@ -1264,6 +1270,12 @@ describe('PluginManagerPage', () => {
     expect(screen.getByText(zh.partsFilterEmpty)).toBeTruthy()
     fireEvent.change(search, { target: { value: 'Sidebar component' } })
     setLanguage(en)
+    for (const query of ['导航组件', '侧边导航']) {
+      fireEvent.change(search, { target: { value: query } })
+      expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+      expect(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') })).toBeTruthy()
+    }
+    fireEvent.change(search, { target: { value: 'Sidebar component' } })
     expect(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') }))
     expect(document.querySelector('[data-plugin-row-detail]')?.getAttribute('data-plugin-row-detail')).toBe('dsh-better-sidebar#sidebar')

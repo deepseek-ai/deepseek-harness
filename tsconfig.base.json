@@ -307,6 +307,7 @@
       "@deepseek-ai/dsh-plugin-manager": ["./packages/boot/plugin-manager/src"],
       "@deepseek-ai/dsh-plugin-manager/catalog": ["./packages/boot/plugin-manager/src/catalog.ts"],
       "@deepseek-ai/dsh-plugin-manager/diagnostic": ["./packages/boot/plugin-manager/src/diagnostic.ts"],
+      "@deepseek-ai/dsh-plugin-manager/grammar": ["./packages/boot/plugin-manager/src/grammar.ts"],
       "@deepseek-ai/dsh-plugin-manager/types": ["./packages/boot/plugin-manager/src/types.ts"],
       "@deepseek-ai/dsh-plugin-manager/registry": ["./packages/boot/plugin-manager/src/registry.ts"],
       "@deepseek-ai/dsh-plugin-manager/operations": ["./packages/boot/plugin-manager/src/operations.ts"],

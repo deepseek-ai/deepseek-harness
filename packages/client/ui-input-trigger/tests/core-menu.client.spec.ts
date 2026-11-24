@@ -71,17 +71,44 @@ describe('menuReduce hit', () => {
 describe('menuReduce source-settled', () => {
   it('marks the group ready and highlights the first item', () => {
     let s = open(['command', 'skill'])
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal')] })
+    expect(s.groups[0]).toEqual({ source: 'command', status: 'ready', items: [item('goal')] })
+    expect(s.groups[1]!.status).toBe('pending')
+    expect(s.highlight).toEqual({ source: 'command', index: 0 })
+  })
+
+  it('withholds the default highlight from a later group until every earlier group settles', () => {
+    let s = open(['command', 'skill'])
     s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'skill', items: [item('commit')] })
     expect(s.groups[1]).toEqual({ source: 'skill', status: 'ready', items: [item('commit')] })
-    expect(s.groups[0]!.status).toBe('pending')
+    expect(s.highlight).toBeNull()
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal')] })
+    expect(s.highlight).toEqual({ source: 'command', index: 0 })
+  })
+
+  it('passes the default highlight to a later group when every earlier group settles empty', () => {
+    let s = open(['command', 'skill'])
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'skill', items: [item('commit')] })
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [] })
     expect(s.highlight).toEqual({ source: 'skill', index: 0 })
   })
 
   it('keeps an existing valid highlight when a later group settles', () => {
     let s = open(['command', 'skill'])
+    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal'), item('model')] })
+    s = menuReduce(s, { type: 'move', dir: 1 })
     s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'skill', items: [item('commit')] })
-    s = menuReduce(s, { type: 'source-settled', generation: 1, source: 'command', items: [item('goal')] })
-    expect(s.highlight).toEqual({ source: 'skill', index: 0 })
+    expect(s.highlight).toEqual({ source: 'command', index: 1 })
+  })
+
+  it('keeps a highlight parked on a revalidating group while a later group settles first', () => {
+    let s = ready()
+    s = menuReduce(s, { type: 'move', dir: 1 })
+    s = menuReduce(s, { type: 'hit', hit: hit('g') })
+    s = menuReduce(s, { type: 'source-settled', generation: 2, source: 'skill', items: [item('git')] })
+    expect(s.highlight).toEqual({ source: 'command', index: 1 })
+    s = menuReduce(s, { type: 'source-settled', generation: 2, source: 'command', items: [item('goal'), item('grep')] })
+    expect(s.highlight).toEqual({ source: 'command', index: 1 })
   })
 
   it('drops settlements from a stale generation by reference', () => {

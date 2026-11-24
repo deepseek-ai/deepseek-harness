@@ -421,8 +421,8 @@ describe('web e2e: plugin manager', () => {
       const release = Promise.withResolvers<undefined>()
       const listBundles = scaffold.ctx.pluginManager.listBundles.bind(scaffold.ctx.pluginManager)
       const reads: ReturnType<typeof listBundles>[] = []
-      const spy = vi.spyOn(scaffold.ctx.pluginManager, 'listBundles').mockImplementation(() => {
-        const read = release.promise.then(() => listBundles())
+      const spy = vi.spyOn(scaffold.ctx.pluginManager, 'listBundles').mockImplementation((...args) => {
+        const read = release.promise.then(() => listBundles(...args))
         reads.push(read)
         return read
       })
