@@ -13,6 +13,7 @@ Rules for writing DeepSeek Harness code, in the style of the [C++ Core Guideline
   - [G.2: Avoid callbacks in public interface parameters](general.md#g2)
 - [F: Frontend](frontend.md)
 - [B: Backend](backend.md)
+  - [B.1: Drive plugin work from lifecycle events, not loops that poll Agent state](backend.md#b1)
 - [D: Data exchange](data-exchange.md)
 
 ## Status and scope
