@@ -150,7 +150,8 @@ export class ScheduleRuntime {
    * @param id - Task identity checked inside the shared management transaction.
    * @param candidate - Additional input accompanying the stored instruction.
    * @returns Resolves after Session persistence and the task receipt commit, not model completion.
-   * @throws SourceError when the task is missing, inactive, or busy, or with SOURCE_CLOSED when shutdown refuses
+   * @throws SOURCE_INPUT_TOO_LARGE before queuing an oversized observation. Also throws SourceError
+   * when the task is missing, inactive, or busy, or with SOURCE_CLOSED when shutdown refuses
    * this delivery. Other delivery failures preserve their cause and may follow partial persistence.
    */
   async deliverSource(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {

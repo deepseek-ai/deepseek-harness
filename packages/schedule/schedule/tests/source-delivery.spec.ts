@@ -225,6 +225,25 @@ it('limits source input to 10 MiB of UTF-8 JSON including quotes, escapes and Un
   expect(taskTable(test.ctx).get(ID)).toEqual(saved)
 })
 
+it('rejects an oversized observation without waiting for an earlier delivery to flush', async () => {
+  const test = await setup()
+  const entered = Promise.withResolvers<undefined>()
+  const release = releaseGate()
+  test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  const earlier = test.submit(INPUT)
+  try {
+    await entered.promise
+    const refused = vi.fn()
+    const later = test.submit('x'.repeat(SOURCE_JSON_LIMIT)).catch(refused)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(refused).toHaveBeenCalledExactlyOnceWith(expect.objectContaining(rejected('SOURCE_INPUT_TOO_LARGE')))
+    await later
+  } finally {
+    release.resolve(undefined)
+    await earlier
+  }
+})
+
 it.each([
   ['x', SOURCE_JSON_LIMIT - 1],
   ['\u0000', Math.floor((SOURCE_JSON_LIMIT - 2) / 6) + 1],
