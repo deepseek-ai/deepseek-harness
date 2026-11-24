@@ -1,12 +1,12 @@
 /**
  * Canonical Office tool results and their model-facing content.
- * @module @deepseek-ai/dsh-tool-office/content
+ * @module @deepseek-ai/dsh-tool-document/content
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { AttachmentId, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { OfficeConversionFormat, OfficeRecalculationFormat } from '@deepseek-ai/dsh-office-kit'
+import type { OfficeConversionFormat, OfficeRecalculationFormat, DocumentRenderer } from '@deepseek-ai/dsh-office-kit'
 
 /**
  * One rendered image and the document location it shows. The attachment fields are those of the stored reference;
@@ -34,6 +34,8 @@ export interface OfficeRenderValue {
   images: OfficeRenderedImage[]
   /** Requested font families that were substituted. */
   missingFonts: string[]
+  /** Backend that rendered the images. */
+  renderer: DocumentRenderer
 }
 
 /** Output format of each file-producing operation. */
@@ -76,7 +78,7 @@ export function renderImagesContent(value: OfficeRenderValue): ContentBlock[] {
   const count = value.images.length
   const blocks: ContentBlock[] = [{
     type: 'text',
-    text: `Rendered ${count} image${count === 1 ? '' : 's'} of ${value.path} (${value.pageCount} in the document) at ${value.dpi} DPI.${fontsLine(value.missingFonts)}`,
+    text: `Rendered ${count} image${count === 1 ? '' : 's'} of ${value.path} (${value.pageCount} in the document) at ${value.dpi} DPI with ${value.renderer}.${fontsLine(value.missingFonts)}`,
   }]
   for (const image of value.images) {
     blocks.push({ type: 'text', text: `${location(image)}: ${image.width}x${image.height} px` })

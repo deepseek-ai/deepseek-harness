@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { MenuContribution, ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
+import type { MenuAction, MenuContribution, ContextMenuTargetMap } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {
@@ -69,10 +69,15 @@ export function registerSessionMenus(ctx: Context, actions: Actions): void {
     id: 'fork', label: t('menu.fork'), icon: { key: 'workspace.fork' }, commandId: 'session.fork' as ShortcutCommandId,
     run: () => { actions.forkSession(target.sessionId) },
   }] : [])
-  register('id', 450, [], target => [{
-    id: 'copy', label: t('menu.sessionId'), icon: { key: 'workspace.copy' }, separatorBefore: true,
-    run: () => actions.copySessionId(target.sessionId),
-  }])
+  const copyId = (sessionId: SessionId, separatorBefore: boolean): MenuAction => ({
+    id: 'copy', label: t('menu.sessionId'), icon: { key: 'workspace.copy' }, separatorBefore,
+    run: () => actions.copySessionId(sessionId),
+  })
+  register('id', 450, [], target => [copyId(target.sessionId, true)])
+  ctx.effect(() => ctx.contextMenus.register({
+    id: 'session.id', target: 'sessionHeader', order: 200, observe: () => [ctx.locale],
+    resolve: ({ sessionId }) => [copyId(sessionId, false)],
+  }), 'ui-workspace: header id menu')
   register('archive', 600, ['workspace/archiveSession', 'workspace/unarchiveSession'], (target) => {
     const restoring = archived(target)
     if (!allowed(target, restoring ? 'workspace/unarchiveSession' : 'workspace/archiveSession')) return []

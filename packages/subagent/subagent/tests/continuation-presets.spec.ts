@@ -21,7 +21,7 @@ import { managerState, subagentManager } from './manager-internals.ts'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import SubagentRuntime, { SUBAGENT_DESCRIPTOR_VERSION, snapshotSubagentDescriptor } from '../src/index.ts'
+import SubagentRuntime, { SUBAGENT_DESCRIPTOR_VERSION } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -192,8 +192,6 @@ describe('continuable child presets', () => {
       mode: 'continuable',
       provider: 'separate',
       label: 'preset work',
-      agentProvider: 'mock',
-      agentModel: 'mock',
     })
     expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['reviewing_only'])
     expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
@@ -274,11 +272,11 @@ describe('continuable child presets', () => {
         ...(agentPreset === undefined ? {} : { agentPreset }),
       },
       setup: (childCtx, child) => {
-        child.session.append('subagent/descriptor', snapshotSubagentDescriptor({
-          mode: 'continuable', provider: 'separate', label: 'historical',
+        child.session.append('subagent/descriptor', {
+          version: 3, mode: 'continuable', provider: 'separate', label: 'historical',
           agentProvider: 'mock', agentModel: 'mock', persona: 'Historical child persona.',
           toolFilter: { allow: [] },
-        }))
+        })
         ctx.agentPresets.composeFrom(childCtx, parent.ctx)
       },
     })

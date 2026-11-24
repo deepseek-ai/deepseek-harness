@@ -34,7 +34,7 @@ primary_runtime = download_primary_runtime()
   disabled: true
 ```
 
-Office 技能把渲染、转换和重算交给 [Office 工具](../../packages/document/tool-office/README.zh.md)，它们在 SDK 进程内加载 sidecar 中的 Kit。替换技能集合的方式见 [Office 提供方](../../packages/skill/skill-office/README.zh.md#use-this-package)。配置 patch 在进程启动时生效；切换技能无需重建 runtime wheel 或 Python 环境。
+Office 技能把渲染、转换和重算交给 [Office 工具](../../packages/document/tool-document/README.zh.md)，它们在 SDK 进程内加载 sidecar 中的 Kit。替换技能集合的方式见 [Office 提供方](../../packages/skill/skill-office/README.zh.md#use-this-package)。配置 patch 在进程启动时生效；切换技能无需重建 runtime wheel 或 Python 环境。
 
 仓库构建还会物化仅限开发的 `runtime/node/` 载体。它在系统 Node 24.22.3 或更高的 24.x 版本，或 Node 26.13.1 或更高版本上运行 `node runtime/node/runtime-bootstrap.mjs`。系统不会自动选择它，而且 wheel 包与 sdist 均不包含它。
 

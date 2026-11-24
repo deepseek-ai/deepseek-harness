@@ -69,6 +69,12 @@ interface ActivationBase {
    * settlement notice, even if this epoch's start event was already published.
    */
   accepted: boolean
+  /**
+   * Whether this local epoch was restored only to record durable child state.
+   * It holds no capacity slot, publishes no lifecycle events, admits no input,
+   * and closes before its child lock is released.
+   */
+  readonly maintenance: boolean
 }
 
 /** Resources retained only for the selected execution kind. */

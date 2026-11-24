@@ -9,6 +9,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
 import SubagentRuntime, { SUBAGENT_DESCRIPTOR_VERSION } from '../src/index.ts'
+import type { SubagentDescriptorData } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -145,7 +146,11 @@ describe('Subagent archive admission: reporting', () => {
     }
     child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'fork', label: 7 } as never)
     expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])
-    child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION + 1, mode: 'continuable', provider: 'fork', label: 'unknown' })
+    // Decoded persisted payloads may carry an unsupported descriptor version.
+    const futureDescriptor = JSON.parse(JSON.stringify({
+      version: SUBAGENT_DESCRIPTOR_VERSION + 1, mode: 'continuable', provider: 'fork', label: 'unknown',
+    })) as SubagentDescriptorData
+    child.append('subagent/descriptor', futureDescriptor)
     expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])
     child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'fork' })
     expect(await ask(ctx, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: child.id }] }])

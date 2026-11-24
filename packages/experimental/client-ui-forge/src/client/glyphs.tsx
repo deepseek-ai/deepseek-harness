@@ -18,8 +18,8 @@ const BRANCH_ENDS = (
 /** The head branch line that bends back toward the base, shared by the open and blocked shapes. */
 const TOWARD_BASE = (
   <>
-    <path d="M12 10.9V6.6C12 5.5 11.1 4.6 10 4.6H8.2" />
-    <path d="M9.6 3L8 4.6L9.6 6.2" />
+    <path d="M12 10.9V5.5C12 4.4 11.1 3.5 10 3.5H8.2" />
+    <path d="M9.6 1.9L8 3.5L9.6 5.1" />
   </>
 )
 
@@ -60,7 +60,7 @@ const SHAPES: Record<ChangeRequestTone, ReactNode> = {
   closed: (
     <>
       {BRANCH_ENDS}
-      <path d="M4 5.1V10.9M12 10.9V8.6M10.4 3.2L13.6 6.4M13.6 3.2L10.4 6.4" />
+      <path d="M4 5.1V10.9M12 10.9V7.1M10.4 1.9L13.6 5.1M13.6 1.9L10.4 5.1" />
     </>
   ),
 }

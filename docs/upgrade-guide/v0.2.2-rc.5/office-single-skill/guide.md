@@ -16,7 +16,7 @@ This affects:
 - users who typed `/office-docx`, `/office-pptx`, or `/office-xlsx`: those commands no longer exist;
 - users who defined a skill named `office-docx`, `office-pptx`, or `office-xlsx`, for example under `~/.dsh/skills/`, to override the bundled guidance: the bundled `office` skill no longer loads those names, so the definition becomes an ordinary separate skill and no longer replaces any bundled content;
 - custom `assetRoot` directories, which now need only `office/SKILL.md`;
-- compositions that rely on the default `activationSkills` of [`@deepseek-ai/dsh-tool-office`](../../../../packages/document/tool-office/README.md): the default changed from `[office, office-docx, office-xlsx, office-pptx]` to `[office]`, so loading a skill named `office-docx` no longer activates `office_render`, `office_convert`, and `office_recalculate`.
+- compositions that rely on the default `activationSkills` of [`@deepseek-ai/dsh-tool-office`](../../../../packages/document/tool-document/README.md): the default changed from `[office, office-docx, office-xlsx, office-pptx]` to `[office]`, so loading a skill named `office-docx` no longer activates `office_render`, `office_convert`, and `office_recalculate`.
 
 ## Migration
 

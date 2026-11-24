@@ -34,7 +34,7 @@ Skill selection is independent of delivery: project, custom-directory, and user 
   disabled: true
 ```
 
-Office skills direct rendering, conversion, and recalculation to the [Office tools](../../packages/document/tool-office/README.md), which load the sidecar's Kit inside the SDK process. See the [Office provider](../../packages/skill/skill-office/README.md#use-this-package) for replacing the skill collection. Configuration patches apply at process startup; changing skills does not require rebuilding the runtime wheel or Python environment.
+Office skills direct rendering, conversion, and recalculation to the [Office tools](../../packages/document/tool-document/README.md), which load the sidecar's Kit inside the SDK process. See the [Office provider](../../packages/skill/skill-office/README.md#use-this-package) for replacing the skill collection. Configuration patches apply at process startup; changing skills does not require rebuilding the runtime wheel or Python environment.
 
 Repository builds also materialize a dev-only `runtime/node/` carrier. It runs `node runtime/node/runtime-bootstrap.mjs` on system Node 24.22.3 or a newer 24.x release, or Node 26.13.1 or newer. It is never selected automatically and is excluded from wheels and sdists.
 

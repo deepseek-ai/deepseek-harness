@@ -1,5 +1,6 @@
 {"type":"session","version":4,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","parentSession":"{{sessionId}}","isSeeded":false,"origin":"subagent","delegationDepth":1}
-{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"Return child result","agentProvider":"deepseek-official","agentModel":"deepseek-v4-flash"}}
+{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"Return child result"}}
+{"type":"model/selection","data":{"provider":"deepseek-official","model":"deepseek-v4-flash"}}
 {"type":"sandbox/mode","data":{"mode":"workspace-write","source":"delegation"}}
 {"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
 {"type":"agent/inbox/spliced","data":{"target":"next-turn","start":0,"inserted":[{"content":[{"type":"text","text":"Agent lead sent a message: "},{"type":"text","text":"Reply with exactly CHILD_RESULT and nothing else. Do not call send_message."},{"type":"text","text":"Your final answer is delivered automatically if your parent is still online. Include the result and relevant evidence in that answer; the parent does not receive your full transcript, tool output, or reasoning. If your last action is a message to your parent, the completion notice omits your final answer; include the result and relevant evidence in that message."}],"source":{"kind":"agent-message","form":"relay","senderSessionId":"{{sessionId}}"},"role":"user","id":"{{sessionId}}"}]}}

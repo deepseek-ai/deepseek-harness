@@ -19,7 +19,7 @@ The Cordis framework and its foundation libraries are vendored under [`vendor/`]
 | `vendor/logger-console/` | `@cordisjs/plugin-logger-console` | `@deepseek-ai/cordis-plugin-logger-console` | 1.0.0 | Console logger exporter |
 | `vendor/element/` | `@cordisjs/element` | `@deepseek-ai/cordis-element` | 0.3.0 | Element parsing and serialization |
 | `vendor/fetch-file/` | `@cordisjs/fetch-file` | `@deepseek-ai/cordis-fetch-file` | 1.0.3 | File URL resource fetching |
-| `vendor/http/` | `@cordisjs/plugin-http` | `@deepseek-ai/cordis-plugin-http` | 1.5.1 | HTTP and WebSocket client |
+| `vendor/http/` | `@cordisjs/http` | `@deepseek-ai/cordis-plugin-http` | 1.6.0 | HTTP and WebSocket client |
 | `vendor/satori-element/` | `@satorijs/element` | `@deepseek-ai/satori-element` | 4.0.0-alpha.0 | IM message elements |
 | `vendor/plugin-im-core/` | `@satorijs/core` | `@deepseek-ai/cordis-plugin-im-core` | 5.0.0-alpha.0 | Shared IM runtime |
 | `vendor/plugin-im-adapter-lark/` | `@satorijs/adapter-lark` | `@deepseek-ai/cordis-plugin-im-adapter-lark` | 4.0.0-alpha.0 | Feishu WebSocket adapter |

@@ -1,5 +1,5 @@
 {
-  "name": "@deepseek-ai/dsh-tool-office",
+  "name": "@deepseek-ai/dsh-tool-document",
   "description": "Model-facing Office tools for rendering, converting, and recalculating documents",
   "version": "0.2.3-alpha.2",
   "publishConfig": {
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/document/tool-office"
+    "directory": "packages/document/tool-document"
   },
   "type": "module",
   "main": "lib/index.js",

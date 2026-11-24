@@ -1,0 +1,13 @@
+version: 1
+scenario: subagent-durable-model-selection
+profile: headless
+composition: subagent-durable-model-selection
+recording: authored
+header:
+  class: subagent-durable-model-selection
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn
+  childSystemPrompts: [1]
+workspace:
+  final: true

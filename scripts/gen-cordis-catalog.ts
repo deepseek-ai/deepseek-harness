@@ -880,6 +880,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SubagentMemberNames: 'subagent.md',
   SubagentPromptReceipt: 'subagent.md',
   SubagentPromptRequest: 'subagent.md',
+  SubagentSelectModelRequest: 'subagent.md',
+  SubagentSelectModelReceipt: 'subagent.md',
   SubagentProvider: 'subagent.md',
   SubagentRun: 'subagent.md',
   SubagentRuntime: 'subagent.md',

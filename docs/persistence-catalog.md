@@ -962,9 +962,9 @@ Source: [`packages/subagent/subagent/src/catalog.ts:52`](../packages/subagent/su
 ```ts persistence-catalog
 /**
  * Durable identity and lifecycle mode of a session-backed subagent child,
- * appended once inside the child's initial turn, before its first
- * request. Continuable records also carry their
- * resumable composition. Log-only: it carries no `surfaceOp`, never enters
+ * appended once when the child is established, before its first
+ * request. Historical continuable records may also carry their initial
+ * composition. Log-only: it carries no `surfaceOp`, never enters
  * model history, and survives compaction.
  */
 'subagent/descriptor': SubagentDescriptorData
@@ -3526,7 +3526,7 @@ Array of [`ContextSnapshotSection`](#persistence-type-sha256-86e1e384495ee09ac2d
 
 SHA-256: `6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f`
 
-Sources: [`packages/subagent/subagent/src/descriptor.ts:72`](../packages/subagent/subagent/src/descriptor.ts)
+Sources: [`packages/subagent/subagent/src/descriptor.ts:76`](../packages/subagent/subagent/src/descriptor.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5067,7 +5067,7 @@ One of:
 
 SHA-256: `86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde`
 
-Sources: [`packages/subagent/subagent/src/descriptor.ts:89`](../packages/subagent/subagent/src/descriptor.ts)
+Sources: [`packages/subagent/subagent/src/descriptor.ts:93`](../packages/subagent/subagent/src/descriptor.ts)
 
 One of:
 

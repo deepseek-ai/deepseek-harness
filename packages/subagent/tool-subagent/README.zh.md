@@ -76,7 +76,7 @@ kind: "package-reference"
 
 设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。在每个工具作用域的一个实例上设置 `modelDiscovery: true`，以注册 `list_subagent_models`；该选项独立于 `modelSelection`，默认关闭。同一作用域的第二个发现工具所有者会注册失败。发现工具随其所属插件实例存续，在委派提供方缺席时仍然可用，并在该实例卸载时移除。Web 与 Desktop preset 为 spawn 启用发现和路由字段，为 fork 保持两者关闭。允许模型选择的委派工具在显式选择路由时、发现工具在每次调用时读取 Host 的 `/model-selection-settings` 服务，因此设置编辑会对所有运行中、已恢复和子 Session 的下一次调用生效。启用时，发现和显式选择允许其精确路由列表。设置关闭或未挂载时，只允许父 Agent 当前生效的 provider/model 及其支持的强度。启用但路由列表为空、格式无效或重复时，读取该设置的每次调用都会抛出错误码为 `INVALID_MODEL_SELECTION_SETTINGS` 的 `SubagentError`。普通委派和关闭模型选择的工具不读取路由列表；Host 设置关闭时也不读取该列表。Session 不记录授权；忽略早期的 `subagent/model-selection-policy` 事件。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
 
-一次调用需同时提供 `provider` 与 `model`；`reasoning_effort` 要求同一次调用包含这两个字段。仅指定强度的调用会在查询路由或创建子级之前被拒绝。省略全部三个字段时，保留配置的子级默认值与现有回退行为。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。显式提供提供方／模型组合但省略强度时，会清除配置及继承的强度，即使路由未变，也由所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
+一次调用需同时提供 `provider` 与 `model`；`reasoning_effort` 要求同一次调用包含这两个字段。仅指定强度的调用会在查询路由或创建子级之前被拒绝。省略全部三个字段时，保留配置的子级默认值与现有回退行为。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方捕获父代理的 `agent.model.current()`，包括刚选中、尚未使用的模型，并保留配置的 `maxTokens`。本地子级在校验和启动期间使用该选择。创建后可通过[子代理控制 API](../subagent/README.zh.md#child-model-choices)切换模型。显式提供提供方／模型组合但省略强度时，会清除配置及继承的强度，即使路由未变，也由所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
 -----
 

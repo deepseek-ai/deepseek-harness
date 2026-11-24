@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-23-poppler-pdf-renderer.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-23-poppler-pdf-renderer.md
+/agent-note-poppler-pdf-rendering-with-per-type-renderer-order:
+  en: 6b6a28cbe2843fda
+  zh: edf8a8d2bfca2eda
+/agent-note-poppler-pdf-rendering-with-per-type-renderer-order/problem:
+  en: ce2f303448e1274d
+  zh: 5acf91ededefbbd0
+/agent-note-poppler-pdf-rendering-with-per-type-renderer-order/decision:
+  en: 04930b03b67554c8
+  zh: ceae9b0b5ca6d06a
+/agent-note-poppler-pdf-rendering-with-per-type-renderer-order/alternatives-considered:
+  en: ef583381f5a22d5c
+  zh: 86267c070ec3fdc6
+/agent-note-poppler-pdf-rendering-with-per-type-renderer-order/consequences:
+  en: 01464bd69d4f19ee
+  zh: 1b9a33d2bef75a76
+/agent-note-poppler-pdf-rendering-with-per-type-renderer-order/related:
+  en: 80a851824d3a9aaa
+  zh: 423cdb42471e7c7d

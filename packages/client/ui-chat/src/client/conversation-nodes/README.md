@@ -152,7 +152,7 @@ Settings → General → Replies after collapse appears directly below Collapse 
 
 ### Group-title rules
 
-A closed group's header names the first three categories from its ranked summary, without displaying counts. A group without categories uses the thinking label. A running header names its live tool category, otherwise thinking; Standard appends live detail. Live titles remain visible for at least 150ms, retaining only the newest pending title.
+A closed group's header names the first three categories from its ranked summary, without displaying counts. A group without categories uses the thinking label. A running header names its live tool category; without one it uses the thinking label until a non-Context category is counted, then the completed-work title followed by the next-step phrase. Standard appends live detail. Live titles remain visible for at least 150ms, retaining only the newest pending title.
 
 All three stages share the tool-name classification below. A preparing Tool node uses its category's preparation label: read files for `read`, read images for `read_image`, write files for `write`, edit files for `edit` and `apply_patch`, and update the plan for `todo_write` and goal tools. Standard mode appends available argument detail using the same readers as dispatched calls. It contributes one call and renders one non-expandable row. A named live delta can create this node; historical calls start directly from tool/call without replaying preparation.
 
@@ -160,7 +160,7 @@ The labels below describe recorded activity, not successful outcomes. For exampl
 
 | Category | Running label | Closed label |
 |---|---|---|
-| No live category / no counted categories | Analyzing the request | Analysis completed |
+| No live category / no counted categories | Analyzing the request; after categories are counted, the completed-work title followed by `, thinking about the next step` | Analysis completed |
 | `read` | Reading files | Read files |
 | `readImage` | Reading images | Read images |
 | `search` | Searching code | Searched code |
@@ -179,7 +179,7 @@ The labels below describe recorded activity, not successful outcomes. For exampl
 | Group state | Title composition |
 |---|---|
 | Not closed, with a running tool | Use the live category, not the highest-count category. Standard appends nonempty detail with ` · `; Compact omits detail. |
-| Not closed, without a running tool | Use the analysis label even when completed-tool counts are nonzero. Standard may append running reasoning detail. |
+| Not closed, without a running tool | With zero categories or only `context`, use the analysis label. Otherwise compose the closed-group title from the same counts and append the next-step phrase, for example `Read files and searched code, thinking about the next step`. Standard may append running reasoning detail. |
 | Closed, zero categories | Use the completed-analysis label. |
 | Closed, one category | Use its closed label without a count. |
 | Closed, two categories | Join ranked labels with “and”. Chinese removes the second leading `已` only when both labels start with it. |

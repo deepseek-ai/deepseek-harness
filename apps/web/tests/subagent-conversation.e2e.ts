@@ -786,6 +786,50 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
+  it('pushes cold child choices to two open pages without running or saving a default', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-model'))
+    const observer = await browser.newPage({
+      storageState: await page.context().storageState(), viewport: { width: 1680, height: 1000 }, locale: 'en-US',
+    })
+    const defaults = scaffold.ctx.agentDefaultModel.currentSelection()
+    const before = await readPersistedEvents(scaffold, childId)
+    const trigger = page.getByRole('button', { name: /^Select model/ })
+    try {
+      await observer.goto(page.url(), { waitUntil: 'load' })
+      const observerTrigger = observer.getByRole('button', { name: /^Select model/ })
+      await observerTrigger.waitFor({ timeout: 15_000 })
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^Model/ }).click()
+      await page.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash-Vision-Exp', exact: true }).click()
+      await expect.poll(() => trigger.getAttribute('aria-label')).toContain('Vision-Exp')
+      await expect.poll(() => observerTrigger.getAttribute('aria-label')).toContain('Vision-Exp')
+      await trigger.click()
+      await page.getByRole('menuitem', { name: /^Effort/ }).click()
+      await page.getByRole('menuitemradio', { name: 'max', exact: true }).click()
+      await expect.poll(() => trigger.getAttribute('aria-label')).toContain('reasoning effort max')
+      await expect.poll(() => observerTrigger.getAttribute('aria-label')).toContain('reasoning effort max')
+      // Labels follow the in-memory Session; release follows the durability check.
+      await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
+      const after = await readPersistedEvents(scaffold, childId)
+      // Each cold save restores the child for maintenance, which records its ordinary resume marker first.
+      expect(after.slice(before.length).map(event => event.type))
+        .toEqual(['session/end-seed', 'model/selection', 'session/end-seed', 'model/selection'])
+      expect(after.at(-1)?.data).toEqual({
+        provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp', reasoningEffort: 'max',
+      })
+      expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual(defaults)
+      await saveFailureShot(page, 'web-subagent-model-selection-preview')
+      const input = page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' })
+      await input.fill('/')
+      await page.getByRole('option', { name: /^Model/ }).click()
+      await page.getByRole('option', { name: 'DeepSeek-V4-Flash', exact: true }).click()
+      await expect.poll(() => trigger.getAttribute('aria-label')).toBe('Select model, current DeepSeek-V4-Flash')
+      await expect.poll(() => observerTrigger.getAttribute('aria-label')).toBe('Select model, current DeepSeek-V4-Flash')
+      await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 10_000 }).toBeUndefined()
+      expect(scaffold.ctx.agentDefaultModel.currentSelection()).toEqual(defaults)
+    } finally { await observer.close() }
+  })
+
   it('continues through FIFO follow-up admission and receives the child follow events', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-followup'))
     const ended = new Promise<void>((resolveEnded, reject) => {

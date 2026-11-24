@@ -837,7 +837,7 @@ describe('dsh-tool-subagent local activation', () => {
     let survivingChildId: SessionId | undefined
     ctx.subagents.registerProvider({
       name: 'gated',
-      capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true },
+      capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: true },
       inheritsParentContext: false,
       start: async () => { throw new Error('continuable policy must not start a one-shot child') },
       prepareContinuable: async (request) => {

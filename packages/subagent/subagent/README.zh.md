@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### Activation 容量
 
-在 Host 插件上设置 `maxActiveSubagents`，限制每棵 subagent 树中在线和正在创建的子级数量。默认值为 `8`，接受正安全整数。顶层父级建立由本地和外部后代共享的池，根父级不占名额。新建和冷恢复在让出执行前预留名额，资源释放完成后才归还。有待处理收件箱内容以及正在停止的 activation 仍计入容量；向驻留子级发送消息复用其名额。委派深度是独立策略。
+在 Host 插件上设置 `maxActiveSubagents`，限制每棵 subagent 树中在线和正在创建的子级数量。默认值为 `8`，接受正安全整数。顶层父级建立由本地和外部后代共享的池，根父级不占名额。新建和冷恢复在让出执行前预留名额，资源释放完成后才归还。为选模型进行的维护恢复不预留名额。有待处理收件箱内容以及正在停止的 activation 仍计入容量；向驻留子级发送消息复用其名额。委派深度是独立策略。
 
 调用方通过 `ctx.subagents.maxActiveSubagents` 读取当前上限；每次新建或冷恢复 Activation 前，准入也读取同一个值。调高后已有树可接纳更多子代理；调低后驻留子代理继续运行，使用量降至上限以下前拒绝新接纳。
 
@@ -73,7 +73,18 @@ kind: "package-reference"
 
 ### 子级 preset
 
-进程内 spawn 接受独立的 `agentPreset`；fork 与外部后端拒绝此选项。省略选择时，本地子级加入父方当前的 preset 代际。显式 id 挂载当前可用代际，即使该 id 与父方相同。通过 [`dsh-tool-subagent`](../tool-subagent/README.zh.md#selecting-a-child-preset) 配置模型可选项，并在 [preset 组装](../../preset/agent-preset-registry/README.zh.md)中配置 persona 与工具。冷恢复保留历史子级 descriptor 记录的 persona 和工具限制。
+进程内 spawn 接受独立的 `agentPreset`；fork 与外部后端拒绝此选项。省略选择时，本地子级加入父方当前的 preset 代际。显式 id 挂载当前可用代际，即使该 id 与父方相同。通过 [`dsh-tool-subagent`](../tool-subagent/README.zh.md#selecting-a-child-preset) 配置模型可选项，并在 [preset 组装](../../preset/agent-preset-registry/README.zh.md)中配置 persona 与工具。
+
+<a id="child-model-choices"></a>
+### 子级模型选择
+
+本地子级只捕获一次创建者的 `agent.model.current()` 选择，再应用配置和请求中的覆盖值。更改 provider 或 model 但未指定强度时，使用所选模型的默认强度。创建需要完整的 provider/model 选择。管理器在异步准备前捕获该选择，并在调用后端前校验显式模型覆盖；被拒绝的覆盖保留 `LlmError` 的名称、代码与消息。创建者后续切换不改变子级。
+
+在发布或接受初始输入前，管理器在任何继承的 fork 历史之后追加 descriptor 和子级自身的 `model/selection`。即使初始选择与创建者相同，也会记录。后续选择使用子级的 `agent.model`；descriptor 不记录模型字段。已经准备的步骤保持原模型，后续步骤和冷恢复使用子级已记录的选择。
+
+`selectModel(childId, selection, authority, signal)` 校验并为可继续子级记录完整选择。Agent 调用方需要与中断相同的确切在线祖先权限；远程 `selectModelByUser` 操作则要求目标 Session 上的授权，并且与 Session 选模一样，只接受提供方在当前目录中列出的模型。两者都要求树根在线、不改变用户默认值，并让选模与从图片能力检查到收件箱准入的过程串行执行。外部执行不支持后续选择；创建时支持 `agentOptions` 不代表具有此能力。被拒绝的选择保留 `LlmError`；`selectModelByUser` 以 `subagent/model-unavailable` 返回，并保留 LLM 消息；未列出的模型也以同一代码返回。
+
+为冷子级选模型时，在其在线树根下以维护方式恢复子级，通过恢复出的 Agent 记录选择，并在返回前释放它。这次恢复不占容量，不发布 `subagent/start` 或 `subagent/end`，不发送完成通知，并拒绝经由 manager 投递的输入。记录选择期间直接发给该 Agent 的输入不会开始轮次，并随它一起被取消。如果 `agent/created` 监听器在记录选择之前唤醒了恢复出的 Agent，选择以 `CONTINUATION_UNAVAILABLE` 失败，释放会取消已开始的轮次。有待处理输入的子级会以 `CONTINUATION_UNAVAILABLE` 拒绝，这些输入留给下一次执行。完整的新选择也可以补足受支持子级日志中缺失的模型。每次恢复都会在选择之前记录普通的 `session/end-seed` 恢复标记。后续继续执行恢复已保存的选择。Session 持久化屏障完成后才返回成功。取消、失效权限、无效选择或不可用的持久化服务都会使操作失败。`PERSISTENCE_UNCONFIRMED`（远程为 `subagent/model-selection-unconfirmed`）表示选择可能已改变，但无法确认持久化；重试前应重新加载子级状态。
 
 ### 消息、中断与发现
 
@@ -113,6 +124,7 @@ kind: "package-reference"
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |
 | [`src/catalog.ts`](src/catalog.ts) | parent 自有的 `subagent/catalog` 事件与分块 host projection |
 | [`src/child-agent.ts`](src/child-agent.ts) | 子级组装、委派策略、深度辅助函数 |
+| [`src/model-selection.ts`](src/model-selection.ts) | 初始选择要求，以及从子级模型投影兼容恢复 |
 | [`src/list-children.ts`](src/list-children.ts) | 直接与递归的 parent 目录读取 |
 | [`src/control.ts`](src/control.ts) | 浏览器控制请求校验与稳定失败分码 |
 | [`src/control-types.ts`](src/control-types.ts) | client-safe 的目录行、控制面请求、回执与失败 |
@@ -139,14 +151,16 @@ kind: "package-reference"
 
 冷恢复从目标的 `agentPreset` 投影或创建 header 读取已保存的 preset 并挂载，不读取创建者当前组装。已保存的 preset 缺失或损坏时拒绝恢复。原始 subagent 提供方不必仍然注册。
 
-没有保存 preset 的目标使用宿主组装，并保留历史 descriptor 中的 persona 和工具限制。持久权限策略从目标自身日志回放。恢复使用当前注册的 preset 定义，不跨重启保留旧代际。
+没有保存 preset 的目标使用宿主组装。保存了 persona 或工具限制的历史 descriptor 在 preset 组装后重新应用它们。持久权限策略从目标自身日志回放。恢复使用当前注册的 preset 定义，不跨重启保留旧代际。
+
+恢复的 Agent 从子级的 `modelSelection` 投影读取模型：待生效的选择优先于最近请求，适配器补充的默认强度保持隐式。保存了初始路由的历史 descriptor 仅在投影没有模型时提供该路由。折叠包含继承的 fork 历史，因此旧 fork 可能使用继承的父级选择恢复，而非 descriptor 中的模型。新子级在继承历史后记录自身初始选择。既没有已记录选择、也没有完整已保存路由的子级在激活前被拒绝恢复；为其选择模型后即可恢复。恢复不读取创建者或树根的当前模型。
 
 ### 所有权与不变式
 
 - **管理器拥有已接受工作**——未发布的失败会回滚；已发布句柄仅取消并释放确切 activation。所有实例归 subagent 树根管理；创建父级 id 保持不变。
 - **注册受 effect 作用域约束**——移除提供方会阻止新启动，但绝不撤销已接受的运行。
 - **Agent 消息权限由树决定**——确切在线发送者和目标必须属于同一个根。冷投递验证目标描述符和创建目录后仅恢复目标。最终收件箱准入重新检查发送者与 subagent 树根；恢复失败释放新建实例。
-- **描述符仅进日志**——它是会话事件，不进入模型历史，并跨压缩（compaction）保留；写入器记录解析后的子级提供方、模型与推理强度，用于冷恢复。历史 one-shot 描述符仍可读取。
+- **描述符仅进日志**——它是会话事件，不进入模型历史，并跨压缩（compaction）保留；写入器记录身份与委派后端，模型选择属于子级自身的 `model/selection` 事件。历史组装字段与 one-shot 描述符仍可读取。
 - **本 runtime 为子代理回答归档准入**（[接缝](../../workspace/workspace/README.zh.md)）——活动查询、以父级原因取消和步骤执行前的拒绝都使用托管实例的创建祖先，即使中间创建者已离线。尚无已发布 Activation 的 Agent 使用在线 header 血缘；普通 fork 保持独立。名称取自当前身份投影中的最新 descriptor，且该 descriptor 必须属于孩子自身的日志；身份缺失、无效、来自继承或没有名称时只报告 id。报告不依赖 Session query 服务，并在身份投影注册完成后启用。每次取消的失败都单独收敛。Agent 注册表拥有父级回合，job 提供方拥有任务，API Session Controller 检查已归档 Session 和可用的 header 血缘。
 
 </details>

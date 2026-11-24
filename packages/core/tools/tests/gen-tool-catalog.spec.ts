@@ -28,11 +28,11 @@ describe('gen-tool-catalog collectToolCatalog', () => {
     const names = catalog.flatMap(entry => entry.schemas.map(s => s.name)).sort()
     expect(names).toEqual([
       'apply_patch', 'ask_user_question', 'bash', 'bash', 'cordis_inspect',
-      'create_goal', 'edit', 'enter_worktree', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep',
+      'create_goal', 'document_convert', 'document_recalculate', 'document_render', 'edit', 'enter_worktree', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep',
       'im_history', 'im_members', 'im_read', 'im_read_file', 'im_read_image', 'im_reply', 'im_send', 'im_send_file',
       'interrupt_agent', 'job_kill', 'job_list', 'job_output',
       'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources', 'list_session',
-      'list_subagent_models', 'list_workspace', 'load_workspace_dependencies', 'lsp', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',
+      'list_subagent_models', 'list_workspace', 'load_workspace_dependencies', 'lsp', 'plugin_manager', 'plugin_market', 'present', 'pwsh', 'pwsh', 'ralph',
       'read', 'read_image', 'read_mcp_resource', 'run_code', 'schedule_create', 'schedule_edit',
       'schedule_list', 'schedule_view', 'send_message', 'session_event_read', 'session_event_search',
       'session_event_trace', 'session_search', 'session_send_message', 'session_trace', 'skill',
