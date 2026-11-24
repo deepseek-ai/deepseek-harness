@@ -24,7 +24,7 @@ function appearance(element: Locator) {
   })
 }
 
-/** A font group can draw its bottom edge on the group or its final row, but not on both. */
+/** The final font registration leaves its outer edge to the enclosing settings card. */
 function fontEndSeparators(expander: Locator) {
   return expander.evaluate((button) => {
     const details = document.getElementById(button.getAttribute('aria-controls')!)
@@ -149,7 +149,7 @@ it('stacks font fields at narrow widths while keeping font-size controls on the 
       await openSettings(page, 'zh')
       const dialog = page.getByRole('dialog', { name: '设置', exact: true })
       const expander = dialog.getByRole('button', { name: '更多字体设置', exact: true })
-      expect(await fontEndSeparators(expander)).toBe(1)
+      expect(await fontEndSeparators(expander)).toBe(0)
       await expander.click()
       await page.evaluate((platform) => {
         document.documentElement.toggleAttribute('data-windows-titlebar', platform === 'win32')
@@ -179,7 +179,7 @@ it('stacks font fields at narrow widths while keeping font-size controls on the 
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
       }
 
-      expect(await fontEndSeparators(expander)).toBe(1)
+      expect(await fontEndSeparators(expander)).toBe(0)
       const field = dialog.getByRole('textbox', { name: '正文字体', exact: true })
       await field.fill('Uncommitted font draft')
       const original = await field.elementHandle()

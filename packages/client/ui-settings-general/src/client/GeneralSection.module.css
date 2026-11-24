@@ -8,12 +8,6 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* css-selector-gate: General clears the contributed element's own border; only sibling output in this outlet decides which root is last. */
-.section > [data-slot='settings.general.item'] > :where([data-slot-item]:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) > :last-child,
-.section > [data-slot='settings.general.item'] > [data-slot-error]:where(:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) {
-  border-bottom: none;
-}
-
 /* The page title keeps a 24px gap before the first visible group. */
 .title {
   margin: 0 0 -4px;
@@ -51,11 +45,14 @@
   display: none;
 }
 
-/* Group item outlets flatten their rows; null entries leave no separator. */
-.card > [data-slot='settings.general.group'] > [data-slot] > * {
+/* Each registration owns its internal layout; only its final root receives a shared divider. */
+.card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot] > [data-slot-item] > :last-child,
+.card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot] > [data-slot-error] {
   border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
-.card > [data-slot='settings.general.group'] > [data-slot] > :last-child {
+/* css-selector-gate: Only sibling output in this settings outlet determines the final registration; null entries retain empty wrappers. */
+.card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot] > [data-slot-item]:where(:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) > :last-child,
+.card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot] > [data-slot-error]:where(:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) {
   border-bottom: none;
 }
