@@ -27,6 +27,11 @@ function declarations(selector: string): Map<string, string> | undefined {
   return undefined
 }
 
+/** Declarations of the reduced-motion block, which disables every sidebar transition. */
+function reducedMotion(): string {
+  return css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\n\}/u)?.[1] ?? ''
+}
+
 describe('SidebarRoot.module.css', () => {
   it('uses a compact expanded navigation gap without shrinking the collapsed rail spacing', () => {
     expect(declarations('.panelList')?.get('gap')).toBe('2px')
