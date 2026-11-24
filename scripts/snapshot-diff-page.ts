@@ -2,10 +2,10 @@
  * Renders the PR preview's snapshot diff site: an `index.html` that lists every
  * changed file under `snapshots/` between two revisions, grouped by scenario
  * directory, plus one `files/<n>.json` per file holding its side-by-side diff
- * rows, which the page loads when a group opens. The page opens on the SDK
- * blank-Session catalog, the system prompt and tool schemas the
- * `sdk/text-turn` scenario's first request carries, and shows "No change" for
- * a catalog file whose content is equal on both sides.
+ * rows, which the page loads when a group opens. The page opens on the
+ * blank-Session catalogs, the system prompt and tool schemas the first request
+ * of each {@link CATALOGS} scenario carries, and shows "No change" for a
+ * catalog file whose content is equal on both sides.
  *
  * JSONL files are compared in a readable form: each record becomes a
  * `# <label>` heading followed by its YAML rendering, so long records span
@@ -23,8 +23,11 @@ import { parseArgs } from 'node:util'
 import { diffArrays, diffLines, diffWordsWithSpace } from 'diff'
 import * as yaml from 'js-yaml'
 
-/** Scenario whose first request represents a blank SDK Session. */
-const CATALOG_SCENARIO = 'sdk/text-turn'
+/** Scenarios whose first request represents a blank Session of each profile, in page order. */
+const CATALOGS = [
+  { title: 'SDK blank Session catalog', scenario: 'sdk/text-turn' },
+  { title: 'Web blank Session catalog', scenario: 'web/fresh-round-trip' },
+] as const
 
 /** Limits that keep each per-file data file small enough to load and render. */
 export interface DiffLimits {
@@ -68,6 +71,8 @@ export interface DiffGroup {
   readonly title: string
   /** Distinct {@link FileEntry.path} values the group shows, including unchanged ones. */
   readonly paths: readonly string[]
+  /** Marks a blank-Session catalog group, which the page lists before the directory groups. */
+  readonly catalog?: true
 }
 
 /** The two sidecars that make up a scenario's request catalog. */
@@ -293,14 +298,14 @@ export function sideBySide(before: readonly string[], after: readonly string[], 
 }
 
 /**
- * Groups changed files for the page: the catalog first, then one group per
+ * Groups changed files for the page: the catalogs first, then one group per
  * scenario directory (`snapshots/<suite>/<scenario>`) and one per directory
  * holding other changed files, in code point order.
  * @param paths - Changed paths under `snapshots/`.
- * @param catalogPaths - Paths the catalog group shows.
- * @returns The catalog group followed by the directory groups.
+ * @param catalogs - Title and paths of each catalog group, in page order.
+ * @returns The catalog groups followed by the directory groups.
  */
-export function groupDiffs(paths: readonly string[], catalogPaths: readonly string[]): DiffGroup[] {
+export function groupDiffs(paths: readonly string[], catalogs: ReadonlyArray<Pick<DiffGroup, 'title' | 'paths'>>): DiffGroup[] {
   const groups = new Map<string, Set<string>>()
   for (const path of paths) {
     const segments = path.split('/')
@@ -309,31 +314,32 @@ export function groupDiffs(paths: readonly string[], catalogPaths: readonly stri
   }
   const byCodePoint = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0
   return [
-    { title: 'SDK blank Session catalog', paths: catalogPaths },
+    ...catalogs.map(({ title, paths }) => ({ title, paths, catalog: true as const })),
     ...[...groups].sort(([a], [b]) => byCodePoint(a, b))
       .map(([key, members]) => ({ title: key.replace(/^snapshots\/?/, '') || 'snapshots', paths: [...members].sort(byCodePoint) })),
   ]
 }
 
-function referencedScenario(source: unknown, field: string): string {
-  if (source === undefined) return CATALOG_SCENARIO
-  if (typeof source !== 'string' || source === '') throw new Error(`snapshots/${CATALOG_SCENARIO}/snapshot.yml: header.${field} must be a non-empty string`)
-  return source.includes('/') ? source : `${CATALOG_SCENARIO.split('/')[0] ?? ''}/${source}`
+function referencedScenario(scenario: string, source: unknown, field: string): string {
+  if (source === undefined) return scenario
+  if (typeof source !== 'string' || source === '') throw new Error(`snapshots/${scenario}/snapshot.yml: header.${field} must be a non-empty string`)
+  return source.includes('/') ? source : `${scenario.split('/')[0] ?? ''}/${source}`
 }
 
 /**
- * Resolves the catalog sidecars from the catalog scenario's `snapshot.yml`,
- * following `header.systemPromptSource` and `header.toolSchemasSource`; a
- * single-segment source names a scenario in the catalog scenario's suite directory.
+ * Resolves a catalog scenario's sidecars from its `snapshot.yml`, following
+ * `header.systemPromptSource` and `header.toolSchemasSource`; a single-segment
+ * source names a scenario in the catalog scenario's suite directory.
+ * @param scenario - Catalog scenario as `<suite>/<scenario>`.
  * @param manifestText - The catalog scenario's `snapshot.yml` text.
  * @returns Repository-relative sidecar paths.
  */
-export function catalogFiles(manifestText: string): CatalogFiles {
+export function catalogFiles(scenario: string, manifestText: string): CatalogFiles {
   const manifest = (yaml.load(manifestText, { schema: yaml.JSON_SCHEMA }) ?? {}) as { header?: Record<string, unknown> }
   const header = manifest.header ?? {}
   return {
-    systemPrompt: `snapshots/${referencedScenario(header.systemPromptSource, 'systemPromptSource')}/system-prompt.expected.md`,
-    toolSchemas: `snapshots/${referencedScenario(header.toolSchemasSource, 'toolSchemasSource')}/tool-schemas.expected.json`,
+    systemPrompt: `snapshots/${referencedScenario(scenario, header.systemPromptSource, 'systemPromptSource')}/system-prompt.expected.md`,
+    toolSchemas: `snapshots/${referencedScenario(scenario, header.toolSchemasSource, 'toolSchemasSource')}/tool-schemas.expected.json`,
   }
 }
 
@@ -411,10 +417,10 @@ const buttons = groups.map((group, index) => {
   const button = el('button', { type: 'button', onclick: () => show(index) }, el('span', { textContent: group.title }),
     stat(changed.reduce((sum, file) => sum + file.added, 0), changed.reduce((sum, file) => sum + file.removed, 0)))
   list.append(button)
-  if (index === 0) list.append(el('hr'))
+  if (group.catalog && !groups[index + 1]?.catalog) list.append(el('hr'))
   return button
 })
-if (groups.length === 1) list.append(el('p', { textContent: 'No other snapshot changed.' }))
+if (groups.every(group => group.catalog)) list.append(el('p', { textContent: 'No other snapshot changed.' }))
 function cell(value) {
   if (typeof value === 'string') return [value]
   return value.map(([changed, text]) => changed ? el('mark', { textContent: text }) : text)
@@ -511,20 +517,23 @@ if (import.meta.main) {
   if (!base || !head || !out) throw new Error('usage: snapshot-diff-page.ts --base <rev> --head <rev> --out <dir> [--preview-manifest <fixtures.json>]')
   const short = (rev: string) => git('rev-parse', '--short', rev).toString('utf8').trim()
   const changed = git('diff', '-z', '--name-only', '--no-renames', base, head, '--', 'snapshots/').toString('utf8').split('\0').filter(path => path !== '')
-  const manifestAt = (rev: string) => catalogFiles(git('show', `${rev}:snapshots/${CATALOG_SCENARIO}/snapshot.yml`).toString('utf8'))
-  const from = manifestAt(base)
-  const to = manifestAt(head)
+  const manifestAt = (rev: string, scenario: string) => catalogFiles(scenario, git('show', `${rev}:snapshots/${scenario}/snapshot.yml`).toString('utf8'))
   type Side = [rev: string, path: string]
   const pairs: Array<{ path: string; before: Side; after: Side }> = changed
     .map(path => ({ path, before: [base, path], after: [head, path] }))
-  const catalog = (['systemPrompt', 'toolSchemas'] as const).map((key) => {
-    assertRegularFile(base, from[key])
-    assertRegularFile(head, to[key])
-    if (from[key] === to[key]) return to[key]
-    // The source scenario moved: compare the two files under an `old → new` label.
-    const path = `${from[key]} → ${to[key]}`
-    if (!blob(base, from[key]).equals(blob(head, to[key]))) pairs.unshift({ path, before: [base, from[key]], after: [head, to[key]] })
-    return path
+  const catalogs = CATALOGS.map(({ title, scenario }) => {
+    const from = manifestAt(base, scenario)
+    const to = manifestAt(head, scenario)
+    const paths = (['systemPrompt', 'toolSchemas'] as const).map((key) => {
+      assertRegularFile(base, from[key])
+      assertRegularFile(head, to[key])
+      if (from[key] === to[key]) return to[key]
+      // The source scenario moved: compare the two files under an `old → new` label.
+      const path = `${from[key]} → ${to[key]}`
+      if (!blob(base, from[key]).equals(blob(head, to[key]))) pairs.unshift({ path, before: [base, from[key]], after: [head, to[key]] })
+      return path
+    })
+    return { title, paths }
   })
   // Only the outputs this script writes are removed, so a mistaken --out cannot delete other files.
   rmSync(join(out, 'files'), { recursive: true, force: true })
@@ -543,7 +552,7 @@ if (import.meta.main) {
     writeFileSync(join(out, 'files', `${String(index)}.json`), JSON.stringify({ rows: result.rows, omitted: result.omitted }))
     return { path, added: result.added, removed: result.removed }
   })
-  writeFileSync(join(out, 'index.html'), renderSnapshotDiffPage(files, groupDiffs(changed, catalog), `${short(base)} → ${short(head)}`))
+  writeFileSync(join(out, 'index.html'), renderSnapshotDiffPage(files, groupDiffs(changed, catalogs), `${short(base)} → ${short(head)}`))
   const manifest = values['preview-manifest']
   if (manifest) {
     const href = `${relative(dirname(manifest), out).split(sep).join(posix.sep)}/`

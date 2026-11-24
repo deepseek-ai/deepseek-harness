@@ -71,11 +71,13 @@ describe('snapshot diff page', () => {
       .toEqual({ added: 4000, removed: 4000, omitted: 0 })
   })
 
-  it('opens on the catalog, then groups scenarios and other files by directory in code point order', () => {
-    const catalog = ['snapshots/sdk/text-turn/system-prompt.expected.md', 'snapshots/session/text-turn/tool-schemas.expected.json']
+  it('opens on the catalogs, then groups scenarios and other files by directory in code point order', () => {
+    const sdk = ['snapshots/sdk/text-turn/system-prompt.expected.md', 'snapshots/session/text-turn/tool-schemas.expected.json']
+    const web = ['snapshots/web/fresh-round-trip/system-prompt.expected.md', 'snapshots/web/fresh-round-trip/tool-schemas.expected.json']
     const paths = ['snapshots/web/b/x', 'snapshots/sdk/sdk.snapshot.ts', 'snapshots/AGENTS.md', 'snapshots/web/B/x', 'snapshots/web/b/a/y']
-    expect(groupDiffs(paths, catalog)).toEqual([
-      { title: 'SDK blank Session catalog', paths: catalog },
+    expect(groupDiffs(paths, [{ title: 'SDK', paths: sdk }, { title: 'Web', paths: web }])).toEqual([
+      { title: 'SDK', paths: sdk, catalog: true },
+      { title: 'Web', paths: web, catalog: true },
       { title: 'snapshots', paths: ['snapshots/AGENTS.md'] },
       { title: 'sdk', paths: ['snapshots/sdk/sdk.snapshot.ts'] },
       { title: 'web/B', paths: ['snapshots/web/B/x'] },
@@ -88,17 +90,24 @@ describe('snapshot diff page', () => {
     ['names a source in its own suite directory', 'profile: sdk-minimal\nheader:\n  toolSchemasSource: other\n', 'sdk/text-turn', 'sdk/other'],
     ['names sources in another suite', 'profile: sdk\nheader:\n  systemPromptSource: session/a\n  toolSchemasSource: session/b\n', 'session/a', 'session/b'],
   ])('resolves catalog sidecars when the manifest %s', (_, manifest, prompt, schemas) => {
-    expect(catalogFiles(manifest)).toEqual({
+    expect(catalogFiles('sdk/text-turn', manifest)).toEqual({
       systemPrompt: `snapshots/${prompt}/system-prompt.expected.md`,
       toolSchemas: `snapshots/${schemas}/tool-schemas.expected.json`,
     })
   })
 
+  it('resolves a single-segment source in another catalog scenario\'s suite directory', () => {
+    expect(catalogFiles('web/fresh-round-trip', 'profile: web\nheader:\n  systemPromptSource: other\n')).toEqual({
+      systemPrompt: 'snapshots/web/other/system-prompt.expected.md',
+      toolSchemas: 'snapshots/web/fresh-round-trip/tool-schemas.expected.json',
+    })
+  })
+
   it.each([
-    ['a non-string source', 'profile: sdk\nheader:\n  toolSchemasSource: 1\n', 'header.toolSchemasSource must be a non-empty string'],
+    ['a non-string source', 'profile: sdk\nheader:\n  toolSchemasSource: 1\n', 'snapshots/sdk/text-turn/snapshot.yml: header.toolSchemasSource must be a non-empty string'],
     ['an empty source', 'header:\n  systemPromptSource: ""\n', 'header.systemPromptSource must be a non-empty string'],
   ])('rejects %s', (_, manifest, message) => {
-    expect(() => catalogFiles(manifest)).toThrow(message)
+    expect(() => catalogFiles('sdk/text-turn', manifest)).toThrow(message)
   })
 
   it('embeds the index so a path cannot close the script element', () => {
