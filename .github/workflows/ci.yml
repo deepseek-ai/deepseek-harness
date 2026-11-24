@@ -103,6 +103,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The pre-commit hook's whitespace check, repeated where it cannot be skipped. The three-dot range starts at the
+      # merge base, so base-branch commits merged into the pull request are not checked as its changes.
+      - name: Check whitespace in the pull request's changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "$BASE_SHA...$HEAD_SHA"
+
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
       # the root partition's /tmp before the first pnpm call in this lane.
       - name: Redirect Node compile cache to runner temp
