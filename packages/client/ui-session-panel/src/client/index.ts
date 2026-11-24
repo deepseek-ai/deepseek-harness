@@ -37,8 +37,11 @@ export type {
   SessionPanelSectionEntry, SessionPanelSectionOwnerProps, SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'
 
-/** Required services: the slot registry, dictionaries, and the Host facts of the Remote carrier. */
-export const inject = ['slots', 'locale', 'remote']
+/**
+ * Required services: the slot registry, dictionaries, the Host facts of the Remote carrier, and the `uiResponsive`
+ * owner of the panel's `useMediaQuery` prop.
+ */
+export const inject = ['slots', 'locale', 'remote', 'uiResponsive']
 
 /**
  * Client plugin body: register the dictionaries, the fold control and row

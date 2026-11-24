@@ -369,6 +369,7 @@
       "@deepseek-ai/dsh-client-shortcuts": ["./packages/client/shortcuts/src"],
       "@deepseek-ai/dsh-client-ui-shortcuts": ["./packages/client/ui-shortcuts/src"],
       "@deepseek-ai/dsh-client-ui-layout": ["./packages/client/ui-layout/src"],
+      "@deepseek-ai/dsh-client-ui-responsive": ["./packages/client/ui-responsive/src"],
       "@deepseek-ai/dsh-client-ui-sidebar": ["./packages/client/ui-sidebar/src"],
       "@deepseek-ai/dsh-client-ui-brand-official": ["./packages/client/ui-brand-official/src"],
       "@deepseek-ai/dsh-client-ui-approval": ["./packages/client/ui-approval/src"],

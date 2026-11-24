@@ -102,8 +102,11 @@ function selectionOf(state: ModelDirectoryState, id: string): ModelSelection | u
 /** Dictionary namespace owned by this plugin. */
 const NS = 'model'
 
-/** Required services: the contribution registry, the seat's slot registry, locale, and the service's own faces. */
-export const inject = ['commandUi', 'locale', 'sessions', 'slots', 'remote', 'remote.session', 'remote.subagents']
+/**
+ * Required services: the contribution registry, the seat's slot registry, locale, the service's own faces, and the
+ * `uiResponsive` owner of the seat's `useMobile` prop.
+ */
+export const inject = ['commandUi', 'locale', 'sessions', 'slots', 'remote', 'remote.session', 'remote.subagents', 'uiResponsive']
 
 /**
  * Client plugin body: mount ModelDirectoryResolver, register the `model` dictionaries,

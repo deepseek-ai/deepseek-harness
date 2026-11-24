@@ -8,7 +8,7 @@ import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', balance: 'zero' | 'positive' | 'bonus' | 'failed' | 'loading' = 'positive', status: DesktopOnboardingState['status'] = 'ready', copy: typeof zh = zh, creditFunded = false) {
+function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', balance: 'zero' | 'positive' | 'bonus' | 'failed' | 'loading' = 'positive', status: DesktopOnboardingState['status'] = 'ready', copy: typeof zh = zh, creditFunded = false, reducedMotion = false) {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const track = vi.fn()
   const complete = vi.fn(async () => true)
@@ -29,6 +29,7 @@ function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', bal
     })
     changeStatus = (value) => { setState(current => ({ ...current, status: value })) }
     return <DesktopOnboarding track={track} locale={copy === zh ? 'zh' : 'en'} state={state} t={key => copy[key]} complete={complete} retry={retry}
+      reducedMotion={reducedMotion}
       update={async (change) => {
         setState(current => ({ ...current, status: 'saving' }))
         const saved = await update(change)
@@ -296,11 +297,10 @@ it('does not render a finished flow', () => {
 it.each(['complete', 'cancel', 'reduced'] as const)('settles the page transition when motion is %s', async (mode) => {
   const animation = Promise.withResolvers<undefined>()
   const animate = vi.fn(() => ({ finished: animation.promise, cancel: vi.fn() }))
-  vi.stubGlobal('matchMedia', () => ({ matches: mode === 'reduced' }))
   const previous = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate')
   Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate })
   try {
-    mount()
+    mount('welcome', 'positive', 'ready', zh, false, mode === 'reduced')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: zh.onboardingStart })) })
     if (mode === 'reduced') expect(animate).not.toHaveBeenCalled()
     else {

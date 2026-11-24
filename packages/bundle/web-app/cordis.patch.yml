@@ -280,6 +280,10 @@
     - id: ui-layout
       name: '@deepseek-ai/dsh-client-ui-layout'
 
+    # Page media queries and the device class behind useMediaQuery and useMobile.
+    - id: ui-responsive
+      name: '@deepseek-ai/dsh-client-ui-responsive'
+
     - id: ui-renderer
       name: '@deepseek-ai/dsh-client-ui-renderer'
 

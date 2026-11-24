@@ -30,6 +30,9 @@
       "path": "../ui-renderer"
     },
     {
+      "path": "../ui-responsive"
+    },
+    {
       "path": "../ui-slots"
     },
     {

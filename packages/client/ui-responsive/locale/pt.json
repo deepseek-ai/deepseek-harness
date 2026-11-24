@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comportamento responsivo",
+    "description": "Permite que os componentes da interface sigam as consultas de mídia da janela e distingam telefones e tablets de computadores de mesa."
+  }
+}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -66,6 +66,7 @@ const runtime = {
   useWorkspaces: (() => { throw new Error('unused') }) as never,
   ...allowAllAccess,
   useContextMenu: contextMenuHook(),
+  ...responsiveHooks(),
 }
 
 function mount(controller: PermissionPresetSettingsController) {

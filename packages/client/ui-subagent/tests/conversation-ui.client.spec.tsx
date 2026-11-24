@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -112,6 +112,7 @@ function props(
     useResource: unused,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
+    ...responsiveHooks(),
     useProjection: unused,
     useConversation: unused,
     useInput: unused,

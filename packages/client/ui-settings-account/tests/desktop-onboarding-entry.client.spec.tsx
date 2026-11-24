@@ -2,6 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AccountSnapshot } from '../src/client/AccountSection.tsx'
 import { DesktopOnboardingEntry } from '../src/client/DesktopOnboardingEntry.tsx'
 import type { DesktopOnboardingState } from '../src/client/onboarding-contract.ts'
@@ -25,7 +26,6 @@ it.each([false, true])('resizes only after eligibility resolves (completed=%s)',
 
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
   appRoot = document.createElement('div')
   appRoot.id = 'root'
   appRoot.inert = false
@@ -39,7 +39,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount(initiallyDone = false, initiallyLoading = false) {
+function mount(initiallyDone = false, initiallyLoading = false, reducedMotion = false) {
   let state: DesktopOnboardingState = {
     creditFunded: false,
     visible: !initiallyDone && !initiallyLoading, status: initiallyLoading ? 'loading' : 'ready', error: null,
@@ -50,8 +50,10 @@ function mount(initiallyDone = false, initiallyLoading = false) {
     view: { status: 'credential-stored', attempt: null, links: { usageUrl: 'https://example.com/usage', topUpUrl: 'https://example.com/top_up' } },
     failed: false, details: undefined, avatar: undefined,
   }
-  // This entry consumes only its injected selectors; the shell owns the global hooks.
-  const globals = {} as GlobalStandardProps
+  // This entry consumes its injected selectors and the reduced-motion media query; the shell owns the other global hooks.
+  const globals = responsiveHooks({
+    matches: query => reducedMotion && query === '(prefers-reduced-motion: reduce)',
+  }) as GlobalStandardProps
   const setVisible = vi.fn()
   const element = () => <DesktopOnboardingEntry {...globals}
     setVisible={setVisible} useOnboarding={select => select(state)} useAccount={select => select(account)}
@@ -124,8 +126,7 @@ it('waits for completion confirmation after the settings stream first reports do
 })
 
 it('removes the completed page immediately when motion is reduced', () => {
-  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
-  const view = mount()
+  const view = mount(false, false, true)
   view.finish()
   expect(screen.queryByRole('heading')).toBeNull()
   expect(appRoot.inert).toBe(false)
