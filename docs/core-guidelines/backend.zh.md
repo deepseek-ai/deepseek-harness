@@ -9,10 +9,10 @@
 
 ### 原因
 
-- 检查时与使用时之间的竞态。从 `whenIdle()` 落定或状态读取返回，到循环据此行动之间，输入可能启动一个轮次，Agent 也可能开始 dispose（资源释放）。每次修复都要再加一次复查和一个 `continue`。
+- 检查时间与使用时间之间的竞态。从 `whenIdle()` 落定或状态读取返回，到循环据此行动之间，输入可能启动一个轮次，Agent 也可能开始 dispose（资源释放）。每次修复都要再加一次复查和一个 `continue`。
 - 状态重复。循环通过读取状态和比较序号来重建一次状态转换，而 agent loop（智能体循环）本身已经知道这次转换，并能恰好报告一次。
-- 生命周期无人拥有。脱离的循环在插件的 effect 之外运行，因此 dispose 不会停止它，它的失败也不会传给任何拥有者。
-- 设计信号。需要这种循环的插件，通常缺少它所依赖的生命周期事件或 API。
+- 生命周期没有拥有者。脱离的循环在插件的 effect 之外运行，因此 dispose 不会停止它，它的失败也不会传给任何拥有者。
+- 设计上的提示。需要这种循环的插件，通常缺少它所依赖的生命周期事件或 API。
 
 ### 反例
 
@@ -57,14 +57,15 @@ export function watchSummaries(agent: Agent): void {
 }
 ```
 
-`turn/end` 事件指明它结束的轮次及原因。监听器是 Agent 上下文的一个 effect，因此它只接收该 Agent 的 Session，dispose 也会移除它。会话事件监听器的失败会被记录并隔离。
+`turn/end` 事件指明它结束的轮次及原因。监听器是 Agent 上下文的一个 effect，因此它只接收该 Agent 的 Session，dispose 也会移除它。会话事件监听器的失败会被记录并隔离。`session/event` 监听器不能向正在发布该事件的 Session 追加事件，这样的追加会抛出异常。
 
 ### 替代方案
 
 - 在轮次或消息边界执行的工作：在 `session/event` 上监听记录该边界的会话事件，例如 `turn/start` 或 `turn/end`。
+- 在轮次结束时需要向 Session 追加事件的工作：监听 `agent/turn-stopping`，它在追加 `turn/end` 之前运行。
 - 在模型请求之前执行的工作：注册 `agent/pre-step` 监听器。
 - 在 Agent 变为空闲或开始运行时执行的工作：监听 `agent/status`。
-- 针对单个 Agent 的清理：监听 `agent/disposed`。
+- 清理单个 Agent 拥有的资源：用 `agent.ctx.effect()` 注册清理，Agent scope 展开时会执行其 disposer。注册在 `agent.ctx` 上的监听器在 `agent/disposed` 发出之前就已移除，因此只有寿命更长的上下文（例如插件上下文）才能观察到 `agent/disposed`。
 - 必须在 Agent 空闲时运行并阻止新轮次开始的工作：在观察到空闲的监听器中同步调用 `runMaintenance()`，例如 `status` 为 `idle` 的 `agent/status`。其他工作已占用该 Agent 时，它会抛出异常。
 - 没有事件报告所需的状态转换：在拥有该状态的包中添加对应的生命周期事件或 API，并更新其文档，而不是从外部观察该状态。
 
