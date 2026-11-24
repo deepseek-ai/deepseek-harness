@@ -2710,6 +2710,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'detached model metadata in adapter-preferred order.',
       },
       {
+        signature: 'async isModelInCatalog(provider: string, model: string): Promise<boolean>',
+        description: 'Report whether a registered provider advertises a model in its current catalog. Catalog-driven entry points use it to accept only listed models.',
+        parameters: [{ name: 'provider', description: 'provider route to inspect.' }, { name: 'model', description: 'provider-owned model id.' }],
+        returns: 'false when the provider is unregistered or its catalog omits the model.',
+        throws: ['the provider\'s catalog failure, unchanged.'],
+      },
+      {
         signature: 'async resolveModelInfo( provider: string, model: string, signal?: AbortSignal, ): Promise<LlmResolvedModelInfo>',
         description: 'Resolve and validate all metadata from the adapter that owns one exact route. The result is detached from adapter-owned objects; catalog membership remains advisory and does not control request routing.',
         parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }, { name: 'model', description: 'exact model id passed to the adapter.' }, { name: 'signal', description: 'optional cancellation for adapter-owned asynchronous lookup.' }],
@@ -4640,6 +4647,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{SubagentError} `UNAUTHORIZED` when the authority does not own the live target.'],
       },
       {
+        signature: 'async selectModel( childId: SessionId, selection: Readonly<ModelSelection>, authority: SubagentInterruptAuthority, signal: AbortSignal, ): Promise<ModelSelection>',
+        description: 'Record a local child\'s complete model choice for future steps without adding a message or changing user defaults. Selection and image admission share the child\'s operation order; an already prepared step retains its model.',
+        parameters: [{ name: 'childId', description: 'durable continuable child Session id.' }, { name: 'selection', description: 'complete choice; omitted effort follows adapter defaults.' }, { name: 'authority', description: 'trusted user operation or exact live creation ancestor.' }, { name: 'signal', description: 'cancellation before selection is recorded.' }],
+        returns: 'the recorded choice after its durability barrier completes.',
+        throws: ['{LlmError} when the LLM runtime rejects the selected route or effort.', '{SubagentError} when access or child availability fails; PERSISTENCE_UNCONFIRMED means the choice may have changed but durability is unknown.'],
+      },
+      {
         signature: 'async drainDescendants(parents: readonly Agent[]): Promise<void>',
         description: 'Close admission and stop all instances in the selected subagent trees, then await pending startup and cleanup. Ordinary members are ignored. The cutoff lasts until each exact root leaves the registry; unrelated subagent trees remain live.',
         parameters: [{ name: 'parents', description: 'exact live subagent tree roots entering teardown.' }],
@@ -4666,6 +4680,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'childSessionId', description: 'durable child session id to interrupt.' }],
         returns: 'acknowledgement that the cancel signal was admitted, not that the target is quiescent.',
         throws: ['{RemoteError} `gateway/bad-request` for an empty id, otherwise `gateway/internal`.'],
+      },
+      {
+        signature: '@Remote({ name: \'selectModelByUser\', resources: { session: request => request.childSessionId } }) async selectModelByUser(request: SubagentSelectModelRequest, signal: AbortSignal): Promise<SubagentSelectModelReceipt>',
+        description: 'Select a local child\'s model under the caller\'s target-Session permission. Like Session model selection, it accepts only a model its provider lists in the current catalog. No message or global default is changed. A successful receipt confirms the child\'s persistence barrier; an unconfirmed failure may follow a live change.',
+        parameters: [{ name: 'request', description: 'target and complete model choice; omitted effort uses adapter defaults.' }, { name: 'signal', description: 'caller cancellation before selection is recorded.' }],
+        returns: 'the recorded choice after confirmed persistence.',
+        throws: ['{RemoteError} validation, authorization, availability, cancellation, or subagent/model-selection-unconfirmed when the durable outcome is unknown.'],
       },
       {
         signature: 'registerProvider(provider: SubagentProvider): () => void',
@@ -8907,7 +8928,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(conf /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async isModelInCatalog(provider: string, model: string): Promise<boolean>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallCo /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',
@@ -11375,7 +11396,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    get maxActiveSubagents(): number;\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    capacityOf(caller: Agent): SubagentCapacity;\n    namesOf(agent: Agent): SubagentMemberNames;\n    async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>;\n    async waitForTreeWork(root: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote({ name: \'prompt\', resources: { session: request => request.childSessionId } })\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote({ name: \'interruptByUser\', resources: { session: childSessionId => childSes /* …truncated — full shape in source */',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    get maxActiveSubagents(): number;\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    capacityOf(caller: Agent): SubagentCapacity;\n    namesOf(agent: Agent): SubagentMemberNames;\n    async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>;\n    async waitForTreeWork(root: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async selectModel(childId: SessionId, selection: Readonly<ModelSelection>, authority: SubagentInterruptAuthority, signal: AbortSignal): Promise<ModelSelection>;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote({ name: \'prompt\', resources: { session: request => request.childSessionId } })\n    async prompt(request: /* …truncated — full shape in source */',
+  },
+  {
+    name: 'SubagentSelectModelReceipt',
+    declaration: 'export interface SubagentSelectModelReceipt {\n    readonly selected: ModelSelection;\n}',
+  },
+  {
+    name: 'SubagentSelectModelRequest',
+    declaration: 'export interface SubagentSelectModelRequest {\n    readonly childSessionId: SessionId;\n    readonly provider: string;\n    readonly model: string;\n    readonly reasoningEffort?: string;\n}',
   },
   {
     name: 'SubagentSendMessageOptions',

@@ -1145,6 +1145,16 @@ fileRequestText(ref: FileAttachmentRef): string
 async listModels(provider: string): Promise<LlmModelInfo[]>
 
 /**
+ * Report whether a registered provider advertises a model in its current
+ * catalog. Catalog-driven entry points use it to accept only listed models.
+ * @param provider - provider route to inspect.
+ * @param model - provider-owned model id.
+ * @returns false when the provider is unregistered or its catalog omits the model.
+ * @throws the provider's catalog failure, unchanged.
+ */
+async isModelInCatalog(provider: string, model: string): Promise<boolean>
+
+/**
  * Resolve and validate all metadata from the adapter that owns one exact
  * route. The result is detached from adapter-owned objects; catalog
  * membership remains advisory and does not control request routing.

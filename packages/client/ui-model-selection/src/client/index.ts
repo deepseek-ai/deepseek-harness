@@ -3,16 +3,15 @@
  * directory owned by ModelDirectoryResolver (`ctx.modelDirectories`). The /model popupSelect
  * contribution and the composer's named `conversation.input.model` seat share
  * one Host-generation `session/modelCatalog` catalog, combine it with the Session's
- * durable model-selection projection, and submit through `session.selectModel`.
+ * durable model-selection projection, and submit through their Session's owning Remote service.
  * A switch made in either entry is what the other shows next. Failures
  * ride each entry's own retry surface (popup shell error/retry; seat menu
- * inline error) without forking the state. Addressed subagent sessions expose
- * neither entry because those Agent-bound RPCs would activate persisted
- * history outside the direct-parent continuation path.
+ * inline error) without forking the state. Continuable subagents use the same entries with their own Session id.
  */
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
 import type { ModelSelection } from '@deepseek-ai/dsh-api-session-controller/types'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { CommandUiContract, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 // Type-only: pulls the ui-conversation SlotMap merge (the input.model seat).
@@ -23,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconDataOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ModelDirectoryState } from './directory.ts'
+import { modelSelectable, type ModelDirectoryState } from './directory.ts'
 import { ModelDirectoryResolver } from './service.ts'
 import type { ModelSelectInjected } from './slots.ts'
 import { ModelSelect } from './ModelSelect.tsx'
@@ -104,7 +103,7 @@ function selectionOf(state: ModelDirectoryState, id: string): ModelSelection | u
 const NS = 'model'
 
 /** Required services: the contribution registry, the seat's slot registry, locale, and the service's own faces. */
-export const inject = ['commandUi', 'locale', 'sessions', 'slots', 'remote', 'remote.session']
+export const inject = ['commandUi', 'locale', 'sessions', 'slots', 'remote', 'remote.session', 'remote.subagents']
 
 /**
  * Client plugin body: mount ModelDirectoryResolver, register the `model` dictionaries,
@@ -126,12 +125,13 @@ export function apply(ctx: ClientContext): void {
     const command = scope.get('commandUi') as CommandUiContract
     const models = scope.modelDirectories
     const sessions = scope.sessions
+    const available = (sessionId: SessionId): boolean => modelSelectable(sessions.subagentAddress(sessionId))
     scope.effect(() => command.register({
       name: 'model',
       label: () => t('command.label'),
       description: () => t('command.description'),
       icon: IconDataOutlineRegular,
-      available: session => sessions.subagentAddress(session.sessionId) === undefined,
+      available: session => available(session.sessionId),
       ui: {
         kind: 'popupSelect',
         searchLabels: () => ({
@@ -140,13 +140,13 @@ export function apply(ctx: ClientContext): void {
           noResults: t('search.empty'),
         }),
         options: async (session) => {
-          if (sessions.subagentAddress(session.sessionId) !== undefined) {
+          if (!available(session.sessionId)) {
             throw new Error('model selection is unavailable for addressed subagent sessions')
           }
           return optionsOf(await models.directoryFor(session.sessionId).load(), t)
         },
         onSelect: async (option, session) => {
-          if (sessions.subagentAddress(session.sessionId) !== undefined) {
+          if (!available(session.sessionId)) {
             throw new Error('model selection is unavailable for addressed subagent sessions')
           }
           const directory = models.directoryFor(session.sessionId)
@@ -178,7 +178,7 @@ export function apply(ctx: ClientContext): void {
       },
       inject: (sessionId): ModelSelectInjected => {
         const directory = models.directoryFor(sessionId)
-        const available = sessions.subagentAddress(sessionId) === undefined
+        const available = modelSelectable(sessions.subagentAddress(sessionId))
         return {
           available,
           directory: directory.store,

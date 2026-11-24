@@ -964,9 +964,9 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 ```ts persistence-catalog
 /**
  * Durable identity and lifecycle mode of a session-backed subagent child,
- * appended once inside the child's initial turn, before its first
- * request. Continuable records also carry their
- * resumable composition. Log-only: it carries no `surfaceOp`, never enters
+ * appended once when the child is established, before its first
+ * request. Historical continuable records may also carry their initial
+ * composition. Log-only: it carries no `surfaceOp`, never enters
  * model history, and survives compaction.
  */
 'subagent/descriptor': SubagentDescriptorData
@@ -3528,7 +3528,7 @@ SHA-256: `c748fb42c80a120038a8c587af80ec39924803c401364db11c8974d5bf6d0262`
 
 SHA-256: `6487b10ba7542f3c447b1e41a1c6a590b7bfafe0b9b66b49f34028da85bb970f`
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:72`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:76`](../packages/subagent/subagent/src/descriptor.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -5069,7 +5069,7 @@ SHA-256: `058fc9a6b4fbd5d43437c3a64170002070dfc98e18d87de294b564ae446ca8ae`
 
 SHA-256: `86d1d0e9cfebb240421187e3dc37fb71cc38a1501885cf32f8f9adef7b0a2bde`
 
-来源：[`packages/subagent/subagent/src/descriptor.ts:89`](../packages/subagent/subagent/src/descriptor.ts)
+来源：[`packages/subagent/subagent/src/descriptor.ts:93`](../packages/subagent/subagent/src/descriptor.ts)
 
 以下类型之一：
 

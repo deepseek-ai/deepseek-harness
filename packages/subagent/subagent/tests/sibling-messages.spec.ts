@@ -14,7 +14,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import SubagentRuntime from '../src/index.ts'
+import SubagentRuntime, { SUBAGENT_DESCRIPTOR_VERSION } from '../src/index.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { bindSubagentActivation, managerState, subagentManager } from './manager-internals.ts'
@@ -175,7 +175,7 @@ describe('tree-wide messages', () => {
     expect(() => ctx.subagents.rootOf({ ...parent })).toThrow(expect.objectContaining({ code: 'UNAUTHORIZED' }))
     const source = ctx.sessions.create(brandString<SessionId>('fork-source'), { meta: { origin: 'subagent', parentSession: parent.id } })
     source.append('turn/start', { turn: 1 })
-    source.append('subagent/descriptor', { version: 3, mode: 'one-shot', provider: 'spawn', label: 'source' })
+    source.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'one-shot', provider: 'spawn', label: 'source' })
     source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     const fork = ctx.sessions.fork(source, undefined, brandString<SessionId>('ordinary-fork'))
     const caller = { ...parent, id: fork.id, session: fork }

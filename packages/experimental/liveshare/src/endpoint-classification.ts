@@ -242,6 +242,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'schedule/view': 'owner-only', // owner schedules
   'subagents/interruptByUser': 'owner-only', // owner subagents
   'subagents/prompt': 'owner-only', // owner subagents
+  'subagents/selectModelByUser': 'owner-only', // owner selects a subagent model
 
   // Owner share management stays on the owner's own page; a `share-viewer` Peer is refused first.
   'liveshareShares/audit': 'owner-only',

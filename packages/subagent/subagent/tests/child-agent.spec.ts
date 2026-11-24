@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import { Session, type SessionId } from '@deepseek-ai/dsh-session'
@@ -7,13 +7,19 @@ import { resolveChildAgentOptions, resolveChildDepth } from '../src/child-agent.
 
 function parentAgent(): Agent {
   const id = brandString<SessionId>('parent')
+  const options = {
+    provider: 'parent-provider',
+    model: 'parent-model',
+    reasoningEffort: brandString<ReasoningEffortId>('high'),
+    maxTokens: 512,
+  }
+  let selection: Readonly<ModelSelection> = options
   return {
     id,
-    options: {
-      provider: 'parent-provider',
-      model: 'parent-model',
-      reasoningEffort: brandString<ReasoningEffortId>('high'),
-      maxTokens: 512,
+    options,
+    model: {
+      current: () => ({ ...selection }),
+      select(next: Readonly<ModelSelection>) { selection = { ...next } },
     },
     session: Session.create(id),
   } as Agent
@@ -66,18 +72,18 @@ describe('child Agent options', () => {
     })
   })
 
-  it('inherits the latest logged request selection over creation-time values', () => {
+  it('inherits a parent choice before the parent uses it in a request', () => {
     const parent = parentAgent()
     parent.session.append('request/header', {
       header: {
         config: {
-          provider: 'current-provider',
-          model: 'current-model',
-          reasoningEffort: brandString<ReasoningEffortId>('low'),
+          provider: 'previous-provider',
+          model: 'previous-model',
         },
       },
       reason: 'initial',
     })
+    parent.model.select({ provider: 'current-provider', model: 'current-model', reasoningEffort: brandString<ReasoningEffortId>('low') })
 
     expect(resolveChildAgentOptions(parent, undefined, 1)).toEqual({
       provider: 'current-provider',
@@ -85,6 +91,18 @@ describe('child Agent options', () => {
       reasoningEffort: 'low',
       maxTokens: 512,
       subagentDepth: 1,
+    })
+  })
+
+  it('keeps adapter-defaulted effort absent from the inherited choice', () => {
+    const parent = parentAgent()
+    parent.model.select({ provider: 'parent-provider', model: 'parent-model' })
+    parent.session.append('request/header', {
+      reason: 'initial',
+      header: { config: { provider: 'parent-provider', model: 'parent-model', reasoningEffort: brandString<ReasoningEffortId>('high') }, adapterDefaults: { reasoningEffort: true } },
+    })
+    expect(resolveChildAgentOptions(parent, undefined, 1)).toEqual({
+      provider: 'parent-provider', model: 'parent-model', maxTokens: 512, subagentDepth: 1,
     })
   })
 })

@@ -1026,8 +1026,11 @@ async function verifyProviderCwdResume(
   }
 }
 
-async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly SessionLog[], ctx: NormalizeContext): Promise<void> {
+async function verifyHeaders(
+  scenario: HeadlessScenario, actualLogs: readonly SessionLog[], ctx: NormalizeContext, expectedLogs: readonly string[],
+): Promise<void> {
   const pin = pinOf(scenario)
+  const expectedContext = contextOf(expectedLogs)
   const fixture = await readFile(join(pin.dir, await primaryFixtureFile(pin.dir)), 'utf8')
   const pinned = normalizedHeaders(fixture, fixtureContext(fixture))
   const changes = pin.manifest.header.changes ?? 0
@@ -1059,17 +1062,21 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
 
   for (const [logIndex, log] of actualLogs.entries()) {
     const headers = normalizedHeaders(log.content, ctx)
+    const childHeaders = logIndex === 0 ? [] : normalizedHeaders(expectedLogs[logIndex]!, expectedContext)
     const prompts = normalizedSystemPrompts(log.content, ctx)
     const promptChanges = scenario.manifest.header.promptChanges ?? pin.manifest.header.promptChanges ?? 0
     if (headers.length > 0) {
       expect(systemPromptPrecedesRequests(log.content), `${scenario.name}: a system/message precedes the first request/header`).toBe(true)
       expect(prompts.length, `${scenario.name}: system/message count`)
-        .toBe(1 + (logIndex === 0 ? promptChanges : 0))
+        .toBe(logIndex === 0 ? 1 + (promptChanges)
+          : normalizedSystemPrompts(expectedLogs[logIndex]!, expectedContext).length)
     }
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
       const base = reconstructed[index] ?? reconstructed[0]
-      const expected = selectedSchemas === undefined ? base : { ...base as JsonObject, tools: selectedSchemas }
+      // Child model choices are pinned by their complete Session; shared pins own prompt and tool declarations.
+      const configured = logIndex === 0 ? base : { ...base as JsonObject, config: (childHeaders[index] as JsonObject).config }
+      const expected = selectedSchemas === undefined ? configured : { ...configured as JsonObject, tools: selectedSchemas }
       expect(header, `${scenario.name}: request header ${index + 1}`).toEqual(expected)
     }
     if (prompts.length > 0) {
@@ -1615,6 +1622,24 @@ describe('headless recorded-session snapshots', () => {
                 .toMatchObject({ name: 'snapshot:complete', state: 'retired' })
             }
             if (scenario.manifest.composition === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'subagent-durable-model-selection') {
+              const parentEvents = parseSessionLog(actualLogs[0]!.content)
+              const results = parentEvents.filter(event => event.type === 'tool/result').map(event => event.data.message)
+              expect(results.map(message => message.isError), JSON.stringify(results.map(message => message.content))).toEqual([false])
+              expect(actualLogs).toHaveLength(3)
+              const childEvents = parseSessionLog(actualLogs[1]!.content)
+              expect(childEvents.filter(event => event.type === 'request/header').map(event => event.data.header.config.model))
+                .toEqual(['deepseek-v4-pro', 'deepseek-v4-flash'])
+              expect(childEvents.filter(event => event.type === 'turn/end').map(event => event.data.reason.kind))
+                .toEqual(['completed', 'completed'])
+              // The maintenance restoration records the resume marker and resume-time policy facts, then the choice.
+              const legacyEvents = parseSessionLog(actualLogs[2]!.content)
+              expect(legacyEvents.map(event => event.type)).toEqual([
+                'subagent/descriptor', 'session/end-seed', 'permission/preset', 'sandbox/mode', 'approval/policy', 'model/selection',
+              ])
+              expect(legacyEvents[0]?.data).toEqual({ version: 3, mode: 'continuable', provider: 'spawn', label: 'Legacy child' })
+              expect(legacyEvents.at(-1)?.data).toEqual({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
+            }
             if (scenario.name === 'subagent-depth-two-rejection') {
               expect(actualLogs).toHaveLength(3)
               const leaf = actualLogs[2]!
@@ -1715,7 +1740,7 @@ describe('headless recorded-session snapshots', () => {
           : records(expectedSnapshots[index] as string)
         expect(actualRecords, `${scenario.name}: session ${index}`).toEqual(expectedRecords)
       }
-      await verifyHeaders(scenario, actualLogs, actualContext)
+      await verifyHeaders(scenario, actualLogs, actualContext, expected)
 
       if (initialWorkspace === undefined || finalWorkspace === undefined) {
         throw new Error(`${scenario.name}: workspace was not captured around the profile run`)

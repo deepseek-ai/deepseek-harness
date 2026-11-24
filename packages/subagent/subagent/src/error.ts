@@ -31,6 +31,8 @@ export type SubagentErrorCode =
   | 'INVALID_MODEL_SELECTION_SETTINGS'
   /** The current Host model-selection setting does not authorize the requested child provider or route. */
   | 'MODEL_ROUTE_NOT_ALLOWED'
+  /** The child model choice is incomplete, or no LLM service can validate it; LLM validation failures keep their `LlmError` code. */
+  | 'MODEL_UNAVAILABLE'
   /** The requested LLM provider is not registered with the LLM runtime. */
   | 'LLM_PROVIDER_NOT_FOUND'
   /** The child's target model cannot accept image input. */
@@ -69,6 +71,8 @@ export type SubagentErrorCode =
   | 'CONTINUATION_UNAVAILABLE'
   /** Continuation needs Session persistence that is absent or failed. */
   | 'PERSISTENCE_UNAVAILABLE'
+  /** The selection may have changed. Reload the child before retrying. */
+  | 'PERSISTENCE_UNCONFIRMED'
   /** A requested agent name does not satisfy the naming rule. */
   | 'INVALID_AGENT_NAME'
   /** A requested agent name is already used by a sibling. */

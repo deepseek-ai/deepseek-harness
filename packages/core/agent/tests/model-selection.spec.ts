@@ -9,7 +9,7 @@ import {
 } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, type ReasoningEffortId, type UserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, type SessionId, type EpochHeader } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SessionLogOffset, SessionSeq, type EpochHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { AgentModel, modelSelectionProjectionDefinition } from '../src/model-selection.ts'
 
@@ -146,6 +146,65 @@ describe('Session model selection', () => {
     expect(h.session.snapshotEvents()).toHaveLength(2)
     h.record(INITIAL)
     expect(h.session.snapshotEvents()).toHaveLength(2)
+  })
+
+  it.each([true, false])('inherits model records before a fork records its choice (subagent: %s)', async (subagent) => {
+    const h = await harness()
+    h.header(INITIAL)
+    const inheritedSelection = { provider: 'parent', model: 'pending', reasoningEffort: brandString<ReasoningEffortId>('high') }
+    h.record(inheritedSelection)
+    const seed = h.session.snapshotEvents()
+    const child = h.ctx.sessions.create(brandString<SessionId>('model-child'), {
+      seed,
+      inheritedEventCount: SessionLogOffset(seed.length),
+      meta: { isSeeded: true, ...(subagent ? { origin: 'subagent' as const } : {}) },
+    })
+    const projection = await h.ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+    const fallback = { provider: 'child', model: 'initial' }
+    const model = new AgentModel(() => projection.stateOf(child), child, fallback)
+    expect(model.current()).toEqual(inheritedSelection)
+    expect(h.ctx.sessionProjections.snapshot(child).values.modelSelection).toEqual({ lastUsed: INITIAL, next: inheritedSelection })
+
+    const ownSelection = { provider: 'child', model: 'selected' }
+    model.select(ownSelection)
+    child.append('request/header', { header: { config: { provider: 'child', model: 'earlier' } }, reason: 'initial' })
+    expect(model.current()).toEqual(ownSelection)
+    expect(h.ctx.sessionProjections.snapshot(child).values.modelSelection).toEqual({
+      lastUsed: { provider: 'child', model: 'earlier' }, next: ownSelection,
+    })
+  })
+
+  it('rebuilds subagent selection from missing or old checkpoints and replays a suffix from the current checkpoint', async () => {
+    const h = await harness()
+    h.header(INITIAL)
+    const inheritedSelection = { provider: 'parent', model: 'pending' }
+    h.record(inheritedSelection)
+    const seed = h.session.snapshotEvents()
+    const child = h.ctx.sessions.create(brandString<SessionId>('checkpoint-child'), {
+      seed,
+      inheritedEventCount: SessionLogOffset(seed.length),
+      meta: { isSeeded: true, origin: 'subagent' },
+    })
+    const projection = await h.ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+    const model = new AgentModel(() => projection.stateOf(child), child, {})
+    const ownSelection = { provider: 'child', model: 'selected' }
+    model.select(ownSelection)
+    const rows = h.ctx.sessionProjections.checkpoint(child)
+    const suffixStart = child.seq
+    child.append('request/header', {
+      header: { config: { ...ownSelection, reasoningEffort: brandString<ReasoningEffortId>('high') }, adapterDefaults: { reasoningEffort: true } },
+      reason: 'initial',
+    })
+    const events = child.snapshotEvents()
+    const complete = h.ctx.sessionProjections.restore({}, events, SessionLogOffset(0), child.header, child.inheritedEventCount)
+    const old = h.ctx.sessionProjections.restore({
+      modelSelection: { ver: 2, seq: SessionSeq(h.session.seq - 1), val: { lastUsed: INITIAL, pending: inheritedSelection } },
+    }, events, SessionLogOffset(0), child.header, child.inheritedEventCount)
+    const suffix = h.ctx.sessionProjections.restore(rows, events.slice(suffixStart), suffixStart, child.header, child.inheritedEventCount)
+    expect(complete.snapshot.values.modelSelection).toEqual({ lastUsed: ownSelection, next: ownSelection })
+    expect(old).toEqual(complete)
+    expect(suffix).toEqual(complete)
+    expect(model.current()).toEqual(ownSelection)
   })
 })
 
