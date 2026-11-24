@@ -49,7 +49,7 @@ async function bench(
   if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
   if (catalog !== null) {
     ctx.provide('llm', {
-      isModelListed: async (provider: string, model: string) => catalog[provider]?.includes(model) === true,
+      isModelInCatalog: async (provider: string, model: string) => catalog[provider]?.includes(model) === true,
     } as never)
   }
   await ctx.plugin(SubagentRuntime)

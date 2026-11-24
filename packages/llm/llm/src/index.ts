@@ -738,7 +738,7 @@ export class LlmRuntime extends TypertRemoteService {
    * @returns false when the provider is unregistered or its catalog omits the model.
    * @throws the provider's catalog failure, unchanged.
    */
-  async isModelListed(provider: string, model: string): Promise<boolean> {
+  async isModelInCatalog(provider: string, model: string): Promise<boolean> {
     if (!this.adapters.has(provider)) return false
     return (await this.listModels(provider)).some(entry => entry.id === model)
   }

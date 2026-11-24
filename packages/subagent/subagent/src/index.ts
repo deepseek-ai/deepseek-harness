@@ -585,7 +585,7 @@ export class SubagentRuntime extends TypertRemoteService {
     if (llm === undefined) {
       throw new SubagentError('cannot validate the selected subagent model because the LLM service is unavailable', 'MODEL_UNAVAILABLE')
     }
-    if (!await llm.isModelListed(selection.provider, selection.model)) {
+    if (!await llm.isModelInCatalog(selection.provider, selection.model)) {
       throw new SubagentError(`provider "${selection.provider}" does not list model "${selection.model}"`, 'MODEL_UNAVAILABLE')
     }
   }

@@ -1152,7 +1152,7 @@ async listModels(provider: string): Promise<LlmModelInfo[]>
  * @returns false when the provider is unregistered or its catalog omits the model.
  * @throws the provider's catalog failure, unchanged.
  */
-async isModelListed(provider: string, model: string): Promise<boolean>
+async isModelInCatalog(provider: string, model: string): Promise<boolean>
 
 /**
  * Resolve and validate all metadata from the adapter that owns one exact

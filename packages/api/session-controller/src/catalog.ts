@@ -78,7 +78,7 @@ export async function buildModelCatalog(
  * @returns whether the exact model is currently advertised as available.
  */
 export async function modelAvailable(ctx: Context, selection: ModelSelection): Promise<boolean> {
-  try { return await ctx.llm.isModelListed(selection.provider, selection.model) }
+  try { return await ctx.llm.isModelInCatalog(selection.provider, selection.model) }
   catch (error) {
     throw new RemoteError('session/model-unavailable',
       error instanceof Error ? error.message : String(error),
