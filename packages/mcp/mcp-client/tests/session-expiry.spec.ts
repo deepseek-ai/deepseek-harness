@@ -1,6 +1,6 @@
 /** Real SDK recovery after a Streamable HTTP server stops accepting the session it issued. */
 
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -12,7 +12,7 @@ import * as McpClient from '../src/index.ts'
 import { connectionStatusIn } from '../src/status.ts'
 import { startHttpMcpFixture } from './http-fixture.ts'
 
-it('fails the call that meets an expired session once, reconnects, and serves the next call', async () => {
+it('sends the call that meets an expired session again after reconnecting', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionProjectionRegistry)
@@ -34,12 +34,11 @@ it('fails the call that meets an expired session once, reconnects, and serves th
   expect(await ping('before')).toMatchObject({ isError: false })
 
   fixture.expireSessions()
-  expect((await ping('expired')).error).toEqual({
-    message: 'MCP server session expired; this call returned no result and may not have run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.',
-    info: { name: 'McpLocalError', code: 'MCP_CONNECTION_CLOSED' },
-  })
-
-  await vi.waitFor(() => { expect(states).toEqual(['reconnecting', 'connecting', 'connected']) })
-  expect(await ping('after')).toMatchObject({ isError: false })
+  // The server refuses the request before the tool runs, so the tool runs once for this call.
+  expect(await ping('expired')).toMatchObject({ isError: false })
+  expect(states).toEqual(['reconnecting', 'connecting', 'connected'])
   expect(fixture.calls).toEqual(['ping', 'ping'])
+
+  expect(await ping('after')).toMatchObject({ isError: false })
+  expect(states).toEqual(['reconnecting', 'connecting', 'connected'])
 })

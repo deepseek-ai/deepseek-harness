@@ -56,7 +56,8 @@ export class McpLocalError extends HarnessError {
  *   schema, or that output schema cannot be compiled.
  * - `MCP_CONNECTION_CLOSED`: the connection closed while the request was in flight; its outcome is unknown.
  * - `MCP_TIMEOUT`: the request exceeded its deadline; its outcome is unknown.
- * - `MCP_SERVER_UNAVAILABLE`: the server was not connected, so the request was not sent.
+ * - `MCP_SERVER_UNAVAILABLE`: the server was not connected, or refused the request because it no longer knows the
+ *   session; the tool did not run.
  * - `MCP_REQUEST_FAILED`: any other protocol or SDK failure; `message` carries the JSON-RPC or SDK code.
  */
 export const MCP_TOOL_ERROR_CODES = [

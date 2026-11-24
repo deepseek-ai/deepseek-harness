@@ -42,6 +42,52 @@ export interface ToolBridgeOptions {
   redact?: (text: string) => string
   /** On-demand loading: the generation is published to this loader instead of the tool registry. */
   loader?: McpToolLoader
+  /** Supervised connection: lets a call the server refused for its session be sent once more after the reconnect. */
+  recovery?: McpCallRecovery
+}
+
+/**
+ * One attempt of an upstream tool call on the connection generation that listed the tool.
+ * @param args - model arguments admitted by the ToolRuntime.
+ * @param execution - exact ToolRuntime invocation, including its Agent and cancellation.
+ * @returns the raw MCP result. Rejects with {@link McpSessionRefused} when the server refused the attempt's own
+ *   request because it no longer knows the session.
+ */
+export type McpToolSend = (args: Record<string, unknown>, execution: ToolExecution) => Promise<unknown>
+
+/** What a request reports when the server refused it for its session and no second attempt returned a result. */
+const SESSION_EXPIRED_NOT_RUN = 'MCP server session expired; this call was not run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.'
+
+/**
+ * The server refused a request because it no longer knows the session, so the request did not run
+ * (`MCP_SERVER_UNAVAILABLE`).
+ */
+export class McpSessionRefused extends McpToolError {
+  constructor(
+    /**
+     * Resolves to the attempts of the connection that replaces the refused one, keyed by raw tool name, or to
+     * undefined when the next connection attempt does not connect.
+     */
+    readonly replacement: Promise<ReadonlyMap<string, McpToolSend> | undefined>,
+  ) {
+    super(SESSION_EXPIRED_NOT_RUN, 'MCP_SERVER_UNAVAILABLE')
+  }
+}
+
+/** Supervisor state a tool call needs to be sent again on a replacement connection. */
+export interface McpCallRecovery {
+  /**
+   * Classify the rejection of one request sent on the generation being synchronized.
+   * @param error - the value the request rejected with.
+   * @returns the failure to report when the server refused that request for its session; undefined for any other
+   *   rejection.
+   */
+  refusal(error: unknown): McpSessionRefused | undefined
+  /**
+   * Receive a generation's attempts once its tools are registered.
+   * @param sends - one attempt function per raw tool name.
+   */
+  publish(sends: ReadonlyMap<string, McpToolSend>): void
 }
 
 /**
@@ -150,6 +196,7 @@ export async function syncTools(
 ): Promise<ToolDisposers> {
   // Phase 1: fetch and build the next generation without touching the registry.
   const definitions = new Map<string, { rawName: string; definition: ToolDefinition }>()
+  const sends = new Map<string, McpToolSend>()
   const response = client.getServerCapabilities()?.tools === undefined
     ? { tools: [] }
     : await client.listTools(undefined, { cacheMode: 'refresh', signal: opts.signal })
@@ -173,6 +220,37 @@ export async function syncTools(
       const message = `Tool "${tool.name}" returned an invalid MCP result: ${reason}`
       return new McpToolError(opts.redact === undefined ? message : opts.redact(message), 'MCP_INVALID_RESULT')
     }
+    const send: McpToolSend = async (args, execution) => {
+      // The generation closed and its tools await re-sync; the SDK would refuse the request unsent.
+      if (opts.signal.aborted) {
+        throw new McpToolError(`mcp-client(${opts.serverName}): server is disconnected`, 'MCP_SERVER_UNAVAILABLE')
+      }
+      if (outputCheck !== undefined && 'compileError' in outputCheck) {
+        throw invalidResult(`its output schema cannot be compiled: ${outputCheck.compileError}`)
+      }
+      let result: Awaited<ReturnType<Client['callTool']>>
+      try {
+        result = await client.callTool(
+          { name: tool.name, arguments: args },
+          { signal: AbortSignal.any([execution.signal, opts.signal]),
+            timeout: opts.toolCallTimeoutMs, toolDefinition: callDefinition },
+        )
+      } catch (error) {
+        // The SDK reports an aborted signal as a request timeout; cancellation
+        // and generation closure are reported as their own reasons instead.
+        execution.signal.throwIfAborted()
+        opts.signal.throwIfAborted()
+        throw opts.recovery?.refusal(error) ?? mcpRequestError(error, `tool "${tool.name}"`, opts.redact)
+      }
+      if (result.isError !== true) {
+        const failure = outputCheck === undefined ? undefined : outputCheck.check(result.structuredContent)
+        if (failure !== undefined) throw invalidResult(failure)
+        return result
+      }
+      if (opts.redact === undefined) return result
+      return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
+    }
+    sends.set(tool.name, send)
     definitions.set(publicName, { rawName: tool.name, definition: createMcpToolDefinition(ctx, {
       name: publicName,
       rawName: tool.name,
@@ -181,34 +259,12 @@ export async function syncTools(
       outputSchema: tool.outputSchema,
       taskRequired: tool.execution?.taskSupport === 'required',
       call: async (args, execution) => {
-        // The generation closed and its tools await re-sync; the SDK would refuse the request unsent.
-        if (opts.signal.aborted) {
-          throw new McpToolError(`mcp-client(${opts.serverName}): server is disconnected`, 'MCP_SERVER_UNAVAILABLE')
-        }
-        if (outputCheck !== undefined && 'compileError' in outputCheck) {
-          throw invalidResult(`its output schema cannot be compiled: ${outputCheck.compileError}`)
-        }
-        let result: Awaited<ReturnType<Client['callTool']>>
         try {
-          result = await client.callTool(
-            { name: tool.name, arguments: args },
-            { signal: AbortSignal.any([execution.signal, opts.signal]),
-              timeout: opts.toolCallTimeoutMs, toolDefinition: callDefinition },
-          )
+          return await send(args, execution)
         } catch (error) {
-          // The SDK reports an aborted signal as a request timeout; cancellation
-          // and generation closure are reported as their own reasons instead.
-          execution.signal.throwIfAborted()
-          opts.signal.throwIfAborted()
-          throw mcpRequestError(error, `tool "${tool.name}"`, opts.redact)
+          if (!(error instanceof McpSessionRefused)) throw error
+          return await sendAgain(tool.name, error, args, execution, opts.toolCallTimeoutMs)
         }
-        if (result.isError !== true) {
-          const failure = outputCheck === undefined ? undefined : outputCheck.check(result.structuredContent)
-          if (failure !== undefined) throw invalidResult(failure)
-          return result
-        }
-        if (opts.redact === undefined) return result
-        return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
       },
     }) })
   }
@@ -236,7 +292,41 @@ export async function syncTools(
     ctx.logger.error(`mcp-client(${opts.serverName}): tool registration failed, no tools registered: ${String(error)}`)
     throw new McpToolRegistrationError('MCP tool registration failed', { cause: error })
   }
+  opts.recovery?.publish(sends)
   return disposers
+}
+
+/**
+ * Send a call the server refused for its session once more, on the connection that replaces the refused one. The
+ * wait for that connection ends with the caller's cancellation or after `timeoutMs`.
+ * @param rawName - the refused call's upstream tool name.
+ * @param refused - the first attempt's rejection.
+ * @param args - the refused call's arguments, sent unchanged.
+ * @param execution - the refused call's ToolRuntime invocation.
+ * @param timeoutMs - longest wait for the replacement connection.
+ * @returns the second attempt's raw MCP result. Rejects with `refused` when no replacement connects in time or the
+ *   replacement does not list the tool; the second attempt's failures are rejected unchanged, including its own
+ *   {@link McpSessionRefused}.
+ */
+async function sendAgain(
+  rawName: string,
+  refused: McpSessionRefused,
+  args: Record<string, unknown>,
+  execution: ToolExecution,
+  timeoutMs: number,
+): Promise<unknown> {
+  // An abort listener added after the abort never runs.
+  execution.signal.throwIfAborted()
+  const ended = AbortSignal.any([execution.signal, AbortSignal.timeout(timeoutMs)])
+  const waited: PromiseWithResolvers<undefined> = Promise.withResolvers()
+  const stop = (): void => { waited.resolve(undefined) }
+  ended.addEventListener('abort', stop, { once: true })
+  const sends = await Promise.race([refused.replacement, waited.promise])
+  ended.removeEventListener('abort', stop)
+  execution.signal.throwIfAborted()
+  const send = sends?.get(rawName)
+  if (send === undefined) throw refused
+  return await send(args, execution)
 }
 
 /** A tool's compiled structured-output check, or why its advertised output schema cannot be compiled. */

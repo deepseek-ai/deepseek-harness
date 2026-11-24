@@ -32,9 +32,9 @@ import type { McpCloseResult } from './types.ts'
 import { McpGeneration } from './generation.ts'
 import { McpTemplateBinding } from './credentials.ts'
 import { MissingTemplateValue } from './templates.ts'
-import { McpToolRegistrationError, syncTools } from './tools.ts'
+import { McpSessionRefused, McpToolRegistrationError, syncTools } from './tools.ts'
 import { McpToolLoader } from './tool-loading.ts'
-import type { ToolDisposers } from './tools.ts'
+import type { McpToolSend, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
 
 /** Automatic reconnect policy for one MCP server connection. */
@@ -60,7 +60,10 @@ export const RECONNECT_DEFAULTS: Required<ReconnectConfig> = Object.freeze({
 /** Default UTF-8 byte limit for attributed server instructions. */
 export const DEFAULT_MAX_INSTRUCTION_BYTES = 32_768
 
-/** What requests in flight report when the server no longer knows the session; none of them is sent again. */
+/**
+ * What requests still awaiting an answer report when the client closes a connection whose session the server no
+ * longer knows. A request the server had refused by then reports {@link McpSessionRefused} instead.
+ */
 const SESSION_EXPIRED = 'MCP server session expired; this call returned no result and may not have run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.'
 
 /** Fully resolved reconnect policy captured at plugin load. */
@@ -148,12 +151,22 @@ export function startConnection(
   const loader = config.toolLoading === 'on-demand'
     ? new McpToolLoader(ctx, config.serverName, config.catalogDescriptionMaxLength)
     : undefined
-  type Generation = { wire: McpGeneration; connectedAt?: number }
+  type Generation = {
+    wire: McpGeneration
+    connectedAt?: number
+    /** Present once the server refused a request for this generation's session. */
+    expired?: {
+      /** The SDK errors of the refused requests; each request rejects with its own. */
+      refused: Set<unknown>
+      replacement: McpSessionRefused['replacement']
+    }
+  }
   let current: Generation | undefined
   let bindingValue: { config?: Config; grantId?: string } | undefined
   let disposed = false
   let serverInstructions = ''
   let disposers: ToolDisposers = new Map()
+  let sends: ReadonlyMap<string, McpToolSend> = new Map()
   let syncChain: Promise<void> = Promise.resolve()
   let settling: Promise<void> = Promise.resolve()
   let reconnectTimer: NodeJS.Timeout | undefined
@@ -200,6 +213,7 @@ export function startConnection(
       }
     }
     disposers = new Map()
+    sends = new Map()
     serverInstructions = ''
   }
 
@@ -224,6 +238,7 @@ export function startConnection(
           serverName: config.serverName,
           toolCallTimeoutMs: config.toolCallTimeoutMs,
           signal,
+          recovery: { refusal: error => refusal(record, error), publish: (next) => { sends = next } },
           ...binding.redacting ? { redact: (text: string) => binding.redact(text) } : {},
           ...loader === undefined ? {} : { loader },
         }, disposers, () => isCurrent(record))
@@ -270,6 +285,38 @@ export function startConnection(
       readiness.resolve({ error: new Error(error) })
       if (confirmed) scheduleReconnect(error, record.connectedAt)
     })
+  }
+
+  /**
+   * The outcome of the connection attempt that follows a lost connection.
+   * @returns the replacement's tool call attempts once it is connected, or undefined when the attempt fails, none
+   *   is made, or the instance is disposed first.
+   */
+  function replacement(): McpSessionRefused['replacement'] {
+    const outcome: PromiseWithResolvers<ReadonlyMap<string, McpToolSend> | undefined> = Promise.withResolvers()
+    let attempted = false
+    const settle = (connected: boolean): void => {
+      stop()
+      lifetime.signal.removeEventListener('abort', cancel)
+      outcome.resolve(connected ? sends : undefined)
+    }
+    const cancel = (): void => { settle(false) }
+    const stop = status.onChange((next) => {
+      if (next.state === 'connecting') attempted = true
+      // `reconnecting` before the attempt is its delay; after the attempt it is the attempt's failure.
+      else if (next.state !== 'reconnecting' || attempted) settle(next.state === 'connected')
+    })
+    lifetime.signal.addEventListener('abort', cancel, { once: true })
+    return outcome.promise
+  }
+
+  /**
+   * Classify the rejection of one request sent on `record`.
+   * @returns the failure to report when the server refused that request for its session; undefined otherwise.
+   */
+  function refusal(record: Generation, error: unknown): McpSessionRefused | undefined {
+    const expired = record.expired
+    return expired?.refused.has(error) === true ? new McpSessionRefused(expired.replacement) : undefined
   }
 
   function isStopped(): boolean { return disposed || closureFailure !== undefined }
@@ -340,7 +387,16 @@ export function startConnection(
       // Before startup completes, and on a connection without a session id, these statuses are ordinary answers.
       if (record.connectedAt !== undefined && client.transport?.sessionId !== undefined) {
         if (sessionRejected(error)) {
-          lost(record, 'server session expired', new McpLocalError(SESSION_EXPIRED, 'MCP_CONNECTION_CLOSED'))
+          if (!isCurrent(record)) return
+          if (record.expired === undefined) {
+            record.expired = { refused: new Set(), replacement: replacement() }
+            // The refused request rejects with `error` in a later microtask. Closing before that would reject it
+            // with the closure reason, like the requests still awaiting an answer.
+            setImmediate(() => {
+              lost(record, 'server session expired', new McpLocalError(SESSION_EXPIRED, 'MCP_CONNECTION_CLOSED'))
+            })
+          }
+          record.expired.refused.add(error)
           return
         }
         if (eventStreamRefused(error)) {
@@ -366,7 +422,10 @@ export function startConnection(
         }
       } catch (error) {
         if (error instanceof McpToolRegistrationError) lost(record, diagnostic(error, 'tool synchronization'))
-        else if (isCurrent(record)) ctx.logger.error(`${label}: tool re-sync failed: ${diagnostic(error, 'tool synchronization')}`)
+        // An expired session already has its reconnect pending.
+        else if (isCurrent(record) && record.expired === undefined) {
+          ctx.logger.error(`${label}: tool re-sync failed: ${diagnostic(error, 'tool synchronization')}`)
+        }
       }
     }
     try {
@@ -458,7 +517,8 @@ export function startConnection(
           })
         } catch (error) {
           exec.signal.throwIfAborted()
-          throw mcpRequestError(error, request.method, binding.redacting ? text => binding.redact(text) : undefined)
+          throw refusal(record, error)
+            ?? mcpRequestError(error, request.method, binding.redacting ? text => binding.redact(text) : undefined)
         }
       },
     },

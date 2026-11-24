@@ -169,6 +169,33 @@ function eventStreamRefused(status: number): SdkHttpError {
   return new SdkHttpError(SdkErrorCode.ClientHttpFailedToOpenStream, 'Failed to open SSE stream: ', { status })
 }
 
+/** A request whose POST `client`'s server rejects: the SDK reports the error to `onerror`, then rejects the request with it. */
+function rejected(client: InstanceType<typeof MockClient>, status = 404, text = 'Session not found'): () => Promise<never> {
+  return () => {
+    const error = postRejected(status, text)
+    client.onerror?.(error)
+    return Promise.reject(error)
+  }
+}
+
+/** Make the next tool call meet a POST that `client`'s server rejects. */
+function rejectNextCall(client: InstanceType<typeof MockClient>, status?: number, text?: string): void {
+  mockCallTool.mockImplementationOnce(rejected(client, status, text))
+}
+
+/** A request the server accepted and never answers; the SDK rejects an aborted request as a timeout carrying the abort reason's text. */
+function unanswered(options: unknown): Promise<never> {
+  const { signal } = options as { signal: AbortSignal }
+  return new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => { reject(new SdkError(SdkErrorCode.RequestTimeout, String(signal.reason))) })
+  })
+}
+
+const SESSION_EXPIRED_NOT_RUN = {
+  message: 'MCP server session expired; this call was not run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.',
+  info: { name: 'McpToolError', code: 'MCP_SERVER_UNAVAILABLE' },
+}
+
 const SESSION_EXPIRED = {
   message: 'MCP server session expired; this call returned no result and may not have run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.',
   info: { name: 'McpLocalError', code: 'MCP_CONNECTION_CLOSED' },
@@ -361,71 +388,218 @@ describe('reconnect supervisor', () => {
     }
   })
 
+  const quickReconnect = (): Config => httpConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 5 })
+
+  /** Connect over HTTP with a session id. */
+  async function connectWithSession(
+    config: Config,
+  ): Promise<{ cell: McpStatusCell; client: InstanceType<typeof MockClient>; handle: ReturnType<typeof startConnection> }> {
+    const cell = new McpStatusCell(() => {})
+    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), cell)
+    onTestFinished(() => handle.dispose())
+    await handle.ready
+    const client = instances[0]!
+    client.transport!.sessionId = 'session-1'
+    return { cell, client, handle }
+  }
+
+  /** Connect over HTTP with a session id; the first tool call then meets a POST the server rejects for its session. */
+  async function refuseFirstCall(
+    config: Config,
+  ): Promise<{ cell: McpStatusCell; expired: InstanceType<typeof MockClient>; dispose: () => Promise<void> }> {
+    const { cell, client, handle } = await connectWithSession(config)
+    rejectNextCall(client)
+    return { cell, expired: client, dispose: () => handle.dispose() }
+  }
+
+  function callRemote(signal: AbortSignal = testToolSignal): ReturnType<typeof executeToolFixture> {
+    return executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: { key: 'value' }, callId: nextCallId(), signal })
+  }
+
   it.each([
     [404, 'Session not found'],
     [400, 'Bad Request: No valid session ID provided'],
     [400, 'Bad Request: Server not initialized'],
-  ])('reconnects after the server rejects the session with %i "%s" and does not send the failed call again', async (status, text) => {
-    const cell = new McpStatusCell(() => {})
-    const config = httpConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 5 })
-    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), cell)
-    try {
-      await handle.ready
-      const expired = instances[0]!
-      expired.transport!.sessionId = 'session-1'
-      const reconnecting: string[] = []
-      cell.onChange((value) => { if (value.state === 'reconnecting') reconnecting.push(value.lastError) })
-      // The SDK reports a rejected POST through `onerror` before it rejects the request.
-      mockCallTool.mockImplementationOnce(() => {
-        const error = postRejected(status, text)
-        expired.onerror?.(error)
-        return Promise.reject(error)
-      })
-      mockListTools.mockResolvedValue(listing('revived'))
+  ])('reconnects after the server rejects the session with %i "%s" and sends the rejected call again', async (status, text) => {
+    const { cell, expired } = await refuseFirstCall(quickReconnect())
+    mockCallTool.mockReset().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+    rejectNextCall(expired, status, text)
+    const reconnecting: string[] = []
+    cell.onChange((value) => { if (value.state === 'reconnecting') reconnecting.push(value.lastError) })
+    mockListTools.mockResolvedValue(listing('remote', 'revived'))
 
-      const failed = await executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
-      expect(failed.error).toEqual(SESSION_EXPIRED)
+    expect(await callRemote()).toMatchObject({ isError: false, content: [{ type: 'text', text: 'ok' }] })
 
-      await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__revived')).toBeDefined() })
-      expect(reconnecting).toEqual(['server session expired'])
-      expect(cell.current()).toMatchObject({ state: 'connected', toolCount: 1 })
-      expect(mockConnect).toHaveBeenCalledTimes(2)
-      expect(mockCallTool).toHaveBeenCalledTimes(1)
-      const next = await executeToolFixture(ctx, { name: 'mcp__srv__revived', arguments: {}, callId: nextCallId(), signal: testToolSignal })
-      expect(next.isError).toBe(false)
-    } finally {
-      await handle.dispose()
-    }
+    expect(reconnecting).toEqual(['server session expired'])
+    expect(cell.current()).toMatchObject({ state: 'connected', toolCount: 2 })
+    expect(mockConnect).toHaveBeenCalledTimes(2)
+    // The same request goes to the expired connection and once to its replacement.
+    expect(mockCallTool.mock.calls.map(call => call[0])).toEqual(Array.from({ length: 2 }, () => ({ name: 'remote', arguments: { key: 'value' } })))
+    expect(mockCallTool.mock.contexts).toEqual([instances[0], instances[1]])
   })
 
-  it('reconnects once when several calls in flight meet the same expired session', async () => {
-    const config = httpConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 5 })
-    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
-    try {
-      await handle.ready
-      const expired = instances[0]!
-      expired.transport!.sessionId = 'session-1'
-      const answered: PromiseWithResolvers<void> = Promise.withResolvers()
-      mockCallTool.mockImplementation(async () => {
-        await answered.promise
-        const error = postRejected(404, 'Session not found')
-        expired.onerror?.(error)
-        throw error
-      })
-      const calls = Array.from({ length: 5 }, () => executeToolFixture(ctx, {
-        name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal,
-      }))
-      await vi.waitFor(() => { expect(mockCallTool).toHaveBeenCalledTimes(5) })
-      answered.resolve()
+  it('sends again the calls the server had rejected when the connection closed, and no call still awaiting its answer', async () => {
+    const { client: expired } = await connectWithSession(quickReconnect())
+    const answered: PromiseWithResolvers<void> = Promise.withResolvers()
+    let sent = 0
+    mockCallTool.mockImplementation(async function (this: unknown, _params, options) {
+      if (this !== expired) return { content: [{ type: 'text', text: 'ok' }] }
+      if (++sent > 2) return await unanswered(options)
+      await answered.promise
+      return await rejected(expired)()
+    })
+    const calls = Array.from({ length: 5 }, () => callRemote())
+    await vi.waitFor(() => { expect(mockCallTool).toHaveBeenCalledTimes(5) })
+    answered.resolve()
 
-      for (const result of await Promise.all(calls)) expect(result.error).toEqual(SESSION_EXPIRED)
-      await vi.waitFor(() => { expect(instances).toHaveLength(2) })
-      await sleep(30)
-      expect(instances).toHaveLength(2)
-      expect(mockConnect).toHaveBeenCalledTimes(2)
-    } finally {
-      await handle.dispose()
-    }
+    const results = await Promise.all(calls)
+    expect(results.filter(result => !result.isError)).toHaveLength(2)
+    const failures = results.filter(result => result.isError).map(result => result.error)
+    expect(failures).toEqual([SESSION_EXPIRED, SESSION_EXPIRED, SESSION_EXPIRED])
+    expect(mockCallTool.mock.contexts.slice(5)).toEqual([instances[1], instances[1]])
+
+    // An answer that arrives on the closed connection changes nothing.
+    expired.onerror?.(postRejected(404, 'Session not found'))
+    await sleep(30)
+    expect(instances).toHaveLength(2)
+    expect(mockConnect).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not send again a call in flight when another request meets the expired session', async () => {
+    const { client } = await connectWithSession(quickReconnect())
+    mockCallTool.mockImplementationOnce((_params, options) => unanswered(options))
+    const accepted = callRemote()
+    await vi.waitFor(() => { expect(mockCallTool).toHaveBeenCalledTimes(1) })
+
+    // The server accepted the call; what it rejects is the ping that follows a refused event stream.
+    mockPing.mockImplementationOnce(rejected(client))
+    client.onerror?.(eventStreamRefused(404))
+
+    expect((await accepted).error).toEqual(SESSION_EXPIRED)
+    await vi.waitFor(() => { expect(instances).toHaveLength(2) })
+    await sleep(30)
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a resource request the server rejected for its session as not run, and reconnects', async () => {
+    await ctx.plugin(McpResources)
+    const { cell, client, handle } = await connectWithSession(quickReconnect())
+    ctx.mcpResources.register('srv', handle.resources)
+    vi.spyOn(client, 'getServerCapabilities').mockReturnValue({ tools: {}, resources: {} })
+    vi.spyOn(client, 'listResources').mockImplementation(rejected(client))
+
+    const result = await executeToolFixture(ctx, {
+      name: 'list_mcp_resources', arguments: { server: 'srv' }, callId: nextCallId(), signal: testToolSignal,
+    })
+    expect(result.error).toEqual(SESSION_EXPIRED_NOT_RUN)
+    await vi.waitFor(() => { expect(instances).toHaveLength(2) })
+    await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'connected' }) })
+  })
+
+  it('reconnects without a re-sync failure report when the tool listing meets an expired session', async () => {
+    const { errors } = captureLogs(ctx)
+    const { cell } = await connectWithSession(quickReconnect())
+    mockListTools.mockImplementationOnce(rejected(instances[0]!))
+    const notify = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    notify()
+
+    await vi.waitFor(() => { expect(instances).toHaveLength(2) })
+    await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'connected' }) })
+    expect(mockListTools).toHaveBeenCalledTimes(3)
+    expect(errors.some(line => line.includes('tool re-sync failed'))).toBe(false)
+  })
+
+  it('reports the rejected call as not run when reconnect is disabled', async () => {
+    const { cell } = await refuseFirstCall(httpConfig({ enabled: false }))
+    expect((await callRemote()).error).toEqual(SESSION_EXPIRED_NOT_RUN)
+    expect(cell.current()).toEqual({ state: 'failed', reason: 'reconnect-disabled', lastError: 'server session expired' })
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the rejected call as not run when the next connection attempt fails', async () => {
+    const { cell } = await refuseFirstCall(quickReconnect())
+    mockConnect.mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
+    expect((await callRemote()).error).toEqual(SESSION_EXPIRED_NOT_RUN)
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'connected' }) })
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the rejected call as not run when the new connection does not list the tool', async () => {
+    const { cell } = await refuseFirstCall(quickReconnect())
+    mockListTools.mockResolvedValue(listing('revived'))
+    expect((await callRemote()).error).toEqual(SESSION_EXPIRED_NOT_RUN)
+    expect(cell.current()).toMatchObject({ state: 'connected', toolCount: 1 })
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the rejected call again once, also when the new session is rejected', async () => {
+    await refuseFirstCall(quickReconnect())
+    mockCallTool.mockImplementationOnce(function (this: InstanceType<typeof MockClient>) {
+      this.transport!.sessionId = 'session-2'
+      const error = postRejected(404, 'Session not found')
+      this.onerror?.(error)
+      return Promise.reject(error)
+    })
+    expect((await callRemote()).error).toEqual(SESSION_EXPIRED_NOT_RUN)
+    expect(mockCallTool.mock.contexts).toEqual([instances[0], instances[1]])
+    await vi.waitFor(() => { expect(instances).toHaveLength(3) })
+    await sleep(30)
+    expect(mockCallTool).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports another failure of the call sent again unchanged', async () => {
+    await refuseFirstCall(quickReconnect())
+    mockCallTool.mockRejectedValueOnce(new ProtocolError(-32602, 'Invalid params'))
+    expect((await callRemote()).error).toMatchObject({
+      message: 'MCP tool "remote" failed: JSON-RPC error -32602: Invalid params',
+      info: { name: 'McpToolError', code: 'MCP_REQUEST_FAILED' },
+    })
+    expect(mockCallTool).toHaveBeenCalledTimes(2)
+  })
+
+  describe('while a rejected call waits for the new connection', () => {
+    const waiting = (): Config => httpConfig({ initialDelayMs: 10_000, maxDelayMs: 10_000, maxAttempts: 5 })
+
+    it('ends the call with its cancellation when the caller cancels', async () => {
+      const { cell } = await refuseFirstCall(waiting())
+      const caller = new AbortController()
+      const cancelled = callRemote(caller.signal)
+      await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'reconnecting' }) })
+      caller.abort()
+      expect((await cancelled).error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+      expect(mockCallTool).toHaveBeenCalledTimes(1)
+    })
+
+    it('reports the call as not run when its timeout elapses first', async () => {
+      await refuseFirstCall({ ...waiting(), toolCallTimeoutMs: 20 })
+      expect((await callRemote()).error).toEqual(SESSION_EXPIRED_NOT_RUN)
+      expect(mockCallTool).toHaveBeenCalledTimes(1)
+    })
+
+    it('reports the call as not run when the client is disposed', async () => {
+      const { cell, dispose } = await refuseFirstCall(waiting())
+      const pending = callRemote()
+      await vi.waitFor(() => { expect(cell.current()).toMatchObject({ state: 'reconnecting' }) })
+      await dispose()
+      expect((await pending).error).toEqual(SESSION_EXPIRED_NOT_RUN)
+      expect(mockCallTool).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not send a rejected call again after its caller cancelled it', async () => {
+    const { expired } = await refuseFirstCall(quickReconnect())
+    const caller = new AbortController()
+    mockCallTool.mockReset().mockImplementationOnce(() => {
+      caller.abort()
+      const error = postRejected(404, 'Session not found')
+      expired.onerror?.(error)
+      return Promise.reject(error)
+    })
+    expect((await callRemote(caller.signal)).error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+    await vi.waitFor(() => { expect(instances).toHaveLength(2) })
+    await sleep(30)
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the connection when a rejected request does not mean an expired session', async () => {
@@ -445,11 +619,7 @@ describe('reconnect supervisor', () => {
       expect(cell.current()).toMatchObject({ state: 'connected' })
 
       // A server that validates requests answers a malformed one with 400.
-      mockCallTool.mockImplementationOnce(() => {
-        const error = postRejected(400, 'Bad Request: invalid JSON')
-        client.onerror?.(error)
-        return Promise.reject(error)
-      })
+      rejectNextCall(client, 400, 'Bad Request: invalid JSON')
       const failed = await executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
       expect(failed.error?.info).toEqual({ name: 'McpToolError', code: 'MCP_REQUEST_FAILED' })
 
@@ -487,11 +657,7 @@ describe('reconnect supervisor', () => {
       await sleep(30)
       expect(instances).toHaveLength(1)
 
-      mockPing.mockImplementationOnce(() => {
-        const error = postRejected(404, 'Session not found')
-        client.onerror?.(error)
-        return Promise.reject(error)
-      })
+      mockPing.mockImplementationOnce(rejected(client))
       client.onerror?.(eventStreamRefused(404))
       await vi.waitFor(() => { expect(instances).toHaveLength(2) })
       expect(mockPing).toHaveBeenCalledTimes(3)
