@@ -3,5 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/core-guidelines/backend.md
 /b-backend:
-  en: 86a5f492360c89e3
-  zh: 2c4a7c2b6b1f9b60
+  en: 9f6ad8f600bca18c
+  zh: 953c9e0930a54b3b
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state:
+  en: e99d2e16dfa34e7f
+  zh: c18dedd30726edbd
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/reason:
+  en: d53a2981b8832854
+  zh: 12a238ea0e90cf30
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/example-bad:
+  en: 551a460f1fad5f25
+  zh: 8d1a4ec29343d5d1
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/example:
+  en: 53b3a3f38d7d34a1
+  zh: 91dd563ef94c9959
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/alternative:
+  en: 55ac38e999e4ca9d
+  zh: d35524c91f44a29d
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/exception:
+  en: 198683b0bb8c85ab
+  zh: f0c2a77499422c15
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/note:
+  en: 7f393573202d4fea
+  zh: e2a0d17845f54639
+/b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/enforcement:
+  en: 16aa3658da190766
+  zh: a6e8e205720df251
