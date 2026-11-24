@@ -133,6 +133,7 @@
     "@deepseek-ai/dsh-client-web": "workspace:*",
     "@deepseek-ai/dsh-cua": "workspace:*",
     "@deepseek-ai/dsh-experimental-api-speech-to-text": "workspace:*",
+    "@deepseek-ai/dsh-read-aloud": "workspace:*",
     "@deepseek-ai/dsh-experimental-claude-code-mods": "workspace:*",
     "@deepseek-ai/dsh-experimental-client-ui-cot-translation": "workspace:*",
     "@deepseek-ai/dsh-fs": "workspace:*",

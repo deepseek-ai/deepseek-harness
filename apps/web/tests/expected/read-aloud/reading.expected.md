@@ -1,0 +1,7 @@
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Stop reading"
+- tooltip "Stop reading"
+- button "Branch into a new conversation"
+- text: {{clock}}

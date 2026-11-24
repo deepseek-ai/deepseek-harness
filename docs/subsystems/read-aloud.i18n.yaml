@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for read-aloud.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/read-aloud.md
+/read-aloud:
+  en: 5596501cb04ccb67
+  zh: c2bdeeb27cb63ce2
+/read-aloud/synthesis-providers:
+  en: 8b2edca903ac2130
+  zh: e057e0c3a3bb8f05
+/read-aloud/pacing:
+  en: df78e0531a9f4f15
+  zh: 204f535181dc8759
+/read-aloud/voices:
+  en: afb304bb87c1b2c6
+  zh: 5d41e6a8fe7f34f3
+/read-aloud/browser-and-host-ownership:
+  en: e5f65580dba6014c
+  zh: 8f1e6d610af577b7
+/read-aloud/failures:
+  en: ff5a5a66554f60ab
+  zh: 11cbb1097025952f
+/read-aloud/design-rationale:
+  en: f6fd1ca1bb517cd5
+  zh: d4d3dc9bae436333

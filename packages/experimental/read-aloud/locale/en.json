@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Read-aloud service",
+    "description": "Prepare replies for reading aloud and synthesize them one segment at a time."
+  }
+}

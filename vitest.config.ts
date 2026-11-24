@@ -382,6 +382,9 @@ export default defineConfig({
         // The speech entry also imports generated Remote definitions; voice-input.e2e.ts
         // exercises the built entry, while source tests cover mountVoiceInput.
         'packages/experimental/client-ui-voice-input/src/client/index.ts',
+        // The read-aloud entry imports generated Remote definitions as well; read-aloud.e2e.ts
+        // exercises the built entry, while source tests cover mountReadAloud.
+        'packages/experimental/client-ui-read-aloud/src/client/index.ts',
         // The permission entry binds generated Remote code; cua-permissions.e2e.ts covers
         // its built entry, while source tests exercise mountCuaPermissions and its UI.
         'packages/experimental/cua/src/client/index.ts',

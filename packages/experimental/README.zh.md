@@ -65,6 +65,11 @@ kind: "package-group"
 | [`liveshare`](liveshare/README.zh.md) | 可选 LiveShare host bundle：通过 Relay 以 `view` 或 `write` 档分享会话，派生与附件上传为独立开关 | 注入 `connection`；通过宿主 Web 资源提供查看页 |
 | [`liveshare-protocol`](liveshare-protocol/README.zh.md) | owner bundle 与 Relay 共用的线路帧与身份契约 | 库与协议，不使用 ctx key |
 | [`voice-input-bundle`](voice-input-bundle/README.zh.md) | 默认禁用的可选语音输入组合 | — |
+| [`text-to-speech`](text-to-speech/README.zh.md) | 具名语音合成 Provider | `ctx.textToSpeech` |
+| [`text-to-speech-deepseek`](text-to-speech-deepseek/README.zh.md) | DeepSeek 云端语音合成 | — |
+| [`read-aloud`](read-aloud/README.zh.md) | 为助手回复规划分段并控速合成的 Remote | `ctx.readAloud` |
+| [`client-ui-read-aloud`](client-ui-read-aloud/README.zh.md) | 消息操作栏中的朗读按钮 | — |
+| [`read-aloud-bundle`](read-aloud-bundle/README.zh.md) | 默认禁用的可选朗读组合 | — |
 | [`client-ui-stats`](client-ui-stats/README.zh.md) | Web 端按轮次与步骤展示上下文、耗时、缓存与工具成本 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
 | [`subagent-oar`](subagent-oar/README.zh.md) | 通过 OAR 执行外部编程智能体的独立任务 | `ctx.subagents` |

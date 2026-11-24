@@ -222,6 +222,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-client-ui-connectors` | no | Plugins page tab that lists, installs, and opens the official connectors |
+| `@deepseek-ai/dsh-client-ui-read-aloud` | no | Read assistant replies aloud from the message action row |
 | `@deepseek-ai/dsh-cua` | no | Shared Computer Use application objects, authorization, and logged tool execution |
 | `@deepseek-ai/dsh-cua-macos` | yes | macOS native provider for shared Computer Use application and window objects |
 | `@deepseek-ai/dsh-cua-mcp` | yes | Computer Use as an MCP stdio server: a dsh profile bundle that exposes cua_run_code to external agent harnesses |
@@ -257,11 +258,14 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-hooks-codex` | yes | Bridge plugin: run a Codex hooks.json hook config on the DeepSeek Harness interception seams |
 | `@deepseek-ai/dsh-im` | yes | Platform-neutral IM host: intake, message store, im/message waterfall, hosted sessions, send funnel and output renderers |
 | `@deepseek-ai/dsh-im-session-commands` | yes | Slash-command handling at the head of the dsh-im message waterfall |
+| `@deepseek-ai/dsh-read-aloud` | yes | Experimental paced read-aloud of assistant replies for browser clients |
 | `@deepseek-ai/dsh-sandbox-policy-git` | no | Grants a Session that works in a linked Git worktree write access to its repository's Git directory |
 | `@deepseek-ai/dsh-session-title-all-prompts-llm` | yes | All-user-messages LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-skill-badge` | no | Bundled dsh badge skill provider for DeepSeek Harness |
 | `@deepseek-ai/dsh-speech-to-text-deepseek` | yes | DeepSeek speech recognition through the /v1/tools/asr API, authenticated by the DeepSeek account or API key |
 | `@deepseek-ai/dsh-terminal-panel` | yes | Persistent Agent terminals shown in the Web sidebar, plus read-only access to the user's terminals |
+| `@deepseek-ai/dsh-text-to-speech` | yes | Experimental speech synthesis with independently registered providers |
+| `@deepseek-ai/dsh-text-to-speech-deepseek` | yes | DeepSeek speech synthesis through the /v1/tools/tts API, authenticated by the DeepSeek account or API key |
 | `@deepseek-ai/dsh-timeline` | yes | Replace Todo in long-running sessions with task trees, a live progress bar, and timed reports |
 | `@deepseek-ai/dsh-tool-ralph` | yes | Model-facing fresh-agent Ralph loop over the workflow and subagent seams |
 | `@deepseek-ai/dsh-tool-session-query` | yes | Workspace-authorized model-facing session history search, trace, and event read tools |

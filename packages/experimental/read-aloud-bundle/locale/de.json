@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Vorlesen",
+    "description": "Liest Antworten des Assistenten mit der Cloud-Sprachsynthese von DeepSeek über ein DeepSeek-Konto oder einen API Key vor. Die Synthese wird pro Zeichen abgerechnet.",
+    "detail": "docs/DETAIL.md"
+  }
+}

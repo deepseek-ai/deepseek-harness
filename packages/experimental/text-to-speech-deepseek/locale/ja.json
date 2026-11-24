@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "DeepSeek クラウド合成",
+    "description": "DeepSeek アカウントへのサインインまたは DeepSeek API Key で、DeepSeek クラウドサービスにより音声を合成します。"
+  }
+}

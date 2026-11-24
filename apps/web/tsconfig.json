@@ -66,6 +66,7 @@
     "tests/server-restart.e2e.ts",
     "tests/voice-input.e2e.ts",
     "tests/voice-input-cloud.e2e.ts",
+    "tests/read-aloud.e2e.ts",
     "tests/cot-translation.e2e.ts",
     "tests/cot-translation-paid.e2e.ts",
     "tests/forge-panel.e2e.ts",

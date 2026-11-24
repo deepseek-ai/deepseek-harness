@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-23-read-aloud-segment-pacing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-23-read-aloud-segment-pacing.md
+/agent-note-read-aloud-paces-synthesis-by-segments-in-the-client:
+  en: d7248346097b8687
+  zh: e78e4cda5148ecd8
+/agent-note-read-aloud-paces-synthesis-by-segments-in-the-client/problem:
+  en: 66441ad7621740ea
+  zh: 50318ac12b2fe93a
+/agent-note-read-aloud-paces-synthesis-by-segments-in-the-client/decision:
+  en: f4237fec433b6322
+  zh: bc13bc38f5e7658b
+/agent-note-read-aloud-paces-synthesis-by-segments-in-the-client/alternatives-considered:
+  en: a091e9ff766ad63d
+  zh: fca14b5fc7ed1a1b
+/agent-note-read-aloud-paces-synthesis-by-segments-in-the-client/consequences:
+  en: 814370a809d31e37
+  zh: 36f9e51cde179b00
