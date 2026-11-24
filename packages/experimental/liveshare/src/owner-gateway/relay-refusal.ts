@@ -23,23 +23,3 @@ export function relayRefusal(status: number | undefined): string | undefined {
   }
   return undefined
 }
-
-/** The one form every permanent refusal reaches a Host as; nothing else composes it. */
-const RELAY_REFUSAL_MESSAGE = /^relay refused registration status=(\d+)$/u
-
-/**
- * Read one reported registration failure as the Relay status that decided it.
- *
- * The gateway reports a permanent refusal exactly as `relayRefusal` composes it, and every other
- * failure it reports — a status it did not refuse with, a dropped socket, a timeout — is worth
- * another attempt. A Host reading the message can therefore tell the owner to act on this address
- * instead of promising a retry that reaches the same answer, and can say which status decided it.
- * @param message - Failure the gateway reported for one registration.
- * @returns The refusing status, or undefined when the failure is worth retrying.
- */
-export function relayRefusalStatus(message: string): number | undefined {
-  const match = RELAY_REFUSAL_MESSAGE.exec(message)
-  if (match === null) return undefined
-  const status = Number(match[1])
-  return RELAY_REFUSAL_STATUSES.includes(status) ? status : undefined
-}

@@ -876,13 +876,9 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
     },
 
     /**
-     * Order: owner-state gate -> read the session id -> resolve the credential and identity row -> register one throwaway
-     * share -> remove it after settlement.
-     *
-     * The permission step runs after authorization, so a host that holds no credential for the
-     * effective address reports the authorization it still owes instead of asking the Relay to refuse
-     * it; the throwaway registration carries the same credential, identity row, and management token a
-     * real share would, so the Relay decides it the same way.
+     * Check the stored registration for this Session and Relay, or probe a new registration if
+     * none is held. The Relay compares an existing share's token digest with its stored digest.
+     * A successful check does not reserve a new registration or make duplicate creation idempotent.
      */
     async testPublish(request) {
       assertOwnerStateFree()
@@ -903,14 +899,16 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
           error: `${relay}: no verified owner credential is stored for this address`,
         }
       }
+      const published = [...ownerShares.values()]
+        .find(candidate => candidate.relay === relay && primarySessionIdOf(candidate) === request.sessionId)
       const share = tunnel.shareSpec({
-        // The probe assigns the throwaway id it waits on; every other field is the real one.
+        // The check reads the session, access mode, gateway token, and credential; the id is unused.
         shareId: '',
         sessionIds: [request.sessionId],
         sessionTitle: request.sessionId,
         accessMode: 'open',
         relay,
-        gatewayToken: base64Url(randomBytes(32)),
+        gatewayToken: published?.gatewayToken ?? base64Url(randomBytes(32)),
         allowedSubjectIds: [],
         allowsFork: false,
         sessionMode: 'view',

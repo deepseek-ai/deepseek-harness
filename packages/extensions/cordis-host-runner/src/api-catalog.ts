@@ -2625,8 +2625,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'testPublish\') testPublish(request: TestPublishRequest): Promise<RelayPublishView>',
-        description: 'Register one throwaway share to check whether this host may publish.',
-        parameters: [{ name: 'request', description: 'Session the throwaway registration names.' }],
+        description: 'Ask the Liveshare server whether this host may publish one Session\'s share.',
+        parameters: [{ name: 'request', description: 'Session the check names.' }],
         returns: 'The Liveshare server\'s decision about this host\'s credential.',
       },
     ],

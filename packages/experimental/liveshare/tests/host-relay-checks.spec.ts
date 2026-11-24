@@ -2,10 +2,11 @@
  * The two Relay checks as the owner host answers them.
  *
  * Connectivity is asked without a credential, so a Relay that refuses an anonymous request is still
- * connected; the permission check registers a throwaway share with this host's own credential, so a
+ * connected; the permission check asks the registration check with this host's own credential, so a
  * refusal there is an authorization failure the owner has to act on.
  */
 
+import { createHash } from 'node:crypto'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -22,7 +23,18 @@ interface OwnerRoutes {
   readonly host: Context
 }
 
-async function ownerHost(configured: string | undefined, file: string): Promise<OwnerRoutes> {
+/**
+ * Start one owner host over a state file.
+ * @param configured - Relay address saved beside the shares, or undefined to leave the file as written.
+ * @param file - Owner state file the host loads.
+ * @param shares - Restored shares, which only a call that also saves an address can write.
+ * @returns The Remote routes the host registered and its context.
+ */
+async function ownerHost(
+  configured: string | undefined,
+  file: string,
+  shares: readonly Record<string, unknown>[] = [],
+): Promise<OwnerRoutes> {
   const routes = new Map<string, (request: Request) => Promise<Response>>()
   const host = Object.assign(new Context(), {
     connection: {
@@ -37,26 +49,72 @@ async function ownerHost(configured: string | undefined, file: string): Promise<
   // Always anchor this host at the temporary state file: the default owner-state path belongs to the
   // developer's installation and may name an address, which would make this fixture depend on it.
   const config: Config = {
-    ownerStateFile: configured === undefined ? file : writeOwnerState(file, configured),
+    ownerStateFile: configured === undefined ? file : writeOwnerState(file, configured, shares),
   }
   const dispose = await apply(host, config)
   disposers.push(dispose, () => host.fiber.dispose())
   return { routes, host }
 }
 
-/** One Relay stand-in that answers every request, and every gateway handshake, with one status. */
-async function relayAnswering(status: number): Promise<{ url: string; close: () => Promise<void> }> {
-  const server: Server = createServer((_request, response) => {
-    response.writeHead(status)
-    response.end('answered')
+/** The path the permission check asks. */
+const REGISTRATION_CHECK_PATH = '/__liveshare/owner-registration-check'
+
+/** One request the Relay stand-in received. */
+interface RelayRequest {
+  readonly path: string
+  readonly method: string
+  readonly headers: Readonly<Record<string, string | string[] | undefined>>
+  readonly body: string
+}
+
+/** A Relay stand-in's answer to one request. */
+interface RelayAnswer {
+  readonly status: number
+  readonly body: unknown
+}
+
+/** One Relay stand-in and the requests it received. */
+interface RelayStandIn {
+  readonly url: string
+  readonly requests: RelayRequest[]
+  readonly close: () => Promise<void>
+}
+
+/**
+ * One Relay stand-in that answers each request with one function's answer.
+ * @param answer - Status and JSON body to answer every request with, or a derived answer.
+ * @returns The stand-in's address, the requests it received, and its close operation.
+ */
+async function relayAnswering(answer: (request: RelayRequest) => RelayAnswer | Promise<RelayAnswer>): Promise<RelayStandIn> {
+  const requests: RelayRequest[] = []
+  const server: Server = createServer((request, response) => {
+    const chunks: Buffer[] = []
+    request.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+    request.on('end', () => {
+      const received: RelayRequest = {
+        path: request.url ?? '',
+        method: request.method ?? '',
+        headers: request.headers,
+        body: Buffer.concat(chunks).toString(),
+      }
+      requests.push(received)
+      void Promise.resolve(answer(received)).then((answered) => {
+        response.writeHead(answered.status, { 'content-type': 'application/json' })
+        response.end(JSON.stringify(answered.body))
+      })
+    })
   })
   await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
   const { port } = server.address() as AddressInfo
   return {
     url: `http://127.0.0.1:${String(port)}`,
+    requests,
     close: () => new Promise<void>((resolve) => { server.close(() => { resolve() }) }),
   }
 }
+
+/** A Relay that answers every request with one status and no body content worth reading. */
+const relayStatus = (status: number, body: unknown = '') => async (): Promise<RelayAnswer> => ({ status, body })
 
 interface RelayCheckBody {
   readonly ok: boolean
@@ -94,7 +152,7 @@ afterEach(async () => {
 
 describe('liveshare owner Relay checks', () => {
   it('treats a Relay that answers 401 as connected', async () => {
-    const relay = await relayAnswering(401)
+    const relay = await relayAnswering(relayStatus(401))
     closers.push(relay.close)
     const { host } = await ownerHost(relay.url, ownerStateFile())
 
@@ -128,8 +186,61 @@ describe('liveshare owner Relay checks', () => {
     }
   })
 
+  it('asks the registration check with the share token digest and reports its verdict', async () => {
+    const relay = await relayAnswering(relayStatus(200, { ok: true }))
+    closers.push(relay.close)
+    const file = ownerStateFile()
+    writeOwnerCredential(file, relay.url)
+    const { host } = await ownerHost(relay.url, file)
+
+    await expect(testPublish(host)).resolves.toEqual({ ok: true, blocking: false })
+    const asked = relay.requests.filter(request => request.path === REGISTRATION_CHECK_PATH)
+    expect(asked).toHaveLength(1)
+    expect(asked[0]?.method).toBe('POST')
+    expect(asked[0]?.headers['x-liveshare-owner-credential']).toEqual(expect.any(String))
+    const body = JSON.parse(asked[0]?.body ?? '{}') as Record<string, unknown>
+    expect(body).toMatchObject({ sessionId: 'session-1', accessMode: 'open' })
+    // The digest is standard base64 sha256 of the gateway token this publish would present.
+    expect(body.gatewayTokenDigest).toMatch(/^[A-Za-z0-9+/]{43}=$/u)
+  })
+
+  it('asks the check with the token of the share that already serves the Session', async () => {
+    const relay = await relayAnswering(relayStatus(200, { ok: true }))
+    closers.push(relay.close)
+    const file = ownerStateFile()
+    writeOwnerCredential(file, relay.url)
+    // A Session this host already shares at this address carries one gateway token there; the check
+    // presents that token so the Relay compares it against the share it holds instead of refusing a
+    // fresh one as a mismatch.
+    const { host } = await ownerHost(relay.url, file, [{
+      shareId: 'share-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
+      gatewayToken: 'published-gateway-token', allowedSubjectIds: [], createdAt: '2026-01-01T00:00:00Z',
+    }])
+
+    await expect(testPublish(host)).resolves.toEqual({ ok: true, blocking: false })
+    const asked = relay.requests.filter(request => request.path === REGISTRATION_CHECK_PATH)
+    const body = JSON.parse(asked[0]?.body ?? '{}') as Record<string, unknown>
+    expect(body.gatewayTokenDigest)
+      .toBe(createHash('sha256').update('published-gateway-token').digest('base64'))
+  })
+
+  it('treats a 200 answer with no verdict as a transient check failure', async () => {
+    const relay = await relayAnswering(relayStatus(200, {}))
+    closers.push(relay.close)
+    const file = ownerStateFile()
+    writeOwnerCredential(file, relay.url)
+    const { host } = await ownerHost(relay.url, file)
+
+    // An answer this build cannot read decides nothing, so it must not block creating the share.
+    await expect(testPublish(host)).resolves.toEqual({
+      ok: false,
+      blocking: false,
+      error: `${relay.url}: unrecognized registration-check response`,
+    })
+  })
+
   it('reports a refused registration as a blocking permission failure about the credential', async () => {
-    const relay = await relayAnswering(401)
+    const relay = await relayAnswering(relayStatus(200, { ok: false, code: 'owner credential invalid' }))
     closers.push(relay.close)
     const file = ownerStateFile()
     writeOwnerCredential(file, relay.url)
@@ -139,10 +250,56 @@ describe('liveshare owner Relay checks', () => {
     expect(answer.ok).toBe(false)
     expect(answer.blocking).toBe(true)
     // A refusal is the Relay's decision about this host's credential, so the Host names it as an
-    // authorization problem and keeps the Relay's own status beside it.
+    // authorization problem and keeps the Relay's own code beside it.
     expect(answer.error).toContain('owner credential')
-    expect(answer.error).toContain('relay refused registration status=401')
+    expect(answer.error).toContain('code=owner credential invalid')
     expect(answer.error?.startsWith(`${relay.url}: `)).toBe(true)
+  })
+
+  it('names a gateway mismatch as the share token rather than the credential', async () => {
+    const relay = await relayAnswering(relayStatus(200, { ok: false, code: 'gateway authentication required' }))
+    closers.push(relay.close)
+    const file = ownerStateFile()
+    writeOwnerCredential(file, relay.url)
+    const { host } = await ownerHost(relay.url, file)
+
+    const answer = await testPublish(host)
+    expect(answer).toMatchObject({ ok: false, blocking: true })
+    expect(answer.error).toContain('registration token does not match the one the Relay holds')
+    expect(answer.error).not.toContain('did not accept this host\'s owner credential')
+  })
+
+  it('keeps the registration check at the saved address and reports a redirect as a warning', async () => {
+    const relay = 'https://relay.example.test'
+    const file = ownerStateFile()
+    writeOwnerCredential(file, relay)
+    const { host } = await ownerHost(relay, file)
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 307 }))
+    vi.stubGlobal('fetch', fetch)
+    try {
+      await expect(testPublish(host)).resolves.toEqual({
+        ok: false, blocking: false, error: `${relay}: relay answered registration-check status=307`,
+      })
+      expect(fetch).toHaveBeenCalledWith(new URL(REGISTRATION_CHECK_PATH, relay), expect.objectContaining({ redirect: 'manual' }))
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('keeps an unavailable registration check transient', async () => {
+    const relay = await relayAnswering(relayStatus(503, { error: 'state-store-unavailable' }))
+    closers.push(relay.close)
+    const file = ownerStateFile()
+    writeOwnerCredential(file, relay.url)
+    const { host } = await ownerHost(relay.url, file)
+
+    // The Relay could not judge this publish, which decides nothing about the credential: the owner
+    // keeps the ordinary retry instead of being sent to verify again.
+    await expect(testPublish(host)).resolves.toEqual({
+      ok: false,
+      blocking: false,
+      error: `${relay.url}: relay answered registration-check status=503`,
+    })
   })
 
   it('states the missing address instead of asking any Relay', async () => {
@@ -163,7 +320,7 @@ describe('liveshare owner Relay checks', () => {
   })
 
   it('refuses the permission step when no credential is stored for the address', async () => {
-    const relay = await relayAnswering(401)
+    const relay = await relayAnswering(relayStatus(401))
     closers.push(relay.close)
     const { host } = await ownerHost(relay.url, ownerStateFile())
 

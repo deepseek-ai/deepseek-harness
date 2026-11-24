@@ -858,7 +858,7 @@ describe('Relay checks', () => {
       .rejects.toMatchObject({ code: 'liveshareShares/missing-session-id' })
   })
 
-  it('registers one throwaway share with the real credential and identity row', async () => {
+  it('asks the publish check with the real credential and identity row', async () => {
     const h = harness()
     h.storedCredential.mockReturnValue({ relay: RELAY, credential: 'owner-credential' })
     h.tunnel.probeRelayPublish.mockResolvedValue({ ok: true, blocking: false })
@@ -868,6 +868,38 @@ describe('Relay checks', () => {
       allowedSubjectIds: [], allowsFork: false, sessionMode: 'view',
     }), { relay: RELAY, credential: 'owner-credential' })
     expect(h.tunnel.probeRelayPublish).toHaveBeenCalledWith(RELAY, expect.objectContaining({ shareId: '' }))
+  })
+
+  it('probes with the gateway token of the share that already serves the Session', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare({ gatewayToken: 'published-token' }))
+    await h.operations.testPublish({ sessionId: 'session-1' })
+    // The Relay compares the digest against the token of the share it holds for this Session, so a
+    // fresh token would read as a mismatch and block a publish the Relay would still admit.
+    expect(h.tunnel.shareSpec).toHaveBeenCalledWith(expect.objectContaining({ gatewayToken: 'published-token' }), undefined)
+  })
+
+  it('draws a fresh gateway token for a Session published at another address', async () => {
+    const h = harness()
+    const other = 'https://other.example.test/liveshare'
+    h.ownerShares.set('share-1', storedShare({ gatewayToken: 'other-relay-token', relay: other }))
+    // The address in force is the one the Relay is asked about, and a share at another one carries a
+    // token that Relay never saw.
+    await h.operations.testPublish({ sessionId: 'session-1' })
+    const spec = h.tunnel.shareSpec.mock.calls[0]?.[0] as { readonly relay: string; readonly gatewayToken: string }
+    expect(spec.relay).toBe(RELAY)
+    expect(spec.gatewayToken).not.toBe('other-relay-token')
+    expect(spec.gatewayToken).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+  })
+
+  it('draws a fresh gateway token for a Session that only joins another share as a later source', async () => {
+    const h = harness()
+    h.ownerShares.set('share-1', storedShare({ sessionIds: ['session-2', 'session-1'], gatewayToken: 'relay-token-share-1' }))
+    // The Relay looks a share up by its primary Session, so a share this Session merely joins is not
+    // the row the check is compared against.
+    await h.operations.testPublish({ sessionId: 'session-1' })
+    const spec = h.tunnel.shareSpec.mock.calls[0]?.[0] as { readonly gatewayToken: string }
+    expect(spec.gatewayToken).not.toBe('relay-token-share-1')
   })
 })
 
@@ -902,8 +934,7 @@ describe('a state another live host owns', () => {
       () => h.operations.setCapabilities({ shareId: 'share-1', viewerPlugins: [], viewerPluginAccess: 'none' }),
       () => h.operations.setRelay({ relayUrl: null }),
       // Relay probes change state as well: testRelay persists owed removals from this host's stale
-      // maps, testPublish registers a throwaway share on the holder's Relay, and audit presents a
-      // management token.
+      // maps, testPublish asks the holder's Relay, and audit presents a management token.
       () => h.operations.testRelay(),
       () => h.operations.testPublish({ sessionId: 'session-1' }),
       () => h.operations.audit({ shareId: 'share-1' }),

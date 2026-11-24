@@ -267,7 +267,7 @@ export interface TestPublishRequest {
   readonly sessionId: string
 }
 
-/** Permission check of one throwaway registration. */
+/** Permission check of one publish: what the Liveshare server answers before the share is created. */
 export interface RelayPublishView {
   readonly ok: boolean
   readonly blocking: boolean
