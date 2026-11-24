@@ -2576,6 +2576,15 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async track(session: Session, url: string, signal: AbortSignal): Promise<void>
 
 /**
+ * Read a web URL as a change request, without binding it.
+ * @param url - web URL, which may name one page of a change request.
+ * @param signal - request cancellation.
+ * @returns the provider's canonical URL of the change request, which its Session binding and changes view use,
+ * or null when no registered provider serves the URL.
+ */
+@Remote async recognize(url: string, signal: AbortSignal): Promise<string | null>
+
+/**
  * Hide a visible binding of a Session; other URLs leave the Session unchanged.
  * @param session - Session that owns the binding.
  * @param url - web URL of the change request.

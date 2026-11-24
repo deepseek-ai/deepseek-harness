@@ -41,6 +41,11 @@ const DRAFT = 'https://github.com/octo/demo/pull/9'
 const FOLLOW_UP = 'Summarize the failed check'
 /** Reply to {@link FOLLOW_UP}, a model call appended after the borrowed scenario's single one. */
 const FOLLOW_UP_REPLY = 'RESTORED'
+/**
+ * Reply that replaces the borrowed scenario's only model call with links: PR 7 written as its URL, and the files page
+ * of PR 9 under author-written text.
+ */
+const LINK_REPLY = `Merged ${PULL}. The draft's [changed files](${DRAFT}/files) still need a look.`
 const run = promisify(execFile)
 
 /**
@@ -572,7 +577,7 @@ process.exit(1)
  * the GitLab provider runs {@link GLAB} instead of the machine's GitLab CLI.
  * @returns the scaffold, page, and checkout.
  */
-async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' | 'ptc-reference' = 'normal',
+async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' | 'ptc-reference' | 'links' = 'normal',
   options: {
     desktop?: 'darwin' | 'win32'
     branch?: string
@@ -614,6 +619,7 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   const override = join(root, 'replay.override.json')
   // The borrowed scenario records one model call, so index 1 appends the reply to the follow-up.
   if (scenario === 'follow-up') await writeFile(override, JSON.stringify({ patches: [{ at: 1, entry: { kind: 'chunks', chunks: textReply(FOLLOW_UP_REPLY) } }] }))
+  if (scenario === 'links') await writeFile(override, JSON.stringify({ patches: [{ at: 0, entry: { kind: 'chunks', chunks: textReply(LINK_REPLY) } }] }))
   const reference = scenario === 'reference' || scenario === 'ptc-reference'
   if (reference) {
     const command = `PATH=${JSON.stringify(`.fixture-bin:${process.env.PATH ?? ''}`)} gh pr view 7 --repo octo/demo --json number,title 2>&1 | head -200`
@@ -1077,6 +1083,42 @@ async function expectNumberedReference({ scaffold, page, project, tripwire }: Pa
   expect(tripwire.pageErrors).toEqual([])
   expect(tripwire.warnings).toEqual([])
 }
+
+it.skipIf(MODE === 'record')('offers Open in code review on a change request link, binds it, and opens its changes in the sidebar', async () => {
+  const { scaffold, page, tripwire } = await launchPanel('web-e2e-forge-link-menu', 'links')
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  const bindings = async (): Promise<unknown[]> => {
+    await scaffold.ctx.sessionPersistence.flush()
+    return (await readPersistedEvents(scaffold, sessionId)).flatMap((event) => {
+      const record = pluginRecordOf(event)
+      return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
+    })
+  }
+  const reply = page.locator('[data-chat-flow-kind="assistant-step"]').last()
+  // The settled reply draws the pull request URL as its reference.
+  const pull = reply.getByRole('link', { name: 'octo/demo#7', exact: true })
+  await pull.waitFor({ timeout: 20_000 })
+  expect(await pull.getAttribute('href')).toBe(PULL)
+  expect(await bindings()).toEqual([])
+
+  const review = page.getByRole('menuitem', { name: '在代码评审中打开', exact: true })
+  await pull.click({ button: 'right' })
+  await review.waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'link-menu.expected.md'), await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), MODE)
+  await review.click()
+  const view = page.locator('[data-forge-changes="change"]')
+  await view.getByText('Add the pull request panel', { exact: true }).waitFor({ timeout: 20_000 })
+  await expect.poll(bindings).toEqual([{ action: 'track', url: PULL }])
+
+  // A page of another change request under author-written text opens that change request's changes.
+  await reply.getByRole('link', { name: 'changed files', exact: true }).click({ button: 'right' })
+  await review.click()
+  await view.filter({ hasText: 'Add the merge button' }).waitFor({ timeout: 20_000 })
+  await expect.poll(bindings).toEqual([{ action: 'track', url: PULL }, { action: 'track', url: DRAFT }])
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
 
 it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omits its URL', async () => {
   const launch = await launchPanel('web-e2e-forge-numbered-reference', 'reference')

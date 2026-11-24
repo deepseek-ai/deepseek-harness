@@ -530,4 +530,3 @@ describe('IM bundle command routing', () => {
     expect(replies).toHaveLength(1)
   })
 })
-

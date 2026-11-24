@@ -26,6 +26,7 @@ import { AnnotationView } from './annotations.ts'
 import { ForgeChangesService } from './changes-service.ts'
 import type {} from './slots.ts'
 import { ReviewQueue } from './review-queue.ts'
+import { registerLinkMenu } from './link-menu.ts'
 import { registerReviewPage } from './review-page/review-mount.ts'
 import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
@@ -544,6 +545,7 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
     name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
   }, SessionHoverForge))
+  registerLinkMenu(ctx, { t, openChanges: (sessionId, url) => { openChanges(sessionId, { kind: 'change', url }) } })
   registerReviewPage(ctx, {
     notices, settled, nameOf, openLink, copyText, copyPath, locale, quoteReview: addReviewToInput, quoteThread: addThreadToInput,
     hostSettings: FORGE_BUNDLE,
