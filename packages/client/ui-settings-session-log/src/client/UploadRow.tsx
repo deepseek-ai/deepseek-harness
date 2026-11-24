@@ -23,7 +23,7 @@ type Face = InjectFace<UploadInjected> & PropsLocale<'settings.sessionLog'>
  * @param props - settings hooks, writer and localized copy.
  * @returns the bottom preference row.
  */
-export function UploadRow({ useUpload, useMutation, setEnabled, t }: PropsRuntime<'settings.general.item'> & Face) {
+export function UploadRow({ useUpload, useMutation, setEnabled, t }: PropsRuntime<'settings.general.group.data.item'> & Face) {
   const upload = useUpload(value => value)
   const busy = useMutation(value => value.busy)
   return <div className={css.row}>

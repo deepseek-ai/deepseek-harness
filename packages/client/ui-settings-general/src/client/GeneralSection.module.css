@@ -1,14 +1,61 @@
-/* Feature-contributed rows own their chrome and separators; the section
- * strips the trailing separator wherever the column ends. */
-
 .section {
   display: flex;
   flex-direction: column;
+  gap: 28px;
   width: 100%;
+  min-width: 0;
+  padding: 8px 0;
+  color: var(--dsw-alias-label-primary);
 }
 
 /* css-selector-gate: General clears the contributed element's own border; only sibling output in this outlet decides which root is last. */
 .section > [data-slot='settings.general.item'] > :where([data-slot-item]:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) > :last-child,
 .section > [data-slot='settings.general.item'] > [data-slot-error]:where(:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) {
+  border-bottom: none;
+}
+
+/* The page title keeps a 24px gap before the first visible group. */
+.title {
+  margin: 0 0 -4px;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.card {
+  min-width: 0;
+  padding: 0 16px;
+  border: 0.5px solid var(--dsw-alias-settings-card-stroke);
+  border-radius: var(--dsw-radius-xl);
+  background: var(--dsw-alias-settings-card-fill);
+}
+
+.groupTitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Empty outlets remain mounted so late registrations can reveal the group. */
+.group:has(.card > [data-slot='settings.general.group'] > [data-slot-item]:empty),
+.group:has(.card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot]:only-child:empty) {
+  display: none;
+}
+
+/* Group item outlets flatten their rows; null entries leave no separator. */
+.card > [data-slot='settings.general.group'] > [data-slot] > * {
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.card > [data-slot='settings.general.group'] > [data-slot] > :last-child {
   border-bottom: none;
 }

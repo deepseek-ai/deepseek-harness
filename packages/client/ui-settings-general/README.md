@@ -43,13 +43,61 @@ In Desktop, the account-row update control shows availability, progress, verific
 
 Settings visibility and section selection live in the shell owner store. The shell supplies the effective Settings binding to the contributed launcher for menu keycaps and `aria-keyshortcuts`; the fallback button uses the same binding for hover and keyboard-focus hints and `aria-keyshortcuts`. The Settings command (Desktop: `Mod+,`; Windows/macOS Web: `Mod+Alt+,`) toggles the dialog when Settings is in front or no modal is open; the sidebar control opens the same dialog. The command cannot open or close Settings while the shortcut reference or another modal is in front. Held-key repeats do nothing. The account menu opens General settings; closing the dialog clears the section selection. Onboarding can open a specified section. Initial focus lands on the selected section in the navigation, or on the title when no sections are available, without drawing a focus outline. The section buttons precede header actions and Close in the Tab order. Tab and directional navigation retain their visible focus indicators. `Mod+/` can open the shortcut reference above Settings; `Escape` closes the top dialog and restores focus to its invoking control. Return focus omits outlines after shortcut, Escape, or pointer dismissal.
 
+<a id="the-general-section"></a>
 ### The General section
 
 The current release version appears at the bottom of General Settings in Web and Desktop, using the build’s `DSH_CLIENT_VERSION` metadata and the active language. Partial builds without version metadata omit the row.
 
 The Coding Tools switch controls the shared `ui-settings.enabled` preference described by [ui-settings](../ui-settings/README.md#use-this-package). It is available in both Web and desktop, follows accepted changes immediately, and disables duplicate input while a write settles. A failed write displays localized retry guidance. On Desktop, a change made with this switch reports `code_work_view_toggle` with the new value through the optional [product analytics](../product-analytics/README.md) service, timestamped at the click. Only a write that changes a known value and leaves the preference at the requested value reports; requesting the current value, an unknown previous value, a failed write, and preference updates made elsewhere report nothing.
 
-The General section holds the built-in Coding Tools and Current version rows alongside rows registered into `settings.general.item` by feature packages. Each registrant owns its row copy and behavior. The Appearance row, for example, lives in ui-theme.
+The General page renders the `settings.general.group` list with shared headings, theme-aware cards, and spacing. Group registrations supply a unique `id`, localized `label` (a string or locale-following function), and ascending `order`. Empty group outlets and empty child item outlets hide their cards without preventing later contributions; conditional rows leave no empty separators. Each feature owns its row copy, controls, and settings writes.
+
+Register into an existing group’s item slot to choose its location:
+
+| Group ID | Order | Item slot |
+|---|---|---|
+| `general` | 10 | `settings.general.item` |
+| `display` | 20 | `settings.general.group.display.item` |
+| `interaction` | 30 | `settings.general.group.interaction.item` |
+| `notifications` | 40 | `settings.general.group.notifications.item` |
+| `data` | 50 | `settings.general.group.data.item` |
+| `updates` | 60 | `settings.general.group.updates.item` |
+
+The default Preferences group retains language, appearance, fonts, and additive `settings.general.item` contributions. Chat experience contains Default session permission, the three work-details preferences (Work details, When to collapse work details, and Replies after collapse), Personalized recommendations, Show coding view, and performance/usage, in that order; Interaction contains busy-session sending, link opening, and shortcuts. Data management contains Session log preferences. Notifications stays hidden until a plugin supplies rows. Item `id` and `order` apply within the chosen slot; no `groupId` option is needed.
+
+A custom group declaration-merges its exact item key into `SlotMap`, registers its own component, and declares that item slot at runtime in `children`. The component renders the child outlet through `PropsRenderSlots`; the page supplies the surrounding header and card. Given `ctx` in your plugin’s `apply`, a namespace-bound `t`, and your module-level `AcmeRow` component, register:
+
+```tsx ignore-check
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SettingsGeneralItemOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'settings.general.group.acme.item': {
+      kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps
+    }
+  }
+}
+
+type AcmeItemSlot = 'settings.general.group.acme.item'
+
+function AcmeGroup({ renderSlot }:
+  PropsRuntime<'settings.general.group'> & PropsRenderSlots<AcmeItemSlot>) {
+  return renderSlot('settings.general.group.acme.item', {})
+}
+
+ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+  name: 'settings.general.group', id: 'acme', order: 45,
+  label: () => t('settings.groupTitle'),
+  children: { 'settings.general.group.acme.item': { kind: 'list', scope: 'root' } },
+}, AcmeGroup))
+
+ctx.slots.inject('settings.general.group.acme.item', () => ctx.slots.register({
+  name: 'settings.general.group.acme.item', id: 'acme-preference', order: 0,
+}, AcmeRow))
+```
+
+`ctx.slots.inject` waits for each declaration, removes its contributions when that declaration collapses, and restores them after redeclaration. Unloading a group removes its child declaration and rows together; unloading a contributing plugin removes its own registrations.
 
 ### Opening the configuration file
 
@@ -78,6 +126,8 @@ The shell owns the chrome and the projections; it contributes the Coding Tools a
 ### Ledger projections
 
 The navigation is a projection of the `settings.section` ledger; nav labels may be locale-following thunks, resolved through `resolveSlotLabel` and re-rendered on the section ledger bump or the locale revision (an optional `ctx.get('locale')` read; no hard locale dependency). Each row renders its matching `settings.section.icon` contribution; without one, known built-in sections use their own glyph and other ids use the settings gear. The onboarding ledger projects in ascending order; the active registrant receives its id, `complete()`, and an `openSection(id)` callback, and completing or skipping transfers ownership to the next entry.
+
+The General page projects the winning `settings.general.group` entries in registration `order`, resolving their labels on group-ledger or locale changes. Group components own their child outlets; the page does not classify item IDs or import feature controls.
 
 ### Connection recovery
 

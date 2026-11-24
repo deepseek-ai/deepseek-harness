@@ -193,10 +193,10 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
 
   ctx.effect(() => () => { submissionPolicy.dispose() })
 
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item',
+  ctx.slots.inject('settings.general.group.interaction.item', () => ctx.slots.register({
+    name: 'settings.general.group.interaction.item',
     id: 'composer-enter',
-    order: 20,
+    order: 0,
     locale: NS,
     inject: (): EnterBehaviorRowInjected => ({
       hooks: { busyEnter: submissionPolicy.busyEnter },

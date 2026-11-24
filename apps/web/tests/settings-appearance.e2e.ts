@@ -172,7 +172,8 @@ it('stacks font fields at narrow widths while keeping font-size controls on the 
         for (const name of ['增大字号', '增大代码字号', '增大终端字号']) {
           const geometry = await rowGeometry(dialog.getByRole('button', { name, exact: true }).locator('../../..'))
           expect(geometry.afterText, `${platform} ${width}px ${name} placement`).toBeGreaterThanOrEqual(0)
-          expect(Math.abs(geometry.rightGap), `${platform} ${width}px ${name} alignment`).toBeLessThan(1)
+          // A narrow panel can reserve a scrollbar gutter beside the row.
+          expect(Math.abs(geometry.rightGap), `${platform} ${width}px ${name} alignment`).toBeLessThan(8)
           expect(Math.abs(geometry.centerDifference), `${platform} ${width}px ${name} centering`).toBeLessThan(1)
         }
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
@@ -220,7 +221,9 @@ it('uses 16px text for coarse-pointer font fields and preserves compact fine-poi
 })
 
 it('shares settings card materials and control sizes in both palettes', async () => {
-  const scaffold = await launchWebScaffold({})
+  const scaffold = await launchWebScaffold({
+    extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
+  })
   onTestFinished(() => scaffold.close())
   await scaffold.ctx.settings.mutate('ui-settings-account', [
     { op: 'set', path: ['step'], value: 'done' },
@@ -260,6 +263,14 @@ it('shares settings card materials and control sizes in both palettes', async ()
     await dialog.getByRole('button', { name: '通用设置', exact: true }).click()
     await dialog.getByRole('button', { name: label, exact: true }).click()
     await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(palette === 'dark')
+    const selectedChoice = await appearance(dialog.getByRole('button', { name: label, exact: true }))
+    const unselectedChoice = await appearance(dialog.getByRole('button', { name: palette === 'light' ? '深色' : '浅色', exact: true }))
+    expect(selectedChoice.radius).toBe('20px')
+    expect(selectedChoice.height).toBeGreaterThanOrEqual(82)
+    expect(unselectedChoice).toMatchObject({ radius: '20px', height: selectedChoice.height, stroke: 'rgba(0, 0, 0, 0)' })
+    expect(unselectedChoice.fill).not.toBe('rgba(0, 0, 0, 0)')
+    expect(selectedChoice.fill).not.toBe(unselectedChoice.fill)
+    expect(selectedChoice.stroke).not.toBe(unselectedChoice.stroke)
     const selector = await appearance(dialog.getByRole('button', { name: '工作区内修改', exact: true }))
     expect(selector.radius).toBe('12px')
     expect((await appearance(dialog)).radius).toBe('28px')
@@ -295,7 +306,7 @@ it('shares settings card materials and control sizes in both palettes', async ()
     const save = await appearance(dialog.getByRole('button', { name: '保存', exact: true }))
     expect(save).toMatchObject({ radius: '12px', height: 36 })
     await compareOrRefreshGolden(join(EXPECTED, `${palette}.expected.md`),
-      JSON.stringify({ card: material, selector, usage, topUp, save }, null, 2), webSnapshotMode())
+      JSON.stringify({ card: material, selector, selectedChoice, unselectedChoice, usage, topUp, save }, null, 2), webSnapshotMode())
     await dialog.getByRole('button', { name: '取消', exact: true }).click()
   }
 })

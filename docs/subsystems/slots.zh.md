@@ -18,6 +18,8 @@ root 作用域的 list `sidebar.panellist.actions`、`conversation.session.heade
 
 [ui-session-panel](../../packages/client/ui-session-panel/README.zh.md#contribute-a-section) 记录会话面板的分栏、标题控件、行与开关角标扩展位置。
 
+通用设置声明 root 作用域的列表 `settings.general.group`；每个分组条目拥有其设置行子列表的声明。设置底座声明六个内置分组设置行 key，并以 `SettingsGeneralGroupItemSlot` 导出它们的联合类型；自定义分组通过声明合并把确切的 `settings.general.group.<id>.item` key 加入 `SlotMap`。默认「常规」分组拥有兼容的 `settings.general.item` 名称。[ui-settings-general](../../packages/client/ui-settings-general/README.zh.md#the-general-section) 记录分组标题、排序、共享卡片及注册示例。
+
 ## 声明与生命周期
 
 `SlotMap` 是编译期注册表。包通过声明合并写入 key、cardinality（基数）、scope、owner props、keyed props 与可选的 slot 级 inject face。运行时声明则是拥有该渲染位置的组件在 `children` 中给出的对应条目。
@@ -107,9 +109,9 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 - 错误：层自身崩溃时照常上报错误，出错处回退到同一份 `children`（含其出口），直到该处本次挂载结束，owner props 变化也不恢复。该层保持注册，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
 - 布局：两种出口都使用 `display: contents` 的 `div`（`inline: true` 时使用 `span`）。它们不产生布局盒，但仍参与子元素和兄弟元素选择器的匹配。应按属性识别出口，而非依赖嵌套深度。包裹 `children` 的层自身不得产生盒子，除非该 slot 另有说明。
 
-<a id="component-inputs"></a>
-
 [右键菜单插件](../../packages/client/ui-context-menu/README.zh.md) 通过 `provideRoot` 贡献 `useContextMenu`；每个作用域接收同一个由插件拥有的触发器工厂。提供方卸载时，注入属性与保留的处理器一并失效。其根作用域 keyed Slot `contextMenu.icon` 根据操作元数据渲染业务方提供的图标。
+
+<a id="component-inputs"></a>
 
 ## 组件输入
 

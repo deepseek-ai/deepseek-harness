@@ -43,13 +43,61 @@ kind: "package-reference"
 
 设置的可见状态和分区选择由 shell owner store 保存。外壳将设置命令的有效绑定传给入口贡献，用于菜单键帽和 `aria-keyshortcuts`；回退按钮使用相同绑定提供悬停、键盘聚焦提示和 `aria-keyshortcuts`。设置位于最前方或没有模态弹窗时，设置命令（Desktop 为 `Mod+,`，Windows/macOS Web 为 `Mod+Alt+,`）切换设置弹窗的开关；侧栏控件打开同一弹窗。快捷键速查或其他模态弹窗位于前方时，该命令不能打开或关闭设置。长按产生的重复按键不执行操作。账号菜单打开通用设置；关闭弹窗会清空分区选择。引导流程可以打开指定分区。初始焦点落在导航中选中的分区；没有可用分区时落在标题上，均不绘制焦点外轮廓线。Tab 顺序中，分区按钮先于头部操作和关闭按钮。Tab 和方向键导航保留可见焦点提示。`Mod+/` 可在设置上方打开快捷键速查；`Escape` 关闭最上层弹窗，焦点返回触发该弹窗的控件。通过快捷键、Esc 或鼠标关闭后的回焦均不绘制外轮廓线。
 
+<a id="the-general-section"></a>
 ### 「通用」分区
 
 Web 与桌面端的通用设置底部显示当前发布版本，使用构建注入的 `DSH_CLIENT_VERSION` 元数据和当前语言。缺少版本元数据的局部构建不显示该行。
 
 代码工作工具开关控制 [ui-settings](../ui-settings/README.zh.md#use-this-package) 定义的共享偏好 `ui-settings.enabled`。Web 和桌面端均提供此开关，立即跟随已接受的变更，并在写入完成前禁用重复输入。写入失败时显示本地化的重试提示。在桌面端，通过此开关做出的变更会经可选的[产品埋点](../product-analytics/README.zh.md)服务报告携带新值的 `code_work_view_toggle`，时间戳取点击时刻。只有改变已知值、且写入后偏好等于所请求值的写入才会报告；请求当前值、原值未知、写入失败以及在其他位置修改偏好均不报告。
 
-「通用」分区承载内置的代码工作工具行与当前版本行，以及功能包注册进 `settings.general.item` 的行。每个注册方拥有自己的行文案与行为。例如「外观」行位于 ui-theme。
+「通用」页面渲染 `settings.general.group` 列表，并统一提供标题、适配主题的卡片和间距。分组注册项提供唯一的 `id`、本地化的 `label`（字符串或跟随语言的函数）以及升序排列的 `order`。分组 outlet 或设置行子 outlet 为空时隐藏卡片，但不阻止后续贡献；条件渲染的空行不留下分隔线。每项功能拥有自己的设置行文案、控件和设置写入。
+
+注册到已有分组的设置行 slot 即可选择位置：
+
+| 分组 ID | 顺序 | 设置行 slot |
+|---|---|---|
+| `general` | 10 | `settings.general.item` |
+| `display` | 20 | `settings.general.group.display.item` |
+| `interaction` | 30 | `settings.general.group.interaction.item` |
+| `notifications` | 40 | `settings.general.group.notifications.item` |
+| `data` | 50 | `settings.general.group.data.item` |
+| `updates` | 60 | `settings.general.group.updates.item` |
+
+默认「常规」分组保留语言、外观、字体，以及通过 `settings.general.item` 添加的贡献。「会话偏好」依次包含会话默认权限、工作步骤的三项偏好（工作步骤展示、工作步骤收起时机和收起后显示的回复）、个性化推荐、显示代码工作视图，以及性能与用量；「交互与快捷键」包含繁忙时发送、链接打开方式和快捷键。「数据管理」包含会话日志偏好。「通知」分组在插件提供设置行前保持隐藏。设置行的 `id` 与 `order` 仅作用于所选 slot；无需 `groupId` 选项。
+
+自定义分组通过声明合并把确切的设置行 key 加入 `SlotMap`，注册自己的组件，并在 `children` 中声明该设置行 slot 的运行时类型。组件通过 `PropsRenderSlots` 渲染子 outlet；页面提供外层标题和卡片。已有插件 `apply` 中的 `ctx`、绑定命名空间的 `t` 和模块级 `AcmeRow` 组件时，可这样注册：
+
+```tsx ignore-check
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SettingsGeneralItemOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    'settings.general.group.acme.item': {
+      kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps
+    }
+  }
+}
+
+type AcmeItemSlot = 'settings.general.group.acme.item'
+
+function AcmeGroup({ renderSlot }:
+  PropsRuntime<'settings.general.group'> & PropsRenderSlots<AcmeItemSlot>) {
+  return renderSlot('settings.general.group.acme.item', {})
+}
+
+ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+  name: 'settings.general.group', id: 'acme', order: 45,
+  label: () => t('settings.groupTitle'),
+  children: { 'settings.general.group.acme.item': { kind: 'list', scope: 'root' } },
+}, AcmeGroup))
+
+ctx.slots.inject('settings.general.group.acme.item', () => ctx.slots.register({
+  name: 'settings.general.group.acme.item', id: 'acme-preference', order: 0,
+}, AcmeRow))
+```
+
+`ctx.slots.inject` 等待每次声明，在声明折叠时移除其贡献，并在重新声明后恢复。卸载分组会一起移除其子声明和设置行；卸载贡献插件会移除它自己的注册项。
 
 ### 打开配置文件
 
@@ -78,6 +126,8 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 ### 账本投影
 
 导航是 `settings.section` 账本的投影；导航 label 可以是跟随语言的 thunk，经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。每行渲染匹配的 `settings.section.icon` 贡献；没有贡献时，已知内置分区使用各自的图标，其他 id 使用设置齿轮。引导账本按升序投影；当前注册方会收到该条目的 id、`complete()` 与 `openSection(id)` 回调，完成或跳过当前步骤后，所有权转交给下一项。
+
+「通用」页面按注册的 `order` 投影 `settings.general.group` 获选条目，并在分组账本或语言变化时解析标题。分组组件拥有自己的子 outlet；页面不按设置行 ID 分类，也不导入功能控件。
 
 ### 连接恢复
 

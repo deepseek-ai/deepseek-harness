@@ -18,7 +18,7 @@ export interface DesktopChannelRowInjected {
  * @returns The General settings row.
  */
 export function DesktopChannelRow({ useChannel, select, t }:
-  PropsRuntime<'settings.general.item'> & PropsLocale<'settings'> & InjectFace<DesktopChannelRowInjected>) {
+  PropsRuntime<'settings.general.group.updates.item'> & PropsLocale<'settings'> & InjectFace<DesktopChannelRowInjected>) {
   const { state, failed, pending } = useChannel(value => value)
   const [open, setOpen] = useState(false)
   const busy = pending !== undefined || state?.changing === true

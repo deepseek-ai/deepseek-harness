@@ -8,6 +8,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { allowAllAccess, bindSnapshotSelector, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GeneralSectionComponentProps } from '../src/client/GeneralSection.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
+import {
+  GeneralGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup,
+} from '../src/client/GeneralGroup.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
 import type { TriggerContentProps } from '../src/client/chrome.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
@@ -127,41 +130,82 @@ describe('chrome content', () => {
   })
 })
 
+describe('General group bodies', () => {
+  it.each([
+    [GeneralGroup, 'settings.general.item'],
+    [DisplayGroup, 'settings.general.group.display.item'],
+    [InteractionGroup, 'settings.general.group.interaction.item'],
+    [NotificationsGroup, 'settings.general.group.notifications.item'],
+    [DataGroup, 'settings.general.group.data.item'],
+    [UpdatesGroup, 'settings.general.group.updates.item'],
+  ] as const)('renders the declared child slot for %s', (Group, slotName) => {
+    const renderSlot = vi.fn(() => 'Preference content')
+    const view = render(<Group {...kit} renderSlot={renderSlot} />)
+    expect(view.container.textContent).toBe('Preference content')
+    expect(renderSlot).toHaveBeenCalledExactlyOnceWith(slotName, {})
+  })
+})
+
 describe('GeneralSection', () => {
-  function mount() {
+  function mount(groups: readonly { id: string; label: string }[]) {
+    const source = createSnapshotStore(groups)
     const renderSlot = vi.fn(
-      ((key: string) => <div data-testid={`slot-${key}`} />) as GeneralSectionComponentProps['renderSlot'],
+      ((key: string, _owner: object, options?: { only?: string }) => <div data-testid={`slot-${key}-${options?.only}`} />) as GeneralSectionComponentProps['renderSlot'],
     )
-    const props: GeneralSectionComponentProps = { ...kit, renderSlot, close: vi.fn() }
+    const props: GeneralSectionComponentProps = {
+      ...kit, t, renderSlot, close: vi.fn(), useGroups: bindSnapshotSelector(source),
+    }
     const view = render(<GeneralSection {...props} />)
-    return { view, renderSlot }
+    return { view, renderSlot, source }
   }
 
-  it('renders the item slot as the section body', () => {
-    const { renderSlot } = mount()
-    expect(renderSlot).toHaveBeenCalledWith('settings.general.item', {})
-    expect(screen.getByTestId('slot-settings.general.item')).toBeTruthy()
+  it('renders supplied group labels and each group slot in ledger order', () => {
+    const { renderSlot } = mount([
+      { id: 'custom', label: 'Custom preferences' },
+      { id: 'display', label: 'Chat experience' },
+    ])
+    expect(screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent))
+      .toEqual(['Custom preferences', 'Chat experience'])
+    expect(renderSlot).toHaveBeenNthCalledWith(1, 'settings.general.group', {}, { only: 'custom' })
+    expect(renderSlot).toHaveBeenNthCalledWith(2, 'settings.general.group', {}, { only: 'display' })
+    expect(screen.getByTestId('slot-settings.general.group-custom')).toBeTruthy()
   })
 
-  it.each([false, true])('removes only the last element separator across items (trailing error: %s)', (trailingError) => {
-    const renderSlot: GeneralSectionComponentProps['renderSlot'] = () => (
-      <div data-slot="settings.general.item">
-        <div data-slot-error="settings.general.item" className="divider" />
-        <div data-slot-item=""><article className="divider" /><aside className="divider" /></div>
-        {trailingError && <div data-slot-error="settings.general.item" className="divider" />}
-        <div data-slot-item="">Plain text</div>
-        <div data-slot-item="" />
-      </div>
-    )
-    const { container } = render(<GeneralSection {...kit} close={vi.fn()} renderSlot={renderSlot} />)
-    const sheet = document.createElement('style')
-    // Vitest stubs CSS Modules; use the mounted class to apply the production selector.
-    sheet.textContent = '.divider { border-bottom: 2px dashed; }\n' + readFileSync(
+  it('follows group additions, localized labels, and removal through its injected source', () => {
+    const { source } = mount([{ id: 'custom', label: 'Custom preferences' }])
+    act(() => {
+      source.set([
+        { id: 'display', label: '会话偏好' },
+        { id: 'custom', label: '扩展偏好' },
+      ])
+    })
+    expect(screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent))
+      .toEqual(['会话偏好', '扩展偏好'])
+    act(() => { source.set([{ id: 'display', label: '会话偏好' }]) })
+    expect(screen.queryByText('扩展偏好')).toBeNull()
+    expect(screen.getByTestId('slot-settings.general.group-display')).toBeTruthy()
+  })
+
+  it('keeps a group accessible when its registered id contains whitespace', () => {
+    const { renderSlot } = mount([{ id: 'plugin preferences', label: 'Plugin preferences' }])
+    expect(screen.getByRole('region', { name: 'Plugin preferences' })).toBeTruthy()
+    expect(renderSlot).toHaveBeenCalledWith('settings.general.group', {}, { only: 'plugin preferences' })
+  })
+
+  it('renders the page title without group headings when the ledger is empty', () => {
+    const { renderSlot } = mount([])
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('General')
+    expect(screen.queryByRole('heading', { level: 3 })).toBeNull()
+    expect(renderSlot).not.toHaveBeenCalled()
+  })
+
+  it('declares separators for group items and clears the last one', () => {
+    const css = readFileSync(
       resolve(import.meta.dirname, '../src/client/GeneralSection.module.css'), 'utf8',
-    ).replaceAll('.section', `.${container.firstElementChild!.className}`)
-    container.append(sheet)
-    const borders = [...container.querySelectorAll('.divider')].map(row => getComputedStyle(row).borderBottomStyle)
-    expect(borders).toEqual(trailingError ? ['dashed', 'dashed', 'dashed', 'none'] : ['dashed', 'dashed', 'none'])
+    )
+    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot] > * {")
+    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot] > :last-child {")
+    expect(css).not.toContain(':global(')
   })
 })
 

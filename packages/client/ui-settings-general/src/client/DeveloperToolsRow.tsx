@@ -17,7 +17,7 @@ export interface DeveloperToolsRowInjected {
  * @returns the General Settings row.
  */
 export function DeveloperToolsRow({ useDeveloperTools, setEnabled, t }:
-  PropsRuntime<'settings.general.item'> & PropsLocale<'settings'> & InjectFace<DeveloperToolsRowInjected>) {
+  PropsRuntime<'settings.general.group.display.item'> & PropsLocale<'settings'> & InjectFace<DeveloperToolsRowInjected>) {
   const enabled = useDeveloperTools(value => value)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)

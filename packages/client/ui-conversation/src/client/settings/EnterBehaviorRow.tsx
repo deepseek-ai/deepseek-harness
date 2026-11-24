@@ -19,7 +19,7 @@ export interface EnterBehaviorRowInjected {
 
 /** Full Settings-row props. */
 export type EnterBehaviorRowProps =
-  PropsRuntime<'settings.general.item'>
+  PropsRuntime<'settings.general.group.interaction.item'>
   & PropsLocale<'conversation'>
   & InjectFace<EnterBehaviorRowInjected>
 
