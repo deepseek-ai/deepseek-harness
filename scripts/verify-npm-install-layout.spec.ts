@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveNpmPackageLock, type NpmPackageLock, type RegistryIndex } from './benchmark-npm-resolution.ts'
 import {
   assertDualDshInstallLayout,
+  assertRequiredPeerDeclared,
   assertResolutionWorkBudget,
   assertSingleExternalInstallation,
   buildDualDshRegistry,
@@ -158,6 +159,33 @@ describe('shared external package installation', () => {
 
   it('rejects an index without the external package', () => {
     expect(() => withNewerExternalRelease(new Map(), 'zod')).toThrow('registry contains no release of zod')
+  })
+
+  it('rejects a DSH package that leaves a required peer of its dependency undeclared', () => {
+    expect(() => { assertRequiredPeerDeclared(sharedZodRegistry(false), 'zod') }).toThrow(
+      'DSH package(s) depend on a package that requires zod as a peer without declaring zod:\n'
+      + '  - @deepseek-ai/dsh-first: zod-peer-host@1.0.0 requires zod@^4.0.0\n',
+    )
+  })
+
+  it('accepts a declared peer, an optional peer, and a dependency range no indexed version satisfies', () => {
+    expect(() => { assertRequiredPeerDeclared(sharedZodRegistry(true), 'zod') }).not.toThrow()
+
+    const index = new Map(sharedZodRegistry(false))
+    index.set('zod-peer-host', new Map([['1.0.0', {
+      name: 'zod-peer-host',
+      version: '1.0.0',
+      peerDependencies: { zod: '^4.0.0' },
+      peerDependenciesMeta: { zod: { optional: true } },
+    }]]))
+    expect(() => { assertRequiredPeerDeclared(index, 'zod') }).not.toThrow()
+
+    index.set('zod-peer-host', new Map([['2.0.0', {
+      name: 'zod-peer-host',
+      version: '2.0.0',
+      peerDependencies: { zod: '^4.0.0' },
+    }]]))
+    expect(() => { assertRequiredPeerDeclared(index, 'zod') }).not.toThrow()
   })
 
   it('accepts one top-level installation', () => {

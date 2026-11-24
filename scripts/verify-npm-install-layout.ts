@@ -5,7 +5,7 @@
 
 import { readFileSync } from 'node:fs'
 import { posix, resolve } from 'node:path'
-import { inc, rsort } from 'semver'
+import { inc, maxSatisfying, rsort } from 'semver'
 import {
   buildRegistryIndex,
   resolveNpmPackageLock,
@@ -266,6 +266,52 @@ export function withNewerExternalRelease(index: RegistryIndex, name: string): Re
   return new Map(index).set(name, new Map(versions).set(next, { ...manifest, version: next }))
 }
 
+interface PeerDeclarations {
+  readonly peerDependencies?: Record<string, string>
+  readonly peerDependenciesMeta?: Record<string, unknown>
+}
+
+function requiresPeer(manifest: PeerDeclarations | undefined, name: string): boolean {
+  if (manifest?.peerDependencies?.[name] === undefined) return false
+  const meta = manifest.peerDependenciesMeta?.[name]
+  return !(typeof meta === 'object' && meta !== null && 'optional' in meta && meta.optional === true)
+}
+
+/**
+ * Assert that every DSH package depending on an external package that requires `name` as a peer declares `name`.
+ *
+ * npm installs a required peer that no dependent provides at the newest release the peer range accepts, and
+ * whether that release reaches the top level depends on the order npm processes the tree. This check reads
+ * manifests, so it also covers DSH packages outside the `@deepseek-ai/dsh` graph and orders npm does not
+ * produce today.
+ * @param index - Registry metadata for one DSH release.
+ * @param name - External package required as a peer.
+ */
+export function assertRequiredPeerDeclared(index: RegistryIndex, name: string): void {
+  const undeclared: string[] = []
+  for (const [dshName, versions] of index) {
+    if (!isDshPackage(dshName)) continue
+    for (const manifest of versions.values()) {
+      if (manifest.dependencies?.[name] !== undefined) continue
+      for (const [dependency, range] of Object.entries({ ...manifest.optionalDependencies, ...manifest.dependencies })) {
+        const candidates = index.get(dependency)
+        const resolved = candidates === undefined ? null : maxSatisfying([...candidates.keys()], range)
+        const external = resolved === null ? undefined : candidates?.get(resolved)
+        if (!requiresPeer(external, name)) continue
+        undeclared.push(`${dshName}: ${dependency}@${String(resolved)} requires ${name}@${String(external?.peerDependencies?.[name])}`)
+      }
+    }
+  }
+  if (undeclared.length === 0) return
+  throw new Error(
+    `DSH package(s) depend on a package that requires ${name} as a peer without declaring ${name}:\n`
+    + `${undeclared.sort().map(line => `  - ${line}`).join('\n')}\n`
+    + `  Add ${name} to each package's dependencies with the range other DSH packages declare. npm otherwise\n`
+    + `  installs the newest ${name} release that peer range accepts, and DSH packages that cannot share it\n`
+    + '  install their own copies.',
+  )
+}
+
 /**
  * Assert that npm installs an external package shared by DSH packages exactly once, at the top level.
  * @param packageLock - Metadata-only package lock npm produced for one DSH release.
@@ -298,6 +344,7 @@ async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '..')
   const version = workspaceVersion(root)
   const release = buildRegistryIndex(root)
+  assertRequiredPeerDeclared(release, SHARED_EXTERNAL_PACKAGE)
   const shared = await resolveNpmPackageLock(
     withNewerExternalRelease(release, SHARED_EXTERNAL_PACKAGE),
     { [DSH_PACKAGE]: version },
