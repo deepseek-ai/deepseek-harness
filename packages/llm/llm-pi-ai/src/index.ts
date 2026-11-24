@@ -52,6 +52,27 @@
  *               max: ultra
  * ```
  *
+ * A composition layer that adds a route without restating this dict writes a
+ * row of `@deepseek-ai/dsh-llm-pi-ai/provider` instead: its config is the route
+ * key in `provider` and the profile fields beside it. This plugin serves the
+ * routes of those rows together with the dict's. Of the declarations that name
+ * one route, the one that comes last in the composed entry list is in effect,
+ * and the dict takes the position of this plugin's row, so a row that a home
+ * patch adds replaces the dict entry of the same route.
+ *
+ * ```yaml
+ * - id: llm-pi-ai-team-gateway
+ *   name: '@deepseek-ai/dsh-llm-pi-ai/provider'
+ *   config:
+ *     provider: team-gateway
+ *     displayName: Team Gateway
+ *     apiKeyEnv: TEAM_GATEWAY_API_KEY
+ *     api: openai-completions
+ *     baseURL: https://gateway.team.example/v1
+ *     models:
+ *       - id: team-large
+ * ```
+ *
  * @module @deepseek-ai/dsh-llm-pi-ai
  */
 import type {} from '@deepseek-ai/dsh-settings'
@@ -75,6 +96,8 @@ import { discoverModels } from './discovery.ts'
 import type { StoredModelDiscoveryProfile } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
 import { providerDefaultsOf } from './provider-data.ts'
+import { PiAiProviderRegistry, routesInEffect } from './registry.ts'
+import type { PiAiRowRoutes } from './registry.ts'
 import type { PiAiRequestHeaderContext } from './types.ts'
 
 export { PiAiAdapter } from './adapter.ts'
@@ -90,8 +113,10 @@ export type {
   PiAiProviderProfile,
   PiAiReasoningEfforts,
   PiAiThinkingFormat,
+  ProviderRowConfig,
   ResolvedPiAiProviderProfile,
 } from './config.ts'
+export type { PiAiProviderRegistration, PiAiProviders } from './registry.ts'
 export { supportedProtocols } from './provider.ts'
 
 export const name = 'llm-pi-ai'
@@ -140,25 +165,31 @@ function registrationFacts(profiles: ReadonlyMap<string, ResolvedPiAiProviderPro
  * The configurable-provider directory: every installed catalog route, plus
  * every route the current profiles declare. A hand-declared route has no
  * catalog entry, so without this union it would have no settings address and
- * configuration surfaces could neither show nor edit it. A catalog route also
+ * configuration surfaces could neither show nor edit it. A route that a
+ * provider row serves is addressed by that row, whose whole config section is
+ * the profile; every other route by its entry of this plugin's dict, where a
+ * configuration surface adds a catalog route. A catalog route also
  * carries its catalog endpoint and native authentication, which a settings
  * editor shows while the profile leaves the endpoint or the credential
  * reference unset.
  * @param profiles - the currently resolved provider profiles.
+ * @param rows - entry id of the provider row in effect for each route that one serves.
+ * @param settingsNs - entry id of this plugin's row.
  * @returns the directory entries in catalog order, declared routes last.
  */
 function directoryEntries(
   profiles: ReadonlyMap<string, ResolvedPiAiProviderProfile>,
+  rows: ReadonlyMap<string, string>,
   settingsNs: string,
 ): LlmConfigurableProvider[] {
   const entries = new Map<string, LlmConfigurableProvider>()
   const declare = (provider: string, displayName: string, error?: string): void => {
     const installed = catalogProvider(provider)
+    const row = rows.get(provider)
     entries.set(provider, {
       provider,
       displayName,
-      settingsNs,
-      settingsPath: ['providers', provider],
+      ...row === undefined ? { settingsNs, settingsPath: ['providers', provider] } : { settingsNs: row, settingsPath: [] },
       // Membership of the installed catalog, not of the settings document:
       // narrowing a shipped provider's models stores a profile too, and that
       // route is still one pi-ai knows.
@@ -172,22 +203,21 @@ function directoryEntries(
   return [...entries.values()]
 }
 
-/** Register one generic pi-ai adapter for all configured provider routes. */
+/** Register one generic pi-ai adapter for the routes of its dict and of the provider rows. */
 export function apply(ctx: Context, config: Config): void {
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   const settingsNs = ctx.fiber.entry?.options.id ?? NS
   let lastRaw: ReturnType<Config['providers']['get']> | undefined
   let memoized: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
   /**
-   * The resolved profiles for the current configuration, memoized by the raw
-   * snapshot's identity — which is also what makes the adapter's own snapshot
-   * stable across operations that observe no change.
+   * The resolved profiles of this row's own dict, memoized by the raw
+   * snapshot's identity.
    *
    * Catalog diagnostics stay in the snapshot beside serviceable models, so
    * stored configuration remains visible after an installed catalog changes.
    * Scalar configuration errors still reject resolution.
    */
-  const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
+  const own = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
     const raw = config.providers.get()
     if (raw === lastRaw && memoized !== undefined) return memoized
     const next = resolveProfiles(structuredClone(raw) as import('./config.ts').Options['providers'], 'deferred')
@@ -195,7 +225,21 @@ export function apply(ctx: Context, config: Config): void {
     memoized = next
     return next
   }
-  profiles()
+  own()
+  /** Routes of the provider rows, replaced as one value whenever a row registers, changes, moves, or is withdrawn. */
+  let rows: PiAiRowRoutes = { before: new Map(), after: new Map() }
+  let laid: { own: ReturnType<typeof own>; rows: PiAiRowRoutes; routes: ReturnType<typeof routesInEffect> } | undefined
+  /**
+   * The routes in effect over the dict and the provider rows, memoized by the
+   * identities of both — which is also what makes the adapter's own snapshot
+   * stable across operations that observe no change.
+   */
+  const routes = (): ReturnType<typeof routesInEffect> => {
+    const dict = own()
+    if (laid?.own !== dict || laid.rows !== rows) laid = { own: dict, rows, routes: routesInEffect(dict, rows) }
+    return laid.routes
+  }
+  const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => routes().profiles
   ctx.on('internal/config', (fiber, next) => {
     const raw: unknown = next()
     if (fiber !== ctx.fiber) return raw
@@ -283,7 +327,7 @@ export function apply(ctx: Context, config: Config): void {
   let directory: DirectoryRegistrationHandle | undefined
   let directoryFacts: unknown
   const ensureDirectory = (): void => {
-    const entries = directoryEntries(profiles(), settingsNs)
+    const entries = directoryEntries(profiles(), routes().rows, settingsNs)
     if (deepEqualJson(entries, directoryFacts)) return
     // Atomic replace, never dispose-then-register: a route another adapter
     // family already declares (a profile keyed `deepseek-official`) would
@@ -321,9 +365,10 @@ export function apply(ctx: Context, config: Config): void {
     () => storedDiscoveryProfile(request.provider),
   ))
   // Route effects bind to this apply fiber via the stable `ctx` reference,
-  // even when a swap runs inside the scoped settings callback below. A bare
+  // even when a provider row's registration causes the swap. A bare
   // mount (zero routes) is the dormant posture: nothing registers until a
-  // settings section supplies profiles, and routes drop when it empties.
+  // settings section or a provider row supplies a profile, and routes drop
+  // when both are empty.
   let registration: AdapterRegistrationHandle | undefined
   let registeredFacts: unknown
   const ensureRegistrationFacts = (): void => {
@@ -337,8 +382,8 @@ export function apply(ctx: Context, config: Config): void {
     // new set — so returning to a working configuration always re-applies.
     const routes = [...profiles().keys()]
     if (registration === undefined) {
-      // Dormant bare mount: nothing is registered until a section supplies
-      // profiles, and an empty section keeps it that way.
+      // Dormant bare mount: nothing is registered until a section or a
+      // provider row supplies a profile, and without either it stays that way.
       if (routes.length === 0) {
         registeredFacts = facts
         return
@@ -356,6 +401,22 @@ export function apply(ctx: Context, config: Config): void {
     catch (error) {
       ctx.logger.error('llm-pi-ai: configuration conflicts with an existing provider route')
       ctx.logger.error(error)
+    }
+  })
+
+  // Provides `ctx.piAiProviders` for as long as this row runs.
+  new PiAiProviderRegistry(ctx, (next) => {
+    const previous = rows
+    rows = next
+    try {
+      ensureRegistrationFacts()
+      ensureDirectory()
+    } catch (error) {
+      // The row whose change conflicts with another adapter's route fails alone; every other route keeps serving.
+      rows = previous
+      ensureRegistrationFacts()
+      ensureDirectory()
+      throw error
     }
   })
 }

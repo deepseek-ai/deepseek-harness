@@ -367,6 +367,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance.',
   },
   {
+    key: 'piAiProviders',
+    pkg: 'llm-pi-ai',
+    title: 'Pi-ai provider route registry',
+    mode: 'core',
+    note: 'Each provider row of the package registers one route; the adapter serves those routes beside its own dict, and for each route the declaration that comes last in the composed entry list.',
+  },
+  {
     key: 'tokenMeter',
     pkg: 'token-meter',
     title: 'Replay token measurement',

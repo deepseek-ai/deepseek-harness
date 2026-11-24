@@ -12,7 +12,7 @@ import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/Mo
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
 import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
-import { ModelsSettingsStore, deriveKeyRef, protocolChoices, reasoningLevelChoices } from '../src/client/store.ts'
+import { ModelsSettingsStore, PI_AI_PROFILE_PATH, deriveKeyRef, protocolChoices, reasoningLevelChoices } from '../src/client/store.ts'
 import { createModelsOperations } from '../src/client/operations.ts'
 import type { ModelsOperations } from '../src/client/operations.ts'
 import { en } from '../src/client/locales.ts'
@@ -261,10 +261,10 @@ function within_(scope: HTMLElement, label: string): HTMLElement {
 describe('protocolChoices', () => {
   it('reads the protocols out of the namespace schema and nothing else', async () => {
     const { namespace } = scriptedFace()
-    expect(protocolChoices(namespace, settingsSchema)).toEqual(PROTOCOLS)
-    expect(protocolChoices(undefined, settingsSchema)).toEqual([])
+    expect(protocolChoices(namespace, PI_AI_PROFILE_PATH, settingsSchema)).toEqual(PROTOCOLS)
+    expect(protocolChoices(undefined, PI_AI_PROFILE_PATH, settingsSchema)).toEqual([])
     const plain = { ...namespace, schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as JsonValue }
-    expect(protocolChoices(plain, settingsSchema)).toEqual([])
+    expect(protocolChoices(plain, PI_AI_PROFILE_PATH, settingsSchema)).toEqual([])
     await Promise.resolve()
   })
 })
@@ -272,17 +272,17 @@ describe('protocolChoices', () => {
 describe('reasoningLevelChoices', () => {
   it('reads the levels out of the reasoningEfforts key schema and nothing else', () => {
     const { namespace } = scriptedFace()
-    expect(reasoningLevelChoices(namespace, settingsSchema)).toEqual(LEVELS)
-    expect(reasoningLevelChoices(undefined, settingsSchema)).toEqual([])
+    expect(reasoningLevelChoices(namespace, PI_AI_PROFILE_PATH, settingsSchema)).toEqual(LEVELS)
+    expect(reasoningLevelChoices(undefined, PI_AI_PROFILE_PATH, settingsSchema)).toEqual([])
     const plain = { ...namespace, schema: JSON.parse(JSON.stringify(Schema.object({}).toJSON())) as JsonValue }
-    expect(reasoningLevelChoices(plain, settingsSchema)).toEqual([])
+    expect(reasoningLevelChoices(plain, PI_AI_PROFILE_PATH, settingsSchema)).toEqual([])
     const withoutDict = Schema.object({
       providers: Schema.dict(Schema.object({
         models: Schema.array(Schema.object({ reasoningEfforts: Schema.union([Schema.const(false)]) })),
       })),
     })
     const falseOnly = { ...namespace, schema: JSON.parse(JSON.stringify(withoutDict.toJSON())) as JsonValue }
-    expect(reasoningLevelChoices(falseOnly, settingsSchema)).toEqual([])
+    expect(reasoningLevelChoices(falseOnly, PI_AI_PROFILE_PATH, settingsSchema)).toEqual([])
   })
 })
 

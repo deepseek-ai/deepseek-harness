@@ -18,13 +18,20 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./provider": {
+      "types": "./lib/types/provider-row.d.ts",
+      "default": "./lib/provider-row.js"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./provider/locale/*.json": "./locale/provider/*.json"
   },
   "files": [
     "locale/*.json",
+    "locale/provider/*.json",
     "lib/index.js",
+    "lib/provider-row.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",
@@ -52,6 +59,7 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
     "@deepseek-ai/dsh-authorization": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",

@@ -3,14 +3,16 @@
  * distributed outside this repository adds UI to the Models settings section
  * without editing it.
  *
- * `settings.models.provider-card` is keyed by the row's owning settings
- * namespace (`ProviderDirectoryEntry.settingsNs`): an adapter family's
+ * `settings.models.provider-card` is keyed by the namespace of the adapter
+ * that serves the row (`ProviderRow.adapterNs`): an adapter family's
  * companion plugin registers one entry under the family's namespace and
  * receives every card of that family — shipped, added, and hand-declared rows
- * alike — while the section never learns what the namespace means. Keying on
- * the namespace follows `settings.plugin.item`, and the key domain stays the
- * open string space because hand-declared route ids are user-chosen at
- * runtime.
+ * alike — while the section never learns what the namespace means. That is
+ * the row's settings namespace (`ProviderDirectoryEntry.settingsNs`), except
+ * for a pi-ai provider row: a plugin row of its own, whose card is keyed by
+ * its adapter's row id. Keying on a namespace follows `settings.plugin.item`,
+ * and the key domain stays the open string space because hand-declared route
+ * ids are user-chosen at runtime.
  *
  * TYPE HOME RATIONALE: the Models section declares these slots at runtime,
  * and a plugin registering an extension already depends on this package for
@@ -23,8 +25,8 @@ import type { ProviderDirectoryEntry } from './store.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * One provider card's adapter extension area, dispatched with
-     * `entryKey = settingsNs` on every card that renders a directory row: a
+     * One provider card's adapter extension area, dispatched with the serving
+     * adapter's namespace as `entryKey` on every card that renders a directory row: a
      * saved row's card (its first-run setup posture included) and the
      * add-provider draft card. The hand-declared draft card has no directory
      * row yet, so it dispatches nothing until saved. Without a registrant the

@@ -249,6 +249,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The Web Host mounts the default-off settings owner independently of the
   // delegation-tool instances.
   '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js'],
+  // A provider row is a separate Loader entry of the adapter package.
+  '@deepseek-ai/dsh-llm-pi-ai': ['lib/provider-row.js'],
   // The JSONL backend resolves its private verification Worker relative to
   // import.meta.url; it is shipped without a public package subpath.
   '@deepseek-ai/dsh-session-persistence-jsonl': ['lib/worker.cjs'],
@@ -627,6 +629,14 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     if (manifest.name === '@deepseek-ai/dsh-tool-executor-ptc'
       && !hasExportPair(manifest, './run-code', './lib/types/run-code.d.ts', './lib/run-code.js')) {
       errors.push(`${label}: exports["./run-code"] must expose lib/types/run-code.d.ts and lib/run-code.js`)
+    }
+    if (manifest.name === '@deepseek-ai/dsh-llm-pi-ai') {
+      if (!hasExportPair(manifest, './provider', './lib/types/provider-row.d.ts', './lib/provider-row.js')) {
+        errors.push(`${label}: exports["./provider"] must expose lib/types/provider-row.d.ts and lib/provider-row.js`)
+      }
+      if (manifest.exports?.['./provider/locale/*.json'] !== './locale/provider/*.json') {
+        errors.push(`${label}: exports["./provider/locale/*.json"] must be "./locale/provider/*.json"`)
+      }
     }
     const expectedFiles = expectedDshPackageFiles(manifest, detailDocumentFiles(join(root, dir)))
     if (!sameStringList(manifest.files, expectedFiles)) {

@@ -159,6 +159,7 @@
     "tests/model-badge.e2e.ts",
     "tests/deepseek-messages-chat.e2e.ts",
     "tests/models-settings-recovery.e2e.ts",
+    "tests/models-settings-deployment.e2e.ts",
     "tests/default-model.e2e.ts",
     "tests/model-menu-observer.e2e.ts",
     "tests/default-workspace.e2e.ts",

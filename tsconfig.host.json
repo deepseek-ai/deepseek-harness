@@ -147,6 +147,7 @@
     "apps/web/tests/model-badge.e2e.ts",
     "apps/web/tests/deepseek-messages-chat.e2e.ts",
     "apps/web/tests/models-settings-recovery.e2e.ts",
+    "apps/web/tests/models-settings-deployment.e2e.ts",
     "apps/web/tests/onboarding-deepseek-config.e2e.ts",
     "apps/web/tests/onboarding-native.e2e.ts",
     "apps/web/tests/desktop-onboarding.e2e.ts",

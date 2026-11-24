@@ -2,6 +2,8 @@
  * Configuration schema and provider-profile validation for the pi-ai adapter.
  * Profiles are a dict keyed by provider route, so the composition base and a
  * user-settings layer merge per provider and the route set is structural.
+ * A provider row configures one more route with the same profile fields,
+ * written flat beside its route key.
  *
  * A route key is not required to name an installed pi-ai provider. When it does,
  * that provider's endpoint, protocol, display name, and model catalog are the
@@ -266,6 +268,16 @@ export interface Config {
 /** Plain options accepted by the provider resolver. */
 export type Options = { [K in keyof Config]?: Config[K] extends Volatile<infer T> ? T : never }
 
+/**
+ * Configuration of one provider row, written flat: the route key, then the fields of {@link PiAiProviderProfile}.
+ * The plugin receives each profile field as a live reference that a configuration change updates in place; a
+ * field the schema does not declare keeps its plain value.
+ */
+export type ProviderRowConfig = {
+  /** Route key that a request selects with `GenerateOptions.provider`. Changing it restarts the row. */
+  provider: string
+} & { [Field in keyof PiAiProviderProfile]-?: Volatile<PiAiProviderProfile[Field]> }
+
 const thinkingBudgets = z.object({
   minimal: z.number(),
   low: z.number(),
@@ -391,6 +403,32 @@ const profile = z.object({
 export const Config = z.object({
   providers: z.dict(profile).default({}).volatile(),
 })
+
+/** Field schemas of one route's profile, which an entry of the `providers` dict and a provider row share. */
+const profileFields = profile.dict as Record<string, z>
+
+/**
+ * Runtime schema of one provider row, written flat: the route key in `provider`, then the profile fields of a
+ * `providers` entry. A changed profile field updates the running route in place; a changed `provider` restarts
+ * the row.
+ */
+export const ProviderConfig = z.object({
+  provider: z.string().required(),
+  ...Object.fromEntries(Object.entries(profileFields).map(([field, schema]) => [field, schema.volatile()])),
+})
+
+/**
+ * Read the profile a provider row configures.
+ * @param config - the row's parsed config.
+ * @returns the profile fields that have a value, without the route key.
+ */
+export function rowProfile(config: ProviderRowConfig): PiAiProviderProfile {
+  return Object.fromEntries(Object.entries(config).flatMap(([field, value]): [string, unknown][] => {
+    if (field === 'provider') return []
+    const current: unknown = Object.hasOwn(profileFields, field) ? (value as Volatile<unknown>).get() : value
+    return current === undefined ? [] : [[field, current]]
+  }))
+}
 
 /**
  * Reject new or changed provider profiles that cannot be served. Unchanged

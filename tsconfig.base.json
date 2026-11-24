@@ -273,6 +273,7 @@
       "@deepseek-ai/dsh-tools/pipeline": ["./packages/core/tools/src/pipeline.ts"],
       "@deepseek-ai/dsh-tool-testkit": ["./packages/test-support/tool-testkit/src/index.ts"],
       "@deepseek-ai/dsh-tool-subagent/model-selection-settings": ["./packages/subagent/tool-subagent/src/model-selection-settings.ts"],
+      "@deepseek-ai/dsh-llm-pi-ai/provider": ["./packages/llm/llm-pi-ai/src/provider-row.ts"],
       "@deepseek-ai/dsh-user-approval/types": ["./packages/interaction/user-approval/src/types.ts"],
       "@deepseek-ai/dsh-user-questions/types": ["./packages/interaction/user-questions/src/types.ts"],
       "@deepseek-ai/dsh-agent/types": ["./packages/core/agent/src/types.ts"],

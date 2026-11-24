@@ -15,6 +15,8 @@ const savedKey = 'headless-saved-key'
 const launchKey = 'headless-launch-key'
 const projectKey = 'headless-project-key'
 const homeKey = 'headless-home-key'
+const myGatewayKey = 'headless-my-gateway-key'
+const hubGatewayKey = 'headless-hub-gateway-key'
 const processTimeoutMs = 60_000
 
 /** Anthropic SDK events require the SSE event name beside the JSON payload. */
@@ -127,6 +129,55 @@ describe('headless credential policy', { retry: 0 }, () => {
       expect(result.stderr).toBe('')
       expect(server.keys.length).toBeGreaterThan(0)
       expect(server.keys.every(key => key === launchKey)).toBe(true)
+    } finally {
+      await server.close()
+    }
+  }, processTimeoutMs + 15_000)
+
+  it.each([
+    { name: 'a route of its own', hubRoute: 'hub-gateway', selected: 'hub-gateway', expected: hubGatewayKey },
+    { name: 'the person\'s route beside it', hubRoute: 'hub-gateway', selected: 'my-gateway', expected: myGatewayKey },
+    { name: 'the route the dict names too', hubRoute: 'my-gateway', selected: 'my-gateway', expected: hubGatewayKey },
+  ])('serves a home-patch pi-ai provider row beside the profile\'s providers dict: $name', async ({ name, hubRoute, selected, expected }) => {
+    const server = await startAnthropicServer()
+    try {
+      const gateway = (apiKeyEnv: string) => ({
+        apiKeyEnv, api: 'anthropic-messages', baseURL: server.baseURL,
+        models: [{ id: 'headless-auth-model', contextWindow: 32_768, maxTokens: 1024 }],
+      })
+      // What the Models page stores: the person's providers as an override of the adapter row, in the profile's own patch.
+      const profilePatch = JSON.stringify([
+        { id: 'llm-pi-ai', name: '@deepseek-ai/dsh-llm-pi-ai', config: { providers: { 'my-gateway': gateway('MY_GATEWAY_API_KEY') } } },
+        { id: 'agent-default-model', config: { provider: selected, model: 'headless-auth-model' } },
+      ]) + '\n'
+      const profilePatchPath = (cwd: string): string => join(cwd, '.dsh', 'profiles', 'headless', 'cordis.patch.yml')
+      const result = await runLoaderSmoke({
+        label: `headless deployment provider row: ${name}`,
+        tempDirPrefix: 'headless-deployment-rows-', binScript, tsconfigPath, sourceImport: 'tsx/esm',
+        configPath: '', binArgs: ['headless', 'Reply briefly.'], processTimeoutMs,
+        env: {
+          MY_GATEWAY_API_KEY: myGatewayKey, HUB_GATEWAY_API_KEY: hubGatewayKey,
+          ANTHROPIC_API_KEY: undefined, ANTHROPIC_AUTH_TOKEN: undefined, ANTHROPIC_OAUTH_TOKEN: undefined,
+          DEEPSEEK_API_KEY: undefined, DSH_TELEMETRY_DISABLED: '1',
+        },
+        prepare: async (cwd) => {
+          await mkdir(join(cwd, '.dsh', 'profiles', 'headless'), { recursive: true })
+          await writeFile(profilePatchPath(cwd), profilePatch)
+          // What a deployment writes: one provider row for each of its routes, in the home patch.
+          await writeFile(join(cwd, '.dsh', 'cordis.patch.yml'), JSON.stringify([{ insert: [{
+            id: `llm-pi-ai-dsh-hub-${hubRoute}`, name: '@deepseek-ai/dsh-llm-pi-ai/provider',
+            config: { provider: hubRoute, ...gateway('HUB_GATEWAY_API_KEY') },
+          }] }]))
+        },
+        inspect: async (cwd) => {
+          // The stored dict is read as it is; no launch rewrites the profile's patch.
+          expect(await readFile(profilePatchPath(cwd), 'utf8')).toBe(profilePatch)
+        },
+      })
+      expect(result.stdout.trim()).toBe('mock response recovered')
+      expect(result.stderr).toBe('')
+      expect(server.keys.length).toBeGreaterThan(0)
+      expect(server.keys.every(key => key === expected)).toBe(true)
     } finally {
       await server.close()
     }

@@ -876,6 +876,10 @@ The [wire reference](../deepseek-llm-api-wire-extensions.md) defines the exact r
 
 `PiAiRequestHeaderContext` contains the prepared call's provider, model, resolved model `baseURL`, and optional Session id and auxiliary purpose. It is immutable, contains no messages or authentication fields, and accompanies a request-owned `Headers` object in the synchronous `llm-pi-ai/request-headers` waterfall. The [adapter's request-header documentation](../../packages/llm/llm-pi-ai/README.md#request-headers) defines contribution ownership, attribution precedence, and failure behavior. This extension point is specific to pi-ai inference requests.
 
+## Pi-ai provider rows
+
+The `llm-pi-ai` adapter row configures its routes in its `providers` dict. A composition layer that adds a route without restating that dict writes a Loader row of `@deepseek-ai/dsh-llm-pi-ai/provider`. The row registers its route key and its `PiAiProviderProfile` with the adapter row through `ctx.piAiProviders.register`, and receives a `PiAiProviderRegistration`: calling it withdraws the route, and `replace` applies a changed profile in place. Of the declarations that name one route, the one that comes last in the composed entry list is in effect, and the dict takes the position of the adapter's row. The [adapter README](../../packages/llm/llm-pi-ai/README.md#add-a-route-from-another-composition-layer) describes the row's config and what it means for a deployment's home patch.
+
 ## Service and provider contracts
 
 `LlmAdapter` is the provider contract: subclass, implement `stream()`, and register one adapter instance with `ctx.llm.registerAdapter(providers, adapter)`. `GenerateOptions.provider` selects the registered adapter; `GenerateOptions.model` is passed to that adapter and need not be registered at lifecycle start. Duplicate provider routes fail atomically. Optional `providerRetryPolicy()` is captured per route with normal defaults, while `providerInfo()` and asynchronous `listModels()` feed `LlmRuntime.listProviders()` / `listModels()` with detached selector metadata. That catalog is advisory rather than a request whitelist: the adapter remains authoritative and may accept unlisted model ids. One asynchronous `resolveModel()` query returns exact model identity plus optional correctness-sensitive context capacity, an adapter-configured `defaultMaxTokens`, and ordered model-owned reasoning ids with an optional deployment default; absent fields mean unavailable metadata or provider-owned behavior, not invalid catalog membership. The resolver receives optional cancellation and must settle promptly after abort. `LlmRuntime.resolveModelInfo()` validates and detaches the aggregate. At the final adapter boundary, `resolveCallConfig()` materializes the output default only when `maxTokens` is absent and validates and materializes reasoning, so direct calls cannot bypass either configured behavior; direct dispatch captures one registration before awaiting that resolution. The agent loop instead uses `prepareCall()` to keep the same registration across model resolution, durable header logging, and dispatch, retain detached context metadata from that exact lookup, and report which config fields the adapter defaulted. Adapter lookup happens at the terminal continuation of the `llm/stream` waterfall, so a listener may short-circuit the call or route a mutable one-shot request before lookup. AgentLoop observes a request attempt once the outer waterfall returns a stream handle; that limited boundary does not prove a lazy terminal adapter was constructed or began provider I/O. The `block-start` / `block-end` `index` correlation and the assembler together mean an adapter only has to emit well-formed chunks — block reassembly is not each adapter's problem. [architecture.md](../architecture.md#turn-flow) shows where `ctx.llm.stream()` and the `llm/stream` waterfall sit in one turn.
@@ -1208,6 +1212,25 @@ stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 Types: [FileAttachmentRef](attachment.md) · [ImageAttachmentRef](attachment.md) · [ImageRequestTarget](attachment.md)
 
 Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
+
+<a id="ctxpiaiproviders--piaiproviders"></a>
+
+### `ctx.piAiProviders` — `PiAiProviders`
+
+Service through which provider rows add their routes to the pi-ai adapter.
+
+```ts cordis-catalog
+/**
+ * Register one provider route for the calling plugin; the registration is withdrawn with that plugin.
+ * @param provider - route key.
+ * @param profile - the route's profile. Catalog defects are kept as diagnostics on the route; any other
+ * invalid field throws.
+ * @returns the registration handle.
+ */
+register(provider: string, profile: PiAiProviderProfile): PiAiProviderRegistration
+```
+
+Source: [`packages/llm/llm-pi-ai/src/registry.ts`](../../packages/llm/llm-pi-ai/src/registry.ts)
 
 <a id="llm-events"></a>
 

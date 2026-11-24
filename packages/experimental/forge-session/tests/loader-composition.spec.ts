@@ -557,7 +557,8 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
       url: `https://gitlab.example.test/group/app/-/merge_requests/${number}`,
       ref: { repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'group', name: 'app' }, number },
     })
-    await vi.waitFor(() => { expect(ctx.forgeSession.changeRequests(agent.session)).toHaveLength(5) })
+    // Two of the five are bound by shell lookups, and a program's lookups start only once its root call settles.
+    await vi.waitFor(() => { expect(ctx.forgeSession.changeRequests(agent.session)).toHaveLength(5) }, { timeout: 10_000 })
     expect(byUrl(ctx.forgeSession.changeRequests(agent.session))).toEqual([5, 6, 7, 8, 9].map(number => ({
       ...merge(number), origin: number === 5 ? 'created' : 'referenced', update: null,
     })))

@@ -1,10 +1,12 @@
 /** Page-store join: directory × namespaces × credentials, with last-good rows on failure. */
 import { describe, expect, it } from 'vitest'
-import type { RpcResponse } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import Schema from '@deepseek-ai/schemastery'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { settingsSchema } from './settings-schema.client.ts'
-import { deriveKeyRef, joinProviderDirectory, ModelsSettingsStore, providerUsable } from '../src/client/store.ts'
+import { adapterNsOf, deriveKeyRef, joinProviderDirectory, ModelsSettingsStore, providerUsable } from '../src/client/store.ts'
 
 it.each([
   ['anthropic', 'ANTHROPIC_API_KEY'],
@@ -106,7 +108,7 @@ const NAMESPACES = [
 function api(overrides: {
   accountAvailable?: boolean
   providers?: () => Promise<RpcResponse<{ providers: typeof DIRECTORY }>>
-  describeSettings?: () => Promise<RemoteAnswer<{ writable: boolean; hasDocument: boolean; namespaces: typeof NAMESPACES }>>
+  describeSettings?: () => Promise<RemoteAnswer<{ writable: boolean; hasDocument: boolean; namespaces: SettingsNamespaceView[] }>>
   describeCredentials?: (refs: readonly string[]) => Promise<RemoteAnswer<Record<string, unknown>>>
 } = {}) {
   const seenRefs: string[][] = []
@@ -191,19 +193,56 @@ describe('ModelsSettingsStore', () => {
     expect(byProvider.get('deepseek-official')).toMatchObject({
       configured: true,
       removable: false,
+      adapterNs: 'llm-deepseek',
       apiKeyEnv: 'DEEPSEEK_API_KEY',
       credential: { configured: false, writable: true },
     })
     expect(byProvider.get('openai')).toMatchObject({
       configured: true,
       removable: true,
+      adapterNs: 'llm-pi-ai',
       apiKeyEnv: 'OPENAI_API_KEY',
       credential: { configured: true },
     })
     expect(byProvider.get('anthropic')).toMatchObject({ configured: false, removable: false })
     expect(byProvider.get('anthropic')?.apiKeyEnv).toBeUndefined()
-    expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false })
+    // A route without a mounted namespace keeps its directory address as its adapter.
+    expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false, adapterNs: '' })
     expect(state.namespaces.get('llm-pi-ai')?.ns).toBe('llm-pi-ai')
+  })
+
+  it('names the pi-ai adapter for a namespace whose whole form is a pi-ai profile, and the namespace itself otherwise', async () => {
+    const form = (schema: Schema): JsonValue => JSON.parse(JSON.stringify(schema.toJSON())) as JsonValue
+    const profile = { apiKeyEnv: Schema.string(), baseURL: Schema.string(), models: Schema.array(Schema.string()) }
+    const view = (ns: string, schema: Schema, value: JsonValue = {}): SettingsNamespaceView =>
+      ({ ns, schema: form(schema), value, autoGenerate: false, applies: 'live', secrets: [], revision: 0 })
+    const piAi = view('llm-pi-ai', Schema.object({ providers: Schema.dict(Schema.object(profile)) }))
+    // A provider row declares the same fields in any order, at the root of a namespace of its own.
+    const row = view('hub-team', Schema.object({ models: profile.models, baseURL: profile.baseURL, apiKeyEnv: profile.apiKeyEnv }), { apiKeyEnv: 'TEAM_KEY' })
+    expect(adapterNsOf(row, piAi, settingsSchema)).toBe('llm-pi-ai')
+    expect(adapterNsOf(piAi, piAi, settingsSchema)).toBe('llm-pi-ai')
+    // A form with one field more or less is another plugin's.
+    expect(adapterNsOf(view('wider', Schema.object({ ...profile, extra: Schema.string() })), piAi, settingsSchema)).toBe('wider')
+    expect(adapterNsOf(view('narrower', Schema.object({ apiKeyEnv: profile.apiKeyEnv })), piAi, settingsSchema)).toBe('narrower')
+    // Without the adapter mounted, or with an adapter form that declares no profile, nothing is a provider row.
+    expect(adapterNsOf(row, undefined, settingsSchema)).toBe('hub-team')
+    const bare = view('llm-pi-ai', Schema.object({}))
+    expect(adapterNsOf(view('empty', Schema.object({})), bare, settingsSchema)).toBe('empty')
+
+    const { ctx, mirror } = api({
+      providers: () => Promise.resolve(ok({ providers: [
+        ...DIRECTORY,
+        { provider: 'team', displayName: 'Team', settingsNs: 'hub-team', settingsPath: [], active: true },
+      ] })),
+      describeSettings: () => Promise.resolve(remoteOk({ writable: true, hasDocument: false, namespaces: [
+        ...NAMESPACES.filter(namespace => namespace.ns !== 'llm-pi-ai'), piAi, row,
+      ] })),
+    })
+    const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+    await store.load()
+    const team = store.store.getSnapshot().rows.find(entry => entry.entry.provider === 'team')
+    // The row's whole config section is the route's profile, and the row is not the page's to remove.
+    expect(team).toMatchObject({ configured: true, removable: false, adapterNs: 'llm-pi-ai', apiKeyEnv: 'TEAM_KEY' })
   })
 
   it('degrades the credential badge, not the page, when the credential domain fails', async () => {
