@@ -60,6 +60,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`speech-to-text-sensevoice`](speech-to-text-sensevoice/README.md) | Managed local SenseVoice inference | — |
 | [`api-speech-to-text`](api-speech-to-text/README.md) | Authenticated transient transcription Remote | `ctx.speechController` |
 | [`client-ui-voice-input`](client-ui-voice-input/README.md) | Microphone capture and guarded draft insertion | — |
+| [`client-ui-connectors`](client-ui-connectors/README.md) | Default-disabled Connectors tab of the Plugins page: lists, installs, and opens the official connectors | — |
 | [`plugin-market-bundle`](plugin-market-bundle/README.md) | Default-disabled optional custom plugin indexes: the index service and the Discover tab | — |
 | [`liveshare`](liveshare/README.md) | Opt-in LiveShare host bundle: Relay-backed Session sharing at the `view` or `write` tier, with forking and attachment uploads as independent switches | injects `connection`; serves the viewer page through the Host's web resources |
 | [`liveshare-protocol`](liveshare-protocol/README.md) | Wire frames and the identity contract shared by the owner bundle and the Relay | library and protocol — no ctx key |

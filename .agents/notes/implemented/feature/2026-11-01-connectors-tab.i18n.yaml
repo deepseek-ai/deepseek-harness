@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-01-connectors-tab.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-01-connectors-tab.md
+/agent-note-connectors-tab-for-the-official-connectors:
+  en: 249475914d616170
+  zh: b08da05d8f12f78f
+/agent-note-connectors-tab-for-the-official-connectors/problem:
+  en: baadfd42b61cb847
+  zh: da6301aa0c4d9273
+/agent-note-connectors-tab-for-the-official-connectors/decision:
+  en: b6fcaf46d9ce3818
+  zh: c7a2e239a5d6b587
+/agent-note-connectors-tab-for-the-official-connectors/alternatives-considered:
+  en: 3a318a39779c0bbd
+  zh: 8b143b029e739215
+/agent-note-connectors-tab-for-the-official-connectors/consequences:
+  en: 3d169db3bc48f46b
+  zh: 44f9c95ebf4ae1f6

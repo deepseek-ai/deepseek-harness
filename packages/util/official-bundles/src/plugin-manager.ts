@@ -81,4 +81,5 @@ export const EXPERIMENTAL_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-experimental-plugin-market-bundle',
   '@deepseek-ai/dsh-experimental-liveshare',
   '@deepseek-ai/dsh-deepseek-chat-import',
+  '@deepseek-ai/dsh-client-ui-connectors',
 ])

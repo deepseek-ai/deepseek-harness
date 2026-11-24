@@ -107,6 +107,7 @@
     "apps/web/tests/entry-customization.e2e.ts",
     "apps/web/tests/cua-optin.e2e.ts",
     "apps/web/tests/bundle-platform.e2e.ts",
+    "apps/web/tests/connectors-tab.e2e.ts",
     "apps/web/tests/cua-permissions.e2e.ts",
     "apps/web/tests/cua-run-code.e2e.ts",
     "apps/web/tests/schedule-header.e2e.ts",

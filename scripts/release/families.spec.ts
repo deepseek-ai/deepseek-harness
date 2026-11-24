@@ -58,6 +58,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-browser-use-stagehand-native',
       '@deepseek-ai/dsh-experimental-claude-code-mods',
       '@deepseek-ai/dsh-experimental-client-ui-claude-code-mods',
+      '@deepseek-ai/dsh-client-ui-connectors',
       '@deepseek-ai/dsh-experimental-client-ui-cot-translation',
       '@deepseek-ai/dsh-experimental-client-ui-forge',
       '@deepseek-ai/dsh-experimental-client-ui-stats',

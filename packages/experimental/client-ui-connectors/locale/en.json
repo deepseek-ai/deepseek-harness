@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Connectors",
+    "description": "Adds a Connectors tab to Plugins for viewing, installing, and opening the official connectors.",
+    "detail": "docs/DETAIL.md"
+  }
+}
