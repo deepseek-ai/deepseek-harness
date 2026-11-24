@@ -3,7 +3,7 @@ import type { ReactNode, RefObject } from 'react'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/client'
-import type { ImageLightboxLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { FileDragActions, ImageLightboxLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   MaybeSnapshotSelectorHook, ObservableSnapshot, SnapshotSelectorHook,
@@ -22,7 +22,7 @@ import type { ComposerKeyboard, DraftSnapshot, EditSelection } from './draft-edi
 import type { createConversationStore } from '../stores.ts'
 import type { BusyEnterBehavior } from './composer-submission.ts'
 import type { ConversationSnapshot } from './snapshot.ts'
-import type { ViewTab } from './views.ts'
+import type { ConversationFocus, ConversationViewRequest, ViewTab } from './views.ts'
 import type { UserTextDocumentInput, UserTextEvaluator, UserTextId, UserTextNode } from './user-text.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-context-menu/client' {
@@ -211,7 +211,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'conversation.images.content': {
       scope: 'root'
       props: MessageImagesContentInput
-      inject: { readonly fileDrag: import('@deepseek-ai/dsh-client-ui-primitives').FileDragActions }
+      inject: { readonly fileDrag: FileDragActions }
       locale: 'conversation'
     }
   }
@@ -468,9 +468,9 @@ export interface ConvViewOwnerProps {
   /** Open one model request's inspector record when an inspection target is available. */
   inspectRequest: ((turn: number, step: number) => void) | undefined
   /** Focus request addressed to the selected View. */
-  viewRequest: import('./views.ts').ConversationViewRequest | null
+  viewRequest: ConversationViewRequest | null
   /** Select a View and address one Session entity focus to it; ignored unless that View accepts the focus kind. */
-  openView: (view: string, focus: import('./views.ts').ConversationFocus) => void
+  openView: (view: string, focus: ConversationFocus) => void
   /** Acknowledge the current one-shot focus request. */
   completeViewRequest: () => void
 }
@@ -519,7 +519,7 @@ export interface ConversationSessionInjected {
   /** Bind input draft persistence to the Session-owned store instance. */
   bindDraftPersistence: (write: (draft: DraftSnapshot) => void) => () => void
   /** Select and activate one View while addressing one Session entity focus to it; ignored unless that View accepts the focus kind. */
-  openView: (view: string, focus: import('./views.ts').ConversationFocus) => void
+  openView: (view: string, focus: ConversationFocus) => void
 }
 
 /** One customizable View tab listed in the More menu. */
