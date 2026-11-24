@@ -1047,6 +1047,24 @@ def test_initialize_rejects_a_negative_mcp_startup_wait(tmp_path: Path, seconds:
     assert not init_dump.exists()
 
 
+@pytest.mark.parametrize("seconds", [float("inf"), 1e308])
+def test_initialize_closes_the_runtime_when_the_mcp_startup_wait_overflows(tmp_path: Path, seconds: float) -> None:
+    script = tmp_path / "recording_runtime.py"
+    script.write_text(_INIT_RECORDING_RUNTIME)
+    init_dump = tmp_path / "init.jsonl"
+    client = HarnessClient(HarnessConfig(env={"INIT_DUMP": str(init_dump)}), _launch_args=(sys.executable, str(script)))
+    client.start()
+    proc = client._proc
+    assert proc is not None
+
+    with pytest.raises(OverflowError):
+        client.initialize(cwd=".", provider="deepseek-official", model="dsagent", mcp_startup_timeout_seconds=seconds)
+
+    assert proc.wait(timeout=1) is not None
+    assert client._proc is None
+    assert not init_dump.exists()
+
+
 def test_public_signatures_omit_unsupported_wire_parameters() -> None:
     from deepseek_harness import DeepSeekHarnessConfig, Session
 

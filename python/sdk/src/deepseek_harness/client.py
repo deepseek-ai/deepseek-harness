@@ -172,8 +172,9 @@ class HarnessClient:
         handshake for MCP manager servers in their first connection attempt;
         omission or 0 answers without waiting. Keep it shorter than
         initialize_timeout_seconds, which also covers runtime startup, or a
-        hanging MCP server makes the handshake time out. A negative value
-        closes the runtime like any failed initialization.
+        hanging MCP server makes the handshake time out. A negative value, or
+        one too large to convert to milliseconds, closes the runtime like any
+        failed initialization.
         """
         if mcp_startup_timeout_seconds is not None and not mcp_startup_timeout_seconds >= 0:
             self.close()
@@ -189,11 +190,12 @@ class HarnessClient:
             payload["reasoningEffort"] = reasoning_effort
         if max_tokens is not None:
             payload["maxTokens"] = max_tokens
-        if mcp_startup_timeout_seconds is not None:
-            payload["mcpStartupTimeoutMs"] = round(mcp_startup_timeout_seconds * 1000)
         if self._user_question_handler is not None:
             payload["capabilities"] = {"userQuestions": True}
         try:
+            if mcp_startup_timeout_seconds is not None:
+                # An infinite or overflowing product raises here, so the failure path below closes the runtime.
+                payload["mcpStartupTimeoutMs"] = round(mcp_startup_timeout_seconds * 1000)
             return self.request(
                 "initialize",
                 payload,
