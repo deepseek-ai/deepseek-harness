@@ -14,7 +14,7 @@
 - button "Failed" [disabled] [expanded]
 - button "Injected context"
 - status: Retried model request (2/2) · {{duration}}
-- button "Retried model request 2/2 · {{duration}}"
+- button "Retried model request (2/2) {{duration}}"
 - status:
   - text: This turn failedupstream 503
   - code: SERVER

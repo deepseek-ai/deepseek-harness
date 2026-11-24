@@ -216,7 +216,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Title · progress, with the tool-row separator dot and summary type. */
+/* Title (attempt/maximum) · countdown, with the tool-row separator dot and summary type. */
 .retrySeparator {
   flex: none;
   align-self: center;

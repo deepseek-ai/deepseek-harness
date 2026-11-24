@@ -129,17 +129,18 @@ function ModelRetryItem({ node, active, inFlight, failed, grouped, inspect, t }:
   const seconds = active ? remainingSeconds : scheduledSeconds
 
   const status = t('message.retry.status', { label, retry: node.retry, maximum, seconds })
-  const progress = t('message.retry.progress', { retry: node.retry, maximum, seconds })
+  const title = t('message.retry.title', { label, retry: node.retry, maximum })
+  const remaining = t('message.retry.countdown', { seconds })
   return (
     <div className={grouped ? css.retryBesideGroups : undefined} data-retry-row data-inspect-scope
       data-active={retrying || undefined} data-failed={failed || undefined}>
       <span className={a11yCss.visuallyHidden} role="status" aria-atomic="true">{status}</span>
-      <DisclosureRow icon={retryIcon(node, failed)} title={label}
+      <DisclosureRow icon={retryIcon(node, failed)} title={title}
         rowClassName={css.retryRow} leadingClassName={css.retryLeading} titleClassName={css.retryTitle}
         running={retrying} open={open} expandable expandOnRowClick keepContentWhenOpen onToggle={toggle}
         collapsedContent={<>
           <span className={css.retrySeparator} data-shimmer-decoration aria-hidden />
-          <span className={css.retryProgress}>{progress}</span>
+          <span className={css.retryProgress}>{remaining}</span>
         </>}>
         <div className={css.retryDetails}>
           <div>

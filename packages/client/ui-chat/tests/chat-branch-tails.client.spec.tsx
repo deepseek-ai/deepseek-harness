@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -953,6 +953,8 @@ describe('MessageItem arms', () => {
     expect(row.dataset.active).toBe('true')
     expect(row.dataset.failed).toBeUndefined()
     expect(view.getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 3s')
+    expect(within(summary).getAllByText('正在重试模型请求（1/2）').length).toBeGreaterThan(0)
+    expect(within(summary).getAllByText('3s').length).toBeGreaterThan(0)
     expect(view.queryByText('重试延迟：')).toBeNull()
 
     act(() => { vi.advanceTimersByTime(1_100) })
