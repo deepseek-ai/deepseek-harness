@@ -41,7 +41,8 @@ function harness(mounted: SessionId | null = MAIN, origin?: 'subagent') {
     openResourceIn: (main: SessionId, address: string) => { opened.push({ main, address }) },
   })
   const error = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
-  return { control: new SidechatControl(ctx), fork, forks, opened, error }
+  const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
+  return { control: new SidechatControl(ctx), fork, forks, opened, error, warn }
 }
 
 describe('SidechatControl.fork', () => {
@@ -62,6 +63,7 @@ describe('SidechatControl.fork', () => {
     const none = harness(null)
     none.control.fork(SOURCE)
     expect(none.fork).not.toHaveBeenCalled()
+    expect(none.warn).toHaveBeenCalledWith('Side conversation not created: no conversation is on screen')
   })
 
   it('declines a subagent source with a notice', () => {
@@ -71,13 +73,21 @@ describe('SidechatControl.fork', () => {
     expect(control.notice.getSnapshot()).toEqual({ serial: 1, key: 'subagentSource' })
   })
 
-  it('reports a source without a completed Turn as nothing to branch, without logging', async () => {
+  it('reports a source without a completed Turn as having no completed turn, without logging', async () => {
     const h = harness()
     h.fork.mockRejectedValueOnce(unavailable())
     h.control.fork(SOURCE)
     await vi.waitFor(() => { expect(h.control.notice.getSnapshot()).toEqual({ serial: 1, key: 'noTurn' }) })
     expect(h.error).not.toHaveBeenCalled()
     expect(h.opened).toEqual([])
+  })
+
+  it('reports a same-named fork error without an RPC error as a failed creation', async () => {
+    const h = harness()
+    h.fork.mockRejectedValueOnce(Object.assign(new Error('local'), { name: 'SessionForkError' }))
+    h.control.fork(SOURCE)
+    await vi.waitFor(() => { expect(h.control.notice.getSnapshot()).toEqual({ serial: 1, key: 'createFailed' }) })
+    expect(h.error).toHaveBeenCalledWith('Side conversation creation failed', expect.any(Error))
   })
 
   it('reports a failed creation as a dismissable notice and logs it', async () => {

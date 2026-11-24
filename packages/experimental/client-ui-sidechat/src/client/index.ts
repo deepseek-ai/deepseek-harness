@@ -43,7 +43,7 @@ export function apply(ctx: Context): void {
   }, SidechatToast)), 'sidechat: failure notice')
   ctx.effect(() => ctx.resources.register(sidechatResourceProvider(ctx.sessions)), 'sidechat: child resources')
   ctx.effect(() => ctx.sidebarRightTabs.register({
-    id, kind: 'sidechat', multiple: true, priority: 'builtin',
+    id, kind: 'sidechat',
     patterns: [`${SIDECHAT_ADDRESS}**`],
     canOpen: address => parseSidechatAddress(address) !== undefined,
     title: () => t('title'),

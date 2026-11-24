@@ -9,7 +9,7 @@ export const zh = {
   'loading': '正在打开对话…',
   'openFailed': '无法打开对话',
   'createFailed': '无法创建侧栏对话，请稍后再试',
-  'noTurn': '此会话暂无可分支的内容',
+  'noTurn': '当前会话没有已结束的轮次',
   'subagentSource': '子智能体会话不能创建侧栏对话',
 }
 
@@ -21,7 +21,7 @@ export const en: Record<keyof typeof zh, string> = {
   'loading': 'Opening conversation…',
   'openFailed': 'Could not open conversation',
   'createFailed': 'Could not create the side conversation. Try again later.',
-  'noTurn': 'This conversation has nothing to branch yet.',
+  'noTurn': 'This session has no completed turn',
   'subagentSource': 'A subagent conversation cannot start a side conversation.',
 }
 
@@ -33,7 +33,7 @@ export const ja: Record<keyof typeof zh, string> = {
   'loading': '会話を開いています…',
   'openFailed': '会話を開けませんでした',
   'createFailed': 'サイド会話を作成できませんでした。後でもう一度お試しください。',
-  'noTurn': 'この会話にはまだ分岐できる内容がありません。',
+  'noTurn': 'このセッションには完了したターンがありません',
   'subagentSource': 'サブエージェントの会話からはサイド会話を作成できません。',
 }
 
@@ -45,7 +45,7 @@ export const es: Record<keyof typeof zh, string> = {
   'loading': 'Abriendo la conversación…',
   'openFailed': 'No se pudo abrir la conversación',
   'createFailed': 'No se pudo crear la conversación lateral. Inténtalo de nuevo más tarde.',
-  'noTurn': 'Esta conversación aún no tiene nada que ramificar.',
+  'noTurn': 'Esta sesión no tiene turno completo',
   'subagentSource': 'Una conversación de subagente no puede iniciar una conversación lateral.',
 }
 
@@ -57,7 +57,7 @@ export const fr: Record<keyof typeof zh, string> = {
   'loading': 'Ouverture de la conversation…',
   'openFailed': 'Impossible d’ouvrir la conversation',
   'createFailed': 'Impossible de créer la conversation latérale. Réessayez plus tard.',
-  'noTurn': 'Cette conversation n’a encore rien à brancher.',
+  'noTurn': "Cette session n'a pas de tour terminé",
   'subagentSource': 'Une conversation de sous-agent ne peut pas démarrer une conversation latérale.',
 }
 
@@ -69,7 +69,7 @@ export const de: Record<keyof typeof zh, string> = {
   'loading': 'Gespräch wird geöffnet…',
   'openFailed': 'Gespräch konnte nicht geöffnet werden',
   'createFailed': 'Das Seitengespräch konnte nicht erstellt werden. Versuche es später erneut.',
-  'noTurn': 'Dieses Gespräch hat noch nichts zum Verzweigen.',
+  'noTurn': 'Diese Sitzung hat keine abgeschlossene Runde',
   'subagentSource': 'Ein Subagent-Gespräch kann kein Seitengespräch starten.',
 }
 
@@ -81,7 +81,7 @@ export const ru: Record<keyof typeof zh, string> = {
   'loading': 'Открытие разговора…',
   'openFailed': 'Не удалось открыть разговор',
   'createFailed': 'Не удалось создать боковой разговор. Повторите попытку позже.',
-  'noTurn': 'В этом разговоре пока нечего ветвить.',
+  'noTurn': 'В этой сессии нет завершенных ходов',
   'subagentSource': 'Разговор субагента не может начать боковой разговор.',
 }
 
@@ -93,7 +93,7 @@ export const pt: Record<keyof typeof zh, string> = {
   'loading': 'Abrindo a conversa…',
   'openFailed': 'Não foi possível abrir a conversa',
   'createFailed': 'Não foi possível criar a conversa lateral. Tente novamente mais tarde.',
-  'noTurn': 'Esta conversa ainda não tem nada para ramificar.',
+  'noTurn': 'Esta sessão não tem turno concluído',
   'subagentSource': 'Uma conversa de subagente não pode iniciar uma conversa lateral.',
 }
 

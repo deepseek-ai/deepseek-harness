@@ -27,7 +27,7 @@ export function SidechatTab({ useResource, useTabInfo, SessionProvider, renderSl
   PropsRuntime<'sidebar.right.pane.tab'> & PropsRenderSlots<'sidechat.conversation'> & PropsLocale<typeof NS>) {
   const { tab } = useTabInfo()
   const resource = useResource<'sidechat'>(tab.contentId)
-  return <div className={css.root} data-sidechat="">
+  return <div className={css.root} data-sidechat="" data-sidebar-chat="">
     {resource.value === undefined
       ? <p className={css.notice} role={resource.status === 'failed' ? 'alert' : 'status'}>{t(resource.status === 'failed' ? 'openFailed' : 'loading')}</p>
       : <SessionProvider session={resource.value}>{renderSlot('sidechat.conversation', {})}</SessionProvider>}

@@ -12,7 +12,7 @@ export interface SidechatNotice { readonly serial: number; readonly key: 'create
 /** Client plugin bundles do not share error-class identity, so the Host refusal is told by name and code. */
 function forkUnavailable(error: unknown): boolean {
   return error instanceof Error && error.name === 'SessionForkError'
-    && (error as SessionForkError).rpcError.code === 'session/fork-unavailable'
+    && (error as Partial<SessionForkError>).rpcError?.code === 'session/fork-unavailable'
 }
 
 /** Forks at the latest completed Turn and opens the child beside the Session that was on screen when the user asked. */
@@ -30,12 +30,15 @@ export class SidechatControl {
    * the right Sidebar of the Session on screen. Forking from a side conversation therefore adds the child
    * beside it, not inside it. A subagent source reports that it cannot start a side conversation: its child
    * would inherit the delegated approval policy and preset without the delegation itself. The Host refuses a
-   * source without a completed Turn, which the notice reports as nothing to branch. Every other call forks.
+   * source without a completed Turn, which the notice reports as having no completed turn. Every other call forks.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {
     const main = this.ctx.sidebarRight.mounted.getSnapshot()
-    if (main === undefined) return
+    if (main === undefined) {
+      this.ctx.logger.warn('Side conversation not created: no conversation is on screen')
+      return
+    }
     if (this.ctx.sessions.list.getSnapshot().byId[sessionId]?.origin === 'subagent') {
       this.notice.set({ serial: ++this.serial, key: 'subagentSource' })
       return
