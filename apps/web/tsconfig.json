@@ -147,6 +147,7 @@
     "tests/action-cards-setting.e2e.ts",
     "tests/caption-overlays.e2e.ts",
     "tests/settings-appearance.e2e.ts",
+    "tests/settings-group-dividers.e2e.ts",
     "tests/menu-material.e2e.ts",
     "tests/desktop-locale.e2e.ts",
     "tests/settings-import.e2e.ts",

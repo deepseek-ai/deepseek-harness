@@ -200,12 +200,13 @@ describe('GeneralSection', () => {
     expect(renderSlot).not.toHaveBeenCalled()
   })
 
-  it('declares separators for group items and clears the last one', () => {
+  it('declares registration dividers without styling internal roots', () => {
     const css = readFileSync(
       resolve(import.meta.dirname, '../src/client/GeneralSection.module.css'), 'utf8',
     )
-    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot] > * {")
-    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot] > :last-child {")
+    expect(css).toContain(".card > [data-slot='settings.general.group'] > [data-slot-item] > [data-slot] > [data-slot-item] > :last-child,")
+    expect(css).toContain('[data-slot-item]:where(:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) > :last-child,')
+    expect(css).not.toContain(".section > [data-slot='settings.general.item']")
     expect(css).not.toContain(':global(')
   })
 })

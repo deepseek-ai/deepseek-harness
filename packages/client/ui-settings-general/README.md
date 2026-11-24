@@ -52,6 +52,8 @@ The Coding Tools switch controls the shared `ui-settings.enabled` preference des
 
 The General page renders the `settings.general.group` list with shared headings, theme-aware cards, and spacing. Group registrations supply a unique `id`, localized `label` (a string or locale-following function), and ascending `order`. Empty group outlets and empty child item outlets hide their cards without preventing later contributions; conditional rows leave no empty separators. Each feature owns its row copy, controls, and settings writes.
 
+For a group component that directly renders its child item outlet, the page draws a divider on each item registration’s final DOM root and removes it from the last non-empty registration. A `null` registration adds no divider. Plugins own the layout and separators inside a registration, including multiple Fragment roots; use element roots for automatic dividers, not plain text or portal-only output.
+
 Register into an existing group’s item slot to choose its location:
 
 | Group ID | Order | Item slot |
