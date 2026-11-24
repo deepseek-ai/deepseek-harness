@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react'
 import {
-  CodeBlock, DisclosureRow, IconCodeOutlineRegular, InspectButton, inspectScopeProps,
+  CodeBlock, DisclosureRow, IconCodeOutlineRegular, InspectButton,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
@@ -76,7 +76,7 @@ function StartedCordisDefineRow({
   return (
     <div
       className={css.card}
-      {...inspectScopeProps}
+      data-inspect-scope
       data-tool="cordis_define"
       data-state={card.state}
       data-terminal={reading === 'removed' || undefined}

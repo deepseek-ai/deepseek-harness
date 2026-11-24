@@ -1,6 +1,6 @@
 /** Present call status and expandable durable result text. */
 import { useState } from 'react'
-import { DisclosureRow, IconDeliverDocRegular, InspectButton, inspectScopeProps } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconDeliverDocRegular, InspectButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
@@ -46,7 +46,7 @@ function StartedPresentRow({ block, inspect, t }: Exclude<PresentRowProps, { pha
   const output = settled ? block.content.map(item => item.type === 'text' ? item.text : JSON.stringify(item)).join('\n') : ''
   const details = output || (settled && block.error ? `${block.error.name}: ${block.error.code}` : '')
   const [expanded, setExpanded] = useState(false)
-  return <div data-tool="present" data-state={state} {...inspectScopeProps}>
+  return <div data-tool="present" data-state={state} data-inspect-scope>
     <DisclosureRow title={t('row.title')}
       icon={<IconDeliverDocRegular size={14} />}
       open={expanded && details !== ''} expandable={details !== ''} expandOnRowClick keepContentWhenOpen

@@ -12,12 +12,9 @@ export interface InspectButtonProps {
   className?: string | undefined
 }
 
-/** Spread onto the row root whose hover reveals its {@link InspectButton}. */
-export const inspectScopeProps = { 'data-inspect-scope': '' } as const
-
 /**
  * Render the in-flow pill that opens a process row's inspector record. It
- * stays hidden until an ancestor carrying {@link inspectScopeProps} is hovered or
+ * stays hidden until a `[data-inspect-scope]` ancestor is hovered or
  * the button has keyboard focus; touch-only devices always show it.
  * @param props - Label, action and placement class.
  * @returns the inspect button.
