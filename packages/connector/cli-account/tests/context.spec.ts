@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { cliPathContextText, registerCliPathContext, type CliPathContext } from '../src/context.ts'
@@ -12,13 +13,14 @@ const WINDOWS_RUN = 'Fixture CLI: run `fixture-cli` by its absolute path with th
 async function requiredContextOnly(): Promise<Context> {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { includeRuntimeContext: false })
   return ctx
 }
 
 /** Register the context from its own plugin, so disposing that plugin removes it. */
-async function register(ctx: Context, cli: CliPathContext) {
-  return await ctx.plugin(Object.assign((inner: Context) => { registerCliPathContext(inner, 'fixture:cli', cli) }, { inject: ['systemPrompt'] }))
+async function register(ctx: Context, cli: CliPathContext, ready?: () => boolean) {
+  return await ctx.plugin(Object.assign((inner: Context) => { registerCliPathContext(inner, 'fixture:cli', cli, ready) }, { inject: ['systemPrompt'] }))
 }
 
 async function rendered(ctx: Context) {
@@ -64,10 +66,10 @@ describe('registerCliPathContext', () => {
     expect((await rendered(ctx))[0]?.text).toContain('/opt/{{tools}}/fixture-cli')
   })
 
-  it('contributes nothing while the executable is not ready', async () => {
+  it('contributes nothing while the CLI is not ready', async () => {
     const ctx = await requiredContextOnly()
     let ready = false
-    await register(ctx, { ...CLI, scripts: true, ready: () => ready })
+    await register(ctx, { ...CLI, scripts: true }, () => ready)
 
     expect(await rendered(ctx)).toEqual([])
     ready = true

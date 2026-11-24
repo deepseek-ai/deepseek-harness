@@ -35,7 +35,7 @@ function ViewerForkMarker({ sessionId, useSessions, t }: PropsRuntime<'sidebar.s
   const sourceTitle = useSessions(list => lineage ? list.byId[brandString<SessionId>(lineage)]?.title : undefined)
   if (lineage === undefined) return null
   const label = sourceTitle ? t('viewer.row.forkSource', { title: sourceTitle }) : t('viewer.row.fork')
-  return <Tooltip label={label}><span><IconBranchOutlineRegular size={14} /></span></Tooltip>
+  return <Tooltip label={label}><span data-liveshare-fork-marker=""><IconBranchOutlineRegular size={14} /></span></Tooltip>
 }
 /**
  * Register the viewer's branch lineage marker.

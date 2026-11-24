@@ -64,9 +64,10 @@
           "type": "object",
           "properties": {
             "query": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "maxAppMatches": {
               "type": "integer",
@@ -108,6 +109,37 @@
           },
           "required": [
             "selector"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "launchApp"
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "appHandle": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "appHandle"
           ],
           "additionalProperties": false
         }
@@ -243,6 +275,10 @@
             },
             "details": {
               "description": "Include identifiers, global native bounds and complete action names.",
+              "type": "boolean"
+            },
+            "showDiff": {
+              "description": "Request changes since the previous comparable tree. Omit or pass false to request the full tree.",
               "type": "boolean"
             },
             "maxElements": {
@@ -518,7 +554,7 @@
                 "up"
               ]
             },
-            "useSystemPointer": {
+            "useSystemInput": {
               "type": "boolean"
             }
           },
@@ -570,7 +606,7 @@
                   "minLength": 1,
                   "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                 },
-                "useSystemPointer": {
+                "useSystemInput": {
                   "type": "boolean"
                 }
               },
@@ -604,7 +640,7 @@
                   "type": "number",
                   "minimum": 0
                 },
-                "useSystemPointer": {
+                "useSystemInput": {
                   "type": "boolean"
                 }
               },
@@ -699,6 +735,9 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 9007199254740991
+                },
+                "useSystemInput": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -772,6 +811,9 @@
                   "type": "integer",
                   "minimum": 0,
                   "maximum": 9007199254740991
+                },
+                "useSystemInput": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1080,6 +1122,9 @@
               "items": {
                 "type": "string"
               }
+            },
+            "useSystemInput": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -1128,16 +1173,14 @@
                 "up"
               ]
             },
-            "runId": {
-              "type": "string",
-              "minLength": 1
+            "useSystemInput": {
+              "type": "boolean"
             }
           },
           "required": [
             "appHandle",
             "key",
-            "direction",
-            "runId"
+            "direction"
           ],
           "additionalProperties": false
         }
@@ -1286,7 +1329,7 @@
               "minimum": 1,
               "maximum": 240
             },
-            "useSystemPointer": {
+            "useSystemInput": {
               "type": "boolean"
             }
           },
@@ -1335,37 +1378,6 @@
           "required": [
             "appHandle",
             "windowId"
-          ],
-          "additionalProperties": false
-        }
-      },
-      "required": [
-        "id",
-        "method",
-        "params"
-      ],
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string",
-          "const": "launchApp"
-        },
-        "params": {
-          "type": "object",
-          "properties": {
-            "appHandle": {
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "required": [
-            "appHandle"
           ],
           "additionalProperties": false
         }
@@ -1546,18 +1558,74 @@
         },
         "method": {
           "type": "string",
-          "const": "releaseHeldKeys"
+          "const": "getHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "releaseHeldInputs"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "const": "takeWindowActivity"
         },
         "params": {
           "type": "object",
           "properties": {
-            "runId": {
-              "type": "string",
-              "minLength": 1
+            "appHandle": {
+              "type": "string"
+            },
+            "observations": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[0-9]{1,20}$"
+              }
             }
           },
           "required": [
-            "runId"
+            "appHandle",
+            "observations"
           ],
           "additionalProperties": false
         }
@@ -1577,7 +1645,7 @@
         },
         "method": {
           "type": "string",
-          "const": "releaseSystemButton"
+          "const": "clearWindowActivity"
         },
         "params": {
           "type": "object",

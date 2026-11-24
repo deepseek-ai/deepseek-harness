@@ -4,8 +4,11 @@ import type { RefObject } from 'react'
 import { observeComposition } from './keyboard-composition.ts'
 import { focusWithoutRing } from './focus.ts'
 
+/** Active menu popups, including search controls outside the menu's ARIA row group. */
+export const menuPopupSelector = '[data-menu-popup], [role="menu"]'
+
 /** Dialog and menu elements whose document order determines foreground shortcut ownership. */
-export const modalSelector = '[role="dialog"][aria-modal="true"], [role="menu"]'
+export const modalSelector = `[role="dialog"][aria-modal="true"], ${menuPopupSelector}`
 
 const layers = new WeakMap<Document, { element: HTMLElement; close: () => void }[]>()
 
@@ -77,7 +80,7 @@ export function useModalLayer(dialog: RefObject<HTMLElement | null>, open: boole
       }
       if (event.key !== 'Tab') return
       // Portaled menus own their traversal while they contain focus.
-      if (document.activeElement?.closest('[role="menu"]')) return
+      if (document.activeElement?.closest(menuPopupSelector)) return
       const items = [...element.querySelectorAll<HTMLElement>(focusable)]
         .filter(item => !item.closest('[inert], [hidden]'))
       const first = items[0] ?? element

@@ -3,15 +3,14 @@
 import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconSearchOutlineRegular,
-  IconWarningTriangleOutlineRegular, Input, Menu, MenuItemButton, Tooltip,
+  IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronDownOutlineRegular,
+  IconWarningTriangleOutlineRegular, Menu, MenuItemButton, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeBaseBranch, ForgeBaseBranches } from '../types.ts'
 import { branchSearchStatus, useBranchSearch } from './branch-search.tsx'
 import type { NS } from './locales.ts'
-import { searchFieldKeyDown } from './menu-search.ts'
 import css from './BaseMenu.module.css'
 
 /** Props of the base branch picker. */
@@ -48,7 +47,7 @@ interface BaseOption {
 export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: BaseMenuProps): ReactNode {
   const [open, setOpen] = useState(false)
   const shown = visible && open
-  const { query, setQuery, listing, retry, reset, field } = useBranchSearch(shown, list)
+  const { query, setQuery, listing, retry, reset } = useBranchSearch(shown, list)
   const close = (): void => {
     setOpen(false)
     reset()
@@ -85,7 +84,6 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
         .map(branch => ({ key: branch.ref, name: branch.name, base: branch })),
     },
   ].filter(group => group.options.length > 0)
-  const first = groups[0]?.options[0]
 
   const body: ReactNode = branchSearchStatus({ listing, empty: groups.length === 0, retry, className: css.status, t })
     ?? groups.map(group => (
@@ -117,6 +115,7 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
       className={css.anchor}
       listClassName={css.menu}
       onClose={close}
+      search={{ label: t('diff.base.search'), value: query, onChange: setQuery, skipAutoFocusOnTouch: true }}
       anchor={(
         <Tooltip label={t('diff.base.aria', { base: label })} side="bottom" portal delayMs={500}>
           <button type="button" className={clsx(css.trigger, missing && css.missing)} aria-haspopup="menu" aria-expanded={shown}
@@ -130,12 +129,6 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
       )}
     >
       <div className={css.root} data-forge-base-menu="">
-        <div className={css.search}>
-          <Input ref={field} className={clsx(css.searchInput)} icon={<IconSearchOutlineRegular size={14} />} value={query}
-            aria-label={t('diff.base.search')} placeholder={t('diff.base.search')}
-            onChange={(event) => { setQuery(event.target.value) }}
-            onKeyDown={(event) => { searchFieldKeyDown(event, first === undefined ? undefined : () => { pick(first.base) }) }} />
-        </div>
         <div className={css.rows}>{body}</div>
         <div className={css.note}>{t('diff.base.note')}</div>
       </div>

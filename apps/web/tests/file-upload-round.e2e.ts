@@ -339,15 +339,10 @@ describe('web e2e: generic file upload through the real assembly', () => {
   it.skipIf(MODE === 'record')('keeps a mixed durable message in one ordered wrapping attachment flow', async () => {
     const groups = page.locator('[data-message-attachments]')
     await expect.poll(() => groups.count(), { timeout: 10_000 }).toBe(1)
+    await groups.getByRole('img', { name: IMAGE_NAMES[0]!, exact: true }).waitFor()
     const geometry = await groups.first().evaluate((element): HistoryAttachmentGeometry => {
-      const cards = [...element.children] as HTMLElement[]
-      const renderedCards = cards.map((card) => {
-        const box = card.getBoundingClientRect()
-        return box.width === 0 && box.height === 0 && card.firstElementChild instanceof HTMLElement
-          ? card.firstElementChild
-          : card
-      })
-      const boxes = renderedCards.map(card => card.getBoundingClientRect())
+      const cards = [...element.children].map(item => item.querySelector('button[data-variant="tile"]') ?? item)
+      const boxes = cards.map(card => card.getBoundingClientRect())
       const imageIndex = cards.findIndex(card => card.querySelector('img') !== null)
       const fileIndex = cards.findIndex(card => card.getAttribute('title') === 'poem.txt')
       const imageBox = boxes[imageIndex]
@@ -357,7 +352,7 @@ describe('web e2e: generic file upload through the real assembly', () => {
         fileIconBox: `${fileIcon.getBoundingClientRect().width} × ${fileIcon.getBoundingClientRect().height}`,
         fileIconColor: getComputedStyle(fileIcon).color,
         fileIconUsesSolidFill: fileIcon.querySelector('path')?.getAttribute('fill') === 'currentColor',
-        order: cards.map(card => card.getAttribute('title') ?? card.querySelector('img')?.getAttribute('alt') ?? ''),
+        order: cards.map(card => card.querySelector('img')?.getAttribute('alt') ?? card.getAttribute('title') ?? ''),
         oneGroup: document.querySelectorAll('[data-message-attachments]').length === 1,
         oneRow: boxes.every(box => Math.abs(box.top - (boxes[0]?.top ?? box.top)) < 0.5),
         equalHeight: boxes.every(box => Math.abs(box.height - 64) < 0.5),

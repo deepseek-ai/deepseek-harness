@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -139,6 +141,27 @@ describe('GeneralSection', () => {
     const { renderSlot } = mount()
     expect(renderSlot).toHaveBeenCalledWith('settings.general.item', {})
     expect(screen.getByTestId('slot-settings.general.item')).toBeTruthy()
+  })
+
+  it.each([false, true])('removes only the last element separator across items (trailing error: %s)', (trailingError) => {
+    const renderSlot: GeneralSectionComponentProps['renderSlot'] = () => (
+      <div data-slot="settings.general.item">
+        <div data-slot-error="settings.general.item" className="divider" />
+        <div data-slot-item=""><article className="divider" /><aside className="divider" /></div>
+        {trailingError && <div data-slot-error="settings.general.item" className="divider" />}
+        <div data-slot-item="">Plain text</div>
+        <div data-slot-item="" />
+      </div>
+    )
+    const { container } = render(<GeneralSection {...kit} close={vi.fn()} renderSlot={renderSlot} />)
+    const sheet = document.createElement('style')
+    // Vitest stubs CSS Modules; use the mounted class to apply the production selector.
+    sheet.textContent = '.divider { border-bottom: 2px dashed; }\n' + readFileSync(
+      resolve(import.meta.dirname, '../src/client/GeneralSection.module.css'), 'utf8',
+    ).replaceAll('.section', `.${container.firstElementChild!.className}`)
+    container.append(sheet)
+    const borders = [...container.querySelectorAll('.divider')].map(row => getComputedStyle(row).borderBottomStyle)
+    expect(borders).toEqual(trailingError ? ['dashed', 'dashed', 'dashed', 'none'] : ['dashed', 'dashed', 'none'])
   })
 })
 

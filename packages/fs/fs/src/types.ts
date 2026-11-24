@@ -143,6 +143,18 @@ export interface FsWriteOutcome {
   after: string
 }
 
+/**
+ * Outcome of a full-file byte write. Bytes carry no diff basis, so the outcome
+ * reports only what the write produced: a caller that needs the previous
+ * content reads it first.
+ */
+export interface FsWriteBytesOutcome {
+  /** Whether the write created a new file or replaced an existing one. */
+  operation: 'create' | 'update'
+  /** Opaque version of the file after the write. */
+  version: FsVersion
+}
+
 /** A literal-replacement edit request. */
 export interface FsEditRequest {
   /** Literal non-empty text to replace. Must match exactly (after line-ending normalization). */

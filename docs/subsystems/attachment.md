@@ -134,12 +134,14 @@ interface StoredImageAttachment {
 ```ts type-equiv
 /** Deterministic request-image target selected by one exact model route for one attachment. */
 interface ImageRequestTarget {
-  /** Target width in pixels; a target above the source keeps the source width. */
+  /** Maximum request width in pixels; byte-limit enforcement can produce a smaller image. */
   width: number
-  /** Target height in pixels; a target above the source keeps the source height. */
+  /** Maximum request height in pixels; byte-limit enforcement can produce a smaller image. */
   height: number
-  /** Encoded-byte target before base64 expansion or Files API upload; the smallest quality-ladder output is kept when no quality fits. */
-  maxBytes: number
+  /** Hard encoded-byte limit before base64 expansion or Files API upload; successful results never exceed it. */
+  maxImageBytes: number
+  /** Preferred encoded-byte target, no greater than maxImageBytes; exceeding only this target does not reduce resolution. */
+  imageTargetBytes: number
 }
 ```
 
@@ -299,9 +301,9 @@ fileHostPath(ref: FileAttachmentRef): string | undefined
 /**
  * Generate or read one deterministic model-request version from the stored normalized image.
  * @param ref - durable provider-independent normalized attachment reference.
- * @param target - route-chosen dimensions and byte target; an unmet byte target yields the smallest ladder output.
+ * @param target - route-chosen maximum dimensions, hard byte limit, and preferred byte target.
  * @param signal - optional cancellation.
- * @returns request bytes and the cache/upload identity covering every transform input.
+ * @returns request bytes within the hard limit, actual encoded dimensions, and a cache/upload identity covering every transform input.
  */
 readImageRequest( ref: ImageAttachmentRef, target: ImageRequestTarget, signal?: AbortSignal, ): Promise<RequestImageAttachment>
 ```

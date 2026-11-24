@@ -1,0 +1,23 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "### headline as a heading"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "body below the alternative"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

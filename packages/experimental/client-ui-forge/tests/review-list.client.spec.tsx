@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 /**
- * The review page's list column, its navigation row, and the label line: sections with their items, empty states, and
- * failures, the search box and pasted links, the filter menu, the navigation count, and labels folding into a chip.
+ * The review page's list column, its navigation row, and the label line: sections with their items and empty states,
+ * the notices of hosts that could not be read, the search box and pasted links, the filter menu of hosts and repositories,
+ * the navigation count, and labels folding into a chip.
  */
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ChangeRequestIssue, ChangeRequestLabel, ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestLabel, ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/types'
 import { en } from '../src/client/locales.ts'
 import { fittingLabels, ReviewLabels } from '../src/client/review-page/ReviewLabels.tsx'
 import { ReviewList, type ReviewListProps } from '../src/client/review-page/ReviewList.tsx'
@@ -31,10 +32,10 @@ const NOW = Date.parse('2026-10-09T00:05:00Z')
 /** Render the list column with every handler recorded and no choice made, unless `overrides` makes one. */
 function renderList(overrides: Partial<ReviewListProps> = {}) {
   const props: ReviewListProps = {
-    frame: undefined, stopped: null, selected: null, query: '', repository: null, repositories: [], directOnly: false, folded: {}, refreshing: false,
+    frame: undefined, stopped: null, selected: null, query: '', scope: null, repositories: [], directOnly: false, folded: {}, refreshing: false,
     now: NOW, view: 'detailed',
     onSelect: vi.fn(), onSearch: vi.fn(), onScope: vi.fn(), onToggleDirect: vi.fn(), onView: vi.fn(), onFold: vi.fn(), onRefresh: vi.fn(),
-    onRetry: vi.fn(), copyText: vi.fn(), t, ...overrides,
+    onRetry: vi.fn(), copyText: vi.fn(), onOpenSettings: undefined, t, ...overrides,
   }
   const view = render(<ReviewList {...props} />)
   /** The section of one list. */
@@ -50,11 +51,6 @@ function renderList(overrides: Partial<ReviewListProps> = {}) {
     return element
   }
   return { view, props, section, item }
-}
-
-function issue(number: number): ChangeRequestIssue {
-  const url = `https://github.com/octo/demo/issues/${number}`
-  return { repository: ref(number).repository, number, title: `Issue ${number}`, state: 'open', url }
 }
 
 function inRepository(number: number, owner: string, name: string, overrides: Partial<ChangeRequestSummary> = {}): ChangeRequestSummary {
@@ -158,74 +154,149 @@ describe('ReviewList sections', () => {
     expect(b.view.queryByText(/more not listed/)).toBeNull()
   })
 
-  it('shows skeleton rows for a list no host has read yet, and only the failure once a read failed', () => {
-    const b = renderList({ frame: frame(host({ authored: list(null), involved: failedList('unavailable', 'GitHub is down') })) })
+  it('shows skeleton rows for a list no host has read yet while a read runs, and none once every read settled', () => {
+    const lists = frame(host({ authored: list(null), involved: list([summary(1)]) }))
+    const b = renderList({ frame: { ...lists, reading: true } })
     expect(b.section('authored').querySelectorAll(`[aria-busy="true"] .${css.skeletonItem}`)).toHaveLength(3)
     expect(within(b.section('authored')).queryByRole('button', { name: /\d/ })).toBeNull()
-    const involved = b.section('involved')
-    expect(involved.querySelector('[aria-busy="true"]')).toBeNull()
-    expect(within(involved).getByRole('status').textContent).toBe('Couldn\'t read the list on github.com: GitHub is down')
+    cleanup()
+    const settled = renderList({ frame: lists })
+    expect(settled.section('authored').querySelector('[aria-busy="true"]')).toBeNull()
+    expect(settled.section('authored').textContent).toBe('Created by me')
   })
 
-  it('asks the user to sign in to a GitHub host with a command to copy, and to other hosts without one', () => {
-    const b = renderList({ frame: frame(
-      host({ authored: failedList('unauthenticated') }, { host: 'ghe.example' }),
+  it('keeps one skeleton row under the rows of the hosts that answered while another host still reads the list', () => {
+    const slow = { forge: 'gitlab', host: 'gitlab.com' }
+    const lists = frame(
+      host({ authored: list([summary(1)]), involved: list([]) }), host({ authored: list(null), involved: list(null) }, slow),
+    )
+    const b = renderList({ frame: { ...lists, reading: true } })
+    // The count and the empty text wait for the host that has not answered.
+    expect(b.section('authored').querySelectorAll('[data-forge-review-item]')).toHaveLength(1)
+    expect(b.section('authored').querySelectorAll(`[aria-busy="true"] .${css.skeletonItem}`)).toHaveLength(1)
+    expect(within(b.section('authored')).getByRole('button', { name: /Created by me/ }).textContent).toBe('Created by me')
+    expect(b.section('involved').querySelectorAll(`[aria-busy="true"] .${css.skeletonItem}`)).toHaveLength(3)
+    expect(within(b.section('involved')).queryByText('No change requests')).toBeNull()
+    cleanup()
+    // A host that failed is not waited for: its notice reports it.
+    const failed = frame(host({ authored: list([summary(1)]) }), host({ authored: failedList('unavailable') }, slow))
+    const c = renderList({ frame: { ...failed, reading: true } })
+    expect(c.section('authored').querySelector('[aria-busy="true"]')).toBeNull()
+    expect(within(c.section('authored')).getByRole('button', { name: /Created by me/ }).textContent).toBe('Created by me1')
+  })
+})
+
+describe('ReviewList hosts that could not be read', () => {
+  it('reports each host once after the sections, with its sign-in command and the way to the settings', () => {
+    const onOpenSettings = vi.fn()
+    const b = renderList({ onOpenSettings, frame: frame(
+      host({ 'authored': list([summary(1)]), 'review-requested': failedList('rate-limited'), 'involved': list([]) }),
+      host({ authored: failedList('unauthenticated'), involved: failedList('unauthenticated') }, { host: 'ghe.example', signIn: 'gh auth login --hostname ghe.example' }),
       host({ involved: failedList('unauthenticated') }, { forge: 'gitlab', host: 'gitlab.example' }),
-      host({ 'review-requested': failedList('rate-limited') }),
+      host({ involved: failedList('unavailable', 'glab could not start') }, { forge: 'gitlab', host: 'gitlab.com' }),
     ) })
-    const github = within(b.section('authored')).getByRole('status')
-    expect(github.textContent).toContain('Sign in to ghe.example to list your change requests')
-    expect(within(github).getByText('gh auth login --hostname ghe.example')).toBeTruthy()
-    fireEvent.click(within(github).getByRole('button', { name: 'Copy sign-in command' }))
+    const notices = b.view.getAllByRole('status')
+    expect(notices.map(notice => notice.getAttribute('data-forge-review-failure'))).toEqual(['github.com', 'ghe.example', 'gitlab.example', 'gitlab.com'])
+    // The notices follow the last section instead of repeating inside each one.
+    expect(b.section('involved').parentElement?.lastElementChild?.contains(notices[0] ?? null)).toBe(true)
+    expect(b.view.container.querySelector('[data-forge-review-section] [role="status"]')).toBeNull()
+    const [limited, enterprise, gitlab, down] = notices as [HTMLElement, HTMLElement, HTMLElement, HTMLElement]
+    expect(limited.textContent).toBe(`Couldn't read the list on github.com: ${en['change.failure.rateLimited']}Open settings`)
+    expect(enterprise.textContent).toContain('Sign in to ghe.example to list your change requests')
+    expect(within(enterprise).getByText('gh auth login --hostname ghe.example')).toBeTruthy()
+    fireEvent.click(within(enterprise).getByRole('button', { name: 'Copy sign-in command' }))
     expect(b.props.copyText).toHaveBeenCalledWith('gh auth login --hostname ghe.example')
-    const gitlab = within(b.section('involved')).getByRole('status')
-    expect(gitlab.textContent).toBe('Sign in to gitlab.example to list your change requests')
-    expect(within(gitlab).queryByRole('button')).toBeNull()
-    expect(within(b.section('review-requested')).getByRole('status').textContent).toBe(en['change.failure.rateLimited'])
+    // A provider that names no sign-in command leaves the notice without one.
+    expect(gitlab.textContent).toBe('Sign in to gitlab.example to list your change requestsOpen settings')
+    expect(within(gitlab).queryByRole('button', { name: 'Copy sign-in command' })).toBeNull()
+    expect(down.textContent).toBe('Couldn\'t read the list on gitlab.com: glab could not startOpen settings')
+    fireEvent.click(within(down).getByRole('button', { name: 'Open settings' }))
+    expect(onOpenSettings).toHaveBeenCalledOnce()
+  })
+
+  it('shows only the notices once no host listed anything, without a settings button while the settings cannot be opened', () => {
+    const lists = frame(
+      host({ 'authored': failedList('unauthenticated'), 'review-requested': failedList('unauthenticated') }, { signIn: 'gh auth login --hostname github.com' }),
+      host({ involved: failedList('unavailable', 'down') }, { forge: 'gitlab', host: 'gitlab.com' }),
+    )
+    const b = renderList({ frame: lists })
+    expect(b.view.container.querySelector('[data-forge-review-section]')).toBeNull()
+    const notices = b.view.getAllByRole('status') as [HTMLElement, HTMLElement]
+    expect(notices).toHaveLength(2)
+    expect(within(notices[0]).getAllByRole('button').map(button => button.textContent)).toEqual(['Copy sign-in command'])
+    expect(notices[1].textContent).toBe('Couldn\'t read the list on gitlab.com: down')
+    expect(within(notices[1]).queryByRole('button')).toBeNull()
+    cleanup()
+    // A later read of the hosts that failed changes nothing on the page until one answers.
+    const reading = renderList({ frame: { ...lists, reading: true } })
+    expect(reading.view.container.querySelector('[data-forge-review-section]')).toBeNull()
+    expect(reading.view.getAllByRole('status')).toHaveLength(2)
+    cleanup()
+    // A host still to answer keeps the sections, with their skeletons above the notices.
+    const first = renderList({ frame: { hosts: [...lists.hosts, host({ authored: list(null) }, { host: 'ghe.example' })], reading: true } })
+    expect(first.section('authored').querySelector('[aria-busy="true"]')).not.toBeNull()
+    expect(first.view.getAllByRole('status')).toHaveLength(2)
+  })
+
+  it('leaves out the notices and the lists of hosts other than the one the lists are narrowed to', () => {
+    const b = renderList({ scope: { host: 'github.com' }, frame: frame(
+      host({ authored: list([summary(1)]) }), host({ involved: failedList('unauthenticated') }, { forge: 'gitlab', host: 'gitlab.com' }),
+    ) })
+    expect(b.view.queryByRole('status')).toBeNull()
+    expect([...b.view.container.querySelectorAll('[data-forge-review-section]')].map(section => section.getAttribute('data-forge-review-section'))).toEqual(['authored'])
   })
 })
 
 describe('ReviewList items', () => {
-  it('names an item by its number, author, update time, closing issues, and the hint the user acts on', () => {
+  it('names an item by its number and author with the short update time beside them, then the hint the user acts on', () => {
     const b = renderList({ frame: frame(host({
       'review-requested': list([
-        summary(1, {
-          viewerReview: { verdict: 'changes-requested', reviewedSha: null }, viewerRequest: { team: null }, closingIssues: [issue(5)],
-        }),
-        summary(2, { author: null, updatedAt: 'not a time', checksRollup: 'none', closingIssues: [issue(5), issue(6), issue(8)] }),
-        summary(3, {
-          viewerReview: { verdict: 'approved', reviewedSha: 'a'.repeat(40) }, closingIssues: [issue(5)], closingIssuesTruncated: true,
-        }),
+        summary(1, { viewerReview: { verdict: 'changes-requested', reviewedSha: null }, viewerRequest: { team: null } }),
+        summary(2, { author: null, updatedAt: 'not a time', checksRollup: 'none' }),
+        summary(3, { viewerReview: { verdict: 'approved', reviewedSha: 'a'.repeat(40) } }),
         summary(4, { viewerRequest: { team: 'octo/core' }, checksRollup: 'failure' }),
       ]),
     })) })
     const first = b.item(prUrl(1))
-    expect(first.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#1·octo·5 min ago·⊙#5·You requested changes · Requested again')
-    expect(first.querySelector(`.${css.itemMeta} .${css.itemHint}`)?.textContent).toBe('You requested changes · Requested again')
+    expect(first.querySelector(`.${css.itemLine}`)?.textContent).toBe('#1·octo')
+    expect(first.querySelector(`.${css.itemMeta} > .${css.itemTime}`)?.textContent).toBe('5min')
+    // The hint stands beside the number and the author, so it shares their line where it fits and wraps below it where it does not.
+    expect(first.querySelector(`.${css.itemFacts} > .${css.itemHint}`)?.textContent).toBe('Re-review requested')
     expect(first.querySelector(`.${css.itemHint}`)?.getAttribute('data-tone')).toBe('error')
     expect(first.querySelector('[data-forge-glyph]')?.getAttribute('data-tone')).toBe('open')
     expect(first.querySelector('[data-checks]')?.getAttribute('data-checks')).toBe('success')
 
     const second = b.item(prUrl(2))
-    expect(second.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#2·⊙#5and 2 more')
+    expect(second.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#2')
+    expect(second.querySelector(`.${css.itemTime}`)).toBeNull()
     expect(second.querySelector(`.${css.itemHint}`)).toBeNull()
     expect(second.querySelector('[data-checks]')).toBeNull()
 
     const third = b.item(prUrl(3))
-    expect(third.querySelector(`.${css.itemIssues}`)?.textContent).toBe('⊙#5and 1+ more')
+    expect(third.querySelector(`.${css.itemHint}`)?.textContent).toBe('You approved')
     expect(third.querySelector(`.${css.itemHint}`)?.getAttribute('data-tone')).toBe('success')
 
     const fourth = b.item(prUrl(4))
-    expect(fourth.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#4·octo·5 min ago·Team octo/core')
+    expect(fourth.querySelector(`.${css.itemFacts}`)?.textContent).toBe('#4·octoTeam octo/core')
     expect(fourth.querySelector(`.${css.itemHint}`)?.textContent).toBe('Team octo/core')
     expect(fourth.querySelector(`.${css.itemHint}`)?.hasAttribute('data-tone')).toBe(false)
     expect(fourth.querySelector('[data-forge-glyph]')?.getAttribute('data-tone')).toBe('blocked')
   })
 
-  it('names each item\'s repository once the lists span more than one', () => {
+  it('names each item\'s repository before its number once the lists span more than one', () => {
     const b = renderList({ frame: frame(host({ authored: list([summary(1), inRepository(2, 'acme', 'widgets')]) })) })
-    expect(b.item(prUrl(1)).querySelector(`.${css.itemMeta}`)?.firstChild?.textContent).toBe('demo#1')
-    expect(b.item(prUrl(2)).querySelector(`.${css.itemMeta}`)?.firstChild?.textContent).toBe('widgets#2')
+    expect(b.item(prUrl(1)).querySelector(`.${css.itemName}`)?.textContent).toBe('demo#1')
+    expect(b.item(prUrl(2)).querySelector(`.${css.itemName} > .${css.itemRepository}`)?.textContent).toBe('widgets')
+    expect(b.item(prUrl(2)).querySelector(`.${css.itemName} > .${css.itemNumber}`)?.textContent).toBe('#2')
+    cleanup()
+    const single = renderList({ frame: frame(host({ authored: list([summary(1)]) })) })
+    expect(single.item(prUrl(1)).querySelector(`.${css.itemRepository}`)).toBeNull()
+    cleanup()
+    // Narrowed to one host, the lists span the repositories of that host only.
+    const narrowed = renderList({ scope: { host: 'github.com' }, frame: frame(
+      host({ authored: list([summary(1)]) }), host({ authored: list([inRepository(2, 'acme', 'widgets')]) }, { forge: 'gitlab', host: 'gitlab.example' }),
+    ) })
+    expect(narrowed.item(prUrl(1)).querySelector(`.${css.itemRepository}`)).toBeNull()
   })
 })
 
@@ -256,9 +327,7 @@ describe('ReviewList compact view', () => {
   it('names the full title and every fact of the detailed item in a hover card that copies the title', () => {
     vi.useFakeTimers()
     const b = renderList({ view: 'compact', frame: frame(host({ 'review-requested': list([
-      summary(1, {
-        viewerReview: { verdict: 'changes-requested', reviewedSha: null }, viewerRequest: { team: null }, closingIssues: [issue(5)],
-      }),
+      summary(1, { viewerReview: { verdict: 'changes-requested', reviewedSha: null }, viewerRequest: { team: null } }),
       inRepository(2, 'acme', 'widgets', { author: null, updatedAt: 'not a time' }),
     ]) })) })
     fireEvent.pointerEnter(b.item(prUrl(1)))
@@ -268,11 +337,11 @@ describe('ReviewList compact view', () => {
     act(() => { vi.advanceTimersByTime(1) })
     const first = screen.getByRole('button', { name: 'Copy title: Change 1' })
     expect(first.querySelector(`.${css.compactCardTitle}`)?.textContent).toBe('Change 1')
-    expect(first.querySelector(`.${css.itemMeta}`)?.textContent).toBe('octo/demo#1·octo·5 min ago·⊙#5')
-    expect(first.querySelector(`.${css.itemHint}`)?.textContent).toBe('You requested changes · Requested again')
+    expect(first.querySelector(`.${css.cardMeta}`)?.textContent).toBe('octo/demo#1·octo·5 min ago')
+    expect(first.querySelector(`.${css.itemHint}`)?.textContent).toBe('Re-review requested')
     expect(first.querySelector(`.${css.itemHint}`)?.getAttribute('data-tone')).toBe('error')
     const second = screen.getByRole('button', { name: 'Copy title: Change 2' })
-    expect(second.querySelector(`.${css.itemMeta}`)?.textContent).toBe('acme/widgets#2')
+    expect(second.querySelector(`.${css.cardMeta}`)?.textContent).toBe('acme/widgets#2')
     expect(second.querySelector(`.${css.itemHint}`)).toBeNull()
     cleanup()
 
@@ -281,7 +350,17 @@ describe('ReviewList compact view', () => {
     fireEvent.pointerEnter(single.item(prUrl(3)))
     act(() => { vi.advanceTimersByTime(800) })
     const card = screen.getByRole('button', { name: 'Copy title: Change 3' })
-    expect(card.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#3·octo·5 min ago')
+    expect(card.querySelector(`.${css.cardMeta}`)?.textContent).toBe('#3·octo·5 min ago')
+    cleanup()
+
+    // Once the lists span more than one host, the card starts with the host.
+    const hosts = renderList({ view: 'compact', frame: frame(
+      host({ authored: list([summary(4)]) }), host({ authored: list([inRepository(5, 'group/sub', 'app')]) }, { forge: 'gitlab', host: 'gitlab.example' }),
+    ) })
+    fireEvent.pointerEnter(hosts.item(prUrl(5)))
+    act(() => { vi.advanceTimersByTime(800) })
+    expect(screen.getByRole('button', { name: 'Copy title: Change 5' }).querySelector(`.${css.cardMeta}`)?.textContent)
+      .toBe('gitlab.example·group/sub/app#5·octo·5 min ago')
   })
 
   it('marquees a clipped title while the item is hovered and returns it on leave', () => {
@@ -382,7 +461,7 @@ describe('ReviewList filter menu', () => {
     const button = open(b)
     expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
     fireEvent.click(within(document.body).getByRole('menuitem', { name: 'acme/widgets' }))
-    expect(b.props.onScope).toHaveBeenCalledWith({ owner: 'acme', name: 'widgets' })
+    expect(b.props.onScope).toHaveBeenCalledWith({ host: 'github.com', owner: 'acme', name: 'widgets' })
     expect(button.getAttribute('aria-expanded')).toBe('false')
     open(b)
     repositories()
@@ -397,38 +476,69 @@ describe('ReviewList filter menu', () => {
   })
 
   it('keeps offering a chosen repository whose lists are empty, and names the chosen repository on its row', () => {
-    const b = renderList({ frame: lists, repository: { owner: 'zeta', name: 'empty' } })
+    const b = renderList({ frame: lists, scope: { host: 'github.com', owner: 'zeta', name: 'empty' } })
     const button = open(b)
     expect(button.matches(`.${css.iconButtonActive}`)).toBe(true)
     expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositoryzeta/empty')
     expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'zeta/empty'])
     cleanup()
 
-    const listed = renderList({ frame: lists, repository: { owner: 'acme', name: 'widgets' } })
+    const listed = renderList({ frame: lists, scope: { host: 'github.com', owner: 'acme', name: 'widgets' } })
     open(listed)
     expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositoryacme/widgets')
     expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
   })
 
   it('keeps offering the repositories remembered from every repository while the lists are read in one, marking the chosen one', () => {
-    const remembered = [{ owner: 'acme', name: 'widgets' }, { owner: 'octo', name: 'demo' }, { owner: 'zeta', name: 'tools' }]
+    const remembered = ['acme/widgets', 'octo/demo', 'zeta/tools'].map((path) => {
+      const [owner = '', name = ''] = path.split('/')
+      return { host: 'github.com', owner, name }
+    })
     // Lists read in octo/demo name only that repository.
     const scoped = frame(host({ authored: list([summary(1)]) }))
-    const b = renderList({ frame: scoped, repository: { owner: 'octo', name: 'demo' }, repositories: remembered })
+    const b = renderList({ frame: scoped, scope: { host: 'github.com', owner: 'octo', name: 'demo' }, repositories: remembered })
     open(b)
     expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'zeta/tools'])
     const child = within(document.body).getAllByRole('menu').at(-1) as HTMLElement
     expect(within(child).getAllByRole('menuitem').map(row => row.querySelector(CHECK) !== null)).toEqual([false, false, true, false])
     // Another repository is one choice away, without returning to every repository first.
     fireEvent.click(within(child).getByRole('menuitem', { name: 'zeta/tools' }))
-    expect(b.props.onScope).toHaveBeenCalledWith({ owner: 'zeta', name: 'tools' })
+    expect(b.props.onScope).toHaveBeenCalledWith({ host: 'github.com', owner: 'zeta', name: 'tools' })
     cleanup()
 
     // The offer also survives the wait for the chosen repository's first frame.
-    const waiting = renderList({ repository: { owner: 'octo', name: 'demo' }, repositories: remembered })
+    const waiting = renderList({ scope: { host: 'github.com', owner: 'octo', name: 'demo' }, repositories: remembered })
     open(waiting)
     expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'zeta/tools'])
     expect(within(document.body).queryByText('Reading the lists', { selector: '[role="menu"] *' })).toBeNull()
+  })
+
+  it('offers each host with its repositories below it once the lists name repositories on more than one host', () => {
+    const two = frame(
+      host({ authored: list([summary(1), inRepository(2, 'acme', 'widgets')]) }),
+      host({ involved: list([inRepository(3, 'group/sub', 'app')]) }, { forge: 'gitlab', host: 'gitlab.example' }),
+    )
+    const b = renderList({ frame: two })
+    open(b)
+    expect(repositories()).toEqual(['All repositories', 'github.com', 'acme/widgets', 'octo/demo', 'gitlab.example', 'group/sub/app'])
+    const offered = within(within(document.body).getAllByRole('menu').at(-1) as HTMLElement).getAllByRole('menuitem')
+    // A repository stands below the row of its host.
+    expect(offered.map(row => row.querySelector(`.${css.menuNested}`) !== null)).toEqual([false, false, true, true, false, true])
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'gitlab.example' }))
+    expect(b.props.onScope).toHaveBeenCalledWith({ host: 'gitlab.example' })
+    cleanup()
+
+    const narrowed = renderList({ frame: two, scope: { host: 'gitlab.example' } })
+    const button = open(narrowed)
+    expect(button.matches(`.${css.iconButtonActive}`)).toBe(true)
+    expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositorygitlab.example')
+    repositories()
+    const rows = within(within(document.body).getAllByRole('menu').at(-1) as HTMLElement).getAllByRole('menuitem')
+    expect(rows.map(row => row.querySelector(CHECK) !== null)).toEqual([false, false, false, false, true, false])
+    // Only the chosen host's change requests show, and a nested group's project is one choice.
+    expect([...narrowed.view.container.querySelectorAll('[data-forge-review-item]')].map(item => item.getAttribute('data-forge-review-item'))).toEqual([prUrl(3)])
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'group/sub/app' }))
+    expect(narrowed.props.onScope).toHaveBeenCalledWith({ host: 'gitlab.example', owner: 'group/sub', name: 'app' })
   })
 
   it('says that the lists are still read while no repository was remembered and a read is under way', () => {

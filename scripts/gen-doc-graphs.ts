@@ -108,6 +108,13 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'remoteConnection',
+    pkg: 'client-remote-connection',
+    title: 'Remote browser login',
+    mode: 'service',
+    note: 'Owns QR invitations, approved pairing requests, Remote browser credentials and the anonymous login document; its Client provides approval controls and an independent Token-link shortcut.',
+  },
+  {
     key: 'actionCards',
     pkg: 'action-cards',
     title: 'Optional action cards',
@@ -137,6 +144,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['headless'],
     note: 'Supplies parsed task and run options to the headless runner and its sandbox-policy configuration.',
+  },
+  {
+    key: 'im',
+    pkg: 'im',
+    title: 'Persistent IM automation',
+    mode: 'service',
+    consumers: ['im-session-commands'],
+    note: 'Owns durable intake, the hosted sessions of every admitted chat, and explicitly authorized reads and publications.',
   },
   {
     key: 'cotTranslation',

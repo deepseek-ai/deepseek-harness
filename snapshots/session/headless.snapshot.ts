@@ -498,6 +498,8 @@ async function seedWorkspace(scenario: HeadlessScenario, cwd: string): Promise<v
 
 const WORKTREE_CHECKOUT_FILTER = "printf 'FILTERED CHECKOUT CONTENT\\n'"
 const WORKTREE_CHECKOUT_ATTRIBUTES = 'tracked.txt filter=dsh-snapshot-checkout\n'
+/** The `.git` file of a checkout in the default worktree pool. */
+const WORKTREE_GIT_POINTER = /^\.agents\/worktrees\/[^/]+\/\.git$/
 
 const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
   async 'readonly-patch-directory'(cwd) {
@@ -842,9 +844,15 @@ function verifyMcpError(log: string, secret: string, oauth: boolean): void {
     const headers = prefix.flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
     expect(headers[0]?.tools?.some(tool => tool.name === 'mcp__protected__ping')).toBe(true)
     expect(headers.at(-1)?.tools?.some(tool => tool.name === 'mcp__protected__ping')).toBe(false)
-    expect(log).toContain('MCP_AUTHORIZED_INSTRUCTION')
     const system = messages.filter(message => message?.role === 'system')
-    expect(JSON.stringify(system)).not.toContain('MCP_AUTHORIZED_INSTRUCTION')
+    expect(system).toHaveLength(2)
+    expect(JSON.stringify(system[0])).toContain('MCP_AUTHORIZED_INSTRUCTION')
+    // Losing authorization keeps the server's section registered with empty text, admitted under its notice.
+    const update = system[1]!
+    const section = update.source.sections?.find(candidate => candidate.name === 'mcp:protected')
+    expect(section).toMatchObject({ state: 'active', noticeIndex: [expect.any(Number)] })
+    expect(update.content.map(block => block.type === 'text' ? block.text : undefined))
+      .toEqual(['The earlier instructions supplied by MCP server "protected" no longer apply.', ''])
   }
 }
 
@@ -852,7 +860,7 @@ function verifyNoMcpServers(log: string, ptc: boolean): void {
   const events = parseSessionLog(log)
   const headers = events.flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
   const prompts = events.flatMap(event => event.type === 'system/message'
-    ? event.data.message.content.filter(block => block.type === 'text').map(block => block.text) : [])
+    ? [event.data.message.content.filter(block => block.type === 'text').map(block => block.text).join('')] : [])
   expect(headers.length).toBeGreaterThan(0)
   expect(prompts.length).toBeGreaterThan(0)
   for (const header of headers) {
@@ -940,6 +948,15 @@ async function verifyWorktree(log: string, cwd: string): Promise<void> {
     `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(removed)}.`,
     `The working directory ${JSON.stringify(removed)} is unavailable. The working directory is now ${JSON.stringify(cwd)}.`,
   ])
+}
+
+/** Verify in Git that the Session's commit landed on the worktree's branch and left the source checkout's branch where it was. */
+function verifyWorktreeCommit(cwd: string): void {
+  const checkout = join(cwd, '.agents', 'worktrees', 'committing')
+  expect(snapshotGit(checkout, ['log', '-1', '--format=%s'])).toBe('Add note')
+  expect(snapshotGit(cwd, ['show', '--format=', '--name-only', 'refs/heads/committing'])).toBe('note.txt')
+  expect(snapshotGit(cwd, ['rev-parse', 'refs/heads/committing~1'])).toBe(snapshotGit(cwd, ['rev-parse', 'refs/heads/main']))
+  expect(snapshotGit(checkout, ['status', '--porcelain=v1'])).toBe('')
 }
 
 /** Exercise provider-cwd adoption through the shipped launcher without normalizing away the observation. */
@@ -1043,10 +1060,11 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   for (const [logIndex, log] of actualLogs.entries()) {
     const headers = normalizedHeaders(log.content, ctx)
     const prompts = normalizedSystemPrompts(log.content, ctx)
+    const promptChanges = scenario.manifest.header.promptChanges ?? pin.manifest.header.promptChanges ?? 0
     if (headers.length > 0) {
       expect(systemPromptPrecedesRequests(log.content), `${scenario.name}: a system/message precedes the first request/header`).toBe(true)
       expect(prompts.length, `${scenario.name}: system/message count`)
-        .toBe(1 + (logIndex === 0 ? pin.manifest.header.promptChanges ?? 0 : 0))
+        .toBe(1 + (logIndex === 0 ? promptChanges : 0))
     }
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
@@ -1058,9 +1076,21 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
       expect(
         formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)),
         `${scenario.name}: system prompts`,
-      ).toBe(childPrompts.get(logIndex) ?? prompt)
+      ).toBe(childPrompts.get(logIndex) ?? leadingPromptSections(prompt, logIndex === 0 ? promptChanges : 0))
     }
   }
+}
+
+/**
+ * Keep the pinned prompt sidecar through change `changes`; a scenario that declares fewer prompt changes than its pin
+ * compares against that leading part.
+ * @param prompt - complete pinned prompt sidecar.
+ * @param changes - prompt changes the scenario declares.
+ * @returns the sidecar text before change `changes + 1`.
+ */
+function leadingPromptSections(prompt: string, changes: number): string {
+  const end = prompt.indexOf(`\n<!-- system/message change ${changes + 1} -->`)
+  return end < 0 ? prompt : prompt.slice(0, end)
 }
 
 describe('headless recorded-session snapshots', () => {
@@ -1442,7 +1472,7 @@ describe('headless recorded-session snapshots', () => {
               ? {}
               : { DSH_PERMISSION_MODE: scenario.manifest.permission }),
             ...scenario.manifest.environment,
-            ...(scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc' ? {
+            ...(scenario.manifest.composition === 'mcp-resources' || scenario.manifest.composition === 'mcp-resources-ptc' ? {
               DSH_MCP_RESOURCES_FIXTURE: join(repoRoot, 'packages/mcp/mcp-client/tests/fixtures/resources-server.ts'),
             } : {}),
             NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
@@ -1563,11 +1593,28 @@ describe('headless recorded-session snapshots', () => {
                   type: 'text', text: expect.stringMatching(/^Error: cannot render ".+[\\/]report\.docx": model "deepseek-v4-flash" does not accept images$/u),
                 }])
               }
-              expect(results).toHaveLength(2)
+              expect(results).toHaveLength(1)
               expect(results.every(result => result.isError === false)).toBe(true)
-              expect(log).toContain('# Office task routing')
+              expect(log).toContain('# Office tasks')
             }
-            if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'complete-prompt-in-history') {
+              const events = parseSessionLog(actualLogs[0]!.content)
+              const systems = events.filter(event => event.type === 'system/message')
+              expect(systems.map(event => event.surfaceOp)).toEqual(['append', 'append', 'append', 'append'])
+              expect(systems.map(event => event.data.message.source.complete === true)).toEqual([false, true, true, false])
+              expect(events.filter(event => event.type === 'system/message' || event.type === 'tool/result')
+                .map(event => event.type)).toEqual([
+                'system/message', 'tool/result', 'system/message', 'tool/result',
+                'system/message', 'tool/result', 'system/message',
+              ])
+              const sections = systems.map(event => event.data.message.source.sections?.map(section => section.name))
+              expect(sections[1]).toEqual(['snapshot:complete'])
+              expect(sections[2]).toEqual(['snapshot:complete'])
+              expect(sections[3]?.filter(name => name !== 'snapshot:complete')).toEqual(sections[0])
+              expect(systems[3]!.data.message.source.sections?.find(section => section.name === 'snapshot:complete'))
+                .toMatchObject({ name: 'snapshot:complete', state: 'retired' })
+            }
+            if (scenario.manifest.composition === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
             if (scenario.name === 'subagent-depth-two-rejection') {
               expect(actualLogs).toHaveLength(3)
               const leaf = actualLogs[2]!
@@ -1583,11 +1630,11 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }
-            if (scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc') {
-              verifyMcpResources(actualLogs[0]!.content, scenario.name === 'mcp-resources-ptc')
+            if (scenario.manifest.composition === 'mcp-resources' || scenario.manifest.composition === 'mcp-resources-ptc') {
+              verifyMcpResources(actualLogs[0]!.content, scenario.manifest.composition === 'mcp-resources-ptc')
             }
-            if (scenario.name === 'mcp-empty' || scenario.name === 'mcp-empty-ptc') {
-              verifyNoMcpServers(actualLogs[0]!.content, scenario.name === 'mcp-empty-ptc')
+            if (scenario.manifest.composition === 'mcp-empty' || scenario.manifest.composition === 'mcp-empty-ptc') {
+              verifyNoMcpServers(actualLogs[0]!.content, scenario.manifest.composition === 'mcp-empty-ptc')
             }
             if (scenario.name === 'provider-cwd') {
               if (model === undefined) throw new Error('provider-cwd resume requires a recorded model')
@@ -1601,12 +1648,13 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name === 'worktree') {
               await verifyWorktree(actualLogs[0]!.content, await realpath(cwd))
             }
+            if (scenario.name === 'worktree-commit') verifyWorktreeCommit(await realpath(cwd))
             finalWorkspace = await captureWorkspaceSnapshot(cwd, {
               ignoredRootEntries: ignoredWorkspaceEntries,
             })
-            if (scenario.name === 'worktree') {
-              // The linked checkout's .git pointer contains the temporary source path; Git assertions verify it separately.
-              finalWorkspace = finalWorkspace.filter(entry => entry.path !== '.agents/worktrees/isolated/.git')
+            if (scenario.manifest.workspace?.setup === 'git-worktree') {
+              // A linked checkout's .git pointer contains the temporary source path; Git assertions verify it separately.
+              finalWorkspace = finalWorkspace.filter(entry => !WORKTREE_GIT_POINTER.test(entry.path))
             }
           },
         })

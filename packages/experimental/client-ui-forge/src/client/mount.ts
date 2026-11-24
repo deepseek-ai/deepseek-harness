@@ -43,12 +43,15 @@ import { ChangesTabTitle } from './ChangesTabTitle.tsx'
 import {
   CheckoutRow, ConnectionRow, LocalChangesRow, type CheckoutRowInjected, type ConnectionRowInjected, type LocalChangesRowInjected,
 } from './EnvironmentRows.tsx'
+import { HostSettings, type HostForge, type HostSettingsInjected } from './HostSettings.tsx'
+import { HostSettingsForm, type HostSettings as HostSettingsFields } from './host-settings-form.ts'
+import { HostSignInStates } from './host-sign-in.ts'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
 import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
 import { SessionRowForge } from './SessionRowForge.tsx'
 import {
-  createNoticeSource, createPanelSource, createStreamSource, foldStates, type PanelSource, type PanelStream,
+  createNoticeSource, createPanelSource, createStreamSource, foldStates, pageVisibility, type PanelSource, type PanelStream,
 } from './source.ts'
 import { numberOf, type ChangeRequestEntry } from './status.ts'
 import type { WorktreeRequestResult } from './WorktreeNameDialog.tsx'
@@ -60,11 +63,23 @@ import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.ts
 /** Services required before the Remote contribution mounts. */
 export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace']
 
+/** The Forge bundle, whose page on the Plugins page lists the rows below. */
+export const FORGE_BUNDLE = '@deepseek-ai/dsh-experimental-forge-bundle'
+
 /** The worktree row of the Forge bundle, whose Plugins page carries the archive cleanup switch. */
-export const WORKTREE_ROW_KEY = '@deepseek-ai/dsh-experimental-forge-bundle#worktree'
+export const WORKTREE_ROW_KEY = `${FORGE_BUNDLE}#worktree`
 
 /** The Loader entry id the worktree service's settings namespace follows. */
 export const WORKTREE_NS = 'worktree'
+
+/**
+ * The provider rows of the Forge bundle whose Plugins pages carry a host list. A row's id is also the Loader entry id
+ * its settings namespace follows.
+ */
+export const HOST_ROWS: readonly { readonly forge: HostForge; readonly row: string }[] = [
+  { forge: 'github', row: 'forge-github' },
+  { forge: 'gitlab', row: 'forge-gitlab' },
+]
 
 /**
  * Open a URL in a new browsing context without giving it access to this page.
@@ -79,7 +94,7 @@ interface SessionStores {
   readonly panel: PanelSource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
   readonly viewed: ViewedFiles
-  /** Refresh unless an automatic refresh of this Session ran within {@link AUTO_REFRESH_MIN_MS}. */
+  /** Revisit the Session's panel on the Host unless an automatic revisit of this Session ran within {@link AUTO_REFRESH_MIN_MS}. */
   readonly refreshIfStale: () => void
   /** Plugin annotations of each changes view of the Session, by address. */
   readonly annotations: Map<string, AnnotationView>
@@ -87,9 +102,9 @@ interface SessionStores {
 }
 
 /**
- * Least time between automatic refreshes of one Session, which run when the
+ * Least time between automatic revisits of one Session, which run when the
  * Session panel opens and when the window regains focus; repeated focus
- * changes then cost one checkout inspection and code host poll.
+ * changes then cost one checkout inspection.
  */
 const AUTO_REFRESH_MIN_MS = 10_000
 
@@ -162,6 +177,7 @@ function registerUi(ctx: Context): void {
           refreshIfStale()
         }),
         subscribeReset: listener => ctx.on('connection/reset', listener),
+        visibility: pageVisibility,
       })
       const dispose = scope.effect(() => () => {
         panel.close()
@@ -176,7 +192,7 @@ function registerUi(ctx: Context): void {
         const now = Date.now()
         if (refreshedAt !== undefined && now - refreshedAt < AUTO_REFRESH_MIN_MS) return
         refreshedAt = now
-        void refreshOf(sessionId)()
+        void ctx.remote.forgePanel.revisit(sessionId).then((result) => { settled(result, 'toast.refreshFailed') })
       }
       store = {
         panel, reviews: new WeakMap(), viewed: new ViewedFiles(sessionId), annotations: new Map(), refreshIfStale,
@@ -313,6 +329,10 @@ function registerUi(ctx: Context): void {
         reportAction(entry, await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha),
           { done: 'toast.merged', stale: 'toast.mergeStale', failed: 'toast.mergeFailed' })
       },
+      autoMerge: async (entry, request) => {
+        reportAction(entry, await ctx.remote.forgePanel.setAutoMerge(sessionId, entry.url, request),
+          { done: request.enabled ? 'toast.autoMergeEnabled' : 'toast.autoMergeCancelled', stale: 'toast.autoMergeStale', failed: 'toast.autoMergeFailed' })
+      },
       rerunChecks: async (entry, request) => {
         reportAction(entry, await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request),
           { done: 'toast.rerunRequested', stale: 'toast.rerunStale', failed: 'toast.rerunFailed' })
@@ -377,7 +397,8 @@ function registerUi(ctx: Context): void {
       changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),
       changeRequestCommits: (url, signal) => ctx.remote.forgePanel.changeRequestCommits(sessionId, url, signal),
       viewedFiles: store.viewed,
-      changeRequestViewed: (url, headSha, signal) => ctx.remote.forgePanel.changeRequestViewed(sessionId, url, headSha, signal),
+      changeRequestViewed: (url, headSha, fresh, signal) =>
+        ctx.remote.forgePanel.changeRequestViewed(sessionId, url, headSha, fresh, signal),
       setFileViewed: (url, request) => ctx.remote.forgePanel.setFileViewed(sessionId, url, request),
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
@@ -513,6 +534,7 @@ function registerUi(ctx: Context): void {
   const states = createStreamSource<ForgeChangeRequestStatesFrame, ReadonlyMap<string, ForgeChangeRequestListState>>({
     open: signal => ctx.remote.forgePanel.changeRequestStates(signal),
     subscribeReset: listener => ctx.on('connection/reset', listener),
+    visibility: pageVisibility,
   }, new Map(), foldStates)
   ctx.effect(() => () => { states.close() }, 'forge-panel: change request states')
   const listFace = (): SessionListInjected => ({ hooks: { states: states.observable } })
@@ -524,12 +546,35 @@ function registerUi(ctx: Context): void {
   }, SessionHoverForge))
   registerReviewPage(ctx, {
     notices, settled, nameOf, openLink, copyText, copyPath, locale, quoteReview: addReviewToInput, quoteThread: addThreadToInput,
+    hostSettings: FORGE_BUNDLE,
   })
   const worktreeSettings = new WorktreeSettingsForm(ctx.configForms.get<WorktreeSettingsFields>(WORKTREE_NS))
   ctx.effect(() => () => { worktreeSettings.dispose() }, 'forge-panel: worktree settings form')
   ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
     name: 'plugins.row.config', key: WORKTREE_ROW_KEY, locale: NS, inject: () => worktreeSettings.inject(),
   }, WorktreeSettings))
+  const hostRows = HOST_ROWS.map(row => ({ ...row, scope: ctx.configForms.get<HostSettingsFields>(row.row) }))
+  for (const { forge, row, scope } of hostRows) {
+    // A host has one provider, so a row refuses the hosts the other rows serve now.
+    const taken = (): string[] => hostRows.flatMap(other => other.row === row ? [] : other.scope.getSnapshot().value?.hosts ?? [])
+    const form = new HostSettingsForm(scope, taken)
+    const signIn = new HostSignInStates((host, signal) => ctx.remote.forgePanel.hostReadiness(forge, host, signal))
+    ctx.effect(() => () => {
+      form.dispose()
+      signIn.dispose()
+    }, `forge-panel: ${row} host settings`)
+    const { hooks, ...actions } = form.inject()
+    const face: HostSettingsInjected = {
+      ...actions,
+      hooks: { ...hooks, signIn: signIn.states },
+      forge,
+      checkSignIn: (hosts, visibly) => { signIn.check(hosts, visibly) },
+      copyCommand: (command) => { copy(command, 'toast.commandCopied') },
+    }
+    ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+      name: 'plugins.row.config', key: `${FORGE_BUNDLE}#${row}`, locale: NS, inject: () => face,
+    }, HostSettings))
+  }
 }
 
 /**

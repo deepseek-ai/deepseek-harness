@@ -18,6 +18,7 @@ struct NativeSnapshot {
     let id: String
     let scope: SnapshotScope
     let elements: [Int: AXUIElement]
+    let tree: AXTreeBaseline?
 }
 struct CaptureTarget: Sendable {
     let appHandle: String
@@ -60,9 +61,10 @@ struct ApplicationLaunch: Sendable {
     let handle: String
     let application: InstalledApplication
     let authorization: JSONValue
+    let source: ProcessIdentity?
 }
 private enum ApplicationTarget {
-    case running(ProcessIdentity)
+    case running(ProcessIdentity, JSONValue)
     case pending(InstalledApplication, JSONValue)
 }
 enum DriverOutcome: Sendable { case result(JSONValue), capture(CaptureTarget), foreground(ForegroundPlan), launch(ApplicationLaunch), paste(PastePlan), mouseMove(WindowRoute, WindowPoint), systemButtonDown(WindowRoute, CGMouseButton) }
@@ -81,15 +83,17 @@ actor AXWorker {
     private let maxClickHoldMs: Int
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
-    private let heldKeys: HeldKeys
+    private let connectionID: UUID
+    private let heldInputs: HeldInputs
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, heldKeys: HeldKeys = HeldKeys(),
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, heldInputs: HeldInputs = HeldInputs(), connectionID: UUID = UUID(),
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
-        self.heldKeys = heldKeys
+        self.heldInputs = heldInputs
+        self.connectionID = connectionID
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
@@ -119,8 +123,8 @@ actor AXWorker {
         if let keyboard, let pointer { return (keyboard, pointer) }
         let poster = PIDEventPoster()
         let latch = cancellation
-        let key = KeyboardInput(post: poster.post, textEventInterval: textEventInterval, held: heldKeys, checkCancellation: { try latch.check() })
-        let mouse = WindowPointerInput(poster: poster, checkCancellation: { try latch.check() })
+        let key = KeyboardInput(post: poster.post, textEventInterval: textEventInterval, held: heldInputs, connection: connectionID, checkCancellation: { try latch.check() })
+        let mouse = WindowPointerInput(poster: poster, held: heldInputs, checkCancellation: { try latch.check() })
         keyboard = key; pointer = mouse
         return (key, mouse)
     }
@@ -135,21 +139,45 @@ actor AXWorker {
         snapshots = snapshots.filter { $0.key.appHandle != handle }
         observedWindowBounds.removeValue(forKey: handle)
     }
-    func validateIdentity(_ handle: String) throws -> ProcessIdentity {
+    private func runningSelection(_ handle: String) throws -> (identity: ProcessIdentity, authorization: JSONValue) {
         guard !closed else { throw NativeFailure(code: "STALE_APP", message: "Helper is closing; acquire fresh application handles") }
-        guard case .running(let identity)? = targets[handle] else { throw NativeFailure(code: "STALE_APP", message: "Application handle expired; call getApp again") }
+        guard case .running(let identity, let authorization)? = targets[handle] else {
+            throw NativeFailure(code: "STALE_APP", message: "Application handle expired; call getApp again")
+        }
         do { try NativePlatform.verify(identity) }
         catch { forget(handle); throw error }
-        return identity
+        return (identity, authorization)
     }
-    private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
-        if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
-            if case .running(let value) = old.value, value == identity { return old.key }
+    func validateIdentity(_ handle: String) throws -> ProcessIdentity {
+        try runningSelection(handle).identity
+    }
+    /// Advisory lookup leaves target validation and error ordering to the requested operation.
+    func activityTarget(_ params: RequestParameters) -> ActivityTarget? {
+        guard !closed, let handle = params.values["appHandle"]?.string,
+              case .running(let identity, _)? = targets[handle] else { return nil }
+        let window = params.values["windowId"]?.string.flatMap(UInt32.init)
+        let scope = snapshots.values.first {
+            $0.scope.appHandle == handle && $0.id == params.values["snapshotId"]?.string
+        }
+        guard let id = window ?? scope?.scope.windowID else { return nil }
+        return ActivityTarget(process: identity, windowID: id)
+    }
+    func acquire(_ identity: ProcessIdentity, authorization: JSONValue, pendingHandle: String? = nil) throws -> String {
+        // Reuse requires the same process and selected authorization; changed authorization must re-select.
+        if let old = targets.first(where: { if case .running(let value, _) = $0.value { return value.pid == identity.pid }; return false }) {
+            if case .running(let value, let selected) = old.value, value == identity, selected["id"] == authorization["id"] {
+                return old.key
+            }
             forget(old.key)
         }
         let id = try pendingHandle ?? identifier("app")
-        targets[id] = .running(identity)
+        targets[id] = .running(identity, authorization)
         return id
+    }
+    func discardSnapshot(_ scope: SnapshotScope) {
+        snapshots.removeValue(forKey: scope)
+        if let windowID = scope.windowID { observedWindowBounds[scope.appHandle]?.removeValue(forKey: windowID) }
+        else { observedWindowBounds.removeValue(forKey: scope.appHandle) }
     }
     private func snapshot(_ handle: String, _ id: String) throws -> NativeSnapshot {
         guard let result = snapshots.values.first(where: { $0.scope.appHandle == handle && $0.id == id }) else {
@@ -195,21 +223,17 @@ actor AXWorker {
                              accessibilityError: failure.accessibilityError, attribute: failure.attribute)
     }
 
-    func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
+    func execute(_ method: String, deadline: ContinuousClock.Instant, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
-        if method == "releaseHeldKeys" {
-            try keyboard?.releaseHeldKeys(run: params.string("runId"))
-            return .result(Self.actionResult)
-        }
         if method == "getActionSchema" {
             return .result(try ActionSchema.parameter(action: params.string("action")))
         }
         var recovery = AXChildRecoveryBudget(maxElements: NativeProtocol.elementRange.upperBound, timeout: axTimeout)
         if method == "sendKeyEvent", try params.string("direction") == "up" {
             let handle = try params.string("appHandle")
-            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId")) {
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, useSystemInput: params.optionalBoolean("useSystemInput") ?? false) {
                 try NativePlatform.requireUnlocked(observeSession())
                 try NativePlatform.requireAccessibility()
                 return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog, budget: &recovery)
@@ -227,6 +251,7 @@ actor AXWorker {
             return .result(.array(catalog.selectableApplications.map { app in
                 var value = app.json.object ?? [:]
                 value["isRunning"] = .bool(true)
+                value["identity"] = app.identity.map(JSONValue.string) ?? .null
                 return .object(value)
             }))
         }
@@ -250,7 +275,7 @@ actor AXWorker {
             guard matches.count == 1, let app = matches.first else { throw Self.ambiguousApplication }
             let identity = try NativePlatform.identity(app.pid)
             let authorization = try ApplicationAuthorization.describe(identity, name: app.name ?? selector, expectedExecutablePath: app.executablePath)
-            let handle = try acquire(identity)
+            let handle = try acquire(identity, authorization: authorization)
             var response = app.json.object ?? [:]
             response["running"] = .bool(true)
             response["appHandle"] = .string(handle)
@@ -259,18 +284,30 @@ actor AXWorker {
         }
         let handle = try params.string("appHandle")
         if method == "launchApp" {
-            guard case .pending(let app, let authorization)? = targets[handle] else {
-                throw NativeFailure(code: "STALE_APP", message: "Pending application selection expired; call getApp again")
+            guard let target = targets[handle] else {
+                throw NativeFailure(code: "STALE_APP", message: "Application selection expired; call getApp again")
             }
-            guard try ApplicationAuthorization.describeInstalled(app) == authorization else {
-                forget(handle)
-                throw NativeFailure(code: "STALE_APP", message: "Application executable changed before launch; select it again")
+            switch target {
+            case .pending(let app, let authorization):
+                guard try ApplicationAuthorization.describeInstalled(app) == authorization else {
+                    forget(handle)
+                    throw NativeFailure(code: "STALE_APP", message: "Application executable changed before launch; select it again")
+                }
+                guard catalog.selectableApplications.filter(app.matchesProcess).count <= 1 else {
+                    forget(handle)
+                    throw Self.ambiguousApplication
+                }
+                return .launch(ApplicationLaunch(handle: handle, application: app, authorization: authorization, source: nil))
+            case .running(let identity, let authorization):
+                do { try NativePlatform.verify(identity) }
+                catch { forget(handle); throw error }
+                guard let process = catalog.application(identity.pid) else {
+                    throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application is no longer running; select the application again")
+                }
+                let application = try ApplicationDiscovery.installedApplication(for: process)
+                try ApplicationAuthorization.requireLaunchSelection(authorization, application: application)
+                return .launch(ApplicationLaunch(handle: handle, application: application, authorization: authorization, source: identity))
             }
-            guard catalog.selectableApplications.filter(app.matchesProcess).count <= 1 else {
-                forget(handle)
-                throw Self.ambiguousApplication
-            }
-            return .launch(ApplicationLaunch(handle: handle, application: app, authorization: authorization))
         }
         let identity = try validateIdentity(handle)
         if method == "listWindows" {
@@ -281,38 +318,35 @@ actor AXWorker {
             observedWindowBounds[handle] = observedWindowBounds[handle]?.filter { ids.contains($0.key) }
             return .result(.array(windows.map(\.json)))
         }
+        var previousTree: AXTreeBaseline?
         if method == "getState" {
             let windowID = try params.optionalWindowID()
-            snapshots.removeValue(forKey: SnapshotScope(appHandle: handle, windowID: windowID))
-            if let windowID { observedWindowBounds[handle]?.removeValue(forKey: windowID) }
-            else { observedWindowBounds.removeValue(forKey: handle) }
+            let scope = SnapshotScope(appHandle: handle, windowID: windowID)
+            previousTree = snapshots[scope]?.tree
+            discardSnapshot(scope)
         }
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
         switch method {
         case "show":
-            let windowID = try params.optionalWindowID()
-            if let windowID { _ = try NativePlatform.ownedWindow(identity.pid, windowID) }
-            let beforePID = NativePlatform.frontPID()
-            let beforeWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let restored = try ax().restoreWindow(windowID, owner: identity)
+            let shelf = try await StageManagerShelf.current()
+            let result = try await showWindow(params.optionalWindowID(), owner: identity, access: ax(), cancellation: cancellation,
+                                              deadline: deadline, sessionState: sessionState, shelf: shelf)
             _ = try validateIdentity(handle)
             try NativePlatform.requireUnlocked(observeSession())
-            let afterPID = NativePlatform.frontPID()
-            let afterWindow = NativePlatform.windows().first { $0.isOnScreen }?.windowID
-            let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
-                                                       afterPID: afterPID, afterWindow: afterWindow)
-            return .result(.object(["dispatched": .bool(true),
-                "windowId": restored.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
+            return .result(result)
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":
             let window = try params.optionalWindowID()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
-            let projection: AXProjection
+            let options = try AXTreeReadOptions(params)
+            let showDiff = try params.optionalBoolean("showDiff") ?? false
+            let numbered = showDiff || previousTree != nil
+            var projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
-                    maxElements: params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: params.integer("maxDepth", in: NativeProtocol.depthRange),
-                    includeMenus: params.optionalBoolean("includeMenus") ?? false, details: params.optionalBoolean("details") ?? false)
+                    maxElements: options.maxElements, maxDepth: options.maxDepth,
+                    includeMenus: options.includeMenus, details: options.details, numbered: numbered)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
             }
@@ -324,7 +358,10 @@ actor AXWorker {
             let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
-            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
+            let tree = numbered ? try AXTreeBaseline.observe(&projection, options: options, previous: showDiff ? previousTree : nil,
+                windowTitle: window.flatMap { id in observedWindows.first { $0.windowID == id }?.title }, checkCancellation: { try self.cancellation.check() }) : nil
+            try cancellation.check()
+            snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed, tree: tree)
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
@@ -351,14 +388,17 @@ actor AXWorker {
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
-            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
-                try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
+            let system = try params.optionalBoolean("useSystemInput") ?? false
+            try inputs().0.keyDown(params.string("key"), app: handle, useSystemInput: system) {
+                if system { return identity }
+                return try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             }
         case "typeText", "pressKey":
-            let recipient = try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
+            let system = try method == "pressKey" && (params.optionalBoolean("useSystemInput") ?? false)
+            let recipient = system ? identity : try ax().keyboardRecipient(identity, catalog: catalog, budget: &recovery)
             try NativePlatform.verify(recipient)
             if method == "typeText" { try inputs().0.typeText(params.string("text"), to: recipient.pid) }
-            else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid) }
+            else { try inputs().0.pressKey(params.string("key"), modifiers: params.modifiers(), to: recipient.pid, useSystemInput: system) }
         case "setValue": try ax().setAttribute(element(handle, params), "AXValue", params.values["value"])
         case "performAction":
             try ax().performAction(element(handle, params), action: params.string("action"), argument: params.values["argument"])
@@ -375,24 +415,18 @@ actor AXWorker {
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
         case "toggleMouse":
             let id = try params.windowID()
-            let isDown = try params.string("direction") == "down"
-            let window: WindowInfo
-            if isDown {
-                guard NativePlatform.frontPID() == identity.pid else {
-                    throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Activate the selected application before pressing a mouse button")
-                }
-                window = try ax().coordinateWindow(identity, id, budget: &recovery).window
-            } else {
-                window = try NativePlatform.ownedWindow(identity.pid, id)
+            guard NativePlatform.frontPID() == identity.pid else {
+                throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Activate the selected application before pressing a mouse button")
             }
+            let window = try ax().coordinateWindow(identity, id, budget: &recovery).window
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
-            if try params.optionalBoolean("useSystemPointer") == true {
+            if try params.optionalBoolean("useSystemInput") == true {
                 return .systemButtonDown(route, try WindowPointerInput.button(params.string("mouseButton")))
             }
-            try await inputs().1.toggleMouse(in: route,
-                                             button: params.string("mouseButton"), isDown: isDown)
+            try await inputs().1.mouseDown(owner: .init(connection: connectionID, app: handle),
+                                          in: route, button: params.string("mouseButton"))
         case "click", "mouseMove":
-            let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false
+            let useSystemInput = try params.optionalBoolean("useSystemInput") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
@@ -412,7 +446,7 @@ actor AXWorker {
                 }
                 if method == "mouseMove" {
                     _ = try NativePlatform.ownedWindow(identity.pid, enclosing.id)
-                    if !useSystemPointer { return try moveUsingAX(selected, windowID: enclosing.id, handle: handle) }
+                    if !useSystemInput { return try moveUsingAX(selected, windowID: enclosing.id, handle: handle) }
                 } else {
                     try ax().requireEnabled(selected)
                 }
@@ -429,7 +463,7 @@ actor AXWorker {
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
                 try WindowPointerInput.validate(point, in: route)
-                if !useSystemPointer {
+                if !useSystemInput {
                     var hit = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
                     if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
                     return try moveUsingAX(hit, windowID: window.windowID, handle: handle)
@@ -447,7 +481,7 @@ actor AXWorker {
                 try NativePlatform.verify(panel.process)
                 clickRoute = WindowRoute(owner: panel.process, windowID: panel.windowID, bounds: serviceWindow.bounds)
             }
-            try await inputs().1.click(in: clickRoute, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs)
+            try await inputs().1.click(in: clickRoute, at: point, button: button, count: count, modifiers: modifiers, holdMs: holdMs, useSystemInput: useSystemInput)
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)
@@ -461,7 +495,7 @@ actor AXWorker {
                 try await inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
                     durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240),
                     button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers(),
-                    useSystemPointer: params.optionalBoolean("useSystemPointer") ?? false)
+                    useSystemInput: params.optionalBoolean("useSystemInput") ?? false)
             }
         default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }
@@ -486,6 +520,14 @@ actor AXWorker {
         return .object(value)
     }
     func finishLaunch(_ plan: ApplicationLaunch, pid: Int32, catalog: ApplicationCatalogSnapshot) throws -> JSONValue {
+        if let source = plan.source {
+            try cancellation.check()
+            guard try validateIdentity(plan.handle) == source else {
+                throw NativeFailure(code: "STALE_APP", message: "Application process changed during launch; select the application again")
+            }
+            guard pid > 0 else { throw NativeFailure(code: "APP_UNAVAILABLE", message: "Application exited during launch") }
+            return Self.actionResult
+        }
         do {
             try cancellation.check()
             guard case .pending(let app, let original)? = targets[plan.handle], app == plan.application, original == plan.authorization,
@@ -500,7 +542,7 @@ actor AXWorker {
             if original["persistable"] == .bool(true), actual["id"] != original["id"] {
                 throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
             }
-            guard try acquire(identity, pendingHandle: plan.handle) == plan.handle else {
+            guard try acquire(identity, authorization: actual, pendingHandle: plan.handle) == plan.handle else {
                 throw NativeFailure(code: "STALE_APP", message: "This connection already has a handle for this process. Use the existing handle or retrieve it with getApp")
             }
             var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "running": .bool(true), "name": .string(app.name)]
@@ -544,8 +586,6 @@ actor AXWorker {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
     }
     func shutdown() {
-        do { try keyboard?.releaseHeldKeys() }
-        catch { fputs("Could not release held keys on disconnect: \(error)\n", stderr) }
         closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll()
         access = nil; keyboard = nil; pointer = nil
     }

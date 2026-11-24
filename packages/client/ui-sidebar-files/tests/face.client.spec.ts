@@ -395,6 +395,31 @@ describe('filesFace', () => {
     await stream.released.promise
   })
 
+  it('records a watch failure the Host reported under its own code', async () => {
+    const h = mount()
+    const reported = Promise.withResolvers<undefined>()
+    const unsubscribe = h.instance.subscribe(() => {
+      const level = h.snapshot()?.levels[ROOT]
+      if (level?.kind === 'ready' && level.failure !== undefined) reported.resolve(undefined)
+    })
+    onTestFinished(unsubscribe)
+    h.attach()
+    h.face.hold(PANE, ROOT)
+    const stream = await h.watches.forPath(ROOT)
+    // The Remote face's bundle throws its own copy of the class, which fails `instanceof` in this one.
+    stream.fail(Object.assign(new Error('no entry at "/work/app"'), {
+      isDSHRemoteError: true, code: 'workspace-file/not-found', details: { path: ROOT },
+    }))
+    expect((await h.waitForList(0)).path).toBe(ROOT)
+    await h.settle({ ok: true, value: LEVEL })
+    await reported.promise
+    expect(h.snapshot()!.levels[ROOT]).toMatchObject({
+      kind: 'ready', level: LEVEL,
+      failure: { code: 'workspace-file/not-found', message: 'no entry at "/work/app"', details: { path: ROOT } },
+    })
+    await stream.released.promise
+  })
+
   it('does not publish a watch failure when the pane closes during its fallback list', async () => {
     const close = vi.spyOn(DirectoryNode.prototype, 'close')
     onTestFinished(() => { close.mockRestore() })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  checkCounts, checkDuration, ciSummary, flagOf, needsAttention, numberOf, toneOf,
+  checkCounts, checkDuration, ciSummary, flagOf, mergeBlockers, needsAttention, numberOf, toneOf,
 } from '../src/client/status.ts'
 import { check, entry, ref, snapshot, unserved } from './client-fixtures.client.ts'
 
@@ -145,5 +145,18 @@ describe('checkDuration', () => {
     ['a completion before the start', { completedAt: '2026-10-09T09:59:59Z' }],
   ])('measures nothing for %s', (_label, overrides) => {
     expect(checkDuration(check('test', overrides))).toBeUndefined()
+  })
+})
+
+describe('mergeBlockers', () => {
+  it('names each reason the snapshot shows, the conflict first', () => {
+    const blocked = snapshot(7, { mergeability: 'conflicting', reviewDecision: 'changes-requested', checksRollup: 'failure' })
+    expect(mergeBlockers(blocked)).toEqual(['change.blocked.conflict', 'change.blocked.changesRequested', 'change.blocked.checksFailed'])
+    expect(mergeBlockers(snapshot(7, { reviewDecision: 'review-required', checksRollup: 'pending' })))
+      .toEqual(['change.blocked.reviewRequired', 'change.blocked.checksPending'])
+  })
+
+  it('names the general reason when the snapshot shows none, as for a user without the right to merge', () => {
+    expect(mergeBlockers(snapshot(7, { mergeability: 'mergeable', reviewDecision: 'approved', checksRollup: 'success' }))).toEqual(['change.blocked.other'])
   })
 })

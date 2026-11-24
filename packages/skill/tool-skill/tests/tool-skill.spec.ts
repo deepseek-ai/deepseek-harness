@@ -59,9 +59,9 @@ async function writeSkill(root: string, name: string, description: string, body:
 async function setup(home: string, config: toolSkill.Config = {}): Promise<Context> {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx, home)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(NativeToolExecutor)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SkillRegistry)
@@ -199,9 +199,9 @@ describe('dsh-tool-skill', () => {
   it('registers the skill tool schema and removes it on dispose', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     const home = await tempDir('tool-schema')
@@ -893,9 +893,9 @@ describe('dsh-tool-skill', () => {
     const home = await tempDir('tool-invalid-catalog-cap')
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx, home)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(NativeToolExecutor)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SkillRegistry)
@@ -1129,6 +1129,23 @@ describe('user-explicit invocation injection', () => {
     const ctx = await setup(home)
     return { ctx, agent: agentForCwd(home) }
   }
+
+  it('omits excluded names from user invocations and the session catalog', async () => {
+    const home = await tempDir('excluded-skills')
+    const ctx = await setup(home, { excludedSkills: ['hidden'] })
+    for (const name of ['visible', 'hidden']) {
+      ctx.skills.register({ name, description: name, source: 'runtime', content: name })
+    }
+    const decision = await proposeStep(ctx, agentForCwd(home), [gesture('/hidden /visible')])
+    if (decision.kind !== 'enter') throw new Error('expected enter')
+    expect(decision.messages.flatMap(({ source }) => source.kind === 'skill-invocation' ? [source.name] : [])).toEqual(['visible'])
+    expect(decision.messages.flatMap(({ source }) => source.kind === 'skill-catalog' ? source.entries.map(entry => entry.name) : [])).toEqual(['visible'])
+  })
+
+  it('rejects invalid excluded skill names at startup', async () => {
+    await expect(setup(await tempDir('invalid-exclusion'), { excludedSkills: ['bad/name'] }))
+      .rejects.toThrow('invalid excluded skill name "bad/name"')
+  })
 
   it('injects a user-invocable skill named by a leading /token, after every other injection', async () => {
     const { ctx, agent } = await invokeHarness()

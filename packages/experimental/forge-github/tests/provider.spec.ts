@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
-import { CANDIDATES_QUERY } from '../src/overview.ts'
+import { CANDIDATES_QUERY, DISABLE_AUTO_MERGE_MUTATION, ENABLE_AUTO_MERGE_MUTATION } from '../src/overview.ts'
 import { VIEWED_QUERY } from '../src/viewed.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import type { GitHubLimits } from '../src/provider.ts'
@@ -28,11 +28,12 @@ function output(stdout: unknown, exitCode = 0, stderr = ''): GhOutput {
 }
 
 const limits: GitHubLimits = {
-  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
+  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, snapshotBatchSize: 8, briefBatchSize: 50,
+  maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
 }
 
-function provider(run: GhRunner): GitHubProvider {
-  return new GitHubProvider(run, ['github.com', 'GHE.corp.example'], limits)
+function provider(run: GhRunner, overrides: Partial<GitHubLimits> = {}): GitHubProvider {
+  return new GitHubProvider(run, ['github.com', 'GHE.corp.example'], { ...limits, ...overrides })
 }
 
 describe('GitHub provider addressing', () => {
@@ -328,6 +329,112 @@ describe('GitHub provider fetch', () => {
     })
 
     await expect(subject.fetch([pull(1)], signal)).rejects.toThrow('aborted')
+  })
+})
+
+describe('GitHub provider snapshot queries', () => {
+  it('names the sizes of its queries to the registry', () => {
+    const subject = provider(fakeGh(() => output('')).run, { snapshotBatchSize: 3, briefBatchSize: 7 })
+
+    expect([subject.snapshotBatchSize, subject.briefBatchSize]).toEqual([3, 7])
+  })
+
+  /** Pull request numbers one snapshot query reads, in alias order. */
+  function documentNumbers(args: readonly string[]): number[] {
+    const query = args.find(arg => arg.startsWith('query=')) ?? ''
+    return [...query.matchAll(/pullRequest\(number: (\d+)\)/g)].map(match => Number(match[1]))
+  }
+
+  /** Answer a snapshot query of `demo` pull requests with one node each. */
+  function answer(args: readonly string[]): GhOutput {
+    return output({ data: { r0: Object.fromEntries(documentNumbers(args).map((number, index) => [`p${index}`, pullRequestNode(number)])) } })
+  }
+
+  function pulls(count: number): ReturnType<typeof pull>[] {
+    return Array.from({ length: count }, (_, index) => pull(index + 1))
+  }
+
+  it.each([
+    [1, {}, [1]],
+    [8, {}, [8]],
+    [9, {}, [8, 1]],
+    [17, {}, [8, 8, 1]],
+    [7, { snapshotBatchSize: 3 }, [3, 3, 1]],
+    [3, { snapshotBatchSize: 1 }, [1, 1, 1]],
+  ])('reads %i pull requests under limits %j in queries of %j, in order', async (count, overrides, sizes) => {
+    const gh = fakeGh(answer)
+    const refs = pulls(count)
+
+    const results = await provider(gh.run, overrides).fetch(refs, signal)
+
+    expect(gh.calls.map(call => documentNumbers(call).length)).toEqual(sizes)
+    expect(gh.calls.flatMap(documentNumbers)).toEqual(refs.map(ref => ref.number))
+    for (const ref of refs) expect(results.get(changeRequestKey(ref))).toMatchObject({ title: `Change ${ref.number}` })
+  })
+
+  it('sends a query only after the previous one is answered', async () => {
+    const first = Promise.withResolvers<undefined>()
+    const gh = fakeGh(async (args) => {
+      if (documentNumbers(args)[0] === 1) await first.promise
+      return answer(args)
+    })
+
+    const read = provider(gh.run).fetch(pulls(9), signal)
+    await new Promise(resolve => setImmediate(resolve))
+    expect(gh.calls).toHaveLength(1)
+    first.resolve(undefined)
+
+    expect((await read).size).toBe(9)
+    expect(gh.calls).toHaveLength(2)
+  })
+
+  it.each([
+    ['times out', () => { throw new GhTimeoutError('gh api timed out after 30000ms') }, 'unavailable', 'gh api timed out after 30000ms'],
+    ['prints over its limit', () => { throw new GhOutputLimitError('gh api output exceeds maxOutputBytes') }, 'too-large',
+      'gh api output exceeds maxOutputBytes'],
+    ['cannot start', () => { throw new GhUnavailableError('gh could not start: spawn gh ENOENT') }, 'unavailable',
+      'gh could not start: spawn gh ENOENT'],
+    ['is refused', () => output('', 1, 'HTTP 502: Bad Gateway (https://api.github.com/graphql)'), 'unavailable',
+      'HTTP 502: Bad Gateway (https://api.github.com/graphql)'],
+    ['meets a GraphQL timeout', () => output({ data: null, errors: [{ message: 'Something went wrong while executing your query.' }] }),
+      'unavailable', 'Something went wrong while executing your query.'],
+  ] as const)('fails only the pull requests of a query that %s', async (_, fail, code, message) => {
+    const gh = fakeGh(args => documentNumbers(args)[0] === 9 ? fail() : answer(args))
+    const refs = pulls(17)
+
+    const results = await provider(gh.run).fetch(refs, signal)
+
+    expect(gh.calls).toHaveLength(3)
+    for (const ref of refs) {
+      expect(results.get(changeRequestKey(ref))).toEqual(ref.number >= 9 && ref.number <= 16
+        ? { code, message } : expect.objectContaining({ title: `Change ${ref.number}` }))
+    }
+  })
+
+  it.each([
+    ['after a query is answered', false],
+    ['while a query runs', true],
+  ])('sends no further query once cancelled %s', async (_, during) => {
+    const controller = new AbortController()
+    const gh = fakeGh((args) => {
+      if (documentNumbers(args)[0] !== 9) return answer(args)
+      controller.abort(new Error('cancelled'))
+      if (during) throw controller.signal.reason
+      return answer(args)
+    })
+
+    await expect(provider(gh.run).fetch(pulls(17), controller.signal)).rejects.toThrow('cancelled')
+    expect(gh.calls).toHaveLength(2)
+  })
+
+  it.each([
+    ['in a later query of the same host', () => [...pulls(8), pull(9, { ...demo, owner: 'oc"to' })]],
+    ['on a later host', () => [pull(1), pull(2, { ...enterprise, owner: 'te"am' })]],
+  ])('rejects a reference it cannot inline %s before the first request', async (_, refs) => {
+    const gh = fakeGh(answer)
+
+    await expect(provider(gh.run).fetch(refs(), signal)).rejects.toThrow('invalid repository')
+    expect(gh.calls).toEqual([])
   })
 })
 
@@ -834,6 +941,56 @@ describe('GitHub provider overview and viewed marks', () => {
     ])
   })
 
+  it('turns auto-merge on for the confirmed head and off, each through one mutation on standard input', async () => {
+    const gh = double(() => node)
+    const subject = provider(gh.run)
+    await expect(subject.setAutoMerge(pull(1), { enabled: true, method: 'rebase', headSha: HEAD }, signal)).resolves.toBeUndefined()
+    await expect(subject.setAutoMerge(pull(1), { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(gh.inputs).toEqual([
+      { query: ENABLE_AUTO_MERGE_MUTATION, variables: { input: { pullRequestId: 'PR_1', mergeMethod: 'REBASE', expectedHeadOid: HEAD } } },
+      { query: DISABLE_AUTO_MERGE_MUTATION, variables: { input: { pullRequestId: 'PR_1' } } },
+    ])
+    const mutation = ['api', 'graphql', '--hostname', 'github.com', '--input', '-']
+    expect(gh.calls.filter(args => args.includes('--input'))).toEqual([mutation, mutation])
+  })
+
+  const MOVED = 'e'.repeat(40)
+  const squash = { enabled: true, method: 'squash', headSha: HEAD } as const
+  /** GitHub's answer to a mutation it refuses, as `gh api graphql` prints it. */
+  const refused = (message: string): GhOutput =>
+    output({ data: { enablePullRequestAutoMerge: null }, errors: [{ type: 'UNPROCESSABLE', message }] }, 1, `gh: ${message}`)
+
+  it.each([
+    ['a refusal while the head stays', HEAD, refused('Pull request Pull request is in clean status'),
+      { code: 'failed', message: 'Pull request Pull request is in clean status' }, 2],
+    ['a refusal after the head moved', MOVED, refused('Head moved'),
+      { code: 'stale', message: `the pull request head moved from ${HEAD} to ${MOVED}` }, 2],
+    ['an error that does not name a refusal', HEAD, output({ data: null, errors: [{ message: 'Something went wrong' }] }, 1),
+      { code: 'unknown', message: 'Something went wrong' }, 1],
+    ['a server error', HEAD, output('', 1, 'gh: HTTP 502'), { code: 'unknown', message: 'gh: HTTP 502' }, 1],
+    ['a timeout', HEAD, new GhTimeoutError('gh timed out'), { code: 'unknown', message: 'gh timed out' }, 1],
+    ['a gh that cannot start', HEAD, new GhUnavailableError('gh could not start'), { code: 'failed', message: 'gh could not start' }, 2],
+  ])('reports turning auto-merge on answered with %s, sending the mutation once', async (_label, later, answer, failure, reads) => {
+    let read = 0
+    const gh = double(() => read++ === 0 ? node : { data: { repository: { pullRequest: { id: 'PR_1', headRefOid: later } } } }, () => {
+      if (answer instanceof Error) throw answer
+      return answer
+    })
+    await expect(provider(gh.run).setAutoMerge(pull(1), squash, signal)).resolves.toEqual(failure)
+    expect(gh.inputs).toHaveLength(1)
+    expect(read).toBe(reads)
+  })
+
+  it.each([
+    ['a head that moved', () => output({ data: { repository: { pullRequest: { id: 'PR_1', headRefOid: MOVED } } } }), 'stale'],
+    ['missing credentials', () => output('', 1, 'gh: HTTP 401: Bad credentials'), 'unauthenticated'],
+    ['a pull request GitHub does not show', () => output({ data: { repository: { pullRequest: null } } }), 'failed'],
+  ] as const)('refuses to turn auto-merge on after %s, without a mutation', async (_label, answer, code) => {
+    const gh = fakeGh(answer)
+    await expect(provider(gh.run).setAutoMerge(pull(1), squash, signal)).resolves.toMatchObject({ code })
+    expect(gh.calls).toHaveLength(1)
+  })
+
   it('reruns each workflow run with a failed Actions job once, after confirming the head', async () => {
     const actions = (name: string, conclusion: string, run: number | null) => ({ ...checkRun(name, 'COMPLETED', conclusion),
       checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: run, event: 'pull_request', workflow: { id: name, name } } } })
@@ -899,6 +1056,7 @@ describe('GitHub provider overview and viewed marks', () => {
     await expect(subject.requestReviews(unconfigured, { reviewers: [{ kind: 'user', login: 'mona' }] }, signal)).resolves.toEqual(failure)
     await expect(subject.reviewerCandidates(unconfigured, '', signal)).resolves.toEqual({ ...failure, code: 'unavailable' })
     await expect(subject.updateBranch(unconfigured, { method: 'merge', headSha: HEAD }, signal)).resolves.toEqual(failure)
+    await expect(subject.setAutoMerge(unconfigured, { enabled: false }, signal)).resolves.toEqual(failure)
     expect(gh.calls).toEqual([])
   })
 })

@@ -6,6 +6,7 @@
  * cases are the policy's own answers rather than this host's substitute for them.
  */
 
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import {
   existsSync,
   mkdirSync,
@@ -100,6 +101,7 @@ beforeEach(async () => {
 
   ctx = new Context()
   provideWorkingDirectoryFixture(ctx, root)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)

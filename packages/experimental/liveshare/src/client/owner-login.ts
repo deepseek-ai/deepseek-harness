@@ -3,14 +3,14 @@
  *
  * The owner host is the authority here as it is for every other identity fact: it mints one
  * short-lived transaction bound to the Relay address, the Relay instance, and this page's origin, and
- * it keeps that transaction's verifier to itself. This page opens the Relay's sign-in in a popup,
- * accepts the one-time code that popup hands back by `postMessage` — only from the origin the host
- * named, only from that popup, and only for the state the host minted — and submits the code with its
- * state to its own host. The host redeems them against the Relay and stores the credential; the page
- * reads the result back the way it reads any other identity answer.
+ * it keeps that transaction's verifier to itself. This page opens the transaction's Relay address in a
+ * browser — a window it reserved inside the click, or whatever the shell opens for the address — and
+ * always offers the same address to open by hand. The owner may finish signing in in any browser: the
+ * Relay holds the code it issues, the host collects and redeems it, and this page asks its host how the
+ * transaction stands until it settles.
  *
- * The page holds no credential, reads no cookie, and writes nothing to the URL, to storage, or to a
- * log: the code lives from the popup's message to the host's answer and nowhere else.
+ * The page holds no credential and no code, reads no cookie, and writes nothing to the URL, to storage,
+ * or to a log.
  *
  * @module @deepseek-ai/dsh-experimental-liveshare/src/client/owner-login
  */
@@ -18,36 +18,22 @@
 import { readOwnerIdentity, type OwnerIdentityStatus } from './owner-identity.ts'
 import { OWNER_ROUTES } from './owner-routes.ts'
 
-/** Message type the Relay's sign-in page hands its opener. */
-export const OWNER_LOGIN_CODE_TYPE = 'liveshare-auth-code'
-
-/** Message type this page answers with, so that page closes instead of navigating on. */
-export const OWNER_LOGIN_ACK_TYPE = 'liveshare-auth-ack'
-
 /** Same-origin host endpoints one attempt uses. */
 const START_ROUTE = OWNER_ROUTES.ownerLoginStart
-const REDEEM_ROUTE = OWNER_ROUTES.ownerLoginRedeem
+const STATUS_ROUTE = OWNER_ROUTES.ownerLoginStatus
 const CANCEL_ROUTE = OWNER_ROUTES.ownerLoginCancel
 
 /** What one sign-in attempt is doing, as the dialog states it. */
-export type OwnerLoginPhase = 'opening' | 'waiting' | 'verifying' | 'verified' | 'failed'
+export type OwnerLoginPhase = 'opening' | 'waiting' | 'verified' | 'failed'
 
 /** Why one attempt ended without a verified identity, as the host named it. */
 export type OwnerLoginFailure =
-  | 'blocked' | 'cancelled' | 'expired' | 'mismatch' | 'replayed' | 'unavailable' | 'failed'
+  | 'cancelled' | 'expired' | 'mismatch' | 'replayed' | 'unavailable' | 'failed'
 
-/** One host-minted transaction: where to sign in, what it is bound to, and until when. */
+/** One host-minted transaction: where to sign in, and until when. */
 export interface OwnerLoginTicket {
   readonly authorizeUrl: string
   readonly state: string
-  /**
-   * Exact origin the Relay's own sign-in page posts from, as the host binds it.
-   *
-   * The origin the host answered *this page* for is not this: trusting that back would accept a
-   * message from whatever page happens to be at this address, and a ticket that names no sender
-   * origin leaves the attempt unable to verify any message at all.
-   */
-  readonly messageOrigin: string
   /** UTC deadline this transaction stops being redeemable at, when the host stated one. */
   readonly expiresAt?: string
 }
@@ -57,39 +43,41 @@ export type OwnerLoginResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly reason: OwnerLoginFailure }
 
+/** One transaction's standing: the outcome a page acts on. */
+export type OwnerLoginStatusResult =
+  | { readonly ok: true; readonly value: OwnerIdentityStatus }
+  | { readonly ok: false; readonly pending: true }
+  | { readonly ok: false; readonly reason: OwnerLoginFailure }
+
 /** The same-origin host face one attempt submits to. */
 export interface OwnerLoginHost {
   start(): Promise<OwnerLoginResult<OwnerLoginTicket>>
-  redeem(code: string, state: string): Promise<OwnerLoginResult<OwnerIdentityStatus>>
+  /**
+   * Ask this Host how one transaction stands.
+   *
+   * The Host collects the code from the Relay and redeems it itself, so the page learns the outcome only
+   * from this answer.
+   * @param state - The transaction this page minted.
+   * @returns The stored identity, the news that it is pending, or the reason it ended.
+   */
+  status(state: string): Promise<OwnerLoginStatusResult>
   cancel(state: string): Promise<void>
 }
 
-/**
- * Minimal popup window one sign-in attempt reserves and drives.
- *
- * The flow reads \`closed\`, navigates \`location.href\`, calls \`close\`, and posts the acknowledgement, so
- * a page's \`open\` need not return the whole browser \`Window\`.
- */
-export interface OwnerLoginPopup {
-  /** Whether the sign-in page closed the window. */
-  closed: boolean
+/** Minimal window one sign-in attempt reserves and navigates. */
+export interface OwnerLoginWindow {
+  /** Clear the opener before navigating the reserved tab to the Relay. */
+  opener: unknown
   /** Address the flow navigates to the sign-in URL. */
   location: { href: string }
   /** Close the reserved window. */
   close(): void
-  /** Post the acknowledgement the sign-in page waits for. */
-  postMessage(message: unknown, targetOrigin: string): void
 }
 
-/**
- * The browser page one sign-in attempt drives: the popup it reserves, the messages it listens for,
- * and the timer it polls with.
- */
+/** The browser page one sign-in attempt drives: the window it opens and the timer it polls with. */
 export interface OwnerLoginPage {
-  /** Open the Relay's sign-in; null when the browser refused a popup for this gesture. */
-  open(url: string, name: string, features: string): OwnerLoginPopup | null
-  addEventListener(type: 'message', listener: (event: MessageEvent) => void): void
-  removeEventListener(type: 'message', listener: (event: MessageEvent) => void): void
+  /** Open a window; null when the browser or shell gave this page none. */
+  open(url: string, name: string, features?: string): OwnerLoginWindow | null
   setInterval(handler: () => void, ms: number): number
   clearInterval(id: number): void
 }
@@ -113,38 +101,6 @@ export function readOwnerLoginFailure(value: unknown): OwnerLoginFailure | undef
   if (typeof value !== 'object' || value === null) return undefined
   const code = (value as Record<string, unknown>).error
   return typeof code === 'string' ? FAILURE_CODES[code] : undefined
-}
-
-/**
- * Read the one-time code a sign-in popup handed this page, or nothing when the message is not it.
- *
- * An attempt has exactly one legitimate sender, and this is where that is enforced: the origin the
- * host bound the transaction to, the popup the host's ticket opened, the message type this page
- * expects, and the state that transaction minted. A message from another window, another origin,
- * another state, or one that is not even shaped like a code is dropped without an answer and without
- * a trace, so no other page can hand this one a code it would submit.
- * @param event - Message event this page received.
- * @param expected - Origin, popup, and state the host bound this attempt to.
- * @returns The code and state to submit, or undefined when the message is not this attempt's.
- */
-export function readOwnerLoginCode(
-  event: { readonly origin: string; readonly source: unknown; readonly data: unknown },
-  expected: { readonly origin: string; readonly source: unknown; readonly state: string },
-): { readonly code: string; readonly state: string } | undefined {
-  if (expected.origin === '' || expected.origin === '*') return undefined
-  if (event.origin !== expected.origin) return undefined
-  if (expected.source === null || expected.source === undefined) return undefined
-  if (event.source !== expected.source) return undefined
-  const data = event.data
-  if (typeof data !== 'object' || data === null) return undefined
-  const payload = data as Record<string, unknown>
-  if (payload.type !== OWNER_LOGIN_CODE_TYPE) return undefined
-  if (typeof payload.state !== 'string' || payload.state === '' || payload.state !== expected.state) {
-    return undefined
-  }
-  const code = payload.code
-  if (typeof code !== 'string' || code === '') return undefined
-  return { code, state: payload.state }
 }
 
 /** Read one non-empty string field from a decoded JSON object. */
@@ -187,12 +143,12 @@ export function hostOwnerLogin(
   request: (input: string, init?: RequestInit) => Promise<Response> = (input, init) => fetch(input, init),
 ): OwnerLoginHost {
   /** Post one same-origin call and read its JSON body, or undefined when it answered none. */
-  const post = async (path: string, body?: unknown): Promise<{ status: number; value: unknown }> => {
+  const post = async (path: string, body: unknown): Promise<{ status: number; value: unknown }> => {
     const response = await request(path, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json', accept: 'application/json' },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      body: JSON.stringify(body),
     })
     const value: unknown = await response.json().catch(() => undefined)
     return { status: response.status, value }
@@ -201,7 +157,7 @@ export function hostOwnerLogin(
     async start() {
       let answer: { status: number; value: unknown }
       try {
-        answer = await post(START_ROUTE)
+        answer = await post(START_ROUTE, {})
       } catch {
         return { ok: false, reason: 'unavailable' }
       }
@@ -211,49 +167,33 @@ export function hostOwnerLogin(
       }
       const authorizeUrl = readLoginUrl(readText(body, 'authorizeUrl'))
       const state = readText(body, 'state')
-      const messageOrigin = readText(body, 'messageOrigin')
       const expiresAt = readText(body, 'expiresAt')
-      // A ticket this page cannot use is refused rather than half-open: no wildcard origin, no
-      // address that is not a sign-in, and no transaction without its state.
-      if (
-        authorizeUrl === undefined || state === undefined
-        || messageOrigin === undefined || messageOrigin === '*'
-      ) {
-        return { ok: false, reason: 'unavailable' }
-      }
-      return {
-        ok: true,
-        value: {
-          authorizeUrl,
-          state,
-          messageOrigin,
-          ...(expiresAt === undefined ? {} : { expiresAt }),
-        },
-      }
+      // A ticket this page cannot use is refused rather than half-open: no address that is not a
+      // sign-in, and no transaction without its state.
+      if (authorizeUrl === undefined || state === undefined) return { ok: false, reason: 'unavailable' }
+      return { ok: true, value: { authorizeUrl, state, ...(expiresAt === undefined ? {} : { expiresAt }) } }
     },
-    async redeem(code, state) {
+    async status(state) {
       let answer: { status: number; value: unknown }
       try {
-        answer = await post(REDEEM_ROUTE, { code, state })
+        answer = await post(STATUS_ROUTE, { state })
       } catch {
-        return { ok: false, reason: 'unavailable' }
+        // A request that did not reach the Host says nothing about the transaction; ask again.
+        return { ok: false, pending: true }
       }
       if (answer.status !== 200) {
         return { ok: false, reason: readOwnerLoginFailure(answer.value) ?? 'failed' }
       }
-      // The binding this attempt is judged on is the Relay the host itself states, read before any
-      // helper defaults an address in: a body that names no Relay, an empty or non-string one, or
-      // another address is not this attempt's verified identity.
-      const statedRelay = readText(readRecord(answer.value) ?? {}, 'relay')
-      if (statedRelay === undefined) return { ok: false, reason: 'failed' }
+      const body = readRecord(answer.value) ?? {}
+      const status = readText(body, 'status')
+      if (status === 'pending') return { ok: false, pending: true }
+      if (status !== 'verified') return { ok: false, reason: readOwnerLoginFailure(body) ?? 'failed' }
+      // The binding this attempt is judged on is the Relay the host states for the stored identity.
+      const statedRelay = readText(readRecord(body.identity) ?? {}, 'relay')
       if (statedRelay !== relay) return { ok: false, reason: 'mismatch' }
-      // Only a verified identity is this attempt's success: one that leaves the owner unverified is
-      // not a sign-in this page may call done.
-      const status = readOwnerIdentity(answer.value, relay)
-      if (status.state !== 'verified') {
-        return { ok: false, reason: 'failed' }
-      }
-      return { ok: true, value: status }
+      const identity = readOwnerIdentity(body.identity, relay)
+      if (identity.state !== 'verified') return { ok: false, reason: 'failed' }
+      return { ok: true, value: identity }
     },
     async cancel(state) {
       try {
@@ -266,22 +206,24 @@ export function hostOwnerLogin(
 }
 
 /**
- * Start one sign-in attempt: reserve its window, ask the host for a transaction, and take the
- * one-time code the sign-in page hands back.
+ * Start one sign-in attempt: reserve a window, ask the host for a transaction, open its Relay address,
+ * and wait for the host to settle it.
  *
- * The window is reserved inside the gesture that asked for it, because a window opened after an
- * await is refused by many browsers and this flow has no safe whole-page completion to fall back on:
- * a page that navigated away would leave nobody listening for the code. A blocked window is a named
- * failure, and every way an attempt can end — the popup closing, the transaction expiring, the owner
- * cancelling, a ticket that arrives after the attempt was cancelled — drops the transaction on the
- * host instead of leaving a code redeemable behind it.
+ * The window is reserved inside the gesture that asked for it, because a window opened after an await is
+ * refused by many browsers. A page that got no window — the Desktop shell denies one and opens the address
+ * in the system browser instead — opens the address directly once it is known. Neither proves a browser
+ * is on screen, so the address is always reported for the owner to open by hand. Each tick asks the host
+ * how the transaction stands, skipping while the previous ask is unanswered. Every way an attempt can end
+ * other than success — the deadline, the owner cancelling, a ticket that arrives after the attempt was
+ * cancelled, a refusal — drops the transaction on the host.
  * @param options - Host face, page, phase reporter, and the clock the deadline is read with.
  * @returns A handle that stops waiting for this attempt.
  */
 export function beginOwnerLogin(options: {
   readonly host: OwnerLoginHost
   readonly page: OwnerLoginPage
-  readonly report: (phase: OwnerLoginPhase, failure?: OwnerLoginFailure) => void
+  /** `link` is the Relay address to open by hand, reported with the `waiting` phase. */
+  readonly report: (phase: OwnerLoginPhase, failure?: OwnerLoginFailure, link?: string) => void
   readonly now?: () => number
 }): { cancel(): void } {
   const { host, page, report } = options
@@ -299,17 +241,46 @@ export function beginOwnerLogin(options: {
     stopWaiting?.()
     report(phase, failure)
   }
-  const popup = page.open('', 'liveshare-owner-login', 'popup=yes,width=520,height=720')
-  if (popup === null) {
-    // Nothing was started, so there is no transaction to drop; the owner may try again.
-    report('failed', 'blocked')
-    return { cancel() {} }
-  }
+  const reserved = page.open('', '_blank')
   const close = (): void => {
     try {
-      popup.close()
+      reserved?.close()
     } catch (_windowGone) {
       // A window already gone needs no closing.
+    }
+  }
+  /**
+   * Ask the host how the transaction stands until it settles or its deadline passes.
+   * @param minted - The transaction this attempt opened.
+   */
+  const waitForSettlement = (minted: OwnerLoginTicket): void => {
+    const deadline = minted.expiresAt === undefined ? Number.NaN : Date.parse(minted.expiresAt)
+    let stopped = false
+    let asking = false
+    const timer = page.setInterval(() => {
+      if (stopped || asking) return
+      if (Number.isFinite(deadline) && now() >= deadline) {
+        drop(minted.state)
+        finish('failed', 'expired')
+        return
+      }
+      asking = true
+      void host.status(minted.state).then((standing) => {
+        asking = false
+        if (stopped) return
+        if (standing.ok) {
+          finish('verified')
+          return
+        }
+        if ('pending' in standing) return
+        // An ending the host settled leaves nothing to drop; one it refused to read may still be pending.
+        drop(minted.state)
+        finish('failed', standing.reason)
+      })
+    }, 1_000)
+    stopWaiting = () => {
+      stopped = true
+      page.clearInterval(timer)
     }
   }
   report('opening')
@@ -325,69 +296,21 @@ export function beginOwnerLogin(options: {
       drop(started.value.state)
       return
     }
-    if (popup.closed) {
-      drop(started.value.state)
-      finish('failed', 'cancelled')
-      return
-    }
     const minted = started.value
     ticket = minted
-    // The reserved window navigates to the sign-in the host named; this page never builds that address.
-    try {
-      popup.location.href = minted.authorizeUrl
-    } catch {
-      // A window this page cannot navigate is a window no code can arrive in: a dead end like a
-      // refused popup, and the owner may try again. The transaction it was minted for is dropped and
-      // the window is closed, so a ticket nobody can complete is not left redeemable behind it.
-      drop(minted.state)
-      close()
-      finish('failed', 'blocked')
-      return
-    }
-    report('waiting')
-    const deadline = minted.expiresAt === undefined ? Number.NaN : Date.parse(minted.expiresAt)
-    const onMessage = (event: MessageEvent): void => {
-      const code = readOwnerLoginCode(event, {
-        origin: minted.messageOrigin,
-        source: popup,
-        state: minted.state,
-      })
-      if (code === undefined) return
-      stopWaiting?.()
-      stopWaiting = undefined
-      // The sign-in page closes on this acknowledgement instead of navigating the opener away.
+    if (reserved === null) {
+      page.open(minted.authorizeUrl, '_blank', 'noopener')
+    } else {
       try {
-        popup.postMessage({ type: OWNER_LOGIN_ACK_TYPE, state: code.state }, minted.messageOrigin)
-      } catch (_windowUnreachable) {
-        // A window that cannot be answered closes itself; the host still redeems this code.
+        reserved.opener = null
+        reserved.location.href = minted.authorizeUrl
+      } catch {
+        // Do not leave an unusable tab open beside the manual sign-in link.
+        close()
       }
-      report('verifying')
-      void host.redeem(code.code, code.state).then((redeemed) => {
-        // A redemption counts as this page's sign-in only when the host read a verified identity back:
-        // an answer that leaves the owner unverified is not a success, whatever carried it here.
-        if (redeemed.ok && redeemed.value.state === 'verified') {
-          finish('verified')
-          return
-        }
-        finish('failed', redeemed.ok ? 'failed' : redeemed.reason)
-      })
     }
-    page.addEventListener('message', onMessage)
-    const timer = page.setInterval(() => {
-      if (Number.isFinite(deadline) && now() >= deadline) {
-        drop(minted.state)
-        finish('failed', 'expired')
-        return
-      }
-      if (popup.closed) {
-        drop(minted.state)
-        finish('failed', 'cancelled')
-      }
-    }, 500)
-    stopWaiting = () => {
-      page.removeEventListener('message', onMessage)
-      page.clearInterval(timer)
-    }
+    report('waiting', undefined, minted.authorizeUrl)
+    waitForSettlement(minted)
   })
   return {
     cancel() {

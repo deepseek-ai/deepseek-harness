@@ -16,6 +16,7 @@ import {
   taskkillArgs,
   type Gate,
   type GateResult,
+  type Mode,
 } from './run-gates.ts'
 
 // Graph fixtures select their own browser pool instead of inheriting the CI
@@ -24,9 +25,12 @@ import {
 // DSH_COVERAGE_PARTITIONS to every child).
 beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
+  vi.stubEnv('DSH_COVERAGE_SHARD', undefined)
+  vi.stubEnv('DSH_BENCH_PHASE', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
   vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
+  vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -253,6 +257,9 @@ describe('gate graph validation', () => {
     'ci-snapshot',
     'ci-artifacts',
     'ci-consumers',
+    'ci-build',
+    'ci-consumers-prebuilt',
+    'ci-web-snapshot-prebuilt',
     'ci-windows-blocking',
     'ci-windows-complete',
     'ci-windows-observational-ready',
@@ -287,6 +294,26 @@ describe('gate graph validation', () => {
     )
     expect(scripts['build:native-system']).toBe('tsx native/system/scripts/build.ts --host-addon-only')
     expect(scripts['test:bench:built']).toBe('tsx scripts/run-bench-suite.ts')
+  })
+
+  it.each(['first', 'last'] as const)('runs the %s benchmark phase on restored shared-build output', (phase) => {
+    const subject = withEnv('DSH_BENCH_PHASE', phase, () => withPnpmEntrypoint(() => gatesForMode('ci-bench-prebuilt')))
+    const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+
+    expect(scripts['check:ci:bench-prebuilt']).toBe('tsx scripts/run-gates.ts ci-bench-prebuilt')
+    expect(subject).toHaveLength(1)
+    expect(subject[0]).toMatchObject({
+      id: 'bench',
+      label: `performance benchmarks (${phase} phase)`,
+      args: ['/private/pnpm.cjs', 'exec', 'tsx', 'scripts/run-ci-bench.ts', `--phase=${phase}`],
+    })
+  })
+
+  it.each([undefined, '', 'all', 'second'])('refuses benchmark phase %j', (raw) => {
+    expect(() => withEnv('DSH_BENCH_PHASE', raw, () => withPnpmEntrypoint(() => gatesForMode('ci-bench-prebuilt'))))
+      .toThrow('benchmark phase must be "first" or "last"')
   })
 
   it('checks all maintained repository references locally and in CI', () => {
@@ -383,7 +410,7 @@ describe('gate graph validation', () => {
       'rescope-vendor', 'publint', 'constraints', 'default-product-isolation', 'product-use', 'official-bundle-catalog', 'provider-data', 'package-dependencies', 'application-entrypoints',
       'dsh-package-licenses', 'node-next-types',
       'optional-dependency-imports', 'client-packages', 'installer-locales', 'locale-metadata', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
-      'plugin-record-callers', 'no-unknown-casts', 'empty-catch', 'cordis-root', 'no-top-level-await', 'plugin-entry-exports',
+      'plugin-record-callers', 'no-unknown-casts', 'empty-catch', 'css-selectors', 'cordis-root', 'no-top-level-await', 'plugin-entry-exports',
       'cordis-config', 'runtime-closure',
     ])
   })
@@ -752,6 +779,37 @@ describe('gate graph validation', () => {
     })
   })
 
+  it.each([
+    ['1/2', true],
+    ['2/2', false],
+  ] as const)('runs coverage file shard %s with the exempt heavy suites only on the first shard', (shard, ownsExempt) => {
+    const subject = withEnv('DSH_COVERAGE_SHARD', shard, () => withEnv('DSH_COVERAGE_PARTITIONS', '4', () =>
+      withPnpmEntrypoint(() => gatesForMode('ci-coverage-shard'))))
+
+    expect(subject.map(item => [item.id, item.needs ?? []])).toEqual([
+      ['native-system', []],
+      ['coverage', ['native-system']],
+      ...ownsExempt ? [['coverage-exempt-heavy', ['native-system']]] : [],
+    ])
+    expect(subject[1]).toMatchObject({
+      args: ['/private/pnpm.cjs', 'run', 'test:coverage:partitioned'],
+      env: { DSH_COVERAGE_EXEMPT_HEAVY: '1' },
+    })
+  })
+
+  it('refuses a coverage shard lane without a shard', () => {
+    expect(() => withEnv('DSH_COVERAGE_PARTITIONS', '4', () =>
+      withPnpmEntrypoint(() => gatesForMode('ci-coverage-shard'))))
+      .toThrow('ci-coverage-shard requires DSH_COVERAGE_SHARD')
+  })
+
+  it('leaves the exempt share of the coverage budget only on the first shard', () => {
+    expect(ciWorkerEnvironment('ci-coverage-shard', { DSH_COVERAGE_MAX_WORKERS: '6', DSH_COVERAGE_SHARD: '1/2' }, 16))
+      .toHaveProperty('DSH_COVERAGE_PARTITIONS', '4')
+    expect(ciWorkerEnvironment('ci-coverage-shard', { DSH_COVERAGE_MAX_WORKERS: '6', DSH_COVERAGE_SHARD: '2/2' }, 16))
+      .toHaveProperty('DSH_COVERAGE_PARTITIONS', '6')
+  })
+
   it('rejects an invalid coverage partition count before starting a gate', () => {
     expect(() => withEnv('DSH_COVERAGE_PARTITIONS', '1', () =>
       withPnpmEntrypoint(() => gatesForMode('ci-windows-complete'))))
@@ -868,6 +926,78 @@ describe('Typert contract preparation', () => {
     ])
   })
 
+  it.each([
+    ['with-deps', ['install', '--with-deps', 'chromium', 'webkit']],
+    ['browsers', ['install', 'chromium', 'webkit']],
+  ] as const)('installs %s Playwright browsers beside the build for the browser readers only', (mode, install) => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', mode)
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
+    const needsOf = (id: string) => subject.find(item => item.id === id)?.needs
+
+    expect(subject.find(item => item.id === 'playwright-install')).toMatchObject({
+      args: ['/private/pnpm.cjs', '--filter', '@deepseek-ai/dsh-web-frontend', 'exec', 'playwright', ...install],
+    })
+    expect(needsOf('playwright-install')).toBeUndefined()
+    expect(needsOf('snapshot')).toEqual(['build', 'playwright-install'])
+    expect(needsOf('web-snapshot')).toEqual(['build', 'playwright-install'])
+    expect(needsOf('expected-output')).toEqual(['build'])
+  })
+
+  it('starts web snapshots after the build-artifact readers', () => {
+    vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', '16')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers')).find(item => item.id === 'web-snapshot')
+
+    expect(subject?.after).toEqual(['publint', 'snapshot', 'expected-output', 'doc-typecheck', 'node-next-types', 'built-bin-smoke'])
+  })
+
+  it('builds once and runs only the cheap readers in the build lane', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'with-deps')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-build'))
+
+    expect(subject.map(item => [item.id, item.needs ?? []])).toEqual([
+      ['build', []],
+      ['publint', ['build']],
+      ['node-next-types', ['build']],
+    ])
+    expect(subject[0]).toMatchObject({ displayCommand: 'pnpm run build:artifacts', env: { DSH_BUILD_CLIENT_PROFILE: 'official' } })
+  })
+
+  it('runs restored-artifact consumers without a build or browsers', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'with-deps')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers-prebuilt'))
+
+    expect(subject.map(item => [item.id, item.needs ?? [], item.after ?? []])).toEqual([
+      ['node-compat', [], []],
+      ['snapshot', [], []],
+      ['expected-output', [], []],
+      ['doc-typecheck', [], []],
+      ['built-bin-smoke', [], []],
+    ])
+    expect(subject.find(item => item.id === 'doc-typecheck')?.env).toMatchObject({ DSH_DOC_TYPECHECK_USE_BUILD_OUTPUT: '1' })
+  })
+
+  it('leaves the web snapshot adapters to the web shards only in the restored-artifact consumers', () => {
+    const snapshotEnv = (mode: Mode) => withPnpmEntrypoint(() => gatesForMode(mode)).find(item => item.id === 'snapshot')?.env
+
+    expect(snapshotEnv('ci-consumers-prebuilt')).toEqual({ DSH_EXAMPLE_MODE: 'lib', DSH_SNAPSHOT_SKIP_WEB_ADAPTERS: '1' })
+    for (const mode of ['ci-primary', 'check-all', 'ci-snapshot', 'ci-linux-primary', 'ci-consumers'] as const) {
+      expect(snapshotEnv(mode), mode).toEqual({ DSH_EXAMPLE_MODE: 'lib' })
+    }
+  })
+
+  it('runs one restored-artifact web snapshot shard without installing browsers', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'with-deps')
+    const subject = withPnpmEntrypoint(() => gatesForMode('ci-web-snapshot-prebuilt'))
+
+    expect(subject.map(item => [item.id, item.needs ?? [], item.after ?? []])).toEqual([['web-snapshot', [], []]])
+  })
+
+  it('rejects an unknown Playwright install mode', () => {
+    vi.stubEnv('DSH_CI_PLAYWRIGHT_INSTALL', 'deps')
+
+    expect(() => withPnpmEntrypoint(() => gatesForMode('ci-consumers'))).toThrow(/DSH_CI_PLAYWRIGHT_INSTALL must be with-deps or browsers/)
+  })
+
   it('reuses contracts from the validated consumer build', () => {
     const subject = withPnpmEntrypoint(() => gatesForMode('ci-consumers'))
 
@@ -892,7 +1022,7 @@ describe('Typert contract preparation', () => {
 })
 
 describe('Node compatibility graph', () => {
-  it.each(['24.9.0', '24.19.0', '26.0.0'])('runs all source compatibility smokes serially on Node %s', (version) => {
+  it.each(['24.22.3', '24.23.0', '26.0.0'])('runs all source compatibility smokes serially on Node %s', (version) => {
     const subject = withNodeVersion(version, () =>
       withPnpmEntrypoint(() => gatesForMode('node-compat')))
 
@@ -925,18 +1055,28 @@ describe('Node compatibility graph', () => {
     expect(subject.find(item => item.id === 'source-compat-smokes')?.env).toEqual({ VITEST_MAX_WORKERS: '1' })
   })
 
-  it.each(['24.19.0', '26.0.0'])('keeps Node %s compatibility source-only', (version) => {
+  // The primary lanes nest this mode on latest 24, which can be the floor release itself.
+  it.each(['24.22.3', '24.23.0', '26.0.0'])('keeps Node %s compatibility source-only without a build request', (version) => {
     const subject = withNodeVersion(version, () =>
-      withPnpmEntrypoint(() => gatesForMode('node-compat')))
+      withEnv('DSH_NODE_COMPAT_BUILD', undefined, () =>
+        withPnpmEntrypoint(() => gatesForMode('node-compat'))))
 
     expect(subject.map(item => item.id)).not.toContain('build')
     expect(subject.map(item => item.id)).not.toContain('cli-lazy-search-startup-smoke')
   })
 
-  it.each([undefined, '1'])('builds the complete Node 24.9 artifacts once with skip-typecheck=%s', (skipTypecheck) => {
-    const subject = withNodeVersion('24.9.0', () =>
-      withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', skipTypecheck, () =>
-        withPnpmEntrypoint(() => gatesForMode('node-compat'))))
+  it.each(['24.23.0', '26.0.0'])('rejects a build request on Node %s', (version) => {
+    expect(() => withNodeVersion(version, () =>
+      withEnv('DSH_NODE_COMPAT_BUILD', '1', () =>
+        withPnpmEntrypoint(() => gatesForMode('node-compat')))))
+      .toThrow(`DSH_NODE_COMPAT_BUILD requires Node 24.22.3, got ${version}.`)
+  })
+
+  it.each([undefined, '1'])('builds the complete Node 24.22.3 artifacts once on request with skip-typecheck=%s', (skipTypecheck) => {
+    const subject = withNodeVersion('24.22.3', () =>
+      withEnv('DSH_NODE_COMPAT_BUILD', '1', () =>
+        withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', skipTypecheck, () =>
+          withPnpmEntrypoint(() => gatesForMode('node-compat')))))
 
     expect(subject.filter(item => item.displayCommand === 'pnpm run build:artifacts')).toHaveLength(1)
     expect(subject.find(item => item.id === 'build')?.args).toEqual([
@@ -949,10 +1089,11 @@ describe('Node compatibility graph', () => {
     })
   })
 
-  it.each(['passed', 'failed'] as const)('runs the Node 24.9 lazy-search smoke only after a passed build (%s)', async (buildStatus) => {
-    const subject = withNodeVersion('24.9.0', () =>
-      withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', '1', () =>
-        withPnpmEntrypoint(() => gatesForMode('node-compat'))))
+  it.each(['passed', 'failed'] as const)('runs the Node 24.22.3 lazy-search smoke only after a passed build (%s)', async (buildStatus) => {
+    const subject = withNodeVersion('24.22.3', () =>
+      withEnv('DSH_NODE_COMPAT_BUILD', '1', () =>
+        withEnv('DSH_NODE_COMPAT_SKIP_TYPECHECK', '1', () =>
+          withPnpmEntrypoint(() => gatesForMode('node-compat')))))
     let buildCompleted = false
     let smokeStarted = false
     const results = await runGates(subject, 2, async (item) => {

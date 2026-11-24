@@ -10,45 +10,12 @@ enum ActionSchema {
                 "argument": SchemaBuilder.scalar("null", description: "This action accepts no argument; omit argument or pass null."),
             ], required: [])
         }
-        return SchemaBuilder.object(["argument": argument(for: target.attribute)], required: ["argument"])
-    }
-
-    /// Without an element, only a name-determined type is definite; other attributes accept every supported kind.
-    private static func argument(for attribute: String) -> JSONValue {
-        guard let kind = AXAccess.knownValueKind(attribute: attribute) else {
-            return SchemaBuilder.oneOf(AXAccess.AttributeValueKind.allCases.map { schema(for: $0) },
-                description: "The accepted value type depends on the element's live attribute value type.")
-        }
-        return schema(for: kind)
-    }
-
-    private static func schema(for kind: AXAccess.AttributeValueKind) -> JSONValue {
-        switch kind {
-        case .string: return SchemaBuilder.scalar("string")
-        case .boolean: return SchemaBuilder.scalar("boolean")
-        case .number: return SchemaBuilder.scalar("number", description: "A finite number.")
-        case .point:
-            return SchemaBuilder.object([
-                "x": SchemaBuilder.scalar("number", description: "A finite x coordinate."),
-                "y": SchemaBuilder.scalar("number", description: "A finite y coordinate."),
-            ], required: ["x", "y"])
-        case .size:
-            return SchemaBuilder.object([
-                "width": SchemaBuilder.scalar("number", description: "A nonnegative finite width."),
-                "height": SchemaBuilder.scalar("number", description: "A nonnegative finite height."),
-            ], required: ["width", "height"])
-        case .range:
-            return SchemaBuilder.object([
-                "location": SchemaBuilder.scalar("number", description: "A nonnegative integer no greater than \(Int.max)."),
-                "length": SchemaBuilder.scalar("number", description: "A nonnegative integer no greater than \(Int.max)."),
-            ], required: ["location", "length"],
-                description: "The sum of location and length must be no greater than \(Int.max).")
-        }
+        return SchemaBuilder.object(["argument": try target.parameter.schema(attribute: target.attribute)], required: ["argument"])
     }
 }
 
 /// Builds fresh schema nodes, each optionally annotated with a model-facing description.
-private enum SchemaBuilder {
+enum SchemaBuilder {
     static func scalar(_ type: String, description: String? = nil) -> JSONValue {
         node(["type": .string(type)], description: description)
     }

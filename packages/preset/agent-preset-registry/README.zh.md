@@ -41,7 +41,7 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `default` | 必填 | 未显式指定时使用的 preset ID |
+| `default` | 无 | 未显式指定时使用的 preset ID。未配置默认值时仍可读取已记录的选择。此时省略 preset 会返回 `agent-preset/no-default` 及可用的 ID |
 
 Web 内置定义来自 `dsh-web-app` bundle。定义使用普通插件行；注册表不扫描目录，也不接受 preset 路径。`agent-preset-registry` 条目的 volatile 字段 `selectedDefault` 保留用户默认值，新会话优先使用它而不是部署 `default`。profile patch 仍可能带有已废弃的 `modeSelectionEnabled` 字段；注册表未声明该字段，既不读取也不重写它。
 

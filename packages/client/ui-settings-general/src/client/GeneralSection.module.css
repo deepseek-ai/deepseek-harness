@@ -7,6 +7,8 @@
   width: 100%;
 }
 
-.section > :global([data-slot='settings.general.item']) > :last-child {
+/* css-selector-gate: General clears the contributed element's own border; only sibling output in this outlet decides which root is last. */
+.section > [data-slot='settings.general.item'] > :where([data-slot-item]:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) > :last-child,
+.section > [data-slot='settings.general.item'] > [data-slot-error]:where(:not(:has(~ [data-slot-error], ~ [data-slot-item] > *))) {
   border-bottom: none;
 }

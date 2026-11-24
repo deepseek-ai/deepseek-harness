@@ -1,0 +1,51 @@
+{
+  "op": 0,
+  "s": 1202,
+  "t": "GROUP_AT_MESSAGE_CREATE",
+  "id": "GROUP_AT_MESSAGE_CREATE:1a2b3c4d5e6f708192a3b4c5d6e7f809",
+  "d": {
+    "id": "ROBOT1.0_y4P5nR3tU8wC0yZ2aB6dE9fG1hJ3kL5mN7oQ9rS1tV3wY5xZ7aC9bD1eF3gH5jK7mN9pQ1rS3",
+    "author": {
+      "id": "C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6",
+      "member_openid": "C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6",
+      "member_role": "member",
+      "username": "小红",
+      "bot": false
+    },
+    "content": " 看看这张风景照 ",
+    "group_openid": "B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5",
+    "message_type": 0,
+    "timestamp": "2026-07-21T10:05:00+08:00",
+    "attachments": [
+      {
+        "content_type": "image/jpeg",
+        "filename": "photo.jpg",
+        "url": "https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=img-01&rkey=rk01&spec=0",
+        "width": 1920,
+        "height": 1080,
+        "size": 256000
+      },
+      {
+        "content_type": "voice",
+        "filename": "voice.silk",
+        "url": "https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=voice-01&rkey=rk02&spec=0",
+        "voice_wav_url": "https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=voice-01&rkey=rk02&spec=1",
+        "asr_refer_text": "明天上午十点开会",
+        "size": 8192
+      },
+      {
+        "content_type": "file",
+        "filename": "季度报告.pdf",
+        "url": "https://multimedia.nt.qq.com.cn/download?appid=1407&fileid=file-01&rkey=rk03&spec=0",
+        "size": 2097152
+      }
+    ],
+    "message_scene": {
+      "source": "default",
+      "ext": [
+        "msg_idx=REFIDX_yyyyyyyyyyyyyyy==",
+        "auth_token=1f2e3d4c5b6a7988a9b0c1d2e3f4a5b6"
+      ]
+    }
+  }
+}

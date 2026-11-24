@@ -1,0 +1,41 @@
+{
+  "payloads": [
+    {
+      "msg_type": "interactive",
+      "content": {
+        "schema": "2.0",
+        "config": {
+          "update_multi": true
+        },
+        "header": {
+          "title": {
+            "tag": "plain_text",
+            "content": "Release notes"
+          },
+          "subtitle": {
+            "tag": "plain_text",
+            "content": "subtitle text"
+          }
+        },
+        "body": {
+          "elements": [
+            {
+              "tag": "markdown",
+              "element_id": "ep6tjltnlrednunf",
+              "content": "body of the titled message",
+              "text_align": "left"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "report": {
+    "degraded": [],
+    "moved": [],
+    "split": 0,
+    "folded": 0,
+    "dropped": [],
+    "fallbacks": []
+  }
+}

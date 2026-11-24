@@ -7,7 +7,8 @@ import { searchText, VIEWER_COUNT_QUERY, VIEWER_LIST_QUERY } from '../src/viewer
 const signal = new AbortController().signal
 
 const limits: GitHubLimits = {
-  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
+  maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, snapshotBatchSize: 8, briefBatchSize: 50,
+  maxCommits: 250, maxViewedFiles: 3_000, maxViewerItems: 50,
 }
 
 function fakeGh(handler: (args: readonly string[]) => GhOutput): { run: GhRunner; calls: string[][] } {
@@ -39,7 +40,6 @@ function row(number: number, overrides: Record<string, unknown> = {}): Record<st
     commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE' } } }] },
     viewerLatestReview: null,
     viewerLatestReviewRequest: { requestedReviewer: { __typename: 'User' } },
-    closingIssuesReferences: { totalCount: 0, nodes: [] },
     ...overrides,
   }
 }
@@ -68,16 +68,7 @@ describe('GitHub viewer lists', () => {
 
   it('reads one list through one search on the queried host and maps each pull request', async () => {
     const gh = fakeGh(() => output(listBody([
-      row(8225, {
-        closingIssuesReferences: {
-          totalCount: 4,
-          nodes: [
-            { number: 8224, title: 'Identify the client', state: 'OPEN', url: 'https://github.com/octo/demo/issues/8224', repository: { name: 'demo', owner: { login: 'octo' } } },
-            { number: 9, title: 'Closed elsewhere', state: 'CLOSED', url: 'https://github.com/octo/other/issues/9', repository: { name: 'other', owner: { login: 'octo' } } },
-            { number: 10, title: 'Bad repository', state: 'OPEN', url: 'https://github.com/x/y/issues/10', repository: { name: 'a b', owner: { login: 'x' } } },
-          ],
-        },
-      }),
+      row(8225),
       row(7155, {
         isDraft: true,
         reviewDecision: 'CHANGES_REQUESTED',
@@ -113,11 +104,6 @@ describe('GitHub viewer lists', () => {
           reviewDecision: 'none',
           viewerReview: null,
           viewerRequest: { team: null },
-          closingIssues: [
-            { repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 8224, title: 'Identify the client', state: 'open', url: 'https://github.com/octo/demo/issues/8224' },
-            { repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'other' }, number: 9, title: 'Closed elsewhere', state: 'closed', url: 'https://github.com/octo/other/issues/9' },
-          ],
-          closingIssuesTruncated: true,
           updatedAt: '2026-11-10T09:29:00Z',
         },
         expect.objectContaining({
@@ -127,7 +113,6 @@ describe('GitHub viewer lists', () => {
           reviewDecision: 'changes-requested',
           viewerReview: { verdict: 'changes-requested', reviewedSha: '2'.repeat(40) },
           viewerRequest: { team: 'octo/core' },
-          closingIssuesTruncated: false,
         }),
         expect.objectContaining({ title: 'Change 6', author: null, viewerReview: null, viewerRequest: null }),
         expect.objectContaining({ title: 'Change 7', viewerReview: { verdict: 'commented', reviewedSha: null }, viewerRequest: { team: null } }),

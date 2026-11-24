@@ -1,8 +1,11 @@
-/** GitLab writes and reads of the merge request overview: pipeline retries, review requests, reviewer candidates, and rebases. */
+/**
+ * GitLab writes and reads of the merge request overview: pipeline retries, review requests, reviewer candidates, rebases,
+ * and automatic merges.
+ */
 
 import type {
-  BranchUpdateRequest, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeRerunRequest,
-  ForgeReviewerCandidate, ForgeReviewersRequest,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure,
+  ForgeRerunRequest, ForgeReviewerCandidate, ForgeReviewersRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GitLabApi } from './api.ts'
@@ -36,6 +39,19 @@ export const REREVIEW_MUTATION = `mutation($path: ID!, $iid: String!, $user: Use
 export const CANDIDATES_QUERY = `query($path: ID!, $iid: String!, $search: String!) {
   project(fullPath: $path) { autocompleteUsers(search: $search) { username name avatarUrl } mergeRequest(iid: $iid) { author { username } } }
 }`
+
+/**
+ * Turn on the automatic merge that waits for every merge check; variables `path`, `iid`, and `sha`, the head commit, are
+ * strings, and `squash` is a boolean.
+ */
+export const AUTO_MERGE_MUTATION = `mutation($path: ID!, $iid: String!, $sha: String!, $squash: Boolean!) {
+  mergeRequestAccept(input: { projectPath: $path, iid: $iid, sha: $sha, squash: $squash, strategy: MERGE_WHEN_CHECKS_PASS }) {
+    errors
+  }
+}`
+
+/** The error with which `mergeRequestAccept` refuses a `sha` that is not the head commit; GitLab gives it no code. */
+const HEAD_MOVED = /merge-head is not at the anticipated SHA/i
 
 const reviewersSchema = z.object({
   project: z.object({
@@ -188,4 +204,32 @@ export async function updateGitLabBranch(
   if (merge.data.rebase_in_progress === true) return { code: 'failed', message: 'GitLab is already rebasing the merge request' }
   const rebased = await api.write(host, ['-X', 'PUT', `${mergeRequestPath(ref)}/rebase`], signal)
   return rebased.ok ? undefined : rebased.failure
+}
+
+/**
+ * Turn GitLab's automatic merge of a merge request on or off, each through one request that is never sent again.
+ * Turning it on calls the GraphQL `mergeRequestAccept` mutation with the strategy that waits for every merge check, the
+ * confirmed head as `sha`, and `squash` for the squash method; the strategy keeps GitLab from merging at once and from
+ * adding the merge request to a merge train. GitLab's refusal of a `sha` that is not the head is `stale`, and every
+ * other error it lists is `failed`, such as an automatic merge that is already on. Turning it off posts REST
+ * `cancel_auto_merge`, which GitLab answers with HTTP 409 for a merge request whose automatic merge is off.
+ * @param api - GitLab writes.
+ * @param ref - merge request, with a project path already checked for inlining.
+ * @param request - whether to turn the automatic merge on, with the merge method and the head commit the user confirmed.
+ * @param signal - cancellation of the request.
+ * @returns undefined once GitLab accepted the request; `stale` when the head moved, `failed` when GitLab refused, and
+ * `unknown` when its answer does not show whether it applied the request.
+ */
+export async function setGitLabAutoMerge(
+  api: GitLabApi, ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal,
+): Promise<ForgeActionFailure | undefined> {
+  const host = ref.repository.host
+  if (!request.enabled) {
+    const cancelled = await api.write(host, ['-X', 'POST', `${mergeRequestPath(ref)}/cancel_auto_merge`], signal)
+    return cancelled.ok ? undefined : cancelled.failure
+  }
+  const variables = { path: checkedProject(ref), iid: String(ref.number), sha: request.headSha, squash: request.method === 'squash' }
+  const accepted = await api.mutate(host, AUTO_MERGE_MUTATION, variables, 'mergeRequestAccept', signal)
+  if ('ok' in accepted) return undefined
+  return accepted.code === 'failed' && HEAD_MOVED.test(accepted.message) ? { code: 'stale', message: accepted.message } : accepted
 }

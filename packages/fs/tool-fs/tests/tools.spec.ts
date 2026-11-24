@@ -117,6 +117,7 @@ class FakeFs extends FileSystem {
 async function setup(config: ToolFs.Config = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -159,10 +160,11 @@ describe('current directory resolution', () => {
 
 describe('registration', () => {
   it.each([
-    { config: { read: false }, tools: ['edit', 'write'], sections: ['tool:edit', 'tool:write'] },
-    { config: { write: false }, tools: ['edit', 'read'], sections: ['tool:edit', 'tool:read'] },
+    { config: { read: false }, tools: ['apply_patch', 'edit', 'write'], sections: ['tool:apply_patch', 'tool:edit', 'tool:write'] },
+    { config: { write: false }, tools: ['apply_patch', 'edit', 'read'], sections: ['tool:apply_patch', 'tool:edit', 'tool:read'] },
     { config: { edit: false }, tools: ['read', 'write'], sections: ['tool:read', 'tool:write'] },
-    { config: { write: false, applyPatch: true }, tools: ['apply_patch', 'edit', 'read'], sections: ['tool:apply_patch', 'tool:edit', 'tool:read'] },
+    { config: { applyPatch: false }, tools: ['edit', 'read', 'write'], sections: ['tool:edit', 'tool:read', 'tool:write'] },
+    { config: { edit: false, applyPatch: true }, tools: ['apply_patch', 'read', 'write'], sections: ['tool:apply_patch', 'tool:read', 'tool:write'] },
     { config: { read: false, readImage: false, write: false, edit: false }, tools: [], sections: [] },
   ])('omits disabled tools and their guidance: $config', async ({ config, tools, sections }) => {
     const { ctx } = await setup(config)
@@ -181,9 +183,9 @@ describe('registration', () => {
     expect((await ToolFs.Config['~standard'].validate(config)).issues).toBeDefined()
   })
 
-  it('registers read, write, and edit', async () => {
+  it('registers read, write, edit, and apply_patch, which follows edit unless set', async () => {
     const { ctx } = await setup()
-    expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['edit', 'read', 'write'])
+    expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['apply_patch', 'edit', 'read', 'write'])
   })
 
   it.each([
@@ -223,6 +225,7 @@ describe('registration', () => {
   it('stays pending until ctx.fs exists (inject)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -233,6 +236,7 @@ describe('registration', () => {
   it('unregisters everything on fiber disposal (HMR safety)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -241,9 +245,10 @@ describe('registration', () => {
     const fiber = await ctx.plugin(ToolFs)
     // Each tool contributes BOTH a schema and a prompt section; disposal must
     // withdraw both, not just the schemas.
-    expect(ctx.tools.schemas()).toHaveLength(3)
-    const sectionNames = (a: { sections: { name: string }[] }) => a.sections.map(s => s.name).sort()
-    expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix', 'harness:identity', 'tool:edit', 'tool:read', 'tool:write'])
+    expect(ctx.tools.schemas()).toHaveLength(4)
+    const sectionNames = (a: { sections: { name: string; retire?: boolean }[] }) => a.sections
+      .filter(s => !s.retire).map(s => s.name).sort()
+    expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix', 'harness:identity', 'tool:apply_patch', 'tool:edit', 'tool:read', 'tool:write'])
     await fiber.dispose()
     expect(ctx.tools.schemas()).toHaveLength(0)
     // Only the system-prompt plugin's own built-in sections remain.
@@ -780,6 +785,7 @@ describe('read caps are plugin config', () => {
   async function setupWith(config: ToolFs.Config) {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -840,6 +846,7 @@ describe('read caps are plugin config', () => {
   ] as const)('rejects a non-positive or fractional %s at load', async (name, config) => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -884,10 +891,10 @@ describe('sandbox escalation API (write/edit)', () => {
   async function setupConfining(opts: { approval?: boolean } = {}) {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
     await ctx.plugin(SandboxingFakeFs)
@@ -950,6 +957,7 @@ describe('sandbox escalation API (write/edit)', () => {
   it('fails load when a confining filesystem has no shared sandbox-policy resolver', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -1176,7 +1184,7 @@ const originalGuidance = {
 
 describe('scope-aware filesystem guidance', () => {
   it.each(Array.from({ length: 8 }, (_, mask) => mask))('preserves exact text for visible tools (mask %i)', async (mask) => {
-    const { ctx } = await setup()
+    const { ctx } = await setup({ applyPatch: false })
     const { key, scope } = await guidanceScope(ctx)
     const names = ['read', 'write', 'edit'] as const
     const allow = names.filter((_, index) => (mask & (1 << index)) !== 0)
@@ -1199,7 +1207,7 @@ describe('scope-aware filesystem guidance', () => {
   })
 
   it('honors deny filters and the existing exemption for own-scope tools', async () => {
-    const { ctx } = await setup()
+    const { ctx } = await setup({ applyPatch: false })
     const { key, scope } = await guidanceScope(ctx)
     const write = ctx.tools.get('write')!
     scope.ctx.tools.restrict({ deny: ['write', 'edit'] })
@@ -1238,6 +1246,7 @@ describe('scope-aware PTC guidance', () => {
     const mode = 'ptc'
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(GuidancePtcRuntime)
     await ctx.plugin(ToolRuntime)

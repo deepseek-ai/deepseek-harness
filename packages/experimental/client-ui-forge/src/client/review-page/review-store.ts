@@ -1,6 +1,6 @@
 /**
  * Choices of the review page that outlive its mount: the change request shown in full, its tab, whether the list column
- * hides, which list sections fold, the repository the lists are read in, the search text, the conversation the page
+ * hides, which list sections fold, the host or repository the lists are narrowed to, the search text, the conversation the page
  * started for each change request, and the changes view's choices for each change request.
  */
 
@@ -8,7 +8,7 @@ import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-sto
 import type { ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { changesActions, type ChangesState } from '../changes-store.ts'
-import { mergeRepositories, type ReviewRepository } from './review-lists.ts'
+import { mergeRepositories, type ReviewRepository, type ReviewScope } from './review-lists.ts'
 
 /** A tab of the review page's detail. */
 export type ReviewTab = 'summary' | 'changes' | 'chat'
@@ -26,8 +26,8 @@ export interface ReviewPageState extends ChangesState {
   listHidden: boolean
   /** List sections the reader folded. */
   folded: Partial<Record<ForgeViewerFilter, boolean>>
-  /** Repository the lists are read in, or null for every repository. */
-  repository: { readonly owner: string; readonly name: string } | null
+  /** What the lists are narrowed to: one host, one repository, or null for every repository of every host. */
+  scope: ReviewScope | null
   /**
    * Repositories the lists named while they were read in every repository, which the repository menu keeps offering
    * while the lists are read in one.
@@ -62,14 +62,14 @@ const reviewActions = {
   },
   toggledList: (state: ReviewPageState) => { state.listHidden = !state.listHidden },
   folded: (state: ReviewPageState, filter: ForgeViewerFilter) => { state.folded[filter] = state.folded[filter] !== true },
-  scopedTo: (state: ReviewPageState, repository: ReviewPageState['repository']) => { state.repository = repository },
+  scopedTo: (state: ReviewPageState, scope: ReviewScope | null) => { state.scope = scope },
   /**
    * Record the repositories the lists read in every repository name: a complete read replaces the record, and a read
    * still under way or failed in part adds to it.
    */
   listed: (state: ReviewPageState, repositories: ReviewPageState['repositories'], complete: boolean) => {
     const next = complete ? mergeRepositories(repositories) : mergeRepositories(state.repositories, repositories)
-    const names = (list: ReviewPageState['repositories']): string => list.map(item => `${item.owner}/${item.name}`).join('\n')
+    const names = (list: ReviewPageState['repositories']): string => list.map(item => `${item.host} ${item.owner}/${item.name}`).join('\n')
     if (names(next) !== names(state.repositories)) state.repositories = [...next]
   },
   searched: (state: ReviewPageState, query: string) => { state.query = query },
@@ -87,7 +87,7 @@ const reviewActions = {
 export function createReviewStore(): EngineStoreHandle<ReviewPageState, typeof reviewActions> {
   return defineStore({
     init: (): ReviewPageState => ({
-      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, repositories: [], query: '', directOnly: false, conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
+      selected: null, tab: 'summary', listHidden: false, folded: {}, scope: null, repositories: [], query: '', directOnly: false, conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
     }),
     actions: reviewActions,
   })

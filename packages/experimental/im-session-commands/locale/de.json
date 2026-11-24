@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "IM-Sitzungsbefehle",
+    "description": "Verarbeitet in einem IM-Chat gesendete Befehle /clear, /new, /stop, /status und /help, bevor die Nachricht den Agenten erreicht."
+  }
+}

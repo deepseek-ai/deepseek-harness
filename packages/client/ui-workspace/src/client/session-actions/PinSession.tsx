@@ -21,8 +21,8 @@ function usePinState({ sessionId, usePinned, useArchived, useSessionAccess }: Pi
 /**
  * Hover button (order 200), also visible without hover when pinned; absent on
  * archived rows and while the Session's access snapshot excludes that toggle.
- * Tooltip forwards the class to the button. Keep that button directly inside
- * the display-contents slot anchor so hoverless rows can retain the Unpin action.
+ * The button is the entry's root element so hoverless rows can show Unpin
+ * without revealing other quick actions.
  * @param props - owner share, the access Hook, and the pin share.
  * @returns the button, or null for an archived or refused Session.
  */

@@ -14,8 +14,6 @@ export interface CliPathContext {
   readonly executable: string
   /** Whether the plugin's skill has scripts that run {@link program} by name; the text then gives their PATH prefix. */
   readonly scripts?: boolean
-  /** Whether the executable is installed; the context contributes nothing while it returns false. Absent means always. */
-  readonly ready?: () => boolean
 }
 
 /**
@@ -55,11 +53,12 @@ function pwshLiteral(text: string): string {
  * @param ctx - the registering plugin's context, which reaches `systemPrompt`; disposing it removes the context.
  * @param name - the runtime-context name, unique across plugins, such as `feishu:cli`.
  * @param cli - the CLI to describe.
+ * @param ready - tells whether the CLI and what it needs are in place; the context contributes nothing while it returns
+ *   false. Absent means always.
  * @returns the registration's effect disposer.
  */
-export function registerCliPathContext(ctx: Context, name: string, cli: CliPathContext): () => void {
+export function registerCliPathContext(ctx: Context, name: string, cli: CliPathContext, ready?: () => boolean): () => void {
   const text = cliPathContextText(cli, process.platform)
-  const { ready } = cli
   return ctx.systemPrompt.context({
     name,
     order: ctx.systemPrompt.getContextOrder('PLUGIN_CLIS'),

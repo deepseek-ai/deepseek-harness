@@ -10,6 +10,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import * as sandboxPolicyGit from '@deepseek-ai/dsh-sandbox-policy-git'
 import type {} from '@deepseek-ai/dsh-settings'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -145,13 +146,15 @@ export class WorktreeService extends Service {
 
   protected async [Service.init](): Promise<void> {
     this.projection = await this.ctx.sessionProjections.register(worktreeProjection)
+    // Git in a worktree writes the repository's Git directory, outside the Session's workspace root.
+    await this.ctx.plugin(sandboxPolicyGit)
     // Reclamation needs the Workspace archive events and the Session corpus; without
     // them the service only creates and restores, as a headless profile composes it.
-    this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory', 'sandboxPolicy'], (scope) => {
+    this.ctx.inject(['workspaceRegistry', 'sessionQuery', 'sessions', 'workingDirectory'], (scope) => {
       const reclamation = new WorktreeReclamation(scope, {
         retainOnArchive: () => this.config.retainOnArchive.get(),
         exclusiveCheckout: (path, body) => this.exclusiveCheckout(path, body),
-        removeCheckout: (session, request, signal, admit) => this.removeCheckout(session, request, signal, admit),
+        removeCheckout: (request, signal, admit) => this.removeCheckout(request, signal, admit),
       }, this.projection)
       this.reclamation = reclamation
       scope.effect(() => () => { this.reclamation = undefined })
@@ -292,16 +295,16 @@ export class WorktreeService extends Service {
   }
 
   /**
-   * Inspect a recorded checkout under the Session's policy and, when eligible
-   * and admitted, remove it and its registration without force or branch
-   * deletion. A rejection can leave a partial directory; the branch stays.
+   * Inspect a recorded checkout and, when eligible and admitted, remove it and
+   * its registration without force or branch deletion. Archiving is the user's
+   * authorization, so Git runs unconfined by any Session's sandbox policy; the
+   * inspection bounds it to a clean checkout of the configured pool registered
+   * on the recorded branch. A rejection can leave a partial directory; the branch stays.
    */
-  private async removeCheckout(
-    session: Session, request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean,
-  ): Promise<boolean> {
+  private async removeCheckout(request: RestoreWorktreeRequest, signal: AbortSignal, admit: () => boolean): Promise<boolean> {
     const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const policy = this.sourcePolicy(session, request.repositoryRoot)
+    const policy: SandboxExecutionPolicy = { mode: 'danger-full-access', workspaceRoot: request.repositoryRoot }
     const git = { read: this.gitRunner(policy, control), scan: this.gitScanner(policy, control) }
     const operation = removeCheckout(this.ctx, this.config.directory, request, git, control, admit)
     this.pending.add(operation)
@@ -438,7 +441,7 @@ export class WorktreeService extends Service {
   }
 
   /**
-   * The policy removal and restoration run under: the Session's mode and grants, bounded by the source
+   * The policy restoration runs under: the Session's mode and grants, bounded by the source
    * checkout of the recorded worktree instead of the Session's own root, which may be the worktree
    * directory, removed or being removed.
    */

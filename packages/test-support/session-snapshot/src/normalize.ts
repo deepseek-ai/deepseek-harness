@@ -274,14 +274,15 @@ function tokenizeFixtureValue(
  * path.
  *
  * @param rawLog The raw or refresh-stabilized session JSONL fixture.
+ * @param workspaceCwd The shared scenario workspace; omitted uses this Session's cwd.
  * @returns Compact JSONL whose known cwd spellings become `{{cwd}}`.
  * @throws If a non-empty line is invalid JSON or the session cwd has no basename.
  */
-export function tokenizeSessionFixtureCwd(rawLog: string): string {
+export function tokenizeSessionFixtureCwd(rawLog: string, workspaceCwd?: string): string {
   const lines = rawLog.split('\n')
   const firstLine = lines.find(line => line.trim().length > 0)
   const header = firstLine === undefined ? undefined : JSON.parse(firstLine) as { cwd?: unknown }
-  const cwd = typeof header?.cwd === 'string' ? header.cwd : ''
+  const cwd = workspaceCwd ?? (typeof header?.cwd === 'string' ? header.cwd : '')
   const basename = cwd.split(/[\\/]/).at(-1)
   if (basename === undefined || basename.length === 0) {
     throw new Error('acp-snapshot: cannot tokenize a cwd without a basename')
@@ -538,11 +539,9 @@ function hasSessionFormatVersion(rawLog: string): boolean {
 }
 
 /**
- * Replace the rendered prompt text of every `system/message` event with the
- * `{{system}}` token. The text block keeps its position and type, so the
- * fixture still shows one system node per prompt version; an empty `content`
- * (no system prompt) stays empty. Request headers and every other line pass
- * through byte-for-byte; the transform is idempotent.
+ * Replace system text with `{{system}}`, preserving surrounding whitespace
+ * and separator blocks. Source attribution remains visible.
+ * Empty content stays empty; the transform is idempotent.
  *
  * @param rawLog The raw session `.jsonl` content.
  * @returns The JSONL with system-prompt text tokenized.
@@ -651,12 +650,21 @@ interface ModelRequestScrubOptions {
   tools?: boolean
 }
 
-/** Return the first text block of a `system/message` payload, or `undefined` when it carries none. */
-function systemPromptBlock(data: Record<string, unknown>): Record<string, unknown> | undefined {
+/** Tokenize system text while retaining whitespace separators and source attribution. */
+function scrubSystemPrompt(data: Record<string, unknown>): boolean {
   const message = data.message as Record<string, unknown> | null | undefined
-  if (message === null || typeof message !== 'object' || !Array.isArray(message.content)) return undefined
-  const block = message.content[0] as Record<string, unknown> | null | undefined
-  return block !== null && typeof block === 'object' && typeof block.text === 'string' ? block : undefined
+  if (message === null || typeof message !== 'object' || !Array.isArray(message.content)) return false
+  let changed = false
+  const blocks: readonly unknown[] = message.content
+  for (const block of blocks) {
+    if (block === null || typeof block !== 'object' || !('text' in block) || typeof block.text !== 'string'
+      || block.text.trim().length === 0) continue
+    const text = block.text.trim()
+    const start = block.text.indexOf(text)
+    block.text = `${block.text.slice(0, start)}${SYSTEM}${block.text.slice(start + text.length)}`
+    changed = true
+  }
+  return changed
 }
 
 /** Transform the selected model-request payloads. */
@@ -670,10 +678,7 @@ function scrubModelRequestContent(rawLog: string, options: ModelRequestScrubOpti
     const data = record.data as Record<string, unknown> | null | undefined
     if (data === null || typeof data !== 'object') return line
     if (options.system === true && record.type === 'system/message') {
-      const block = systemPromptBlock(data)
-      if (block === undefined) return line
-      block.text = SYSTEM
-      return JSON.stringify(record)
+      return scrubSystemPrompt(data) ? JSON.stringify(record) : line
     }
     if (options.tools === true && record.type === 'request/header') {
       const header = data.header as Record<string, unknown> | null | undefined

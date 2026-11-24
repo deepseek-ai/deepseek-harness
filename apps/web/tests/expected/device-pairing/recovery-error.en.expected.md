@@ -1,0 +1,16 @@
+- main:
+  - region "Connect to this Host":
+    - heading "Connect to this Host" [level=1]
+    - paragraph: Use one of the methods below to sign in.
+    - form "Enter a login token or link":
+      - heading "Enter a login token or link" [level=2]
+      - paragraph: On a signed-in device, copy the link from Settings → Remote connection and paste it here.
+      - textbox "Enter a login token or link":
+        - /placeholder: {{application-url}}?token=xxx
+      - button "Continue"
+    - region "Pair this device":
+      - heading "Pair this device" [level=2]
+      - paragraph: After requesting, open Settings → Remote connection on another signed-in device. Match the pairing code and approve to sign in here automatically.
+      - code: {{pairing-code}}
+      - button "Request again"
+      - alert: Could not complete pairing. Check your connection, then request again.

@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { agentEvents } from '@deepseek-ai/dsh-agent'
+import { agentEvents, foldConsumedWork } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -19,7 +19,8 @@ import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import type { ContentBlock, GenerateOptions, MessageId, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { type ToolCallId, createUserMessage, LlmAdapter, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { type ToolCallId, createAssistantMessage, createUserMessage, LlmAdapter, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { createScope } from '@deepseek-ai/dsh-scope'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SubagentRuntime, {
@@ -30,6 +31,8 @@ import type { SubagentRunEndInfo, SubagentRunInfo } from '../src/index.ts'
 import type { SubagentPromptRequestId } from '../src/control-types.ts'
 import * as activationResults from '../src/activation.ts'
 import { requireLocalActivation } from '../src/activation.ts'
+import { finalAssistantOutput } from '../src/assistant-output.ts'
+import { epochStopReason } from '../src/lifecycle.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
 import {
@@ -302,18 +305,24 @@ describe('continuable activation capacity', () => {
     const { ctx, parent } = await setupWith(adapter, { maxActiveSubagents: 1 })
     parkParent(ctx, parent)
     try {
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 1 })
       const first = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 1, limit: 1 })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })).rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 2 })
       const second = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 2, limit: 2 })
       await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 1 })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 2, limit: 1 })
       expect(ctx.agents.get(first.childId)).toBeDefined()
       expect(ctx.agents.get(second.childId)).toBeDefined()
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })).rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       await subagentConfigs.get(ctx)!.update({ maxActiveSubagents: 3 })
       const third = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 3, limit: 3 })
       release.resolve(undefined)
       await Promise.all([first, second, third].map(child => waitNoActivation(ctx, child.childId)))
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 3 })
     } finally {
       release.resolve(undefined)
       await ctx.fiber.dispose()
@@ -358,15 +367,21 @@ describe('continuable activation capacity', () => {
       await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
       const nested = await ctx.subagents.startActivation({ ...startSpec(child, 'fork'), delivery: 'parent' })
       const sibling = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
+      for (const caller of [parent, child, ctx.agents.get(nested.childId)!]) {
+        expect(ctx.subagents.capacityOf(caller)).toEqual({ running: 3, limit: 3 })
+      }
+      expect(ctx.subagents.capacityOf(other)).toEqual({ running: 0, limit: 3 })
       await expect(ctx.subagents.startActivation({ ...startSpec(ctx.agents.get(nested.childId)!), delivery: 'parent' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       const independent = await ctx.subagents.startActivation({ ...startSpec(other), delivery: 'parent' })
+      expect(ctx.subagents.capacityOf(other)).toEqual({ running: 1, limit: 3 })
       parkParent(ctx, child)
       releaseParent.resolve(undefined)
       await child.whenIdle()
       expect(managerState(ctx).resident.get(first.childId)).toBeDefined()
+      expect(ctx.subagents.capacityOf(child)).toEqual({ running: 3, limit: 3 })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' }))
         .rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       release.resolve(undefined)
@@ -393,10 +408,12 @@ describe('continuable activation capacity', () => {
     const rejected = expect(starting).rejects.toThrow('creation failed')
     try {
       await entered.promise
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 1, limit: 1 })
       await expect(ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })).rejects.toMatchObject({ code: 'ACTIVATION_LIMIT_REACHED' })
       expect(createSpy).toHaveBeenCalledTimes(1)
       release.resolve(undefined)
       await rejected
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 1 })
       createSpy.mockRestore()
       const replacement = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
       await waitNoActivation(ctx, replacement.childId)
@@ -1731,6 +1748,138 @@ describe('continuable durability and teardown', () => {
     }, { timeout: 5_000 })
   })
 
+  it.each(['another owner disposes the child', 'the manager unloads'] as const)('settles with the outcome of the whole epoch when %s', async (teardown) => {
+    const hold = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    let epochStart: number | undefined
+    ctx.on('subagent/start', (info) => { epochStart = ctx.agents.get(info.id)!.session.seq })
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const activation = requireLocalActivation(managerState(ctx).resident.get(started.childId)!)
+    const session = activation.handle.agent.session
+
+    // Both teardowns cancel the open turn; its ending commits after the child
+    // scope's listeners, or the manager context's, would already be gone.
+    const disposed = teardown === 'the manager unloads'
+      ? subagentConfigs.get(ctx)!.fiber.dispose()
+      : activation.handle.dispose()
+    hold.resolve(undefined)
+    await disposed
+
+    const epoch = session.snapshotEvents().slice(epochStart)
+    expect(epoch.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'aborted' } } })
+    await expect(started.result).resolves.toEqual({
+      output: finalAssistantOutput(epoch) ?? [],
+      stopReason: epochStopReason(foldConsumedWork(epoch)),
+    })
+    await expect(started.result).resolves.toMatchObject({ stopReason: 'aborted' })
+  })
+
+  it('includes an event appended while the child scope is being disposed', async () => {
+    const hold = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    let epochStart: number | undefined
+    ctx.on('subagent/start', (info) => { epochStart = ctx.agents.get(info.id)!.session.seq })
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const activation = requireLocalActivation(managerState(ctx).resident.get(started.childId)!)
+    const child = activation.handle.agent
+    // Scope disposers start in one microtask drain, so a macrotask later the
+    // child scope's own listeners are gone.
+    child.ctx.effect(() => async () => {
+      await new Promise(resolve => setImmediate(resolve))
+      child.session.append('assistant/message', {
+        stream: [], turn: 1, step: 1,
+        message: createAssistantMessage({ content: [{ type: 'text', text: 'late answer' }], source: { provider: 'mock', model: 'mock' } }),
+      }, { surfaceOp: 'append' })
+    }, 'test: late append')
+    // Keep the settlement watcher behind the lock, so the manager captures the
+    // result in `agent/disposed`, after the child scope is gone.
+    const lock = await holdChildLock(ctx, started.childId)
+
+    const disposed = activation.handle.dispose()
+    hold.resolve(undefined)
+    await disposed
+    lock.release()
+    await lock.held
+
+    const epoch = child.session.snapshotEvents().slice(epochStart)
+    await expect(started.result).resolves.toEqual({
+      output: finalAssistantOutput(epoch) ?? [],
+      stopReason: epochStopReason(foldConsumedWork(epoch)),
+    })
+    await expect(started.result).resolves.toMatchObject({ output: [{ type: 'text', text: 'late answer' }] })
+  })
+
+  it('rejects the result with the error that folding its events threw', async () => {
+    const hold = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    ctx.logger.warn = () => {}
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const child = ctx.agents.get(started.childId)!
+    const malformed = child.session.append('assistant/attempt', { turn: 1, step: 1 } as SessionEventMap['assistant/attempt'])
+    let expected: unknown
+    try { finalAssistantOutput([malformed]) } catch (error: unknown) { expected = error }
+    expect(expected).toBeInstanceOf(TypeError)
+
+    hold.resolve(undefined)
+    await expect(started.result).rejects.toThrow((expected as TypeError).message)
+  })
+
+  it('observes a child that runs outside the scope the manager is mounted in', async () => {
+    const ctx = new Context()
+    await mountAgentLoopTestDependencies(ctx)
+    const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-continuation-'))
+    const persistence = await ctx.plugin(JsonlSessionPersistence, { root })
+    cleanups.push(async () => {
+      await ctx.fiber.dispose()
+      await persistence.dispose()
+      rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    })
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(TestSessionQuery)
+    await mountWorkingDirectoryFixture(ctx)
+    if (ctx.get('sessionProjections') === undefined) await ctx.plugin(SessionProjectionRegistry)
+    await createScope(ctx, {}).ctx.plugin(SubagentRuntime, {})
+    await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
+    ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('answer')]))
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
+
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+
+    await expect(started.result).resolves.toEqual({ output: [{ type: 'text', text: 'answer' }], stopReason: 'completed' })
+  })
+
+  it('releases the activation-owner scope when manager teardown fails', async () => {
+    const hold = Promise.withResolvers<undefined>()
+    const adapter = new GatedAdapter([{ chunks: textResponse('answer'), gate: hold.promise }])
+    const { ctx, parent } = await setupWith(adapter)
+    const errors: unknown[] = []
+    ctx.logger.error = (error: unknown) => { errors.push(error) }
+    ctx.logger.warn = () => {}
+    const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'caller' })
+    await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
+    const { ownerCtx, resident } = managerState(ctx)
+    const handle = requireLocalActivation(resident.get(started.childId)!).handle
+    const realDispose = handle.dispose.bind(handle)
+    handle.dispose = async () => {
+      await realDispose()
+      throw new Error('child cleanup failed')
+    }
+
+    const unloaded = subagentConfigs.get(ctx)!.fiber.dispose()
+    hold.resolve(undefined)
+    await unloaded
+
+    // The drain rejected, so the manager's teardown failed after settling the child.
+    expect(String(errors.at(-1))).toContain('child cleanup failed')
+    expect(ownerCtx.fiber.state).toBe(FiberState.DISPOSED)
+  })
+
   it('disposes every subagent tree instance on manager teardown', async () => {
     const hold = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
@@ -2417,6 +2566,7 @@ describe('continuable review regressions', () => {
     turn.resolve(undefined)
     try {
       await cleaning.promise
+      expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 1, limit: 8 })
       expect(observed).not.toHaveBeenCalled()
       expect(ended).not.toHaveBeenCalled()
       expect(followup).not.toHaveBeenCalled()
@@ -2426,6 +2576,7 @@ describe('continuable review regressions', () => {
       await started.dispose()
     }
     await expect(started.result).resolves.toMatchObject({ stopReason: 'completed' })
+    expect(ctx.subagents.capacityOf(parent)).toEqual({ running: 0, limit: 8 })
     expect(ended).toHaveBeenCalledTimes(1)
     expect(followup.mock.calls.length + steer.mock.calls.length).toBe(1)
     expect(managerState(ctx).resident.get(started.childId)).toBeUndefined()

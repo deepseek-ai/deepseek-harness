@@ -53,14 +53,18 @@ describe('inline Slot anchors', () => {
     runtime.slots.register({ name: 'spec.inline.single' }, Crashed)
     runtime.slots.register({ name: 'spec.inline.keyed', key: 'failed' }, Crashed)
     runtime.slots.register({ name: 'spec.inline.list', id: 'failed' }, Crashed)
+    runtime.slots.register({ name: 'spec.inline.list', id: 'healthy' }, () => <em>Inline item</em>)
     const view = runtime.renderRoot()
     await act(async () => {})
     for (const name of ['spec.inline.single', 'spec.inline.keyed', 'spec.inline.list'] as const) {
       const anchor = view.container.querySelector(`[data-slot="${name}"]`)
       expect(anchor?.tagName).toBe('SPAN')
-      expect(anchor?.querySelector('[data-slot-error]')?.tagName).toBe('SPAN')
-      expect(runtime.slots.entries(name)).toHaveLength(1)
+      expect(anchor?.querySelector(':scope > [data-slot-error]')?.tagName).toBe('SPAN')
+      expect(runtime.slots.entries(name)).toHaveLength(name === 'spec.inline.list' ? 2 : 1)
     }
+    const item = view.getByText('Inline item').parentElement
+    expect(item?.matches('[data-slot="spec.inline.list"] > span[data-slot-item]')).toBe(true)
+    expect(item?.style.display).toBe('contents')
     expect(view.container.querySelector('[data-slot="spec.inline.block"]')?.tagName).toBe('DIV')
     expect(view.getByText('Ordinary fallback')).toBeTruthy()
   })

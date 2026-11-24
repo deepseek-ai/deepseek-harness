@@ -895,6 +895,7 @@ describe('Trajectory conversation Definitions', () => {
         time: 1_700_000_000_010,
         kind: 'system',
         previous: { config: { provider: 'test', model: 'test' }, system: 'first prompt', tools: [] },
+        rebuilt: true,
       }],
     ])
   })
@@ -921,7 +922,7 @@ describe('Trajectory conversation Definitions', () => {
     value.flush()
     expect(snapshot(value).systemPrompts).toBeUndefined()
     expect(snapshot(value).requests.find(request => request.purpose === 'assistant'))
-      .toMatchObject({ prompt: { system: 'known prompt', config: { provider: 'test', model: 'test' } } })
+      .toMatchObject({ prompt: { system: 'original\n\nknown prompt', config: { provider: 'test', model: 'test' } } })
   })
 
   it('carries an in-history prompt update into later requests as a system change at its own position', () => {
@@ -987,18 +988,18 @@ describe('Trajectory conversation Definitions', () => {
       ? [request.prompt?.system, request.promptChange]
       : undefined)).toEqual([
       ['first prompt', { seq: 3, time: 1_700_000_000_003, kind: 'initial' }],
-      ['updated prompt', {
+      ['first prompt\n\nupdated prompt', {
         seq: 10,
         time: 1_700_000_000_010,
         kind: 'system',
         previous: { config: { provider: 'test', model: 'test' }, system: 'first prompt', tools: [] },
       }],
-      ['updated prompt', undefined],
-      ['updated prompt', undefined],
+      ['first prompt\n\nupdated prompt', undefined],
+      ['first prompt\n\nupdated prompt', undefined],
     ])
   })
 
-  it.each(['replay', 'live'] as const)('compares consecutive A → B → C updates against B (%s)', (mode) => {
+  it.each(['replay', 'live'] as const)('compares accumulated sections with the preceding request (%s)', (mode) => {
     const history = [
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
@@ -1029,8 +1030,8 @@ describe('Trajectory conversation Definitions', () => {
       ? { system: request.prompt?.system, previous: request.promptChange?.previous?.system }
       : null)).toEqual([
       { system: 'A', previous: undefined },
-      { system: 'B', previous: 'A' },
-      { system: 'C', previous: 'B' },
+      { system: 'A\n\nB', previous: 'A' },
+      { system: 'A\n\nB\n\nC', previous: 'A\n\nB' },
     ])
   })
 
@@ -1075,7 +1076,7 @@ describe('Trajectory conversation Definitions', () => {
     }
     expect(snapshot(value).requests.filter(request => request.purpose === 'assistant')
       .map(request => [request.prompt?.system, request.promptChange?.previous?.system])).toEqual([
-      ['A', undefined], ['B', 'A'], ['A', 'B'],
+      ['A', undefined], ['A\n\nB', 'A'], ['A', 'A\n\nB'],
     ])
     expect(snapshot(value).requests.at(-1)).toMatchObject({ promptChange: { seq: 12, kind: 'system' } })
   })
@@ -1095,7 +1096,7 @@ describe('Trajectory conversation Definitions', () => {
     expect(snapshot(uncertain).systemPrompts).toBeUndefined()
     value.prepend([system(1, 'A'), system(3, 'B'), system(5, 'A2', 1)], false)
     value.flush()
-    expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: 'C' } })
+    expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: 'D\n\nC' } })
   })
 
   it('withholds inherited prompts when a replacement reaches an unloaded endpoint', () => {
@@ -1109,6 +1110,130 @@ describe('Trajectory conversation Definitions', () => {
       at(9, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('reply', 'reply') }),
     ])
     expect(snapshot(value).requests.at(-1)).toMatchObject({ prompt: { system: '' } })
+  })
+
+  it('presents a section-attributed update with its per-source reading and instructions in force', () => {
+    const sectioned = (text: string) => ({
+      ...systemMessage(text),
+      source: { kind: 'system-prompt', sections: [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }] },
+    })
+    const events = [
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'system/message', { turn: 1, step: 1, message: sectioned('plan on') }, { surfaceOp: 'append' }),
+      at(4, 'request/header', {
+        reason: 'initial',
+        header: { config: { provider: 'test', model: 'test' }, tools: [] },
+      }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'system/message', { turn: 1, step: 2, message: sectioned('plan off') }, { surfaceOp: 'append' }),
+      at(9, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+    ]
+    const message = { reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated', text: 'plan off', notices: [] }] }
+
+    const requests = snapshot(assembler(events)).requests
+    expect(requests.map(request => request.purpose === 'assistant' ? request.prompt?.sections : undefined)).toEqual([
+      [{ name: 'plan:status', order: 1, text: 'plan on' }],
+      [{ name: 'plan:status', order: 1, text: 'plan off' }],
+    ])
+    expect(requests.at(-1)).toMatchObject({ promptChange: {
+      seq: 8, kind: 'system', message, previous: { sections: [{ name: 'plan:status', order: 1, text: 'plan on' }] },
+    } })
+
+    // Without a loaded header each standalone prompt node keeps its reading and the instructions in force after it.
+    const headerless = snapshot(assembler(events.filter(event => event.event.type !== 'request/header')))
+    expect(headerless.systemPrompts?.map(prompt => prompt.message?.changes.map(change => change.change)))
+      .toEqual([undefined, ['updated']])
+    expect(headerless.systemPrompts?.map(prompt => prompt.sections?.map(section => section.text)))
+      .toEqual([['plan on'], ['plan off']])
+  })
+
+  it('keeps a later step\'s tool change separate from an update its own earlier step presented', () => {
+    const sectioned = (text: string) => ({
+      ...systemMessage(text),
+      source: { kind: 'system-prompt', sections: [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }] },
+    })
+    const config = { provider: 'test', model: 'test' }
+    const probe = { name: 'probe', description: 'Probe', parameters: { type: 'object' } }
+    const requests = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'system/message', { turn: 1, step: 1, message: sectioned('plan on') }, { surfaceOp: 'append' }),
+      at(4, 'request/header', { reason: 'initial', header: { config, tools: [] } }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'system/message', { turn: 1, step: 2, message: sectioned('plan off') }, { surfaceOp: 'append' }),
+      at(9, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+      at(10, 'step/end', { turn: 1, step: 2 }),
+      at(11, 'step/start', { turn: 1, step: 3 }),
+      at(12, 'request/header', { reason: 'change', header: { config, tools: [probe] } }),
+      at(13, 'assistant/message', { turn: 1, step: 3, message: assistantMessage('assistant-3', 'third') }),
+    ])).requests
+
+    expect(requests.map(request => request.purpose === 'assistant' ? request.promptChange?.kind : undefined))
+      .toEqual(['initial', 'system', 'tools'])
+    expect(requests.at(-1)).toMatchObject({ promptChange: { seq: 12, previous: { tools: [] } } })
+  })
+
+  it('presents an update that only clears a source as its own change with the instructions in force', () => {
+    const config = { provider: 'test', model: 'test' }
+    const message = (seq: number, content: readonly string[], sections: readonly object[]) => at(seq, 'system/message', {
+      turn: 1, step: seq < 6 ? 1 : 2,
+      message: { ...systemMessage(''), content: content.map(text => ({ type: 'text', text })), source: { kind: 'system-prompt', sections } },
+    }, { surfaceOp: 'append' })
+    const requests = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      message(3, ['rules', 'memo'], [
+        { name: 'rules', state: 'active', order: 1, contentIndex: 0 },
+        { name: 'memo', state: 'active', order: 2, contentIndex: 1 },
+      ]),
+      at(4, 'request/header', { reason: 'initial', header: { config, tools: [] } }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/start', { turn: 1, step: 2 }),
+      // The source withdraws its text and suppresses its notice, so the message carries only an empty block.
+      message(7, [''], [{ name: 'memo', state: 'active', order: 2, contentIndex: 0 }]),
+      at(8, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+    ])).requests
+
+    expect(requests.at(-1)).toMatchObject({
+      prompt: { system: 'rules\n\nmemo', sections: [{ name: 'rules', text: 'rules' }, { name: 'memo', text: '' }] },
+      promptChange: { seq: 7, kind: 'system', message: { changes: [{ name: 'memo', change: 'cleared' }] } },
+    })
+  })
+
+  it('merges an in-history update and a tool change of one step into a single change', () => {
+    const sectioned = (text: string) => ({
+      ...systemMessage(text),
+      source: { kind: 'system-prompt', sections: [{ name: 'plan:status', state: 'active', order: 1, contentIndex: 0 }] },
+    })
+    const config = { provider: 'test', model: 'test' }
+    const probe = { name: 'probe', description: 'Probe', parameters: { type: 'object' } }
+    const requests = snapshot(assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'system/message', { turn: 1, step: 1, message: sectioned('plan on') }, { surfaceOp: 'append' }),
+      at(4, 'request/header', { reason: 'initial', header: { config, tools: [] } }),
+      at(5, 'assistant/message', { turn: 1, step: 1, message: assistantMessage('assistant-1', 'first') }),
+      at(6, 'step/end', { turn: 1, step: 1 }),
+      at(7, 'step/start', { turn: 1, step: 2 }),
+      at(8, 'system/message', { turn: 1, step: 2, message: sectioned('plan off') }, { surfaceOp: 'append' }),
+      at(9, 'request/header', { reason: 'change', header: { config, tools: [probe] } }),
+      at(10, 'assistant/message', { turn: 1, step: 2, message: assistantMessage('assistant-2', 'second') }),
+    ])).requests
+
+    expect(requests.at(-1)).toMatchObject({
+      prompt: { system: 'plan on\n\nplan off', tools: [probe] },
+      promptChange: {
+        seq: 8,
+        kind: 'system-and-tools',
+        previous: { system: 'plan on', tools: [] },
+        message: { changes: [{ name: 'plan:status', change: 'updated', text: 'plan off' }] },
+      },
+    })
   })
 
   it('retains an in-history update without a loaded header as a plain system node', () => {
@@ -1127,7 +1252,7 @@ describe('Trajectory conversation Definitions', () => {
     expect(snapshot(value).requests.map(request => request.purpose === 'assistant'
       ? [request.prompt?.system, request.promptChange]
       : undefined)).toEqual([
-      ['updated prompt', { seq: 4, time: 1_700_000_000_004, kind: 'initial' }],
+      ['first prompt\n\nupdated prompt', { seq: 4, time: 1_700_000_000_004, kind: 'initial' }],
     ])
   })
 

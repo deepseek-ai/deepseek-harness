@@ -43,12 +43,12 @@ export function installKeyboard(window: Window, shortcuts: Pick<ShortcutRegistry
   const changedModals = (records: MutationRecord[]): void => {
     if (records.length > 0) dialogs = undefined
     if (records.some(record => record.type === 'attributes'
-      ? record.oldValue === 'dialog' || record.oldValue === 'true' || containsModal(record.target)
+      ? record.attributeName === 'data-menu-popup' || record.oldValue === 'dialog' || record.oldValue === 'true' || containsModal(record.target)
       : [...record.addedNodes, ...record.removedNodes].some(containsModal))) reset()
   }
   const observer = new MutationObserver(changedModals)
   observer.observe(document.documentElement, { childList: true, subtree: true,
-    attributes: true, attributeFilter: ['role', 'aria-modal'], attributeOldValue: true })
+    attributes: true, attributeFilter: ['role', 'aria-modal', 'data-menu-popup'], attributeOldValue: true })
   const capture = (): void => {
     if (pending) reset()
     window.clearTimeout(pendingTimer)

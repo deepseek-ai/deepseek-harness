@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-08-02-native-github-stacks-and-optional-rebases.zh.md)
 
+The equal choice between merge-forward and rebase below is superseded by [rebase with rerere](2026-11-19-prefer-rebase-with-rerere.md), which keeps merge-forward for an explicit PR author request. Stack linkage, landing, lease protection, and post-rewrite audits remain current.
+
 ## Problem
 
 A dependent PR chain represented only by base branches has no official stack identity. Landing it requires manually merging one PR at a time, preserving intermediate branches, retargeting every child, and reconstructing whether the chain survived. GitHub's native stacked-PR feature instead carries the order, applies trunk rules and CI to every layer, and owns bottom-up merges and retargeting.

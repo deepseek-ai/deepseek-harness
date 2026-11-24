@@ -11,6 +11,10 @@
     personaPrefix: >-
       You are a coding agent powered by the {{model}} model.
 
+# Session adoption reads the registry's projection. An earlier bundle may supply its default.
+- id: agent-preset-registry
+  disabled: false
+
 - insert:
     - id: headless-startup
       name: '@deepseek-ai/dsh-headless/startup'

@@ -2,25 +2,31 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  BranchUpdateRequest, ChangeRequestIssue, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList,
-  ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate,
-  ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, MergeRequest,
+  AutoMergeRequest, BranchUpdateRequest, ChangeRequestActivity, ChangeRequestDescription, ChangeRequestIssue, ChangeRequestKey,
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider, ForgeReadiness,
+  ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest,
+  ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewerCapability, ForgeViewerFilter, ForgeViewerList,
+  ForgeViewerQuery, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
+import { readActivity } from './activity.ts'
 import { GitLabApi } from './api.ts'
 import { readCommits } from './commits.ts'
+import { readDescription } from './description.ts'
 import { comparePatch, fileTextOf, isCommit, mergeBaseOf, newestVersion, textPatch, versionFileDiffs, versionPatch } from './diff.ts'
 import type { GlabRunner } from './glab.ts'
-import { gitLabReviewerCandidates, requestGitLabReviews, rerunGitLabChecks, updateGitLabBranch } from './overview.ts'
+import { gitLabReviewerCandidates, requestGitLabReviews, rerunGitLabChecks, setGitLabAutoMerge, updateGitLabBranch } from './overview.ts'
 import { pool } from './pool.ts'
 import type { VersionFile } from './position.ts'
 import { readReviewThreads } from './review.ts'
 import type { PositionFile } from './review.ts'
 import {
   closingIssuesOf, JOB_PAGE, jobsPageSchema, JOBS_QUERY, needsMergeCheck, POLL_JOBS, projectSchema, snapshotOf, statusQuery,
+  statusViewer,
 } from './status.ts'
-import type { JobNode, MergeRequestNode } from './status.ts'
+import type { JobNode, StatusParts } from './status.ts'
 import { checkedProject, encodedPath, mergeRequestPath, parseMergeRequestUrl, parseRemoteUrl, repositoryOf } from './urls.ts'
+import { countViewerLists, readInvolvedList, readViewerList, readViewerName, VIEWER_FILTERS, VIEWER_PAGE } from './viewer.ts'
 import { submitGitLabReview, writeGitLabReview } from './writes.ts'
 import type { VersionFiles } from './writes.ts'
 
@@ -69,8 +75,11 @@ export class GitLabProvider implements ForgeProvider {
   readonly hosts: readonly string[]
   readonly label = 'GitLab'
   readonly changeRequestNoun = 'merge-request'
+  readonly viewer: ForgeViewerCapability
   private readonly served: ReadonlySet<string>
   private readonly api: GitLabApi
+  /** Username of the signed-in user by host, as the latest viewer read on the host named it. */
+  private readonly viewers = new Map<string, string>()
   /** Closing issues by merge request; one entry per merge request this provider polled. */
   private readonly closing = new Map<ChangeRequestKey, ClosingIssues>()
   /** Diff version patches by merge request and version, least recently read first. */
@@ -88,6 +97,76 @@ export class GitLabProvider implements ForgeProvider {
     this.api = new GitLabApi(glab)
     this.hosts = [...new Set(hosts.map(host => host.toLowerCase()))]
     this.served = new Set(this.hosts)
+    this.viewer = { hosts: this.hosts, filters: VIEWER_FILTERS, maxItems: VIEWER_PAGE }
+  }
+
+  /**
+   * Read one list of the signed-in user's open merge requests through one GraphQL request; the `involved` list names
+   * the user in its request.
+   * @see readViewerList
+   * @see readInvolvedList
+   * @see GitLabProvider.asViewer
+   * @throws when the limit is not a positive integer no greater than {@link VIEWER_PAGE}.
+   */
+  async listForViewer(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure> {
+    const { host, filter, limit } = query
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    if (!Number.isSafeInteger(limit) || limit <= 0 || limit > VIEWER_PAGE) {
+      throw new Error(`forge-gitlab: viewer list limit must be a positive integer no greater than ${VIEWER_PAGE}`)
+    }
+    if (filter === 'involved') return await this.asViewer(host, async me => await readInvolvedList(this.api, query, me, signal), signal)
+    const list = await readViewerList(this.api, filter, query, signal)
+    if (!('code' in list)) this.viewers.set(host, list.viewer)
+    return list
+  }
+
+  /**
+   * Count the signed-in user's open merge requests in every list through one GraphQL request, which names the user.
+   * @see countViewerLists
+   * @see GitLabProvider.asViewer
+   */
+  async countForViewer(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure> {
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    const counted = await this.asViewer(host, async me => await countViewerLists(this.api, host, me, signal), signal)
+    return 'code' in counted ? counted : counted.counts
+  }
+
+  /**
+   * Read a merge request's description and labels through GraphQL.
+   * @see readDescription
+   */
+  async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await readDescription(this.api, ref, signal)
+  }
+
+  /**
+   * Read a merge request's latest notes through GraphQL and its state changes through REST.
+   * @see readActivity
+   */
+  async readActivity(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestActivity | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    return await readActivity(this.api, ref, signal)
+  }
+
+  /**
+   * Add a comment through one REST request that creates a note. The comment is saved once GitLab answers with the
+   * note's id; an accepted request whose answer names no note is `unknown`. GitLab runs the quick actions in `body`,
+   * such as `/close`, and removes them from the note.
+   */
+  async addComment(ref: ChangeRequestRef, body: string, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const refused = this.writable(ref, null)
+    if (refused !== undefined) return refused
+    const written = await this.api.write(ref.repository.host, [
+      '-X', 'POST', `${mergeRequestPath(ref)}/notes`, '--input', '-', '-H', 'Content-Type: application/json',
+    ], signal, JSON.stringify({ body }))
+    if (!written.ok) return written.failure
+    return z.object({ id: z.number() }).safeParse(written.body).success ? undefined
+      : { code: 'unknown', message: 'unexpected GitLab response to the comment' }
   }
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
@@ -186,6 +265,15 @@ export class GitLabProvider implements ForgeProvider {
     ], signal)
     if (written.ok) return undefined
     return written.status === 409 ? { code: 'stale', message: written.failure.message } : written.failure
+  }
+
+  /**
+   * Turn the automatic merge on through the GraphQL `mergeRequestAccept` mutation at the confirmed head, or off through
+   * REST `cancel_auto_merge`.
+   * @see setGitLabAutoMerge
+   */
+  async setAutoMerge(ref: ChangeRequestRef, request: AutoMergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    return this.writable(ref, request.enabled ? request.headSha : null) ?? await setGitLabAutoMerge(this.api, ref, request, signal)
   }
 
   /**
@@ -289,6 +377,31 @@ export class GitLabProvider implements ForgeProvider {
   }
 
   /**
+   * Run a read that names the signed-in user of `host` in its request: with the username the latest viewer read on the
+   * host returned, which one request reads first when there is none. An answer that names another user, as after
+   * `glab` signed in as someone else, replaces the kept username, and the read runs once more with it.
+   * @param host - host the read is on.
+   * @param read - the read for one username, whose result names the user GitLab answered as.
+   * @param signal - cancellation of the username read.
+   * @returns the result of the last read, or why GitLab named no user.
+   */
+  private async asViewer<Result extends { readonly viewer: string }>(
+    host: string, read: (me: string) => Promise<Result | ForgeFailure>, signal: AbortSignal,
+  ): Promise<Result | ForgeFailure> {
+    let me = this.viewers.get(host)
+    if (me === undefined) {
+      const named = await readViewerName(this.api, host, signal)
+      if (typeof named !== 'string') return named
+      me = named
+      this.viewers.set(host, me)
+    }
+    const result = await read(me)
+    if ('code' in result || result.viewer === me) return result
+    this.viewers.set(host, result.viewer)
+    return await read(result.viewer)
+  }
+
+  /**
    * Read the status of merge requests on one host with one GraphQL query, halving the batch while GitLab refuses it as
    * too complex, then read each one's closing issues unless its update time is the one they were read at.
    */
@@ -313,12 +426,16 @@ export class GitLabProvider implements ForgeProvider {
       return results
     }
     const data = z.record(z.string(), z.unknown()).parse(read.body)
+    const viewer = statusViewer(data)
     for (const [index, ref] of refs.entries()) {
       const key = changeRequestKey(ref)
       const project = projectSchema.safeParse(data[`m${index}`])
       if (!project.success) results.set(key, { code: 'unavailable', message: 'unexpected GitLab response to the status read' })
       else if (project.data === null || project.data.mergeRequest === null) results.set(key, { code: 'not-found', message: `merge request ${ref.number} was not found` })
-      else results.set(key, await this.snapshot(ref, project.data.mergeRequestsFfOnlyEnabled, project.data.mergeRequest, allJobs, signal))
+      else {
+        const parts = { ref, fastForwardOnly: project.data.mergeRequestsFfOnlyEnabled, viewer, node: project.data.mergeRequest }
+        results.set(key, await this.snapshot(parts, allJobs, signal))
+      }
     }
     return results
   }
@@ -328,8 +445,9 @@ export class GitLabProvider implements ForgeProvider {
    * to check its conflicts when it has not since a change.
    */
   private async snapshot(
-    ref: ChangeRequestRef, fastForwardOnly: boolean, node: MergeRequestNode, allJobs: boolean, signal: AbortSignal,
+    parts: Pick<StatusParts, 'ref' | 'fastForwardOnly' | 'viewer' | 'node'>, allJobs: boolean, signal: AbortSignal,
   ): Promise<ChangeRequestSnapshot | ForgeFailure> {
+    const { ref, node } = parts
     const jobs: JobNode[] = [...node.headPipeline?.jobs?.nodes ?? []]
     let page = node.headPipeline?.jobs?.pageInfo
     let bytes = Buffer.byteLength(JSON.stringify(node))
@@ -352,8 +470,7 @@ export class GitLabProvider implements ForgeProvider {
     if (needsMergeCheck(node)) await this.api.rest(ref.repository.host, mergeRequestPath(ref), signal)
     const closing = await this.closingIssues(ref, node.updatedAt, signal)
     return snapshotOf({
-      ref, fastForwardOnly, node, jobs, jobsTruncated: page?.hasNextPage ?? false,
-      closingIssues: closing.issues, closingIssuesTruncated: closing.truncated,
+      ...parts, jobs, jobsTruncated: page?.hasNextPage ?? false, closingIssues: closing.issues, closingIssuesTruncated: closing.truncated,
     })
   }
 

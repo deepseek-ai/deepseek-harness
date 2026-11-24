@@ -1,6 +1,6 @@
 /**
- * The review page's list helpers and store: list sections and their search, the repositories the lists name, item hints
- * and tones, pasted links, description Markdown, and the page's choices.
+ * The review page's list helpers and store: list sections and their search, the hosts that failed, the repositories and
+ * scopes the lists name, item hints and tones, pasted links, description Markdown, and the page's choices.
  */
 import { describe, expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -8,8 +8,8 @@ import type { ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/t
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import {
-  descriptionMarkdown, mergeRepositories, pastedUrl, REVIEW_FILTERS, reviewHint, reviewListsComplete, reviewRepositories, reviewSearchKeys,
-  reviewSections, summaryTone,
+  descriptionMarkdown, mergeRepositories, pastedUrl, REVIEW_FILTERS, reviewFailures, reviewHint, reviewListsComplete, reviewRepositories,
+  reviewSearchKeys, reviewSections, sameScope, scopeRepository, summaryTone,
 } from '../src/client/review-page/review-lists.ts'
 import { createReviewStore } from '../src/client/review-page/review-store.ts'
 import { ref } from './client-fixtures.client.ts'
@@ -27,7 +27,7 @@ function urls(sections: ReturnType<typeof reviewSections>): Record<string, reado
 
 describe('reviewSections', () => {
   it('shows no section before the first frame', () => {
-    expect(reviewSections(undefined, false)).toEqual([])
+    expect(reviewSections(undefined, false, null)).toEqual([])
   })
 
   it('shows one section per offered list in page order, newest first, summing totals over hosts and marking cut lists', () => {
@@ -35,32 +35,53 @@ describe('reviewSections', () => {
     const newer = summary(2, { updatedAt: '2026-10-05T00:00:00Z' })
     const middle = summary(4, { updatedAt: '2026-10-03T00:00:00Z' })
     const requested = summary(3)
-    const sections = reviewSections(frame(
+    const lists = frame(
       host({ 'authored': list([older, newer], { total: 5 }), 'review-requested': list([requested]) }),
       host({ authored: list([middle]) }, { forge: 'gitlab', host: 'gitlab.example' }),
-    ), false)
+    )
+    const sections = reviewSections(lists, false, null)
     expect(REVIEW_FILTERS).toEqual(['review-requested', 'authored', 'involved'])
     expect(sections.map(section => section.filter)).toEqual(['review-requested', 'authored'])
     expect(sections[1]?.items?.map(item => [item.summary.ref.number, item.forge, item.host])).toEqual([
       [2, 'github', 'github.com'], [4, 'gitlab', 'gitlab.example'], [1, 'github', 'github.com'],
     ])
-    expect(sections[1]).toMatchObject({ total: 6, truncated: true, failure: null })
-    expect(sections[0]).toMatchObject({ total: 1, truncated: false, failure: null })
+    expect(sections[1]).toEqual(expect.objectContaining({ total: 6, truncated: true }))
+    expect(sections[0]).toEqual(expect.objectContaining({ total: 1, truncated: false }))
   })
 
-  it('reports the first failure of any host, keeping the items a host read and null items before any host read the list', () => {
+  it('marks a list some host has neither read nor failed to read, and no list whose hosts all answered or failed', () => {
+    const lists = frame(
+      host({ 'authored': list([summary(1)]), 'review-requested': list(null), 'involved': list([]) }),
+      host({ authored: list(null), involved: failedList('unavailable') }, { forge: 'gitlab', host: 'gitlab.example' }),
+    )
+    expect(reviewSections(lists, false, null).map(section => [section.filter, section.items?.length ?? null, section.pending])).toEqual([
+      ['review-requested', null, true], ['authored', 1, true], ['involved', 0, false],
+    ])
+    // The host that has not answered is out of a reader's narrowed lists.
+    expect(reviewSections(lists, false, 'github.com').map(section => section.pending)).toEqual([true, false, false])
+  })
+
+  it('shows only the lists of the host the reader narrowed them to', () => {
+    const lists = frame(
+      host({ 'authored': list([summary(1), summary(2)], { total: 5 }), 'review-requested': list([summary(3)]) }),
+      host({ authored: list([summary(4)]) }, { forge: 'gitlab', host: 'gitlab.example' }),
+    )
+    expect(reviewSections(lists, false, 'gitlab.example')).toEqual([
+      { filter: 'authored', items: [{ summary: summary(4), forge: 'gitlab', host: 'gitlab.example' }], total: 1, truncated: false, pending: false },
+    ])
+    expect(reviewSections(lists, false, 'github.com').map(section => [section.filter, section.total])).toEqual([['review-requested', 1], ['authored', 5]])
+    expect(reviewSections(lists, false, 'other.example')).toEqual([])
+  })
+
+  it('keeps the items a host read while its latest read failed, and null items before any host read the list', () => {
     const sections = reviewSections(frame(
       host({
         involved: list([summary(1)], { failure: { code: 'rate-limited', message: 'slow down' } }), authored: failedList('unauthenticated'),
       }),
       host({ involved: failedList('unavailable'), authored: failedList('unavailable') }, { host: 'ghe.example' }),
-    ), false)
+    ), false, null)
     expect(urls(sections)).toEqual({ authored: null, involved: ['https://github.com/octo/demo/pull/1'] })
-    expect(sections.map(section => section.failure)).toEqual([
-      { host: 'github.com', forge: 'github', failure: { code: 'unauthenticated', message: 'down' } },
-      { host: 'github.com', forge: 'github', failure: { code: 'rate-limited', message: 'slow down' } },
-    ])
-    expect(sections[0]).toMatchObject({ total: 0, truncated: false })
+    expect(sections[0]).toEqual({ filter: 'authored', items: null, total: 0, truncated: false, pending: false })
   })
 
   it('leaves out review requests made only of one of the user\'s teams from the review-requested list when asked', () => {
@@ -68,20 +89,23 @@ describe('reviewSections', () => {
     const direct = summary(2, { viewerRequest: { team: null }, updatedAt: '2026-10-08T00:00:00Z' })
     const none = summary(3, { updatedAt: '2026-10-07T00:00:00Z' })
     const lists = frame(host({ 'review-requested': list([team, direct, none]), 'authored': list([team]) }))
-    expect(urls(reviewSections(lists, true))).toEqual({
+    expect(urls(reviewSections(lists, true, null))).toEqual({
       'review-requested': ['https://github.com/octo/demo/pull/2', 'https://github.com/octo/demo/pull/3'],
       'authored': ['https://github.com/octo/demo/pull/1'],
     })
-    expect(reviewSections(lists, false)[0]?.items).toHaveLength(3)
+    expect(reviewSections(lists, false, null)[0]?.items).toHaveLength(3)
   })
 
-  it('offers the title, the number, the repository, and the author to the shared list search', () => {
+  it('offers the title, the number, the repository, the author, and the host to the shared list search', () => {
     const parser = summary(11, { title: 'Fix the Parser' })
     const widgets = inRepository(22, 'Acme', 'Widgets', { title: 'Tidy up' })
     const mona = summary(33, { title: 'Docs', author: { login: 'Mona', avatarUrl: null, bot: true } })
     const hidden = summary(44, { title: 'Hidden author', author: null })
-    const lists = frame(host({ involved: list([parser, widgets, mona, hidden]) }))
-    const [section] = reviewSections(lists, false)
+    const elsewhere = summary(55, { title: 'Elsewhere' })
+    const lists = frame(
+      host({ involved: list([parser, widgets, mona, hidden]) }), host({ involved: list([elsewhere]) }, { forge: 'gitlab', host: 'gitlab.example' }),
+    )
+    const [section] = reviewSections(lists, false, null)
     const index = new TextSearchIndex(section?.items ?? [], reviewSearchKeys)
     const search = (query: string): number[] => index.search(query).map(item => item.summary.ref.number)
     expect(search(' PARSER ')).toEqual([11])
@@ -89,14 +113,54 @@ describe('reviewSections', () => {
     expect(search('22')).toEqual([22])
     expect(search('acme/wid')).toEqual([22])
     expect(search('mon')).toEqual([33])
+    expect(search('gitlab')).toEqual([55])
+    expect(search('github.com')).toEqual([11, 22, 33, 44])
     // A fuzzy subsequence from a word start finds a title, as the client search rule lets it.
     expect(search('tdy')).toEqual([22])
     expect(search('fix docs')).toEqual([])
     expect(search('zzz')).toEqual([])
-    expect(search('   ')).toEqual([11, 22, 33, 44])
+    expect(search('   ')).toEqual([11, 22, 33, 44, 55])
     // The section keeps every item and the whole list's size; the search only narrows what shows.
-    expect(section).toMatchObject({ total: 4 })
-    expect(section?.items).toHaveLength(4)
+    expect(section?.total).toBe(5)
+    expect(section?.items).toHaveLength(5)
+  })
+})
+
+describe('reviewFailures', () => {
+  it('reports each host whose read failed once, with the first failure among its lists and its sign-in command', () => {
+    const lists = frame(
+      host({
+        involved: list([summary(1)], { failure: { code: 'rate-limited', message: 'slow down' } }), authored: failedList('unauthenticated'),
+      }, { signIn: 'gh auth login --hostname github.com' }),
+      host({ involved: list([summary(2)]) }, { host: 'ghe.example' }),
+      host({ involved: failedList('unavailable') }, { forge: 'gitlab', host: 'gitlab.example' }),
+    )
+    expect(reviewFailures(undefined, null)).toEqual([])
+    expect(reviewFailures(lists, null)).toEqual([
+      { forge: 'github', host: 'github.com', failure: { code: 'unauthenticated', message: 'down' }, signIn: 'gh auth login --hostname github.com' },
+      { forge: 'gitlab', host: 'gitlab.example', failure: { code: 'unavailable', message: 'down' }, signIn: null },
+    ])
+    expect(reviewFailures(lists, 'gitlab.example').map(failure => failure.host)).toEqual(['gitlab.example'])
+    expect(reviewFailures(lists, 'ghe.example')).toEqual([])
+  })
+})
+
+describe('review scopes', () => {
+  it('names the repository of a scope and tells two scopes apart by host and repository', () => {
+    const repository = { host: 'github.com', owner: 'octo', name: 'demo' }
+    expect(scopeRepository(null)).toBeNull()
+    expect(scopeRepository({ host: 'github.com' })).toBeNull()
+    expect(scopeRepository(repository)).toBe(repository)
+    expect(sameScope(null, null)).toBe(true)
+    expect(sameScope(null, repository)).toBe(false)
+    expect(sameScope({ host: 'github.com' }, null)).toBe(false)
+    expect(sameScope({ host: 'github.com' }, { host: 'github.com' })).toBe(true)
+    expect(sameScope({ host: 'github.com' }, { host: 'ghe.example' })).toBe(false)
+    expect(sameScope({ host: 'github.com' }, repository)).toBe(false)
+    expect(sameScope(repository, { ...repository })).toBe(true)
+    expect(sameScope(repository, { ...repository, host: 'ghe.example' })).toBe(false)
+    expect(sameScope(repository, { ...repository, owner: 'acme' })).toBe(false)
+    expect(sameScope(repository, { ...repository, name: 'other' })).toBe(false)
   })
 })
 
@@ -111,22 +175,26 @@ describe('reviewListsComplete', () => {
 })
 
 describe('mergeRepositories', () => {
-  it('merges lists without duplicates, whatever their case, by owner then name', () => {
+  it('merges lists without duplicates, whatever their case, by host, then owner, then name', () => {
+    const on = (host: string, owner: string, name: string): { host: string; owner: string; name: string } => ({ host, owner, name })
     expect(mergeRepositories()).toEqual([])
     expect(mergeRepositories(
-      [{ owner: 'octo', name: 'demo' }, { owner: 'acme', name: 'widgets' }], [{ owner: 'Octo', name: 'Demo' }], [{ owner: 'acme', name: 'gears' }],
-    )).toEqual([{ owner: 'acme', name: 'gears' }, { owner: 'acme', name: 'widgets' }, { owner: 'Octo', name: 'Demo' }])
+      [on('github.com', 'octo', 'demo'), on('github.com', 'acme', 'widgets')], [on('github.com', 'Octo', 'Demo')],
+      [on('gitlab.example', 'acme', 'gears'), on('github.com', 'acme', 'gears')],
+    )).toEqual([
+      on('github.com', 'acme', 'gears'), on('github.com', 'acme', 'widgets'), on('github.com', 'Octo', 'Demo'), on('gitlab.example', 'acme', 'gears'),
+    ])
   })
 })
 
 describe('reviewRepositories', () => {
-  it('lists each repository the lists name once, by owner then name, skipping lists not read yet', () => {
+  it('lists each repository the lists name once with its host, by host, then owner, then name, skipping lists not read yet', () => {
     expect(reviewRepositories(undefined)).toEqual([])
     const repositories = reviewRepositories(frame(
       host({ authored: list([summary(1), inRepository(2, 'Octo', 'Demo')]), involved: failedList('unavailable') }),
       host({ 'review-requested': list([inRepository(3, 'acme', 'widgets')]) }, { host: 'ghe.example' }),
     ))
-    expect(repositories).toEqual([{ owner: 'acme', name: 'widgets' }, { owner: 'Octo', name: 'Demo' }])
+    expect(repositories).toEqual([{ host: 'ghe.example', owner: 'acme', name: 'widgets' }, { host: 'github.com', owner: 'Octo', name: 'Demo' }])
   })
 })
 
@@ -201,7 +269,7 @@ describe('createReviewStore', () => {
     const store = createReviewStore().create()
     const { actions } = store
     expect(store.getSnapshot()).toEqual({
-      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, repositories: [], query: '', directOnly: false,
+      selected: null, tab: 'summary', listHidden: false, folded: {}, scope: null, repositories: [], query: '', directOnly: false,
       conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
     })
     actions.tabbed('chat')
@@ -210,18 +278,20 @@ describe('createReviewStore', () => {
     actions.tabbed('changes')
     actions.toggledList()
     actions.folded('authored')
-    actions.scopedTo({ owner: 'octo', name: 'demo' })
+    actions.scopedTo({ host: 'github.com', owner: 'octo', name: 'demo' })
     actions.searched('parser')
     actions.toggledDirect()
     expect(store.getSnapshot()).toMatchObject({
-      tab: 'changes', listHidden: true, folded: { authored: true }, repository: { owner: 'octo', name: 'demo' }, query: 'parser',
+      tab: 'changes', listHidden: true, folded: { authored: true }, scope: { host: 'github.com', owner: 'octo', name: 'demo' }, query: 'parser',
       directOnly: true,
     })
     actions.folded('authored')
     actions.toggledList()
     actions.toggledDirect()
+    actions.scopedTo({ host: 'gitlab.example' })
+    expect(store.getSnapshot().scope).toEqual({ host: 'gitlab.example' })
     actions.scopedTo(null)
-    expect(store.getSnapshot()).toMatchObject({ listHidden: false, folded: { authored: false }, repository: null, directOnly: false })
+    expect(store.getSnapshot()).toMatchObject({ listHidden: false, folded: { authored: false }, scope: null, directOnly: false })
 
     const first = brandString<SessionId>('s1')
     const second = brandString<SessionId>('s2')
@@ -238,8 +308,8 @@ describe('createReviewStore', () => {
   it('records the repositories of every repository\'s lists: a read under way adds to the record, a complete read replaces it', () => {
     const store = createReviewStore().create()
     const { actions } = store
-    const demo = { owner: 'octo', name: 'demo' }
-    const widgets = { owner: 'acme', name: 'widgets' }
+    const demo = { host: 'github.com', owner: 'octo', name: 'demo' }
+    const widgets = { host: 'github.com', owner: 'acme', name: 'widgets' }
     actions.listed([demo], false)
     actions.listed([widgets], false)
     expect(store.getSnapshot().repositories).toEqual([widgets, demo])
@@ -249,8 +319,9 @@ describe('createReviewStore', () => {
     expect(store.getSnapshot().repositories).toBe(recorded)
     actions.listed([demo], true)
     expect(store.getSnapshot().repositories).toEqual([demo])
-    actions.listed([{ owner: 'octo', name: 'other' }], true)
-    expect(store.getSnapshot().repositories).toEqual([{ owner: 'octo', name: 'other' }])
+    // The same repository on another host is another repository.
+    actions.listed([{ ...demo, host: 'ghe.example' }], true)
+    expect(store.getSnapshot().repositories).toEqual([{ host: 'ghe.example', owner: 'octo', name: 'demo' }])
   })
 
   it('shows the list in the view the reader chose', () => {

@@ -46,6 +46,7 @@ it.each(['accepted', 'refused', 'disconnected', 'pending'] as const)('initialize
         return () => {}
       },
     },
+    reflect: { provide: () => () => {} },
     remoteAccess: {
       whenAccess: (_action: string, install: () => (() => void) | Iterable<() => void> | undefined) => {
         const effect = install()

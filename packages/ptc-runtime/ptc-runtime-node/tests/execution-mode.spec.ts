@@ -4,7 +4,7 @@ import z from '@deepseek-ai/schemastery'
 import { expect, it } from 'vitest'
 import NodeRuntime from '../src/index.ts'
 import type { Config } from '../src/index.ts'
-import { mountRuntime } from './setup.ts'
+import { mountConfiguredRuntime, mountRuntime } from './setup.ts'
 import { resolvePersistentExecution } from '../src/configuration.ts'
 
 it.each([undefined, 'function-body', 'repl', 'script', 'scoped-repl'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
@@ -13,8 +13,8 @@ it.each([undefined, 'function-body', 'repl', 'script', 'scoped-repl'] as const)(
   expect(runtime.programFormat).toBe(programFormat === 'script' ? 'script' : 'scoped-repl')
 })
 
-it.each<Config>([{}, { executionMode: 'per-call' }])('starts fresh state for each call with configuration %j', async (config) => {
-  const { runtime } = await mountRuntime(new Context(), config)
+it('starts fresh state for each per-call execution', async () => {
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'per-call' })
   const stateOwner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner }))
   expect(runtime.programFormat).toBe('function-body')
@@ -57,9 +57,17 @@ it.each(['per-call', 'persistent-in-memory'] as const)('rejects Script retention
   await expect(mountRuntime(new Context(), { executionMode, scriptPersistence: true, replScoped: false })).rejects.toThrow('scriptPersistence')
 })
 
+// The only ptc-runtime-node mode test that omits executionMode; it pins the provider default.
+it('selects the retained scoped REPL when executionMode is omitted', async () => {
+  const { runtime } = await mountConfiguredRuntime(new Context(), {})
+  expect(runtime.retainsState).toBe(true)
+  expect(runtime.programFormat).toBe('scoped-repl')
+})
+
 // The only ptc-runtime-node mode test that omits replScoped; it pins SCOPED_REPL_BY_DEFAULT from configuration.ts.
-it('runs the scoped REPL when persistent-in-memory omits replScoped', async () => {
-  const { runtime } = await mountRuntime(new Context(), { executionMode: 'persistent-in-memory' })
+it('runs the retained scoped REPL when persistent-in-memory omits replScoped', async () => {
+  const { runtime } = await mountConfiguredRuntime(new Context(), { executionMode: 'persistent-in-memory' })
+  expect(runtime.retainsState).toBe(true)
   expect(runtime.programFormat).toBe('scoped-repl')
 })
 

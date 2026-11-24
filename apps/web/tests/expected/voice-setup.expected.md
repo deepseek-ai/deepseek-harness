@@ -1,6 +1,7 @@
-- dialog "Set up voice input before recording":
-  - heading "Set up voice input before recording" [level=2]
+- dialog "Prepare speech recognition":
+  - heading "Prepare speech recognition" [level=2]
   - button "Cancel"
-  - paragraph: Voice input is enabled. First use requires downloading and preparing local recognition models. Open the plugin details to review disk space, memory and time estimates before starting setup.
+  - paragraph: Sign in to DeepSeek or configure an API key to use cloud recognition without downloading models. You can also download a local model so recordings stay on the machine running DSH.
   - button "Later"
-  - button "Go to setup"
+  - button "Download local model"
+  - button "Sign in to DeepSeek"

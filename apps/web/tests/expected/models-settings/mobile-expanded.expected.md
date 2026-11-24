@@ -5,6 +5,7 @@
     - button "模型"
     - button "插件管理"
     - button "Agent 预设"
+    - button "远程连接"
   - button "打开配置文件"
   - button "关闭"
   - heading "模型" [level=2]

@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PRIMARY_NODE_VERSION: '24'
+  PRIMARY_NODE_VERSION: '^24.22.3'
   # CI runs must never report to the production telemetry endpoint baked
   # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
   DSH_TELEMETRY_DISABLED: '1'
@@ -41,7 +41,7 @@ jobs:
           path: publisher-isolated
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: '24'
+          node-version: '^24.22.3'
       - name: Check preflights before dependency installation
         working-directory: publisher-isolated
         run: node apps/desktop-publisher/tests/preinstall.mjs
@@ -116,12 +116,21 @@ jobs:
       - name: Parse Windows runner supervision scripts
         shell: pwsh
         run: |
-          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/scripts/start-windows-packaging-runner.ps1', 'apps/desktop/scripts/windows-runner-network.ps1', 'apps/desktop/scripts/run-windows-runner-network-process.ps1', 'apps/desktop/tests/windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-launcher.ps1', 'apps/desktop/tests/windows-runner-network.ps1', 'apps/desktop/tests/windows-runner-network-process.ps1')) {
+          foreach ($path in @('apps/desktop/scripts/windows-runner-task.ps1', 'apps/desktop/scripts/windows-runner-scheduler.ps1', 'apps/desktop/tests/windows-runner-boot.ps1', 'apps/desktop/tests/windows-runner-processes.ps1', 'apps/desktop/tests/windows-runner-recovery.ps1', 'apps/desktop/scripts/run-windows-runner-task.ps1', 'apps/desktop/scripts/start-windows-packaging-runner.ps1', 'apps/desktop/scripts/windows-runner-network.ps1', 'apps/desktop/scripts/run-windows-runner-network-process.ps1', 'apps/desktop/tests/windows-runner-task.ps1', 'apps/desktop/tests/windows-runner-launcher.ps1', 'apps/desktop/tests/windows-runner-network.ps1', 'apps/desktop/tests/windows-runner-network-process.ps1')) {
             $tokens = $null
             $parseErrors = $null
             $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$parseErrors)
             if ($parseErrors.Count) { throw ($parseErrors -join "`n") }
           }
+      - name: Verify Windows unattended runner definitions and recovery
+        shell: pwsh
+        run: |
+          ./apps/desktop/tests/windows-runner-boot.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./apps/desktop/tests/windows-runner-recovery.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./apps/desktop/tests/windows-runner-processes.ps1
+          exit $LASTEXITCODE
       - name: Verify windowless Windows runner launcher
         shell: pwsh
         run: ./apps/desktop/tests/windows-runner-launcher.ps1
@@ -268,6 +277,14 @@ jobs:
           } else {
             pnpm install --frozen-lockfile
           }
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and test the Windows CUA helper
+        shell: pwsh
+        run: |
+          dotnet build packages/experimental/cua-windows/native/cua-windows.slnx --configuration Release -p:RestoreLockedMode=true
+          dotnet run --project packages/experimental/cua-windows/native/tests/Protocol.Tests.csproj --configuration Release --no-build
       - name: Run Windows-specific native tests
         shell: pwsh
         run: >-
@@ -275,6 +292,7 @@ jobs:
           --no-file-parallelism
           --testTimeout 90000
           packages/shell/tool-pwsh/tests/loader.spec.ts
+          packages/experimental/cua-windows/tests/loader-composition.spec.ts
           packages/workflow/workflow-ptc/tests/workflow-ptc.spec.ts
           packages/experimental/tool-ralph/tests/integration.spec.ts
           packages/subprocess/subprocess-local/tests/process-exit.spec.ts

@@ -116,6 +116,18 @@ describe('ripgrep-backed workspace discovery', () => {
     expect((await search('link')).matches).toEqual([])
   })
 
+  it('finishes over directory links that form cycles, and returns nothing below a link', async () => {
+    const kind = process.platform === 'win32' ? 'junction' : 'dir'
+    await files('needle.txt', 'src/needle.ts')
+    await writeFile(join(harness.outside, 'needle-outside.txt'), '')
+    await symlink(harness.workspace, join(harness.workspace, 'src', 'loop'), kind)
+    await symlink(harness.outside, join(harness.workspace, 'escape'), kind)
+    await symlink(harness.outside, join(harness.outside, 'again'), kind)
+    expect(await search('needle')).toEqual({ matches: [
+      { path: 'needle.txt', type: 'file' }, { path: 'src/needle.ts', type: 'file' },
+    ], truncated: false, incomplete: false })
+  })
+
   it('keeps git ignore repository detection and does not interpret core.ignorecase', async () => {
     await files('SECRET.txt')
     await writeFile(join(harness.workspace, '.gitignore'), 'SECRET.txt\n')

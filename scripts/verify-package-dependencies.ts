@@ -345,11 +345,15 @@ function hasGeneratedHostExport(pkg: WorkspacePackageManifest): boolean {
     && nodeExportTargets((exports as Record<string, unknown>)['./typert']).includes('./lib/typert.host.js')
 }
 
-/** Generate Host modules in memory, without the build plugin's artifact writes. */
+/**
+ * Generate Host modules in memory, without the build plugin's artifact writes. Like the build plugin, generation leaves
+ * TypeScript diagnostics to `pnpm run typecheck`.
+ */
 function generatedHostSources(root: string, packages: readonly WorkspacePackageManifest[]): ReadonlyMap<string, string> {
   const selected = packages.filter(hasGeneratedHostExport)
   if (selected.length === 0) return new Map()
-  const artifacts = new WorkspaceTypertGenerator(root).generate(selected.map(pkg => pkg.name), ['host'])
+  const artifacts = new WorkspaceTypertGenerator(root, { checkDiagnostics: false })
+    .generate(selected.map(pkg => pkg.name), ['host'])
   const sources = new Map(artifacts.map(artifact => [artifact.package, artifact.js]))
   for (const pkg of selected) {
     if (!sources.has(pkg.name)) throw new Error(`${pkg.manifestPath}: declared Host Typert export has no generated module`)

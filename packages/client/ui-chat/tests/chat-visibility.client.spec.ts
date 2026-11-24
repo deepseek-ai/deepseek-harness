@@ -46,6 +46,15 @@ describe('Chat-only command visibility', () => {
     expect(isVisibleChatNode(failed)).toBe(true)
   })
 
+  it('shows only section-attributed system prompt updates', () => {
+    const prompt = (data: ChatNode<'system-prompt'>['data']): ChatNode<'system-prompt'> => ({ ...placement, kind: 'system-prompt', data })
+    expect(isVisibleChatNode(prompt({ text: '# Prompt' }))).toBe(false)
+    expect(isVisibleChatNode(prompt({ text: '# Whole prompt', update: true }))).toBe(false)
+    const message = { reset: false, notices: [], changes: [{ name: 'plan:status', change: 'updated' as const, text: 'off', notices: [] }] }
+    expect(isVisibleChatNode(prompt({ text: 'off', update: true, message }))).toBe(true)
+    expect(isVisibleChatNode({ ...prompt({ text: 'off', update: true, message }), visibility: 'hidden' })).toBe(false)
+  })
+
   it('keeps the existing permission and explicit hidden-node policies', () => {
     expect(isVisibleChatNode(command('on', { kind: 'error', text: 'failure' }, 'permission'))).toBe(false)
     expect(isVisibleChatNode({ ...command('on', { kind: 'error', text: 'failure' }), visibility: 'hidden' })).toBe(false)

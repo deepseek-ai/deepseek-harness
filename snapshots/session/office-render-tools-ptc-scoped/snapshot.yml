@@ -1,0 +1,12 @@
+version: 1
+scenario: office-render-tools-ptc-scoped
+profile: headless
+platform: posix
+composition: office-render-tools-ptc
+recording: authored
+header:
+  class: office-render-tools-ptc-scoped
+  # The authored input's `office-xlsx` load no longer resolves, so the Office tools never activate the pinned prompt change.
+  promptChanges: 0
+workspace:
+  setup: office-retired-ptc

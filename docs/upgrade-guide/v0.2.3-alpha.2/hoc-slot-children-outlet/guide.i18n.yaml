@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/hoc-slot-children-outlet/guide.md
+/:
+  en: 269da5e847d9788e
+  zh: 9b554ae959a12bde
+/dom-selectors-for-hoc-slot-children:
+  en: 1d320414061c1ef6
+  zh: 407b8a1eda948d00
+/dom-selectors-for-hoc-slot-children/change:
+  en: 1e019f372693ff7c
+  zh: a0393e140a2b11a7
+/dom-selectors-for-hoc-slot-children/migration:
+  en: bde2d90bd9745036
+  zh: 47e8a1447506c72f

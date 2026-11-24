@@ -1,0 +1,6 @@
+# Enables the disabled tool-session-control row of the dsh-web-app bundle, so
+# Agents in a Web profile can message ordinary Sessions in any Workspace or
+# directory. Profiles without that bundle (headless, sdk, sdk-minimal, acp)
+# have no such row; the Loader warns and skips this patch there.
+- id: tool-session-control
+  disabled: false

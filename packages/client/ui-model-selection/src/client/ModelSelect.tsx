@@ -482,8 +482,18 @@ export function ModelSelect(
       onKeyDown={onRootKeyDown}
       onBlur={onBlur}
       onMouseDown={(event) => {
-        // WebKit blurs a focused row before click unless the button's mousedown keeps focus.
-        if (event.target instanceof Element && event.target.closest('button') !== null) event.preventDefault()
+        // WebKit blurs a focused row before click unless the button's mousedown
+        // keeps focus. Pressing non-focusable card content (a provider heading,
+        // padding, status text) would move focus to the body and close the card
+        // through onBlur; other focusable controls, which plugin options may
+        // render, keep their default focus, and a detail pane keeps the default
+        // so its prose stays selectable.
+        const { target } = event
+        if (target instanceof Element && (
+          target.closest('button') !== null
+          || (pane.kind !== 'detail' && menuRef.current?.contains(target) === true
+            && target.closest('a[href], input, select, textarea, [role="button"], [contenteditable], [tabindex]') === null)
+        )) event.preventDefault()
       }}
     >
       <button

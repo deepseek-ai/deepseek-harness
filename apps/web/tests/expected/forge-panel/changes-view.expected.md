@@ -2,7 +2,7 @@
 - text: "Add the pull request panel #7"
 - button "查看的提交：全部提交": 全部提交
 - button "提交评审"
-- button "在浏览器中打开"
+- button "在 GitHub 中打开"
 - button "全部 2 个文件"
 - button "分层透镜：全部": 全部
 - switch "隐藏测试文件"

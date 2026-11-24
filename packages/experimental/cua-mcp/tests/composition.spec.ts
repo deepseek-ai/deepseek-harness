@@ -108,12 +108,12 @@ async function setup(options: SetupOptions = {}) {
     cua: {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
-        installCua(owner, config, { helperPath: process.execPath,
+        installCua(owner, config, { helperPath: process.execPath, heldInputState: true,
           createChannel: options.cancellationAcknowledgementMs === undefined
             ? native.createChannel
             : delayCancellation(native.createChannel, options.cancellationAcknowledgementMs, () => { native.events.push('cancellation-acknowledged') }),
           getGuidance: () => 'Fixture CUA guidance: select test.fixture and operate window 7.',
-          capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
+          capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot', 'sendKeyEvent', 'toggleMouse'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
@@ -182,6 +182,134 @@ async function setup(options: SetupOptions = {}) {
 }
 
 describe('Computer Use MCP composition', () => {
+  it('retains input across successful MCP programs and reports remaining holds', async () => {
+    const { native, run } = await setup()
+    const held = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await app.sendKeyEvent("w", "down"); await win.toggleMouse("left", "down")')
+    expect(held.isError).not.toBe(true)
+    expect(native.held.map(press => press.key)).toEqual(['w', 'left'])
+    expect(native.calls.some(call => call.method === 'releaseHeldInputs')).toBe(false)
+    expect(texts(held).join('')).toContain('CUA inputs are still held')
+    expect(texts(await run('inspect("next program")')).join('')).toContain('Key "w"')
+    const released = await run('await win.toggleMouse("left", "up"); await app.sendKeyEvent("w", "up")')
+    expect(texts(released).join('')).not.toContain('<system-reminder>')
+    expect(native.held).toEqual([])
+    const failed = await run('await win.toggleMouse("left", "down"); throw Error("failed program")')
+    expect(failed.isError).toBe(true)
+    expect(native.held).toEqual([])
+    expect((await run('await win.click("0")')).isError).not.toBe(true)
+  })
+
+  it('waits for cleanup after a failed MCP program and reports native refusal', async () => {
+    const { native, run } = await setup()
+    const release = native.controlNext('releaseHeldInputs')
+    let settled = false
+    const running = run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down"); throw Error("program failed")').then((value) => { settled = true; return value })
+    await release.entered
+    expect(settled).toBe(false)
+    release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'MCP release refused' })
+    const result = await running
+    expect(result.isError).toBe(true)
+    const message = texts(result).join('')
+    expect(message).toContain('program failed')
+    expect(message.match(/MCP release refused/g)).toHaveLength(1)
+  })
+
+  it('cleans up a cancelled MCP request even after its program has finished and image delivery is pending', async () => {
+    const { ctx, native, run } = await setup()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+    const original = ctx.attachments.readImageRequest.bind(ctx.attachments)
+    const read = vi.spyOn(ctx.attachments, 'readImageRequest').mockImplementation(async (...args) => {
+      if (native.calls.some(call => call.method === 'getHeldInputs')) { entered.resolve(); await finish.promise }
+      return original(...args)
+    })
+    onTestFinished(() => { finish.resolve(); read.mockRestore() })
+    const controller = new AbortController()
+    const running = run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await app.sendKeyEvent("w", "down"); inspect(await win.getScreenshot())', {}, controller.signal)
+    const cancelled = expect(running).rejects.toThrow(/abort/i)
+    await entered.promise
+    const release = native.controlNext('releaseHeldInputs')
+    try {
+      controller.abort()
+      await release.entered
+      expect(native.held.map(press => press.key)).toEqual(['w'])
+      release.reply()
+    } finally { finish.resolve() }
+    await cancelled
+    await run('inspect("after cancellation")')
+    expect(native.held).toEqual([])
+  })
+
+  it.each(['reset', 'image failure', 'cleanup failure'] as const)('cleans up held input when %s interrupts response delivery', async (ending) => {
+    const { ctx, native, client, run } = await setup()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const finish: PromiseWithResolvers<void> = Promise.withResolvers()
+    const original = ctx.attachments.readImageRequest.bind(ctx.attachments)
+    const read = vi.spyOn(ctx.attachments, 'readImageRequest').mockImplementation(async (...args) => {
+      if (native.calls.some(call => call.method === 'getHeldInputs')) {
+        entered.resolve()
+        await finish.promise
+        if (ending !== 'reset') throw new Error('Fixture screenshot could not be delivered')
+      }
+      return original(...args)
+    })
+    onTestFinished(() => { finish.resolve(); read.mockRestore() })
+    const running = run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await app.sendKeyEvent("w", "down"); inspect(await win.getScreenshot())')
+      .then(value => texts(value).join(' '), (error: unknown) => String(error))
+    await entered.promise
+    let reset: ReturnType<typeof client.callTool> | undefined
+    try {
+      expect(native.held.map(press => press.key)).toEqual(['w'])
+      if (ending === 'reset') {
+        let resetDone = false
+        const release = native.controlNext('releaseHeldInputs')
+        reset = client.callTool({ name: 'cua_reset', arguments: {} }).then((result) => { resetDone = true; return result })
+        await release.entered
+        release.reply()
+        expect(resetDone).toBe(false)
+      }
+      if (ending === 'cleanup failure') {
+        const release = native.controlNext('releaseHeldInputs')
+        finish.resolve()
+        await release.entered
+        release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Fixture cleanup refused during response delivery' })
+      }
+    } finally { finish.resolve() }
+    const result = await running
+    expect(result).not.toContain('CUA inputs are still held')
+    if (ending !== 'reset') expect(result).toContain('Fixture screenshot could not be delivered')
+    if (ending === 'cleanup failure') {
+      expect(result).toContain('Fixture cleanup refused during response delivery')
+      const next = await run('await win.sendKeyEvent("w", "down")')
+      expect(texts(next).join(' ')).toContain('INPUT_CLEANUP_UNCONFIRMED')
+    } else expect(native.held).toEqual([])
+    expect((await reset)?.isError).not.toBe(true)
+  })
+
+  it('reports refused cleanup after a cancelled MCP request and prevents further native input', async () => {
+    const { ctx, native, run } = await setup()
+    await run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")')
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    ctx.on('tools/execute', (execution, next) => {
+      if (execution.name === 'cua_run_code' && execution.parent === undefined) entered.resolve()
+      return next()
+    })
+    const release = native.controlNext('releaseHeldInputs')
+    const controller = new AbortController()
+    const running = run('await new Promise(() => {})', {}, controller.signal)
+    const cancelled = expect(running).rejects.toThrow(/abort/i)
+    await entered.promise
+    controller.abort()
+    await release.entered
+    release.reply({ code: 'INPUT_CLEANUP_FAILED', message: 'Cancellation release refused' })
+    await cancelled
+    const count = native.calls.length
+    const result = await run('await cua.getApp("test.fixture")')
+    expect(result.isError).toBe(true)
+    expect(texts(result).join('')).toContain('INPUT_CLEANUP_UNCONFIRMED')
+    expect(native.calls).toHaveLength(count)
+  })
+
   it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {
     const { ctx, native, client, run, adapter, directory } = await setup()
     expect(client.getInstructions()).toContain('Start every conversation by calling cua_get_api_reference')
@@ -266,6 +394,26 @@ describe('Computer Use MCP composition', () => {
     const invalid = await client.callTool({ name: 'cua_run_code', arguments: { code: '1' } })
     expect(invalid.isError).toBe(true)
     expect(texts(invalid)).toEqual(['invalid arguments: missing required property "description"'])
+  })
+
+  it.each([[true, false], [false, true], [true, true]])('reports reset failures (environment: %s, input: %s)', async (environmentFails, refused) => {
+    const { native, client, run } = await setup()
+    await run('var app = await cua.getApp("test.fixture"); await app.sendKeyEvent("w", "down")')
+    const environment = vi.spyOn(NodeRuntime.prototype, 'release')
+    if (environmentFails) environment.mockRejectedValueOnce(new Error('Fixture process failed to exit'))
+    onTestFinished(() => { environment.mockRestore() })
+    const release = native.controlNext('releaseHeldInputs')
+    const resetting = client.callTool({ name: 'cua_reset', arguments: {} })
+    await release.entered
+    try { expect(environment).toHaveBeenCalledTimes(1) } finally {
+      release.reply(refused ? { code: 'INPUT_CLEANUP_FAILED', message: 'Fixture release refused' } : undefined)
+    }
+    const result = await resetting
+    expect(result.isError).toBe(true)
+    const message = texts(result).join(' ')
+    if (environmentFails) expect(message).toContain('Fixture process failed to exit')
+    if (refused) expect(message).toContain('Fixture release refused')
+    else expect(native.events).toEqual(['w:down', 'w:up'])
   })
 
   it('resets only the program environment: a fresh process and cua object, the same Agent and native connection', async () => {

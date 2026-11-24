@@ -46,6 +46,12 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../../vendor/loader"
+    },
+    {
+      "path": "../../boot/app-boot"
     }
   ]
 }

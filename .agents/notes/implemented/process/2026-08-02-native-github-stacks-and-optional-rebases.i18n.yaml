@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-02-native-github-stacks-and-optional-rebases.md
 /agent-note-native-github-stacks-and-optional-pr-rebases:
-  en: 9427ca53db68d50b
-  zh: 9e72b34deee3bb9f
+  en: b20dd8917f43b935
+  zh: c9d6f3d2a04da072
 /agent-note-native-github-stacks-and-optional-pr-rebases/problem:
   en: 21312af191207fa6
   zh: 86306b4c6dd08a0c

@@ -117,7 +117,7 @@
   transform: rotate(180deg);
 }
 
-/* The base menu: the changes view's BaseMenu search, rows, and labels, with a footer row that names the branch. */
+/* The base menu: the changes view's BaseMenu rows and labels, and the label of the footer row that names the branch. */
 .anchor {
   flex: none;
   min-width: 0;
@@ -136,20 +136,6 @@
   min-height: 0;
   color: var(--dsw-alias-label-primary);
   font-size: 12px;
-}
-
-.search {
-  padding: 8px;
-}
-
-.searchInput {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-}
-
-.searchInput input::placeholder {
-  color: var(--dsw-alias-label-secondary);
 }
 
 .rows {
@@ -226,14 +212,6 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-.footer {
-  display: flex;
-  flex-direction: column;
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
 .footerLabel {
   flex: none;
 }
@@ -249,12 +227,6 @@
 
 .footerName {
   font-family: var(--ds-font-family-code);
-}
-
-@media (pointer: coarse) {
-  .search input {
-    font-size: 16px;
-  }
 }
 
 @media (max-width: 600px) {

@@ -41,10 +41,10 @@ it('saves language and provider preferences without remounting and restores them
     const fiber = entry.fiber
     for (const language of [...languages, 'zh']) {
       await speech.configure({ language })
-      expect(speech.snapshot().selection).toEqual({ providerId: 'sensevoice-local', language })
+      expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'sensevoice-local', language })
     }
     await speech.configure({ providerId: 'another-provider' as SpeechProviderId })
-    expect(speech.snapshot().selection).toEqual({ providerId: 'another-provider', language: 'zh' })
+    expect(speech.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'another-provider', language: 'zh' })
     expect(entry.fiber === fiber).toBe(true)
     const saved = readFileSync(profile.patchPath, 'utf8')
     expect(saved).toContain('id: speech-to-text')
@@ -52,7 +52,12 @@ it('saves language and provider preferences without remounting and restores them
     expect(saved).toContain('language: zh')
     await ctx.fiber.dispose()
     ctx = await start()
-    expect(ctx.get('speechToText')!.snapshot().selection).toEqual({ providerId: 'another-provider', language: 'zh' })
+    const restarted = ctx.get('speechToText')!
+    // Until a provider that lists the saved hint registers again, the hint is reported as automatic detection.
+    expect(restarted.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'another-provider', language: 'auto' })
+    restarted.register({ info: { id: 'another-provider' as SpeechProviderId, name: 'another-provider', location: 'host-local', languages },
+      transcribe: async () => { throw new Error('Changing preferences must not transcribe audio') } })
+    expect(restarted.snapshot().selection).toEqual({ mode: 'explicit', providerId: 'another-provider', language: 'zh' })
   } finally {
     try { await ctx?.fiber.dispose() } finally { rmSync(home, { recursive: true, force: true }) }
   }

@@ -32,7 +32,19 @@
     "INSTALLER_EXTRACT_COLLAPSE": "Ocultar detalhes",
     "INSTALLER_EXTRACT_SAVED": "O relatório completo foi salvo em %s",
     "INSTALLER_EXTRACT_UNSAVED": "Não foi possível salvar o relatório completo. Use Copiar detalhes do erro para mantê-lo.",
-    "INSTALLER_EXTRACT_COPIED": "Os detalhes do erro foram copiados para a área de transferência."
+    "INSTALLER_EXTRACT_COPIED": "Os detalhes do erro foram copiados para a área de transferência.",
+    "INSTALLER_UNINSTALL_OWNER": "O DeepSeek Harness está instalado em vários locais",
+    "INSTALLER_UNINSTALL_REGISTRATION": "Não foi possível limpar alguns itens. Salve o relatório para ver os detalhes.",
+    "INSTALLER_UNINSTALL_REGISTERED": "Local de instalação registrado:",
+    "INSTALLER_UNINSTALL_SCOPE": "Continuar remove este diretório e os comandos, atalhos e registros que apontam para ele:",
+    "INSTALLER_UNINSTALL_CONTINUE": "Continuar limpando o diretório de desinstalação",
+    "INSTALLER_UNINSTALL_SAVE": "Salvar relatório de limpeza…",
+    "INSTALLER_UNINSTALL_SAVE_FAILED": "Não foi possível salvar o relatório. Escolha outro local.",
+    "INSTALLER_UNINSTALL_INCOMPLETE": "A desinstalação não foi concluída",
+    "INSTALLER_UNINSTALL_UNSAFE": "Não foi possível verificar o escopo da exclusão. Nenhuma exclusão foi iniciada.",
+    "INSTALLER_UNINSTALL_UNKNOWN": "Uma operação de limpeza não retornou um resultado completo. As etapas seguintes foram interrompidas.",
+    "INSTALLER_UNINSTALL_BLOCKED": "Não foi possível excluir este arquivo. Feche programas que possam estar usando-o, verifique as permissões e tente novamente.",
+    "INSTALLER_UNINSTALL_COMPLETE": "Desinstalação concluída"
   },
   "uninstaller": {
     "welcome": "Bem-vindo",

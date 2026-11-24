@@ -1,8 +1,9 @@
 /**
  * Filesystem Service Definition for one execution world. Backends own stable target
- * identity, process paths and file URIs, containment, text reads, decoding,
- * binary rejection, and atomic mutations. Read windows and
- * observed-state policy stay in consumer and policy plugins; `editText`
+ * identity, process paths and file URIs, containment, text and byte reads, decoding
+ * and binary rejection where text is required, and atomic mutations — text
+ * writes and verbatim byte writes — over the same locking and version guards. Read
+ * windows and observed-state policy stay in consumer and policy plugins; `editText`
  * remains here so version check, literal match, and rewrite share one critical
  * section.
  * @module @deepseek-ai/dsh-fs
@@ -24,6 +25,7 @@ import type {
   FsTarget,
   FsVersion,
   FsWriteIntent,
+  FsWriteBytesOutcome,
   FsWriteOutcome,
 } from './types.ts'
 
@@ -47,6 +49,7 @@ export type {
   FsPathInfo,
   FsTarget,
   FsWriteIntent,
+  FsWriteBytesOutcome,
   FsWriteOutcome,
 } from './types.ts'
 
@@ -287,6 +290,36 @@ export abstract class FileSystem extends Service {
     signal?: AbortSignal,
     sandboxPolicy?: SandboxExecutionPolicy,
   ): Promise<FsWriteOutcome>
+
+  /**
+   * Atomically create or replace one file from exact bytes: no decoding, no
+   * newline normalization, no diff basis. The bytes are stored as given, which
+   * is how a consumer materializes content it already holds — a downloaded
+   * attachment, a rendered document — inside this execution world. Backends
+   * that cannot store arbitrary bytes keep this default rejection.
+   * @param target - the resolved target to write.
+   * @param data - the exact bytes to store.
+   * @param expected - the write intent guarding the write; omit for unconditional.
+   * @param signal - aborts before atomic publication takes effect.
+   * @param sandboxPolicy - the per-call mode and workspace root this write
+   *   runs under; a sandboxing backend fences the write by it, the bare backend
+   *   ignores it. Omit to leave the backend its own default.
+   * @returns the outcome, including the version the write produced.
+   */
+  writeBytes(
+    target: FsTarget,
+    data: Uint8Array,
+    expected?: FsWriteIntent,
+    signal?: AbortSignal,
+    sandboxPolicy?: SandboxExecutionPolicy,
+  ): Promise<FsWriteBytesOutcome> {
+    void target
+    void data
+    void expected
+    void signal
+    void sandboxPolicy
+    return Promise.reject(new FsError('This filesystem provider cannot write bytes.', 'FS_IO_ERROR'))
+  }
 
   /**
    * Atomically edit literal text. When supplied, the version guard is checked

@@ -5,7 +5,7 @@
  * which keys exist, what each register call must pass, what the component
  * receives, who already occupies the seat, and when the seat exists at all —
  * is decided at compile time by the shipped web bundle. This generator reads
- * those facts lexically (no type-checker program) and emits them as a data
+ * those facts from source and emits them as a data
  * module inside `tool-cordis`, so the host-side toolset teaches the browser
  * surface without importing a single client runtime module.
  *

@@ -42,7 +42,9 @@ dsh --profile web --no-open --port 8080
 
 After startup you see a `dsh web:` line whose root URL carries a fresh process token. Unless `--no-open` or an SSH session suppresses it, the default browser opens that URL, receives a signed cookie, and redirects to the same directory without the token. You know it worked when the page loads and you can chat with the agent. Two failures to expect: if the frontend is not built, startup stops with a build hint (`pnpm run build` in a checkout); if the browser cannot be opened, a credential-free diagnostic prints to stderr while the server keeps running — open the printed startup URL yourself.
 
-**Settings → Models** displays **DeepSeek**, using `DEEPSEEK_API_KEY`. The default is `deepseek-official` / `deepseek-flash` (DeepSeek-V4.1-Flash). The [DeepSeek plugin](../../llm/llm-deepseek/README.md#endpoint-and-wire-format) uses the Messages API.
+The sign-in page presents token entry and pairing in separate cards. Paste either a login link or its token; copy the link from Settings → Remote connection on a signed-in device. Continue becomes available only for a well-formed login link or token; activating it while unavailable shows a validation prompt. Editing dismisses the prompt until another submission attempt. Rejected tokens appear in a full-width error banner, matching the pairing failure banners. Pairing instructions are visible before requesting access. Another browser can request access from that page. Approve the matching code in **Settings → Remote connection** on a signed-in browser; the applicant then enters the application automatically. [Browser pairing](../../client/remote-connection/README.md) owns the approval rules and request limits.
+
+**Settings → Models** displays **DeepSeek API**, using `DEEPSEEK_API_KEY`. The default is `deepseek-official` / `deepseek-flash` (DeepSeek-V4.1-Flash). The [DeepSeek plugin](../../llm/llm-deepseek/README.md#endpoint-and-wire-format) uses the Messages API.
 
 Saved model selections override the composition default. The settings card accepts a Messages-compatible API address and a credential reference.
 
@@ -61,7 +63,7 @@ The `minimal` agent preset uses a persistent shell, the `read_image` tool, and a
 
 WebApp owns `printUrl` and `openBrowser`. This bundle enables URL printing and maps the parsed `--no-open` setting to the runtime. After readiness, synchronous `webserver/entry-url` listeners contribute complete entries. WebApp prints every entry as `label: url` when printing is enabled and opens only the first entry marked `open: true` when browser opening is enabled outside SSH. No entries means no output or opening.
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them. It also inserts the six personalized recommendation rows, from [`action-cards`](../../interaction/action-cards/README.md) to `client-ui-plugin-recommendations`, whose `enabled` switch is in Settings → General.
 
 The `standard`, `cordis`, and `ptc` presets set `config.interrupt: false` on their `tool-subagent-control` rows. To expose `interrupt_agent`, including in Team mode, override the relevant preset declaration as described in the [migration steps](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.md); changing the disabled Host row does not change preset tools.
 
@@ -94,9 +96,9 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 ### Per-session agent setup
 
-Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
+Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard, PTC, and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
-Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
+Both modes expose read-only runtime inspection through `cordis_inspect`; see [its context effects](../../extensions/tool-cordis/README.md#model-experience). Standard, PTC, and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
 
 The packaged skill uses the custom skill root: a same-named project skill overrides it, and it overrides same-named user skills. One catalog entry wins without an error; see [skill-root priority](../../skill/skill-filesystem/README.md).
 
@@ -161,7 +163,7 @@ Read these pages when you want to go deeper into the shared core, the browser re
 
 #### What the model sees
 
-Standard and Creator list `dsh-doc` in the skill catalog. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources. Loading the skill does not modify workspace files or profile settings.
+Standard, PTC, and Creator list `dsh-doc` in the skill catalog, as the SDK profile does. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources. Loading the skill does not modify workspace files or profile settings.
 
 #### Token effect
 
@@ -203,15 +205,15 @@ None; the plugin contributes no system-prompt text.
 
 #### What the model sees
 
-The skill catalog lists the Office router and three Office authoring skills in every profile. The loaded Python skills end with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+The skill catalog lists the `office` skill in every profile; it gives concise inline guidance for Word, PowerPoint, and Excel pitfalls and for the Office tools. The loaded skill ends with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
 
 #### Token effect
 
-The four catalog summaries in each initial catalog; loaded skill bodies only when the model requests them.
+One catalog summary in each initial catalog; the skill body only when the model loads it.
 
 #### KV Cache effect
 
-While resources and configuration stay unchanged, the built-in Office summaries and Python environment sections stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
+While resources and configuration stay unchanged, the built-in Office summary and Python environment section stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
 
 ## Known Limitations and Deferred Work
 

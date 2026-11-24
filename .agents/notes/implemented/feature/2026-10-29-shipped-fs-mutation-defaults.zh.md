@@ -10,7 +10,7 @@
 
 ## 决策
 
-- `dsh-base` 的 `tool-fs` 行（headless、SDK、ACP）与 Web 的 `standard` preset 写出 `applyPatch: true`。Web 的 `ptc`、`cordis` preset 写出 `applyPatch: false`，随发行版交付的 [PTC overlay](../../../../apps/cli/config/examples/ptc.yml) 在 base 行上也设为 `false`，因此 SDK 与 Desktop 的 PTC 工具集保持一致，无需一致性例外。
+- `dsh-base` 的 `tool-fs` 行（headless、SDK、ACP）与 Web 的 `standard` preset 写出 `applyPatch: true`。Web 的 `ptc`、`cordis` preset 写出 `applyPatch: false`，随发行版交付的 [PTC overlay](../../../../apps/cli/config/examples/ptc.yml) 在 base 行上也设为 `false`，两者都保持 PTC 组合评测时的工具集。[Apply patch 跟随 edit](2026-11-23-apply-patch-follows-edit.zh.md) 取代本条：内置行不写 `applyPatch`，它随之跟随 `edit`，PTC 组合也提供该工具。
 - `dsh-base` 的 `fs-observation-policy` 行以 `disabled: true` 交付。叠加 base 的 profile 中每个修改工具都直接作用于裸提供方：`write` 覆盖，`edit` 替换唯一的字面匹配，`apply_patch` 只凭上下文匹配应用 hunk。部署在该行上写 `disabled: false` 即可为三者恢复防护。`sdk-minimal` 不叠加 `dsh-base`，不受影响。
 - `write` 与 `edit` 的提示语仍要求先读，但不再点名该策略；`apply_patch` 的提示语要求给每个 hunk 足够的上下文以匹配唯一位置，而非先读。
 - 由于没有默认组合挂载策略包，它被归类为可选产品包。录的是策略拒绝的两个场景 `fs-policy-reject` 与 `apply-patch-rejected` 通过各自的 `runtime.cordis.yml` 把该行开回来；固定 token 预算的压缩场景在 live 与 replay patch 中都钉住 `applyPatch: false`，因为它们的阈值是按录制时的工具集调的。
@@ -21,7 +21,7 @@
 
 **只对 `apply_patch` 关闭策略。** 曾实现并评测过一个让补丁跳过 intent waterfall 的 `tool-fs` 开关，但它让 `write` 与 `edit` 继续受随发行版交付的组合已不需要的防护，并在策略行之外增加了第二个配置维度；禁用该行在一处决定三个工具，并为需要防护的部署完整保留策略包。
 
-**在 PTC preset 中也开启 `apply_patch`。** PTC 下该工具是 `run_code` 内的绑定而非 JSON schema，代价很小，但 PTC 组合是在没有它的情况下评测的；overlay 与 Web preset 保持评测时的工具集。
+**在 PTC preset 中也开启 `apply_patch`。** PTC 下该工具是 `run_code` 内的绑定而非 JSON schema，代价很小，但 PTC 组合是在没有它的情况下评测的；overlay 与 Web preset 保持评测时的工具集。[Apply patch 跟随 edit](2026-11-23-apply-patch-follows-edit.zh.md) 后来采用了这一方案。
 
 ## 后果
 
@@ -29,4 +29,4 @@
 
 ## 测试
 
-`tool-fs` 单元测试覆盖无防护路径（`policy: false`）。keyless SDK smoke 通过随发行版交付的 `sdk` profile 对模型从未读过的既有文件执行 edit 并检查磁盘字节。`desktop-tools.expected.e2e.ts` 比较 SDK 与 Desktop 的 `standard` 和 `ptc` 工具集。录制 corpus 以随发行版交付的默认值回放；`fs-policy-reject` 与 `apply-patch-rejected` 在策略开回的情况下回放。
+`tool-fs` 单元测试覆盖无防护路径（`policy: false`）。keyless SDK smoke 通过随发行版交付的 `sdk` profile 对模型从未读过的既有文件执行 edit 并检查磁盘字节。`desktop-tools.expected.e2e.ts` 比较 SDK profile 与 Desktop `standard` preset 的首个模型请求（含工具 schema），不比较 PTC 执行。录制 corpus 以随发行版交付的默认值回放；`fs-policy-reject` 与 `apply-patch-rejected` 在策略开回的情况下回放。

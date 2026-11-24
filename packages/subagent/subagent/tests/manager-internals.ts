@@ -6,6 +6,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SubagentRunId, SubagentResult } from '../src/types.ts'
 import type { LocalActivation } from '../src/activation.ts'
+import { AssistantOutputFold } from '../src/assistant-output.ts'
 import type SubagentManager from '../src/manager.ts'
 
 /** Return the service's bound subagent manager. */
@@ -47,7 +48,10 @@ export function bindSubagentActivation(
     path: undefined,
     releaseSlot() {},
     handle: { agent: child, async dispose() {} },
-    outputStart: child.session.seq,
+    output: new AssistantOutputFold(),
+    work: undefined,
+    outputFailure: undefined,
+    workFailure: undefined,
     structured: undefined,
     failureAt: undefined,
     poke: Promise.withResolvers(),

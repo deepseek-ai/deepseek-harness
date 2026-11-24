@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-从本地提交创建隔离的检出目录，并在其中继续同一个 Session。每次操作创建新的具名分支，源检出目录保持不变。所有写入均受现有沙箱约束。离开检出目录会保留文件与分支。
+从本地提交创建隔离的检出目录，并在其中继续同一个 Session。每次操作创建新的具名分支，源检出目录保持不变。除归档清理外，所有写入均受现有沙箱约束。离开检出目录会保留文件与分支。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。模型需要此操作时，再添加工具包。
+将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。服务会挂载[链接工作树授权](../sandbox-policy-git/README.zh.md)，它在 macOS 和 Linux 上让在链接工作树中工作的 Session 能在 `workspace-write` 下写入其仓库的 Git 目录。模型需要此操作时，再添加工具包。
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-worktree'
@@ -40,7 +40,7 @@ kind: "package-reference"
 
 `ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。其命令在 Session 的策略下运行，边界是记录中的源检出目录，它包含目标目录，因此自身根就是被删除 worktree 的 Session 也能恢复它。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
 
-每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。每次进入都会追加一条 `plugin:worktree/entered` 记录，只有 `exit` 读取它：归档 Session 从不移除它只是进入过的检出目录，进入记录也不会让 Session 已离开的检出目录保留下来。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——或创建者的沙箱策略为只读，目录就保留。符合条件的目录在路径锁内再做一次使用检查后，用创建者的策略执行不带 force 的 `git worktree remove`，边界是记录中的源检出目录，它包含目标目录；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
+每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。每次进入都会追加一条 `plugin:worktree/entered` 记录，只有 `exit` 读取它：归档 Session 从不移除它只是进入过的检出目录，进入记录也不会让 Session 已离开的检出目录保留下来。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——目录就保留。冷创建者经 `sessionQuery.observeSession` 观察，不会被挂载或恢复运行。归档即用户授权删除该目录，因此清理不读取任何沙箱策略，其 Git 命令不经沙箱执行；只有下述检查约束它。符合条件的目录在路径锁内再做一次使用检查后，在记录中的源检出目录（它包含目标目录）执行不带 force 的 `git worktree remove`；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
 
 预期失败抛出 `WorktreeError`，其 `code` 为：名称被 Git 或池规则拒绝、起始修订为空或恢复记录违反文档约束时为 `WORKTREE_INVALID_ARGUMENT`，Git 无法解析的起始修订或基础提交则以 `WORKTREE_COMMAND_FAILED` 失败；分支或路径已存在时为 `WORKTREE_ALREADY_EXISTS`；登记被锁定时为 `WORKTREE_LOCKED`；进入时名称在池中选不到已登记的工作树为 `WORKTREE_NOT_FOUND`；Session 的目录不在任何已记录工作树内却调用退出时为 `WORKTREE_NOT_ENTERED`；命令以失败状态退出、超过 `maxOutputBytes` 或超过 `timeoutMs` 时分别为 `WORKTREE_COMMAND_FAILED`、`WORKTREE_OUTPUT_TOO_LARGE` 和 `WORKTREE_TIMEOUT`；服务释放后为 `WORKTREE_UNAVAILABLE`。目录分配之后的失败会在消息中加入保留产物的说明，并保留原错误的 `name` 与 `code`；调用方取消仍是 `AbortError`。
 
@@ -54,7 +54,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略。创建操作不会扩大目标目录或共享 Git 管理目录的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
+Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调用 Session 的文件策略；归档清理不经沙箱执行。创建操作本身不会扩大目标目录或共享 Git 管理目录的写权限；在链接工作树中工作的 Session 通过链接工作树授权持有后者的写权限。目录创建独占申请目标路径；取消或初始化失败可能留下已有产物，错误会包含其路径。服务销毁会中止待完成操作，并等待它们结束。
 
 | 源码 | 职责 |
 |---|---|
@@ -97,7 +97,7 @@ Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调�
 - **默认仅限本地提交**——创建操作只获取请求指定的那一个远程分支，不会获取其他远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
 - **过滤器处理前的内容**——检出时跳过已配置的过滤器，以避免执行仓库配置的程序或隐式下载。Git LFS 指针与加密 blob 保持存储时的形式；拉取实体内容或解密由用户另行执行。
 - **执行要求**——子进程提供方必须在与文件系统提供方相同的执行环境中提供 Git 与 Node。Git 必须识别 `GIT_NO_LAZY_FETCH`：Git 2.45 及 2.39.4、2.40.2、2.41.1、2.42.2、2.43.4、2.44.1 维护版本均支持；更早的版本会忽略该变量并继续执行而不报错，因此创建操作可能从 promisor 远程获取缺失的部分克隆对象。`git --no-lazy-fetch` 选项会拒绝这些版本，但它仅在 Git 2.45 及以后存在，也会拒绝上述已修补的维护版本。现有沙箱必须允许写入检出目录与共享 Git 元数据。
-- **在工作树内提交**——仓库的 Git 目录位于链接工作树之外，因此在 `workspace-write` 下，在其中工作的 Session 不能运行 `git add` 或 `git commit`，也不能从中再创建工作树，直到[沙箱策略](../../sandbox/sandbox-policy/README.zh.md#use-this-package)通过 `additionalWritableRoots` 或 `registerWritableRoot` 授权该目录。本服务不注册任何授权，Windows 的进程忽略这类授权。
+- **在工作树内提交**——仓库的 Git 目录位于链接工作树之外，因此在 `workspace-write` 下，在其中工作的 Session 只有在授权覆盖该目录时才能运行 `git add` 和 `git commit`，或从中再创建工作树。本服务挂载的[链接工作树授权](../sandbox-policy-git/README.zh.md)在 macOS 和 Linux 上注册该目录。在 Windows 上它不注册任何目录，那里的进程也忽略通过 `additionalWritableRoots` 或 `registerWritableRoot` 做出的授权。
 
 <a id="dev-note"></a>
 ### 开发备注

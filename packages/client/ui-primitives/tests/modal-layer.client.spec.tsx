@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Modal } from '../src/Modal.tsx'
 import { closeTopModal, isBehindModal, useModalLayer } from '../src/useModalLayer.ts'
-import { Menu } from '../src/Menu.tsx'
+import { Menu, MenuItemButton } from '../src/Menu.tsx'
 
 afterEach(cleanup)
 function Nested({ withSearch = true }: { withSearch?: boolean }) {
@@ -24,6 +24,17 @@ function Nested({ withSearch = true }: { withSearch?: boolean }) {
   </>
 }
 const escape = (init = {}) => fireEvent.keyDown(document.activeElement ?? document, { key: 'Escape', code: 'Escape', ...init })
+
+function SearchableMenuDialog({ onClose }: { onClose: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const items = 'Copy'.toLowerCase().includes(query.toLowerCase()) ? [{ id: 'copy', label: 'Copy' }] : []
+  return <Modal open title="Settings" closeLabel="Close settings" onClose={onClose}>
+    <Menu open={open} portal anchor={<button onClick={() => { setOpen(true) }}>Actions</button>}
+      items={items} onClose={() => { setOpen(false) }}
+      search={{ label: 'Filter actions', clearLabel: 'Clear filter', value: query, onChange: setQuery, emptyMessage: 'No matching actions' }} />
+  </Modal>
+}
 
 it('restores the opener after a closing dialog updates its retained controls', () => {
   function RetainedDialog({ open }: { open: boolean }) {
@@ -182,6 +193,107 @@ it('keeps focus in a headless empty dialog and leaves portaled menu traversal to
     expect(fireEvent.keyDown(button, { key: 'Tab' })).toBe(true)
     fireEvent.blur(window)
   } finally { menu.remove() }
+})
+
+it('leaves native Tab traversal between a portaled menu search field and its clear button', () => {
+  render(<SearchableMenuDialog onClose={() => {}} />)
+  const opener = screen.getByRole('button', { name: 'Actions' })
+  opener.focus()
+  fireEvent.click(opener)
+  const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+  const clear = screen.getByRole('button', { name: 'Clear filter' })
+
+  expect(document.activeElement).toBe(search)
+  expect(fireEvent.keyDown(search, { key: 'Tab' })).toBe(true)
+  expect(document.activeElement).toBe(search)
+  clear.focus()
+  expect(fireEvent.keyDown(clear, { key: 'Tab', shiftKey: true })).toBe(true)
+  expect(document.activeElement).toBe(clear)
+  expect(fireEvent.keyDown(clear, { key: 'Tab' })).toBe(false)
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Copy' }))
+})
+
+it('activates the first enabled search result on Enter after composition ends', () => {
+  const onSelect = vi.fn()
+  render(<Menu open anchor={null} onClose={() => {}} onSelect={onSelect}
+    items={[{ id: 'disabled', label: 'Unavailable', disabled: true }, { id: 'copy', label: 'Copy' }, { id: 'paste', label: 'Paste' }]}
+    search={{ label: 'Filter actions', value: 'p', onChange: () => {} }} />)
+  const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+  expect(screen.queryByRole('button')).toBeNull()
+
+  fireEvent.compositionStart(search)
+  expect(fireEvent.keyDown(search, { key: 'Enter' })).toBe(true)
+  fireEvent.compositionEnd(search)
+  expect(fireEvent.keyDown(search, { key: 'Enter' })).toBe(true)
+  fireEvent.keyUp(search, { key: 'Enter' })
+  expect(fireEvent.keyDown(search, { key: 'Enter', repeat: true })).toBe(false)
+  expect(onSelect).not.toHaveBeenCalled()
+
+  expect(fireEvent.keyDown(search, { key: 'Enter' })).toBe(false)
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith('copy')
+})
+
+it('keeps explained results focusable while Enter chooses the next selectable result', () => {
+  const onCopy = vi.fn()
+  const onLocked = vi.fn()
+  const onSelect = vi.fn()
+  render(<Menu open anchor={null} onClose={() => {}} onSelect={onSelect}
+    footer={[{ id: 'add', label: 'Add workspace' }]}
+    search={{ label: 'Filter actions', value: '', onChange: () => {} }}>
+    <MenuItemButton disabled disabledReason="Waiting for access" onSelect={onLocked}>Locked</MenuItemButton>
+    <MenuItemButton onSelect={onCopy}>Copy</MenuItemButton>
+  </Menu>)
+  const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+  fireEvent.keyDown(search, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Locked' }))
+  act(() => { search.focus() })
+  fireEvent.keyDown(search, { key: 'Enter' })
+  expect(onCopy).toHaveBeenCalledOnce()
+  expect(onLocked).not.toHaveBeenCalled()
+  expect(onSelect).not.toHaveBeenCalled()
+})
+
+it.each(['Home', 'End'])('leaves %s to native text navigation while the menu search has focus', (key) => {
+  render(<SearchableMenuDialog onClose={() => {}} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+  const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+  fireEvent.change(search, { target: { value: 'Cop' } })
+  expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeTruthy()
+  expect(document.activeElement).toBe(search)
+  expect(fireEvent.keyDown(search, { key })).toBe(true)
+  expect(document.activeElement).toBe(search)
+})
+
+it('keeps an empty searchable menu in front of the dialog for application close commands', () => {
+  const closeDialog = vi.fn()
+  render(<SearchableMenuDialog onClose={closeDialog} />)
+  const opener = screen.getByRole('button', { name: 'Actions' })
+  opener.focus()
+  fireEvent.click(opener)
+  const search = screen.getByRole('searchbox', { name: 'Filter actions' })
+  const clear = screen.getByRole('button', { name: 'Clear filter' })
+  expect(screen.getByRole('menu')).toBeTruthy()
+  expect(search.closest('[role="menu"]')).toBeNull()
+  fireEvent.change(search, { target: { value: 'missing' } })
+  expect(screen.getByRole('status').textContent).toBe('No matching actions')
+  expect(screen.queryByRole('menu')).toBeNull()
+  clear.focus()
+  expect(fireEvent.keyDown(clear, { key: 'Tab' })).toBe(false)
+  expect(document.activeElement).toBe(search)
+
+  act(() => { closeTopModal(document) })
+  expect(closeDialog).not.toHaveBeenCalled()
+  fireEvent.click(clear)
+  expect(screen.getByRole('menu')).toBeTruthy()
+  expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeTruthy()
+  expect(screen.queryByRole('status')).toBeNull()
+  fireEvent.change(search, { target: { value: 'missing' } })
+  escape()
+  expect(screen.queryByRole('searchbox')).toBeNull()
+  expect(document.activeElement).toBe(opener)
+  expect(closeDialog).not.toHaveBeenCalled()
+  act(() => { closeTopModal(document) })
+  expect(closeDialog).toHaveBeenCalledOnce()
 })
 
 it('does not steal focus when a lower layer disappears and restores a remaining parent after opener removal', () => {

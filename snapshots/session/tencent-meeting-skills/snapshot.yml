@@ -1,0 +1,12 @@
+version: 1
+scenario: tencent-meeting-skills
+profile: headless
+composition: tencent-meeting-skills
+recording: authored
+replay:
+  override: true
+platform: posix
+header:
+  class: skill
+  pin: true
+  toolSchemasSource: text-turn

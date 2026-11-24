@@ -25,6 +25,7 @@ Agent（智能体）可以读取和编辑工作区文件、运行命令、委派
 ## 继续使用
 
 - [配置模型](./providers.zh.md)
+- [在 Session 之间发送消息](../session-control.zh.md)
 - [使用 Python SDK](./python-sdk.zh.md)
 - [在反向代理之后发布 Web UI](./public-deployments.zh.md)
 - [卸载 DSH 桌面端](./desktop-uninstall-cleanup.zh.md)

@@ -9,6 +9,7 @@
  * formatted-result spill handoff, and the no-background-job invariant.
  * Real-`rg` behavior is pinned separately in integration.spec.ts.
  */
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -205,6 +206,7 @@ async function setup(options: SetupOptions = {}) {
   provideWorkingDirectoryFixture(ctx)
   const warnings: string[] = []
   ctx.logger.warn = ((message: unknown) => { warnings.push(String(message)) }) as typeof ctx.logger.warn
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -269,6 +271,7 @@ describe('registration', () => {
   it('stays pending until ctx.subprocess exists (inject)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -281,7 +284,7 @@ describe('registration', () => {
     expect(ctx.tools.schemas()).toHaveLength(2)
     await fiber.dispose()
     expect(ctx.tools.schemas()).toHaveLength(0)
-    const sections = (await ctx.systemPrompt.assemble()).sections.map(s => s.name)
+    const sections = (await ctx.systemPrompt.assemble()).sections.filter(s => !s.retire).map(s => s.name)
     expect(sections).not.toContain('tool:glob')
     expect(sections).not.toContain('tool:grep')
   })
@@ -326,6 +329,7 @@ describe('config validation', () => {
   ] as const)('rejects a non-positive or fractional %s at load', async (name, config) => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)
@@ -336,6 +340,7 @@ describe('config validation', () => {
   it('rejects a grace beyond the Node timer range at load', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(NativeToolExecutor)

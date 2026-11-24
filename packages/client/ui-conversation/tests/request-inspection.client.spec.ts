@@ -40,6 +40,23 @@ describe('inspectRequestPrompt', () => {
     })
   })
 
+  it('carries per-source instructions and marks a change established by a rebuilt system node', () => {
+    const sections = [{ name: 'plan:status', order: 1, text: 'off' }]
+    const previous = { config: CONFIG, system: 'on', tools: [], sections: [{ name: 'plan:status', order: 1, text: 'on' }] }
+    const rebuilt = inspectRequestPrompt(previous, header(SessionSeq(9), 'series', { config: CONFIG }), {
+      ...systemNode(7, 'off'), sections, rebuilt: true,
+    })
+    expect(rebuilt.prompt.sections).toBe(sections)
+    expect(rebuilt.change).toEqual({ seq: 7, time: 1_700_000_000_007, kind: 'system', previous, rebuilt: true })
+
+    // A tools-only change is anchored at the header, so the rebuilt system node does not mark it.
+    const tools = inspectRequestPrompt(rebuilt.prompt, header(SessionSeq(12), 'change', { config: CONFIG, tools: [READ_TOOL] }), {
+      ...systemNode(7, 'off'), sections, rebuilt: true,
+    })
+    expect(tools.change).toMatchObject({ seq: 12, kind: 'tools' })
+    expect(tools.change).not.toHaveProperty('rebuilt')
+  })
+
   it('anchors an initial header without a system node at the header itself', () => {
     expect(inspectRequestPrompt(undefined, header(SessionSeq(2), 'initial', {
       config: CONFIG,

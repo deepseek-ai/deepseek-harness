@@ -1,15 +1,8 @@
 /**
- * A per-agent persona as a composable row.
+ * Persona prefix and suffix overrides as a composable row.
  *
- * `dsh-system-prompt` owns the global persona as its own config, and registers
- * that section unconditionally — so this row is **scope-only**. Mounted inside
- * an agent preset it shadows the deployment persona for that one session,
- * exactly like the per-child persona `dsh-subagent` installs; mounted globally
- * it collides with the registry's own registration and fails loud.
- *
- * That constraint is the reason the row exists. An agent preset cannot mount
- * the prompt registry itself, so without a row of its own a preset could
- * change an agent's tools but never its identity.
+ * Registers prefix and suffix as ordinary scoped system sections. Disposing
+ * the plugin reveals any inherited or earlier same-scope persona definitions.
  * @module @deepseek-ai/dsh-persona
  */
 
@@ -54,22 +47,21 @@ export const Config: z<Config> = z.object({
 })
 
 /**
- * Register the persona prefix and suffix sections for the mounting context's scope.
- * @param ctx - an agent scope context; an unscoped context collides with the
- * prompt registry's own persona registration and rejects.
+ * Register persona prefix and suffix overrides in the mounting context.
+ * @param ctx - context owning the registrations and their scope visibility.
  * @param config - the prefix, suffix, and complete-prompt policy.
  */
 export function apply(ctx: Context, config: Config): void {
-  ctx.effect(() => ctx.systemPrompt.section({
+  ctx.systemPrompt.section({
     name: PERSONA_PREFIX_SECTION,
     order: ctx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX'),
     text: config.prefix,
-    ...(config.complete ? { complete: true } : {}),
-  }), 'persona.section()')
-  ctx.effect(() => ctx.systemPrompt.section({
+    complete: config.complete ?? false,
+  })
+  ctx.systemPrompt.section({
     name: PERSONA_SUFFIX_SECTION,
     order: ctx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_SUFFIX'),
     text: config.suffix ?? '',
-  }), 'persona.suffix()')
+  })
   if (!(config.includeRuntimeContext ?? true)) ctx.systemPrompt.suppressRuntimeContext()
 }

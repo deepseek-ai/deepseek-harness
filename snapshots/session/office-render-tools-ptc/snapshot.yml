@@ -10,6 +10,8 @@ sessionFormat:
   coverage: [retired-tools]
 header:
   class: office-render-tools-ptc
+  # The retained input's skill load no longer resolves, so the Office tools never activate the pinned prompt change.
+  promptChanges: 0
 workspace:
   setup: office-retired-ptc
 # Adapt the retained retired-tool program to current explicit output.

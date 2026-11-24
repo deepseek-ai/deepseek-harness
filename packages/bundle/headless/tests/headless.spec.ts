@@ -1,8 +1,9 @@
 /** Direct one-shot Agent driving, exact Session adoption, machine-readable projection, and exit mapping. */
 
 import { Readable } from 'node:stream'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type {
@@ -13,6 +14,7 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
+import AgentPresets, { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
 import { type LlmAttemptId, type ReasoningEffortId, type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -38,7 +40,17 @@ interface Script {
 interface ObservationStub {
   header: { cwd?: string; origin?: string; parentSession?: string; agentPreset?: string }
   events: readonly { type: string; data: unknown }[]
+  /** Projection values at the cut; a stub that omits the key gets the agent preset its header and events fold to. */
+  projections?: { values: { agentPreset?: string | null } } | undefined
   [Symbol.dispose](): void
+}
+
+/** Complete a stub with the agent preset the registered projection folds from its header and events. */
+function withPresetProjection(stub: ObservationStub): ObservationStub {
+  if ('projections' in stub) return stub
+  const { init, apply } = agentPresetProjectionDefinition
+  const agentPreset = stub.events.reduce((state, event) => apply(state, event as never), init(stub.header as never))
+  return { ...stub, projections: { values: { agentPreset } } }
 }
 
 /** Runner invocation options layered over the scripted Agent factory. */
@@ -60,6 +72,8 @@ interface BenchOptions {
   omitSessionQuery?: boolean
   /** Leave the persistence service unmounted to exercise the fail-loud path. */
   omitPersistence?: boolean
+  /** Leave the agent preset registry unmounted to exercise the fail-loud path. */
+  omitPresets?: boolean
   /** Register a live Agent under `sessionId` before the runner starts. */
   prelive?: boolean
   /** Header facts for that pre-registered live Agent. */
@@ -201,6 +215,10 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentDefaultModelConfig, { provider: 'test-provider', model: 'test-model' })
+  if (options.omitPresets !== true) {
+    await ctx.plugin(Loader)
+    await ctx.plugin(AgentPresets, {})
+  }
   ctx.agents.setFactory({
     async createAgent(ownerCtx: Context, createOptions: CreateAgentOptions): Promise<AgentHandle> {
       const session = ctx.sessions.create(createOptions.sessionId, {
@@ -219,7 +237,7 @@ async function bench(script: Script, options: BenchOptions = {}): Promise<{
   })
   if (options.omitSessionQuery !== true && (options.sessionId !== undefined || options.observe !== undefined)) {
     const observe = options.observe ?? (() => Promise.reject(new SessionQueryError('missing', 'SESSION_QUERY_SESSION_NOT_FOUND')))
-    ctx.provide('sessionQuery', { observeSession: () => observe() } as never)
+    ctx.provide('sessionQuery', { observeSession: async () => withPresetProjection(await observe()) } as never)
   }
   if (options.omitPersistence !== true) {
     ctx.provide('sessionPersistence', {} as never)
@@ -738,22 +756,37 @@ describe('headless runner', () => {
     await test.ctx.fiber.dispose()
   })
 
-  it('fails when an event below the captured Session length cannot be read', async () => {
-    let capturedLength = 0
+  it('counts only events at or after the offset captured before the task is submitted', async () => {
+    let captured = false
+    const test = await bench({
+      afterPrompt(session, message) { appendTurn(session, 1, message, 'answer below the offset', true) },
+    }, {
+      onWhenIdle(agent) {
+        if (captured) return
+        captured = true
+        // The runner reads its first offset next, so the whole turn falls below it.
+        vi.spyOn(agent.session, 'seq', 'get').mockReturnValueOnce(SessionLogOffset(1_000))
+      },
+    })
+    expect(await test.run()).toMatchObject({ code: 1, out: '\n', err: '' })
+    await test.ctx.fiber.dispose()
+  })
+
+  it('fails with the error that folding an interval event threw', async () => {
     const test = await bench({
       afterPrompt(session, message) {
-        appendTurn(session, 1, message, 'unreachable', true)
-        capturedLength = session.seq
-        Object.defineProperty(session, 'eventAt', { value: () => undefined })
+        session.append('turn/start', { turn: 1 })
+        session.append('assistant/message', {
+          stream: [], turn: 1, step: 1,
+          message: { ...createAssistantMessage({ content: [], source: { provider: 'test-provider', model: 'test-model' } }), content: [null] },
+        } as never, { surfaceOp: 'append' })
+        appendTurn(session, 2, message, 'later answer', true)
       },
     })
     const result = await test.run()
-    expect(capturedLength).toBeGreaterThan(0)
-    expect(result).toMatchObject({
-      code: 1,
-      out: '',
-      err: `dsh: headless summary cannot read seq 0 below captured length ${String(capturedLength)}\n`,
-    })
+    expect(result.code).toBe(1)
+    expect(result.out).toBe('')
+    expect(result.err).toMatch(/^dsh: Cannot read properties of null/)
     await test.ctx.fiber.dispose()
   })
 
@@ -946,18 +979,27 @@ describe('headless runner', () => {
     await test.ctx.fiber.dispose()
   })
 
-  it('rejects a persisted Session whose preset record names no preset', async () => {
+  it('rejects a persisted Session observed without its agent preset projection', async () => {
     const test = await bench({ afterPrompt: () => {} }, {
       sessionId: 'session-exact',
       observe: () => Promise.resolve({
         header: { cwd: process.cwd() },
-        events: [{ type: 'agent-preset/selected', data: {} }],
+        events: [],
+        projections: undefined,
         [Symbol.dispose]() {},
       }),
     })
     const result = await test.run()
     expect(result.code).toBe(1)
-    expect(result.err).toContain('malformed agent-preset/selected event')
+    expect(result.err).toContain('was observed without its agent preset projection')
+    await test.ctx.fiber.dispose()
+  })
+
+  it('rejects --session-id when the agent preset registry is not mounted', async () => {
+    const test = await bench({ afterPrompt: () => {} }, { sessionId: 'session-exact', omitPresets: true })
+    const result = await test.run()
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('requires the agentPresets service')
     await test.ctx.fiber.dispose()
   })
 
@@ -1122,29 +1164,6 @@ describe('headless runner', () => {
     expect(result.code).toBe(1)
     expect(result.err).toContain('runs under agent preset "minimal"')
     expect(result.out).toBe('')
-    await test.ctx.fiber.dispose()
-  })
-
-  it('fails when a live event below the captured Session length cannot be read', async () => {
-    let capturedLength = 0
-    const test = await bench({
-      before(session) {
-        const history = {
-          role: 'user', content: [{ type: 'text', text: 'earlier' }], source: { kind: 'user' }, id: brandString<MessageId>('history'),
-        } satisfies UserMessage
-        appendTurn(session, 0, history, 'earlier answer', true)
-        capturedLength = session.seq
-        Object.defineProperty(session, 'eventAt', { value: () => undefined })
-      },
-      afterPrompt: () => {},
-    }, {
-      sessionId: 'session-exact',
-      prelive: true,
-    })
-    const result = await test.run()
-    expect(capturedLength).toBeGreaterThan(0)
-    expect(result.code).toBe(1)
-    expect(result.err).toContain(`headless adoption cannot read seq 0 below captured length ${String(capturedLength)}`)
     await test.ctx.fiber.dispose()
   })
 

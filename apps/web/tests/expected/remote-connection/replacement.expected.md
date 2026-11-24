@@ -1,0 +1,9 @@
+- region "自定义远程连接":
+  - heading "自定义远程连接" [level=2]
+  - code: {{access-address}}
+  - status: "邀请状态: pending"
+  - status "邀请编号": {{invitation-id}}
+  - button "生成新邀请"
+  - button "取消邀请"
+  - button "重新读取"
+  - button "关闭设置"

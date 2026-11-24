@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-27-im-dispatch-out-of-v1.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-27-im-dispatch-out-of-v1.md
+/agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set:
+  en: adafb8ddbbb8f339
+  zh: 10a63fd931bc5b1a
+/agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/problem:
+  en: 3b7d39cd4924ad76
+  zh: 04ed58ef19fc57c2
+/agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/decision:
+  en: d869683b9760a7fc
+  zh: 9a8cef79272a9dfe
+/agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/alternatives-considered:
+  en: 288528e7edab6442
+  zh: 47f80c327a39cfe5
+/agent-note-rule-driven-im-dispatch-leaves-the-v1-package-set/consequences:
+  en: d39bd4db7d30bd86
+  zh: d60b0564fa4596b3

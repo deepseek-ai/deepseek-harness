@@ -1,0 +1,212 @@
+[
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "title": "Everything at once",
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "*subtitle text*"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "plain **bold***italic*<u>under</u>~~strike~~secret`inline-code`[link-text](https://example.com/everything)<at user_id=\"u-alice\">Alice</at><at user_id=\"all\"></at>@在线成员@Admins\\#general:party:green-text\\\nafter the break"
+            }
+          ],
+          [
+            {
+              "tag": "img",
+              "image_key": "fake:fake:test:image:a68ab9e2b4d4"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "# Heading one"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "## Heading two"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "### Heading three"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "#### Heading four"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "##### Heading five"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "###### Heading six"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "- first item\n- [x] done task\n- parent item\n  - child item"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "3. third item\n4. fourth item"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "> quoted line\n>\n> > deeper quote"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "```ts\nconst answer = 42\n```"
+            }
+          ],
+          [
+            {
+              "tag": "hr"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "| Name | Qty |\n| --- | ---: |\n| apple | 3 second paragraph |"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "**▸ More information**"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "hidden body text"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "— fine print note"
+            }
+          ],
+          [
+            {
+              "tag": "img",
+              "image_key": "fake:fake:test:image:d9d33215365f"
+            }
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "msg_type": "audio",
+    "content": {
+      "file_key": "fake:fake:test:audio:679dc6bc0bc9"
+    }
+  },
+  {
+    "msg_type": "media",
+    "content": {
+      "file_key": "fake:fake:test:video:336d52e2eddb"
+    }
+  },
+  {
+    "msg_type": "file",
+    "content": {
+      "file_key": "fake:fake:test:file:e4de5288fb5a"
+    }
+  },
+  {
+    "msg_type": "post",
+    "content": {
+      "zh_cn": {
+        "content": [
+          [
+            {
+              "tag": "md",
+              "text": "\\[Stop\\] [Open](https://example.com/open) Compact `/compact`"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "run Status `/status` to check"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Delete everything\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Title\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "☑ I agree"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Size: Small / Large\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[选择: Alpha / Beta\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[Send\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "\\[合并转发\\]"
+            }
+          ],
+          [
+            {
+              "tag": "md",
+              "text": "raw fallback text"
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

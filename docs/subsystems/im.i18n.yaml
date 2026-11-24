@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for im.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/im.md
+/im-automation:
+  en: 9656d074b937f11e
+  zh: a8969c490d22d61a
+/im-automation/references-and-results:
+  en: b6bf9c56e9c32f97
+  zh: ca858bb9439f9662
+/im-automation/publication-resources:
+  en: 8246c8ab044a7cb1
+  zh: 87952585dfebc270
+/im-automation/session-attribution-and-durable-state:
+  en: cbaf7a5edf75366c
+  zh: 99c93a6b9fb9496f
+/im-automation/cordis-api:
+  en: fada7691badd06af
+  zh: fada7691badd06af

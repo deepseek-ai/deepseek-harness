@@ -30,9 +30,35 @@ export interface ToolMessageSource {
   callId: ToolCallId
 }
 
+/** One source's effective instructions and associated notices within a system message. */
+export type SystemPromptSectionState = {
+  /** Stable registration name. */
+  readonly name: string
+  /** Indexes of source-associated replacement or retirement notices, disjoint from all other attributed blocks. */
+  readonly noticeIndex?: readonly number[]
+} & ({
+  /** This record supplies effective instructions. */
+  readonly state: 'active'
+  /** Ascending prompt order, with code-unit name order breaking ties. */
+  readonly order: number
+  /** Index of the source's actual text in message.content, including empty text. */
+  readonly contentIndex: number
+} | {
+  /** This record retires the source. */
+  readonly state: 'retired'
+  /** Retirement carries no canonical instruction text. */
+  readonly contentIndex?: never
+})
+
 /** Required source of a system-role message produced by the system-prompt plugin. */
 export interface SystemPromptMessageSource {
   kind: 'system-prompt'
+  /** Exclusive guidance from this message onward; earlier messages keep their positions. */
+  readonly complete?: true
+  /** Original admission supersedes all previously admitted sources; omission applies a delta. */
+  readonly reset?: true
+  /** Source states referencing instruction and notice blocks; absent on legacy whole-prompt messages. */
+  readonly sections?: readonly SystemPromptSectionState[]
 }
 
 /**
@@ -306,14 +332,19 @@ export function createToolResultMessage(input: ToolResultMessageInput): ToolResu
 }
 
 /**
- * Extract and join only text blocks in content order, preserving their whitespace.
+ * Extract and join only text blocks in content order, preserving their whitespace unless `trim` is set.
  * Non-text blocks contribute neither text nor separators; content is not modified.
  * Import from `@deepseek-ai/dsh-llm/message` in Host and browser code.
  * @param content - source blocks to read in their existing order.
  * @param options - optional text extraction settings.
  * @param options.separator - text inserted between text blocks; defaults to an empty string.
+ * @param options.trim - trim each text block and omit blocks left empty, so they add no separator.
  * @returns joined text, or an empty string when no text blocks are present.
  */
-export function extractTextContent(content: readonly ContentBlock[], options?: { separator?: string }): string {
-  return content.filter(block => block.type === 'text').map(block => block.text).join(options?.separator ?? '')
+export function extractTextContent(content: readonly ContentBlock[], options?: { separator?: string; trim?: boolean }): string {
+  let texts = content.filter(block => block.type === 'text').map(block => block.text)
+  if (options?.trim === true) texts = texts.map(text => text.trim()).filter(Boolean)
+  return texts.join(options?.separator ?? '')
 }
+
+export { requestImageBudgetFailure, uniqueRequestImageRefs } from './request-images.ts'

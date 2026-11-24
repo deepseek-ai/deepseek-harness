@@ -61,3 +61,8 @@
         args: [driver.mjs, .dsh/computer-use-fixture]
         reconnect:
           enabled: false
+
+# Recorded programs are async function bodies, so replay keeps the per-call runtime.
+- id: ptc-runtime
+  config:
+    executionMode: per-call

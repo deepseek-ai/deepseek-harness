@@ -56,6 +56,7 @@ it.skipIf(!helperPath || !selector)('admits real application screenshots through
   const api = createCuaApi(dispatch)
   const discovered = (await api.listApps()).find(app =>
     app.id === selector || app.displayName === selector)
+  if (discovered) expect(discovered.identity).toBeNull()
   const app = await api.getApp(discovered?.id ?? selector!)
   const target = (await app.getWindows()).find(window =>
     window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)

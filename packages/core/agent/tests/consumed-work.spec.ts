@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { TurnEndReason } from '@deepseek-ai/dsh-session'
-import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
+import { foldConsumedWork, foldConsumedWorkForEvent } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** One pending message, as the inbox records it. */
@@ -157,5 +157,22 @@ describe('foldConsumedWork', () => {
       end: session.snapshotEvents().findLast(event => event.type === 'turn/end'),
       droppedUnrun: false,
     })
+  })
+
+  it('advances a fold one event at a time, starting from no state', () => {
+    const session = Session.create(brandString<SessionId>('stepwise'))
+    steppedTurn(session, 1, { kind: 'completed' })
+    session.append('turn/start', { turn: 2 })
+    cancelPending(session)
+    const [first, ...rest] = session.snapshotEvents()
+
+    let state = foldConsumedWorkForEvent(undefined, first!)
+    for (const event of rest) state = foldConsumedWorkForEvent(state, event)
+
+    expect(state).toMatchObject(foldConsumedWork(session.snapshotEvents()))
+    expect(state).toMatchObject({ droppedUnrun: true, open: 2 })
+    expect([...state.stepped]).toEqual([])
+    expect([...state.claimed]).toEqual([])
+    expect(foldConsumedWork([])).toEqual({ droppedUnrun: false })
   })
 })

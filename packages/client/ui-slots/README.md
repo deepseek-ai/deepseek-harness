@@ -33,6 +33,8 @@ A designer may choose a Component Factory for a component or assembly they consi
 
 Factory `children` remain ordinary global Slots and must match `SlotMap`, while local `slots` select one Component per occurrence. An occurrence inherits its render-position scope; `renderFactorySlot()` does not accept a Session identity. Shared Store handles use ordinary scope resolution. A Store factory stays lazy until an occurrence first materializes, then creates one handle for that render position and rejects a persistent Store spec whose key would collide across occurrences.
 
+In DOM queries, `[data-slot-factory]` marks a rendered Factory, and `[data-slot-factory-children]` marks a mounted local component explicitly selected by its caller. See the [Factory DOM migration guide](../../../docs/upgrade-guide/v0.2.3-alpha.2/factory-content-roots/guide.md) for selector examples and how to declare inline roots.
+
 ### The five framework props shares
 
 Every registered component receives props composed from five framework shares: the runtime share (`owner` from the parent's render call site, plus the session standard kit and global seat), the child-render share (`renderSlot` statically narrowed to declared children), the Factory-render share (`renderFactorySlot`), the store share (the declared handle's selector hook and draft-stripped actions), and the business share (inferred from `inject`). Components reference the derived props aliases; they never re-type a share locally.

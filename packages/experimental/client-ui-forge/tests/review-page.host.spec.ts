@@ -4,7 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider,
+  ChangeRequestActivity, ChangeRequestDescription, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure,
+  ForgeFailure, ForgeProvider,
   ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewerFilter,
   ForgeViewerList, ForgeViewerQuery,
 } from '@deepseek-ai/dsh-experimental-forge'
@@ -217,6 +218,20 @@ describe('forgePanel.reviewChangeRequest', () => {
     expect(opened.ctx.forge.latest(ref(7))).toBeUndefined()
   })
 
+  it('reads a change request at once for a stream that starts once its latest status is older than statusMaxAgeMs', async () => {
+    const opened = await page({ statusMaxAgeMs: 1 })
+    const first = changeRequest(opened, pullUrl(7))
+    await first.until(polled)
+    await new Promise(resolve => setTimeout(resolve, 5))
+
+    // The stream watches the change request once its first frame is pulled.
+    const joined = changeRequest(opened, pullUrl(7))
+    await joined.pull()
+
+    await vi.waitFor(() => { expect(opened.provider.fetches).toEqual([[7], [7]]) })
+    await Promise.all([first.stop(), joined.stop()])
+  })
+
   it('names how the change request\'s provider calls itself, and nothing once that provider left', async () => {
     const opened = await page()
     const { registration } = await registerViewer(opened)
@@ -265,6 +280,30 @@ describe('forgePanel review page reads', () => {
     Object.assign(opened.provider, { readDescription: () => Promise.resolve(description) })
     await expect(panel.reviewDescription(url, signal)).resolves.toEqual(description)
 
+    // A provider that reads no activity has none to show; a read the host refused names the host's reason.
+    await expect(panel.reviewActivity(url, signal)).resolves.toBeNull()
+    const activity: ChangeRequestActivity = {
+      items: [{ kind: 'comment', at: '2026-11-02T00:00:00Z', actor: { login: 'mona', avatarUrl: null, bot: false }, body: 'Looks good', url: null }],
+      truncated: false, viewerCanComment: true,
+    }
+    const readActivity = vi.fn<() => Promise<ChangeRequestActivity | ForgeFailure>>(() => Promise.resolve(activity))
+    Object.assign(opened.provider, { readActivity })
+    await expect(panel.reviewActivity(url, signal)).resolves.toEqual(activity)
+    readActivity.mockResolvedValueOnce({ code: 'rate-limited', message: 'slow down' })
+    await expect(panel.reviewActivity(url, signal)).rejects.toMatchObject({ code: 'forgePanel/activity-failed', message: 'slow down' })
+
+    // A comment reaches the provider as written; a blank one is refused before the host is asked.
+    await expect(panel.reviewComment(url, 'Thanks', signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider adds no comments' })
+    const addComment = vi.fn<() => Promise<ForgeActionFailure | undefined>>(() => Promise.resolve(undefined))
+    Object.assign(opened.provider, { addComment })
+    await expect(panel.reviewComment(url, ' Thanks\n', signal)).resolves.toBeUndefined()
+    expect(addComment).toHaveBeenCalledWith(ref(7), ' Thanks\n', expect.any(AbortSignal))
+    await expect(panel.reviewComment(url, ' \n', signal)).rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'The comment is empty' })
+    expect(addComment).toHaveBeenCalledTimes(1)
+    addComment.mockResolvedValueOnce({ code: 'unknown', message: 'no answer' })
+    await expect(panel.reviewComment(url, 'Thanks', signal)).rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'no answer' })
+
     await expect(panel.reviewChecks(url, HEAD, signal))
       .rejects.toMatchObject({ code: 'forgePanel/checks-failed', message: 'This provider does not support complete check reads' })
     Object.assign(opened.provider, { fetchChecks: () => Promise.resolve(snapshot(ref(7))) })
@@ -284,14 +323,17 @@ describe('forgePanel review page reads', () => {
     await expect(panel.reviewText(url, HEAD, 'src/a.ts', signal)).resolves.toBe('new\n')
     await expect(panel.reviewText(url, HEAD, 'big.bin', signal)).rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
 
-    await expect(panel.reviewViewed(url, HEAD, signal)).resolves.toBeNull()
+    await expect(panel.reviewViewed(url, HEAD, false, signal)).resolves.toBeNull()
     const marks = { headSha: HEAD, files: { 'src/a.ts': 'dismissed' as const }, truncated: false }
     const viewedFiles = vi.fn<NonNullable<ForgeProvider['viewedFiles']>>(() => Promise.resolve(marks))
     Object.assign(opened.provider, { viewedFiles, setViewed: () => Promise.resolve(undefined) })
-    await expect(panel.reviewViewed(url, HEAD, signal)).resolves.toEqual(marks)
+    await expect(panel.reviewViewed(url, HEAD, false, signal)).resolves.toEqual(marks)
+    // The marks are kept for the next read that is not fresh.
+    await expect(panel.reviewViewed(url, HEAD, false, signal)).resolves.toEqual(marks)
+    expect(viewedFiles).toHaveBeenCalledOnce()
     viewedFiles.mockResolvedValueOnce({ code: 'stale', message: 'moved' }).mockResolvedValueOnce({ code: 'unavailable', message: 'down' })
-    await expect(panel.reviewViewed(url, HEAD, signal)).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
-    await expect(panel.reviewViewed(url, HEAD, signal)).rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'down' })
+    await expect(panel.reviewViewed(url, HEAD, true, signal)).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
+    await expect(panel.reviewViewed(url, HEAD, true, signal)).rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'down' })
   })
 
   it('reads the files and review threads at the head of the streamed status, which a review page write refreshes', async () => {
@@ -357,6 +399,20 @@ describe('forgePanel review page actions', () => {
     await expect(panel.reviewMarkReady(url, signal)).rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Not a draft' })
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${HEAD}`, `merge 7 rebase ${HEAD}`, 'ready 7'])
 
+    // The automatic merge reaches the provider as asked; one that sets none fails without asking the host.
+    const on = { enabled: true as const, method: 'squash' as const, headSha: HEAD }
+    await expect(panel.reviewSetAutoMerge(url, on, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider sets no automatic merge' })
+    const setAutoMerge = vi.fn<NonNullable<ForgeProvider['setAutoMerge']>>(() => Promise.resolve(undefined))
+    Object.assign(opened.provider, { setAutoMerge })
+    await expect(panel.reviewSetAutoMerge(url, on, signal)).resolves.toBeUndefined()
+    await expect(panel.reviewSetAutoMerge(url, { enabled: false }, signal)).resolves.toBeUndefined()
+    expect(setAutoMerge.mock.calls.map(([target, request]) => [target, request])).toEqual([[ref(7), on], [ref(7), { enabled: false }]])
+    setAutoMerge.mockResolvedValueOnce({ code: 'stale', message: 'Head moved' })
+    await expect(panel.reviewSetAutoMerge(url, on, signal)).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'Head moved' })
+    setAutoMerge.mockResolvedValueOnce({ code: 'unknown', message: 'no answer' })
+    await expect(panel.reviewSetAutoMerge(url, on, signal)).rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'no answer' })
+
     await expect(panel.reviewRerunChecks(url, { headSha: HEAD }, signal))
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider reruns no checks' })
     await expect(panel.reviewReviewerCandidates(url, '', signal))
@@ -418,6 +474,8 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewPoll(UNSERVED, signal),
       () => changeRequest(opened, UNSERVED).pull(),
       () => panel.reviewDescription(UNSERVED, signal),
+      () => panel.reviewActivity(UNSERVED, signal),
+      () => panel.reviewComment(UNSERVED, 'Thanks', signal),
       () => panel.reviewChecks(UNSERVED, HEAD, signal),
       () => panel.reviewThreads(UNSERVED, HEAD, false, signal),
       () => panel.reviewThreadWrite(UNSERVED, write, signal),
@@ -425,10 +483,11 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewDiff(UNSERVED, null, signal),
       () => panel.reviewCommits(UNSERVED, signal),
       () => panel.reviewText(UNSERVED, HEAD, 'src/a.ts', signal),
-      () => panel.reviewViewed(UNSERVED, HEAD, signal),
+      () => panel.reviewViewed(UNSERVED, HEAD, false, signal),
       () => panel.reviewSetViewed(UNSERVED, { path: 'src/a.ts', viewed: true, headSha: HEAD }, signal),
       () => panel.reviewMarkReady(UNSERVED, signal),
       () => panel.reviewMerge(UNSERVED, 'merge', HEAD, signal),
+      () => panel.reviewSetAutoMerge(UNSERVED, { enabled: false }, signal),
       () => panel.reviewRerunChecks(UNSERVED, { headSha: HEAD }, signal),
       () => panel.reviewRequestReviews(UNSERVED, [{ kind: 'user', login: 'mona' }], signal),
       () => panel.reviewReviewerCandidates(UNSERVED, '', signal),
@@ -455,13 +514,16 @@ describe('forgePanel review page actions', () => {
       () => panel.reviewRefresh(aborted),
       () => panel.reviewPoll(url, aborted),
       () => panel.reviewDescription(url, aborted),
+      () => panel.reviewActivity(url, aborted),
+      () => panel.reviewComment(url, 'Thanks', aborted),
       () => panel.reviewChecks(url, HEAD, aborted),
       () => panel.reviewThreads(url, HEAD, false, aborted),
       () => panel.reviewDiff(url, null, aborted),
       () => panel.reviewCommits(url, aborted),
       () => panel.reviewText(url, HEAD, 'src/a.ts', aborted),
-      () => panel.reviewViewed(url, HEAD, aborted),
+      () => panel.reviewViewed(url, HEAD, false, aborted),
       () => panel.reviewMarkReady(url, aborted),
+      () => panel.reviewSetAutoMerge(url, { enabled: false }, aborted),
       () => panel.reviewStage(opened.session.id, url, aborted),
     ]
 
@@ -518,7 +580,7 @@ describe('forgePanel review lists', () => {
     const { provider, registration } = await registerViewer(opened)
     const read = await lists.until(frame => !frame.reading && frame.hosts[0]?.viewer === 'mona')
     const listed = { items: [], total: 2, fetchedAt: ANY_TIME, failure: null }
-    expect(read.hosts).toEqual([{ forge: 'viewer', host: 'view.test', viewer: 'mona', lists: { 'review-requested': listed, authored: listed } }])
+    expect(read.hosts).toEqual([{ forge: 'viewer', host: 'view.test', viewer: 'mona', signIn: null, lists: { 'review-requested': listed, authored: listed } }])
     expect(provider.queries).toEqual([
       { host: 'view.test', filter: 'review-requested', repository: null, limit: 10 },
       { host: 'view.test', filter: 'authored', repository: null, limit: 10 },
@@ -535,12 +597,27 @@ describe('forgePanel review lists', () => {
     const { provider } = await registerViewer(opened)
     provider.list = () => Promise.reject(new Error('gh crashed'))
     const warn = vi.spyOn(opened.ctx.logger, 'warn').mockImplementation(() => undefined)
-    const lists = streamed<ForgeReviewFrame>(stop => opened.ctx.forgePanel.reviewLists({ owner: 'octo', name: 'demo' }, stop))
+    const lists = streamed<ForgeReviewFrame>(stop => opened.ctx.forgePanel.reviewLists({ host: 'view.test', owner: 'octo', name: 'demo' }, stop))
 
     const failed = await lists.until(frame => !frame.reading && (frame.hosts[0]?.lists.authored?.failure ?? null) !== null)
     expect(failed.hosts[0]?.lists['review-requested']?.failure).toEqual({ code: 'unavailable', message: 'gh crashed' })
     expect(provider.queries).toEqual([{ host: 'view.test', filter: 'review-requested', repository: { owner: 'octo', name: 'demo' }, limit: 30 }])
     expect(warn).toHaveBeenCalledWith('forge-panel: reading a review list failed: Error: gh crashed')
+  })
+
+  it('names the provider\'s sign-in command beside the lists of a host that refuses the viewer', async () => {
+    const opened = await page()
+    const { provider } = await registerViewer(opened)
+    provider.list = () => Promise.resolve({ code: 'unauthenticated', message: 'sign in' })
+    const lists = streamed<ForgeReviewFrame>(stop => opened.ctx.forgePanel.reviewLists(null, stop))
+
+    // A provider that names no command leaves the host without one.
+    const unnamed = await lists.until(frame => !frame.reading && (frame.hosts[0]?.lists.authored?.failure ?? null) !== null)
+    expect(unnamed.hosts[0]?.signIn).toBeNull()
+    provider.readiness = () => Promise.resolve({ state: 'unauthenticated', message: 'sign in', signIn: { command: 'viewer auth login' } })
+    await opened.ctx.forgePanel.reviewRefresh(signal)
+    const refused = await lists.until(frame => !frame.reading && (frame.hosts[0]?.signIn ?? null) !== null)
+    expect(refused.hosts[0]).toEqual(expect.objectContaining({ host: 'view.test', viewer: null, signIn: 'viewer auth login' }))
   })
 
   it('streams the review request count from count reads and from lists of every repository', async () => {

@@ -73,7 +73,7 @@ Owner 而不是查看页或 Liveshare 服务端授权每次会话操作。子会
 
 只有已验证的 owner 才能创建分享。对话框显示 owner 的 DSH 回读到的身份——名字、有效期、何时续期——没有显示名时用身份派生出来的标签。创建分享的代码本身也会拒绝未验证的 owner，不是只看按钮能不能点。
 
-登录只做一次，且发生在 owner 点击时页面预留的窗口里。DSH 生成一个短寿命事务，绑定 Liveshare 服务端地址、Liveshare 服务端实例，以及允许完成它的页面；页面打开 DSH 指定的登录页，只接受来自该 origin、该窗口、该事务的一次性 code，并把它交回自己的 DSH。
+Host 将短期事务绑定到 Relay 地址、Host 自身的实例和获准读取结果的页面来源。所有者可以在任意浏览器中打开同一个链接完成授权：Relay 保留授权码供 Host 取回，授权既不依赖打开登录页的窗口，也不要求浏览器能回调 Host 地址。同一事务的并发状态查询共用一次进行中的取码请求。
 
 Owner 使用自己保留的校验值兑换代码，以仅所有者可读写的权限保存凭据，并只向签发它的 Liveshare 服务端地址发送。首次登记需要已验证凭据；已有分享重连使用分享管理 token，显式身份认领保留该分享的 ACL、模式、过期时间和 token。分享指定的同事是 owner 的存储选择加上部署自身的允许列表；不会从显示身份派生任何内容。
 
@@ -95,7 +95,7 @@ Owner 使用自己保留的校验值兑换代码，以仅所有者可读写的�
 
 本包交付一个 Host 程序和一个浏览器端。公开入口包括 Host 导出（`lib/index.js`）、`./client`（`lib/client.js`，closure-factory bundle）、`./viewer-declarations`、分享管理 Remote 的 `./typert` 与 `./remote` 两个面、`./types`、组合包 patch `./cordis.patch.yml`，以及 locale JSON 文件。manifest 以 `dsh.client` 声明浏览器端，`platform` 为 `web`，并列出它需要的客户端服务；该入口读取 `__DSH_LIVESHARE_VIEWER__`：在被服务的查看页上挂载查看页 session 插件及其品牌、模型、权限、会话行与分享路径界面，否则先挂载 owner 生成的 Remote，再挂载 Session 头部操作。
 
-分享管理是一个 `liveshareShares` Typert Remote，共十二个方法——`create`、`list`、`stop`、`updatePermissions`、`setCapabilities`、`capabilities`、`relay`、`setRelay`、`identity`、`audit`、`testRelay` 与 `testPublish`——背后是 owner 宿主执行的操作。仅存的同源 HTTP 路由是四条 owner 登录与凭据路由：`/api/liveshare.ownerLoginStart`、`/api/liveshare.ownerLoginRedeem`、`/api/liveshare.ownerLoginCancel` 与 `/api/liveshare.ownerCredential`。
+`liveshareShares` Typert Remote 提供 Host 的分享管理操作。分享对话框使用三条同源 HTTP 登录路由：`/api/liveshare.ownerLoginStart`、`/api/liveshare.ownerLoginStatus` 和 `/api/liveshare.ownerLoginCancel`。独立的 `/api/liveshare.ownerCredential` 路由用于导入凭据，分享对话框登录不调用它。
 
 出站网关是受监督的子进程，源码入口为 `src/owner-gateway/cli.ts`，发布入口为 `lib/owner-gateway/cli.js`；目录名让它与 DSH API gateway 明确区分。
 
@@ -127,7 +127,7 @@ Owner 使用自己保留的校验值兑换代码，以仅所有者可读写的�
 - 分享使用两档之一及该档的沙箱；未知模式、读不懂的应答、没有模式的分享仍可读取，但绝不会被驱动。
 - 没有已验证的 owner 身份，就无法创建分享。
 - 弹窗创建的分享携带 `open`；已存储的 `selected` 或 `approval` 记录保留记录中的 ACL 与访问摘要，`create` 仍会存储调用方请求的 `selected` 模式及其主体。
-- 登录只接受来自该事务 origin、窗口与 state 的一次性 code，别的都不接受；失败或放弃都会丢弃事务，凭据、cookie 与 code 都不进入 URL、存储或日志。
+- 只有与事务绑定的页面来源才能读取结果。Host 核对绑定的 Relay 和 Host 实例，用自己的 PKCE 校验值兑换 Relay 签发的授权码；分享对话框不读取登录 cookie，也不接收授权码或凭据。
 - 真实 Controller、ToolRuntime、文件系统和 profile 测试覆盖 fork 身份、冷恢复限制、有界执行、撤权和正常取消。已构建查看页必须使用真实 POST 载体和 Owner 授权处理器；确定性显示 fixture（测试前置数据）不替代执行或持久化测试。
 - 生成的 API 文档和两种 SDK 投影与 `user-rpc` 来源 principal 保持一致；该字段只由 `agent/pre-step` 准入校验消费。
 - `ViewerSessionMode` 只有两个成员；持久化的 `fork-readonly` 记录在 owner 状态加载时被拒绝。

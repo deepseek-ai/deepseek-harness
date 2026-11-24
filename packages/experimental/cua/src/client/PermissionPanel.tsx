@@ -1,10 +1,9 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Button, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { CuaApplicationGrant, CuaSystemPermissionState } from '../access-types.ts'
 import type { PermissionFace } from './controller.ts'
 import type { NS } from './locales.ts'
@@ -16,64 +15,6 @@ export type PermissionProps = InjectFace<PermissionFace> & PropsLocale<typeof NS
 /** Permission guidance only navigates to the existing bundle details. */
 export type PermissionSetupProps = PermissionProps
   & Pick<PropsRuntime<'plugins.bundle.activation'>, 'onDismiss' | 'onOpenDetails'>
-
-type DefaultPresetProps = PermissionProps & InjectFace<{
-  hooks: { cuaDefaultPreset: ConfigForm<{ default: string; selectedDefault?: string }> }
-  setPtcDefault: () => Promise<boolean>
-}>
-
-type PersistentPtcProps = PermissionProps & { setPersistentPtc: () => Promise<boolean> }
-
-/** The detail page owns explicit preset and execution-mode settings. */
-export type PermissionPanelProps = PermissionProps & DefaultPresetProps & PersistentPtcProps
-
-function DefaultPresetSetting(props: DefaultPresetProps) {
-  const preset = props.useCuaDefaultPreset(value => value)
-  const changing = props.useCuaPermissions(value => value.changing)
-  return <ConfigurationSetting kind="default" status={preset.value !== undefined && preset.status === 'loading' ? 'ready' : preset.status} loading={preset.value === undefined && preset.status === 'loading'} writable={preset.writable} t={props.t} busy={changing} save={props.setPtcDefault}
-    configured={(preset.value?.selectedDefault ?? preset.value?.default) === 'ptc'} />
-}
-
-function PersistentPtcSetting(props: PersistentPtcProps) {
-  const runtime = props.useCuaPermissions(value => value.runtime)
-  const changing = props.useCuaPermissions(value => value.changing)
-  return <ConfigurationSetting kind="persistent" loading={runtime.value === null && runtime.error === null}
-    status={runtime.error !== null ? 'unavailable' : runtime.value !== null ? 'ready' : 'loading'} writable={runtime.value?.writable === true} t={props.t} busy={changing || runtime.busy} save={props.setPersistentPtc}
-    configured={runtime.value?.persistent === true} />
-}
-
-function ConfigurationSetting({ kind, status, loading, writable, configured, save, t, busy }: PropsLocale<typeof NS> & {
-  kind: 'default' | 'persistent'
-  busy: boolean
-  status: 'loading' | 'ready' | 'unavailable'
-  loading: boolean
-  writable: boolean
-  configured: boolean
-  save: () => Promise<boolean>
-}) {
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const submit = async (): Promise<void> => {
-    setSaving(true)
-    setError(null)
-    try {
-      if (!await save()) setError(t(`${kind}NotSaved`))
-    } catch (error) {
-      setError(t(`${kind}Failed`, { message: error instanceof Error ? error.message : String(error) }))
-    } finally { setSaving(false) }
-  }
-  return <div className={css.defaultSetting} role="group" aria-label={t(`${kind}Title`)}>
-    <div className={css.permission}>
-      <div><strong>{t(`${kind}Title`)}</strong><p>{t(`${kind}Body`)}</p></div>
-      {loading ? <span className={css.buttonPlaceholder} aria-hidden />
-        : <Button size="sm" className={css.permissionAction} data-configured={configured || undefined} variant={configured ? 'outline' : 'primary'} disabled={busy || saving || configured || !writable || status !== 'ready'}
-          onClick={() => { void submit() }}>{t(configured ? `${kind}Set` : `${kind}Confirm`)}</Button>}
-    </div>
-    {!configured && (status === 'unavailable' ? <p className={css.error} role="alert">{t(`${kind}Unavailable`)}</p>
-      : status === 'ready' && !writable && <p className={css.error} role="alert">{t(`${kind}ReadOnly`)}</p>)}
-    {error !== null && <p className={css.error} role="alert">{error}</p>}
-  </div>
-}
 
 function Applications({ title, apps, icons, onAction, label, disabled }: {
   title: string
@@ -168,7 +109,7 @@ function systemReady(system: CuaSystemPermissionState): boolean {
 }
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
-export function PermissionPanel(props: PermissionPanelProps) {
+export function PermissionPanel(props: PermissionProps) {
   const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
@@ -201,8 +142,6 @@ export function PermissionPanel(props: PermissionPanelProps) {
       </div>
       <h3>{t('title')}</h3>
       <div className={css.card}>
-        <DefaultPresetSetting {...props} />
-        <PersistentPtcSetting {...props} />
         {observed === null && state.windowsProvider.error !== null && <p role="alert" className={css.error}>
           {t('providerLookupFailed', { message: state.windowsProvider.error })}
         </p>}
