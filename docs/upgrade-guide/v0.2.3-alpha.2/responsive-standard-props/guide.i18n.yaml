@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/responsive-standard-props/guide.md
 /:
-  en: a1882dc8b2a34fed
-  zh: 097eec64c998aa2d
-/usemediaquery-and-usemobile-standard-props:
-  en: ac72ee6c52671236
-  zh: a3cbb9be9b1b09f2
-/usemediaquery-and-usemobile-standard-props/change:
-  en: c1f73d51ee55f110
-  zh: 280932a0cc04cecb
-/usemediaquery-and-usemobile-standard-props/migration:
+  en: f001609070e7731e
+  zh: 45468efa521baccb
+/responsive-and-document-standard-props:
+  en: b710c9462418b9ea
+  zh: e04d23e7bcbb71c4
+/responsive-and-document-standard-props/change:
+  en: 8fbf04614b470534
+  zh: 123ff58097bc3d8e
+/responsive-and-document-standard-props/migration:
   en: 4a1997df58fad08f
   zh: 66d9488609c68ce5

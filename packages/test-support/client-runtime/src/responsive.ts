@@ -1,8 +1,5 @@
 /**
- * Fixed responsive Hooks for client specs. Production pages receive `useMediaQuery` and `useMobile` from the
- * ui-responsive `uiResponsive` service. {@link SlotTestRuntime} mounts {@link StaticUiResponsive} with the
- * {@link responsiveHooks} defaults until a spec releases it to mount that service, and hand-built component props
- * spread `...responsiveHooks(options)`.
+ * Fixed browser Hooks for hand-built component props and the Slot test renderer.
  * @module @deepseek-ai/dsh-client-test-runtime/src/responsive
  */
 import { Service, type Context } from '@deepseek-ai/cordis'
@@ -11,7 +8,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 
 /** The responsive Hooks every Slot component receives. */
-export type ResponsiveStandardProps = Pick<GlobalStandardProps, 'useMediaQuery' | 'useMobile'>
+export type ResponsiveStandardProps = Pick<GlobalStandardProps,
+  'useMediaQuery' | 'useMobile' | 'useDocumentPortal' | 'useDocumentViewport'>
+
+type PortalComponent = ReturnType<ResponsiveStandardProps['useDocumentPortal']>
+const InlinePortal: PortalComponent = ({ children }) => children
 
 /** Fixed answers of {@link responsiveHooks}. */
 export interface ResponsiveHookOptions {
@@ -19,22 +20,32 @@ export interface ResponsiveHookOptions {
   readonly mobile?: boolean
   /** The `useMediaQuery` answer for each query; no query matches when omitted. */
   readonly matches?: (query: string) => boolean
+  /** The `useDocumentViewport` snapshot in CSS pixels; defaults to 1024 × 768. */
+  readonly viewport?: ReturnType<ResponsiveStandardProps['useDocumentViewport']>
+  /** The component returned by `useDocumentPortal`; the default renders children inline without document listeners. */
+  readonly portal?: PortalComponent
 }
 
 /**
- * Responsive Hooks with fixed answers, for props built outside the Slot renderer. The answers never change, so a
- * component never rerenders for them.
- * @param options - the device class and each query's answer; omitted, a desktop device where no query matches.
- * @returns the `useMediaQuery` and `useMobile` props.
+ * Supply responsive Hooks without subscribing to browser events.
+ * @param options - fixed answers and optional portal component; omitted fields use the fixture defaults.
+ * @returns the responsive standard props, with a stable viewport snapshot and portal component.
  */
 export function responsiveHooks(options: ResponsiveHookOptions = {}): ResponsiveStandardProps {
-  const { mobile = false, matches = () => false } = options
-  return { useMediaQuery: query => matches(query), useMobile: () => mobile }
+  const {
+    mobile = false, matches = () => false,
+    viewport = { width: 1024, height: 768 }, portal = InlinePortal,
+  } = options
+  return {
+    useMediaQuery: query => matches(query),
+    useMobile: () => mobile,
+    useDocumentPortal: () => portal,
+    useDocumentViewport: () => viewport,
+  }
 }
 
 /**
- * Stand-in for the ui-responsive service: provided as `uiResponsive`, so plugins that inject it start, and publishing
- * {@link responsiveHooks} answers as the root `useMediaQuery` and `useMobile` props.
+ * Publishes the media-query and device props for the lifetime of the `uiResponsive` stand-in service.
  */
 export class StaticUiResponsive extends Service {
   /** Root standard props are published through the Slot registry. */
@@ -42,10 +53,11 @@ export class StaticUiResponsive extends Service {
 
   /**
    * @param ctx - Context the service is provided on.
-   * @param options - fixed answers; a desktop device where no query matches when omitted.
+   * @param options - fixed answers passed to {@link responsiveHooks}.
    */
   constructor(ctx: Context, options: ResponsiveHookOptions = {}) {
     super(ctx, 'uiResponsive')
-    ctx.slots.provideRoot({ props: responsiveHooks(options) })
+    const { useMediaQuery, useMobile } = responsiveHooks(options)
+    ctx.slots.provideRoot({ props: { useMediaQuery, useMobile } })
   }
 }

@@ -97,6 +97,7 @@
     "tests/shell-command-details.e2e.ts",
     "tests/terminal-command-browser.ts",
     "tests/focus-rings.e2e.ts",
+    "tests/document-hooks.e2e.ts",
     "tests/chat-scroll-fixture.ts",
     "tests/trajectory-virtualization.e2e.ts",
     "tests/lifecycle-chrome.e2e.ts",

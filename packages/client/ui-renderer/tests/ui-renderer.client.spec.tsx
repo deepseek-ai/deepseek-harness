@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup } from '@testing-library/react'
+import { act, cleanup, fireEvent } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { useLayoutEffect } from 'react'
 import { createClientModuleSystem, type ClientModuleLoader, type ClientModuleLoaderTarget } from '@deepseek-ai/dsh-client-modules/client'
@@ -72,6 +72,49 @@ describe('UI renderer plugin', () => {
     act(() => { mounted.push(renderer!.mount(el)) })
     const probe = el.querySelector('[data-testid="root-probe"]')
     expect(probe?.parentElement?.matches('[data-slot="root"][data-plugin=""]')).toBe(true)
+  })
+
+  it('binds document props to each actual mount without exposing its document or requiring a responsive plugin', async () => {
+    const { ctx, slots } = await bench()
+    const renderer = ctx.get('uiRenderer')!
+    expect(renderer).not.toHaveProperty('mountDocument')
+    const capture = vi.fn()
+    slots.register({ name: 'root' }, ({ useDocumentPortal, useDocumentViewport }) => {
+      const Portal = useDocumentPortal()
+      const { width, height } = useDocumentViewport()
+      return <Portal onKeyDownCapture={capture}><output>{width}×{height}</output></Portal>
+    })
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    const page = frame.contentDocument!
+    let width = 800, height = 500
+    Object.defineProperties(page.documentElement, { clientWidth: { get: () => width }, clientHeight: { get: () => height } })
+    const target = page.createElement('main')
+    page.body.append(target)
+    let unmount!: () => void
+    act(() => { unmount = renderer.mount(target) })
+    mounted.push(unmount)
+    const output = page.body.querySelector('output')!
+    expect(target.contains(output)).toBe(false)
+    expect(output.textContent).toBe('800×500')
+    width = 600
+    fireEvent.resize(window)
+    expect(output.textContent).toBe('800×500')
+    fireEvent.resize(frame.contentWindow!)
+    expect(output.textContent).toBe('600×500')
+    height = 400
+    fireEvent.resize(frame.contentWindow!)
+    expect(output.textContent).toBe('600×400')
+    fireEvent.keyDown(page.body, { key: 'Escape' })
+    expect(capture).toHaveBeenCalledOnce()
+    act(() => { unmount() })
+    expect(page.body.querySelector('output')).toBeNull()
+    act(() => { mounted.push(renderer.mount(container())) })
+    fireEvent.keyDown(page.body, { key: 'Escape' })
+    expect(capture).toHaveBeenCalledOnce()
+    expect(document.body.querySelector('output')).not.toBeNull()
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(capture).toHaveBeenCalledTimes(2)
   })
 
   it('installs module CSS before rendering and removes it after the React root unmounts', async () => {

@@ -33,6 +33,8 @@ This package is infrastructure: the web shell and the boot kernel are its only d
 
 ### For business plugins
 
+A mounted Slot receives `useDocumentPortal()` and `useDocumentViewport()` without injecting another service. `const Portal = useDocumentPortal()` returns a stable component: `<Portal onKeyDownCapture={onKey}>{children}</Portal>` renders into the application document's body and retains the nearest `data-plugin` marker at the source. `onKeyDownCapture` and `onKeyDown` receive native document events even when focus is outside the portal; unmounting removes the listeners. The viewport hook returns `{ width, height }` in CSS pixels, excluding scrollbars, and updates on resize. Neither hook depends on the plugin's execution window.
+
 A business plugin registers an ordinary Slot entry or a reusable Component Factory; the renderer binds the runtime's session and workspace observable sources into selector hooks at the render position. The plugin receives standard scope props through its derived Component props — it never imports the renderer or touches React internals. Every renderer-created Component can render a Factory occurrence, and a Factory can expose caller-selected local Components without sharing implementation values between packages.
 
 <a id="package-style-isolation"></a>
@@ -103,7 +105,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define when the application frame appears and how far per-region readiness goes; they are current package constraints.
 
 - **The first application frame waits for the whole client roster** — the boot kernel hands over the mount point only after the loader roster settles and the boot audit accepts it; per-region readiness remains deferred.
-- **Styles target the main document.** Native `@scope` limits selector matches, not inherited values. A Portal or arbitrary JSX moved through props does not carry its source package's scope to the destination. There is no separate presentation document or Shadow DOM; styles follow module, not component, lifetimes.
+- **Styles target the main document.** Native `@scope` limits selector matches, not inherited values. React's `createPortal` and arbitrary JSX moved through props do not automatically carry the source package's scope; `useDocumentPortal()` retains the source marker. There is no separate presentation document or Shadow DOM; styles follow module, not component, lifetimes.
 - **Slot rendering has no Suspense integration or per-entry lazy loading** — the complete plugin roster settles before the renderer mounts the root.
 
 <a id="dev-note"></a>

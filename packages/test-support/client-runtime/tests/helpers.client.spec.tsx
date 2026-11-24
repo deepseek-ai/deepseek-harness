@@ -80,7 +80,7 @@ describe('fixture helpers', () => {
       runtime.releasePanelInfoSource()
       await runtime.releaseResponsiveSource()
       expect(runtime.ctx.get('uiResponsive')).toBeUndefined()
-      releaseReplacement = runtime.slots.provideRoot({ hooks, props })
+      releaseReplacement = runtime.slots.provideRoot({ hooks, props: { useMediaQuery: props.useMediaQuery, useMobile: props.useMobile } })
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
       await runtime.releaseResponsiveSource()
@@ -88,7 +88,7 @@ describe('fixture helpers', () => {
         expect(() => runtime.slots.provideRoot({ hooks: { [key]: hooks[key] } }))
           .toThrow(`duplicate root standard hook '${key}'`)
       }
-      for (const key of ['useMediaQuery', 'useMobile'] as const) {
+      for (const key of ['useMediaQuery', 'useMobile', 'useDocumentPortal', 'useDocumentViewport'] as const) {
         expect(() => runtime.slots.provideRoot({ props: { [key]: props[key] } }))
           .toThrow(`duplicate root standard prop '${key}'`)
       }
@@ -132,23 +132,35 @@ describe('fixture helpers', () => {
     }
   })
 
-  it('answers responsive Hooks as a desktop where no query matches unless a spec fixes other answers', async () => {
+  it('supplies fixed, replaceable answers for hand-built responsive props', () => {
     const defaults = responsiveHooks()
     expect(defaults.useMediaQuery('(max-width: 640px)')).toBe(false)
     expect(defaults.useMobile()).toBe(false)
-    const fixed = responsiveHooks({ mobile: true, matches: query => query === '(hover: none)' })
+    expect(defaults.useDocumentPortal()).toBe(defaults.useDocumentPortal())
+    expect(defaults.useDocumentViewport()).toBe(defaults.useDocumentViewport())
+    const portal = () => <aside />
+    const viewport = { width: 390, height: 844 }
+    const fixed = responsiveHooks({ mobile: true, matches: query => query === '(hover: none)', portal, viewport })
     expect(fixed.useMobile()).toBe(true)
     expect(fixed.useMediaQuery('(hover: none)')).toBe(true)
     expect(fixed.useMediaQuery('(max-width: 640px)')).toBe(false)
+    expect(fixed.useDocumentPortal()).toBe(portal)
+    expect(fixed.useDocumentViewport()).toBe(viewport)
+  })
+
+  it('keeps the document props available without the responsive service', async () => {
     const runtime = await SlotTestRuntime.create()
     try {
+      await runtime.releaseResponsiveSource()
       await runtime.declare({ 'trt.panel-info': { kind: 'keyed', scope: 'root' } })
-      runtime.slots.register({ name: 'trt.panel-info', key: 'uiResponsive' },
-        ({ useMediaQuery, useMobile }: PropsRuntime<'trt.panel-info'>) => (
-          <span>{String(useMediaQuery('(hover: none)'))}/{String(useMobile())}</span>
-        ))
-      const view = runtime.renderSlot('trt.panel-info', { label: 'uiResponsive' }, { entryKey: 'uiResponsive' })
-      expect(view.container.textContent).toBe('false/false')
+      runtime.slots.register({ name: 'trt.panel-info', key: 'document' },
+        ({ useDocumentPortal, useDocumentViewport }: PropsRuntime<'trt.panel-info'>) => {
+          const Portal = useDocumentPortal()
+          const { width, height } = useDocumentViewport()
+          return <Portal><span>{width}×{height}</span></Portal>
+        })
+      const view = runtime.renderSlot('trt.panel-info', { label: 'document' }, { entryKey: 'document' })
+      expect(view.container.textContent).toBe('1024×768')
     } finally {
       await runtime.dispose()
     }

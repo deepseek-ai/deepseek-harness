@@ -160,6 +160,7 @@ The shipped adapters add these standard props. They are available according to t
 | every scope | `useWorkspaces`, `useWorkspaceAccess` | `ui-workspace` |
 | every scope | `useRemoteAccess` (the `global` resource) | `api-remote-access` |
 | every scope | `usePanelInfo` | `ui-layout` |
+| every mounted scope | `useDocumentPortal`, `useDocumentViewport` | [ui-renderer](../../packages/client/ui-renderer/README.md#use-this-package) |
 | every scope | `useMediaQuery` | `ui-responsive` |
 | every scope | `useMobile` | `ui-responsive` |
 | `session` | `sessionId`, `useSession`, `useProjection`, `useAccess` (the bound Session's answer) | `ui-session` |
