@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The catalog lists one `office` skill. Its instructions load on demand, cover Word, PowerPoint, and Excel pitfalls alongside [`office_render`, `office_convert`, and `office_recalculate`](../../document/tool-office/README.md), and end with the configured Python environment. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
+The catalog lists one `office` skill. Its instructions load on demand, cover Word, PowerPoint, and Excel pitfalls alongside [`document_render`, `document_convert`, and `document_recalculate`](../../document/tool-document/README.md), and end with the configured Python environment. The Web application and SDK profiles mount the provider; only Desktop, or an SDK with a primary runtime, also mounts the bundled dependency query.
 
 ## Table of Contents
 
@@ -26,7 +26,7 @@ The catalog lists one `office` skill. Its instructions load on demand, cover Wor
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies the `office` instructions and appends a Python environment section. The instructions direct operations to `office_render`, `office_convert`, and `office_recalculate`, so compose [`tool-office`](../../document/tool-office/README.md) beside this provider.
+Mount the skill provider beside the skill registry and `dsh-tool-skill`. The provider supplies the `office` instructions and appends a Python environment section. The instructions direct operations to `document_render`, `document_convert`, and `document_recalculate`, so compose [`tool-document`](../../document/tool-document/README.md) beside this provider.
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -45,7 +45,7 @@ A relative `assetRoot` rejects registration. Catalog discovery and loading read 
 <a id="progressive-loading"></a>
 ### Progressive loading
 
-The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, the `office` skill is listed and loadable through `skill` or explicit user invocation as `/office`. Loading `office` delivers concise inline guidance for Word, PowerPoint, and Excel pitfalls, names `pypdf` in the bundled Python for existing PDFs, and makes the three Office tools available from the next step; when they are not in the tool list, such as after a PTC resume or fork, the instructions direct the model to load `office` again. Legacy `.doc`, `.xls`, and `.ppt` files, which python-docx, openpyxl, and python-pptx cannot open, are converted with `office_convert` first.
+The model chooses skills from the task; the host does not inject complete instructions based on file extensions. With complete resources, the `office` skill is listed and loadable through `skill` or explicit user invocation as `/office`. Loading `office` delivers concise inline guidance for Word, PowerPoint, and Excel pitfalls, names `pypdf` in the bundled Python for existing PDFs, and makes the three Office tools available from the next step; when they are not in the tool list, such as after a PTC resume or fork, the instructions direct the model to load `office` again. Legacy `.doc`, `.xls`, and `.ppt` files, which python-docx, openpyxl, and python-pptx cannot open, are converted with `document_convert` first.
 
 ```mermaid
 flowchart TD
@@ -56,21 +56,21 @@ flowchart TD
     B -->|Create or edit| D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|Render or inspect| R["office_render: images in the tool result"]
+    B -->|Render or inspect| R["document_render: images in the tool result"]
     D -->|Changed slides or visual inspection| R
     R --> V["Inspect rendered images"]
     V --> F
 
-    B -->|Formula recalculation| X["office_recalculate, shell copy"]
+    B -->|Formula recalculation| X["document_recalculate, shell copy"]
     D -->|Formula recalculation| X
     X --> F
 
-    B -->|Format conversion or PDF export| P["office_convert, shell copy"]
+    B -->|Format conversion or PDF export| P["document_convert, shell copy"]
     D -->|Format conversion or PDF export| P
     P --> F
 ```
 
-The inline instructions state the silent data-loss pitfalls across formats: Word text edits change text inside runs because assigning `paragraph.text` drops run formatting, and CJK text needs a `w:eastAsia` font alongside `run.font.name`; PowerPoint edits render changed slides because python-pptx cannot measure whether text fits its box; Excel edits use `office_recalculate` when formula results must show because openpyxl writes formulas without calculated values, and avoid writing a pandas DataFrame over an existing workbook because that drops other sheets, formulas, and formatting; and the original file is kept unless the user asks to replace it. Preview images arrive in the `office_render` result, and converted and recalculated files arrive as temporary paths that the model copies into the workspace with `cp` or `Copy-Item`. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
+The inline instructions state the silent data-loss pitfalls across formats: Word text edits change text inside runs because assigning `paragraph.text` drops run formatting, and CJK text needs a `w:eastAsia` font alongside `run.font.name`; PowerPoint edits render changed slides because python-pptx cannot measure whether text fits its box; Excel edits use `document_recalculate` when formula results must show because openpyxl writes formulas without calculated values, and avoid writing a pandas DataFrame over an existing workbook because that drops other sheets, formulas, and formatting; and the original file is kept unless the user asks to replace it. Preview images arrive in the `document_render` result, and converted and recalculated files arrive as temporary paths that the model copies into the workspace with `cp` or `Copy-Item`. Loaded instructions remain in session history after an operation finishes. The diagram describes ordinary presets across supported clients; it does not change the shell-only definition of minimal or sdk-minimal.
 
 -----
 
@@ -100,7 +100,7 @@ The provider registers no tools or activation projection. Loaded skill results r
 - [Skill registry](../skill/README.md) — discovery and precedence.
 - [Skill tool](../tool-skill/README.md) — model catalogs and loaded bodies.
 - [File delivery](../../deliverables/tool-present/README.md) — current source-path delivery.
-- [Office tools](../../document/tool-office/README.md) — rendering, conversion, and recalculation.
+- [Office tools](../../document/tool-document/README.md) — rendering, conversion, and recalculation.
 
 -----
 
@@ -111,7 +111,7 @@ Indirectly, through `dsh-tool-skill`, which renders the one-line `office` summar
 
 #### KV Cache effect
 
-Skill results append to history, and loaded text or images remain after an operation finishes. With `tool-office` mounted, the first successful `office` load enables the three tool declarations on the next step. A skill omitted or removed for an unreadable skill file changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens, the body without the Python environment section is 232 tokens, and the complete `office` body with the Python environment section is at most 350 tokens (344 for `'workspace-dependencies'` and 346 for `'user'`). The appended Python environment section stays fixed while the configuration stays unchanged, and counts toward the `office` body. Skill wrappers, the generic catalog, shell and Office tool declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
+Skill results append to history, and loaded text or images remain after an operation finishes. With `tool-document` mounted, the first successful `office` load enables the three tool declarations on the next step. A skill omitted or removed for an unreadable skill file changes the catalog, which a later step publishes as a catalog update. Character estimates use `ceil(characters / 4)`: the summary is at most 50 tokens, the body without the Python environment section is 235 tokens, and the complete `office` body with the Python environment section is at most 350 tokens (346 for `'workspace-dependencies'` and 348 for `'user'`). The appended Python environment section stays fixed while the configuration stays unchanged, and counts toward the `office` body. Skill wrappers, the generic catalog, shell and Office tool declarations, and `load_workspace_dependencies` are separate costs, and these estimates are not server usage.
 
 ## Known Limitations and Deferred Work
 

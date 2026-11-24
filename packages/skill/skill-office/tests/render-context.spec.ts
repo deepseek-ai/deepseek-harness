@@ -14,7 +14,7 @@ it('collects displayed images from native results, inspect output and PTC additi
   } }
   session.append('tool/ptc-dispatch', {
     rootCallId: brandString<ToolCallId>('program'), parentCallId: brandString<ToolCallId>('program'), subCallId: brandString<ToolCallId>('program:1'),
-    name: 'office_render', arguments: {}, isError: false, content: [image],
+    name: 'document_render', arguments: {}, isError: false, content: [image],
   })
   session.append('user/message', createUserMessage({ content: [image], source: { kind: 'user' } }), { surfaceOp: 'append' })
   session.append('tool/result', { turn: 1, step: 1,
@@ -34,11 +34,11 @@ it('collects displayed images from native results, inspect output and PTC additi
 it.each([undefined, 2])('rejects a native render with JSON indentation %s', (indent) => {
   const session = Session.create(brandString<SessionId>('native-render'))
   session.append('tool/call', {
-    turn: 1, step: 1, callId: brandString<ToolCallId>('render'), name: 'office_render',
+    turn: 1, step: 1, callId: brandString<ToolCallId>('render'), name: 'document_render',
     arguments: JSON.stringify({ input: 'input.docx' }, null, indent),
   })
   expect(officeCalls(session.snapshotEvents())).toEqual([
-    { callId: 'render', name: 'office_render', args: { input: 'input.docx' } },
+    { callId: 'render', name: 'document_render', args: { input: 'input.docx' } },
   ])
   expect(() => { expectNoRenderContext(session.snapshotEvents()) }).toThrow()
 })
@@ -47,19 +47,19 @@ it('rejects a PTC render even without a model-visible PTC result', () => {
   const session = Session.create(brandString<SessionId>('ptc-render'))
   session.append('tool/ptc-dispatch', {
     rootCallId: brandString<ToolCallId>('program'), parentCallId: brandString<ToolCallId>('program'), subCallId: brandString<ToolCallId>('program:1'),
-    name: 'office_render', arguments: { input: 'input.docx' }, isError: false, content: [],
+    name: 'document_render', arguments: { input: 'input.docx' }, isError: false, content: [],
   })
   expect(session.deriveMessages()).toEqual([])
   expect(officeCalls(session.snapshotEvents())).toEqual([
-    { callId: 'program:1', name: 'office_render', args: { input: 'input.docx' } },
+    { callId: 'program:1', name: 'document_render', args: { input: 'input.docx' } },
   ])
   expect(() => { expectNoRenderContext(session.snapshotEvents()) }).toThrow()
 })
 
-it.each(['office_convert', 'office_recalculate'])('accepts %s and quoted render instructions without a render call', (name) => {
+it.each(['document_convert', 'document_recalculate'])('accepts %s and quoted render instructions without a render call', (name) => {
   const session = Session.create(brandString<SessionId>('pdf-conversion'))
   session.append('user/message', createUserMessage({
-    content: [{ type: 'text', text: 'For visual inspection use office_render.' }], source: { kind: 'user' },
+    content: [{ type: 'text', text: 'For visual inspection use document_render.' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('tool/call', {
     turn: 1, step: 1, callId: brandString<ToolCallId>('output'), name,

@@ -27,14 +27,14 @@ export function officeModelPatches() {
 export function officeToolPatches() {
   return [{ insert: [
     { id: 'office-kit', name: '@deepseek-ai/dsh-office-kit' },
-    { id: 'tool-office', name: '@deepseek-ai/dsh-tool-office' },
+    { id: 'tool-document', name: '@deepseek-ai/dsh-tool-document' },
   ] }]
 }
 
 /** One Office call from a native tool call or a PTC dispatch. */
 export interface OfficeCall {
   readonly callId: string
-  readonly name: 'office_render' | 'office_convert' | 'office_recalculate'
+  readonly name: 'document_render' | 'document_convert' | 'document_recalculate'
   readonly args: { readonly input?: string; readonly format?: string; readonly pages?: number[] }
 }
 
@@ -47,7 +47,7 @@ export function officeCalls(events: readonly SessionEvent[]): OfficeCall[] {
   return events.flatMap((event): OfficeCall[] => {
     if (event.type !== 'tool/call' && event.type !== 'tool/ptc-dispatch') return []
     const { name } = event.data
-    if (name !== 'office_render' && name !== 'office_convert' && name !== 'office_recalculate') return []
+    if (name !== 'document_render' && name !== 'document_convert' && name !== 'document_recalculate') return []
     return event.type === 'tool/call'
       ? [{ callId: event.data.callId, name, args: JSON.parse(event.data.arguments) as OfficeCall['args'] }]
       : [{ callId: event.data.subCallId, name, args: event.data.arguments as OfficeCall['args'] }]
@@ -100,7 +100,7 @@ export function convertedPdfFiles(events: readonly SessionEvent[]): ConvertedPdf
  */
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const calls = officeCalls(events)
-  expect(calls.filter(call => call.name === 'office_render'), JSON.stringify(calls)).toEqual([])
+  expect(calls.filter(call => call.name === 'document_render'), JSON.stringify(calls)).toEqual([])
   const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
   expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
 }

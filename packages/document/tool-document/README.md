@@ -3,13 +3,13 @@ description: "Skill-activated Office tools for viewing document pages, convertin
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-tool-office
+# @deepseek-ai/dsh-tool-document
 
 English | [中文](README.zh.md)
 
 ## Summary
 
-After an Office skill loads, the model gains three tools. `office_render` returns document pages, slides, or worksheet areas as images for layout inspection, without temporary image files or a separate image read. `office_convert` produces a document in another format; `office_recalculate` refreshes workbook formulas. Both return a temporary file to copy to its destination with the shell. The tools do not modify inputs or write workspace files, and work in standard and PTC modes alike.
+After an Office skill loads, the model gains three tools. `document_render` returns document pages, slides, or worksheet areas as images for layout inspection, without temporary image files or a separate image read. `document_convert` produces a document in another format; `document_recalculate` refreshes workbook formulas. Both return a temporary file to copy to its destination with the shell. The tools do not modify inputs or write workspace files, and work in standard and PTC modes alike.
 
 ## Table of Contents
 
@@ -29,11 +29,11 @@ The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bund
 
 Activation matches only the skill names listed in `activationSkills`, so mount [`@deepseek-ai/dsh-skill-office`](../../skill/skill-office/README.md) or another provider that registers skills with those names; without one, the three tools never appear.
 
-The tools read the Office kit service at each call. When Kit is missing, calls fail with the service's `unavailable` message; while the service is absent, calls fail with `The document converter is unavailable.` Every `unavailable` failure tells the model to inform the user, or to retry later when the cause may be temporary, such as a full output store or a service being unloaded, without substituting system soffice, npx, or another converter.
+The tools read the Office kit service at each call. When Kit is missing, calls fail with the service's `unavailable` message; while the service is absent, calls fail with `The document converter is unavailable.` Every `unavailable` failure tells the model to inform the user, or to retry later when the cause may be temporary, such as a full output store or a service being unloaded, without substituting system soffice, npx, or another converter. When the call named `renderer: poppler`, the hint instead says `Omit renderer, or choose libreoffice.`
 
 ```yaml
 - name: '@deepseek-ai/dsh-office-kit'
-- name: '@deepseek-ai/dsh-tool-office'
+- name: '@deepseek-ai/dsh-tool-document'
   config:
     maxImages: 20
 ```
@@ -48,7 +48,7 @@ The tools read the Office kit service at each call. When Kit is missing, calls f
 
 A render applies the lower of each field and the attachment store's corresponding image limit (`maxImagesPerMessage`, `maxImagePixels`, `maxImageDimension`, `maxMessageImageBytes`), and refuses any single image above `maxImageBytes` of the store. A selection beyond a bound fails instead of being truncated. Rendering requires an attachment store and a calling model route that declares image input. The tool reads that route from the latest model request of the Session, or from the agent options before the first request, and refuses a model whose input modalities omit images or are not declared before any rendering work starts.
 
-Inputs resolve against the Session working directory and use the filesystem backend's read authority, as `read` and Office previews do, so files outside the workspace are readable. The input extension selects the document family. `office_convert` accepts Word, Excel, and PowerPoint documents: Word exports to pdf, docx, odt, or txt; Excel to pdf, xlsx, ods, or csv; PowerPoint to pdf, pptx, or odp. CSV export requires a worksheet name for a workbook with several sheets. `office_recalculate` accepts xls, xlsx, and ods workbooks and requires xlsx or ods output. `office_render` also accepts PDF.
+Inputs resolve against the Session working directory and use the filesystem backend's read authority, as `read` and Office previews do, so files outside the workspace are readable. The input extension selects the document family. `document_convert` accepts Word, Excel, and PowerPoint documents: Word exports to pdf, docx, odt, or txt; Excel to pdf, xlsx, ods, or csv; PowerPoint to pdf, pptx, or odp. CSV export requires a worksheet name for a workbook with several sheets. `document_recalculate` accepts xls, xlsx, and ods workbooks and requires xlsx or ods output. `document_render` also accepts PDF. Its optional `renderer` selects `libreoffice` or `poppler` exclusively; `poppler` renders PDF only, so the tool refuses it for other inputs with `INVALID_ARGS` before any filesystem access. Without `renderer`, the Office kit uses the first available renderer of its [`renderers`](../office-kit/README.md#use-this-package) order for the input type, by default Poppler and then LibreOffice for PDF. The result records the renderer used.
 
 Conversion and recalculation results name a file in the Office kit's private [output store](../office-kit/README.md#use-this-package) under the Harness home; the model copies it with the shell, so the shell's sandbox and approvals govern where it lands. When the filesystem backend cannot read Host files, such as an SSH workspace, these two tools fail before converting; rendering still works.
 
@@ -68,7 +68,7 @@ Argument checks, including input-dependent conversion formats, and the Office ki
 
 Each tool declares its own parameters and result schema. The supported schema subset cannot express page uniqueness, numeric bounds, or cross-parameter rules, so those render selections and input-dependent conversion formats are checked at runtime. Office kit errors are reported as `cannot <operation> "<path>": <message>`, where `<path>` is the resolved input path, or the path as given when the service is absent, with a hint for `unavailable` to tell the user or, when the cause may be temporary, to retry later without substituting another converter, a retry hint for `busy`, and a selection hint for oversized renders. Nested PTC calls re-enter the same execution pipeline, so policy and logging apply to them; a nested render's images are attached after the program run.
 
-Successful `tools/result` notifications mark the calling Agent in a plugin-owned WeakSet. The post-commit `session/event` feed also marks direct user skill invocations, without depending on pre-step listener order. `agent/disposed` clears the mark. The three tools share one `when`: the Agent is marked, or the Session's latest public `requestHeader()` lists any Office tool. No additional projection or Session event is registered.
+Successful `tools/result` notifications mark the calling Agent in a plugin-owned WeakSet. The post-commit `session/event` feed also marks direct user skill invocations, without depending on pre-step listener order. `agent/disposed` clears the mark. The three tools share one `when`: the Agent is marked, or the Session's latest public `requestHeader()` lists any Office tool, including the earlier names `office_render`, `office_convert`, and `office_recalculate` recorded by Sessions created before the rename. No additional projection or Session event is registered.
 
 Native request headers retain Office declarations across resume and fork, including the first request after restoration; compaction replaces conversation content without removing request headers. PTC records only `run_code` in its request header, so a resumed or forked PTC Agent must load an Office skill again. Losing an Agent's memory before a native Office declaration is recorded also loses activation; calling `skill` again restores it on the following step.
 
@@ -86,11 +86,11 @@ Native request headers retain Office declarations across resume and fork, includ
 <a id="model-experience"></a>
 ## Model Experience
 
-### office_render, office_convert, office_recalculate
+### document_render, document_convert, document_recalculate
 
 #### What the model sees
 
-The three declarations are documented in the [tool catalog](../../../docs/tool-catalog.md). A render result opens with `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI.`, adds `Fonts not installed and substituted: <families>.` when fonts are missing, then gives each image as a `Page <n>: <width>x<height> px` or `Sheet "<name>" <range>: <width>x<height> px` label followed by the image. A conversion reports `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>` (or `Recalculated …`), then `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.` and the same font line. Failures read `cannot <operation> "<path>": <reason>`, or `cannot read "<path>": <reason>` for an input the filesystem cannot read. An argument rule the schema cannot express reads `invalid arguments: <violations>`.
+The three declarations are documented in the [tool catalog](../../../docs/tool-catalog.md). A render result opens with `Rendered <count> image(s) of <absolute input path> (<pageCount> in the document) at <dpi> DPI with <renderer>.`, where `<renderer>` is `libreoffice` or `poppler`, adds `Fonts not installed and substituted: <families>.` when fonts are missing, then gives each image as a `Page <n>: <width>x<height> px` or `Sheet "<name>" <range>: <width>x<height> px` label followed by the image. A conversion reports `Converted <input> to <format> (<bytes> bytes[, <n> pages]): <temporary file>` (or `Recalculated …`), then `Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.` and the same font line. Failures read `cannot <operation> "<path>": <reason>`, or `cannot read "<path>": <reason>` for an input the filesystem cannot read. An argument rule the schema cannot express reads `invalid arguments: <violations>`.
 
 #### Token effect
 
@@ -106,13 +106,13 @@ In native mode, activation during a conversation appends one `developer/message`
 
 - **Converted files need a shell copy** — the filesystem service creates no binary files, so the model copies each temporary file with the shell. Deployments without a shell tool cannot deliver converted files, and the temporary file is deleted after the Office kit's retention or when the root Session of the caller's subagent tree is disposed; a file a subagent produced stays after that subagent ends.
 - **No conversion on remote workspaces** — the Office kit runs on the Host, and a remote shell cannot read its output store.
-- **Render saves no image file** — `office_render` returns images only for the model to view and writes no PNG or other image file. A user who needs the pages as a file gets a PDF through `office_convert` with `format: "pdf"`.
-- **Web GUI does not display rendered images** — the [ui-tool](../../client/ui-tool/README.md) Office row shows the text blocks of an `office_render` result and omits its images, so the user does not see the pages the model inspected. The model still receives every image.
-- **Native engine in the Host process** — rendering, conversion, and recalculation that the model starts run the native LibreOffice Kit engine inside the Host process through `ctx.officeKit`, so the shell sandbox and PTC permissions do not confine them. Inputs remain subject to the filesystem backend's read authority. The native parser processes an untrusted document with the Host user's permissions.
+- **Render saves no image file** — `document_render` returns images only for the model to view and writes no PNG or other image file. A user who needs the pages as a file gets a PDF through `document_convert` with `format: "pdf"`.
+- **Web GUI does not display rendered images** — the [ui-tool](../../client/ui-tool/README.md) Office row shows the text blocks of an `document_render` result and omits its images, so the user does not see the pages the model inspected. The model still receives every image.
+- **Native engine in the Host process** — rendering, conversion, and recalculation that the model starts run the native LibreOffice Kit engine inside the Host process, and Poppler renders PDF in subprocesses of the subprocess provider, through `ctx.officeKit`, so the shell sandbox and PTC permissions do not confine them. Inputs remain subject to the filesystem backend's read authority. The native parser processes an untrusted document with the Host user's permissions.
 - **PTC activation does not survive resume or fork** — the PTC request header records only `run_code`, so a resumed or forked PTC Agent offers no Office bindings until the model loads an Office skill again; the removal and the re-addition each rewrite the system prompt, with the cache effect described under KV Cache effect.
 - **Plugin reload clears activation** — hot reload, or disabling and re-enabling the plugin, clears the in-memory marks. If a step runs in the meantime, its request header omits the three tools, and the model must load an Office skill again to restore them.
 - **Direct invocation activates from the next step** — the tool set of a step is fixed before the content of a user-invoked skill such as `/office` is injected, so the first model request after the invocation declares no Office tools. The tools appear from the next model step.
-- Rendering fidelity, fonts, and pagination follow LibreOffice Kit and can differ from Microsoft Office.
+- Rendering fidelity, fonts, and pagination follow LibreOffice Kit and can differ from Microsoft Office. PDF pages rendered by Poppler can differ from the same pages rendered by LibreOffice.
 
 <a id="dev-note"></a>
 ### Dev Note

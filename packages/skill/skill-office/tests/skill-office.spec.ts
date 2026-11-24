@@ -27,7 +27,7 @@ describe('bundled Office skills', () => {
       await ctx.plugin(SkillOffice)
       expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(names)
       const route = (await ctx.skills.get('office'))!
-      expect(route.description).toBe('Create, read, edit, and validate Word, PowerPoint, and Excel files; render Office files and PDFs; convert or recalculate. Load first to enable office_render, office_convert, and office_recalculate.')
+      expect(route.description).toBe('Create, read, edit, and validate Word, PowerPoint, and Excel files; render Office files and PDFs; convert or recalculate. Load first to enable document_render, document_convert, document_recalculate.')
       expect(Math.ceil(route.description.length / 4)).toBeLessThanOrEqual(50)
     } finally { await ctx.fiber.dispose() }
     for (const pythonEnvironment of ['workspace-dependencies', 'user'] as const) {
@@ -312,10 +312,10 @@ it('directs Office operations to dedicated tools without executable paths', asyn
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillOffice)
     const route = (await ctx.skills.get('office'))!.content
-    expect(route).toContain('`office_render`, `office_convert`, and `office_recalculate` become available on the next step; if one is missing later, load `office` again.')
+    expect(route).toContain('`document_render`, `document_convert`, and `document_recalculate` become available on the next step; if one is missing later, load `office` again.')
     expect(route).toContain('Bundled Python includes `pypdf` for existing PDFs.')
-    expect(route).toContain('python-docx, python-pptx, and openpyxl cannot open legacy `.doc`, `.ppt`, or `.xls` files; convert them with `office_convert` first.')
-    expect(route).toContain('openpyxl writes formulas without calculated values; use `office_recalculate` when results must show.')
+    expect(route).toContain('python-docx, python-pptx, and openpyxl cannot open legacy `.doc`, `.ppt`, or `.xls` files; convert them with `document_convert` first.')
+    expect(route).toContain('openpyxl writes formulas without calculated values; use `document_recalculate` when results must show.')
     expect(route).not.toMatch(
       /operation:|`office` tool|office-render|office-recalculate|office-export-pdf|LibreOffice Kit CLI|--output-dir|"<node>"|`[a-z]+\.md`/u,
     )

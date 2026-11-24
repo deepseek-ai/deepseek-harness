@@ -5,7 +5,7 @@
  * one source byte before the service runs, so a cached result never answers a call that cannot read the source.
  * Converted files stay in the Office kit's private output store; the model copies them into the workspace with the
  * shell, so these tools write no workspace file.
- * @module @deepseek-ai/dsh-tool-office
+ * @module @deepseek-ai/dsh-tool-document
  */
 
 import { basename } from 'node:path'
@@ -20,7 +20,7 @@ import type {} from '@deepseek-ai/dsh-skill'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { OfficeSourceKey } from '@deepseek-ai/dsh-office-kit/types'
 import { OfficeKitError, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
-  type OfficeKitSource, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
+  type OfficeKitSource, type DocumentRenderer, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
 import { defineTool, ToolContextUnavailableError, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { checkParameterNames, checkRenderArguments, checkConversionArguments, extensionOf, inputFamily, OUTPUT_FORMATS,
@@ -34,7 +34,7 @@ import { OFFICE_KIT_FAILURE_CODES, OfficeToolError } from './error.ts'
 export type { OfficeToolErrorCode } from './error.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
-export const name = 'tool-office'
+export const name = 'tool-document'
 
 /** Required services; `officeKit` is read at each call, and `attachments` and `llm` are checked when rendering. */
 export const inject = ['tools', 'fs', 'workingDirectory', 'agents']
@@ -86,7 +86,14 @@ const IMAGE_SCHEMA = {
 } as const
 
 const MISSING_FONTS_SCHEMA = { type: 'array', required: true, items: { type: 'string' } } as const
-const OFFICE_TOOL_NAMES: readonly string[] = ['office_render', 'office_convert', 'office_recalculate']
+const RENDERERS = ['libreoffice', 'poppler'] as const satisfies readonly DocumentRenderer[]
+/**
+ * Tool names whose declaration in a Session's request header keeps the tools active. The `office_*` names are the
+ * earlier names of these tools; they let Sessions recorded before the rename activate the tools after resume or fork.
+ */
+const OFFICE_TOOL_NAMES: readonly string[] = [
+  'document_render', 'document_convert', 'document_recalculate', 'office_render', 'office_convert', 'office_recalculate',
+]
 
 const RENDER_PARAMETERS = {
   input: { type: 'string', required: true, description: 'Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified.' },
@@ -100,6 +107,10 @@ const RENDER_PARAMETERS = {
   },
   range: { type: 'string', description: 'A1 range, such as A1:H40; requires sheet. Omit for the used area.' },
   dpi: { type: 'integer', description: 'Resolution from 24 to 600; default 144.' },
+  renderer: {
+    type: 'string', enum: RENDERERS,
+    description: 'Rendering backend; omit to use the first available for this file type. poppler renders pdf only.',
+  },
 } as const
 
 const CONVERT_PARAMETERS = {
@@ -117,9 +128,9 @@ const RECALCULATE_PARAMETERS = {
 } as const
 
 const PARAMETER_NAMES: Readonly<Record<OfficeToolName, readonly string[]>> = {
-  office_render: Object.keys(RENDER_PARAMETERS),
-  office_convert: Object.keys(CONVERT_PARAMETERS),
-  office_recalculate: Object.keys(RECALCULATE_PARAMETERS),
+  document_render: Object.keys(RENDER_PARAMETERS),
+  document_convert: Object.keys(CONVERT_PARAMETERS),
+  document_recalculate: Object.keys(RECALCULATE_PARAMETERS),
 }
 
 /** Output definition of a file-producing `operation` whose `format` is one of `formats`. */
@@ -165,7 +176,7 @@ export function apply(ctx: Context, config: Config): void {
   const when = ({ agent }: ToolActivationContext): boolean => marked.has(agent)
     || agent.session.requestHeader()?.tools?.some(tool => OFFICE_TOOL_NAMES.includes(tool.name)) === true
   ctx.tools.register(defineTool({
-    name: 'office_render',
+    name: 'document_render',
     description: 'Render document pages, slides, or worksheet areas as images you can view.',
     parameters: RENDER_PARAMETERS,
     output: {
@@ -178,6 +189,7 @@ export function apply(ctx: Context, config: Config): void {
           dpi: { type: 'integer', required: true },
           images: { type: 'array', required: true, items: IMAGE_SCHEMA },
           missingFonts: MISSING_FONTS_SCHEMA,
+          renderer: { type: 'string', enum: RENDERERS, required: true },
         },
       },
       render: (_args, value) => renderImagesContent(value),
@@ -185,7 +197,7 @@ export function apply(ctx: Context, config: Config): void {
     },
     isConcurrencySafe: () => true,
     async execute(args, exec): Promise<OfficeRenderValue> {
-      checkParameterNames('office_render', args, PARAMETER_NAMES)
+      checkParameterNames('document_render', args, PARAMETER_NAMES)
       checkRenderArguments(args, inputFamily('render', args.input))
       const { agent, kit, target, source } = await prepareInput(ctx, exec, 'render', args.input)
       return render(ctx, kit, config, agent, exec.signal, args, target, source)
@@ -193,13 +205,13 @@ export function apply(ctx: Context, config: Config): void {
     presentCall: args => ({ card: 'generic', title: `Render ${args.input}`, kind: 'read', locations: [{ path: args.input }] }),
   }), { when })
   ctx.tools.register(defineTool({
-    name: 'office_convert',
+    name: 'document_convert',
     description: 'Convert a document to another format. Return a temporary file to copy to its destination with the shell.',
     parameters: CONVERT_PARAMETERS,
     output: fileOutput('convert', OUTPUT_FORMATS),
     isConcurrencySafe: () => false,
     async execute(args, exec): Promise<OfficeFileValue<'convert'>> {
-      checkParameterNames('office_convert', args, PARAMETER_NAMES)
+      checkParameterNames('document_convert', args, PARAMETER_NAMES)
       // `inputFamily` rejects PDF for convert and recalculate.
       checkConversionArguments(args, inputFamily('convert', args.input) as Exclude<OfficeFamily, 'pdf'>)
       const { agent, kit, target, source } = await prepareInput(ctx, exec, 'convert', args.input)
@@ -208,13 +220,13 @@ export function apply(ctx: Context, config: Config): void {
     presentCall: args => ({ card: 'generic', title: `Convert ${args.input} to ${args.format}`, kind: 'other', locations: [{ path: args.input }] }),
   }), { when })
   ctx.tools.register(defineTool({
-    name: 'office_recalculate',
+    name: 'document_recalculate',
     description: 'Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.',
     parameters: RECALCULATE_PARAMETERS,
     output: fileOutput('recalculate', RECALCULATION_FORMATS),
     isConcurrencySafe: () => false,
     async execute(args, exec): Promise<OfficeFileValue<'recalculate'>> {
-      checkParameterNames('office_recalculate', args, PARAMETER_NAMES)
+      checkParameterNames('document_recalculate', args, PARAMETER_NAMES)
       inputFamily('recalculate', args.input)
       const { agent, kit, target, source } = await prepareInput(ctx, exec, 'recalculate', args.input)
       return convertFile(ctx, kit, agent, exec.signal, 'recalculate', args, target, source)
@@ -293,12 +305,14 @@ function codeOf(error: unknown): unknown {
 
 /**
  * Model-facing failure for a classified Office service error, with the matching `OfficeToolError` code and the
- * service error as `cause`; other failures pass through unchanged.
+ * service error as `cause`; other failures pass through unchanged. An unavailable explicitly requested `poppler`
+ * renderer points to the other renderer instead of reporting the operation unavailable.
  */
-function officeFailure(verb: string, path: string, error: unknown): unknown {
+function officeFailure(verb: string, path: string, error: unknown, renderer?: DocumentRenderer): unknown {
   if (!(error instanceof OfficeKitError)) return error
   const hint = error.code === 'unavailable'
-    ? ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
+    ? renderer === 'poppler' ? ' Omit renderer, or choose libreoffice.'
+      : ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
     : error.code === 'busy' ? ' Retry after other document operations finish.'
       : error.code === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
   return new OfficeToolError(`cannot ${verb} "${path}": ${error.message}${hint}`, OFFICE_KIT_FAILURE_CODES[error.code], { cause: error })
@@ -343,12 +357,13 @@ async function render(
       ...args.sheet === undefined ? {} : { sheet: args.sheet },
       ...args.range === undefined ? {} : { range: args.range },
       ...args.dpi === undefined ? {} : { dpi: args.dpi },
+      ...args.renderer === undefined ? {} : { renderer: args.renderer },
       maxImages: Math.min(config.maxImages, limits.maxImagesPerMessage),
       maxPixels: Math.min(config.maxImagePixels, limits.maxImagePixels),
       maxDimension: Math.min(config.maxImageDimension, limits.maxImageDimension),
       maxBytes: Math.min(config.maxImageBytes, limits.maxMessageImageBytes),
     }, signal)
-  } catch (error) { throw officeFailure('render', target.displayPath, error) }
+  } catch (error) { throw officeFailure('render', target.displayPath, error, args.renderer) }
   const oversized = result.images.find(image => image.png.byteLength > limits.maxImageBytes)
   if (oversized !== undefined) {
     throw new OfficeToolError(`cannot render "${target.displayPath}": an image exceeds the ${limits.maxImageBytes}-byte image limit; select a smaller range or a lower dpi`, 'OFFICE_OUTPUT_TOO_LARGE')
@@ -365,6 +380,7 @@ async function render(
   }
   return {
     operation: 'render', path, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
+    renderer: result.renderer,
     images: result.images.map((image, index) => {
       // saveImages returns one reference per input, in input order.
       const ref = refs[index] as ImageAttachmentRef
@@ -423,7 +439,7 @@ async function convertFile<Operation extends 'convert' | 'recalculate'>(
       }, signal)
       : await kit.recalculate({
         extension: extension as OfficeWorkbookExtension,
-        // The office_recalculate schema admitted only recalculation formats.
+        // The document_recalculate schema admitted only recalculation formats.
         format: format as OfficeRecalculateArgs['format'],
         source, output,
       }, signal)

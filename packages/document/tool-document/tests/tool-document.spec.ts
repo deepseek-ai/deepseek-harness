@@ -26,7 +26,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import OfficeKit, { OfficeKitError, type OfficeKitErrorCode, type OfficeImagesRequest, type OfficeImagesResult, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
 import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
-import * as ToolOffice from '../src/index.ts'
+import * as ToolDocument from '../src/index.ts'
 import { renderImagesContent } from '../src/content.ts'
 
 vi.mock('../../office-kit/src/locate.ts', async original => ({
@@ -104,7 +104,8 @@ function fakeOfficeKit() {
   return {
     renderImages: vi.fn(async (request: OfficeImagesRequest, _signal?: AbortSignal): Promise<OfficeImagesResult> => {
       await readSource(request.source)
-      return { images: [{ png: PNG, width: 1, height: 1, page: 2 }], pageCount: 3, dpi: request.dpi ?? 144, missingFonts: [] }
+      return { images: [{ png: PNG, width: 1, height: 1, page: 2 }], pageCount: 3, dpi: request.dpi ?? 144, missingFonts: [],
+        renderer: request.renderer ?? 'libreoffice' }
     }),
     outputDirectory: join(home, 'outputs'),
     convertTo: vi.fn(async (
@@ -119,8 +120,8 @@ function fakeOfficeKit() {
 let dir: string
 let home: string
 beforeEach(async () => {
-  dir = await realpath(await mkdtemp(join(tmpdir(), 'dsh-tool-office-')))
-  home = await mkdtemp(join(tmpdir(), 'dsh-tool-office-home-'))
+  dir = await realpath(await mkdtemp(join(tmpdir(), 'dsh-tool-document-')))
+  home = await mkdtemp(join(tmpdir(), 'dsh-tool-document-home-'))
   await writeFile(join(dir, 'deck.pptx'), 'pptx bytes')
   await writeFile(join(dir, 'book.xlsx'), 'xlsx bytes')
   await writeFile(join(dir, 'report.docx'), 'docx bytes')
@@ -135,7 +136,7 @@ interface SetupOptions {
   attachments?: boolean | { normalizedImageMaxPixels: number }
   llm?: boolean
   kit?: boolean
-  config?: Partial<ToolOffice.Config>
+  config?: Partial<ToolDocument.Config>
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -158,7 +159,7 @@ async function setup(options: SetupOptions = {}) {
   }
   const kit = fakeOfficeKit()
   if (options.kit !== false) ctx.provide('officeKit', kit as never)
-  const fiber = await ctx.plugin(ToolOffice, options.config ?? {})
+  const fiber = await ctx.plugin(ToolDocument, options.config ?? {})
   return { ctx, kit, fiber }
 }
 
@@ -189,7 +190,7 @@ async function office(ctx: Context, args: Record<string, unknown>, agent: object
     modelSelection: { provider: 'visual', model: 'vision' }, signal: callSignal })
   try {
     return await executeToolFixture(ctx, {
-      signal: callSignal, callId: brandString<ToolCallId>(`office-${++calls}`), name: `office_${String(operation)}`, arguments: parameters,
+      signal: callSignal, callId: brandString<ToolCallId>(`office-${++calls}`), name: `document_${String(operation)}`, arguments: parameters,
       ...agent === null ? {} : { agent: agent as never }, ...toolSet === undefined ? {} : { toolSet },
     })
   } finally { toolSet?.dispose() }
@@ -214,20 +215,23 @@ describe('office schema', () => {
   it('declares the model-facing description and parameters', async () => {
     const { ctx } = await setup()
     const schemas = ctx.tools.schemas()
-    expect(schemas.map(schema => schema.name)).toEqual(['office_render', 'office_convert', 'office_recalculate'])
+    expect(schemas.map(schema => schema.name)).toEqual(['document_render', 'document_convert', 'document_recalculate'])
     expect(schemas.map(schema => Object.keys(schema.parameters.properties ?? {}))).toEqual([
-      ['input', 'pages', 'sheet', 'range', 'dpi'], ['input', 'format', 'sheet'], ['input', 'format'],
+      ['input', 'pages', 'sheet', 'range', 'dpi', 'renderer'], ['input', 'format', 'sheet'], ['input', 'format'],
     ])
     expect(schemas.map(schema => schema.parameters.required)).toEqual([['input'], ['input', 'format'], ['input', 'format']])
     expect(schemas[0]?.description).toBe('Render document pages, slides, or worksheet areas as images you can view.')
+    expect(schemas[0]?.parameters).toMatchObject({ properties: { renderer: { type: 'string', enum: ['libreoffice', 'poppler'],
+      description: 'Rendering backend; omit to use the first available for this file type. poppler renders pdf only.' } } })
     expect(schemas[1]?.parameters).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(schemas[2]?.parameters).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
     const outputs = ctx.tools.definitions().map(definition => definition.output.schema)
-    expect(outputs[0]).toMatchObject({ properties: { images: { items: { properties: { mediaType: { enum: ['image/png', 'image/jpeg', 'image/webp'] } } } } } })
+    expect(outputs[0]).toMatchObject({ properties: { images: { items: { properties: { mediaType: { enum: ['image/png', 'image/jpeg', 'image/webp'] } } } },
+      renderer: { type: 'string', enum: ['libreoffice', 'poppler'] } }, required: expect.arrayContaining(['renderer']) as string[] })
     expect(outputs[1]).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(outputs[2]).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
     for (const definition of ctx.tools.definitions()) {
-      expect(definition.output.schema).toMatchObject({ type: 'object', properties: { operation: { const: definition.name.replace('office_', '') } } })
+      expect(definition.output.schema).toMatchObject({ type: 'object', properties: { operation: { const: definition.name.replace('document_', '') } } })
       expect(definition.output.schema).not.toHaveProperty('oneOf')
     }
   })
@@ -240,9 +244,9 @@ describe('office schema', () => {
   })
 
   it.each([
-    ['office_render', { input: 'deck.pptx' }],
-    ['office_convert', { input: 'book.xlsx', format: 'csv' }],
-    ['office_recalculate', { input: 'book.xlsx', format: 'xlsx' }],
+    ['document_render', { input: 'deck.pptx' }],
+    ['document_convert', { input: 'book.xlsx', format: 'csv' }],
+    ['document_recalculate', { input: 'book.xlsx', format: 'xlsx' }],
   ])('refuses a direct %s body call without an Agent', async (name, args) => {
     const { ctx, kit } = await setup()
     const definition = ctx.tools.get(name)!
@@ -256,9 +260,9 @@ describe('office schema', () => {
 
   it('presents pending calls with their files', async () => {
     const { ctx } = await setup()
-    const render = ctx.tools.get('office_render')!
-    const convert = ctx.tools.get('office_convert')!
-    const recalculate = ctx.tools.get('office_recalculate')!
+    const render = ctx.tools.get('document_render')!
+    const convert = ctx.tools.get('document_convert')!
+    const recalculate = ctx.tools.get('document_recalculate')!
     expect(render.presentCall?.({ input: 'deck.pptx' }))
       .toEqual({ card: 'generic', title: 'Render deck.pptx', kind: 'read', locations: [{ path: 'deck.pptx' }] })
     expect(convert.presentCall?.({ input: 'deck.pptx', format: 'pdf' }))
@@ -278,11 +282,11 @@ describe('render', () => {
     expect(kit.renderImages).toHaveBeenCalledWith(expect.objectContaining({
       extension: 'pptx', pages: [2], dpi: 96, maxImages: 5, maxPixels: 1000, maxDimension: 100, maxBytes: 4096,
     }), expect.any(AbortSignal))
-    expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'deck.pptx')} (3 in the document) at 96 DPI.\nPage 2: 1x1 px`)
+    expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'deck.pptx')} (3 in the document) at 96 DPI with libreoffice.\nPage 2: 1x1 px`)
     expect(result.content[2]).toMatchObject({ type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } })
     if (result.isError) throw new Error('render failed')
     expect(result.value).toMatchObject({ operation: 'render', path: join(dir, 'deck.pptx'), pageCount: 3, dpi: 96,
-      images: [{ page: 2, mediaType: 'image/png', width: 1, height: 1 }], missingFonts: [] })
+      images: [{ page: 2, mediaType: 'image/png', width: 1, height: 1 }], missingFonts: [], renderer: 'libreoffice' })
     expect(result.meta).toEqual({ path: join(dir, 'deck.pptx') })
   })
 
@@ -300,10 +304,10 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [
       { png: PNG, width: 1, height: 1, sheet: 'Data', range: 'A1:B2' }, { png: PNG, width: 1, height: 1, sheet: 'Data' },
-    ], pageCount: 2, dpi: 144, missingFonts: ['Aptos'] })
+    ], pageCount: 2, dpi: 144, missingFonts: ['Aptos'], renderer: 'libreoffice' })
     const result = await office(ctx, { operation: 'render', input: 'book.xlsx', sheet: 'Data', range: 'A1:B2' })
     expect(kit.renderImages.mock.calls[0]![0]).toMatchObject({ extension: 'xlsx', sheet: 'Data', range: 'A1:B2' })
-    expect(text(result)).toBe(`Rendered 2 images of ${join(dir, 'book.xlsx')} (2 in the document) at 144 DPI.\n`
+    expect(text(result)).toBe(`Rendered 2 images of ${join(dir, 'book.xlsx')} (2 in the document) at 144 DPI with libreoffice.\n`
       + 'Fonts not installed and substituted: Aptos.\nSheet "Data" A1:B2: 1x1 px\nSheet "Data": 1x1 px')
   })
 
@@ -349,7 +353,7 @@ describe('render', () => {
     const { ctx, kit } = await setup()
     const limit = ctx.get('attachments')!.imageLimits.maxImageBytes
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: new Uint8Array(limit + 1), width: 1, height: 1, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [] })
+      pageCount: 1, dpi: 144, missingFonts: [], renderer: 'libreoffice' })
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     expect(text(result)).toContain(`exceeds the ${limit}-byte image limit`)
     expect(errorInfo(result)).toEqual(officeToolError('OFFICE_OUTPUT_TOO_LARGE'))
@@ -358,7 +362,7 @@ describe('render', () => {
   it('reports attachment refusals and passes other storage failures through', async () => {
     const { ctx, kit } = await setup()
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: Buffer.from('not a png'), width: 1, height: 1, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [] })
+      pageCount: 1, dpi: 144, missingFonts: [], renderer: 'libreoffice' })
     const refused = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     expect(text(refused)).toContain(`cannot render "${join(dir, 'deck.pptx')}": `)
     expect(errorInfo(refused)).toEqual({ name: 'AttachmentError', code: 'INVALID_IMAGE' })
@@ -370,7 +374,7 @@ describe('render', () => {
 
   it('projects written files and their presentation metadata', async () => {
     const { ctx } = await setup()
-    const output = ctx.tools.get('office_recalculate')!.output
+    const output = ctx.tools.get('document_recalculate')!.output
     const value = { operation: 'recalculate', path: '/w/book.xlsx', file: '/h/out/book.xlsx', format: 'xlsx', bytes: 9, missingFonts: ['Aptos'] }
     expect(output.render({}, value)).toEqual([{ type: 'text', text: 'Recalculated /w/book.xlsx to xlsx (9 bytes): /h/out/book.xlsx\n'
       + 'Copy this temporary file to its destination with the shell now; it may be deleted after a retention period or to free space, and is deleted when this conversation ends.\nFonts not installed and substituted: Aptos.' }])
@@ -391,8 +395,28 @@ describe('render', () => {
     expect(kit.renderImages.mock.calls[0]![0].source).not.toHaveProperty('bytes')
   })
 
+  it('passes the requested renderer and reports the renderer the Office service used', async () => {
+    const { ctx, kit } = await setup()
+    await writeFile(join(dir, 'scan.pdf'), '%PDF-1.7\n%%EOF\n')
+    const result = await office(ctx, { operation: 'render', input: 'scan.pdf', renderer: 'poppler' })
+    expect(kit.renderImages.mock.calls[0]![0]).toMatchObject({ extension: 'pdf', renderer: 'poppler' })
+    expect(text(result)).toBe(`Rendered 1 image of ${join(dir, 'scan.pdf')} (3 in the document) at 144 DPI with poppler.\nPage 2: 1x1 px`)
+    if (result.isError) throw new Error('render failed')
+    expect(result.value).toMatchObject({ renderer: 'poppler' })
+    await office(ctx, { operation: 'render', input: 'scan.pdf' })
+    expect(kit.renderImages.mock.calls[1]![0]).not.toHaveProperty('renderer')
+  })
+
+  it.each(['deck.pptx', 'book.xlsx', 'report.docx'])('refuses the poppler renderer for %s before reading it', async (input) => {
+    const { ctx, kit } = await setup()
+    const result = await office(ctx, { operation: 'render', input, renderer: 'poppler' })
+    expect(text(result)).toContain('renderer poppler renders only pdf; omit renderer or choose libreoffice')
+    expect(errorInfo(result)).toEqual(invalidArgs)
+    expect(kit.renderImages).not.toHaveBeenCalled()
+  })
+
   it('records the normalized dimensions of a reduced image', () => {
-    const blocks = renderImagesContent({ operation: 'render', path: '/a.pdf', pageCount: 1, dpi: 72, missingFonts: [],
+    const blocks = renderImagesContent({ operation: 'render', path: '/a.pdf', pageCount: 1, dpi: 72, missingFonts: [], renderer: 'poppler',
       images: [{ attachmentId: 'a', mediaType: 'image/png', bytes: 1, width: 1, height: 1, originalDimensions: { width: 2, height: 2 } }] })
     expect(blocks[1]).toEqual({ type: 'text', text: 'Image: 1x1 px' })
     expect(blocks[2]).toMatchObject({ attachment: { originalDimensions: { width: 2, height: 2 } } })
@@ -404,7 +428,7 @@ describe('render', () => {
   ] as const)('returns the stored encoding when attachment normalization re-encodes %s', async (_label, translucent, mediaType) => {
     const { ctx, kit } = await setup({ attachments: { normalizedImageMaxPixels: 16 } })
     kit.renderImages.mockResolvedValueOnce({ images: [{ png: solidPng(8, translucent), width: 8, height: 8, page: 1 }],
-      pageCount: 1, dpi: 144, missingFonts: [] })
+      pageCount: 1, dpi: 144, missingFonts: [], renderer: 'libreoffice' })
     const result = await office(ctx, { operation: 'render', input: 'deck.pptx' })
     if (result.isError) throw new Error('render failed')
     expect(result.value).toMatchObject({ images: [{ mediaType, width: 4, height: 4, originalDimensions: { width: 8, height: 8 } }] })
@@ -439,7 +463,7 @@ describe('Office service failures', () => {
 
   it('stays registered without the Office service, fails each call as unavailable, and uses the service once it is provided', async () => {
     const { ctx, kit } = await setup({ kit: false })
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['office_render', 'office_convert', 'office_recalculate'])
+    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['document_render', 'document_convert', 'document_recalculate'])
     for (const [args, verb] of [
       [{ operation: 'render', input: 'deck.pptx' }, 'render'],
       [{ operation: 'convert', input: 'deck.pptx', format: 'pdf' }, 'convert'],
@@ -450,8 +474,8 @@ describe('Office service failures', () => {
       expect(text(result)).toBe(`Error: cannot ${verb} "${args.input}": The document converter is unavailable.${unavailableHint}`)
       expect(errorInfo(result)).toEqual(officeToolError('OFFICE_UNAVAILABLE'))
     }
-    const definition = ctx.tools.get('office_render')!
-    const call = { signal, callId: brandString<ToolCallId>('missing-service'), name: 'office_render', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
+    const definition = ctx.tools.get('document_render')!
+    const call = { signal, callId: brandString<ToolCallId>('missing-service'), name: 'document_render', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
     await expect(definition.execute({ input: 'deck.pptx' }, call as never)).rejects.toMatchObject({
       ...officeToolError('OFFICE_UNAVAILABLE'),
       cause: expect.objectContaining({ name: 'OfficeKitError', code: 'unavailable', message: 'The document converter is unavailable.' }) as Error,
@@ -482,6 +506,18 @@ describe('Office service failures', () => {
     expect(errorInfo(result)).toEqual(officeToolError(toolCode))
   })
 
+  it.each([
+    ['poppler', ' Omit renderer, or choose libreoffice.'],
+    ['libreoffice', unavailableHint],
+  ] as const)('reports an unavailable explicit %s renderer with its next step', async (renderer, hint) => {
+    const { ctx, kit } = await setup()
+    await writeFile(join(dir, 'scan.pdf'), '%PDF-1.7\n%%EOF\n')
+    kit.renderImages.mockRejectedValueOnce(officeError('unavailable', 'The renderer is unavailable.'))
+    const result = await office(ctx, { operation: 'render', input: 'scan.pdf', renderer })
+    expect(text(result)).toBe(`Error: cannot render "${join(dir, 'scan.pdf')}": The renderer is unavailable.${hint}`)
+    expect(errorInfo(result)).toEqual(officeToolError('OFFICE_UNAVAILABLE'))
+  })
+
   it.each<[OfficeKitErrorCode, string]>([
     ['unavailable', 'OFFICE_UNAVAILABLE'], ['busy', 'OFFICE_BUSY'], ['input-too-large', 'OFFICE_INPUT_TOO_LARGE'],
     ['output-too-large', 'OFFICE_OUTPUT_TOO_LARGE'], ['invalid-document', 'OFFICE_INVALID_DOCUMENT'],
@@ -492,11 +528,11 @@ describe('Office service failures', () => {
     const { ctx, kit } = await setup()
     const cause = officeError(code, 'Conversion stopped.')
     kit.convertTo.mockRejectedValueOnce(cause)
-    const definition = ctx.tools.get('office_convert')!
+    const definition = ctx.tools.get('document_convert')!
     const result = await office(ctx, { operation: 'convert', input: 'deck.pptx', format: 'pdf' })
     expect(errorInfo(result)).toEqual(officeToolError(toolCode))
     kit.convertTo.mockRejectedValueOnce(cause)
-    const call = { signal, callId: brandString<ToolCallId>(`cause-${code}`), name: 'office_convert', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
+    const call = { signal, callId: brandString<ToolCallId>(`cause-${code}`), name: 'document_convert', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
     await expect(definition.execute({ input: 'deck.pptx', format: 'pdf' }, call as never)).rejects.toMatchObject({ cause })
   })
 
@@ -601,13 +637,13 @@ describe('arguments and paths', () => {
     [{ operation: 'recalculate', input: 'book.xlsx' }, 'format'],
     [{ operation: 'convert', input: 'book.xlsx', format: 'pdf', sheet: 'A' }, 'sheet applies only to CSV conversion'],
     [{ operation: 'convert', input: 'book.xlsx', format: 'csv', sheet: ' ' }, 'sheet must be an exact worksheet name'],
-    [{ operation: 'render', input: 'deck.pptx', format: 'pdf' }, 'format applies only to office_convert or office_recalculate'],
-    [{ operation: 'convert', input: 'deck.pptx', format: 'pdf', pages: [1] }, 'pages applies only to office_render'],
-    [{ operation: 'convert', input: 'book.xlsx', format: 'pdf', range: 'A1:B2' }, 'range applies only to office_render'],
-    [{ operation: 'convert', input: 'deck.pptx', format: 'pdf', dpi: 96 }, 'dpi applies only to office_render'],
-    [{ operation: 'recalculate', input: 'book.xlsx', format: 'xlsx', sheet: 'Data' }, 'sheet applies only to office_render or office_convert'],
-    [{ operation: 'recalculate', input: 'book.xlsx', format: 'xlsx', pages: [1] }, 'pages applies only to office_render'],
-    [{ operation: 'render', input: 'deck.pptx', output: 'deck.pdf' }, 'office_render does not accept output'],
+    [{ operation: 'render', input: 'deck.pptx', format: 'pdf' }, 'format applies only to document_convert or document_recalculate'],
+    [{ operation: 'convert', input: 'deck.pptx', format: 'pdf', pages: [1] }, 'pages applies only to document_render'],
+    [{ operation: 'convert', input: 'book.xlsx', format: 'pdf', range: 'A1:B2' }, 'range applies only to document_render'],
+    [{ operation: 'convert', input: 'deck.pptx', format: 'pdf', dpi: 96 }, 'dpi applies only to document_render'],
+    [{ operation: 'recalculate', input: 'book.xlsx', format: 'xlsx', sheet: 'Data' }, 'sheet applies only to document_render or document_convert'],
+    [{ operation: 'recalculate', input: 'book.xlsx', format: 'xlsx', pages: [1] }, 'pages applies only to document_render'],
+    [{ operation: 'render', input: 'deck.pptx', output: 'deck.pdf' }, 'document_render does not accept output'],
     [{ operation: 'render', input: 'book.xlsx', pages: [1] }, 'pages does not apply to spreadsheets'],
     [{ operation: 'render', input: 'deck.pptx', pages: [] }, 'pages must list distinct one-based page numbers'],
     [{ operation: 'render', input: 'deck.pptx', pages: [0] }, 'pages must list distinct one-based page numbers'],
@@ -626,7 +662,7 @@ describe('arguments and paths', () => {
   it('prefixes argument refusals with the argument error label', async () => {
     const { ctx } = await setup()
     expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx', output: 'deck.pdf' })))
-      .toBe('Error: invalid arguments: office_render does not accept output')
+      .toBe('Error: invalid arguments: document_render does not accept output')
     expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx', dpi: 23 })))
       .toBe('Error: invalid arguments: dpi must be an integer from 24 to 600')
   })
@@ -659,7 +695,7 @@ describe('arguments and paths', () => {
   })
 
   it('reads an input outside the workspace as the read tool does', async () => {
-    const outside = await realpath(await mkdtemp(join(tmpdir(), 'dsh-tool-office-outside-')))
+    const outside = await realpath(await mkdtemp(join(tmpdir(), 'dsh-tool-document-outside-')))
     onTestFinished(() => rm(outside, { recursive: true, force: true }))
     await writeFile(join(outside, 'shared.docx'), 'docx bytes')
     const { ctx, kit } = await setup()
@@ -723,7 +759,7 @@ describe('PTC dispatch', () => {
     const { ctx } = await setup({ ptc: true })
     const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
-      await request.bindings[0]!.functions.office_render!({ input: 'deck.pptx' })
+      await request.bindings[0]!.functions.document_render!({ input: 'deck.pptx' })
       return { output: [] }
     }
     const agent = { ...agentOn('vision'), ctx }
@@ -734,7 +770,7 @@ describe('PTC dispatch', () => {
       signal, callId: brandString<ToolCallId>(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
       toolSet,
     })
-    const result = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
+    const result = await run({ code: 'await tools.document_render({ input: "deck.pptx" })', description: 'Render' })
     expect(result.isError).toBe(false)
     const dispatch = agent.session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')
     expect(dispatch?.data.content.some(block => block.type === 'image')).toBe(true)
@@ -746,12 +782,12 @@ describe('PTC dispatch', () => {
 
     const denied: string[] = []
     ctx.on('tools/pre-execute', (exec, next) => {
-      if (exec.name !== 'office_render') return next()
+      if (exec.name !== 'document_render') return next()
       denied.push(exec.name)
       return Promise.resolve({ kind: 'deny' as const, reason: 'office denied by policy' })
     }, { prepend: true })
-    const refused = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
-    expect(denied).toEqual(['office_render'])
+    const refused = await run({ code: 'await tools.document_render({ input: "deck.pptx" })', description: 'Render' })
+    expect(denied).toEqual(['document_render'])
     expect(text(refused)).toContain('office denied by policy')
   })
 })

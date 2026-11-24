@@ -2902,8 +2902,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'officeKit',
-    summary: 'A provider lifetime owns all converters, queued calls, and temporary files.',
-    description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
+    summary: 'A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.',
+    description: 'A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.',
     methods: [
       {
         signature: 'readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())',
@@ -2924,10 +2924,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>',
-        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.',
-        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
-        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.',
-        throws: ['{OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
+        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority. The backend is chosen before admission: `request.renderer` exclusively, otherwise the first available entry of the configured `renderers` order, where the last entry is used without an availability check. A backend that fails after it starts rejects without trying another. Poppler renders without a LibreOffice converter slot.',
+        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, backend, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits, with the backend that rendered them.',
+        throws: ['{OfficeKitError} `unsupported-format` for `poppler` with non-PDF input, `unavailable` when the requested or last configured backend cannot run, `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
       },
       {
         signature: 'async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>',
@@ -7682,6 +7682,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
   },
   {
+    name: 'DocumentRenderer',
+    declaration: 'export type DocumentRenderer = \'libreoffice\' | \'poppler\';',
+  },
+  {
     name: 'Domain',
     declaration: 'export interface Domain<S extends DomainSpec> {\n    readonly name: string;\n    readonly global: DomainGlobalHandleOf<S>;\n    table<N extends keyof S[\'tables\'] & string>(name: N): KvTable<TableKeyOf<S, N>, TableValueOf<S, N>>;\n    close(): Promise<void>;\n}',
   },
@@ -9339,11 +9343,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OfficeImagesRequest',
-    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
+    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly renderer?: DocumentRenderer;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
   },
   {
     name: 'OfficeImagesResult',
-    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n}',
+    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n    readonly renderer: DocumentRenderer;\n}',
   },
   {
     name: 'OfficeKitGeneration',

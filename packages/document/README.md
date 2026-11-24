@@ -27,7 +27,7 @@ Each package owns its configuration and lifetime rules; the subsystem reference 
 | Package | Role | ctx key |
 |---|---|---|
 | [office-kit](office-kit/README.md) | Authorized Office bytes to complete PDFs, PNG images, converted files, and recalculated workbooks with bounded queues and caching; the provider resolves its own Kit entry, engine manifests, and ASAR-unpacked engine paths | `ctx.officeKit` |
-| [tool-office](tool-office/README.md) | `office_render`, `office_convert`, and `office_recalculate`, declared after an Office skill loads: render pages as images in the tool result, convert documents, and recalculate workbooks | — |
+| [tool-document](tool-document/README.md) | `document_render`, `document_convert`, and `document_recalculate`, declared after an Office skill loads: render pages as images in the tool result, convert documents, and recalculate workbooks | — |
 
 -----
 

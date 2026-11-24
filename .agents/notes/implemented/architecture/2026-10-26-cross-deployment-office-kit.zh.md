@@ -18,9 +18,9 @@ Status: implemented
 
 [`@deepseek-ai/dsh-office-kit`](../../../../packages/document/office-kit/README.zh.md) 负责 Kit 定位和共享转换服务。Kit 定位是提供方的内部实现，不对外导出：提供方传入自己的 `import.meta.resolve` 查找函数，原生引擎路径使用 ASAR 解包映射。定位不读取环境变量。[按需激活的 Office 工具](2026-10-31-native-office-tool.zh.md)在 Host 内执行 Kit 操作，因此任何部署都不发布 Kit CLI 路径或 Office 可执行文件变量。
 
-Kit 缺失时降级，而不是加载失败。转换服务照常注册，以代码 `unavailable` 拒绝转换，只保留成功的 Kit 导入，并对每种不同的失败只报告一次；`office_render`、`office_convert` 和 `office_recalculate` 工具保持注册并在调用时返回该消息。
+Kit 缺失时降级，而不是加载失败。转换服务照常注册，以代码 `unavailable` 拒绝转换，只保留成功的 Kit 导入，并对每种不同的失败只报告一次；`document_render`、`document_convert` 和 `document_recalculate` 工具保持注册并在调用时返回该消息。
 
-`office-to-pdf` 改为 `office-kit`，使后续的 Kit 消费方（例如原生渲染（PR #5374）和 `tool-office` 包）从同一个包获取 Kit。LibreOffice Kit 依赖在每个清单中声明同一个精确版本，因此转换器和打包的引擎来自同一个 Kit 发行版。
+`office-to-pdf` 改为 `office-kit`，使后续的 Kit 消费方（例如原生渲染（PR #5374）和 `tool-document` 包）从同一个包获取 Kit。LibreOffice Kit 依赖在每个清单中声明同一个精确版本，因此转换器和打包的引擎来自同一个 Kit 发行版。
 
 ## 考虑过的替代方案
 

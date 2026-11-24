@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/office-tools-renamed-document/guide.md
+/:
+  en: e4dc42b8eaeb8ba4
+  zh: 7754a24fde73bb24
+/dsh-tool-office-becomes-dsh-tool-document-with-document-tools:
+  en: 2f035ba61a470c44
+  zh: cc9d078574f1ee60
+/dsh-tool-office-becomes-dsh-tool-document-with-document-tools/change:
+  en: 0ffd06a2084ac7a0
+  zh: b6c33cdb732e0af2
+/dsh-tool-office-becomes-dsh-tool-document-with-document-tools/migration:
+  en: 325f3cf957017d20
+  zh: 871e8ab52b6fdb0c

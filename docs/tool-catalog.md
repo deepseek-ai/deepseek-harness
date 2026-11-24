@@ -25,7 +25,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-executor-ptc` | `run_code` | `ctx.workingDirectory (Agent executions)`, `ctx.tools`, `ctx.ptcRuntime`, `ctx.systemPrompt` | `tool/call`, `one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call`, `tool/result` | - | The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated TypeScript SDK. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.agents`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.workingDirectory`, `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`, `tool/result` | - | The bash tool is the model-facing consumer of the bash executor seam. With a job registry composed every call registers with the generic `ctx.jobs` runtime as it starts, collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; without one, or with `enableRunInBackground: false`, the tool registers a foreground-only schema without the `run_in_background` parameter. |
-| `@deepseek-ai/dsh-tool-office` | `office_convert`, `office_recalculate`, `office_render` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents`, `ctx.officeKit`, `ctx.attachments and ctx.llm for office_render` | `tool/call`, `tool/result with rendered image attachments`, `temporary converted files in the Office kit output store` | - | Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed. |
+| `@deepseek-ai/dsh-tool-document` | `document_convert`, `document_recalculate`, `document_render` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents`, `ctx.officeKit`, `ctx.attachments and ctx.llm for document_render` | `tool/call`, `tool/result with rendered image attachments`, `temporary converted files in the Office kit output store` | - | Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed. |
 | `@deepseek-ai/dsh-tool-present` | `present` | `ctx.workingDirectory`, `ctx.tools`, `ctx.fs`, `ctx.agents` | `tool/call`, `deliverables/presented after a successful final result`, `tool/result` | - | Deliveries belong to the calling Session; Web ui-deliverables supplies source-file opening and cards. |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.workingDirectory`, `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs for run_in_background and the job-backed foreground path` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_inspect` | `ctx.tools`, `ctx.cordisInspect` | `tool/call`, `tool/result` | - | The Desktop Standard and Creator modes and the SDK profile provide one read-only runtime inspection tool. Omit query for the provider directory; pass query to inspect a declared method. The Cordis host runner supplies the inspection registry; Client queries require a connected page. Author persistent changes as bundles and install them with plugin_manager. |
@@ -951,11 +951,11 @@ Source: [`packages/shell/tool-bash/src/index.ts`](../packages/shell/tool-bash/sr
 
 The bash tool is the model-facing consumer of the bash executor seam. With a job registry composed every call registers with the generic `ctx.jobs` runtime as it starts, collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; without one, or with `enableRunInBackground: false`, the tool registers a foreground-only schema without the `run_in_background` parameter.
 
-<a id="deepseek-aidsh-tool-office"></a>
+<a id="deepseek-aidsh-tool-document"></a>
 
-## `@deepseek-ai/dsh-tool-office`
+## `@deepseek-ai/dsh-tool-document`
 
-### `office_convert`
+### `document_convert`
 
 Convert a document to another format. Return a temporary file to copy to its destination with the shell.
 
@@ -994,9 +994,9 @@ Convert a document to another format. Return a temporary file to copy to its des
 }
 ```
 
-Source: [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+Source: [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
-### `office_recalculate`
+### `document_recalculate`
 
 Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.
 
@@ -1024,9 +1024,9 @@ Recalculate spreadsheet formulas. Return a temporary workbook to copy to its des
 }
 ```
 
-Source: [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+Source: [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
-### `office_render`
+### `document_render`
 
 Render document pages, slides, or worksheet areas as images you can view.
 
@@ -1056,6 +1056,14 @@ Render document pages, slides, or worksheet areas as images you can view.
     "dpi": {
       "type": "integer",
       "description": "Resolution from 24 to 600; default 144."
+    },
+    "renderer": {
+      "type": "string",
+      "description": "Rendering backend; omit to use the first available for this file type. poppler renders pdf only.",
+      "enum": [
+        "libreoffice",
+        "poppler"
+      ]
     }
   },
   "required": [
@@ -1064,7 +1072,7 @@ Render document pages, slides, or worksheet areas as images you can view.
 }
 ```
 
-Source: [`packages/document/tool-office/src/index.ts`](../packages/document/tool-office/src/index.ts)
+Source: [`packages/document/tool-document/src/index.ts`](../packages/document/tool-document/src/index.ts)
 
 Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service's unavailable error when LibreOffice Kit is not installed.
 

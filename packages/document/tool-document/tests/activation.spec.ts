@@ -15,9 +15,9 @@ import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as ToolOffice from '../src/index.ts'
+import * as ToolDocument from '../src/index.ts'
 
-const NAMES = ['office_convert', 'office_recalculate', 'office_render']
+const NAMES = ['document_convert', 'document_recalculate', 'document_render']
 const SKILLS = ['office']
 const signal = new AbortController().signal
 
@@ -77,7 +77,7 @@ async function harness(script: StreamChunk[][] = [], options: {
   await ctx.plugin(SkillRegistry)
   for (const name of [...SKILLS, 'office-docx', 'other', 'custom-office']) ctx.skills.register({ name, source: 'runtime', description: name, content: `${name} instructions` })
   if (!options.officeFirst) await ctx.plugin(ToolSkill)
-  const fiber = await ctx.plugin(ToolOffice, options.skills === undefined ? {} : { activationSkills: options.skills })
+  const fiber = await ctx.plugin(ToolDocument, options.skills === undefined ? {} : { activationSkills: options.skills })
   if (options.officeFirst) await ctx.plugin(ToolSkill)
   const adapter = new ScriptedAdapter(script)
   ctx.llm.registerAdapter(['fixture'], adapter)
@@ -118,8 +118,8 @@ describe('Office skill admission', () => {
     await turn(agent)
     expect(nested).toEqual([true])
     expect(adapter.requests).toHaveLength(2)
-    expect(adapter.requests[0]?.messages.some(message => JSON.stringify(message.content).includes('office_render'))).toBe(false)
-    expect(adapter.requests[1]?.messages.some(message => JSON.stringify(message.content).includes('office_render'))).toBe(true)
+    expect(adapter.requests[0]?.messages.some(message => JSON.stringify(message.content).includes('document_render'))).toBe(false)
+    expect(adapter.requests[1]?.messages.some(message => JSON.stringify(message.content).includes('document_render'))).toBe(true)
     expect(agent.session.requestHeader()?.tools?.map(tool => tool.name)).toEqual(['run_code'])
   })
 
@@ -195,8 +195,17 @@ describe('Office skill admission', () => {
     expect(await admitted(ctx, agent)).toEqual(NAMES)
   })
 
+  it.each(['office_convert', 'office_recalculate', 'office_render'])('activates the renamed tools for an earlier Session whose header declares only %s', async (name) => {
+    const { ctx, agent } = await harness()
+    const [schema] = ctx.tools.schemas().filter(tool => tool.name === name.replace('office_', 'document_'))
+    agent.session.append('request/header', { reason: 'initial', header: {
+      config: { provider: 'fixture', model: 'fixture' }, tools: [{ ...schema!, name }],
+    } })
+    expect(await admitted(ctx, agent)).toEqual(NAMES)
+  })
+
   it('validates the configured skill set and activates only its names', async () => {
-    for (const activationSkills of [[], [''], ['Office'], ['has space'], [1]]) expect(() => ToolOffice.Config({ activationSkills } as never)).toThrow()
+    for (const activationSkills of [[], [''], ['Office'], ['has space'], [1]]) expect(() => ToolDocument.Config({ activationSkills } as never)).toThrow()
     const { ctx, agent } = await harness([response(), response()], { skills: ['custom-office'] })
     await turn(agent, '/office')
     expect(await admitted(ctx, agent)).toEqual([])
@@ -253,7 +262,7 @@ describe('Office skill admission', () => {
     expect(await admitted(ctx, agent)).toEqual(NAMES)
     await fiber.dispose()
     expect(await admitted(ctx, agent)).toEqual([])
-    await ctx.plugin(ToolOffice)
+    await ctx.plugin(ToolDocument)
     expect(await admitted(ctx, agent)).toEqual([])
   })
 })

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Render Office documents as PDFs or PNG images, convert them between formats, and recalculate workbooks on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. Previews accept DOC, DOCX, XLS, XLSX, PPT, and PPTX; operations also accept the OpenDocument formats, and image rendering accepts PDF. OOXML operations return missing-font names; binary Office operations return an empty list.
+Render Office documents as PDFs or PNG images, convert them between formats, and recalculate workbooks on the Host computer. Targets with a declared native LibreOffice engine use it; other targets use Node WASM. Previews accept DOC, DOCX, XLS, XLSX, PPT, and PPTX; operations also accept the OpenDocument formats, and image rendering accepts PDF, which it renders with Poppler's `pdftoppm` when the subprocess provider finds it. OOXML operations return missing-font names; binary Office operations return an empty list.
 
 ## Table of Contents
 
@@ -25,18 +25,22 @@ Render Office documents as PDFs or PNG images, convert them between formats, and
 <a id="use-this-package"></a>
 ## Use this package
 
-The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bundle/sdk-app/README.md) mount this provider as `office-kit`; the [Office tools](../tool-office/README.md) are its model-facing consumers. Independent compositions mount `@deepseek-ai/dsh-office-kit` as a `cordis.yml` row.
+The [Web bundle](../../bundle/web-app/README.md) and the [SDK bundle](../../bundle/sdk-app/README.md) mount this provider as `office-kit`; the [Office tools](../tool-document/README.md) are its model-facing consumers. Independent compositions mount `@deepseek-ai/dsh-office-kit` as a `cordis.yml` row.
 
-Callers submit authorized source identity, version, optional byte size, a deferred bounded read, and input extension; PDF conversions also name a scheduling priority, and image rendering, format conversion, and recalculation run at foreground priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`, whose lowercase `code` is also the `document-render/failed` reason; [`dsh-tool-office`](../tool-office/README.md#use-this-package) maps it to `OfficeToolError` codes for tool results. Every result carries the missing fonts; PDF results also carry the conversion generation, which changes on configuration replacement.
+Callers submit authorized source identity, version, optional byte size, a deferred bounded read, and input extension; PDF conversions also name a scheduling priority, and image rendering, format conversion, and recalculation run at foreground priority. A changed source version rejects the operation. Cancellation rejects with its reason; failures use `OfficeKitError`, whose lowercase `code` is also the `document-render/failed` reason; [`dsh-tool-document`](../tool-document/README.md#use-this-package) maps it to `OfficeToolError` codes for tool results. Every result carries the missing fonts; PDF results also carry the conversion generation, which changes on configuration replacement.
 
 | Method | Operation | Result |
 |---|---|---|
 | `convert()` | Office to PDF for previews | caller-owned PDF bytes and a cache key |
-| `renderImages()` | selected pages, slides, or worksheet areas to PNG | images in document order with their page, sheet, or range, plus the document page count and DPI |
+| `renderImages()` | selected pages, slides, or worksheet areas to PNG | images in document order with their page, sheet, or range, plus the document page count, DPI, and the renderer used |
 | `convertTo()` | conversion to the format of `format`; CSV takes a `sheet` | the saved file's Host path, size, and PDF page count |
 | `recalculate()` | XLS, XLSX, or ODS recalculation to XLSX or ODS | the saved workbook's Host path and size |
 
-`renderImages()` requires `maxImages`, `maxPixels`, `maxDimension`, and `maxBytes`. The engine rejects a selection with more images than `maxImages` or an image above the pixel or dimension limit; the provider rejects images whose total PNG bytes exceed `maxBytes` with `output-too-large`, before and while reading them. A page, sheet, range, resolution, or format selection the engine rejects fails with `invalid-request` and the engine's description. Converted and recalculated files obey `maxOutputBytes`. The provider never writes into a workspace: it saves each output in its own owner-only directory under `outputDirectory`, grouped by the request's `output.owner` (`office_convert` and `office_recalculate` pass the root Session of the caller's subagent tree), and returns the absolute Host path. A file is deleted after `outputRetentionMs`, when newer outputs need room within `maxOutputStoreBytes` (oldest first), when the Session whose id equals the owner is disposed, or when the provider unloads; a file larger than `maxOutputStoreBytes` fails with `output-too-large`. A file counts toward `maxOutputStoreBytes` until its deletion succeeds; a failed deletion is logged and retried by later eviction, release, and unload, and a save that cannot free enough room fails with `unavailable`. Unload waits for deletions in progress. Startup also removes expired output directories of earlier processes, considering only real directories, not links or junctions, with the names the provider generates: `session-` and 24 lowercase hexadecimal digits directly under `outputDirectory`, each holding lowercase UUID v4 output directories. Other entries are left untouched. `outputDirectory` is exposed on the service so consumers can check that their execution world reads it.
+`renderImages()` requires `maxImages`, `maxPixels`, `maxDimension`, and `maxBytes`. The engine rejects a selection with more images than `maxImages` or an image above the pixel or dimension limit; the provider rejects images whose total PNG bytes exceed `maxBytes` with `output-too-large`, before and while reading them. A page, sheet, range, resolution, or format selection the engine rejects fails with `invalid-request` and the engine's description. Converted and recalculated files obey `maxOutputBytes`. The provider never writes into a workspace: it saves each output in its own owner-only directory under `outputDirectory`, grouped by the request's `output.owner` (`document_convert` and `document_recalculate` pass the root Session of the caller's subagent tree), and returns the absolute Host path. A file is deleted after `outputRetentionMs`, when newer outputs need room within `maxOutputStoreBytes` (oldest first), when the Session whose id equals the owner is disposed, or when the provider unloads; a file larger than `maxOutputStoreBytes` fails with `output-too-large`. A file counts toward `maxOutputStoreBytes` until its deletion succeeds; a failed deletion is logged and retried by later eviction, release, and unload, and a save that cannot free enough room fails with `unavailable`. Unload waits for deletions in progress. Startup also removes expired output directories of earlier processes, considering only real directories, not links or junctions, with the names the provider generates: `session-` and 24 lowercase hexadecimal digits directly under `outputDirectory`, each holding lowercase UUID v4 output directories. Other entries are left untouched. `outputDirectory` is exposed on the service so consumers can check that their execution world reads it.
+
+`renderImages()` selects its renderer before admission. A request's `renderer` is used exclusively: `poppler` with non-PDF input fails with `unsupported-format`, and an unavailable renderer fails with `unavailable`. Without `renderer`, the provider takes the first available entry of `renderers.pdf` for PDF input or `renderers.office` otherwise, and uses the last entry without checking it. Only unavailability moves selection to the next entry; a selected renderer that fails, times out, or produces invalid output rejects the request. LibreOffice is available when Kit imports. Poppler is available when the `subprocess` service exists and resolves both configured executables in its execution world, which is the SSH host when SSH providers are composed. The result names the renderer, and cached renderings are kept per renderer.
+
+Poppler renders PDF pages without a LibreOffice converter slot and still shares queue admission, concurrency, and source-byte reservations. Each process reads the PDF from stdin, so no file passes between the provider and the process. One `pdfinfo` reports the page count, taken from its last `Pages:` line because document properties such as the title print earlier. The provider then applies the LibreOffice codes to the selection: more pages than `maxImages` is `output-too-large`, and a page outside the document is `invalid-request`. One `pdftoppm -cropbox` per run of consecutive pages renders at the requested DPI (default 144) and writes the PNG images to stdout one after another. The provider splits them at PNG chunk boundaries as they arrive, terminates `pdftoppm` with `output-too-large` once the bytes exceed the remaining `maxBytes`, and requires one image per page of the run. Page pixels and dimensions are checked only after rendering, against each PNG header: an image above `maxPixels` or `maxDimension` fails with `output-too-large`. The result has an empty `missingFonts` list. Exit code 1 maps to `invalid-document`, the `timeoutMs` deadline to `timeout`, and other failures to `failed`.
 
 The provider depends on the independently published [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API at kit version `0.2.3`. Application packaging selects the matching native package declared in the kit’s `optionalDependencies`, or WASM when no native package is declared for that target. A missing declared native engine rejects packaging without selecting WASM. The [release ownership decision](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) defines the independent kit and Harness responsibilities.
 
@@ -47,7 +51,7 @@ Browsers request PDFs through the `officeKit.render` Remote method with a Sessio
 | Field | Default | Meaning |
 |---|---|---|
 | `maxConcurrentConversions` | `2` | Maximum active converters; queued calls remain cancellable. |
-| `timeoutMs` | `60000` | Conversion deadline after a converter is acquired. |
+| `timeoutMs` | `60000` | Conversion deadline after a converter is acquired; for Poppler, the deadline of all processes of one rendering. |
 | `maxInputBytes` | `52428800` | Maximum source bytes. |
 | `maxOutputBytes` | `104857600` | Maximum complete PDF, converted, or recalculated file bytes. |
 | `outputDirectory` | `$DSH_HOME/office-kit/outputs` | Absolute directory for converted and recalculated files. |
@@ -55,6 +59,8 @@ Browsers request PDFs through the `officeKit.render` Remote method with a Sessio
 | `maxOutputStoreBytes` | `536870912` | Maximum bytes across retained outputs. |
 | `maxImageResolution` | `192` | Image resolution in DPI of PDF exports; overrides the kit default of `144`. `renderImages()` uses each request's `dpi` instead. |
 | `fontFallbacks` | Kit defaults | Ordered font-family preference groups; each group requires at least two names containing non-whitespace characters. |
+| `renderers` | `{ office: [libreoffice], pdf: [poppler, libreoffice] }` | Renderer order per input type for requests without `renderer`; each list is nonempty and duplicate-free, and `office` excludes `poppler`. Load rejects other values. |
+| `poppler` | `{ pdftoppm: pdftoppm, pdfinfo: pdfinfo }` | Poppler executables, each a name looked up on the subprocess provider's `PATH` or an absolute path in its execution world. |
 
 The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-office-kit) owns the full font, archive, and image settings. `fontDirectories` accepts absolute directories; omission uses the kit platform defaults. Explicit `fontFallbacks` replaces the kit's default groups. Installed requested fonts retain precedence, and other system fonts remain eligible for uncovered glyphs. Native engines can select installed metric-compatible fonts before these preferences.
 
@@ -86,6 +92,8 @@ Each concurrent slot lazily creates and reuses one kit converter. The provider w
 
 Remote file reads recheck content authorization and source version before consulting the conversion cache. Deferred reads run after conversion admission and verify the source version after reading. Source-read failures pass through; conversion failures return `document-render/failed` with a classified reason and no engine diagnostics. Unload cancels and joins authorization reads, Remote requests, and conversion work.
 
+Poppler processes receive argv through the `subprocess` service, never a shell command or a caller-supplied path, and run in the directory of their resolved executable, which exists wherever the provider found it. The provider writes stdin with backpressure; a write error such as EPIPE ends the input, and the process's exit status decides the outcome. Their stderr is kept as a bounded tail in the failure cause. Cancellation, the deadline, and provider disposal terminate the running process; each call waits until the process has exited before it settles.
+
 </details>
 
 -----
@@ -94,7 +102,7 @@ Remote file reads recheck content authorization and source version before consul
 ## Further Exploration
 
 - [Office Kit](../../../docs/subsystems/office-kit.md) — composition and input/result ownership.
-- [Office tool](../tool-office/README.md) — the model-facing render, convert, and recalculate tool.
+- [Office tool](../tool-document/README.md) — the model-facing render, convert, and recalculate tool.
 - [Workspace Files](../../api/workspace-files/README.md) — Session file authorization and bounded reads.
 
 -----
@@ -102,7 +110,7 @@ Remote file reads recheck content authorization and source version before consul
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through [the Office tools](../tool-office/README.md#model-experience), which return rendered images and converted files from this service.
+Indirectly, through [the Office tools](../tool-document/README.md#model-experience), which return rendered images and converted files from this service.
 
 #### KV Cache effect
 
@@ -117,6 +125,10 @@ None; this service does not construct or modify model requests.
 - The provider locates only the Kit installation it resolves itself; it does not search other locations or install Kit or engines.
 - Rendered images are returned as bytes. Converted and recalculated files are stored in the provider's output directory, not in the workspace; the caller copies each file to its destination.
 - Mapping a native path does not verify that the unpacked copy exists. Kit rejects missing manifests or assets instead of treating them as an absent native package.
+- Poppler runs as an ordinary process of the subprocess provider, outside the DSH sandbox and without a memory limit; only `timeoutMs` bounds it. The provider neither installs Poppler nor checks its version.
+- Each Poppler process receives the complete PDF on stdin, so a rendering sends the source to one `pdfinfo` process and to one `pdftoppm` process per run of consecutive pages; with SSH providers each copy crosses the SSH connection.
+- Page size limits are checked after `pdftoppm` renders a page, so an oversized page is rasterized before it is refused and briefly occupies memory in `pdftoppm` and in the provider's PNG buffer.
+- Poppler and LibreOffice rasterize PDF pages differently, so images of the same page can differ between renderers.
 
 <a id="dev-note"></a>
 ### Dev Note
