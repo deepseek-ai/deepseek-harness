@@ -1,5 +1,5 @@
-/** The internal timer samples wall time and drains one coalesced callback sequence. */
-import { afterEach, beforeEach, expect, expectTypeOf, it, vi } from 'vitest'
+/** The internal timer drains one coalesced callback sequence. */
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { MAX_TIMER_DELAY_MS, TimeSource } from '../src/time-source.ts'
 
 const sources: TimeSource[] = []
@@ -18,7 +18,7 @@ afterEach(async () => {
 })
 
 function setup(
-  onTime: (now: number) => Promise<void>,
+  onTime: () => Promise<void>,
   reportFailure = vi.fn<(error: unknown) => void>(),
 ) {
   const source = new TimeSource(onTime, reportFailure)
@@ -32,22 +32,16 @@ function gate() {
   return release
 }
 
-it('submits the sampled wall time to its callback', async () => {
-  const receive = vi.fn(async (value: number) => { expectTypeOf(value).toEqualTypeOf<number>() })
-  const { source, reportFailure } = setup(receive)
-  vi.setSystemTime(START + 100)
-  source.request()
-  vi.setSystemTime(START + 200)
-  await vi.advanceTimersByTimeAsync(0)
-  expect(receive).toHaveBeenCalledExactlyOnceWith(START + 100)
+it('notifies the callback without passing a timestamp', async () => {
+  const receive = vi.fn(async () => {})
+  const { source } = setup(receive)
   source.request()
   await vi.advanceTimersByTimeAsync(0)
-  expect(receive).toHaveBeenLastCalledWith(START + 200)
-  expect(reportFailure).not.toHaveBeenCalled()
+  expect(receive).toHaveBeenCalledExactlyOnceWith()
 })
 
 it('replaces or cancels its one armed timer and leaves no automatic recurrence', async () => {
-  const receive = vi.fn(async (_value: number) => {})
+  const receive = vi.fn(async () => {})
   const { source } = setup(receive)
   source.arm(START + 10)
   source.arm(START + 20)
@@ -64,10 +58,11 @@ it('replaces or cancels its one armed timer and leaves no automatic recurrence',
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('samples each long-wait segment and lets its callback recompute the deadline after clock rollback', async () => {
+it('signals each long-wait segment and lets its callback recompute the deadline after clock rollback', async () => {
   const deadline = START + MAX_TIMER_DELAY_MS + 2_000
   const received: number[] = []
-  const { source } = setup(async (now) => {
+  const { source } = setup(async () => {
+    const now = Date.now()
     received.push(now)
     source.arm(now < deadline ? deadline : undefined)
   })
@@ -84,7 +79,7 @@ it('samples each long-wait segment and lets its callback recompute the deadline 
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it('waits for accepted work before coalesced requests produce the next sample', async () => {
+it('waits for accepted work before coalesced requests produce the next signal', async () => {
   const entered = Promise.withResolvers<undefined>()
   const release = gate()
   let calls = 0
@@ -166,7 +161,7 @@ it('closes admission immediately and drains accepted work without delivering its
 })
 
 it('disposes an idle source and cancels its future timer', async () => {
-  const receive = vi.fn(async (_value: number) => {})
+  const receive = vi.fn(async () => {})
   const { source } = setup(receive)
   source.arm(START + MAX_TIMER_DELAY_MS)
   await source.dispose()

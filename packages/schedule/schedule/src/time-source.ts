@@ -11,11 +11,11 @@ export class TimeSource {
   private closing: Promise<void> | undefined
 
   /**
-   * @param onTime - Accepts the sampled wall time and resolves when its due-task scan has settled.
+   * @param onTime - Resolves when the due-task scan has settled.
    * @param reportFailure - Reports a failed callback without retrying it; this callback must not throw.
    */
   constructor(
-    private readonly onTime: (now: number) => Promise<void>,
+    private readonly onTime: () => Promise<void>,
     private readonly reportFailure: (error: unknown) => void,
   ) {}
 
@@ -62,8 +62,7 @@ export class TimeSource {
       while (this.requested) {
         this.requested = false
         this.clearTimer()
-        const now = Date.now()
-        await Promise.resolve().then(() => this.onTime(now))
+        await Promise.resolve().then(() => this.onTime())
       }
     } catch (error: unknown) {
       this.reportFailure(error)
