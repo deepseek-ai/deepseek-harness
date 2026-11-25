@@ -3051,7 +3051,7 @@ export interface McpOAuthConfig {
 
 - `inject`: `tools`
 - `refs`: [`McpOAuthConfigInput`](../packages/mcp/mcp-client/src/index.ts) · [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:77`](../packages/mcp/mcp-manager/src/index.ts)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:44`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /** Manager configuration with live server entries. */

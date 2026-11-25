@@ -314,6 +314,7 @@
       "@deepseek-ai/dsh-plugin-manager/tools": ["./packages/boot/plugin-manager/src/tools.ts"],
       "@deepseek-ai/dsh-mcp-client/types": ["./packages/mcp/mcp-client/src/types.ts"],
       "@deepseek-ai/dsh-mcp-manager/types": ["./packages/mcp/mcp-manager/src/types.ts"],
+      "@deepseek-ai/dsh-mcp-manager/server": ["./packages/mcp/mcp-manager/src/server-row.ts"],
       "@deepseek-ai/dsh-plugin-market/types": ["./packages/boot/plugin-market/src/types.ts"],
       "@deepseek-ai/dsh-plugin-market/tools": ["./packages/boot/plugin-market/src/tools.ts"],
       "@deepseek-ai/dsh-plugin-market-index/source": ["./packages/util/plugin-market-index/src/source.ts"],

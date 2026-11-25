@@ -28,7 +28,7 @@ The client owns each configured connection, the manager runs a settings-driven f
 |---|---|
 | [`mcp-account/`](mcp-account/README.md) | Show each MCP connector's OAuth server account on the Plugins page through the connector account registry |
 | [`mcp-client/`](mcp-client/README.md) | Connect one MCP server, expose its tools and instructions, and provide its resource operations |
-| [`mcp-manager/`](mcp-manager/README.md) | Manage a settings-driven fleet of mcp-client instances: live add/edit/enable/disable/delete, status, restart, probe |
+| [`mcp-manager/`](mcp-manager/README.md) | Manage a settings-driven fleet of mcp-client instances: live add/edit/enable/disable/delete, status, restart, probe; a composition can also declare a server as its own row |
 | [`mcp-resources/`](mcp-resources/README.md) | Discover and read resources through shared tools with explicit server selection |
 
 -----
@@ -40,6 +40,7 @@ Try the worked example configurations to see the plugin in action, then read the
 
 - [historical MCP client plugin Agent Note](../../.agents/notes/archived/feature/2026-07-07-mcp-client-plugin.md) — the bridge's design: server-qualified naming, discovery, execution, and environment scrubbing.
 - [MCP manager Agent Note](../../.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md) — the settings-driven fleet: reconcile semantics, templates, status surface, and rejected alternatives.
+- [Server rows Agent Note](../../.agents/notes/implemented/architecture/2026-11-24-mcp-manager-server-rows.md) — one row per server beside the manager's `servers` dictionary.
 - [Resources and instructions reference](mcp-resources/README.md) — on-demand resource access and scoped server guidance.
 - [Third-party memory MCP guide](../../docs/user/guide/mcp-memory.md) — runnable overlay rows and setup instructions.
 - [Tools subsystem reference](../../docs/subsystems/tools.md) — the `ToolRuntime` that receives the registered tools.

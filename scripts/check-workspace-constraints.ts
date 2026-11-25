@@ -251,6 +251,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js'],
   // A provider row is a separate Loader entry of the adapter package.
   '@deepseek-ai/dsh-llm-pi-ai': ['lib/provider-row.js'],
+  // A server row is a separate Loader entry of the manager package.
+  '@deepseek-ai/dsh-mcp-manager': ['lib/server-row.js'],
   // The JSONL backend resolves its private verification Worker relative to
   // import.meta.url; it is shipped without a public package subpath.
   '@deepseek-ai/dsh-session-persistence-jsonl': ['lib/worker.cjs'],
@@ -636,6 +638,14 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
       }
       if (manifest.exports?.['./provider/locale/*.json'] !== './locale/provider/*.json') {
         errors.push(`${label}: exports["./provider/locale/*.json"] must be "./locale/provider/*.json"`)
+      }
+    }
+    if (manifest.name === '@deepseek-ai/dsh-mcp-manager') {
+      if (!hasExportPair(manifest, './server', './lib/types/server-row.d.ts', './lib/server-row.js')) {
+        errors.push(`${label}: exports["./server"] must expose lib/types/server-row.d.ts and lib/server-row.js`)
+      }
+      if (manifest.exports?.['./server/locale/*.json'] !== './locale/server/*.json') {
+        errors.push(`${label}: exports["./server/locale/*.json"] must be "./locale/server/*.json"`)
       }
     }
     const expectedFiles = expectedDshPackageFiles(manifest, detailDocumentFiles(join(root, dir)))

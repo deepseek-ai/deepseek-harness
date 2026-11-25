@@ -3,7 +3,9 @@
  * instances built from two sources. Volatile `Config.servers` holds configured
  * entries, which Settings exposes under the owning Loader entry id with profile
  * inheritance and revision checks; plugins contribute registered entries for
- * their own lifetime through `register()`. Every change to either source
+ * their own lifetime through `register()`, among them a
+ * `@deepseek-ai/dsh-mcp-manager/server` row, which registers the server its
+ * config declares. Every change to either source
  * reconciles the live instance set: new entries mount, removed or disabled
  * entries unmount, and a changed entry is rebuilt. Connection handling stays
  * entirely in mcp-client, which the manager reaches only through the
@@ -23,55 +25,20 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { parseCredentialKey } from '@deepseek-ai/dsh-credentials'
 import { McpClientHost } from '@deepseek-ai/dsh-mcp-client'
-import type { McpCloseResult, McpOAuthAuthorization, McpProbeOptions, McpProbeResult, McpServerInstance, ReconnectConfig } from '@deepseek-ai/dsh-mcp-client'
-import type { Config as McpClientConfig, McpOAuthAttemptId, McpOAuthAttemptView, McpOAuthConfigInput } from '@deepseek-ai/dsh-mcp-client'
+import type { McpCloseResult, McpOAuthAuthorization, McpProbeOptions, McpProbeResult, McpServerInstance } from '@deepseek-ai/dsh-mcp-client'
+import type { Config as McpClientConfig, McpOAuthAttemptId, McpOAuthAttemptView } from '@deepseek-ai/dsh-mcp-client'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
+import { ServerEntrySchema } from './entry.ts'
+import type { McpManagedServerEntry, McpServerRegistration } from './entry.ts'
 import type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
 // Side-effect type imports: declare the tool service and Loader's volatile events.
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
+export type { McpManagedServerEntry, McpServerRegistration } from './entry.ts'
 export type { McpManagedServerStatus, McpManagedServerView } from './types.ts'
-
-/**
- * One managed server entry. Deliberately flat rather than a per-transport
- * union: the manager's write-time validation owns the per-transport field
- * rules, and its refusals name the offending field where a union's shape error
- * would not.
- */
-export interface McpManagedServerEntry {
-  /** Optional OAuth configuration; each entry owns a distinct stable credential key, and the MCP client host resolves the rest. */
-  oauth?: McpOAuthConfigInput
-  /** Which transport the instance uses. */
-  transport: 'stdio' | 'streamable-http'
-  /** stdio: executable used to start the server; `''` while unset. */
-  command: string
-  /** stdio: arguments passed without shell interpolation. */
-  args: string[]
-  /** stdio: extra child environment; values may use `${credential:…}` templates. */
-  env: Record<string, string>
-  /** stdio: working directory for the child process. */
-  cwd: string
-  /** streamable-http: MCP endpoint URL; `''` while unset. */
-  url: string
-  /** streamable-http: extra request headers; values may use templates. */
-  headers: Record<string, string>
-  /** Durable intent: whether the entry asks for a running instance. */
-  enabled: boolean
-  /** Per-tool-call timeout override in milliseconds; omission uses the mcp-client default. */
-  toolCallTimeoutMs?: number
-  /** Per-attempt startup budget in milliseconds; the manager schema defaults to 30000. */
-  startupTimeoutMs: number
-  /** Cleanup budget override in milliseconds; omission uses the mcp-client default. */
-  closeTimeoutMs?: number
-  /** Reconnect policy; the MCP client host validates it, and omission uses the mcp-client defaults. */
-  reconnect?: ReconnectConfig
-  /** `on-demand` keeps the server's tools out of every tool list until an agent loads them; default `eager`. */
-  toolLoading: 'eager' | 'on-demand'
-}
 
 /** Manager configuration with live server entries. */
 export interface Config {
@@ -79,35 +46,11 @@ export interface Config {
   servers: Volatile<Record<string, McpManagedServerEntry>>
 }
 
-type EntryInput = Omit<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'startupTimeoutMs' | 'toolLoading'>
-  & Partial<Pick<McpManagedServerEntry, 'command' | 'url' | 'args' | 'env' | 'cwd' | 'headers' | 'enabled' | 'startupTimeoutMs' | 'toolLoading'>>
 interface ConfigInput {
-  servers?: Record<string, EntryInput>
+  servers?: Record<string, McpServerRegistration & Partial<Pick<McpManagedServerEntry, 'enabled'>>>
 }
 
-/** One server a plugin contributes for its own lifetime; it is enabled while registered. */
-export type McpServerRegistration = Omit<EntryInput, 'enabled'>
-
 type ResolvedEntry = VolatileSnapshot<McpManagedServerEntry>
-
-// `oauth` and `reconnect` pass through unresolved: the MCP client host owns their fields,
-// defaults, and bounds, and validates them with the rest of the client configuration.
-const ServerEntrySchema = z.object({
-  oauth: z.any(),
-  transport: z.union(['stdio', 'streamable-http']).required(),
-  command: z.string().default(''),
-  args: z.array(String).default([]),
-  env: z.dict(String).default({}),
-  cwd: z.string().default(''),
-  url: z.string().default(''),
-  headers: z.dict(String).default({}),
-  enabled: z.boolean().default(true),
-  toolCallTimeoutMs: z.number(),
-  startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
-  closeTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
-  reconnect: z.any(),
-  toolLoading: z.union(['eager', 'on-demand']).default('eager'),
-}) as z<EntryInput, McpManagedServerEntry>
 
 /** One server's child instance, probes, and any cleanup failure retained by the manager. */
 interface ManagedRecord {
