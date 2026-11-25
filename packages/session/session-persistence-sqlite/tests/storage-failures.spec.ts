@@ -302,7 +302,7 @@ it.each([
     const reader = await logs.open(SessionId('child'), 'read')
     const db = new DatabaseSync(path)
     try {
-      db.exec('PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TRIGGER segments_no_reparent;')
+      db.exec('PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TRIGGER segments_no_reparent; DROP TRIGGER frames_no_delete;')
       const head = "(SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')"
       if (fault === 'missing-segment') db.exec(`DELETE FROM segments WHERE segment_uuid = ${head}`)
       if (fault === 'missing-parent') db.exec(`UPDATE segments SET parent_segment_uuid = 'absent' WHERE segment_uuid = ${head}`)
