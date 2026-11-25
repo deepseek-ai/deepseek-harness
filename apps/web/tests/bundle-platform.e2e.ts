@@ -42,19 +42,19 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   const beforeRuntime = runtimeId()
   expect(beforeRuntime).toBeTypeOf('number')
   expect(scaffold.ctx.ptcRuntime.programFormat).toBe('scoped-repl')
-  const names = [name]
+  const refusals: [string, string[]][] = [[name, ['freebsd']]]
   await page.locator('[data-plugin-panel]').getByRole('button', { name: '更多', exact: true }).click()
   const cua = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
   const cuaSupported = process.platform === 'darwin' || process.platform === 'win32'
   expect(await cua.count()).toBe(cuaSupported ? 1 : 0)
   if (!cuaSupported) {
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
-      .toMatchObject({ listedByDefault: false, enabled: false, error: { code: 'unsupported-platform', platforms: ['freebsd'] } })
-    names.push('@deepseek-ai/dsh-cua-bundle')
+      .toMatchObject({ listedByDefault: false, enabled: false, error: { code: 'unsupported-platform', platforms: ['darwin', 'win32'] } })
+    refusals.push(['@deepseek-ai/dsh-cua-bundle', ['darwin', 'win32']])
   }
-  for (const bundle of names) {
+  for (const [bundle, platforms] of refusals) {
     expect(await scaffold.ctx.pluginManager.setBundleEnabled(bundle, true)).toMatchObject({
-      changed: false, application: 'failed', error: { code: 'unsupported-platform', platforms: ['freebsd'] },
+      changed: false, application: 'failed', error: { code: 'unsupported-platform', platforms },
     })
   }
   expect(await readFile(manifest, 'utf8')).toBe(before)
