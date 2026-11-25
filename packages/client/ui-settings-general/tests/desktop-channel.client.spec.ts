@@ -122,13 +122,18 @@ it('does not let a late initial read overwrite an accepted selection', async () 
 })
 
 
-it('does not submit or toast for the current healthy selection', async () => {
+it('submits when locked on stable, then skips redundant submits once unlocked', async () => {
   const f = fixture()
-  f.get.resolve(nightly)
+  const lockedStable: DesktopChannelState = { ...stable, unlocked: false }
+  f.get.resolve(lockedStable)
   await f.get.promise
-  await f.source.select('nightly')
-  expect(f.select).not.toHaveBeenCalled()
-  expect(f.source.store.getSnapshot()).toEqual({ state: nightly, failed: false })
+  const unlocking = f.source.select('stable')
+  expect(f.select).toHaveBeenCalledExactlyOnceWith('stable')
+  f.set.resolve({ kind: 'applied', state: stable })
+  await unlocking
+  await f.source.select('stable')
+  expect(f.select).toHaveBeenCalledOnce()
+  expect(f.source.store.getSnapshot().state).toEqual(stable)
   f.source.dispose()
 })
 

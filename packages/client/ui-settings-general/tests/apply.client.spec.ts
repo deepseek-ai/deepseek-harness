@@ -17,6 +17,7 @@ import { inject } from '../src/client/index.ts'
 import type { DeveloperToolsRowInjected } from '../src/client/DeveloperToolsRow.tsx'
 import { HostReleasePrompt, type HostReleasePromptInjected } from '../src/client/HostReleasePrompt.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+import type { CurrentVersionRowInjected } from '../src/client/CurrentVersionRow.tsx'
 import type { DesktopChannelRowInjected, DesktopChannelToastInjected } from '../src/client/DesktopChannelRow.tsx'
 import type { DesktopChannelBridge } from '../src/types.ts'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
@@ -218,8 +219,11 @@ describe('ui-settings-general apply', () => {
 
   it('removes the Desktop channel row and shell subscription when its plugin unloads', async ({ mock, start }) => {
     const unsubscribe = vi.fn()
-    const state = { channel: 'nightly', packagedChannel: 'nightly', changing: false } as const
-    const save = vi.fn(async () => ({ kind: 'applied' as const, state }))
+    let state = { channel: 'stable' as 'nightly' | 'stable', packagedChannel: 'stable' as const, unlocked: false, changing: false }
+    const save = vi.fn(async (channel: 'nightly' | 'stable') => {
+      state = { ...state, channel, unlocked: true }
+      return { kind: 'applied' as const, state }
+    })
     const channels: DesktopChannelBridge = { get: async () => state, set: save,
       subscribe: () => unsubscribe }
     const open = vi.fn(async () => {})
@@ -227,6 +231,13 @@ describe('ui-settings-general apply', () => {
       status: async () => ({ phase: 'idle' }), open, subscribe: () => () => {} } })
     onTestFinished(() => { vi.unstubAllGlobals() })
     const { c } = await client(mock, start)
+    const versionRow = c.ctx.slots.entries('settings.general.group.updates.item').find(row => row.options.id === 'current-version')!
+    const versionInjected = versionRow.inject!()
+    const versionHooks = versionInjected.hooks as CurrentVersionRowInjected['hooks']
+    const unlock = versionInjected.unlock as CurrentVersionRowInjected['unlock']
+    expect(versionHooks.channel).toBeDefined()
+    await unlock()
+    expect(save).toHaveBeenCalledWith('nightly')
     const row = c.ctx.slots.entries('settings.general.group.updates.item').find(row => row.options.id === 'desktop-update-channel')!
     expect(row.options.order).toBe(100)
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-channel-toast')).toBe(true)
@@ -241,7 +252,7 @@ describe('ui-settings-general apply', () => {
     openConfiguration()
     expect(open).toHaveBeenCalledOnce()
     expect(hooks.channel.getSnapshot().notice?.outcome).toBe('applied')
-    dismiss(1)
+    dismiss(2)
     expect(hooks.channel.getSnapshot().notice).toBeUndefined()
     await c.unload(SELF)
     await c.flush()

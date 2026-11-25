@@ -327,6 +327,49 @@ describe('current version', () => {
     const view = render(<CurrentVersionRow {...kit} t={t} />)
     expect(view.container.textContent).toBe('')
   })
+
+  it('unlocks the development channel after 5 clicks and confirmation while keeping Cancel focused first', async () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+    const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
+      failed: false,
+      state: { channel: 'stable', packagedChannel: 'stable', unlocked: false, changing: false },
+    })
+    const unlock = vi.fn(async () => {
+      store.set({
+        failed: false,
+        state: { channel: 'nightly', packagedChannel: 'stable', unlocked: true, changing: false },
+      })
+    })
+    const useChannel = bindSnapshotSelector(store)
+    render(
+      <>
+        <DesktopChannelRow {...kit} t={t} useChannel={useChannel} select={vi.fn(async () => {})} />
+        <CurrentVersionRow {...kit} t={t} useChannel={useChannel} unlock={unlock} />
+      </>,
+    )
+    expect(screen.queryByRole('group', { name: 'Update channel' })).toBeNull()
+    const versionRow = screen.getByText(en['general.currentVersion'])
+    for (let i = 0; i < 4; i++) fireEvent.click(versionRow)
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+
+    fireEvent.click(versionRow)
+    const modal = screen.getByRole('dialog', { name: en['desktop.channel.unlock.title'] })
+    expect(modal.textContent).toContain(en['desktop.channel.unlock.description'])
+    expect(document.activeElement?.textContent).toBe('Cancel')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+    expect(unlock).not.toHaveBeenCalled()
+
+    for (let i = 0; i < 5; i++) fireEvent.click(versionRow)
+    expect(screen.getByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to development' }))
+    await waitFor(() => { expect(unlock).toHaveBeenCalledOnce() })
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Update channel' }).textContent).toBe('Development')
+
+    for (let i = 0; i < 5; i++) fireEvent.click(versionRow)
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+  })
 })
 
 describe('Host release change confirmation', () => {
@@ -392,19 +435,23 @@ describe('Host release change confirmation', () => {
 })
 
 
-it('shows channel load errors and waits for an explicit selection to settle', async () => {
+it('hides the channel row while locked, shows load errors, and waits for an explicit selection to settle', async () => {
   let state: { state?: DesktopChannelState; failed: boolean; pending?: 'stable' } = { failed: false }
   const pending = Promise.withResolvers<undefined>()
   const select = vi.fn(() => pending.promise)
   const props = { ...kit, t, select, useChannel: bindSnapshotSelector(createSnapshotStore(state)) }
   const view = render(<DesktopChannelRow {...props} />)
-  const control = screen.getByRole('button', { name: 'Update channel' })
-  expect(control.hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByRole('button', { name: 'Update channel' })).toBeNull()
+  state = { failed: false, state: { channel: 'stable', packagedChannel: 'stable', unlocked: false, changing: false } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(screen.queryByRole('button', { name: 'Update channel' })).toBeNull()
   state = { failed: true }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(screen.getByRole('alert').textContent).toBe(en['desktop.channel.readError'])
-  state = { failed: false, state: { channel: null, packagedChannel: 'nightly', unlocked: true, changing: false, error: 'format' } }
+  expect(screen.getByRole('button', { name: 'Update channel' }).hasAttribute('disabled')).toBe(true)
+  state = { failed: false, state: { channel: null, packagedChannel: 'nightly', unlocked: false, changing: false, error: 'format' } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  const control = screen.getByRole('button', { name: 'Update channel' })
   expect(control.textContent).toContain('Configuration unavailable')
   fireEvent.click(control)
   fireEvent.click(screen.getByRole('menuitem', { name: 'Stable' }))
