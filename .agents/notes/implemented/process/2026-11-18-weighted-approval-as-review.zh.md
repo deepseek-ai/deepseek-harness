@@ -16,7 +16,7 @@ Status: implemented
 
 第二个 workflow `weighted-approval-machine` 以机器账号 `deepseek-ai-harness`（用户 ID 359032549）发布同一决定，形式为原生 review。它复用评分策略，以及无权限的 `weighted-approval-review-event` workflow 转交路径。它只写自己的评论、approving review 和对该 approval 的 dismissal；它读取评分所需的其它 review、评论、权限和历史。它从不 dismiss 人类 review，也不发起 review request。
 
-试点使用 `secrets.DSH_APPROVAL_BOT_TOKEN`，即机器账号的 PAT。`evaluate` job 以字面量声明 `environment: weighted-approval`。该环境提供该 token：可复用 workflow 不声明任何 `workflow_call` secret，调用它的旧版 publisher 也不传入 secret。该环境的部署分支策略只允许 `master`，没有 tag 规则，并禁用管理员绕过；不满足该策略的部署会在 job 的步骤开始前被拒绝。试点不签发 App token，也不持有 App 私钥。任何写入之前，它按数字用户 ID 和 login 校验该 token 属于机器账号。它用 PAT 读取策略输入，并用只读的 `GITHUB_TOKEN` 获取合并历史和 production ownership。它按用户 ID 识别自己的评论和 review，因此其它账号复制的 marker 会被忽略。两个 publisher 都把机器账号的 review 排除在计分之外。
+试点使用 `secrets.DSH_APPROVAL_BOT_TOKEN`，即机器账号的 PAT。`evaluate` job 以字面量声明 `environment: weighted-approval`；该固定环境提供取值。可复用 workflow 的 `workflow_call` 以 `required: true` 声明 `DSH_APPROVAL_BOT_TOKEN`，调用它的旧版 publisher 只转发名称（`DSH_APPROVAL_BOT_TOKEN: ${{ secrets.DSH_APPROVAL_BOT_TOKEN }}`），不使用 `inherit`。即使被调用 job 的环境提供取值，调用方仍必须传入名称；同名时环境 secret 优先于仓库或组织 secret。独立触发路径不变：它们的 `evaluate` job 声明同一环境并直接读取该 secret。该环境的部署分支策略只允许 `master`，没有 tag 规则，并禁用管理员绕过；不满足该策略的部署会在 job 的步骤开始前被拒绝。`required: true` 会让省略该 secret 的调用方失败，但不证明环境 secret 有值；试点的 token 身份校验会在任何写入前拒绝缺失或错误的值。[GitHub 文档：在可复用 workflow 中传递 inputs 和 secrets](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)记录了按名称传入与环境优先级。试点不签发 App token，也不持有 App 私钥。任何写入之前，它按数字用户 ID 和 login 校验该 token 属于机器账号。它用 PAT 读取策略输入，并用只读的 `GITHUB_TOKEN` 获取合并历史和 production ownership。它按用户 ID 识别自己的评论和 review，因此其它账号复制的 marker 会被忽略。两个 publisher 都把机器账号的 review 排除在计分之外。
 
 试点发布：
 
@@ -33,7 +33,7 @@ Status: implemented
 
 ## Verification
 
-审批策略套件用 `pnpm run test:approval-policy` 运行 keyless 测试，覆盖两个 publisher：旧版 status 发布；试点的评论和 approving review 发布；撤回；scope 选择；机器身份；head 绑定；委托；计分；以及 API 失败。`scripts/ci-workflow.spec.ts` 中的 workflow 测试钉住可信 checkout、无权限的 review 事件转交、旧版 status 与 App 标签 token、`evaluate` job 上的字面量 `weighted-approval` 环境、未声明的 `workflow_call` secret 与调用方未传入 secret、试点 PAT、试点不签发 App token、scope 变量、workflow-dispatch 输入、事件和命令。
+审批策略套件用 `pnpm run test:approval-policy` 运行 keyless 测试，覆盖两个 publisher：旧版 status 发布；试点的评论和 approving review 发布；撤回；scope 选择；机器身份；head 绑定；委托；计分；以及 API 失败。`scripts/ci-workflow.spec.ts` 中的 workflow 测试钉住可信 checkout、无权限的 review 事件转交、旧版 status 与 App 标签 token、`evaluate` job 上的字面量 `weighted-approval` 环境、`required: true` 的 `workflow_call` secret 声明与调用方只转发名称、试点 PAT、试点不签发 App token、scope 变量、workflow-dispatch 输入、事件和命令。
 
 已合并的 #9005 探针只在一个专用探针环境上测量了手动 `workflow_dispatch` 运行的环境隔离：其受保护的 job 在 `master` 读到 marker secret，同一个 job 在 topic 分支上的任何步骤执行前被拒绝，而没有环境的独立 control job 在 topic 分支上运行，并断言 marker 不存在。它没有测量 `pull_request_target`、`workflow_run`，也没有测量旧版 publisher 发起的委托 `workflow_call`。在试点覆盖第二个拉取请求之前，先在一个隔离的拉取请求上验证 `evaluate` job 能到达 `weighted-approval` 环境，并在这三条路径上读取 `DSH_APPROVAL_BOT_TOKEN`。确认每次运行都为该环境记录一次部署，并且 publisher 完成身份校验并写入。测试期间把 scope 设为该拉取请求的编号，在三条路径全部通过前不要设为 `all`。
 
