@@ -10,7 +10,7 @@ Desktop updates and native recovery can run before the Host starts or while it i
 
 ## Decision
 
-Electron main owns `userData/desktop/settings.json` independently of Host startup and Cordis evaluation. The test authentication popup switch uses this file; the [Desktop reference](../../../../apps/desktop/README.md#local-desktop-settings) owns its fields and behavior.
+Electron main owns `userData/desktop/settings.json` independently of Host startup and Cordis evaluation. Document `"version": "1"`, the test authentication popup switch, and the update-channel preference and unlock flag use this file; [channel convergence and decoupled publishing](2026-11-25-desktop-channel-convergence-and-decoupled-publishing.md) owns `"version": "1"` migration and default `stable` locking, and the [Desktop reference](../../../../apps/desktop/README.md#local-desktop-settings) owns field validation and runtime behavior.
 
 Ownership follows runtime dependencies: Electron-owned functions needing configuration before Host startup or while the Host is unavailable use shell configuration. Host plugin settings, including shared Web/Desktop preferences, continue to use Cordis. Displaying a setting in Desktop alone does not justify shell ownership. A unified settings interface can use separate storage owners.
 
