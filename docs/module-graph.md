@@ -1563,6 +1563,8 @@ flowchart TD
   pkg_tool_document --> pkg_subagent
   pkg_tool_document --> pkg_tools
   pkg_tool_document --> pkg_working_directory
+  pkg_client_ui_connectors --> pkg_credentials
+  pkg_client_ui_connectors --> pkg_mcp_manager
   pkg_experimental_client_ui_forge --> pkg_experimental_forge
   pkg_experimental_client_ui_forge --> pkg_experimental_worktree
   pkg_experimental_client_ui_forge --> pkg_fs
@@ -1833,7 +1835,6 @@ flowchart TD
 | [`notion`](../packages/connector/notion) | `connector` | — |
 | [`tencent-docs`](../packages/connector/tencent-docs) | `connector` | — |
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
-| [`client-ui-connectors`](../packages/experimental/client-ui-connectors) | `experimental` | — |
 | [`client-ui-read-aloud`](../packages/experimental/client-ui-read-aloud) | `experimental` | — |
 | [`client-ui-sidechat`](../packages/experimental/client-ui-sidechat) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
@@ -2112,6 +2113,7 @@ flowchart TD
 | [`compaction-basic`](../packages/compaction/compaction-basic) | `compaction` | [`agent`](../packages/core/agent), [`commands`](../packages/interaction/commands), [`compaction`](../packages/compaction/compaction), [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`token-meter`](../packages/llm/token-meter) |
 | [`session-reference`](../packages/context/session-reference) | `context` | [`agent`](../packages/core/agent), [`compaction`](../packages/compaction/compaction), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`session-projection-cache`](../packages/session/session-projection-cache), [`session-query`](../packages/session-query/session-query), [`session-title`](../packages/session/session-title), [`spill`](../packages/spill/spill), [`subagent`](../packages/subagent/subagent), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol) |
 | [`tool-document`](../packages/document/tool-document) | `document` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`error`](../packages/util/error), [`fs`](../packages/fs/fs), [`llm`](../packages/llm/llm), [`office-kit`](../packages/document/office-kit), [`skill`](../packages/skill/skill), [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
+| [`client-ui-connectors`](../packages/experimental/client-ui-connectors) | `experimental` | [`credentials`](../packages/credentials/credentials), [`mcp-manager`](../packages/mcp/mcp-manager) |
 | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | `experimental` | [`experimental-forge`](../packages/experimental/forge), [`experimental-worktree`](../packages/experimental/worktree), [`fs`](../packages/fs/fs), [`session`](../packages/core/session), [`timeout`](../packages/util/timeout) |
 | [`experimental-subagent-oar`](../packages/experimental/subagent-oar) | `experimental` | [`error`](../packages/util/error), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`subagent`](../packages/subagent/subagent), [`subprocess`](../packages/subprocess/subprocess) |
 | [`experimental-tool-subagent-oar`](../packages/experimental/tool-subagent-oar) | `experimental` | [`subagent`](../packages/subagent/subagent), [`tools`](../packages/core/tools) |

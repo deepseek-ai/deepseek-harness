@@ -1,4 +1,4 @@
-/** The account copy of an MCP server configured in Settings, which names the server where a connector names its service. */
+/** The account copy of a custom MCP server, which names the server where a connector names its service. */
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { McpAccountCopy } from '@deepseek-ai/dsh-mcp-account'
 

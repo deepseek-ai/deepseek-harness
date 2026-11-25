@@ -10,6 +10,7 @@ import { inject, mountConnectors } from '../src/client/mount.ts'
 import type { ConnectorsFace } from '../src/client/connectors-store.ts'
 import type { CustomServersFace } from '../src/client/custom-servers-store.ts'
 import { CustomServersSection } from '../src/client/CustomServersSection.tsx'
+import type { CustomServersList } from '../src/types.ts'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-client-ui-connectors', descriptors: [] }
 
@@ -62,13 +63,25 @@ it('contributes the Connectors tab, follows Host changes, and withdraws the tab 
   expect(remote.unmounted).toHaveBeenCalledOnce()
 })
 
-it('adds the custom servers section once its Remote and the manager\'s exist, and reads again after a Settings change', async () => {
+it('adds the custom servers section once its Remote and the manager\'s exist, follows the server rows once the section asks, and closes their stream before its Remote goes', async () => {
   const { remote, slots, fiber } = await bench()
   expect(slots.entries('connectors.custom')).toEqual([])
 
-  const listServers = vi.fn(async () => ({ ok: true as const, value: { available: true, writable: true, revision: 1, servers: [] } }))
+  const steps: string[] = []
+  remote.unmounted.mockImplementation(async () => { steps.push('remote unmounted') })
+  /** The Host stream: the list, then nothing until the client closes it. */
+  async function* watchServers(signal: AbortSignal): AsyncGenerator<CustomServersList> {
+    steps.push('stream opened')
+    const closed: PromiseWithResolvers<void> = Promise.withResolvers()
+    signal.addEventListener('abort', () => {
+      steps.push('stream closed')
+      closed.resolve()
+    }, { once: true })
+    yield { available: true, revision: 'r1', servers: [] }
+    await closed.promise
+  }
   remote.provideNamespaces({
-    connectors: { listServers, saveServer: vi.fn(), removeServer: vi.fn(), setServerEnabled: vi.fn() },
+    connectors: { watchServers, saveServer: vi.fn(), removeServer: vi.fn(), setServerEnabled: vi.fn() },
     mcpManager: { probe: vi.fn() },
   })
   await vi.waitFor(() => { expect(slots.entries('connectors.custom')).toHaveLength(1) })
@@ -76,18 +89,14 @@ it('adds the custom servers section once its Remote and the manager\'s exist, an
   expect(entry).toMatchObject({ locale: 'connectors', component: CustomServersSection })
   const injected: object = entry!.inject!()
   const face = injected as CustomServersFace
-  remote.emit('settings/document-updated', ['mcp-manager', 2])
-  expect(listServers).not.toHaveBeenCalled()
+  expect(steps).toEqual([])
   face.ensure()
-  await vi.waitFor(() => { expect(face.hooks.customServers.getSnapshot().status).toBe('ready') })
-  remote.emit('settings/document-updated', ['mcp-manager', 2])
-  await vi.waitFor(() => { expect(listServers).toHaveBeenCalledTimes(2) })
+  await vi.waitFor(() => { expect(face.hooks.customServers.getSnapshot()).toMatchObject({ status: 'ready', revision: 'r1' }) })
+  expect(steps).toEqual(['stream opened'])
 
   await fiber.dispose()
   expect(slots.entries('connectors.custom')).toEqual([])
-  remote.emit('settings/document-updated', ['mcp-manager', 3])
-  expect(listServers).toHaveBeenCalledTimes(2)
-  expect(remote.unmounted).toHaveBeenCalledOnce()
+  expect(steps).toEqual(['stream opened', 'stream closed', 'remote unmounted'])
 })
 
 it('loads the browser entry through its generated Remote contribution', async () => {

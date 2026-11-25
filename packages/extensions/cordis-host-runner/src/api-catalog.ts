@@ -909,32 +909,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'connectors',
-    summary: 'Lists and changes the MCP manager\'s Settings servers for the Connectors tab, and shows each configured OAuth server\'s account.',
-    description: 'Lists and changes the MCP manager\'s Settings servers for the Connectors tab, and shows each configured OAuth server\'s account.',
+    summary: 'Streams and changes the MCP server rows of the profile\'s composition for the Connectors tab, and shows the account of each OAuth server row that is on.',
+    description: 'Streams and changes the MCP server rows of the profile\'s composition for the Connectors tab, and shows the account of each OAuth server row that is on.',
     methods: [
       {
-        signature: '@Remote listServers(): CustomServersList',
-        description: 'List the servers of the MCP manager\'s Settings namespace with secrets redacted.',
-        parameters: [],
-        returns: 'the servers and the revision a change names, or that the profile has no Settings, credentials, or manager to keep custom servers with.',
+        signature: '@Remote({ mode: \'stream\' }) async* watchServers(signal: AbortSignal): AsyncIterable<CustomServersList>',
+        description: 'Stream the MCP server rows: the rows of the profile\'s composition that load the MCP manager\'s server row plugin, including rows that are switched off and rows that did not start. A list follows every successful reload of the composition, every change the plugin manager reports, and every change made through this service.',
+        parameters: [{ name: 'signal', description: 'ends the stream.' }],
+        returns: 'each list with the revision a change names, or that the profile has no configuration editor, plugin manager, credentials, or MCP manager to keep custom servers with.',
       },
       {
-        signature: '@Remote async saveServer(draft: ServerDraft, revision: number): Promise<void>',
-        description: 'Save one server from the form: write the entry, store the secret values entered in it, then delete the secrets the entry stopped using. An edit that drops OAuth signs the server out first, because the manager deletes a grant only while the entry still configures OAuth. The first refused step stops the save, so a refused write stores nothing; the manager starts the written entry at once and connects it again when a secret it references is stored after that. A save is refused when a reference under the server\'s own prefix is used by another server\'s entry, and it never deletes a reference another entry still uses.',
-        parameters: [{ name: 'draft', description: 'the form\'s values, including newly entered secret values.' }, { name: 'revision', description: 'the namespace revision the list last read.' }],
-        throws: ['RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for a draft the form would not save or the first refused step.'],
+        signature: '@Remote saveServer(draft: ServerDraft, revision: string, id?: string): Promise<void>',
+        description: 'Save one server from the form. A new server becomes the row `mcp-server-<name>` of the profile patch, switched on; an edit replaces the config of the row `id` names. The save writes the row, stores the secret values entered in the form, then deletes the secrets the row stopped using; an edit that drops OAuth removes the grant first. The first refused step stops the save, so a refused write stores nothing. A row that is switched on must run after the write: when it does not start, the configuration editor restores the profile patch and the save is refused with the row\'s failure, while a row that is switched off is only written. The manager starts a written row at once and connects it again when a secret it references is stored after that. A save is refused when a reference under the server\'s own prefix is used by another row, and it never deletes a reference another row still uses, whether that row is on or off.',
+        parameters: [{ name: 'draft', description: 'the form\'s values, including newly entered secret values.' }, { name: 'revision', description: 'the revision of the list the save was made on.' }, { name: 'id', description: 'the row to edit; omitted for a new server.' }],
+        throws: ['RemoteError `connectors/conflict` when the server rows changed after that revision, or `connectors/refused` for a draft the form would not save, a config the row plugin\'s schema rejects, or the first refused step.'],
       },
       {
-        signature: '@Remote async removeServer(name: string, revision: number): Promise<void>',
-        description: 'Remove one server: sign an OAuth server out, delete its entry, then delete the secrets it owned that no other entry uses. The first refused step stops the removal.',
-        parameters: [{ name: 'name', description: 'the server.' }, { name: 'revision', description: 'the namespace revision the list read.' }],
-        throws: ['RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for the first refused step.'],
+        signature: '@Remote removeServer(id: string, revision: string): Promise<void>',
+        description: 'Remove one server row the profile patch adds: remove an OAuth server\'s grant, delete the row with its overrides, then delete the secrets it owned that no other row uses. The first refused step stops the removal. A row the form cannot read is removed without its grant and secrets.',
+        parameters: [{ name: 'id', description: 'the row.' }, { name: 'revision', description: 'the revision of the list the removal was made on.' }],
+        throws: ['RemoteError `connectors/conflict` when the server rows changed after that revision, or `connectors/refused` for a row the profile patch does not add, or the first refused step.'],
       },
       {
-        signature: '@Remote async setServerEnabled(name: string, enabled: boolean, revision: number): Promise<void>',
-        description: 'Switch one server on or off.',
-        parameters: [{ name: 'name', description: 'the server.' }, { name: 'enabled', description: 'whether the manager runs it.' }, { name: 'revision', description: 'the namespace revision the list read.' }],
-        throws: ['RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` when the write is refused.'],
+        signature: '@Remote setServerEnabled(id: string, enabled: boolean, revision: string): Promise<void>',
+        description: 'Switch one server row on or off through the plugin manager, which writes the switch to the profile patch and reloads the composition. A row that does not start after it is switched on stays switched on and is listed as failed.',
+        parameters: [{ name: 'id', description: 'the row.' }, { name: 'enabled', description: 'whether the row runs.' }, { name: 'revision', description: 'the revision of the list the switch was made on.' }],
+        throws: ['RemoteError `connectors/conflict` when the server rows changed after that revision, or `connectors/refused` when the switch did not take effect: the row did not start, another patch decides the switch, or the composition applies it only after a restart.'],
       },
     ],
   },
@@ -7866,11 +7866,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CustomServersList',
-    declaration: 'export type CustomServersList = {\n    readonly available: false;\n} | {\n    readonly available: true;\n    readonly writable: boolean;\n    readonly revision: number;\n    readonly servers: readonly CustomServerView[];\n};',
+    declaration: 'export type CustomServersList = {\n    readonly available: false;\n} | {\n    readonly available: true;\n    readonly revision: string;\n    readonly servers: readonly CustomServerView[];\n};',
+  },
+  {
+    name: 'CustomServerStatus',
+    declaration: 'export type CustomServerStatus = {\n    readonly state: \'on\' | \'off\';\n} | {\n    readonly state: \'failed\';\n    readonly error: string;\n};',
   },
   {
     name: 'CustomServerView',
-    declaration: 'export interface CustomServerView {\n    readonly name: string;\n    readonly raw?: Readonly<Record<string, JsonValue>> | undefined;\n    readonly inherited: boolean;\n}',
+    declaration: 'export type CustomServerView = CustomServerStatus & {\n    readonly id: string;\n    readonly name: string;\n    readonly raw?: Readonly<Record<string, JsonValue>> | undefined;\n    readonly inherited: boolean;\n};',
   },
   {
     name: 'DailyInput',
@@ -10750,7 +10754,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ServerDraft',
-    declaration: 'export interface ServerDraft {\n    readonly name: string;\n    readonly transport: Transport;\n    readonly url: string;\n    readonly headers: readonly DraftRow[];\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: readonly DraftRow[];\n    readonly cwd: string;\n    readonly auth: AuthKind;\n    readonly token: string;\n    readonly tokenRef?: string | undefined;\n    readonly clientId: string;\n    readonly scope: string;\n    readonly enabled: boolean;\n}',
+    declaration: 'export interface ServerDraft {\n    readonly name: string;\n    readonly transport: Transport;\n    readonly url: string;\n    readonly headers: readonly DraftRow[];\n    readonly command: string;\n    readonly args: readonly string[];\n    readonly env: readonly DraftRow[];\n    readonly cwd: string;\n    readonly auth: AuthKind;\n    readonly token: string;\n    readonly tokenRef?: string | undefined;\n    readonly clientId: string;\n    readonly scope: string;\n}',
   },
   {
     name: 'ServerResponse',

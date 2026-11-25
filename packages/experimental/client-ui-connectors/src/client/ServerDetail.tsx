@@ -1,10 +1,15 @@
-/** A custom MCP server's page: its account, form, connection test, and removal, with an enabled local command's risk confirmation. */
+/**
+ * A custom MCP server's page: why it did not start, its account, form, connection test, and removal, with the risk
+ * confirmation of a local command the save starts.
+ */
 import { useState, type ReactNode } from 'react'
-import { Button, Checkbox, IconPlusOutlineRegular, Input, RiskConfirmation, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, IconPlusOutlineRegular, Input, Modal, RiskConfirmation, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ProbeState } from './custom-servers-store.ts'
 import type { ConnectorsLocaleKey } from './locales.ts'
 import { validateDraft, type AuthKind, type DraftRow, type ServerDraft, type Transport } from '../server-form.ts'
+import type { CustomServerStatus } from '../types.ts'
 import css from './CustomServers.module.css'
 
 type T = Translate<ConnectorsLocaleKey>
@@ -17,6 +22,29 @@ function probeText(probe: ProbeState, t: T): string {
   }
 }
 
+/**
+ * Keys that stay with the rows of an editable list while rows are added or removed. `add` and `remove` change the list
+ * and its keys together; nothing else may change the list's length.
+ */
+function useRowKeys<Row>(rows: readonly Row[], onChange: (rows: readonly Row[]) => void): {
+  readonly keys: readonly number[]
+  readonly add: (row: Row) => void
+  readonly remove: (index: number) => void
+} {
+  const [state, setState] = useState(() => ({ next: rows.length, keys: rows.map((_, index) => index) }))
+  return {
+    keys: state.keys,
+    add: (row) => {
+      setState(({ next, keys }) => ({ next: next + 1, keys: [...keys, next] }))
+      onChange([...rows, row])
+    },
+    remove: (index) => {
+      setState(({ next, keys }) => ({ next, keys: keys.filter((_, at) => at !== index) }))
+      onChange(rows.filter((_, at) => at !== index))
+    },
+  }
+}
+
 function Rows({ label, addLabel, rows, t, onChange }: {
   readonly label: string
   readonly addLabel: string
@@ -24,6 +52,7 @@ function Rows({ label, addLabel, rows, t, onChange }: {
   readonly t: T
   readonly onChange: (rows: readonly DraftRow[]) => void
 }): ReactNode {
+  const { keys, add, remove } = useRowKeys(rows, onChange)
   const update = (index: number, change: Partial<DraftRow>): void => {
     onChange(rows.map((row, at) => at === index ? { ...row, ...change } : row))
   }
@@ -31,17 +60,20 @@ function Rows({ label, addLabel, rows, t, onChange }: {
     <fieldset className={css.rows}>
       <legend className={css.label}>{label}</legend>
       {rows.map((row, index) => (
-        <div key={index} className={css.row}>
+        <div key={keys[index]} className={css.row}>
           <Input aria-label={t('form.rowKey')} placeholder={t('form.rowKey')} value={row.key}
             onChange={(event) => { update(index, { key: event.target.value }) }} />
           <Input aria-label={t('form.rowValue')} type={row.secret ? 'password' : 'text'} value={row.value}
             placeholder={row.secret && row.ref !== undefined ? t('form.storedSecret') : t('form.rowValue')}
             onChange={(event) => { update(index, { value: event.target.value }) }} />
           <Checkbox checked={row.secret} label={t('form.rowSecret')} onChange={(secret) => { update(index, { secret, value: '', ref: undefined }) }} />
-          <Button variant="ghost" size="sm" aria-label={t('form.removeRow')} onClick={() => { onChange(rows.filter((_, at) => at !== index)) }}>×</Button>
+          <Button variant="ghost" size="sm" aria-label={t('form.removeRow')} onClick={() => { remove(index) }}>×</Button>
         </div>
       ))}
-      <Button variant="ghost" size="sm" className={css.add} icon={<IconPlusOutlineRegular size={13} />} onClick={() => { onChange([...rows, { key: '', value: '', secret: false }]) }}>{addLabel}</Button>
+      <Button variant="ghost" size="sm" className={css.add} icon={<IconPlusOutlineRegular size={13} />}
+        onClick={() => { add({ key: '', value: '', secret: false }) }}>
+        {addLabel}
+      </Button>
     </fieldset>
   )
 }
@@ -51,32 +83,37 @@ function Args({ args, t, onChange }: {
   readonly t: T
   readonly onChange: (args: readonly string[]) => void
 }): ReactNode {
+  const { keys, add, remove } = useRowKeys(args, onChange)
   return (
     <fieldset className={css.rows}>
       <legend className={css.label}>{t('form.args')}</legend>
       {args.map((arg, index) => (
-        <div key={index} className={css.argRow}>
+        <div key={keys[index]} className={css.argRow}>
           <Input aria-label={t('form.argLabel', { index: String(index + 1) })} value={arg}
             onChange={(event) => { onChange(args.map((value, at) => at === index ? event.target.value : value)) }} />
-          <Button variant="ghost" size="sm" aria-label={t('form.removeRow')} onClick={() => { onChange(args.filter((_, at) => at !== index)) }}>×</Button>
+          <Button variant="ghost" size="sm" aria-label={t('form.removeRow')} onClick={() => { remove(index) }}>×</Button>
         </div>
       ))}
-      <Button variant="ghost" size="sm" className={css.add} icon={<IconPlusOutlineRegular size={13} />} onClick={() => { onChange([...args, '']) }}>{t('form.addArg')}</Button>
+      <Button variant="ghost" size="sm" className={css.add} icon={<IconPlusOutlineRegular size={13} />} onClick={() => { add('') }}>
+        {t('form.addArg')}
+      </Button>
     </fieldset>
   )
 }
 
 /**
- * Edit a draft on the server's page; problems show after the first save attempt, and an enabled local command is
- * confirmed before saving. The connection test reads the saved entry, so it waits until the draft has no changes.
- * @param props - the initial draft, whether it is new, the other servers' names, whether a save runs, the saved
- * server's account section and latest test, and the callbacks; a new server has no test, and a new or inherited one no
- * removal.
- * @returns the page and its confirmation.
+ * Edit a draft on the server's page; problems show after the first save attempt. A save starts a new server and a
+ * server that is switched on, so saving a local command asks for the risk confirmation unless the server is switched
+ * off. The connection test reads the saved entry, so it waits until the draft has no changes. The removal asks first.
+ * @param props - the initial draft, the saved server's status and entry (undefined for a new server), the other
+ * servers' names, whether a save runs, the saved server's account section and latest test, and the callbacks; only a
+ * server that is on has a test, and a new or inherited one has no removal.
+ * @returns the page and its confirmations.
  */
-export function ServerDetail({ initial, isNew, taken, saving, t, account, probe, onProbe, onDelete, onSave }: {
+export function ServerDetail({ initial, status, entry, taken, saving, t, account, probe, onProbe, onDelete, onSave }: {
   readonly initial: ServerDraft
-  readonly isNew: boolean
+  readonly status: CustomServerStatus | undefined
+  readonly entry: Readonly<Record<string, JsonValue>> | undefined
   readonly taken: readonly string[]
   readonly saving: boolean
   readonly t: T
@@ -90,13 +127,15 @@ export function ServerDetail({ initial, isNew, taken, saving, t, account, probe,
   const [submitted, setSubmitted] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
-  const problems = validateDraft(draft, isNew ? taken : taken.filter(name => name !== initial.name))
+  const [removing, setRemoving] = useState(false)
+  const isNew = status === undefined
+  const problems = validateDraft(draft, taken, entry)
   const changed = JSON.stringify(draft) !== JSON.stringify(initial)
   const set = (change: Partial<ServerDraft>): void => { setDraft({ ...draft, ...change }) }
   const submit = (): void => {
     setSubmitted(true)
     if (problems.length > 0) return
-    if (draft.transport === 'stdio' && draft.enabled) {
+    if (draft.transport === 'stdio' && status?.state !== 'off') {
       setAcknowledged(false)
       setConfirming(true)
       return
@@ -115,6 +154,7 @@ export function ServerDetail({ initial, isNew, taken, saving, t, account, probe,
   return (
     <div className={css.detail} data-custom-server-page={isNew ? '' : initial.name}>
       <h3 className={css.detailTitle}>{isNew ? t('form.addTitle') : t('form.editTitle', { name: initial.name })}</h3>
+      {status?.state === 'failed' ? <p className={css.failure}>{t('custom.failed', { message: status.error })}</p> : null}
       {account}
       <div className={css.form}>
         {field('form.name', draft.name, (name) => { set({ name }) }, { disabled: !isNew })}
@@ -162,7 +202,7 @@ export function ServerDetail({ initial, isNew, taken, saving, t, account, probe,
           : null}
       </div>
       <div className={css.footer}>
-        {onDelete === undefined ? null : <Button variant="ghost" onClick={onDelete}>{t('custom.remove')}</Button>}
+        {onDelete === undefined ? null : <Button variant="ghost" onClick={() => { setRemoving(true) }}>{t('custom.remove')}</Button>}
         <div className={css.footerEnd}>
           {probe === undefined ? null : <span className={css.probe}>{probeText(probe, t)}</span>}
           {onProbe === undefined
@@ -175,6 +215,17 @@ export function ServerDetail({ initial, isNew, taken, saving, t, account, probe,
         acknowledgeLabel={t('stdio.acknowledge')} cancelLabel={t('form.cancel')} closeLabel={t('close')} confirmLabel={t('stdio.confirm')}
         acknowledged={acknowledged} onAcknowledgedChange={setAcknowledged} onCancel={() => { setConfirming(false) }}
         onConfirm={() => { setConfirming(false); onSave(draft) }} />
+      {onDelete === undefined || !removing
+        ? null
+        : (
+          <Modal open title={t('custom.removeTitle', { name: initial.name })} closeLabel={t('close')} onClose={() => { setRemoving(false) }}
+            footer={<>
+              <Button variant="ghost" onClick={() => { setRemoving(false) }}>{t('form.cancel')}</Button>
+              <Button variant="primary" data-modal-autofocus onClick={() => { setRemoving(false); onDelete() }}>{t('custom.remove')}</Button>
+            </>}>
+            <p>{t('custom.removeBody')}</p>
+          </Modal>
+        )}
     </div>
   )
 }

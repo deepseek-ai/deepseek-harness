@@ -25,7 +25,13 @@
       "path": "../../credentials/credentials"
     },
     {
-      "path": "../../settings/settings"
+      "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../boot/config-editor"
+    },
+    {
+      "path": "../../boot/plugin-manager"
     },
     {
       "path": "../../mcp/mcp-manager"

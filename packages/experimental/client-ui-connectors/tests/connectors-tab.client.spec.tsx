@@ -22,7 +22,7 @@ function renderTab(state: TabState, version: string | undefined) {
   const store = createSnapshotStore<ConnectorsState>(full(state))
   // The custom servers section, reduced to a button that asks the tab for one server's page.
   const renderSlot = vi.fn((_name: string, owner: CustomServersOwnerProps) => (
-    <button type="button" data-custom-servers-slot={owner.view.kind} onClick={() => { owner.setView({ kind: 'server', name: 'docs' }) }}>docs</button>
+    <button type="button" data-custom-servers-slot={owner.view.kind} onClick={() => { owner.setView({ kind: 'server', id: 'mcp-server-docs' }) }}>docs</button>
   ))
   const actions = { ensure: vi.fn(), retry: vi.fn(), install: vi.fn(), openPackage: vi.fn(), setEnabled: vi.fn(), renderSlot }
   const props = {
@@ -109,7 +109,7 @@ it('shows only a custom server’s page below its Back button while the section 
   const { actions } = renderTab({ status: 'ready', connectors: {} }, '1.2.3')
   expect(screen.queryByRole('button', { name: en['custom.back'] })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'docs' }))
-  expect(actions.renderSlot.mock.calls.at(-1)?.[1].view).toEqual({ kind: 'server', name: 'docs' })
+  expect(actions.renderSlot.mock.calls.at(-1)?.[1].view).toEqual({ kind: 'server', id: 'mcp-server-docs' })
   expect(screen.queryByRole('heading', { name: en.official })).toBeNull()
   expect(document.querySelectorAll('[data-connector]')).toHaveLength(0)
   expect(document.querySelector('[data-connectors] [data-custom-servers-slot="server"]')).not.toBeNull()

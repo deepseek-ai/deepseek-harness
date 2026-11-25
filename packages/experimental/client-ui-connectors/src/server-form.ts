@@ -1,4 +1,4 @@
-/** The server form's draft, and its conversion from and to a manager Settings entry with credential references. */
+/** The server form's draft, and its conversion from and to an entry, a server row's config, with credential references. */
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { DraftEntry, DraftProblem, DraftRow, ServerDraft } from './types.ts'
 
@@ -10,16 +10,21 @@ const OAUTH_NAME = /^[a-z][a-z0-9-]*$/
 const SECRET_VALUE = /^\$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}$/
 const BEARER_VALUE = /^Bearer \$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}$/
 const CREDENTIAL_TOKEN = /\$\{credential:([A-Za-z_][A-Za-z0-9_]*)\}/g
-const FORM_FIELDS = ['transport', 'url', 'headers', 'command', 'args', 'env', 'cwd', 'enabled', 'oauth']
+// The Loader evaluates a map that carries this key as a `!!js` expression.
+const EXPRESSION_KEY = '__jsExpr'
+// A save writes these fields again, except `enabled`, which a server row refuses and a save therefore drops.
+const FORM_FIELDS = ['serverName', 'transport', 'url', 'headers', 'command', 'args', 'env', 'cwd', 'enabled', 'oauth']
+// A save writes these `oauth` fields again and keeps the others, such as the credential key of the grant.
+const OAUTH_FORM_FIELDS = ['clientId', 'scope']
 
 /**
  * The draft of a new server.
- * @returns an enabled remote server without authentication.
+ * @returns a remote server without authentication.
  */
 export function emptyDraft(): ServerDraft {
   return {
     name: '', transport: 'streamable-http', url: '', headers: [], command: '', args: [], env: [], cwd: '',
-    auth: 'none', token: '', clientId: '', scope: '', enabled: true,
+    auth: 'none', token: '', clientId: '', scope: '',
   }
 }
 
@@ -39,6 +44,22 @@ function text(value: JsonValue | undefined): string {
 
 function record(value: JsonValue | undefined): Readonly<Record<string, JsonValue>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {}
+}
+
+/** The fields of a saved map that a save keeps as they are. */
+function unedited(saved: Readonly<Record<string, JsonValue>>, edited: readonly string[]): Record<string, JsonValue> {
+  return Object.fromEntries(Object.entries(saved).filter(([key]) => !edited.includes(key)))
+}
+
+/**
+ * Tell whether a value holds a `!!js` expression, which the Loader evaluates when the server row starts.
+ * @param value - an entry or one of its values.
+ * @returns whether the value, or a value nested in it, is a map with a string under `__jsExpr`.
+ */
+export function holdsExpression(value: JsonValue | undefined): boolean {
+  if (Array.isArray(value)) return value.some(item => holdsExpression(item))
+  const fields = record(value)
+  return typeof fields[EXPRESSION_KEY] === 'string' || Object.values(fields).some(item => holdsExpression(item))
 }
 
 function rows(values: Readonly<Record<string, JsonValue>>): DraftRow[] {
@@ -75,7 +96,6 @@ export function draftFromEntry(name: string, raw: Readonly<Record<string, JsonVa
     tokenRef: bearer?.[1],
     clientId: text(oauth.clientId),
     scope: text(oauth.scope),
-    enabled: raw.enabled !== false,
   }
 }
 
@@ -83,15 +103,18 @@ export function draftFromEntry(name: string, raw: Readonly<Record<string, JsonVa
  * List why a draft cannot be saved.
  * @param draft - the draft.
  * @param taken - the names of the other servers.
+ * @param raw - the previous entry, if any.
  * @returns the problems, empty when the draft can be saved.
  */
-export function validateDraft(draft: ServerDraft, taken: readonly string[]): DraftProblem[] {
+export function validateDraft(draft: ServerDraft, taken: readonly string[], raw: Readonly<Record<string, JsonValue>> = {}): DraftProblem[] {
   const problems: DraftProblem[] = []
   if (!SERVER_NAME.test(draft.name)) problems.push('name-invalid')
   // Names and keys that differ only in case, `-`, or `_` would share a credential reference.
   else if (taken.some(other => credentialRef(other, '') === credentialRef(draft.name, ''))) problems.push('name-taken')
   const keyed = draft.transport === 'stdio' ? draft.env : draft.headers
   if (keyed.some(row => row.key.trim() === '')) problems.push('row-key-missing')
+  // The Loader would run the row's value as code when the server row starts.
+  if (keyed.some(row => row.key.trim() === EXPRESSION_KEY)) problems.push('row-key-reserved')
   // Keys that would map to one reference, and secret rows that would store their values under one reference, since a
   // renamed secret row keeps the reference its key no longer names; a bearer token is stored under one too.
   const prefix = draft.transport === 'stdio' ? 'ENV' : 'HEADER'
@@ -107,7 +130,9 @@ export function validateDraft(draft: ServerDraft, taken: readonly string[]): Dra
   }
   if (!URL.canParse(draft.url) || !['http:', 'https:'].includes(new URL(draft.url).protocol)) problems.push('url-invalid')
   if (draft.auth === 'token' && draft.token === '' && draft.tokenRef === undefined) problems.push('token-missing')
-  if (draft.auth === 'oauth' && SERVER_NAME.test(draft.name) && !OAUTH_NAME.test(draft.name)) problems.push('name-oauth')
+  // The name forms the credential key of the grant unless the previous entry names one, which the save keeps.
+  const named = draft.auth === 'oauth' && record(raw.oauth).credentialKey === undefined
+  if (named && SERVER_NAME.test(draft.name) && !OAUTH_NAME.test(draft.name)) problems.push('name-oauth')
   if (draft.auth !== 'none' && draft.headers.some(row => row.key.trim().toLowerCase() === 'authorization')) problems.push('authorization-header')
   return problems
 }
@@ -130,20 +155,22 @@ function rowValues(
 }
 
 /**
- * Write a draft as an entry, keeping the fields of the previous entry that the form does not edit.
+ * Write a draft as an entry, keeping the fields of the previous entry that the form does not edit. An OAuth entry keeps
+ * the `oauth` fields of the previous entry other than the client ID and scope, and names its grant `mcp-client/<name>`
+ * when the previous entry names none.
  * @param draft - the draft.
  * @param raw - the previous entry, if any.
- * @returns the entry and the secret values entered in the form.
+ * @returns the entry, which names the server in `serverName`, and the secret values entered in the form.
  */
 export function entryFromDraft(draft: ServerDraft, raw: Readonly<Record<string, JsonValue>> = {}): DraftEntry {
-  const kept = Object.fromEntries(Object.entries(raw).filter(([key]) => !FORM_FIELDS.includes(key)))
+  const kept = { serverName: draft.name, ...unedited(raw, FORM_FIELDS) }
   const secrets: { ref: string; value: string }[] = []
   if (draft.transport === 'stdio') {
     const args = draft.args.map(arg => arg.trim()).filter(arg => arg !== '')
     return {
       entry: {
         ...kept, transport: 'stdio', command: draft.command.trim(), args, env: rowValues(draft.name, 'ENV', draft.env, secrets),
-        ...draft.cwd.trim() === '' ? {} : { cwd: draft.cwd.trim() }, enabled: draft.enabled,
+        ...draft.cwd.trim() === '' ? {} : { cwd: draft.cwd.trim() },
       },
       secrets,
     }
@@ -154,11 +181,12 @@ export function entryFromDraft(draft: ServerDraft, raw: Readonly<Record<string, 
     if (draft.token !== '') secrets.push({ ref, value: draft.token })
     headers.Authorization = `Bearer \${credential:${ref}}`
   }
-  const oauth = draft.auth === 'oauth'
-    ? { oauth: { credentialKey: `mcp-client/${draft.name}`, ...draft.clientId.trim() === '' ? {} : { clientId: draft.clientId.trim() },
-      ...draft.scope.trim() === '' ? {} : { scope: draft.scope.trim() } } }
-    : {}
-  return { entry: { ...kept, transport: 'streamable-http', url: draft.url.trim(), headers, ...oauth, enabled: draft.enabled }, secrets }
+  if (draft.auth !== 'oauth') return { entry: { ...kept, transport: 'streamable-http', url: draft.url.trim(), headers }, secrets }
+  const oauth = {
+    credentialKey: `mcp-client/${draft.name}`, ...unedited(record(raw.oauth), OAUTH_FORM_FIELDS),
+    ...draft.clientId.trim() === '' ? {} : { clientId: draft.clientId.trim() }, ...draft.scope.trim() === '' ? {} : { scope: draft.scope.trim() },
+  }
+  return { entry: { ...kept, transport: 'streamable-http', url: draft.url.trim(), headers, oauth }, secrets }
 }
 
 /**

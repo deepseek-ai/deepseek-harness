@@ -49,8 +49,7 @@ export async function mountConnectors(ctx: ClientContext, contribution: TypertRe
   // A profile without the MCP manager keeps the tab without the section.
   const custom = ctx.inject(['remote.connectors', 'remote.mcpManager'], (scope) => {
     const servers = new CustomServersController(scope)
-    scope.effect(() => () => { servers.dispose() }, 'connectors: custom servers')
-    scope.effect(() => scope.remote.$on('settings/document-updated', () => { servers.changed() }), 'connectors: settings changes')
+    scope.effect(() => async () => { await servers.dispose() }, 'connectors: custom servers')
     const section = servers.face()
     scope.slots.inject('connectors.custom', () => scope.slots.register({
       name: 'connectors.custom', locale: NS, inject: () => section,

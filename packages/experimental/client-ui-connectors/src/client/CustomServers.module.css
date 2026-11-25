@@ -28,6 +28,11 @@
   font-size: 13px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+}
+
+.noticeAction {
+  flex: none;
 }
 
 .empty {
@@ -79,6 +84,14 @@
   color: var(--dsw-alias-label-tertiary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.failure {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
 }
 
 .actions {
@@ -172,5 +185,5 @@
   padding-left: 18px;
   font-size: 13px;
   line-height: 18px;
-  color: var(--dsw-alias-state-danger, var(--dsw-alias-label-secondary));
+  color: var(--dsw-alias-state-error-primary);
 }

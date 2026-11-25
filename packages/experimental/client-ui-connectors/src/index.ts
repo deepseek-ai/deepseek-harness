@@ -1,20 +1,25 @@
 /**
- * Host half of Connectors: the `connectors` service, present while the Connectors bundle is enabled. Its Remote lists
- * the MCP servers configured in the MCP manager's Settings and saves, removes, or switches one as a single Host
- * operation; while the MCP account service runs, it shows the account of each configured OAuth server.
+ * Host half of Connectors: the `connectors` service, present while the Connectors bundle is enabled. Its Remote streams
+ * the MCP server rows of the profile's composition and saves, removes, or switches one as a single Host operation;
+ * while the MCP account service runs, it shows the account of each OAuth server row that is on.
  */
-import type { Context } from '@deepseek-ai/cordis'
+import { createHash } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
+import { FiberState, type Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import type {} from '@deepseek-ai/dsh-app-boot'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { CredentialProvider, CredentialRef } from '@deepseek-ai/dsh-credentials'
+import type ConfigEditor from '@deepseek-ai/dsh-config-editor'
+import { credentialKey, type CredentialKey, type CredentialProvider, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-mcp-account'
 import type McpServerManager from '@deepseek-ai/dsh-mcp-manager'
-import type { SettingsDescriptor, SettingsForms, SettingsPathOp } from '@deepseek-ai/dsh-settings'
+import { Config as ServerRowConfig } from '@deepseek-ai/dsh-mcp-manager/server'
+import type { ChangeResult, PluginEntryId, PluginManager } from '@deepseek-ai/dsh-plugin-manager'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { assertNever, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { serverCopy } from './server-copy.ts'
-import { entryFromDraft, entryRefs, ownedRefs, validateDraft } from './server-form.ts'
-import type { CustomServersList, CustomServerView, ServerDraft } from './types.ts'
+import { entryFromDraft, entryRefs, holdsExpression, ownedRefs, validateDraft } from './server-form.ts'
+import type { CustomServersList, CustomServerStatus, CustomServerView, ServerDraft } from './types.ts'
 
 export type * from './types.ts'
 
@@ -25,34 +30,35 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Where the custom servers live. */
-export interface Config {
-  /** The MCP manager's Settings namespace: the id of its composition row. */
-  mcpManagerNamespace: string
+/** The module name of the MCP manager's server row plugin. */
+const SERVER_ROW = '@deepseek-ai/dsh-mcp-manager/server'
+
+type Row = ReturnType<ConfigEditor['configuration']>[number]
+type RowConfig = Readonly<Record<string, JsonValue>>
+
+/** One MCP server row as the list and a change read it. */
+interface ServerRow {
+  readonly entry: Row['entry']
+  /** The row's config when it is a map, whether or not the form can edit it. */
+  readonly config: RowConfig | undefined
+  readonly view: CustomServerView
 }
 
-type Entry = Readonly<Record<string, JsonValue>>
-
-/** The services and servers one change works with, read at the revision the caller named. */
-interface Change {
-  readonly settings: SettingsForms
+/** The services the custom servers need. */
+interface Services {
+  readonly editor: ConfigEditor
+  readonly plugins: PluginManager
   readonly credentials: CredentialProvider
   readonly manager: McpServerManager
-  readonly servers: readonly CustomServerView[]
 }
 
-function record(value: unknown): Entry | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Entry : undefined
+/** The services and server rows one change works with, read at the revision the caller named. */
+interface Change extends Services {
+  readonly rows: readonly ServerRow[]
 }
 
-/** The namespace's servers in document order, marking those the composition base defines and those the form cannot edit. */
-function serversOf(view: SettingsDescriptor): CustomServerView[] {
-  const base = record(record(view.base)?.servers) ?? {}
-  return Object.entries(record(record(view.value)?.servers) ?? {}).map(([name, value]) => {
-    const raw = record(value)
-    const known = raw !== undefined && (raw.transport === 'stdio' || raw.transport === 'streamable-http')
-    return { name, ...known ? { raw } : {}, inherited: Object.hasOwn(base, name) }
-  })
+function record(value: unknown): RowConfig | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as RowConfig : undefined
 }
 
 function messageOf(error: unknown): string {
@@ -63,31 +69,270 @@ function refused(server: string, message: string, cause?: unknown): RemoteError 
   return new RemoteError('connectors/refused', message, { server }, { cause })
 }
 
-/** The Settings conflict code is the seam's stable answer to a stale revision. */
-function conflictOf(error: unknown): { readonly expected: number; readonly actual: number } | undefined {
-  if (typeof error !== 'object' || error === null || Reflect.get(error, 'code') !== 'SETTINGS_CONFLICT') return undefined
-  const expected: unknown = Reflect.get(error, 'expected')
-  const actual: unknown = Reflect.get(error, 'actual')
-  return typeof expected === 'number' && typeof actual === 'number' ? { expected, actual } : undefined
+function conflict(server: string, cause?: unknown): RemoteError {
+  return new RemoteError('connectors/conflict', 'the server rows changed; read the servers again', { server }, { cause })
 }
 
-function conflict(expected: number, actual: number, cause?: unknown): RemoteError {
-  return new RemoteError('connectors/conflict', 'the MCP manager settings changed; read the servers again', { expected, actual }, { cause })
+/** The row's config when the form can edit it. */
+function editable(config: RowConfig | undefined): RowConfig | undefined {
+  if (config === undefined || typeof config.serverName !== 'string') return undefined
+  if (config.transport !== 'stdio' && config.transport !== 'streamable-http') return undefined
+  return holdsExpression(config) ? undefined : config
+}
+
+/** Whether a row is switched off, runs, or is switched on without running, with the reason it does not run. */
+async function stateOf(entry: Row['entry']): Promise<CustomServerStatus> {
+  try {
+    // A `disabled` expression that throws leaves the row switched on and not running, as app-boot reports it.
+    if (entry.disabled) return { state: 'off' }
+    await entry.fiber?.await()
+  } catch (error) {
+    return { state: 'failed', error: messageOf(error) }
+  }
+  return entry.fiber?.state === FiberState.ACTIVE ? { state: 'on' } : { state: 'failed', error: 'the server row is not running' }
+}
+
+async function readRow({ entry, inserted }: Row): Promise<ServerRow> {
+  const options: unknown = entry.options.config
+  const config = record(options)
+  const id = entry.options.id
+  const name = typeof config?.serverName === 'string' ? config.serverName : id
+  const raw = editable(config)
+  return { entry, config, view: { id, name, ...await stateOf(entry), ...raw === undefined ? {} : { raw }, inherited: !inserted } }
+}
+
+/** Read every MCP server row of the profile's composition, including rows that are off and rows that did not start. */
+function readRows(editor: ConfigEditor): Promise<ServerRow[]> {
+  return Promise.all(editor.configuration().filter(row => row.entry.options.name === SERVER_ROW).map(readRow))
+}
+
+/** A digest of the rows' ids, configs, and switches, and of which rows the profile patch adds. */
+function revisionOf(rows: readonly ServerRow[]): string {
+  const facts = rows.map(row => [row.view.id, row.config, row.view.state === 'off', row.view.inherited])
+  return createHash('sha256').update(JSON.stringify(facts)).digest('hex')
 }
 
 /**
- * Register the account of each configured OAuth server with `ctx.mcpAccounts`, following the namespace's changes, until
- * the scope ends. A server whose account a connector already registered keeps that account.
- * @param scope - a context carrying Settings and the MCP account service.
- * @param namespace - the MCP manager's Settings namespace.
+ * Streams and changes the MCP server rows of the profile's composition for the Connectors tab, and shows the account of
+ * each OAuth server row that is on.
  */
-function showServerAccounts(scope: Context, namespace: string): void {
-  scope.effect(() => {
-    const shown = new Map<string, () => void>()
-    const sync = (): void => {
-      const view = scope.settings.describe().find(row => row.ns === namespace)
-      const servers = view === undefined ? [] : serversOf(view)
-      const oauth = new Set(servers.filter(server => server.raw?.oauth !== undefined).map(server => server.name))
+export class Connectors extends TypertRemoteService {
+  /** A service method's `this.ctx` is the caller's context, so the methods reach the other services through this one. */
+  private readonly host: Context
+  private readonly watchers = new Set<() => void>()
+  private readonly lifetime = new AbortController()
+  private tail: Promise<unknown> = Promise.resolve()
+
+  /** @param ctx - the Host plugin context. */
+  constructor(ctx: Context) {
+    super(ctx, 'connectors')
+    this.host = ctx
+    ctx.on('app-boot/config-reload', () => { this.changed() })
+    ctx.on('plugin-manager/changed', () => { this.changed() })
+    ctx.effect(() => () => { this.lifetime.abort() }, 'connectors: server streams')
+    ctx.inject(['mcpAccounts', 'configEditor'], (scope) => { this.showAccounts(scope) })
+  }
+
+  /**
+   * Stream the MCP server rows: the rows of the profile's composition that load the MCP manager's server row plugin,
+   * including rows that are switched off and rows that did not start. A list follows every successful reload of the
+   * composition, every change the plugin manager reports, and every change made through this service.
+   * @param signal - ends the stream.
+   * @returns each list with the revision a change names, or that the profile has no configuration editor, plugin
+   *   manager, credentials, or MCP manager to keep custom servers with.
+   */
+  @Remote({ mode: 'stream' })
+  async* watchServers(signal: AbortSignal): AsyncIterable<CustomServersList> {
+    for await (const _tick of this.ticks(signal)) yield await this.list()
+  }
+
+  /**
+   * Save one server from the form. A new server becomes the row `mcp-server-<name>` of the profile patch, switched on;
+   * an edit replaces the config of the row `id` names. The save writes the row, stores the secret values entered in
+   * the form, then deletes the secrets the row stopped using; an edit that drops OAuth removes the grant first. The
+   * first refused step stops the save, so a refused write stores nothing. A row that is switched on must run after the
+   * write: when it does not start, the configuration editor restores the profile patch and the save is refused with
+   * the row's failure, while a row that is switched off is only written. The manager starts a written row at once and
+   * connects it again when a secret it references is stored after that. A save is refused when a reference under the
+   * server's own prefix is used by another row, and it never deletes a reference another row still uses, whether that
+   * row is on or off.
+   * @param draft - the form's values, including newly entered secret values.
+   * @param revision - the revision of the list the save was made on.
+   * @param id - the row to edit; omitted for a new server.
+   * @throws RemoteError `connectors/conflict` when the server rows changed after that revision, or
+   *   `connectors/refused` for a draft the form would not save, a config the row plugin's schema rejects, or the first
+   *   refused step.
+   */
+  @Remote
+  saveServer(draft: ServerDraft, revision: string, id?: string): Promise<void> {
+    return this.serial(async () => {
+      const { name } = draft
+      const change = await this.begin(name, revision)
+      const row = id === undefined ? undefined : change.rows.find(other => other.view.id === id)
+      if (id !== undefined && (row?.view.raw === undefined || row.view.name !== name)) {
+        throw refused(name, 'the server row cannot be edited: it is gone, the form cannot read it, or the draft renames it')
+      }
+      const previous = row?.view.raw
+      const others = change.rows.filter(other => other !== row)
+      const problems = validateDraft(draft, others.map(other => other.view.name), previous)
+      if (problems.length > 0) throw refused(name, `the server cannot be saved: ${problems.join(', ')}`)
+      // A draft keeps a stored secret only by a reference its entry already uses, so it cannot reach another secret.
+      const used = new Set(previous === undefined ? [] : entryRefs(previous))
+      const named = [...draft.headers, ...draft.env].map(item => item.ref).concat(draft.tokenRef)
+      if (named.some(ref => ref !== undefined && !used.has(ref))) throw refused(name, 'the server names a credential reference its entry does not use')
+      const { entry, secrets } = entryFromDraft(draft, previous)
+      const foreign = foreignRefs(others)
+      const shared = ownedRefs(name, entry).find(ref => foreign.has(ref))
+      if (shared !== undefined) throw refused(name, `the server would share the credential reference ${shared} with another server`)
+      // A row that is off is written without starting, so the row plugin's schema is checked here.
+      await step(name, () => { z.resolve(entry, ServerRowConfig, {}) })
+      if (row !== undefined && previous?.oauth !== undefined && entry.oauth === undefined) await dropGrant(change, row, name)
+      if (row === undefined) await step(name, () => change.editor.insert({ id: `mcp-server-${name}`, name: SERVER_ROW, config: entry }))
+      else await replace(change, row, entry)
+      for (const secret of secrets) await step(name, () => change.credentials.set(brandString<CredentialRef>(secret.ref), secret.value))
+      const kept = new Set(ownedRefs(name, entry))
+      const dropped = previous === undefined ? [] : ownedRefs(name, previous).filter(ref => !kept.has(ref) && !foreign.has(ref))
+      await release(change, name, dropped)
+    })
+  }
+
+  /**
+   * Remove one server row the profile patch adds: remove an OAuth server's grant, delete the row with its overrides,
+   * then delete the secrets it owned that no other row uses. The first refused step stops the removal. A row the form
+   * cannot read is removed without its grant and secrets.
+   * @param id - the row.
+   * @param revision - the revision of the list the removal was made on.
+   * @throws RemoteError `connectors/conflict` when the server rows changed after that revision, or
+   *   `connectors/refused` for a row the profile patch does not add, or the first refused step.
+   */
+  @Remote
+  removeServer(id: string, revision: string): Promise<void> {
+    return this.serial(async () => {
+      const change = await this.begin(id, revision)
+      const row = rowOf(change, id)
+      const { name, raw: previous } = row.view
+      // Refused before any step, so a row that cannot be removed keeps its grant.
+      if (row.view.inherited) throw refused(id, 'the profile patch does not add this server row; switch it off instead of removing it')
+      if (previous?.oauth !== undefined) await dropGrant(change, row, id)
+      await step(id, () => change.editor.remove(row.entry))
+      const foreign = foreignRefs(change.rows.filter(other => other !== row))
+      await release(change, id, previous === undefined ? [] : ownedRefs(name, previous).filter(ref => !foreign.has(ref)))
+    })
+  }
+
+  /**
+   * Switch one server row on or off through the plugin manager, which writes the switch to the profile patch and
+   * reloads the composition. A row that does not start after it is switched on stays switched on and is listed as
+   * failed.
+   * @param id - the row.
+   * @param enabled - whether the row runs.
+   * @param revision - the revision of the list the switch was made on.
+   * @throws RemoteError `connectors/conflict` when the server rows changed after that revision, or
+   *   `connectors/refused` when the switch did not take effect: the row did not start, another patch decides the
+   *   switch, or the composition applies it only after a restart.
+   */
+  @Remote
+  setServerEnabled(id: string, enabled: boolean, revision: string): Promise<void> {
+    return this.serial(async () => {
+      const change = await this.begin(id, revision)
+      const row = rowOf(change, id)
+      const result = await step(id, () => change.plugins.setPluginEnabled(brandString<PluginEntryId>(row.entry.id), enabled))
+      const refusal = switchRefusal(result)
+      if (refusal !== undefined) throw refused(id, refusal)
+    })
+  }
+
+  private services(): Services | undefined {
+    const editor = this.host.get('configEditor')
+    const plugins = this.host.get('pluginManager')
+    const credentials = this.host.get('credentials')
+    const manager = this.host.get('mcpManager')
+    if (editor === undefined || plugins === undefined || credentials === undefined || manager === undefined) return undefined
+    return { editor, plugins, credentials, manager }
+  }
+
+  private async list(): Promise<CustomServersList> {
+    const services = this.services()
+    if (services === undefined) return { available: false }
+    const rows = await readRows(services.editor)
+    return { available: true, revision: revisionOf(rows), servers: rows.map(row => row.view) }
+  }
+
+  /** Read the server rows for a change, refusing one whose revision is no longer current before any step runs. */
+  private async begin(server: string, revision: string): Promise<Change> {
+    const services = this.services()
+    if (services === undefined) {
+      throw refused(server, 'custom MCP servers need the profile configuration editor, the plugin manager, credentials, and the MCP manager')
+    }
+    const rows = await step(server, () => readRows(services.editor))
+    if (revisionOf(rows) !== revision) throw conflict(server)
+    return { ...services, rows }
+  }
+
+  /**
+   * Run one change after every earlier one, so each reads the rows the one before it left, and wake the streams when
+   * it settles: a refused write can leave rows inactive, which no event reports.
+   */
+  private serial<T>(run: () => Promise<T>): Promise<T> {
+    const next = this.tail.then(run).finally(() => { this.changed() })
+    this.tail = next.then(() => undefined, () => undefined)
+    return next
+  }
+
+  /** Wake every stream of this service. */
+  private changed(): void {
+    for (const notify of this.watchers) notify()
+  }
+
+  /** Yield once at subscription, then once after each wake; wakes that arrive before the consumer returns make one tick. */
+  private async* ticks(signal: AbortSignal): AsyncGenerator<void> {
+    const ended = AbortSignal.any([signal, this.lifetime.signal])
+    let next = Promise.withResolvers<void>()
+    const notify = (): void => { next.resolve() }
+    this.watchers.add(notify)
+    ended.addEventListener('abort', notify, { once: true })
+    try {
+      while (!ended.aborted) {
+        yield
+        await next.promise
+        next = Promise.withResolvers<void>()
+      }
+    } finally {
+      this.watchers.delete(notify)
+      ended.removeEventListener('abort', notify)
+    }
+  }
+
+  /**
+   * Register the account of each OAuth server row that is on with `scope.mcpAccounts`, following the rows
+   * `scope.configEditor` lists, until the scope ends. A server whose account a connector already registered keeps that
+   * account.
+   */
+  private showAccounts(scope: Context): void {
+    scope.effect(() => {
+      const ending = new AbortController()
+      const shown = new Map<string, () => void>()
+      const following = this.followAccounts(scope, shown, ending.signal)
+      return async () => {
+        ending.abort()
+        await following
+        for (const withdraw of shown.values()) withdraw()
+      }
+    }, 'connectors: server row accounts')
+  }
+
+  private async followAccounts(scope: Context, shown: Map<string, () => void>, signal: AbortSignal): Promise<void> {
+    for await (const _tick of this.ticks(signal)) {
+      let rows: readonly ServerRow[]
+      try {
+        rows = await readRows(scope.configEditor)
+      } catch (error) {
+        scope.logger.warn('connectors: server row accounts were not read: %s', messageOf(error))
+        continue
+      }
+      // The scope ended during the read, so its account service takes no registration.
+      if (signal.aborted) return
+      const oauth = new Set(rows.filter(row => row.view.state === 'on' && row.view.raw?.oauth !== undefined).map(row => row.view.name))
       for (const [name, withdraw] of shown) {
         if (oauth.has(name)) continue
         withdraw()
@@ -98,157 +343,100 @@ function showServerAccounts(scope: Context, namespace: string): void {
         try {
           shown.set(name, scope.mcpAccounts.register({ server: name, copy: serverCopy(name) }))
         } catch (error) {
-          scope.logger.warn('connectors: configured server "%s" shows no account: %s', name, messageOf(error))
+          scope.logger.warn('connectors: server row "%s" shows no account: %s', name, messageOf(error))
         }
       }
-    }
-    sync()
-    const stop = scope.on('settings/document-updated', (changed) => { if (changed === namespace) sync() })
-    return () => {
-      stop()
-      for (const withdraw of shown.values()) withdraw()
-    }
-  }, 'connectors: configured server accounts')
-}
-
-/** Lists and changes the MCP manager's Settings servers for the Connectors tab, and shows each configured OAuth server's account. */
-export class Connectors extends TypertRemoteService {
-  static Config: z<Partial<Config>, Config> = z.object({ mcpManagerNamespace: z.string().min(1).default('mcp-manager') })
-
-  /** A service method's `this.ctx` is the caller's context, so the methods reach Settings and the manager through this one. */
-  private readonly host: Context
-
-  /**
-   * @param ctx - the Host plugin context.
-   * @param config - the MCP manager's Settings namespace.
-   */
-  constructor(ctx: Context, private readonly config: Config) {
-    super(ctx, 'connectors')
-    this.host = ctx
-    ctx.inject(['settings', 'mcpAccounts'], (scope) => { showServerAccounts(scope, config.mcpManagerNamespace) })
-  }
-
-  /**
-   * List the servers of the MCP manager's Settings namespace with secrets redacted.
-   * @returns the servers and the revision a change names, or that the profile has no Settings, credentials, or manager
-   *   to keep custom servers with.
-   */
-  @Remote
-  listServers(): CustomServersList {
-    const settings = this.host.get('settings')
-    const view = settings?.describe({ redactSecrets: true }).find(row => row.ns === this.config.mcpManagerNamespace)
-    if (settings === undefined || view === undefined || this.host.get('credentials') === undefined || this.host.get('mcpManager') === undefined) {
-      return { available: false }
-    }
-    return { available: true, writable: settings.writable, revision: view.revision, servers: serversOf(view) }
-  }
-
-  /**
-   * Save one server from the form: write the entry, store the secret values entered in it, then delete the secrets the
-   * entry stopped using. An edit that drops OAuth signs the server out first, because the manager deletes a grant only
-   * while the entry still configures OAuth. The first refused step stops the save, so a refused write stores nothing;
-   * the manager starts the written entry at once and connects it again when a secret it references is stored after
-   * that. A save is refused when a reference under the server's own prefix is used by another server's entry, and it
-   * never deletes a reference another entry still uses.
-   * @param draft - the form's values, including newly entered secret values.
-   * @param revision - the namespace revision the list last read.
-   * @throws RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for a
-   *   draft the form would not save or the first refused step.
-   */
-  @Remote
-  async saveServer(draft: ServerDraft, revision: number): Promise<void> {
-    const { name } = draft
-    const change = this.change(name, revision)
-    const previous = change.servers.find(server => server.name === name)?.raw
-    const problems = validateDraft(draft, change.servers.map(server => server.name).filter(other => other !== name))
-    if (problems.length > 0) throw refused(name, `the server cannot be saved: ${problems.join(', ')}`)
-    // A draft keeps a stored secret only by a reference its entry already uses, so it cannot reach another secret.
-    const used = new Set(previous === undefined ? [] : entryRefs(previous))
-    const named = [...draft.headers, ...draft.env].map(row => row.ref).concat(draft.tokenRef)
-    if (named.some(ref => ref !== undefined && !used.has(ref))) throw refused(name, 'the server names a credential reference its entry does not use')
-    const { entry, secrets } = entryFromDraft(draft, previous)
-    const foreign = foreignRefs(change, name)
-    const shared = ownedRefs(name, entry).find(ref => foreign.has(ref))
-    if (shared !== undefined) throw refused(name, `the server would share the credential reference ${shared} with another server`)
-    if (previous?.oauth !== undefined && entry.oauth === undefined) await step(name, () => change.manager.signOut(name))
-    await this.write(change, name, [{ op: 'set', path: ['servers', name], value: entry }], revision)
-    for (const secret of secrets) await step(name, () => change.credentials.set(brandString<CredentialRef>(secret.ref), secret.value))
-    const kept = new Set(ownedRefs(name, entry))
-    await release(change, name, previous === undefined ? [] : ownedRefs(name, previous).filter(ref => !kept.has(ref) && !foreign.has(ref)))
-  }
-
-  /**
-   * Remove one server: sign an OAuth server out, delete its entry, then delete the secrets it owned that no other entry
-   * uses. The first refused step stops the removal.
-   * @param name - the server.
-   * @param revision - the namespace revision the list read.
-   * @throws RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` for the
-   *   first refused step.
-   */
-  @Remote
-  async removeServer(name: string, revision: number): Promise<void> {
-    const change = this.change(name, revision)
-    const previous = change.servers.find(server => server.name === name)?.raw
-    if (previous?.oauth !== undefined) await step(name, () => change.manager.signOut(name))
-    await this.write(change, name, [{ op: 'unset', path: ['servers', name] }], revision)
-    const foreign = foreignRefs(change, name)
-    await release(change, name, previous === undefined ? [] : ownedRefs(name, previous).filter(ref => !foreign.has(ref)))
-  }
-
-  /**
-   * Switch one server on or off.
-   * @param name - the server.
-   * @param enabled - whether the manager runs it.
-   * @param revision - the namespace revision the list read.
-   * @throws RemoteError `connectors/conflict` when Settings changed after that revision, or `connectors/refused` when
-   *   the write is refused.
-   */
-  @Remote
-  async setServerEnabled(name: string, enabled: boolean, revision: number): Promise<void> {
-    await this.write(this.change(name, revision), name, [{ op: 'set', path: ['servers', name, 'enabled'], value: enabled }], revision)
-  }
-
-  /** Read the namespace for a change, refusing one whose revision is no longer current before any step runs. */
-  private change(name: string, revision: number): Change {
-    const settings = this.host.get('settings')
-    const credentials = this.host.get('credentials')
-    const manager = this.host.get('mcpManager')
-    const view = settings?.describe().find(row => row.ns === this.config.mcpManagerNamespace)
-    if (settings === undefined || credentials === undefined || manager === undefined || view === undefined) {
-      throw refused(name, 'custom MCP servers need Settings, credentials, and the MCP manager')
-    }
-    if (view.revision !== revision) throw conflict(revision, view.revision)
-    return { settings, credentials, manager, servers: serversOf(view) }
-  }
-
-  private async write(change: Change, name: string, ops: SettingsPathOp[], revision: number): Promise<void> {
-    try {
-      await change.settings.mutate(this.config.mcpManagerNamespace, ops, revision)
-    } catch (error) {
-      const stale = conflictOf(error)
-      throw stale === undefined ? refused(name, messageOf(error), error) : conflict(stale.expected, stale.actual, error)
     }
   }
 }
 
 /** Run one step of a change; its refusal stops the change. */
-async function step(server: string, run: () => Promise<void>): Promise<void> {
+async function step<T>(server: string, run: () => T | Promise<T>): Promise<T> {
   try {
-    await run()
+    return await run()
   } catch (error) {
     throw refused(server, messageOf(error), error)
   }
 }
 
-/** The credential references the other servers' entries use: a save never takes one over, and a removal never deletes one. */
-function foreignRefs(change: Change, server: string): Set<string> {
-  const others = change.servers.filter(other => other.name !== server)
-  return new Set(others.flatMap(other => other.raw === undefined ? [] : entryRefs(other.raw)))
+/** The listed row a removal or a switch names. */
+function rowOf(change: Change, id: string): ServerRow {
+  const row = change.rows.find(other => other.view.id === id)
+  if (row === undefined) throw refused(id, 'the server row is gone')
+  return row
 }
 
-/** Delete the secrets no entry references any more; the first refusal stops. */
+/** Replace one row's config; a row whose config changed after the revision check is a conflict. */
+async function replace(change: Change, row: ServerRow, entry: RowConfig): Promise<void> {
+  const seen = { stale: false }
+  try {
+    await change.editor.editRow(row.entry, (current) => {
+      // Another writer can change the row between the revision check and the profile lock.
+      seen.stale = !isDeepStrictEqual(current, row.config)
+      if (seen.stale) throw new Error('the server row changed')
+      return entry
+    })
+  } catch (error) {
+    throw seen.stale ? conflict(row.view.name, error) : refused(row.view.name, messageOf(error), error)
+  }
+}
+
+/** The OAuth grant record a row's config names, or undefined when it names none the credentials service could hold. */
+function grantKey(config: RowConfig | undefined): CredentialKey | undefined {
+  const key = record(config?.oauth)?.credentialKey
+  if (typeof key !== 'string') return undefined
+  const slash = key.indexOf('/')
+  if (slash < 0) return undefined
+  try {
+    return credentialKey(key.slice(0, slash), key.slice(slash + 1))
+  } catch (_error) {
+    // The manager refuses a malformed key at registration, so no grant is stored under it.
+    return undefined
+  }
+}
+
+/**
+ * Remove the OAuth grant of a row that stops using it. The manager signs out a server that is on, which closes its
+ * connections first. For a row that is off or did not start, the record its config names is deleted from the
+ * credentials store, unless another server row names the same record or the name of a server the manager holds forms
+ * its key: a connector registers its server without a row and keeps its grant under `mcp-client/<server name>`.
+ */
+async function dropGrant(change: Change, row: ServerRow, server: string): Promise<void> {
+  if (row.view.state === 'on') {
+    await step(server, () => change.manager.signOut(row.view.name))
+    return
+  }
+  const key = grantKey(row.config)
+  if (key === undefined) return
+  const shared = change.rows.some(other => other !== row && grantKey(other.config) === key)
+    || change.manager.list().some(listed => listed.configured && `mcp-client/${listed.name}` === key)
+  if (!shared) await step(server, () => change.credentials.deleteRecord(key))
+}
+
+/**
+ * The credential references the other rows' configs use, whether or not the form can read those rows: a save never
+ * takes one over, and a removal never deletes one.
+ */
+function foreignRefs(others: readonly ServerRow[]): Set<string> {
+  return new Set(others.flatMap(other => other.config === undefined ? [] : entryRefs(other.config)))
+}
+
+/** Delete the secrets no row references any more; the first refusal stops. */
 async function release(change: Change, server: string, refs: readonly string[]): Promise<void> {
   for (const ref of refs) await step(server, () => change.credentials.unset(brandString<CredentialRef>(ref)))
+}
+
+/** Why a switch did not take effect, or undefined when it did. */
+function switchRefusal(result: ChangeResult): string | undefined {
+  switch (result.application) {
+    case 'applied': return undefined
+    case 'restart-required': return 'the switch is saved and takes effect after DSH restarts'
+    case 'overridden': return 'a home patch or command-line overlay decides whether this server is on'
+    case 'failed':
+    case 'cancelled': return result.error?.diagnostic ?? result.error?.code ?? 'the plugin manager did not apply the switch'
+    /* v8 ignore next -- ChangeResult.application is a closed union */
+    default: return assertNever(result.application)
+  }
 }
 
 export default Connectors

@@ -48,7 +48,7 @@ export function apply(ctx: Context): void {
 ```
 
 - `key` 在 Remote 中标识该账号；页面启动和取消操作时把它传回。用同一个键再次注册会抛出异常。
-- `packageName` 是其插件包页面承载区块和标签的 npm 包；一个包最多承载一个账号。没有包名的账号（如在 Settings 中配置的服务器）不出现在任何插件包页面上。
+- `packageName` 是其插件包页面承载区块和标签的 npm 包；一个包最多承载一个账号。没有包名的账号（如 MCP 服务器行的账号）不出现在任何插件包页面上。
 - `source` 是账号：其当前视图、变化观察、检查，以及启动和取消操作。
 - `operations` 列出页面按钮可以启动的操作类型，每项可带该操作成功时在发起它的浏览器中报告的文本；注册表拒绝其他类型。
 - `copy` 包含区块标题、区块下方的提示，以及开启引导的标题、正文和连接按钮文案。
@@ -66,7 +66,7 @@ export function apply(ctx: Context): void {
 | 开启引导 | 插件包开启后，阶段为 `disconnected` 时打开；“连接”会打开插件包页面，并在 display 给出 `connect` 时启动该操作；Host 流中断时它不可用。账号检查中或连接中时继续等待，已连接或不可用时自动关闭 |
 | 提示 | 本浏览器的最新结果，不受插件面板生命周期限制：操作成功的文本，或带警告图标的共用失败文案 |
 
-没有包名的账号，或插件包页面之外的界面，渲染组件工厂 `connector.account` 并传入 `{ account, presentation }`：`section` 显示账号的完整区块，`status` 只显示状态点和状态行，用于列表行。在 Host 列出该账号之前它不渲染任何内容。[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)用它显示 Settings 中配置的 MCP 服务器。
+没有包名的账号，或插件包页面之外的界面，渲染组件工厂 `connector.account` 并传入 `{ account, presentation }`：`section` 显示账号的完整区块，`status` 只显示状态点和状态行，用于列表行。在 Host 列出该账号之前它不渲染任何内容。[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)用它显示使用 OAuth 的 MCP 服务器行的账号。
 
 ### 跟随操作
 

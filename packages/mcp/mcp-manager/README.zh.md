@@ -164,7 +164,7 @@ export function apply(ctx: Context): void {
 
 ### Remote 操作
 
-浏览器客户端经 [`dsh-api-remotes`](../../api/remotes/README.zh.md) 以 `ctx.remote.mcpManager` 访问管理器。`watch(signal)` 在订阅时推送完整服务器列表，之后每次状态或条目变化再推送一次，订阅方尚未读取的变化会合并；中止信号结束该流，管理器销毁结束所有流。`restart(name)` 与 `probe(name, signal)` 执行上述操作。授权、取消与退出只在宿主上执行：插件页经由 [`dsh-mcp-account`](../mcp-account/README.zh.md) 调用它们，因此浏览器从不指定要授权的服务器。配置写入仍走 Settings Remote；管理器不提供写入方法，因此浏览器无法定义服务器命令。
+浏览器客户端经 [`dsh-api-remotes`](../../api/remotes/README.zh.md) 以 `ctx.remote.mcpManager` 访问管理器。`watch(signal)` 在订阅时推送完整服务器列表，之后每次状态或条目变化再推送一次，订阅方尚未读取的变化会合并；中止信号结束该流，管理器销毁结束所有流。`restart(name)` 与 `probe(name, signal)` 执行上述操作。授权、取消与退出只在宿主上执行：插件页经由 [`dsh-mcp-account`](../mcp-account/README.zh.md) 调用它们，因此浏览器从不指定要授权的服务器。配置写入仍走 Settings Remote，管理器不提供写入方法；浏览器只能通过实验性的[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)定义服务器行的命令，该标签仅限所有者的 Remote 会写入服务器行。
 
 -----
 
@@ -234,11 +234,11 @@ export function apply(ctx: Context): void {
 
 这些限制描述今天用本管理器做不到的事。它们是当前包约束，不是任务清单。
 
-- **OAuth 登录界面只随插件账号提供**——[`dsh-mcp-account`](../mcp-account/README.zh.md) 为向它注册的插件服务器在**插件**页面显示账号；其他服务器没有浏览器界面可以授权，因为授权只经由宿主上的调用方执行。
+- **OAuth 登录界面只随插件账号提供**——[`dsh-mcp-account`](../mcp-account/README.zh.md) 为向它注册的插件服务器在**插件**页面显示账号，实验性的[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)会注册每个已开启的 OAuth 服务器行；其他服务器没有浏览器界面可以授权，因为授权只经由宿主上的调用方执行。
 - **只治理全局面**——agent preset 或静态 `cordis.yml` 行挂载的实例既不被列出也不受治理；静态实例只在受管条目试图复用其名字时以 `serverName` 冲突现身。
 - **重建存在工具空窗**——变更的条目先销毁再重挂，其工具会从模型工具集消失直到新实例完成初次同步；没有旧代继续服务到换代完成的交接。
 - **注册条目由其插件固定**——Settings 无法覆盖注册条目的预算；注册插件需要的可调参数放在它自己的配置中。
-- **服务器行没有管理界面**——行的新增、编辑、关闭与移除都在组合文件中进行；Settings 只编辑 `servers` 字典，管理器的 Remote 也没有写入行的方法。
+- **只有实验性的“连接器”标签可以编辑服务器行**——[“连接器”标签](../../experimental/client-ui-connectors/README.zh.md)（随附的 profile 默认不启用）可以新增、编辑、开关和移除 profile 的服务器行；没有它时，行在组合文件中编辑。Settings 只编辑 `servers` 字典，管理器的 Remote 也没有写入行的方法。
 - **被关闭的行不被列出**——带 `disabled: true` 的行不会加载，因此在它重新加载之前，管理器无法列出、探测或授权它的服务器；`enabled: false` 的 `servers` 条目则仍以 `disabled` 状态列出。
 - **一个无效的 `servers` 条目会让所有服务器都不启动**——字典在管理器启动时作为一个值整体校验，因此管理器行失败，它的服务器行也都在等待它；无效的服务器行只让自身失败。
 - **探测输出有上限**——探测默认最多跟进 16 页列表、返回 512 个工具名，超出即报告截断；调用方可设置 `maxPages` 与 `maxToolNames`。

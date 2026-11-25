@@ -32,6 +32,8 @@ export const zh = {
   'custom.conflict': '配置已在别处被修改，已重新读取，请再试一次。',
   'custom.refused': '操作未完成：{message}',
   'custom.unreadable': '无法识别的条目',
+  'custom.failed': '启动失败：{message}',
+  'custom.gone': '这个服务器已在别处被删除，或已无法在这里编辑',
   'custom.probe': '测试连接',
   'custom.probing': '正在测试…',
   'custom.probePassed': '连接成功，共 {count} 个工具',
@@ -80,6 +82,7 @@ export const zh = {
   'problem.command-missing': '请填写命令。',
   'problem.token-missing': '请填写令牌。',
   'problem.row-key-missing': '每一行都要填写名称。',
+  'problem.row-key-reserved': '名称不能是 __jsExpr。',
   'problem.row-key-duplicate': '名称不能重复；只在大小写、- 和 _ 上不同的名称也算重复，改过名的密钥行仍占用原名称。',
   'problem.row-secret-missing': '标为密钥的行需要填写值。',
   'problem.authorization-header': '使用 Bearer 令牌或 OAuth 时，不能再单独添加 Authorization 请求头。',
@@ -88,6 +91,8 @@ export const zh = {
   'stdio.body': '保存后，DSH 会以你的用户权限在本机运行“{command}”，不经过沙箱。只添加你信任的命令。',
   'stdio.acknowledge': '我了解这个命令会以我的权限运行',
   'stdio.confirm': '保存并运行',
+  'stdio.enableBody': '启用后，DSH 会以你的用户权限在本机运行“{command}”，不经过沙箱。只启用你信任的命令。',
+  'stdio.enableConfirm': '启用并运行',
 }
 
 /** Every key the Connectors tab translates. */
@@ -125,6 +130,8 @@ export const en: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': 'The configuration changed elsewhere and was read again. Try again.',
   'custom.refused': 'The change didn’t go through: {message}',
   'custom.unreadable': 'Unrecognized entry',
+  'custom.failed': 'Couldn’t start: {message}',
+  'custom.gone': 'This server was removed or can no longer be edited here.',
   'custom.probe': 'Test connection',
   'custom.probing': 'Testing…',
   'custom.probePassed': 'Connected, {count} tools',
@@ -173,6 +180,7 @@ export const en: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'Enter a command.',
   'problem.token-missing': 'Enter a token.',
   'problem.row-key-missing': 'Every row needs a name.',
+  'problem.row-key-reserved': 'A row can’t be named __jsExpr.',
   'problem.row-key-duplicate': 'Names must be unique; names that differ only in case, - or _ count as the same, and a renamed secret row still counts under its old name.',
   'problem.row-secret-missing': 'A row marked as secret needs a value.',
   'problem.authorization-header': 'With a bearer token or OAuth, don’t add a separate Authorization header.',
@@ -181,6 +189,8 @@ export const en: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': 'After you save, DSH runs “{command}” on this computer with your user permissions, outside the sandbox. Add only commands you trust.',
   'stdio.acknowledge': 'I understand this command runs with my permissions',
   'stdio.confirm': 'Save and run',
+  'stdio.enableBody': 'After you enable it, DSH runs “{command}” on this computer with your user permissions, outside the sandbox. Enable only commands you trust.',
+  'stdio.enableConfirm': 'Enable and run',
 }
 
 /** Japanese dictionary. */
@@ -215,6 +225,8 @@ export const ja: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': '設定が別の場所で変更されたため、読み込み直しました。もう一度お試しください。',
   'custom.refused': '変更を適用できませんでした：{message}',
   'custom.unreadable': '認識できないエントリ',
+  'custom.failed': '起動できませんでした：{message}',
+  'custom.gone': 'このサーバーは削除されたか、ここでは編集できなくなりました。',
   'custom.probe': '接続をテスト',
   'custom.probing': 'テスト中…',
   'custom.probePassed': '接続しました（ツール {count} 個）',
@@ -263,6 +275,7 @@ export const ja: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'コマンドを入力してください。',
   'problem.token-missing': 'トークンを入力してください。',
   'problem.row-key-missing': 'すべての行に名前が必要です。',
+  'problem.row-key-reserved': '行の名前に __jsExpr は使用できません。',
   'problem.row-key-duplicate': '名前は重複できません。大文字・小文字や - と _ の違いしかない名前も重複とみなされ、名前を変更したシークレット行は元の名前も占有します。',
   'problem.row-secret-missing': 'シークレットに指定した行には値が必要です。',
   'problem.authorization-header': 'Bearer トークンまたは OAuth を使用する場合は、Authorization ヘッダーを別途追加しないでください。',
@@ -271,6 +284,8 @@ export const ja: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': '保存すると、DSH はこのコンピューター上で「{command}」をあなたのユーザー権限で実行します。サンドボックスは適用されません。信頼できるコマンドだけを追加してください。',
   'stdio.acknowledge': 'このコマンドが自分の権限で実行されることを理解しました',
   'stdio.confirm': '保存して実行',
+  'stdio.enableBody': '有効にすると、DSH はこのコンピューター上で「{command}」をあなたのユーザー権限で実行します。サンドボックスは適用されません。信頼できるコマンドだけを有効にしてください。',
+  'stdio.enableConfirm': '有効にして実行',
 }
 
 /** Spanish dictionary. */
@@ -305,6 +320,8 @@ export const es: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': 'La configuración se modificó en otro lugar y se volvió a leer. Inténtelo de nuevo.',
   'custom.refused': 'No se pudo aplicar el cambio: {message}',
   'custom.unreadable': 'Entrada no reconocida',
+  'custom.failed': 'No se pudo iniciar: {message}',
+  'custom.gone': 'Este servidor se eliminó o ya no se puede editar aquí.',
   'custom.probe': 'Probar conexión',
   'custom.probing': 'Probando…',
   'custom.probePassed': 'Conectado, {count} herramientas',
@@ -353,6 +370,7 @@ export const es: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'Ingrese un comando.',
   'problem.token-missing': 'Ingrese un token.',
   'problem.row-key-missing': 'Cada fila necesita un nombre.',
+  'problem.row-key-reserved': 'Una fila no puede llamarse __jsExpr.',
   'problem.row-key-duplicate': 'Los nombres deben ser únicos; los que solo difieren en mayúsculas y minúsculas, - o _ cuentan como iguales, y una fila secreta renombrada sigue ocupando su nombre anterior.',
   'problem.row-secret-missing': 'Una fila marcada como secreta necesita un valor.',
   'problem.authorization-header': 'Con un token Bearer u OAuth, no agregue un encabezado Authorization aparte.',
@@ -361,6 +379,8 @@ export const es: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': 'Al guardar, DSH ejecutará “{command}” en esta computadora con sus permisos de usuario, fuera del entorno aislado. Agregue solo comandos en los que confíe.',
   'stdio.acknowledge': 'Entiendo que este comando se ejecuta con mis permisos',
   'stdio.confirm': 'Guardar y ejecutar',
+  'stdio.enableBody': 'Al habilitarlo, DSH ejecutará “{command}” en esta computadora con sus permisos de usuario, fuera del entorno aislado. Habilite solo comandos en los que confíe.',
+  'stdio.enableConfirm': 'Habilitar y ejecutar',
 }
 
 /** French dictionary. */
@@ -395,6 +415,8 @@ export const fr: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': 'La configuration a été modifiée ailleurs et a été relue. Réessayez.',
   'custom.refused': 'La modification n’a pas abouti : {message}',
   'custom.unreadable': 'Entrée non reconnue',
+  'custom.failed': 'Échec du démarrage : {message}',
+  'custom.gone': 'Ce serveur a été supprimé ou ne peut plus être modifié ici.',
   'custom.probe': 'Tester la connexion',
   'custom.probing': 'Test en cours…',
   'custom.probePassed': 'Connecté, {count} outils',
@@ -443,6 +465,7 @@ export const fr: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'Saisissez une commande.',
   'problem.token-missing': 'Saisissez un jeton.',
   'problem.row-key-missing': 'Chaque ligne doit avoir un nom.',
+  'problem.row-key-reserved': 'Une ligne ne peut pas s’appeler __jsExpr.',
   'problem.row-key-duplicate': 'Les noms doivent être uniques ; ceux qui ne diffèrent que par la casse, - ou _ sont considérés comme identiques, et une ligne secrète renommée occupe encore son ancien nom.',
   'problem.row-secret-missing': 'Une ligne marquée comme secrète doit avoir une valeur.',
   'problem.authorization-header': 'Avec un jeton Bearer ou OAuth, n’ajoutez pas d’en-tête Authorization distinct.',
@@ -451,6 +474,8 @@ export const fr: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': 'Après l’enregistrement, DSH exécutera « {command} » sur cet ordinateur avec vos permissions d’utilisateur, hors du bac à sable. N’ajoutez que des commandes auxquelles vous faites confiance.',
   'stdio.acknowledge': 'Je comprends que cette commande s’exécute avec mes permissions',
   'stdio.confirm': 'Enregistrer et exécuter',
+  'stdio.enableBody': 'Après l’activation, DSH exécutera « {command} » sur cet ordinateur avec vos permissions d’utilisateur, hors du bac à sable. N’activez que des commandes auxquelles vous faites confiance.',
+  'stdio.enableConfirm': 'Activer et exécuter',
 }
 
 /** German dictionary. */
@@ -485,6 +510,8 @@ export const de: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': 'Die Konfiguration wurde an anderer Stelle geändert und neu eingelesen. Versuchen Sie es erneut.',
   'custom.refused': 'Die Änderung wurde nicht übernommen: {message}',
   'custom.unreadable': 'Nicht erkannter Eintrag',
+  'custom.failed': 'Start fehlgeschlagen: {message}',
+  'custom.gone': 'Dieser Server wurde entfernt oder kann hier nicht mehr bearbeitet werden.',
   'custom.probe': 'Verbindung testen',
   'custom.probing': 'Wird getestet…',
   'custom.probePassed': 'Verbunden, {count} Werkzeuge',
@@ -533,6 +560,7 @@ export const de: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'Geben Sie einen Befehl ein.',
   'problem.token-missing': 'Geben Sie ein Token ein.',
   'problem.row-key-missing': 'Jede Zeile benötigt einen Namen.',
+  'problem.row-key-reserved': 'Eine Zeile darf nicht __jsExpr heißen.',
   'problem.row-key-duplicate': 'Namen müssen eindeutig sein; Namen, die sich nur in Groß- und Kleinschreibung, - oder _ unterscheiden, gelten als gleich, und eine umbenannte geheime Zeile belegt weiterhin ihren alten Namen.',
   'problem.row-secret-missing': 'Eine als geheim markierte Zeile benötigt einen Wert.',
   'problem.authorization-header': 'Fügen Sie bei einem Bearer-Token oder OAuth keinen separaten Authorization-Header hinzu.',
@@ -541,6 +569,8 @@ export const de: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': 'Nach dem Speichern führt DSH „{command}“ auf diesem Computer mit Ihren Benutzerberechtigungen außerhalb der Sandbox aus. Fügen Sie nur Befehle hinzu, denen Sie vertrauen.',
   'stdio.acknowledge': 'Ich verstehe, dass dieser Befehl mit meinen Berechtigungen ausgeführt wird',
   'stdio.confirm': 'Speichern und ausführen',
+  'stdio.enableBody': 'Nach dem Aktivieren führt DSH „{command}“ auf diesem Computer mit Ihren Benutzerberechtigungen außerhalb der Sandbox aus. Aktivieren Sie nur Befehle, denen Sie vertrauen.',
+  'stdio.enableConfirm': 'Aktivieren und ausführen',
 }
 
 /** Russian dictionary. */
@@ -575,6 +605,8 @@ export const ru: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': 'Конфигурация была изменена в другом месте и прочитана заново. Повторите попытку.',
   'custom.refused': 'Изменение не применено: {message}',
   'custom.unreadable': 'Нераспознанная запись',
+  'custom.failed': 'Не удалось запустить: {message}',
+  'custom.gone': 'Этот сервер удалён, или его больше нельзя редактировать здесь.',
   'custom.probe': 'Проверить подключение',
   'custom.probing': 'Проверка…',
   'custom.probePassed': 'Подключено, инструментов: {count}',
@@ -623,6 +655,7 @@ export const ru: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'Введите команду.',
   'problem.token-missing': 'Введите токен.',
   'problem.row-key-missing': 'В каждой строке должно быть имя.',
+  'problem.row-key-reserved': 'Строку нельзя назвать __jsExpr.',
   'problem.row-key-duplicate': 'Имена должны быть уникальными; имена, которые отличаются только регистром, - или _, считаются одинаковыми, а переименованная секретная строка по-прежнему занимает своё старое имя.',
   'problem.row-secret-missing': 'Для строки, отмеченной как секрет, нужно указать значение.',
   'problem.authorization-header': 'При использовании Bearer-токена или OAuth не добавляйте отдельный заголовок Authorization.',
@@ -631,6 +664,8 @@ export const ru: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': 'После сохранения DSH запустит «{command}» на этом компьютере с вашими правами пользователя, вне песочницы. Добавляйте только команды, которым доверяете.',
   'stdio.acknowledge': 'Я понимаю, что эта команда запускается с моими правами',
   'stdio.confirm': 'Сохранить и запустить',
+  'stdio.enableBody': 'После включения DSH запустит «{command}» на этом компьютере с вашими правами пользователя, вне песочницы. Включайте только команды, которым доверяете.',
+  'stdio.enableConfirm': 'Включить и запустить',
 }
 
 /** Portuguese dictionary. */
@@ -665,6 +700,8 @@ export const pt: Record<ConnectorsLocaleKey, string> = {
   'custom.conflict': 'A configuração foi alterada em outro lugar e foi recarregada. Tente novamente.',
   'custom.refused': 'A alteração não foi aplicada: {message}',
   'custom.unreadable': 'Entrada não reconhecida',
+  'custom.failed': 'Não foi possível iniciar: {message}',
+  'custom.gone': 'Este servidor foi removido ou não pode mais ser editado aqui.',
   'custom.probe': 'Testar conexão',
   'custom.probing': 'Testando…',
   'custom.probePassed': 'Conectado, {count} ferramentas',
@@ -713,6 +750,7 @@ export const pt: Record<ConnectorsLocaleKey, string> = {
   'problem.command-missing': 'Insira um comando.',
   'problem.token-missing': 'Insira um token.',
   'problem.row-key-missing': 'Cada linha precisa de um nome.',
+  'problem.row-key-reserved': 'Uma linha não pode se chamar __jsExpr.',
   'problem.row-key-duplicate': 'Os nomes devem ser únicos; nomes que diferem apenas em maiúsculas e minúsculas, - ou _ contam como iguais, e uma linha secreta renomeada continua a ocupar o nome anterior.',
   'problem.row-secret-missing': 'Uma linha marcada como secreta precisa de um valor.',
   'problem.authorization-header': 'Com um token Bearer ou OAuth, não adicione um cabeçalho Authorization separado.',
@@ -721,4 +759,6 @@ export const pt: Record<ConnectorsLocaleKey, string> = {
   'stdio.body': 'Depois que você salvar, o DSH executará “{command}” neste computador com suas permissões de usuário, fora do sandbox. Adicione apenas comandos em que você confia.',
   'stdio.acknowledge': 'Entendo que este comando é executado com minhas permissões',
   'stdio.confirm': 'Salvar e executar',
+  'stdio.enableBody': 'Depois que você ativar, o DSH executará “{command}” neste computador com suas permissões de usuário, fora do sandbox. Ative apenas comandos em que você confia.',
+  'stdio.enableConfirm': 'Ativar e executar',
 }

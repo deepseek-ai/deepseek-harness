@@ -1,11 +1,12 @@
-/** The custom servers section's state: the servers the `connectors` Remote lists, its changes' outcomes, and the probes. */
+/** The custom servers section's state: the server rows the `connectors` Remote streams, its changes' outcomes, and the probes. */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { RemoteStream } from '@deepseek-ai/dsh-api-gateway/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
-import type { CustomServerView } from '../types.ts'
+import type { CustomServersList, CustomServerView } from '../types.ts'
 import type { ServerDraft } from '../server-form.ts'
 
-/** One server of the manager's Settings namespace. */
+/** One MCP server row of the profile's composition. */
 export type CustomServer = CustomServerView
 
 /** The latest probe of one server. */
@@ -14,7 +15,7 @@ export type ProbeState =
   | { readonly status: 'passed'; readonly tools: number; readonly truncated: boolean }
   | { readonly status: 'failed'; readonly message: string }
 
-/** A change the Host refused; `conflict` means Settings changed elsewhere since the last read. */
+/** A change the Host refused; `conflict` means the server rows changed elsewhere since the list arrived. */
 export interface CustomServersFailure {
   readonly kind: 'conflict' | 'refused'
   readonly message: string
@@ -23,8 +24,7 @@ export interface CustomServersFailure {
 /** Everything the section shows. */
 export interface CustomServersState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error' | 'unavailable'
-  readonly writable: boolean
-  readonly revision: number
+  readonly revision: string
   readonly servers: readonly CustomServer[]
   readonly saving: boolean
   readonly failure: CustomServersFailure | undefined
@@ -36,36 +36,45 @@ export interface CustomServersFace {
   hooks: { customServers: SnapshotStore<CustomServersState> }
   ensure: () => void
   retry: () => void
-  save: (draft: ServerDraft) => Promise<boolean>
-  remove: (name: string) => void
-  setEnabled: (name: string, enabled: boolean) => void
+  /** Save a new server, or the server row `id` names. */
+  save: (draft: ServerDraft, id?: string) => Promise<boolean>
+  remove: (id: string) => void
+  setEnabled: (id: string, enabled: boolean) => void
+  /** Probe the server registered under `name`. */
   probe: (name: string) => void
   dismissFailure: () => void
 }
 
 const INITIAL: CustomServersState = {
-  status: 'idle', writable: false, revision: 0, servers: [], saving: false, failure: undefined, probes: {},
+  status: 'idle', revision: '', servers: [], saving: false, failure: undefined, probes: {},
 }
 
 /**
- * Reads the servers through the `connectors` Remote when the section first asks, and sends each change to the Host as one
- * call: the Host stores the secrets, signs an OAuth grant out, writes the entry, and deletes the secrets it stopped
- * using. A refused change is reported; a conflicting one is also read again.
+ * Follows the server rows through the `connectors` Remote's stream once the section first asks, and sends each change
+ * to the Host as one call that names the revision of the list it was made on. The Host sends the list again after
+ * every change of the rows, so a successful change shows without a separate read. A refused change is reported; a
+ * conflicting one also reopens the stream. A stream that fails stays closed until `retry`.
  */
 export class CustomServersController {
   /** The section's state. */
   readonly store: SnapshotStore<CustomServersState> = createSnapshotStore<CustomServersState>(INITIAL)
-  private read = 0
+  private stream: RemoteStream<CustomServersList> | undefined
+  private following: Promise<void> | undefined
   private disposed = false
   private readonly probing = new Map<string, AbortController>()
 
   /** @param ctx - the browser context with the `connectors` and manager Remotes. */
   constructor(private readonly ctx: ClientContext) {}
 
-  /** Cancel running probes; answers that arrive later change nothing. */
-  dispose(): void {
+  /**
+   * Cancel running probes and close the stream; a change or probe the Host answers later reports nothing.
+   * @returns once the stream's consumer has stopped.
+   */
+  async dispose(): Promise<void> {
     this.disposed = true
     for (const controller of this.probing.values()) controller.abort()
+    await this.stream?.dispose()
+    await this.following
   }
 
   /**
@@ -75,62 +84,67 @@ export class CustomServersController {
   face(): CustomServersFace {
     return {
       hooks: { customServers: this.store },
-      ensure: () => { if (this.state().status === 'idle') void this.load() },
-      retry: () => { void this.load() },
-      save: draft => this.save(draft),
-      remove: (name) => { void this.change(() => this.ctx.remote.connectors.removeServer(name, this.state().revision)) },
-      setEnabled: (name, enabled) => {
-        void this.change(() => this.ctx.remote.connectors.setServerEnabled(name, enabled, this.state().revision))
+      ensure: () => { if (this.state().status === 'idle') this.follow() },
+      retry: () => { if (this.state().status === 'error') this.follow() },
+      save: (draft, id) => this.save(draft, id),
+      remove: (id) => { void this.change(() => this.ctx.remote.connectors.removeServer(id, this.state().revision)) },
+      setEnabled: (id, enabled) => {
+        void this.change(() => this.ctx.remote.connectors.setServerEnabled(id, enabled, this.state().revision))
       },
       probe: (name) => { void this.probe(name) },
       dismissFailure: () => { this.patch({ failure: undefined }) },
     }
   }
 
-  /** Read again after a Settings document changed, once the section has read; the Host owns which namespace it lists. */
-  changed(): void {
-    if (this.state().status !== 'idle') void this.load()
-  }
-
   private state(): CustomServersState {
     return this.store.getSnapshot()
   }
 
-  private async load(): Promise<void> {
-    const read = ++this.read
-    if (this.state().status !== 'ready') this.patch({ status: 'loading' })
-    const answer = await this.ctx.remote.connectors.listServers()
-    if (this.disposed || read !== this.read) return
-    if (!answer.ok) {
-      this.patch({ status: 'error' })
-      return
-    }
-    const list = answer.value
-    this.patch(list.available
-      ? { status: 'ready', writable: list.writable, revision: list.revision, servers: list.servers }
-      : { status: 'unavailable', servers: [] })
+  /** Open a stream and show each list it delivers; a stream that failed cannot be consumed again, so `retry` opens another. */
+  private follow(): void {
+    const stream = this.ctx.remote.$stream<CustomServersList>({
+      name: 'Custom MCP servers',
+      open: signal => this.ctx.remote.connectors.watchServers(signal),
+      ended: () => new Error('Custom MCP servers stream ended'),
+    })
+    this.stream = stream
+    this.patch({ status: 'loading' })
+    this.following = this.observe(stream)
   }
 
-  private async save(draft: ServerDraft): Promise<boolean> {
+  private async observe(stream: RemoteStream<CustomServersList>): Promise<void> {
+    try {
+      for await (const item of stream) {
+        const list = item.value
+        this.patch(list.available
+          ? { status: 'ready', revision: list.revision, servers: list.servers }
+          : { status: 'unavailable', revision: '', servers: [] })
+        item.accept()
+      }
+    } catch (error) {
+      // Disposal ends the stream without an error, so every caught failure is a live stream failure.
+      this.patch({ status: 'error' })
+      this.ctx.logger.warn('custom MCP servers stream failed: %s', error)
+    }
+  }
+
+  private async save(draft: ServerDraft, id: string | undefined): Promise<boolean> {
     this.patch({ saving: true, failure: undefined })
     try {
-      return await this.change(() => this.ctx.remote.connectors.saveServer(draft, this.state().revision))
+      return await this.change(() => this.ctx.remote.connectors.saveServer(draft, this.state().revision, id))
     } finally {
       this.patch({ saving: false })
     }
   }
 
-  /** Send one change, then read again; report a refusal, and read again after a conflict. */
+  /** Send one change and report a refusal. A conflict means this list missed a change, so the stream reopens and reads it again. */
   private async change(call: () => Promise<RemoteResult<void>>): Promise<boolean> {
     const answer = await call()
     if (this.disposed) return false
-    if (answer.ok) {
-      void this.load()
-      return true
-    }
+    if (answer.ok) return true
     const conflict = answer.error.code === 'connectors/conflict'
     this.patch({ failure: { kind: conflict ? 'conflict' : 'refused', message: answer.error.message } })
-    if (conflict) void this.load()
+    if (conflict) this.stream?.restart()
     return false
   }
 

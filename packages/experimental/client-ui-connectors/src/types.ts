@@ -29,26 +29,42 @@ export interface ServerDraft {
   readonly tokenRef?: string | undefined
   readonly clientId: string
   readonly scope: string
-  readonly enabled: boolean
 }
 
 /** A reason the form refuses to save; each has a `problem.<kind>` dictionary entry. */
 export type DraftProblem =
   | 'name-invalid' | 'name-taken' | 'url-invalid' | 'command-missing' | 'token-missing'
-  | 'row-key-missing' | 'row-key-duplicate' | 'row-secret-missing' | 'authorization-header' | 'name-oauth'
+  | 'row-key-missing' | 'row-key-duplicate' | 'row-key-reserved' | 'row-secret-missing' | 'authorization-header' | 'name-oauth'
 
-/** The entry to write, and the secret values to store under the references it uses. */
+/** The server row config to write, and the secret values to store under the references it uses. */
 export interface DraftEntry {
   readonly entry: Readonly<Record<string, JsonValue>>
   readonly secrets: readonly { readonly ref: string; readonly value: string }[]
 }
 
-/** One server of the MCP manager's Settings namespace. */
-export interface CustomServerView {
+/**
+ * Whether one MCP server row runs: `on` for a row that is switched on and runs, `off` for one that is switched off, and
+ * `failed`, with the reason, for one that is switched on and does not run.
+ */
+export type CustomServerStatus =
+  | { readonly state: 'on' | 'off' }
+  | { readonly state: 'failed'; readonly error: string }
+
+/** One MCP server row of the profile's composition, with whether it runs. */
+export type CustomServerView = CustomServerStatus & {
+  /** The row id, which names the row in a change. */
+  readonly id: string
+  /** The server name, or the row id when the row's config carries no `serverName` string. */
   readonly name: string
-  /** The entry, or undefined when its transport is not one the form edits. */
+  /**
+   * The row's config, or undefined when the form cannot edit it: the config carries no `serverName` string, names a
+   * transport the form does not know, or holds a `!!js` expression.
+   */
   readonly raw?: Readonly<Record<string, JsonValue>> | undefined
-  /** Whether the profile's composition base defines the server, so removing it would only restore the base entry. */
+  /**
+   * Whether a layer other than the profile patch adds the row, such as a bundle; such a row can be edited and switched
+   * but not removed.
+   */
   readonly inherited: boolean
 }
 
@@ -57,18 +73,22 @@ export type CustomServersList =
   | { readonly available: false }
   | {
     readonly available: true
-    /** Whether the Settings provider accepts writes. */
-    readonly writable: boolean
-    /** The namespace revision a change must name. */
-    readonly revision: number
+    /** A digest of the listed rows' ids, configs, and switches, which a change must name. */
+    readonly revision: string
     readonly servers: readonly CustomServerView[]
   }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    /** The MCP manager's Settings changed after the caller read them; read the servers again before the next change. */
-    'connectors/conflict': { readonly expected: number; readonly actual: number }
-    /** The Host refused one step of a custom server change, which stopped there; the message names the refusal. */
+    /**
+     * The server rows changed after the caller read them; the caller waits for the next list before the next change.
+     * `server` names the server as the change did: the draft's name for a save, the row id for a removal or a switch.
+     */
+    'connectors/conflict': { readonly server: string }
+    /**
+     * The Host refused one step of a custom server change, which stopped there; the message names the refusal.
+     * `server` names the server as the change did.
+     */
     'connectors/refused': { readonly server: string }
   }
 }

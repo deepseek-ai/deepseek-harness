@@ -211,7 +211,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'client-ui-connectors',
     title: 'Custom MCP servers on the Connectors tab',
     mode: 'service',
-    note: 'Lists the MCP manager\'s Settings servers for the Connectors tab and runs each save, removal, and switch as one Host operation over Settings, credentials, and the manager; registers each configured OAuth server\'s account with `ctx.mcpAccounts` while that service is loaded.',
+    note: 'Streams the MCP server rows of the profile\'s composition to the Connectors tab and runs each save, removal, and switch as one Host operation over the configuration editor, the plugin manager, credentials, and the MCP manager; registers the account of each OAuth server row that is on with `ctx.mcpAccounts` while that service is loaded.',
   },
   {
     key: 'pluginMarket',
