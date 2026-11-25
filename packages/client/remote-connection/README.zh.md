@@ -36,7 +36,7 @@ Web bundle 挂载此插件。Host 端依赖 `connection`、`connection.authentic
 <a id="authentication-and-failures"></a>
 ## 认证与失败处理
 
-二维码使用公布的应用根地址，在查询参数中携带 `login=qr`，在 URL fragment 中携带独立生成的 256 位凭据，始终不使用进程启动 token。根地址的登录页面移除 fragment，并向带 `login=qr` 的同源根地址 POST 兑换凭据。GET 和 HEAD 不会兑换凭据。Remote 在读取兑换请求前应用 WebServer 的匿名来源检查，核对公布地址的 authority，消费一次性凭据，再签发自己的 owner 浏览器 cookie。已兑换、过期、取消、被替换和重启前生成的邀请均不能再次兑换。
+二维码使用公布的应用根地址，在查询参数中携带 `login=qr`，在 URL fragment 中携带独立生成的 256 位凭据，始终不使用进程启动 token。根地址的登录页面移除 fragment，并向带 `login=qr` 的同源根地址 POST 兑换凭据。GET 和 HEAD 不会兑换凭据。Remote 在读取兑换请求前应用 WebServer 的匿名来源检查，核对公布地址的 authority，消费一次性凭据，再签发自己的 owner 浏览器 cookie。兑换成功后，浏览器自动打开不含登录参数的应用地址。已兑换、过期、取消、被替换和重启前生成的邀请均不能再次兑换。
 
 只有已认证的 owner 可以创建、查询或取消邀请。Host 保留凭据摘要，不保留可重复使用的明文。公开页面不包含已认证应用的初始化注入，也不会向第三方发送凭据。二维码兑换失败时保留普通登录页及已配置的 Token 表单，并用本地化 banner 说明失败原因。兑换中断时 cookie 可能已经签发；banner 提供干净的应用链接以检查未知结果，不会自动重试一次性凭据。
 
