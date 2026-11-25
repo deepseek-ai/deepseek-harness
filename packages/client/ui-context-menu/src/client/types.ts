@@ -14,10 +14,11 @@ export interface ContextMenuBindings {
    * Bind an object or deferred business target to one element. This is an ordinary function, safe in loops.
    * @param target - Object captured when the gesture runs; undefined retains native behavior.
    * @param handlers - Existing handlers run first and can cancel with preventDefault().
+   * @param opener - Instance id published as {@link ContextMenus.opener} while the popup this element opened is up.
    * @returns Combined pointer and keyboard handlers plus a keyboard focus stop.
    */
   getTriggerProps: (
-    target: ContextMenuTarget | (() => ContextMenuTarget) | undefined, handlers?: ContextMenuTriggerProps,
+    target: ContextMenuTarget | (() => ContextMenuTarget) | undefined, handlers?: ContextMenuTriggerProps, opener?: string,
   ) => ContextMenuTriggerProps
 }
 
@@ -51,6 +52,8 @@ export interface ContextMenuButtonProps {
   readonly className?: string | undefined
   /** Use the compact toolbar control with a label tooltip; omission preserves caller-styled row button geometry without a tooltip. */
   readonly size?: 'sm'
+  /** Instance id shared with the owner's gesture trigger, so both mark the same opener; omission uses this button's own id. */
+  readonly opener?: string | undefined
 }
 
 /** Pointer position in CSS pixels; keyboard gestures use the trigger's bottom edge. */
@@ -118,6 +121,8 @@ export interface MenuResolution {
 export interface ContextMenus {
   /** Captured target of the shared popup; null after dismissal. */
   readonly active: ObservableSnapshot<ContextMenuTarget | null>
+  /** Instance id of the element that opened the shared popup; null when it was opened without one and after dismissal. */
+  readonly opener: ObservableSnapshot<string | null>
   /** Target kinds with registered contributions; updates synchronously on registration and withdrawal, without resolving actions. */
   readonly registeredKinds: ObservableSnapshot<readonly (keyof ContextMenuTargetMap)[]>
   /**
@@ -130,9 +135,10 @@ export interface ContextMenus {
    * Open the single shared popup; a repeated gesture on the same target within 4 CSS pixels closes it instead.
    * @param target - captured object.
    * @param point - viewport position.
-   * @param options - set by the shared `contextMenu.button`: its instance id replaces the repeated-gesture check.
+   * @param options - set by a toggling control such as `contextMenu.button`: its opener id is published
+   * and replaces the repeated-gesture check.
    */
-  open(target: ContextMenuTarget, point: MenuPoint, options?: { readonly button: string }): void
+  open(target: ContextMenuTarget, point: MenuPoint, options?: { readonly opener: string }): void
   /**
    * Resolve an embedded menu without opening the shared popup.
    * @param target - captured object.

@@ -58,7 +58,7 @@ export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): vo
   const instance = handle.create()
   const store: typeof handle = { ...handle, create: () => instance }
   const targetSource = createSnapshotStore<ContextMenuTarget | null>(null)
-  // Instance id of the shared button whose activation opened the current popup.
+  // Instance id of the element whose activation opened the current popup.
   const opener = createSnapshotStore<string | null>(null)
   let sequence = 0
   let active: { resolution: MenuResolution; unsubscribe: () => void; target: ContextMenuTarget; point: MenuPoint } | undefined
@@ -94,17 +94,22 @@ export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): vo
     closeTimer = setTimeout(() => { instance.actions.close() }, replacing ? MENU_TRANSITION_MS.replace : MENU_TRANSITION_MS.dismiss)
   }
   const close = (): void => { dismiss(false) }
+  // A repeated gesture closes; toggling controls compare their opener instead.
+  const gesture = (target: ContextMenuTarget, point: MenuPoint, owner?: string): void => {
+    const previous = active
+    if (previous !== undefined
+      && Math.hypot(previous.point.x - point.x, previous.point.y - point.y) <= 4
+      && menuTargetKey(previous.target) === menuTargetKey(target)) { close(); return }
+    show(target, point)
+    if (owner !== undefined) opener.set(owner)
+  }
   const contextMenus: ContextMenus = {
-    active: targetSource, registeredKinds: registry.registeredKinds,
+    active: targetSource, opener, registeredKinds: registry.registeredKinds,
     register: input => registry.register(input), resolve: target => registry.resolve(target), notify, close,
     open: (target, point, options) => {
-      const previous = active
-      // A repeated gesture closes; shared buttons toggle by their own instance instead.
-      if (options === undefined && previous !== undefined
-        && Math.hypot(previous.point.x - point.x, previous.point.y - point.y) <= 4
-        && menuTargetKey(previous.target) === menuTargetKey(target)) { close(); return }
+      if (options === undefined) { gesture(target, point); return }
       show(target, point)
-      if (options !== undefined) opener.set(options.button)
+      opener.set(options.opener)
     },
   }
   function show(target: ContextMenuTarget, point: MenuPoint): void {
@@ -138,11 +143,11 @@ export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): vo
       toggle: (button: string, target: ContextMenuTarget, point: MenuPoint) => {
         if (disposed) return
         if (opener.getSnapshot() === button) { close(); return }
-        contextMenus.open(target, point, { button })
+        contextMenus.open(target, point, { opener: button })
       },
     }),
   }, ContextMenuButton)
-  const bindings = createContextMenuBindings((target, point) => { contextMenus.open(target, point) }, () => !disposed)
+  const bindings = createContextMenuBindings(gesture, () => !disposed)
   ctx.slots.provideRoot({ props: { useContextMenu: () => bindings } })
   ctx.effect(() => {
     const outside = (event: PointerEvent): void => {

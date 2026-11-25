@@ -9,7 +9,7 @@
  * `sidebar.workspaces.session.row.action` list. Session and Workspace
  * hover cards are suppressed while their menu is open.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import clsx from 'clsx'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
@@ -143,7 +143,7 @@ type ProjectRowItemProps = {
   /** Host account home; POSIX home-rooted hover paths display as `~`. */
   home?: string | undefined
   t: RowTranslate
-} & Pick<WorkspaceBrowserProps, 'useWorkspaceAccess' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useContextMenu'>
+} & Pick<WorkspaceBrowserProps, 'useWorkspaceAccess' | 'renderFactorySlot' | 'useContextMenuOpener' | 'useContextMenu'>
 
 /** The header actions one row offers; an absent create offers no New Session button. */
 interface ProjectRowActions {
@@ -193,7 +193,7 @@ function WorkspaceProjectRow({ workspaceId, ...props }: ProjectRowItemProps & { 
 
 function ProjectRow({
   group, containsCurrentDescendant = false, onToggle, drag: offeredDrag, home, newShortcut, t, actions,
-  renderFactorySlot, useContextMenuTarget, useContextMenu,
+  renderFactorySlot, useContextMenuOpener, useContextMenu,
 }: Omit<ProjectRowItemProps, 'onCreate'> & { actions: ProjectRowActions }) {
   const { getTriggerProps } = useContextMenu()
   const drag = actions.reorder ? offeredDrag : undefined
@@ -202,7 +202,10 @@ function ProjectRow({
   // The ungrouped bucket has no workspace title: its label is dictionary copy.
   const label = row.workspaceId === undefined ? t('group.ungrouped') : row.label
   const active = containsCurrentDescendant || (group.expanded && group.containsCurrent)
-  const menuOpen = useContextMenuTarget(target => target?.kind === 'workspace' && target.value.workspaceId === row.workspaceId)
+  // The row's gesture and its button share one opener id, so a menu for the
+  // same Workspace opened elsewhere leaves this row unchanged.
+  const menuOpener = useId()
+  const menuOpen = useContextMenuOpener(opener => opener === menuOpener)
   const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
   const workspaceMenuTarget = row.workspaceId !== undefined && row.cwd !== undefined
     ? { workspaceId: row.workspaceId, path: row.cwd } : undefined
@@ -213,7 +216,9 @@ function ProjectRow({
       role="treeitem"
       aria-expanded={row.expanded}
       onClick={onToggle}
-      {...getTriggerProps(workspaceMenuTarget === undefined ? undefined : { kind: 'workspace', value: { ...workspaceMenuTarget, displayTitle: label } })}
+      {...getTriggerProps(workspaceMenuTarget === undefined
+        ? undefined
+        : { kind: 'workspace', value: { ...workspaceMenuTarget, displayTitle: label } }, undefined, menuOpener)}
       draggable={drag !== undefined}
       onDragStart={drag === undefined
         ? undefined
@@ -240,6 +245,7 @@ function ProjectRow({
             target: { kind: 'workspace', value: { ...workspaceMenuTarget, displayTitle: label } },
             label: t('actions.workspace.aria', { name: label }),
             className: css.iconButton,
+            opener: menuOpener,
           })
         )}
         {create !== undefined && (
@@ -511,12 +517,12 @@ export function SearchResultItem({
  * @returns the session row.
  */
 export function SessionNodeItem({
-  node, currentId, now, onOpen, onRenameRequest, renderSlot, renderFactorySlot, useContextMenuTarget,
+  node, currentId, now, onOpen, onRenameRequest, renderSlot, renderFactorySlot, useContextMenuOpener,
   useContextMenu, onReveal, drag, home, useSessionAccess, t,
 }: {
   useContextMenu: WorkspaceBrowserProps['useContextMenu']
   renderFactorySlot: WorkspaceBrowserProps['renderFactorySlot']
-  useContextMenuTarget: WorkspaceBrowserProps['useContextMenuTarget']
+  useContextMenuOpener: WorkspaceBrowserProps['useContextMenuOpener']
   node: SessionNode
   currentId: string | undefined
   now: number
@@ -550,7 +556,10 @@ export function SessionNodeItem({
   const reorderable = useSessionAccess(node.id, 'workspace/insertSessionBefore')
   const draggable = !row.blank && !row.archived
   const reorderDraggable = draggable && drag !== undefined && reorderable
-  const menuOpen = useContextMenuTarget(target => target?.kind === 'session' && target.value.sessionId === node.id)
+  // The row's gesture and its button share one opener id, so the conversation
+  // title's menu for the same Session leaves this row unchanged.
+  const menuOpener = useId()
+  const menuOpen = useContextMenuOpener(opener => opener === menuOpener)
   const dragPreview = useRowDragPreview(css.dragPreview as string, DRAG_PREVIEW_PROPERTIES)
   const rowRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLSpanElement>(null)
@@ -585,7 +594,7 @@ export function SessionNodeItem({
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
         event.preventDefault()
         onOpen(node.id)
-      } })}
+      } }, menuOpener)}
       onPointerEnter={marquee.onPointerEnter}
       onPointerLeave={marquee.onPointerLeave}
       draggable={draggable}
@@ -670,6 +679,7 @@ export function SessionNodeItem({
             target: { kind: 'session', value: { sessionId: node.id, displayTitle: row.title } },
             label: t('actions.session.aria', { name: title }),
             className: css.iconButton,
+            opener: menuOpener,
           })}
           <span className={css.rowQuickActions}>
             {renderSlot('sidebar.workspaces.session.row.action', { sessionId: node.id, displayTitle: row.title })}

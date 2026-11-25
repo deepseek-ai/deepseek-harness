@@ -4,15 +4,19 @@ import type { ContextMenuTriggerProps, MenuPoint, ContextMenuTarget } from './ty
 
 /**
  * Create stable bindings for the plugin's injected hook.
- * @param open - Open against the supplied captured target and viewport position.
+ * @param open - Open against the supplied captured target, viewport position, and the trigger's opener id.
  * @param active - Whether the plugin still owns its service.
  * @returns Ordinary trigger-prop factory; no React subscription or context is created.
  */
 export function createContextMenuBindings<Target extends object = ContextMenuTarget>(
-  open: (target: Target, point: MenuPoint) => void, active: () => boolean,
-): { getTriggerProps: (target: Target | (() => Target) | undefined, handlers?: ContextMenuTriggerProps) => ContextMenuTriggerProps } {
+  open: (target: Target, point: MenuPoint, opener?: string) => void, active: () => boolean,
+): {
+  getTriggerProps: (
+    target: Target | (() => Target) | undefined, handlers?: ContextMenuTriggerProps, opener?: string,
+  ) => ContextMenuTriggerProps
+} {
   return {
-    getTriggerProps(target, handlers = {}) {
+    getTriggerProps(target, handlers = {}, opener) {
       if (target === undefined) return handlers
       const show = (event: SyntheticEvent<HTMLElement>, x: number, y: number): void => {
         if (event.defaultPrevented || !active()) return
@@ -20,7 +24,8 @@ export function createContextMenuBindings<Target extends object = ContextMenuTar
         event.preventDefault()
         event.stopPropagation()
         event.currentTarget.focus({ preventScroll: true })
-        open(captured, { x, y })
+        if (opener === undefined) open(captured, { x, y })
+        else open(captured, { x, y }, opener)
       }
       return {
         ...handlers,
