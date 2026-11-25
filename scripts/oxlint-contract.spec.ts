@@ -1,44 +1,73 @@
 /**
- * Executable lint checks use private copies of repository sources and configuration.
+ * Executable lint checks use a private copy of the Git-tracked repository sources and configuration.
  * Process-spawning cases set Vitest's case timeout to 90 seconds, including
  * plain local runs without a CI override. Configuration-only cases keep the default.
  */
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync, globSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
-import { basename, join, relative } from 'node:path'
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from 'typescript'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const sourceRepositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 let repositoryRoot = ''
+let repositoryCopy: Promise<void> | undefined
+
+const copiedPathspecs = [
+  'tsconfig*.json', '.oxlintrc.json', '.oxlintrc.staged.json', 'package.json', 'lefthook.yml',
+  'apps', 'native', 'packages', 'python', 'scripts', 'vendor', 'website',
+]
+// Keeps more copies queued than libuv's four default file-system threads run at once.
+const copyConcurrency = 16
+
+function listGitFiles(option: '--cached' | '--deleted'): string[] {
+  return execFileSync('git', ['ls-files', '-z', option, '--', ...copiedPathspecs], {
+    cwd: sourceRepositoryRoot,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  }).split('\0').filter(path => path !== '')
+}
+
+/**
+ * Copies the tracked TypeScript, JavaScript, JSON, and Lefthook files present in the working tree.
+ * The file list comes from the Git index because concurrently running suites create and delete
+ * untracked directories inside the repository; walking the live tree fails when one disappears.
+ * The returned promise settles only after every started copy has settled.
+ */
+async function copyRepositorySources(target: string): Promise<void> {
+  const deleted = new Set(listGitFiles('--deleted'))
+  const paths = listGitFiles('--cached').filter(path =>
+    !deleted.has(path) && (/\.(?:json|[cm]?[jt]sx?)$/u.test(path) || path.endsWith('lefthook.yml')))
+  for (const directory of new Set(paths.map(path => dirname(path)))) {
+    await mkdir(join(target, directory), { recursive: true })
+  }
+  let next = 0
+  const copies = await Promise.allSettled(Array.from({ length: copyConcurrency }, async () => {
+    for (let path = paths[next++]; path !== undefined; path = paths[next++]) {
+      await copyFile(join(sourceRepositoryRoot, path), join(target, path))
+    }
+  }))
+  const failures = copies.flatMap((copy): unknown[] => copy.status === 'rejected' ? [copy.reason] : [])
+  if (failures.length > 0) throw new AggregateError(failures, `Copying repository sources to ${target} failed`)
+}
 
 // Probes belong to a private copy: repository compiler scans run in other workers and processes.
 beforeAll(async () => {
   repositoryRoot = await mkdtemp(join(tmpdir(), 'dsh-oxlint-contract-'))
   repositoryRoot = await realpath(repositoryRoot)
-  const files = [
-    ...globSync('tsconfig*.json', { cwd: sourceRepositoryRoot }),
-    '.oxlintrc.json', '.oxlintrc.staged.json', 'package.json', 'lefthook.yml',
-    'apps', 'native', 'packages', 'python', 'scripts', 'vendor', 'website',
-  ]
-  for (const path of files) {
-    await cp(join(sourceRepositoryRoot, path), join(repositoryRoot, path), {
-      recursive: true,
-      async filter(source) {
-        if (['node_modules', 'lib', '.typecheck'].includes(basename(source))) return false
-        return (await lstat(source)).isDirectory() || /\.(?:json|[cm]?[jt]sx?)$/u.test(source) || source.endsWith('lefthook.yml')
-      },
-    })
-  }
+  repositoryCopy = copyRepositorySources(repositoryRoot)
+  await repositoryCopy
   await symlink(join(sourceRepositoryRoot, 'node_modules'), join(repositoryRoot, 'node_modules'),
     process.platform === 'win32' ? 'junction' : 'dir')
 }, 90_000)
 
 afterAll(async () => {
+  // A timed-out beforeAll leaves the copy running; beforeAll has already reported its outcome.
+  await Promise.allSettled([repositoryCopy])
   if (repositoryRoot !== '') await rm(repositoryRoot, { recursive: true, force: true })
 }, 90_000)
 const oxlintCli = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url))
