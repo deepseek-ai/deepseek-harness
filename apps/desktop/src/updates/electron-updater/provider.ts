@@ -26,10 +26,12 @@ export interface DesktopFeedMetadata {
   readonly arch?: string
 }
 
+type DiskPublishConfiguration = GenericProviderConfiguration | { readonly provider?: string } | null
+
 type DesktopProviderUpdater = {
   readonly app: { whenReady(): Promise<void> }
   clientPromise: Promise<GenericProvider> | null
-  readonly configOnDisk: { readonly value: Promise<GenericProviderConfiguration> }
+  readonly configOnDisk: { readonly value: Promise<DiskPublishConfiguration> }
   readonly stagingUserIdPromise: { readonly value: Promise<string> }
   createProviderRuntimeOptions(): ProviderRuntimeOptions
   getUpdateInfoAndProvider(): Promise<{ info: unknown; provider: unknown }>
@@ -120,9 +122,9 @@ export function installDesktopUpdateProvider(
 ): void {
   // electron-updater declares clientPromise and runtime option construction private on AppUpdater.
   const owner = updater as object as DesktopProviderUpdater
-  const create = (configuration: GenericProviderConfiguration): DesktopUpdateProvider => {
-    if (configuration.provider !== 'generic') {
-      throw new Error(`desktop update: expected generic provider, got ${String(configuration.provider)}`)
+  const create = (configuration: DiskPublishConfiguration): DesktopUpdateProvider => {
+    if (configuration === null || configuration.provider !== 'generic' || !('url' in configuration)) {
+      throw new Error(`desktop update: expected generic provider, got ${String(configuration?.provider)}`)
     }
     return new DesktopUpdateProvider(
       configuration,
