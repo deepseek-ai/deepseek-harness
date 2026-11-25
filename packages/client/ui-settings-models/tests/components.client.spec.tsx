@@ -2384,7 +2384,7 @@ it.each([
   // An emptied draft keeps the saved key.
   fireEvent.change(reopened, { target: { value: '' } })
   expect(reopened.placeholder).toBe(en.keyReplacementPlaceholder)
-  expect(screen.queryByText(en.keyRemovePendingEnvironment.replace('{hint}', 'TEAM_API_KEY'))).toBeNull()
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
   fireEvent.blur(reopened)
   expect(screen.getByText(masked)).toBeTruthy()
 })
@@ -2473,7 +2473,9 @@ it('stages saved-key deletion with the clear action and can cancel it', async ()
   const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
   expect(document.activeElement).toBe(input)
   expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'OPENAI_API_KEY'))).toBeTruthy()
+  // The field reads as it does without a saved key; nothing announces the pending removal.
+  expect(screen.getByText(en.keyFallbackUnchecked)).toBeTruthy()
+  expect(screen.queryByText(en.keyRemovePending)).toBeNull()
   // A staged removal has no read-only form.
   fireEvent.blur(input)
   expect(screen.getByLabelText(en.keyInput)).toBe(input)
@@ -2528,7 +2530,7 @@ it.each([
   const envRef = removesReference && nativeAuth !== undefined ? nativeAuth.env[0] : ref
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
     .toBe(en.keyPlaceholderFallback.replace('{hint}', envRef))
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', envRef))).toBeTruthy()
+  expect(screen.getByText(en.keyFallbackUnchecked)).toBeTruthy()
   fireEvent.click(screen.getByText(en.customized))
   expect(screen.getByRole<HTMLButtonElement>('button', { name: en.fetchModels }).disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
@@ -2540,13 +2542,29 @@ it.each([
   else expect(mutate).not.toHaveBeenCalled()
 })
 
-it('keeps the clear hint generic when native authentication has no visible environment reference', () => {
+it.each([
+  ['a detected variable', { configured: true, source: 'env', writable: true }, en.keyFallbackDetected, 'savedNotice'],
+  ['a missing variable', { configured: false, writable: true }, en.keyFallbackMissing, 'notice'],
+] as const)('reads a cleared key like a field without a saved key: %s', (_label, check, hint, tone) => {
+  renderPiAiEditor('google', piAiNamespaceWith('google', { apiKeyEnv: 'GOOGLE_API_KEY' }), {
+    nativeAuth: { env: ['GEMINI_API_KEY'], oauth: false },
+    credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
+    credentialChecks: { GEMINI_API_KEY: check },
+  })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
+  const shown = screen.getByText(hint.replace('{hint}', 'GEMINI_API_KEY'))
+  expect(shown.className).toContain(tone)
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', 'GEMINI_API_KEY'))
+})
+
+it('shows no hint after clearing when native authentication has no visible environment reference', () => {
   renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
     nativeAuth: { env: [], oauth: false },
     credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
   })
   fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
-  expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe(en.keyPlaceholder)
 })
 
@@ -2564,7 +2582,8 @@ it.each(['cancel', 'replace'])('keeps authentication unchanged after refused del
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await screen.findByText('credential store locked')
   expect(mutate).not.toHaveBeenCalled()
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'GEMINI_API_KEY'))).toBeTruthy()
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', 'GEMINI_API_KEY'))
   if (action === 'cancel') {
     fireEvent.click(screen.getByRole('button', { name: en.cancel }))
     expect(closed).toHaveBeenCalledWith(false)

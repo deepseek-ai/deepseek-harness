@@ -91,7 +91,10 @@ it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', '
       const clear = card.getByRole('button', { name: '清除 API 密钥', exact: true })
       await clear.click()
       expect(await key.getAttribute('placeholder')).toBe(`留空使用环境认证（${envRef}）`)
-      await dialog.getByText(`保存以清除已保存的 API key。之后使用环境认证（${envRef}）。`, { exact: true }).waitFor()
+      // The field reads as it does without a saved key. The page has read only the saved
+      // reference, so the environment fallback is unconfirmed until the removal is applied.
+      await card.getByText('环境凭据状态尚未确认', { exact: true }).waitFor()
+      expect(await card.getByText(/保存以清除/).count()).toBe(0)
       expect((await runtime.credentials.resolve(ref))?.source).toBe('file')
       if (messages) await compareOrRefreshGolden(join(EXPECTED, 'clear-key.expected.md'),
         await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
@@ -163,8 +166,9 @@ it.skipIf(webSnapshotMode() === 'record').each([{ name: 'Chromium', engine: chro
       await savedPreview.waitFor()
       expect(await key.count()).toBe(0)
       await clear.click()
-      await card.getByText('保存以清除已保存的 API key。之后使用环境认证（ANTHROPIC_AUTH_TOKEN）。', { exact: true }).waitFor()
+      await card.getByText('环境凭据状态尚未确认', { exact: true }).waitFor()
       expect(await key.getAttribute('placeholder')).toBe('留空使用环境认证（ANTHROPIC_AUTH_TOKEN）')
+      expect(await card.getByText(/保存以清除/).count()).toBe(0)
       await card.getByRole('button', { name: '取消', exact: true }).click()
       await edit.click()
       await savedPreview.waitFor()
@@ -327,7 +331,6 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     // An emptied replacement keeps the saved key instead of staging its removal.
     await key.fill('')
     expect(await key.getAttribute('placeholder')).toBe('输入新的 API 密钥')
-    expect(await messages.getByText('保存以清除已保存的 API key。之后使用环境认证（DEEPSEEK_API_KEY）。', { exact: true }).count()).toBe(0)
     await key.fill('sk-cancelled-replacement')
     await messages.getByRole('button', { name: '取消', exact: true }).click()
     expect(await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8')).toBe(credentials)
