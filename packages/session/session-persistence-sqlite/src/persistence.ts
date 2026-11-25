@@ -7,6 +7,7 @@ import type { Config } from './index.ts'
 import pLimit, { type LimitFunction } from 'p-limit'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { SessionPersistence, SessionAlreadyExistsError, SessionPersistenceNotFoundError, materializeCreateHeader } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionAccess, SessionPersistenceCreateOptions, SessionPersistenceOpenOptions,
   SessionPersistenceStatOptions, SessionPersistenceListOptions, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
@@ -14,12 +15,31 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
 import { SqliteStore, isAbsent } from './sqlite.ts'
+import { DERIVATIONS } from './derivations.ts'
+import type { DerivationFailure } from './derive.ts'
 import { SessionWriteLease } from './lease.ts'
 import { sessionDir } from './paths.ts'
 import { LegacySessionMigration } from './migration.ts'
 import type { JsonlBackend } from './migration.ts'
 
 const marker = z.object({ id: z.string().transform(SessionId), database: z.string() }).strict()
+
+/** Word one derived-table failure for the log; each kind names what was skipped and what happens next. */
+function describeDerivationFailure(failure: DerivationFailure): string {
+  switch (failure.kind) {
+    case 'row':
+      return `Derived table ${failure.derivation} skipped the row of event ${failure.seq}${failure.segment === undefined ? '' : ` in Segment ${failure.segment}`}; `
+        + `its later skipped rows are not logged until restart: ${String(failure.error)}`
+    case 'event':
+      return `Derived tables passed over stored event ${failure.eventNo}, which cannot be decoded; `
+        + `later undecodable events are not logged until restart: ${String(failure.error)}`
+    case 'rebuild':
+      return `Derived tables stopped rebuilding and resume at the next start: ${String(failure.error)}`
+    /* v8 ignore next 2 -- closed DerivationFailure union exhaustiveness guard */
+    default:
+      return assertNever(failure, 'derived-table failure')
+  }
+}
 
 /** Routes the existing logical Session API; Segment identifiers never cross this service. */
 export class SqliteSessionPersistence extends SessionPersistence {
@@ -40,10 +60,17 @@ export class SqliteSessionPersistence extends SessionPersistence {
       path: join(this.directory, 'sessions.sqlite'),
       legacyRoot: this.rootPath,
       compression: config.compression ?? 'zstd',
-      frameEvents: config.frameEvents ?? 64,
+      derivations: DERIVATIONS,
       publish: id => this.publish(id),
       acquireCreationLease: header => this.acquireCreationLease(header),
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },
+      reportDerivation: (failure) => { owner.logger.warn(describeDerivationFailure(failure)) },
+      reportSetAside: (detail, error) => {
+        owner.logger.warn(`The Session database upgrade set aside the ${detail}, which cannot be read; its Session reads as damaged: ${String(error)}`)
+      },
+      reportUpgrade: (from, to) => {
+        owner.logger.info(`Upgrading the Session database from schema version ${from} to ${to}; Sessions open when it finishes`)
+      },
     })
     this.jsonl = jsonl
     this.migration = new LegacySessionMigration(jsonl, this.sqlite,

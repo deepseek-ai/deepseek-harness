@@ -9,7 +9,7 @@ import { SessionId, SessionSeq, SessionLogOffset } from '@deepseek-ai/dsh-sessio
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
 import * as persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as sqlitePersistence from '@deepseek-ai/dsh-session-persistence-sqlite'
-import { storedEvents, tailSegment } from '../../../session/session-persistence-sqlite/tests/fixtures/store.ts'
+import { headSegment, storedEvents } from '../../../session/session-persistence-sqlite/tests/fixtures/store.ts'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 async function fixture(storage: 'sqlite' | 'jsonl' = 'sqlite') {
@@ -114,9 +114,9 @@ it.each([0, 1, 2, 4])('flushes the selected prefix with initial durable count %s
   await child.dispose()
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    const tail = db.prepare('SELECT parent_end_seq, base_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.agent.id)
-    expect(tail).toMatchObject({ parent_end_seq: prefix.length, base_seq: prefix.length })
-    expect(storedEvents(db, tailSegment(db, child.agent.id))).toMatchObject([
+    const head = db.prepare('SELECT parent_id IS NOT NULL AS shared, base_seq FROM segments WHERE segment_id = ?').get(headSegment(db, child.agent.id))
+    expect(head).toMatchObject({ shared: 1, base_seq: prefix.length })
+    expect(storedEvents(db, headSegment(db, child.agent.id))).toMatchObject([
       { type: 'session/end-seed', seq: 2, data: { inherited: true } },
     ])
     expect((await ctx.sessionPersistence.stat(parent.id))?.eventCount).toBe(6)

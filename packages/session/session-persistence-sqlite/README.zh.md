@@ -1,5 +1,5 @@
 ---
-description: "在 SQLite 中保存和重新打开 Session 历史，导入现有 JSONL 历史，并协调并发读写。"
+description: "在 SQLite 中以每个事件一行的方式保存并重新打开 Session 历史，可用 SQL 查询，导入现有 JSONL 历史，并协调并发的读者与写者。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在 SQLite 中保存 Session 历史，并通过原有持久化 API 重新打开。现有 JSONL 历史在首次打开时导入，源文件保持不变。读者可以与活跃写者共享数据库；每个 Session 只允许一个写者。需要显式选择此提供者：内置 profile 继续使用 JSONL。
+在 SQLite 中保存 Session 历史，并通过原有持久化 API 重新打开。每个事件存为一行，序号、类型和时间各占一列，因此数据库还能用 SQL 回答有关事件、token 用量、工具调用和上下文压缩的问题。现有 JSONL 历史在首次打开时导入，源文件保持不变。读者可以与活跃写者共享数据库；每个 Session 只允许一个写者。需要显式选择此提供者：内置 profile 继续使用 JSONL。
 
 ## 目录
 
@@ -44,11 +44,34 @@ fork 创建先排空本进程中的父写者，再在一个事务内引用已持
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `root` | 必填 | 包含数据库和现有 JSONL 历史的存储根目录。 |
-| `compression` | `zstd` | 现有 JSONL 历史和新 SQLite 帧的编码：`zstd` 在压缩后更小时以压缩形式存储帧，`none` 存储 JSON 文本。已存帧按各自的 codec 解码。 |
+| `compression` | `zstd` | 现有 JSONL 历史和新事件行的编码：`zstd` 在事件的 `data` 较大且压缩后更小时压缩它，`none` 存储 JSON 文本。已存的行按各自的 codec 解码。 |
 | `listConcurrency` | `3` | 旧历史元数据及路由记录的并发文件系统读取数。 |
-| `frameEvents` | `64` | 每个存储帧的最大事件数，即压缩和解码的单位。更大的帧压缩率略高，尾部读取的解码代价更大；已存帧保持写入时的大小。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-persistence-sqlite)记录了所有可用字段。
+
+### 查询数据库
+
+DSH 运行期间，可以用任何 SQLite 3.38 及以上的客户端以只读方式打开 `<root>/.segments/sessions.sqlite`。请查询 `session_*` 视图：fork 出的 Session 与父 Session 共享此前的事件，这些视图会解析这种共享，返回每个 Session 的完整历史。
+
+| 视图 | 每行对应 | `session_id` 之外的列 |
+|---|---|---|
+| `session_summary` | Session | `created_at`、`cwd`、`parent_session`、`origin`、`agent_preset`、`inherited_count`、`event_count`、`last_event_time` |
+| `session_events` | 事件 | `seq`、`type`、`time`、`surface_op`、`source_seqs`、`ignorable`、`codec`、`data`、`event_no` |
+| `session_llm_calls` | 报告了用量的模型调用 | `seq`、`time`、`provider`、`model`、`turn`、`step`、`input_tokens`、`output_tokens`、`cache_read_tokens`、`cache_write_tokens`、`reasoning_tokens` |
+| `session_tools` | 工具调用，连同已存储的结果 | `seq`、`time`、`tool`、`turn`、`step`、`result_seq`、`is_error`、`error_code`、`duration_ms` |
+| `session_tool_calls` | 工具调用 | `seq`、`time`、`tool`、`turn`、`step` |
+| `session_tool_results` | 工具结果 | `seq`、`time`、`call_seq`（替换先前结果的结果为 NULL）、`is_error`、`error_code` |
+| `session_compactions` | 一次 prune 或 summary | `seq`、`time`、`kind`、`shadowed_tokens`、`shadowed_start`、`shadowed_end` |
+
+除 `session_summary` 和 `session_tools` 外，每个视图还返回 `segment_id`，即保存该行的 Segment。
+
+```sql
+SELECT tool, count(*) AS calls, sum(is_error) AS errors FROM session_tools WHERE session_id = ? GROUP BY tool;
+SELECT sum(input_tokens), sum(output_tokens) FROM session_llm_calls WHERE session_id = ?;
+SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type = 'model/selection';
+```
+
+时间为 Unix 毫秒。`codec` 为 `0` 时 `data` 是 JSON 文本，SQLite 的 JSON 运算符可以直接读取；`codec` 为 `1` 时是 Zstandard 字节。`llm_calls`、`tool_calls`、`tool_results` 和 `compactions` 表中每个已存事件只出现一次，统计整个存储的总量时请使用这些表；对 `session_*` 视图跨所有 Session 求和，会把共享事件按继承它的 Session 各计一次。token 列是每次调用报告的用量；DSH 显示的数字仍以 `tokenUsage` projection 为准。
 
 ### 打开现有历史
 
@@ -72,14 +95,24 @@ fork 创建先排空本进程中的父写者，再在一个事务内引用已持
 
 插件提供原有持久化服务，并在隔离的服务上下文中使用 JSONL 提供者读取旧历史。导入取得 Session 的文件租约，在数据库事务中提交元数据和事件，然后记录 SQLite 路由。write open 在交接过程中保持租约。
 
-SQLite 保存 thread 元数据、前驱关联的 Segment 元数据和帧：每次持久写入把其批次（每帧最多 `frameEvents` 条事件）以 JSON 行存入一行，以 Segment 和起始序号为键，`compression: zstd` 下在压缩后更小时以 Zstandard 压缩。Segment 的事件数取其最后一帧的结束序号。读取选出与请求范围重叠的帧，在线程池上每次并发解压八帧，只取覆盖的切片；帧缺失、帧短于记录范围、codec 未知或字节无法解码均以存储损坏拒绝读取。发布 schema 前先启用 WAL，防止并发读者阻碍首次模式切换。日志模式的锁竞争会在五秒 busy 等待预算内重试，此时尚未写入 schema 或 Session；持续的锁竞争及其他失败仍会报告。后端负责写入队列、实时事件缓冲、事务完成和句柄清理；调用方不直接访问 Segment。
+SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`sessions` 以 JSON 保存每个 header，其字段作为生成列；header 损坏时这些列为 NULL。`segments` 记录每个 Segment 的父 Segment 和 `base_seq`，即其第一个事件的 Session 序号，也就是它在父 Segment 中的切点。`segment_paths` 为每个 Segment 列出它自身和每个祖先，以及一个不含端点的序号上界，该成员中序号小于它的事件属于此 Segment 的历史；插入 Segment 时由触发器填充，因此读取和视图都不需要递归。`events` 每个事件一行，以 `(segment_id, seq)` 为键，其中 `seq` 是 Session 序号。Segment 的事件数等于其最后一行的序号加一。读取按该键选出每个 Segment 的范围，在 JavaScript 线程上解码各行，每处理一组事件让出一次；缺失的行、未知的 codec、无法解码的字节或无效的事件都会以存储损坏拒绝读取。触发器拒绝更新和删除事件，也拒绝改动 Segment 的祖先关系。
+
+派生表由事件填充，提供者自身从不读取。每个 `Derivation` 声明一张以 `(segment_id, seq)` 为键的表、它读取的事件类型，以及一个把事件映射为一行的纯函数；存储会添加 `session_<name>` 视图。`derivations` 记录每张表的版本，以及表落后时已处理到的 `event_no`。表缺失、表的已存版本与其 derivation 不同，或表被加入已有事件的存储（例如升级后的存储）时，会在打开后以有界事务删除并从事件重新填充。已存的表若在当前构建中没有对应的 derivation，会被保留并标记为从该处起落后，待其 derivation 恢复后补齐。derivation 抛出异常，或其表拒绝某一行时，会跳过该行，绝不会导致追加失败；每张表首次出现这类失败时记录一条指明该事件的警告。导致事务终止的失败则会使该次追加连同其事件一起失败。
+
+打开数据库时会依次执行 [migrations/](src/migrations/index.ts) 中的升级步骤：每一步在打开数据库的事务内把已存 schema 升级一个版本，因此某一步失败时文件保持不变。从版本 1 出发的一步把早先的帧布局改写为事件行，并保留 Segment 标识、祖先关系和继承计数；它按信封复制每个事件，因此当前构建不认识的事件类型也会被升级，待其 Session 被读取时再作判断。无法读取的帧会被记入日志并原样复制到 `frames_set_aside`，由一行任何读取方都不解码的记录代替它，所以它所属的 Session 像升级前一样被拒绝，其余 Session 照常升级。每一步改写数据库期间进程被阻塞，所以提供者会在该步开始前记录日志。某一步失败时，打开操作以 `SESSION_STORAGE_UPGRADE` 被拒绝，提供者在重启前不再重试。外来的数据库、比当前构建更新的版本，或缺少当前表的数据库会以 `SESSION_STORAGE_FORMAT` 被拒绝。
+
+发布 schema 前先启用 WAL，防止并发读者阻碍首次模式切换。日志模式的锁竞争会在五秒 busy 等待预算内重试，此时尚未写入 schema 或 Session；持续的锁竞争及其他失败仍会报告。后端负责写入队列、实时事件缓冲、事务完成和句柄清理；调用方不直接访问 Segment。
 
 | 源码 | 职责 |
 |---|---|
 | [persistence.ts](src/persistence.ts) | 服务路由和 JSONL 的持久接管。 |
 | [migration.ts](src/migration.ts) | 导入排序、所有权交接和取消。 |
 | [sqlite.ts](src/sqlite.ts) | 数据库、Segment 访问、句柄和持久化。 |
-| [frame.ts](src/frame.ts) | 帧编码：JSON 行以文本或单个 Zstandard 帧存储。 |
+| [schema.ts](src/schema.ts) | 当前的规范表、触发器和视图。 |
+| [migrations/](src/migrations/index.ts) | 打开数据库：创建、依次执行的升级步骤和拒绝；每种已停用的布局一个模块。 |
+| [row.ts](src/row.ts) | 事件行编码：信封列，以及以 JSON 文本或单个 Zstandard 帧存储的 `data`。 |
+| [derive.ts](src/derive.ts) | 派生表：`Derivation` 接口、随事件写入，以及从事件重建。 |
+| [derivations.ts](src/derivations.ts) | 内置的 derivation 及其读取的事件成员。 |
 
 </details>
 
@@ -121,6 +154,12 @@ SQLite 保存 thread 元数据、前驱关联的 Segment 元数据和帧：每�
 - 保留的 JSONL 文件只包含导入前缀，不包含后续 SQLite 事件；单靠它们无法恢复最新历史。
 - 所有写入已导入 Session 的进程都必须使用 SQLite 提供者。
 - SQLite 接受当前 Session 格式；未来事件格式升级需要独立的 SQLite 历史迁移。
+- 其他 SQL 客户端没有 Zstandard 函数时无法读取以 `codec` 1 存储的 `data`；其余各列、派生表和小事件仍可读取。
+- 派生表即内置的四张：没有设置可以关闭它们，也没有服务可供其他插件注册 `Derivation`。
+- 不同构建的进程不得写入同一个数据库：缺少某个 derivation 的构建写入的事件，其派生行另一个构建不会补上；较新的构建升级 schema 之后，较早的构建会失败。
+- 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时，然后失败。
+- Session 无法删除，因此 fork 之间共享的存储永远不会回收。
+- `data` 较大的事件会让其最后一个溢出页留有未用空间；实测体积见[决策记录](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md)。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -144,7 +144,7 @@ it('shares an imported JSONL parent through its SQLite root segment', async () =
   expect((await storage.stat(childId))?.eventCount).toBe(2)
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    expect(db.prepare('SELECT base_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(childId)).toEqual({ base_seq: 1 })
+    expect(db.prepare('SELECT base_seq FROM segments WHERE segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = ?)').get(childId)).toEqual({ base_seq: 1 })
   } finally { db.close() }
 })
 

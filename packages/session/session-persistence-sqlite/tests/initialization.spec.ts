@@ -102,7 +102,7 @@ it('enables WAL before publishing the schema to a concurrent reader', async () =
     if (sql === 'COMMIT' && snapshot === undefined) {
       snapshot = new DatabaseSync(join(fixture.root, '.segments', 'sessions.sqlite'), { readOnly: true })
       execute.call(snapshot, 'BEGIN')
-      expect(snapshot.prepare('SELECT COUNT(*) AS count FROM traces').get()?.count).toBe(0)
+      expect(snapshot.prepare('SELECT COUNT(*) AS count FROM sessions').get()?.count).toBe(0)
     }
   })
   try {
@@ -111,7 +111,7 @@ it('enables WAL before publishing the schema to a concurrent reader', async () =
     await writer.append(oneTurnLog())
     await writer.close()
     expect(snapshot).toBeDefined()
-    expect(snapshot?.prepare('SELECT COUNT(*) AS count FROM traces').get()?.count).toBe(0)
+    expect(snapshot?.prepare('SELECT COUNT(*) AS count FROM sessions').get()?.count).toBe(0)
     expect((await backend.persistence.stat(header.id))?.eventCount).toBe(oneTurnLog().length)
   } finally {
     spy.mockRestore()

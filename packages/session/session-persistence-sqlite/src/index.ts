@@ -8,29 +8,14 @@ import { SqliteSessionPersistence } from './persistence.ts'
 /** Loader label for the SQLite Session persistence provider. */
 export const name = 'session-persistence-sqlite'
 
-/**
- * Default events per stored frame. Imported histories reach this cap; a live
- * batch rarely does. Larger frames compress a few percent better and cost
- * proportionally more to decode for a tail read.
- */
-const DEFAULT_FRAME_EVENTS = 64
+/** Storage root and the JSONL settings used when importing legacy Sessions. */
+export type Config = JsonlConfigOptions
 
-/** Storage root, JSONL settings used when importing legacy Sessions, and the frame size for new writes. */
-export interface Config extends JsonlConfigOptions {
-  /**
-   * Maximum events stored per frame. One frame is the unit of compression and
-   * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice; stored frames keep the size they were written with.
-   */
-  frameEvents?: number
-}
-
-/** Validate the storage root, legacy JSONL reader settings, and frame size. */
+/** Validate the storage root and legacy JSONL reader settings. */
 export const Config: z<Config> = z.object({
   root: z.string().required(),
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(3),
-  frameEvents: z.natural().min(1).default(DEFAULT_FRAME_EVENTS),
 })
 
 /**
