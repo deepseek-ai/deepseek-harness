@@ -3,7 +3,7 @@ import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-r
 // InputBar behavior over the editor + submit-machine wiring: Enter-send
 // semantics (IME guard, Shift newline, busy Enter policy, Ctrl/Meta steering,
 // repeat suppression), running semantics (input stays free; continuable
-// children keep Send beside Stop), the machine pending lock, chip decorators,
+// children use the ordinary Stop/Send seat), the machine pending lock, chip decorators,
 // error banners, status strips, and the focus-keeping mousedown. Keyboard
 // gestures dispatch real KeyboardEvents at the contenteditable (the Lexical
 // root listener routes them through the keymap commands); draft writes drive
@@ -251,16 +251,17 @@ function bench(over?: BenchOptions) {
   const view = render(<InputBar {...props} />)
   const textarea = view.container.querySelector<HTMLDivElement>('[data-composer-input]')!
   const sendableDraft = (over?.draft?.trim() ?? '') !== '' || (over?.attachments?.length ?? 0) > 0
-  const primaryStops = over?.running === true && over.subagent === undefined
-    && (!sendableDraft || over.blocked !== undefined)
-  // A running steer-capable composer (ordinary session or continuable child
-  // with its parent online) labels Send by the delivery mode it performs over
-  // a plain message draft; idle sessions, one-shot children, locked
-  // composers, a child's empty draft, drafts with a pending upload, and `/`
-  // command lines keep plain Send (an ordinary running session's empty draft
-  // is the Stop seat). The mirror models plain-phase drafts only: cases
-  // that claim a command or freeze the machine query the DOM directly.
+  // Ordinary Sessions and continuable children share one primary seat: Stop
+  // on an empty or blocked running draft, Send on actionable input.
   const steeringAvailable = over?.subagent === undefined || over.subagent.address.mode === 'continuable'
+  const primaryStops = over?.running === true && steeringAvailable
+    && (!sendableDraft || over.blocked !== undefined)
+  // A running steer-capable composer (ordinary session or continuable child)
+  // labels Send by the delivery mode it performs over a plain message draft;
+  // idle sessions, one-shot children, locked composers, drafts with a pending
+  // upload, and `/` command lines keep plain Send. The mirror models
+  // plain-phase drafts only: cases that claim a command or freeze the machine
+  // query the DOM directly.
   const composerLocked = over?.disabled === true || over?.inert === true || over?.blocked !== undefined
   const uploadsPending = (over?.attachments ?? []).some(attachment => attachment.kind === 'file'
     ? over?.fileUploads?.[attachment.id]?.status !== 'ready'
@@ -577,8 +578,6 @@ describe('image draft rail', () => {
     expect(attachmentOwner(slotCalls).canAcceptDrop).toBe(true)
     act(() => { attachmentOwner(slotCalls).onAddFiles([image]) })
     expect(addFiles).toHaveBeenCalledTimes(2)
-    // This fix restores paste/drop independently of the menu's picker policy.
-    expect(shell.canPickFiles()).toBe(false)
   })
 
   it.each([
@@ -1260,6 +1259,21 @@ describe('running and lock semantics', () => {
     expect(view.getAllByRole('button', { name: '停止生成' })).toHaveLength(1)
   })
 
+  it('running continuable subagent keeps Stop beside the sending control until the Host accepts', async () => {
+    const { view, textarea, stop, sink } = bench({ running: true, draft: '排队消息', subagent: CONTINUABLE_CHILD })
+    let settle!: (outcome: SubmitOutcome) => void
+    sink.mockImplementationOnce(() => new Promise<SubmitOutcome>((resolve) => { settle = resolve }))
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    const sending = view.getByRole('button', { name: '正在发送消息' }) as HTMLButtonElement
+    expect(sending.disabled).toBe(true)
+    fireEvent.click(view.getByRole('button', { name: '停止生成' }))
+    expect(stop).toHaveBeenCalledTimes(1)
+
+    await act(async () => { settle({ kind: 'success' }) })
+    expect(view.queryByRole('button', { name: '正在发送消息' })).toBeNull()
+    expect(view.getAllByRole('button', { name: '停止生成' })).toHaveLength(1)
+  })
+
   it('running Send follows the busy-state Steer preference and labels the delivery', () => {
     const { button, sink } = bench({ running: true, busyEnter: 'steer', draft: '按钮插话' })
     expect(button.getAttribute('aria-label')).toBe('插话发送')
@@ -1462,33 +1476,27 @@ describe('running and lock semantics', () => {
     expect(ctrl.sink).toHaveBeenCalledWith('also queue', [], 'queue', expect.any(AbortSignal), expect.any(Function))
   })
 
-  it('running continuable subagent keeps Send beside an independent Stop', () => {
-    const { button, interruptButton, textarea, sink, stop, view, slotCalls, shell } = bench({
-      running: true,
-      draft: '后续消息',
-      subagent: {
-        address: {
-          parentSessionId: 'parent' as SessionId,
-          childSessionId: SID,
-          mode: 'continuable',
-        },
+  it('running continuable subagent uses the ordinary Stop/Send primary seat', async () => {
+    const subagent = {
+      address: {
+        parentSessionId: 'parent' as SessionId,
+        childSessionId: SID,
+        mode: 'continuable' as const,
       },
-    })
-    expect(button.getAttribute('aria-label')).toBe('排队发送')
-    expect(interruptButton).not.toBeNull()
+    }
+    const { button, textarea, sink, stop, view, shell } = bench({ running: true, subagent })
     expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
-    expect(view.container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(true)
-    expect(attachmentOwner(slotCalls).canAcceptDrop).toBe(true)
-    const click = vi.spyOn(HTMLInputElement.prototype, 'click')
-    onTestFinished(() => { click.mockRestore() })
-    expect(shell.canPickFiles()).toBe(false)
-    expect(shell.pickFiles()).toBe(false)
-    expect(click).not.toHaveBeenCalled()
-    click.mockRestore()
+    expect(button.getAttribute('aria-label')).toBe('停止生成')
+    expect(view.queryByRole('button', { name: '发送消息' })).toBeNull()
+    fireEvent.click(button)
+    expect(stop).toHaveBeenCalledTimes(1)
+
+    writeDraft(shell, '后续消息')
+    expect(button.getAttribute('aria-label')).toBe('排队发送')
+    expect(view.queryByRole('button', { name: '停止生成' })).toBeNull()
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('后续消息', [], 'queue', expect.any(AbortSignal), expect.any(Function))
-    fireEvent.click(interruptButton!)
-    expect(stop).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => { expect(button.getAttribute('aria-label')).toBe('停止生成') })
   })
 
   it('running continuable subagent Send follows the Steer preference like an ordinary session', () => {
@@ -1504,11 +1512,11 @@ describe('running and lock semantics', () => {
     fireEvent.click(button)
     expect(sink).toHaveBeenCalledWith('子代理插话', [], 'steer', expect.any(AbortSignal), expect.any(Function))
 
-    // No draft: the child has no Stop seat to fall back to, so its disabled
-    // Send keeps the plain label instead of naming a delivery it cannot make.
+    // Empty: the shared primary seat becomes the enabled Stop action.
     const empty = bench({ running: true, busyEnter: 'steer', subagent })
-    expect(empty.button.getAttribute('aria-label')).toBe('发送消息')
-    expect(empty.button.disabled).toBe(true)
+    expect(empty.button.getAttribute('aria-label')).toBe('停止生成')
+    expect(empty.button.disabled).toBe(false)
+    expect(empty.view.queryByRole('button', { name: '发送消息' })).toBeNull()
   })
 
   it.each([
@@ -1526,6 +1534,19 @@ describe('running and lock semantics', () => {
     expect(shell.pickFiles()).toBe(true)
     expect(click).toHaveBeenCalledOnce()
     click.mockRestore()
+  })
+
+  it('offers a continuable child an image-only File picker', () => {
+    const { view, shell, slotCalls } = bench({ subagent: CONTINUABLE_CHILD, addFiles: () => null })
+    const file = view.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    expect(file.disabled).toBe(false)
+    expect(file.accept).toBe('image/png,image/jpeg,image/webp,image/gif')
+    expect(attachmentOwner(slotCalls).canAcceptDrop).toBe(true)
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click')
+    onTestFinished(() => { click.mockRestore() })
+    expect(shell.canPickFiles()).toBe(true)
+    expect(shell.pickFiles()).toBe(true)
+    expect(click).toHaveBeenCalledOnce()
   })
 
   it.each([
@@ -1553,17 +1574,20 @@ describe('running and lock semantics', () => {
     expect(shell.pickFiles()).toBe(false)
   })
 
-  it('keeps input and Stop available for a continuable child without parent availability', () => {
-    const { button, interruptButton, textarea, stop } = bench({
-      running: true,
-      draft: 'continue',
-      subagent: CONTINUABLE_CHILD,
-    })
-    expect(textarea.getAttribute('aria-disabled')).not.toBe('true')
-    expect(button.disabled).toBe(false)
-    expect(interruptButton?.disabled).toBe(false)
-    fireEvent.click(interruptButton!)
-    expect(stop).toHaveBeenCalledTimes(1)
+  it('keeps input available for a continuable child without parent availability', () => {
+    const drafted = bench({ running: true, draft: 'continue', subagent: CONTINUABLE_CHILD })
+    expect(drafted.textarea.getAttribute('aria-disabled')).not.toBe('true')
+    expect(drafted.button.getAttribute('aria-label')).toBe('排队发送')
+    expect(drafted.button.disabled).toBe(false)
+    expect(drafted.view.queryByRole('button', { name: '停止生成' })).toBeNull()
+    fireEvent.click(drafted.button)
+    expect(drafted.sink).toHaveBeenCalledWith('continue', [], 'queue', expect.any(AbortSignal), expect.any(Function))
+
+    const empty = bench({ running: true, subagent: CONTINUABLE_CHILD })
+    expect(empty.button.getAttribute('aria-label')).toBe('停止生成')
+    expect(empty.button.disabled).toBe(false)
+    fireEvent.click(empty.button)
+    expect(empty.stop).toHaveBeenCalledTimes(1)
   })
 
   it('running one-shot subagent never exposes Stop', () => {

@@ -1,7 +1,7 @@
-// Web e2e scenario: the composer's independent Stop interrupts a running
+// Web e2e scenario: the composer's shared primary seat interrupts a running
 // continuable child. The child holds its model turn open through a replay
-// hang entry; the browser proves Send and Stop coexist regardless of the
-// creator's list availability, the subagents/interruptByUser
+// hang entry; the browser proves the ordinary Stop/Queue seat works
+// regardless of the creator's list availability, the subagents/interruptByUser
 // (never session.cancel) transport, the parked follow-up, and the FIFO resume
 // on a waking send.
 //
@@ -282,7 +282,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     const input = page.locator('[data-composer-input]').first()
     expect(await input.isDisabled()).toBe(false)
 
-    // Queue a follow-up through Send while independent Stop remains available.
+    // Queue a follow-up through the shared Send seat while the turn runs.
     // The running child's Send names its delivery like an ordinary session:
     // the default busy-state preference is Queue.
     const promptResponse = page.waitForResponse(response =>
