@@ -9,12 +9,11 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { ApplicationIcon } from './protocol.ts'
 import { NativeClient, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
-import type { CuaApplicationId, CuaApplicationState, CuaApplicationReview, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
+import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from './access-types.ts'
 export { ApplicationAuthorizationResult } from './application-access.ts'
 export type * from './access-types.ts'
 
 interface ControlOptions extends AccessOptions {
-  applicationReview?: CuaApplicationReview | undefined
   native: NativeClientConfig
   createChannel: NativeChannelFactory
   permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
@@ -45,11 +44,9 @@ export class CuaAccess extends TypertRemoteService {
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
    * @param permissionParameters Provider-owned native parameters for the selected action and Client language.
-   * @param applicationReview Provider classification of obsolete identities requiring renewed consent.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
-    private readonly control: Control, private readonly permissionParameters: ControlOptions['permissionParameters'],
-    private readonly applicationReview?: CuaApplicationReview) {
+    private readonly control: Control, private readonly permissionParameters: ControlOptions['permissionParameters']) {
     super(ctx, 'cuaAccess')
   }
 
@@ -79,19 +76,10 @@ export class CuaAccess extends TypertRemoteService {
 
   /**
    * Read current saved decisions without waiting for native discovery, system checks, or icons.
-   * @returns Current grants, refusals, obsolete identities requiring review, and durable-storage availability.
+   * @returns Current grants, refusals, and durable-storage availability.
    */
   @Remote
-  async applications(): Promise<CuaApplicationState> {
-    const stored = await this.policy.status()
-    const review = this.applicationReview
-    if (!review) return stored
-    return { ...stored,
-      allowedApps: stored.allowedApps.filter(app => !review.needsReview(app)),
-      blockedApps: stored.blockedApps.filter(app => !review.needsReview(app)),
-      reviewApps: stored.allowedApps.filter(app => review.needsReview(app)),
-    }
-  }
+  applications(): Promise<CuaApplicationState> { return this.policy.status() }
 
   /**
    * Inspect system privileges independently of application decisions and icons.
@@ -187,7 +175,7 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control, options.permissionParameters, options.applicationReview)
+  new CuaAccess(ctx, policy, control, options.permissionParameters)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), readCached: policy.readCached.bind(policy),
     forget: policy.forget.bind(policy), dispose }
 }

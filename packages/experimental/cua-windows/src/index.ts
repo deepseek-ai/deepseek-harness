@@ -94,7 +94,5 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,
     disposeNative: () => runtime.dispose(), heldInputState: true,
     permissionParameters: (_method, permission) => ({ permission }),
-    // Every v2 Windows identity saves an icon target, including a stopped application's executable.
-    applicationReview: { needsReview: application => application.iconPath === undefined },
   })
 }

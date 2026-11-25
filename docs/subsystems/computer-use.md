@@ -15,7 +15,7 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 | `CuaApplicationId`, `CuaApplicationGrant` | A platform-provided application identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
 | `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `windows`, with the helper’s name and path when available. macOS includes permission checks, numeric helper and parent PIDs, and responsible-application metadata when available (falling back to the helper’s own bundle); Windows includes desktop lock, capture availability and elevation status, and omits the helper PID. |
-| `CuaApplicationState` | Saved grants, refused applications, obsolete grants requiring renewed consent in optional `reviewApps`, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
+| `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
 
 The [shared object API](../../packages/experimental/cua/README.md) uses `connectCua` to select an application, then `app.getWindows()` and `app.getWindow(windowId)` to select a window for screenshots and pointer input. Accessibility operations use element IDs from the latest tree for that application handle. Providers declare keyboard scopes and application-level accessibility in `getCapabilities()`.
 
@@ -94,9 +94,9 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Read current saved decisions without waiting for native discovery, system checks, or icons.
- * @returns Current grants, refusals, obsolete identities requiring review, and durable-storage availability.
+ * @returns Current grants, refusals, and durable-storage availability.
  */
-@Remote async applications(): Promise<CuaApplicationState>
+@Remote applications(): Promise<CuaApplicationState>
 
 /**
  * Inspect system privileges independently of application decisions and icons.

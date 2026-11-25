@@ -1007,10 +1007,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Completion after the shared runtime reload; already-persistent runtimes are left intact.',
       },
       {
-        signature: '@Remote async applications(): Promise<CuaApplicationState>',
+        signature: '@Remote applications(): Promise<CuaApplicationState>',
         description: 'Read current saved decisions without waiting for native discovery, system checks, or icons.',
         parameters: [],
-        returns: 'Current grants, refusals, obsolete identities requiring review, and durable-storage availability.',
+        returns: 'Current grants, refusals, and durable-storage availability.',
       },
       {
         signature: '@Remote async systemStatus(): Promise<CuaSystemPermissionState>',
@@ -7692,7 +7692,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaApplicationState',
-    declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    reviewApps?: readonly CuaApplicationGrant[] | undefined;\n    persistentAvailable: boolean;\n}',
+    declaration: 'export interface CuaApplicationState {\n    allowedApps: readonly CuaApplicationGrant[];\n    blockedApps: readonly CuaApplicationGrant[];\n    persistentAvailable: boolean;\n}',
   },
   {
     name: 'CuaPermissionProcess',

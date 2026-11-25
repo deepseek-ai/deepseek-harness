@@ -31,16 +31,5 @@ export interface CuaApplicationState {
   allowedApps: readonly CuaApplicationGrant[]
   /** Refusals from any session, excluding saved grants; other sessions may still hold session access. */
   blockedApps: readonly CuaApplicationGrant[]
-  /** Obsolete saved identities that cannot authorize the current provider; absent when none require review. */
-  reviewApps?: readonly CuaApplicationGrant[] | undefined
   persistentAvailable: boolean
-}
-
-/** Provider classification of saved identities that require renewed consent. */
-export interface CuaApplicationReview {
-  /** Identify obsolete grants using stored fields without native discovery.
-   * @param application Saved application identity and presentation.
-   * @returns Whether this identity requires fresh consent under the provider's current identity rules.
-   */
-  needsReview(application: CuaApplicationGrant): boolean
 }

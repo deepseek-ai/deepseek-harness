@@ -177,13 +177,7 @@ export function PermissionPanel(props: PermissionProps) {
           <Button size="sm" variant="outline" disabled={transitioning || state[key].busy} onClick={refresh}>{t('retry')}</Button>
         </div>)}
         {apps === null ? <p className={css.emptyState}><span className={css.appsPlaceholder} aria-hidden>{t('noApps')}</span></p> : <>
-          {apps.allowedApps.length === 0 && apps.blockedApps.length === 0 && !apps.reviewApps?.length
-            && <p className={css.emptyState}>{t('noApps')}</p>}
-          {!!apps.reviewApps?.length && <>
-            <p className={css.notice}>{t('reviewHint')}</p>
-            <Applications title={t('reviewApps')} apps={apps.reviewApps} icons={state.icons.value}
-              onAction={props.revoke} label={t('revoke')} disabled={appsBusy || !apps.persistentAvailable} />
-          </>}
+          {apps.allowedApps.length === 0 && apps.blockedApps.length === 0 && <p className={css.emptyState}>{t('noApps')}</p>}
           {apps.allowedApps.length > 0 && <Applications title={t('allowedApps')} apps={apps.allowedApps} icons={state.icons.value}
             onAction={props.revoke} label={t('revoke')} disabled={appsBusy || !apps.persistentAvailable} />}
           {apps.blockedApps.length > 0 && <Applications title={t('blockedApps')} apps={apps.blockedApps} icons={state.icons.value}

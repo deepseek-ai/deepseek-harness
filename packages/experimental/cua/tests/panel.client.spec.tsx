@@ -180,13 +180,21 @@ it('uses a Shell icon for a packaged application without an executable path', ()
   expect(screen.getByText('Notepad').closest('li')?.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
 })
 
-it('separates obsolete saved permissions from applications that are allowed', () => {
+it.each<CuaSystemPermissionState>([value.system,
+  { platform: 'windows', sessionLocked: false, captureAvailable: true, elevated: false, helper: {} },
+])('shows the same application groups and actions on $platform', (system) => {
   const f = fixture()
+  const allowed = { id: 'b'.repeat(64) as CuaApplicationId, name: 'Allowed application' }
+  const blocked = { id: 'c'.repeat(64) as CuaApplicationId, name: 'Blocked application' }
   render(<PermissionPanel {...f.props} />)
-  f.publish({ ...observe({ ...value, reviewApps: [{ id: 'c'.repeat(64) as CuaApplicationId, name: 'Legacy application' }] }) })
-  expect(screen.getByText(en.reviewApps)).toBeTruthy()
-  expect(screen.getByText(en.reviewHint)).toBeTruthy()
-  expect(screen.queryByText(en.allowedApps)).toBeNull()
+  f.publish(observe({ ...value, system, allowedApps: [allowed], blockedApps: [blocked] }))
+  const applications = within(screen.getByRole('region', { name: en.applicationsTitle }))
+  expect(applications.getAllByRole('heading').map(heading => heading.textContent))
+    .toEqual([en.applicationsTitle, en.allowedApps, en.blockedApps])
+  fireEvent.click(applications.getByRole('button', { name: en.revoke }))
+  fireEvent.click(applications.getByRole('button', { name: en.retryApproval }))
+  expect(f.props.revoke).toHaveBeenCalledWith(allowed.id)
+  expect(f.props.retryApproval).toHaveBeenCalledWith(blocked.id)
   expect(screen.queryByText(en.noApps)).toBeNull()
 })
 
