@@ -50,7 +50,7 @@ export interface Config {
 
 /** Schemastery validation for {@link Config}. */
 export const Config: z<Config> = z.object({
-  timeoutMs: z.number().default(30_000),
+  timeoutMs: z.number().default(3_000),
   outputMaxBytes: z.number().default(8 * 1024 * 1024),
   maxFiles: z.number().default(500),
   maxFileBytes: z.number().default(2 * 1024 * 1024),
