@@ -76,6 +76,8 @@ export type ManagerNotice =
     readonly reason: string
     /** The packages an `incompatible-version` refusal names. */
     readonly incompatible?: readonly IncompatiblePlugin[]
+    /** The supported Host platforms an `unsupported-platform` refusal names. */
+    readonly platforms?: readonly string[]
     readonly packageName?: string
     readonly seq: number
   }
@@ -279,6 +281,8 @@ export interface InstallState {
     readonly code?: ManagementError['code']
     /** The packages an `incompatible-version` refusal names. */
     readonly incompatible?: readonly IncompatiblePlugin[]
+    /** The supported Host platforms an `unsupported-platform` refusal names. */
+    readonly platforms?: readonly string[]
     readonly kind?: PluginInstallFailureKind
     /** The step the failed change reached; `enable` means the installation finished and applying the bundle failed. */
     readonly stage?: ChangeResult['stage']
@@ -543,6 +547,7 @@ type Answer<T> =
 class RemoteAnswerError extends Error {
   constructor(
     readonly reason: string, readonly code?: ManagementError['code'], readonly incompatible?: readonly IncompatiblePlugin[],
+    readonly platforms?: readonly string[],
   ) {
     super(reason)
     this.name = 'RemoteAnswerError'
@@ -558,6 +563,7 @@ function failureOf(
     reason: error?.diagnostic ?? '',
     ...error === undefined ? {} : { code: error.code },
     ...error?.incompatible === undefined ? {} : { incompatible: error.incompatible },
+    ...error?.platforms === undefined ? {} : { platforms: error.platforms },
     ...kind === undefined ? {} : { kind },
     stage,
     ...enabled === undefined ? {} : { enabled },
@@ -570,9 +576,11 @@ function failureOf(
 function failedNotice(error: unknown, subject: { action: FailedAction; packageName?: string }, seq: number): ManagerNotice {
   const code = error instanceof RemoteAnswerError ? error.code : undefined
   const incompatible = error instanceof RemoteAnswerError ? error.incompatible : undefined
+  const platforms = error instanceof RemoteAnswerError ? error.platforms : undefined
   return {
     kind: 'failed', reason: reasonOf(error), ...code === undefined ? {} : { code },
-    ...incompatible === undefined ? {} : { incompatible }, ...subject, seq,
+    ...incompatible === undefined ? {} : { incompatible },
+    ...platforms === undefined ? {} : { platforms }, ...subject, seq,
   }
 }
 
@@ -1593,7 +1601,7 @@ export class PluginManagerController {
     const result = answer.value
     switch (result.application) {
       case 'failed':
-        throw new RemoteAnswerError(result.error?.diagnostic ?? '', result.error?.code, result.error?.incompatible)
+        throw new RemoteAnswerError(result.error?.diagnostic ?? '', result.error?.code, result.error?.incompatible, result.error?.platforms)
       case 'cancelled':
         this.patch({ notice: { kind: 'cancelled', seq: ++this.noticeSeq } })
         return

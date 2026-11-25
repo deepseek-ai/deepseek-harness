@@ -88,14 +88,17 @@ it.each([en, zh])('waits for platform identification before offering system perm
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   expect(screen.queryByRole('group', { name: dictionary.accessibility })).toBeNull()
   expect(screen.getByText(dictionary.permissionsIntro).getAttribute('aria-hidden')).toBe('true')
-  expect(screen.getByText(dictionary.permissionHint).getAttribute('aria-hidden')).toBe('true')
   f.publish({ system: { ...f.state.getSnapshot().system, busy: false, error: 'connection lost' }, busy: false })
   expect(screen.getAllByText(dictionary.unknown)).toHaveLength(2)
   expect(screen.queryByText(dictionary.granted)).toBeNull()
   expect(screen.queryByRole('button', { name: dictionary.request })).toBeNull()
   expect(screen.queryByRole('button', { name: dictionary.unknown })).toBeNull()
-  expect(screen.getByText(dictionary.permissionsIntro).getAttribute('aria-hidden')).toBe('true')
-  expect(screen.getByText(dictionary.permissionHint).getAttribute('aria-hidden')).toBe('true')
+  expect(screen.queryByText(dictionary.permissionsIntro)).toBeNull()
+  const alert = screen.getByRole('alert')
+  expect(within(alert).getByText(dictionary.queryFailedHint)).toBeTruthy()
+  const heading = screen.getByRole('heading', { name: dictionary.title })
+  expect(heading.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(alert.compareDocumentPosition(screen.getByRole('group', { name: dictionary.accessibilityUse })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   f.publish({ ...observe({ ...value, system: { ...value.system, accessibility: true, screenRecording: false } }) })
   fireEvent.click(screen.getByRole('button', { name: dictionary.request }))
   expect(f.props.request).toHaveBeenCalledWith('screenRecording')
@@ -215,10 +218,9 @@ it.each([en, zh])('shows system permissions with the target application beside e
   expect(within(recording).getByText(application.name)).toBeTruthy()
   expect(recording.textContent).toContain(dictionary.screenRecordingPermission.replace('{application}', application.name))
   expect(within(requirements).getByText(dictionary.permissionsIntro)).toBeTruthy()
-  expect(within(requirements).getByText(dictionary.permissionHint)).toBeTruthy()
   f.publish({ system: { ...f.state.getSnapshot().system, error: 'offline' } })
   expect(screen.queryByText(application.name)).toBeNull()
-  expect(within(requirements).getByText(dictionary.permissionHint)).toBeTruthy()
+  expect(within(requirements).getByText(dictionary.permissionsIntro)).toBeTruthy()
 })
 
 it('names the authorization target even when its icon is unavailable', () => {
@@ -242,12 +244,12 @@ it('waits for the first current observation instead of opening setup with a stal
 })
 
 
-it('keeps permission management guidance after both permissions are granted', () => {
+it('shows both permissions as allowed without a redundant macOS footer', () => {
   const f = fixture()
   render(<PermissionPanel {...f.props} />)
   f.publish({ ...observe({ ...value, system: { ...value.system, accessibility: true, screenRecording: true } }) })
   expect(screen.getAllByText(en.granted)).toHaveLength(2)
-  expect(screen.getByText(en.permissionHint)).toBeTruthy()
+  expect(screen.getByText(en.permissionsIntro)).toBeTruthy()
 })
 
 

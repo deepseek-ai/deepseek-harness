@@ -72,7 +72,7 @@ The [Computer Use bundle](../cua-bundle/README.md) mounts this page with its nat
 
 The enabled bundle highlights the experimental notice above the system permission controls and places the PTC recommendation in a separate paragraph. The Windows page shows desktop status and window capture readiness, and the macOS page offers Accessibility and Screen Recording controls.
 
-The page refreshes on entry, window focus, and completed actions. Query failures retain the last observation as unknown and offer **Retry**. Opening settings or requesting permission does not establish consent. The provider owns native guidance, its configuration, and localized recovery instructions.
+The page refreshes on entry, window focus, and completed actions. System-permission query failures appear directly beneath the section heading with recovery guidance and **Retry**, while retaining the last observation as unknown. Opening settings or requesting permission does not establish consent. The provider owns native guidance, its configuration, and localized recovery instructions.
 
 System-permission operations affect the computer running DSH. When accessing DSH remotely, complete authorization on that computer.
 

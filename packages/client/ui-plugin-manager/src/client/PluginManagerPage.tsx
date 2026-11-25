@@ -1008,7 +1008,12 @@ function failureText(failure: InstallState['failure'], t: Translate, install?: P
     return t('installFailureNetworkAll', { registries: registryList(asked, t, install?.registries?.resolved ?? null) })
   }
   if (failure.kind !== undefined) return t(FAILURE_KIND_KEYS[failure.kind])
-  if (failure.code !== undefined) return managementText({ code: failure.code, diagnostic: failure.reason }, t)
+  if (failure.code !== undefined) {
+    return managementText({
+      code: failure.code, diagnostic: failure.reason,
+      ...failure.platforms === undefined ? {} : { platforms: failure.platforms },
+    }, t)
+  }
   if (failure.reason !== '') return failure.reason
   // An enabled install that failed applying the bundle names that step, never the install command it already finished.
   return failure.stage === 'enable' && failure.enabled === true ? t('installFailedEnabling') : t('installFailureGeneric')

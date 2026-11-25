@@ -536,7 +536,8 @@ describe('PluginManagerController', () => {
         .mockResolvedValueOnce(ok(failed({ code: 'bundle-in-use' })))
         .mockResolvedValueOnce(ok(failed()))
         .mockResolvedValueOnce(ok({ ...failed(), application: 'cancelled' }))
-        .mockResolvedValueOnce(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] }))),
+        .mockResolvedValueOnce(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] })))
+        .mockResolvedValueOnce(ok(failed({ code: 'unsupported-platform', platforms: ['darwin', 'win32'] }))),
     })
     await controller.load()
     face.setEnabled(BUNDLE.name, true)
@@ -560,6 +561,12 @@ describe('PluginManagerController', () => {
     await vi.waitFor(() => {
       expect(state().notice).toEqual({
         kind: 'failed', action: 'enable', code: 'incompatible-version', incompatible: [INCOMPATIBLE], reason: '', packageName: BUNDLE.name, seq: 8,
+      })
+    })
+    face.setEnabled(BUNDLE.name, true)
+    await vi.waitFor(() => {
+      expect(state().notice).toEqual({
+        kind: 'failed', action: 'enable', code: 'unsupported-platform', platforms: ['darwin', 'win32'], reason: '', packageName: BUNDLE.name, seq: 9,
       })
     })
     face.dismissNotice()
@@ -1351,12 +1358,17 @@ describe('PluginManagerController', () => {
     answer(ok(failed({ code: 'incompatible-version', incompatible: [INCOMPATIBLE] })))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     expect(state().install.failure).toEqual({ reason: '', code: 'incompatible-version', incompatible: [INCOMPATIBLE], stage: 'install' })
+    // A platform refusal keeps the supported Host platforms it names.
+    await installing()
+    answer(ok(failed({ code: 'unsupported-platform', platforms: ['darwin', 'win32'] })))
+    await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
+    expect(state().install.failure).toEqual({ reason: '', code: 'unsupported-platform', platforms: ['darwin', 'win32'], stage: 'install' })
     // A failure the Host does not explain has neither code nor words.
     await installing()
     answer(ok(failed()))
     await vi.waitFor(() => { expect(state().install.phase).toBe('failed') })
     expect(state().install.failure).toEqual({ reason: '', stage: 'install' })
-    expect(plugins.installBundle).toHaveBeenCalledTimes(6)
+    expect(plugins.installBundle).toHaveBeenCalledTimes(7)
     // Editing the spec after a failure starts over too.
     face.editInstallSpec('y')
     expect(state().install).toMatchObject({ phase: 'idle', spec: 'y', runs: [], failure: null })

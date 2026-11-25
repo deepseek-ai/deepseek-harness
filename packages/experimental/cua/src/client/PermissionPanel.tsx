@@ -1,6 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect } from 'react'
-import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineMedium, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -132,7 +132,7 @@ export function PermissionPanel(props: PermissionProps) {
     <section className={css.panel} aria-label={t('title')}>
       <div className={css.guidance} data-cua-guidance>
         <div className={css.caution} role="note">
-          <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineMedium /></span>
+          <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineRegular size={14} /></span>
           <div className={css.cautionBody}>
             <p className={css.cautionTitle}>{t('previewNoticeTitle')}</p>
             <p>{t('previewNotice')}</p>
@@ -141,14 +141,20 @@ export function PermissionPanel(props: PermissionProps) {
         <p>{t('ptcRecommendation')}</p>
       </div>
       <h3>{t('title')}</h3>
-      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>
+      {state.system.error !== null && <div className={css.systemError} role="alert">
+        <div className={css.systemErrorBody}>
+          <p className={css.error}>{t('queryFailed', { message: state.system.error })}</p>
+          <p>{t('queryFailedHint')}</p>
+        </div>
+        <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
+      </div>}
+      {(observed !== null || state.system.error === null) && <p
+        className={observed === null ? css.pendingHint : undefined}
+        aria-hidden={observed === null || undefined}
+      >
         {t(observed?.platform === 'windows' ? 'windowsPermissionsIntro' : 'permissionsIntro')}
-      </p>
+      </p>}
       <div className={css.card}>
-        {state.system.error !== null && <div className={css.notice} role="alert">
-          <span className={css.error}>{t('queryFailed', { message: state.system.error })}</span>
-          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
-        </div>}
         {observed === null ? <UnknownStatus loading={loading} t={t} />
           : observed.platform === 'windows' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
             : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
@@ -162,9 +168,7 @@ export function PermissionPanel(props: PermissionProps) {
                 busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
             </div>)}
       </div>
-      <p className={observed === null ? css.pendingHint : undefined} aria-hidden={observed === null || undefined}>{observed?.platform === 'windows'
-        ? <>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</>
-        : t('permissionHint')}</p>
+      {observed?.platform === 'windows' && <p>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</p>}
     </section>
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>

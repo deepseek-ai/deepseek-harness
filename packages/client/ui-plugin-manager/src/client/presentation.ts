@@ -46,6 +46,22 @@ function registryHost(registry: string): string {
 }
 
 /** The sentence each of the Host's refusal codes reads as. */
+const PLATFORM_KEYS = new Map<string, PluginManagerLocaleKey>([
+  ['darwin', 'platformDarwin'],
+  ['win32', 'platformWin32'],
+  ['linux', 'platformLinux'],
+  ['wsl', 'platformWsl'],
+])
+
+function platformList(platforms: readonly string[], t: Translate): string {
+  const labels = platforms.map((name) => {
+    const key = PLATFORM_KEYS.get(name)
+    return key === undefined ? name : t(key)
+  })
+  if (labels.length === 1) return labels.join('')
+  return `${labels.slice(0, -1).join(t('registryListSeparator'))}${t('platformListLastSeparator')}${labels.at(-1)}`
+}
+
 const CODE_KEYS = {
   'management-required': 'reasonManagementRequired',
   'unaddressable': 'reasonUnaddressable',
@@ -84,6 +100,7 @@ export function managementText(error: {
   readonly code: ManagementError['code']
   readonly diagnostic?: string
   readonly incompatible?: readonly IncompatiblePlugin[]
+  readonly platforms?: readonly string[]
   /** Set when the refused package is being installed rather than already installed; selects the incompatibility remedy. */
   readonly installing?: true
 }, t: Translate): string {
@@ -96,6 +113,12 @@ export function managementText(error: {
         requirements: Object.entries(plugin.requirements).map(([name, range]) => `${name} ${range}`).join(', '),
       }))
     return [...sentences, t(error.installing ? 'reasonIncompatibleInstall' : 'reasonIncompatibleInstalled')].join(t('sentenceSeparator'))
+  }
+  if (error.code === 'unsupported-platform') {
+    const platforms = error.platforms ?? []
+    return platforms.length === 0
+      ? t('reasonUnsupportedPlatform')
+      : t('reasonUnsupportedPlatformList', { platforms: platformList(platforms, t) })
   }
   if (error.code !== 'operation-error') return t(CODE_KEYS[error.code])
   return error.diagnostic === undefined || error.diagnostic === '' ? t('reasonOperationError') : error.diagnostic
@@ -182,6 +205,7 @@ export function noticeText(notice: ManagerNotice, t: Translate): string {
     case 'failed': {
       const reason = notice.code === undefined ? notice.reason : managementText({
         code: notice.code, diagnostic: notice.reason, ...notice.incompatible === undefined ? {} : { incompatible: notice.incompatible },
+        ...notice.platforms === undefined ? {} : { platforms: notice.platforms },
       }, t)
       return t(FAILED_KEYS[notice.action], { reason: reason === '' ? t('reasonOperationError') : reason })
     }

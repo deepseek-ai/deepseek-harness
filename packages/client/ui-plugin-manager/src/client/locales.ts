@@ -295,6 +295,12 @@ export const zh = {
   reasonIncompatibleVersion: '{plugin} 与 DSH {runtime} 不兼容（要求 {requirements}），运行它可能导致崩溃或数据丢失。',
   reasonIncompatibleVersionUnnamed: '这个插件与当前 DSH 版本不兼容，运行它可能导致崩溃或数据丢失。',
   reasonUnsupportedPlatform: '此插件不支持当前操作系统',
+  reasonUnsupportedPlatformList: '此插件仅支持 {platforms}',
+  platformListLastSeparator: ' 和 ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   reasonIncompatibleInstall: '请安装与当前 DSH 兼容的插件版本。',
   reasonIncompatibleInstalled: '请卸载后重新安装与当前 DSH 兼容的版本。',
   reasonUnexpectedPackage: '插件来源安装了与所请求不同的包或版本，已撤销这次安装。请向插件发布者或插件索引维护者报告此问题。',
@@ -602,6 +608,12 @@ export const en = {
   reasonIncompatibleVersion: '{plugin} is incompatible with DSH {runtime} (requires {requirements}); running it may cause crashes or data loss.',
   reasonIncompatibleVersionUnnamed: 'This plugin is incompatible with the running DSH version; running it may cause crashes or data loss.',
   reasonUnsupportedPlatform: 'This plugin does not support this operating system.',
+  reasonUnsupportedPlatformList: 'This plugin only supports {platforms}.',
+  platformListLastSeparator: ' and ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   reasonIncompatibleInstall: 'Install a plugin version compatible with this DSH.',
   reasonIncompatibleInstalled: 'Uninstall it and install a version compatible with this DSH.',
   reasonUnexpectedPackage: 'The plugin source installed another package or version than requested; the installation was undone. Report it to the plugin\'s publisher or the index maintainer.',
@@ -619,6 +631,12 @@ export const en = {
 /** Japanese copy, checked against the English keys. */
 export const ja = {
   'reasonUnsupportedPlatform': 'このプラグインは現在の OS に対応していません。',
+  'reasonUnsupportedPlatformList': 'このプラグインは {platforms} にのみ対応しています。',
+  'platformListLastSeparator': ' と ',
+  'platformDarwin': 'macOS',
+  'platformWin32': 'Windows',
+  'platformLinux': 'Linux',
+  'platformWsl': 'WSL',
   'panel': 'プラグイン',
   'settingsEntry': 'プラグイン管理',
   'clientSyncing': 'このページでプラグインを同期中…',
@@ -923,6 +941,12 @@ export const ja = {
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
   reasonUnsupportedPlatform: 'Este complemento no es compatible con este sistema operativo.',
+  reasonUnsupportedPlatformList: 'Este complemento solo es compatible con {platforms}.',
+  platformListLastSeparator: ' y ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   panel: 'Complementos',
   settingsEntry: 'Complementos',
   clientSyncing: 'Sincronizando complementos en esta página…',
@@ -1227,6 +1251,12 @@ export const es = {
 /** French dictionary, checked against the English keys. */
 export const fr = {
   reasonUnsupportedPlatform: 'Ce plugin n’est pas compatible avec ce système d’exploitation.',
+  reasonUnsupportedPlatformList: 'Ce plugin est uniquement compatible avec {platforms}.',
+  platformListLastSeparator: ' et ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   panel: 'Plugins',
   settingsEntry: 'Plugins',
   clientSyncing: 'Synchronisation des plugins sur cette page…',
@@ -1531,6 +1561,12 @@ export const fr = {
 /** German dictionary, checked against the English keys. */
 export const de = {
   reasonUnsupportedPlatform: 'Dieses Plugin unterstützt dieses Betriebssystem nicht.',
+  reasonUnsupportedPlatformList: 'Dieses Plugin unterstützt nur {platforms}.',
+  platformListLastSeparator: ' und ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   panel: 'Plugins',
   settingsEntry: 'Plugins',
   clientSyncing: 'Plugins auf dieser Seite werden synchronisiert…',
@@ -1835,6 +1871,12 @@ export const de = {
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
   reasonUnsupportedPlatform: 'Этот плагин не поддерживает текущую операционную систему.',
+  reasonUnsupportedPlatformList: 'Этот плагин поддерживает только {platforms}.',
+  platformListLastSeparator: ' и ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   panel: 'Плагины',
   settingsEntry: 'Плагины',
   clientSyncing: 'Синхронизация плагинов на этой странице…',
@@ -2139,6 +2181,12 @@ export const ru = {
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
   reasonUnsupportedPlatform: 'Este plugin não é compatível com este sistema operacional.',
+  reasonUnsupportedPlatformList: 'Este plugin é compatível apenas com {platforms}.',
+  platformListLastSeparator: ' e ',
+  platformDarwin: 'macOS',
+  platformWin32: 'Windows',
+  platformLinux: 'Linux',
+  platformWsl: 'WSL',
   panel: 'Plug-ins',
   settingsEntry: 'Plug-ins',
   clientSyncing: 'Sincronizando plug-ins nesta página…',

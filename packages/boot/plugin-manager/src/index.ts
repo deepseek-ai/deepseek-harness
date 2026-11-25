@@ -111,7 +111,7 @@ function messageOf(error: unknown): string { return error instanceof Error ? err
 
 /** An expected refusal keeps its code; anything else becomes an operation error carrying its exact diagnostic. */
 function managementError(error: unknown): ManagementError {
-  if (error instanceof UnsupportedBundlePlatformError) return { code: 'unsupported-platform' }
+  if (error instanceof UnsupportedBundlePlatformError) return { code: 'unsupported-platform', platforms: [...error.platforms] }
   if (!(error instanceof ManagementFailure)) return { code: 'operation-error', diagnostic: messageOf(error) }
   return { code: error.code, ...error.incompatible === undefined ? {} : { incompatible: error.incompatible } }
 }

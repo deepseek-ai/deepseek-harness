@@ -5,15 +5,14 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px;
-  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 40%, transparent);
-  border-radius: var(--dsw-radius-lg);
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-state-warn-tertiary);
 }
 .cautionIcon {
   display: inline-flex;
   flex: none;
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--dsw-alias-state-warn-primary);
 }
 .cautionBody {
@@ -25,6 +24,22 @@
 .cautionBody .cautionTitle {
   color: var(--dsw-alias-label-primary);
   font-weight: 500;
+}
+.systemError {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+}
+.systemErrorBody {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
 }
 .card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); }
 .card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l3); }

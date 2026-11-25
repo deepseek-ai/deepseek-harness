@@ -13,7 +13,6 @@
     - strong: Screen Recording
     - paragraph: Allow DSH Computer Use.app to capture the selected application window.
     - button "Request permission"
-  - paragraph: You can change these permissions anytime in System Settings.
 - region "Manage applications computer use can access":
   - heading "Manage applications computer use can access" [level=3]
   - heading "Always-allowed applications" [level=4]
