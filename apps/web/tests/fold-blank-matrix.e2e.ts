@@ -43,9 +43,10 @@ const STEER_STEPS = 3
 const BLANK_LIMIT = 120
 /**
  * Frames whose layout gap may exceed {@link BLANK_LIMIT}. The gap counts rows by their boxes, so a
- * closing row that has faded but not finished shrinking still covers its space. A band whose rows on
- * both sides have faded to full transparency shows the same background as those rows and does not
- * count; a band beside a visible row always counts.
+ * closing row that has faded but not finished shrinking still covers the space it reserves in the
+ * layout, wherever its visual translate draws it. A row inside a moving row covers only the part that
+ * the moving row does not clip. A band whose rows on both sides have faded to full transparency shows
+ * the same background as those rows and does not count; a band beside a visible row always counts.
  */
 const TRANSIENT_FRAMES = 1
 const EVIDENCE = fileURLToPath(new URL('../../../.artifacts/screenshots/fold-blank-matrix/', import.meta.url))
@@ -158,20 +159,38 @@ function installMeasure(): void {
     if (composer === null) throw new Error(`composer is absent: ${root}`)
     const composerTop = composer.getBoundingClientRect().top
     const spacer = host.querySelector<HTMLElement>('[data-chat-turn-spacer]')?.getBoundingClientRect().height ?? 0
-    // Fold motion writes row opacity, so a row is transparent when it or a moving ancestor has opacity 0.
-    const visible = (element: HTMLElement): boolean => {
+    // Fold motion writes opacity, overflow clipping and a visual translate on its moving rows. A row is
+    // transparent when it or a moving ancestor has opacity 0. A visible row covers its painted box; a
+    // transparent row paints nothing and covers the box it reserves in the layout, without the translate.
+    // Both are clipped to the moving ancestors, whose nested rows run transitions of their own.
+    const extent = (element: HTMLElement): readonly [number, number, boolean] => {
+      const moving: { box: HTMLElement; style: CSSStyleDeclaration }[] = []
       for (let box = element.closest<HTMLElement>('[data-chat-motion]'); box !== null && host.contains(box);
         box = box.parentElement?.closest<HTMLElement>('[data-chat-motion]') ?? null) {
-        if (Number.parseFloat(getComputedStyle(box).opacity) === 0) return false
+        moving.push({ box, style: getComputedStyle(box) })
       }
-      return true
+      const visible = moving.every(({ style }) => Number.parseFloat(style.opacity) !== 0)
+      // A transparent row's boxes drop the vertical translate of each moving box and its moving ancestors.
+      const shifts: number[] = []
+      for (let index = moving.length - 1, sum = 0; index >= 0; index--) {
+        const translate = moving[index]!.style.translate
+        if (!visible && translate !== 'none') sum += Number.parseFloat(translate.split(' ')[1] ?? '') || 0
+        shifts[index] = sum
+      }
+      const rect = element.getBoundingClientRect()
+      let top = rect.top - (shifts[0] ?? 0)
+      let bottom = rect.bottom - (shifts[0] ?? 0)
+      moving.forEach(({ box, style }, index) => {
+        if (box === element || style.overflowY === 'visible') return
+        const clip = box.getBoundingClientRect()
+        top = Math.max(top, clip.top - shifts[index]!)
+        bottom = Math.min(bottom, clip.bottom - shifts[index]!)
+      })
+      return [Math.max(top, viewport.top), Math.min(bottom, composerTop), visible]
     }
     const intervals = [...host.querySelectorAll<HTMLElement>('[data-chat-flow-key], [data-submission-echo], [data-pending-steering], [data-streaming], [data-chat-running]')]
       .filter(element => element.closest('[hidden]') === null)
-      .map((element) => {
-        const rect = element.getBoundingClientRect()
-        return [Math.max(rect.top, viewport.top), Math.min(rect.bottom, composerTop), visible(element)] as const
-      })
+      .map(extent)
       .filter(([top, bottom]) => bottom - top > 0.5)
       .sort((left, right) => left[0] - right[0])
     let cursor = viewport.top
@@ -971,6 +990,38 @@ describe('web e2e: fold blank measurement', () => {
       await page.locator('[data-chat-flow-key="c"]').evaluate((element) => { element.style.opacity = '1' })
       const visible = await page.evaluate(() => window.foldMeasure!('[data-measure-root]'))
       expect([visible.maxGap, visible.gapAt]).toEqual([300, 150])
+    } finally {
+      await browser.close()
+    }
+  })
+
+  it('places a transparent row at its layout box and clips rows nested in a moving row', async () => {
+    const browser = await chromium.launch()
+    try {
+      const page = await browser.newPage()
+      // Row d fades in place: its translate draws it below the composer while it reserves 250-450.
+      await page.setContent(`<body style="margin:0"><div data-measure-root style="position:relative;height:600px">
+        <div data-chat-flow-key="a" style="height:100px"></div>
+        <div data-chat-motion="collapse" data-chat-flow-key="b" style="height:100px;overflow:hidden;opacity:0">
+          <div data-chat-flow-key="b-nested" style="height:400px"></div>
+        </div>
+        <div data-chat-flow-key="c" style="height:50px"></div>
+        <div data-chat-motion="collapse" data-chat-flow-key="d" style="height:200px;overflow:hidden;opacity:0;translate:0 300px"></div>
+        <div data-composer-seat style="position:absolute;top:500px;height:50px;width:100%"></div>
+      </div></body>`)
+      await page.evaluate(installMeasure)
+      const gap = (): Promise<number[]> => page.evaluate(() => {
+        const geometry = window.foldMeasure!('[data-measure-root]')
+        return [geometry.maxGap, geometry.gapAt]
+      })
+      expect(await gap()).toEqual([50, 450])
+      // The nested row shrinks on its own transition inside its clipped, transparent parent: nothing painted
+      // or reserved changes, so the gap does not either.
+      await page.locator('[data-chat-flow-key="b-nested"]').evaluate((element) => { element.style.height = '100px' })
+      expect(await gap()).toEqual([50, 450])
+      // A visible row covers where its translate draws it, so the space it leaves behind counts.
+      await page.locator('[data-chat-flow-key="d"]').evaluate((element) => { element.style.opacity = '1' })
+      expect(await gap()).toEqual([250, 250])
     } finally {
       await browser.close()
     }
