@@ -7,8 +7,10 @@ import electronUpdater, { type AppUpdater, type ProgressInfo, type UpdateInfo, t
 import { gt, valid } from 'semver'
 import type { DesktopUpdateState } from './ipc.ts'
 import { DesktopUpdateHttpExecutor } from './updates/electron-updater/http-executor.ts'
+import { installDesktopUpdateProvider } from './updates/electron-updater/provider.ts'
 import { DesktopUpdatePreparationError, downloadFailureDetails } from './update-error.ts'
 import type { DesktopUpdateChannel } from './update-channel.ts'
+import type { DesktopUpdateConfigVersion } from './update-settings.ts'
 import { selectUpdateChannel } from './updates/electron-updater/channel.ts'
 import { discardDesktopUpdate } from './updates/electron-updater/discard.ts'
 
@@ -53,9 +55,10 @@ export class DesktopUpdateCoordinator {
    * @param updater - Process-owned Electron updater, replaceable at the network/platform test boundary.
    * @param enabled - Whether this process has a packaged update source.
    * @param currentVersion - Actual installed application version.
-   * @param channel - Installed package channel; omitted test/local callers retain nightly.
-   * @param discard - Clears settled library targets and platform resources before another channel is used.
    * @param downloadResult - Once per completed download attempt, including platform preparation failures.
+   * @param channel - Initial runtime channel; omitted test/local callers retain nightly.
+   * @param discard - Clears settled library targets and platform resources before another channel is used.
+   * @param feedState - Samples current settings config generation and unlock status for feed headers.
    */
   constructor(
     private readonly publish: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -66,6 +69,7 @@ export class DesktopUpdateCoordinator {
     private readonly downloadResult?: (success: boolean, reason?: string) => void,
     private channel: DesktopUpdateChannel = 'nightly',
     private readonly discard: (updater: AppUpdater) => Promise<void> = discardDesktopUpdate,
+    private readonly feedState?: () => { readonly configVersion: DesktopUpdateConfigVersion; readonly unlocked: boolean },
   ) {
     if (updater === autoUpdater) {
       // electron-updater omits this internal transport property from its public declarations.
@@ -75,6 +79,15 @@ export class DesktopUpdateCoordinator {
         Number(process.env.DSH_DESKTOP_UPDATE_HTTP_IDLE_TIMEOUT_MS ?? 60_000),
         (authInfo, callback) => { updater.emit('login', authInfo, callback) },
       )
+      installDesktopUpdateProvider(updater, () => {
+        const state = this.feedState?.()
+        return {
+          configVersion: state?.configVersion ?? '0',
+          channel: this.channel,
+          channelSource: state?.unlocked === true ? 'explicit' : 'default',
+          clientVersion: this.currentVersion(),
+        }
+      })
     }
     this.updater.autoDownload = false
     this.updater.autoInstallOnAppQuit = false
@@ -113,9 +126,14 @@ export class DesktopUpdateCoordinator {
    * suspends updates until another explicit switch successfully retires the target.
    * @param channel - Validated UI choice.
    * @param persist - Atomic settings save; rejects before a choice is applied on failure.
+   * @param forcePersist - Persist and apply even when the channel matches, such as unlocking stable.
    * @returns Whether the selection changed; healthy repeated choices preserve the current operation.
    */
-  switchChannel(channel: DesktopUpdateChannel, persist: () => Promise<void>): Promise<'applied' | 'unchanged'> {
+  switchChannel(
+    channel: DesktopUpdateChannel,
+    persist: () => Promise<void>,
+    forcePersist = false,
+  ): Promise<'applied' | 'unchanged'> {
     this.assertLive()
     if (this.installOperation !== undefined || this.current.phase === 'installing' || this.release.kind === 'handed-off') {
       return Promise.reject(new Error('desktop update: installation is in progress'))
@@ -123,7 +141,7 @@ export class DesktopUpdateCoordinator {
     this.switching++
     const operation = this.switchTail.then(async () => {
       this.assertLive()
-      if (channel === this.channel && this.configurationError === undefined) return 'unchanged' as const
+      if (channel === this.channel && this.configurationError === undefined && !forcePersist) return 'unchanged' as const
       await persist()
       this.generation++
       this.cancellation?.cancel()

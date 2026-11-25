@@ -48,6 +48,7 @@ export type DesktopUpdateChannel = 'nightly' | 'stable'
 export interface DesktopChannelState {
   readonly channel: DesktopUpdateChannel | null
   readonly packagedChannel: DesktopUpdateChannel
+  readonly unlocked: boolean
   readonly changing: boolean
   readonly error?: 'read' | 'format' | 'channel' | 'cleanup'
 }

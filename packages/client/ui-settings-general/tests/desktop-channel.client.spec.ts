@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { DesktopChannelSource } from '../src/client/desktop-channel-source.ts'
 import type { DesktopChannelState, DesktopChannelChangeResult } from '../src/types.ts'
 
-const nightly: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', changing: false }
+const nightly: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', unlocked: true, changing: false }
 const stable: DesktopChannelState = { ...nightly, channel: 'stable' }
 
 function fixture() {
