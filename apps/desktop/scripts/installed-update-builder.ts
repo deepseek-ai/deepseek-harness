@@ -22,7 +22,7 @@ export async function createInstalledUpdateBuilderConfig(manifest: string, versi
   const application = await verifyInstalledUpdateApplication(run.root)
   const dsh = join(run.root, version, 'dsh')
   await verifyDesktopRuntime(dsh, version, { platform: 'win32', arch: 'x64' })
-  const config = createElectronBuilderConfig({ ...environment, DSH_DESKTOP_APP_ID: run.appId,
+  const config = createElectronBuilderConfig({ ...environment, DSH_DESKTOP_UPDATE_CHANNEL: 'nightly', DSH_DESKTOP_APP_ID: run.appId,
     DSH_DESKTOP_TARGET_PLATFORM: 'win32', DSH_DESKTOP_TARGET_ARCH: 'x64', DSH_DESKTOP_UNSIGNED: '0' }, 'win32', 'x64', dsh, version)
   return { ...config,
     productName: run.productName,

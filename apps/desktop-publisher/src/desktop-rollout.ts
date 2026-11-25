@@ -26,29 +26,32 @@ function metadata(contents: string) {
 
 /** Validated immutable update identity; no installer bytes are read. */
 export interface DesktopRolloutPlan {
+  readonly channel: 'nightly' | 'stable'
   readonly upload: DesktopSingleUploadPlan
   readonly expected: string
 }
 
 /**
- * Read only the retained update YAML and bind it to its manifest and upload destination.
+ * Read only the retained update YAML and bind it to its manifest and target upload destination.
  * @param directory Original attempt's retained directory.
  * @param manifest Inventory verified against GitHub identity.
  * @param environment Deployment settings loaded from the original machine.
- * @returns A plan permitting only this channel metadata object.
+ * @param targetChannel Target update channel to roll out; defaults to the packaged channel marker.
+ * @returns A plan permitting only the target channel metadata object.
  */
 export async function prepareDesktopRollout(directory: string, manifest: DesktopRetainedManifest,
-  environment: NodeJS.ProcessEnv): Promise<DesktopRolloutPlan> {
+  environment: NodeJS.ProcessEnv, targetChannel: 'nightly' | 'stable' = manifest.source.channel): Promise<DesktopRolloutPlan> {
   const source = manifest.source
   const windows = source.target === 'win-x64'
   const platform = windows ? 'win32' : 'darwin'
-  const update = resolveDesktopUploadConfig({ ...environment, DSH_DESKTOP_UPDATE_CHANNEL: source.channel },
+  const update = resolveDesktopUploadConfig({ ...environment, DSH_DESKTOP_UPDATE_CHANNEL: targetChannel },
     platform, source.target === 'mac-arm64' ? 'arm64' : 'x64')
   if (update.environment !== source.preset) throw new Error('desktop rollout: environment differs from original package')
-  const filename = desktopUpdateMetadataFilename(source.version, platform, source.channel)
-  const item = manifest.files.find(file => file.name === filename)
-  if (!item) throw new Error(`desktop rollout: manifest has no update metadata ${filename}`)
-  const contents = await readFile(join(directory, filename), 'utf8')
+  const sourceFilename = desktopUpdateMetadataFilename(source.version, platform, source.channel)
+  const targetFilename = desktopUpdateMetadataFilename(source.version, platform, targetChannel)
+  const item = manifest.files.find(file => file.name === sourceFilename)
+  if (!item) throw new Error(`desktop rollout: manifest has no update metadata ${sourceFilename}`)
+  const contents = await readFile(join(directory, sourceFilename), 'utf8')
   if (item.size !== Buffer.byteLength(contents)
     || item.sha512 !== createHash('sha512').update(contents).digest('base64')) {
     throw new Error('desktop rollout: retained update metadata differs from manifest')
@@ -66,11 +69,11 @@ export async function prepareDesktopRollout(directory: string, manifest: Desktop
   const url = `${update.origin}/${update.binaryKeyPrefix}/${payload}`
   const expected = dump({ ...parsed, files: [{ ...entry, url }],
     ...(parsed.path === undefined ? {} : { path: url }) })
-  return { expected, upload: {
+  return { channel: targetChannel, expected, upload: {
     environment: source.preset, target: source.target, version: source.version, commit: source.commit, dirty: false,
     publicUrl: update.publicUrl, bucket: update.bucket,
     secretIdEnvName: update.secretIdEnvName, secretKeyEnvName: update.secretKeyEnvName,
-    artifacts: [{ path: join(directory, filename), filename, key: `${update.keyPrefix}/${filename}`,
+    artifacts: [{ path: join(directory, sourceFilename), filename: targetFilename, key: `${update.keyPrefix}/${targetFilename}`,
       contents: expected, contentType: 'application/yaml', channelMetadata: true }],
   } }
 }

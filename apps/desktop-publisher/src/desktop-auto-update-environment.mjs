@@ -6,12 +6,12 @@ import { valid } from 'semver'
 export const DESKTOP_AUTO_UPDATE_ENV = 'DSH_DESKTOP_AUTO_UPDATE_ENV'
 
 /**
- * Resolve the channel embedded in the installer; omitted local settings retain nightly.
+ * Resolve the channel embedded in the installer; omitted local settings default to stable.
  * @param {NodeJS.ProcessEnv} env Packaging or upload settings.
  * @returns {'nightly' | 'stable'} Validated channel.
  */
 export function resolveDesktopUpdateChannel(env) {
-  const channel = env.DSH_DESKTOP_UPDATE_CHANNEL || 'nightly'
+  const channel = env.DSH_DESKTOP_UPDATE_CHANNEL || 'stable'
   if (channel !== 'nightly' && channel !== 'stable') throw new Error('desktop auto-update: invalid update channel')
   return channel
 }
@@ -99,10 +99,10 @@ export function desktopBuildRecordFilename(target) {
  * Return the electron-builder channel metadata filename for an application version.
  * @param {string} version - Desktop semantic version.
  * @param {NodeJS.Platform} platform - Target platform.
- * @param {'nightly' | 'stable'} channel - Selected channel; omitted means nightly.
+ * @param {'nightly' | 'stable'} channel - Selected channel; omitted means stable.
  * @returns {string} Channel metadata filename emitted for the target.
  */
-export function desktopUpdateMetadataFilename(version, platform, channel = 'nightly') {
+export function desktopUpdateMetadataFilename(version, platform, channel = 'stable') {
   if (valid(version) === null) {
     throw new Error(`desktop auto-update: invalid Desktop version ${JSON.stringify(version)}`)
   }

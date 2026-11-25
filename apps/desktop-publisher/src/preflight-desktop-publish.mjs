@@ -4,11 +4,18 @@ import { appendFile, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
 
+function selectedFlag(value, name) {
+  if (value === undefined) return false
+  if (value === true || value === 'true') return true
+  if (value === false || value === 'false') return false
+  throw new Error(`desktop publish: ${name} must be a boolean workflow input`)
+}
+
 /**
- * Pin the requested attempt and reject its explicitly named debugging artifacts.
+ * Pin the requested attempt and reject invalid dispatch choices or debugging artifacts.
  * Artifact names only reject; local inventory and signature verification still authorize publication.
  * @param {string} repository GitHub repository.
- * @param {{ package_run_id: string, package_run_attempt?: string }} inputs Dispatch inputs.
+ * @param {{ package_run_id: string, package_run_attempt?: string, publish_stable?: boolean | string, publish_nightly?: boolean | string, rollout_stable?: boolean | string, rollout_nightly?: boolean | string, rollout_percentage?: string, upload_website?: boolean | string }} inputs Dispatch inputs.
  * @param {(path: string, paginate?: boolean) => unknown} api Parsed GitHub JSON; validated here without dependencies.
  * @returns {string} Exact attempt for subsequent routing.
  */
@@ -16,6 +23,28 @@ export function preflightDesktopPublish(repository, inputs, api) {
   if (!/^[\w.-]+\/[\w.-]+$/u.test(repository) || !/^[1-9]\d*$/u.test(inputs.package_run_id)
     || (inputs.package_run_attempt && !/^[1-9]\d*$/u.test(inputs.package_run_attempt))) {
     throw new Error('desktop publish: repository, package_run_id and package_run_attempt must identify a valid packaging attempt')
+  }
+  const uploadWebsite = selectedFlag(inputs.upload_website, 'upload_website')
+  if ('publish_stable' in inputs || 'publish_nightly' in inputs) {
+    const publishStable = selectedFlag(inputs.publish_stable, 'publish_stable')
+    const publishNightly = selectedFlag(inputs.publish_nightly, 'publish_nightly')
+    if (!publishStable && !publishNightly && !uploadWebsite) {
+      throw new Error('desktop publish: select publish_stable, publish_nightly, or upload_website')
+    }
+  }
+  if ('rollout_stable' in inputs || 'rollout_nightly' in inputs) {
+    const rolloutStable = selectedFlag(inputs.rollout_stable, 'rollout_stable')
+    const rolloutNightly = selectedFlag(inputs.rollout_nightly, 'rollout_nightly')
+    const percentage = typeof inputs.rollout_percentage === 'string' ? inputs.rollout_percentage.trim() : ''
+    if (!rolloutStable && !rolloutNightly && !uploadWebsite) {
+      throw new Error('desktop rollout: select rollout_stable, rollout_nightly, or upload_website')
+    }
+    if ((rolloutStable || rolloutNightly) && percentage === '') {
+      throw new Error('desktop rollout: rollout_percentage is required when rollout channels are selected')
+    }
+    if (!rolloutStable && !rolloutNightly && percentage !== '') {
+      throw new Error('desktop rollout: select rollout_stable or rollout_nightly when specifying rollout_percentage')
+    }
   }
   const base = `repos/${repository}/actions/runs/${inputs.package_run_id}`
   const latest = inputs.package_run_attempt ? undefined : api(base)

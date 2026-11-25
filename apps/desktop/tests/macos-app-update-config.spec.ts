@@ -40,7 +40,7 @@ describe('macOS packaged updater configuration', () => {
     expect(createMacOSAppUpdateConfig(update, 'deepseek-harness-updater')).toEqual({
       provider: 'generic',
       url: update.publicUrl,
-      channel: 'nightly',
+      channel: 'stable',
       updaterCacheDirName: 'deepseek-harness-updater',
     })
     await writeMacOSAppUpdateConfig(paths.resourcesDir, update, 'deepseek-harness-updater')
@@ -49,8 +49,8 @@ describe('macOS packaged updater configuration', () => {
 
   it.each([
     ['missing', undefined],
-    ['wrong feed', 'provider: generic\nurl: https://wrong.example.com/\nchannel: nightly\nupdaterCacheDirName: fixture\n'],
-    ['missing cache directory', `provider: generic\nurl: ${update.publicUrl}\nchannel: nightly\n`],
+    ['wrong feed', 'provider: generic\nurl: https://wrong.example.com/\nchannel: stable\nupdaterCacheDirName: fixture\n'],
+    ['missing cache directory', `provider: generic\nurl: ${update.publicUrl}\nchannel: stable\n`],
   ] as const)('rejects %s updater configuration', async (_label, contents) => {
     const paths = await fixture()
     if (contents !== undefined) await writeFile(join(paths.resourcesDir, 'app-update.yml'), contents)
@@ -66,10 +66,10 @@ describe('macOS packaged updater configuration', () => {
 })
 
 
-it('seals stable into the macOS updater file and rejects a different expected channel', async () => {
+it('seals nightly into the macOS updater file and rejects a different expected channel', async () => {
   const paths = await fixture()
-  const stable = resolveMacOSAppUpdateFeed([{ provider: 'generic', url: update.publicUrl, channel: 'stable' }])
-  await writeMacOSAppUpdateConfig(paths.resourcesDir, stable, 'fixture-updater')
-  await expect(verifyMacOSAppUpdateConfig(paths.appPath, stable)).resolves.toBeUndefined()
+  const nightly = resolveMacOSAppUpdateFeed([{ provider: 'generic', url: update.publicUrl, channel: 'nightly' }])
+  await writeMacOSAppUpdateConfig(paths.resourcesDir, nightly, 'fixture-updater')
+  await expect(verifyMacOSAppUpdateConfig(paths.appPath, nightly)).resolves.toBeUndefined()
   await expect(verifyMacOSAppUpdateConfig(paths.appPath, update)).rejects.toThrow(/does not match/u)
 })

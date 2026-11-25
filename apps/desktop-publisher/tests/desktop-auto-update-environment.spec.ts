@@ -29,24 +29,25 @@ describe('desktop auto-update environment', () => {
   ('uses one test release directory for %s %s feeds and binaries', (platform, arch, target) => {
     expect(resolveDesktopAutoUpdateConfig({ DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com',
       DOWNLOAD_TEST_RELEASE_ID: RELEASE_ID }, platform, arch)).toMatchObject({
+      channel: 'stable',
       publicUrl: `https://updates.example.com/dsh-desk/${RELEASE_ID}/feeds/${target}/`,
       keyPrefix: `dsh-desk/${RELEASE_ID}/feeds/${target}`,
-      binaryKeyPrefix: `dsh-desk/${RELEASE_ID}/bin/${target}`,
+      binaryKeyPrefix: `dsh-desk/${RELEASE_ID}/bin/${target}/stable`,
     })
   })
 
-  it('defaults packages and uploads to the test deployment', () => {
+  it('defaults packages and uploads to the test deployment and stable channel', () => {
     expect(resolveDesktopAutoUpdateEnvironment({})).toBe('test')
     expect(resolveDesktopAutoUpdateConfig({
       DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com/',
       DOWNLOAD_TEST_RELEASE_ID: RELEASE_ID,
     }, 'darwin', 'arm64')).toEqual({
-      environment: 'test', channel: 'nightly',
+      environment: 'test', channel: 'stable',
       target: 'mac-arm64',
       origin: 'https://desktop-updates.example.com',
       publicUrl: `https://desktop-updates.example.com/dsh-desk/${RELEASE_ID}/feeds/mac-arm64/`,
       keyPrefix: `dsh-desk/${RELEASE_ID}/feeds/mac-arm64`,
-      binaryKeyPrefix: `dsh-desk/${RELEASE_ID}/bin/mac-arm64`,
+      binaryKeyPrefix: `dsh-desk/${RELEASE_ID}/bin/mac-arm64/stable`,
     })
     expect(resolveDesktopUploadConfig({
       DOWNLOAD_TEST_ORIGIN: 'https://desktop-updates.example.com/',
@@ -65,9 +66,10 @@ describe('desktop auto-update environment', () => {
       DOWNLOAD_TEST_RELEASE_ID: id,
     }, 'win32', 'x64')).toMatchObject({
       environment: 'production',
+      channel: 'stable',
       target: 'win-x64',
       publicUrl: 'https://download.deepseek.com/dsh-desk/feeds/win-x64/',
-      binaryKeyPrefix: 'dsh-desk/bin/win-x64',
+      binaryKeyPrefix: 'dsh-desk/bin/win-x64/stable',
     })
     expect(resolveDesktopUploadConfig({
       DSH_DESKTOP_AUTO_UPDATE_ENV: 'production',
@@ -112,10 +114,19 @@ describe('desktop auto-update environment', () => {
     expect(() => desktopBuildRecordFilename('linux-x64' as 'mac-arm64')).toThrow(/unsupported target/u)
   })
 
-  it('uses Nightly metadata for stable and prerelease Desktop versions', () => {
-    expect(desktopUpdateMetadataFilename('1.2.3', 'darwin')).toBe('nightly-mac.yml')
-    expect(desktopUpdateMetadataFilename('1.2.3-alpha.4', 'darwin')).toBe('nightly-mac.yml')
-    expect(desktopUpdateMetadataFilename('1.2.3-beta.2', 'win32')).toBe('nightly.yml')
+  it('uses stable metadata by default and nightly metadata when explicitly selected', () => {
+    expect(desktopUpdateMetadataFilename('1.2.3', 'darwin')).toBe('stable-mac.yml')
+    expect(desktopUpdateMetadataFilename('1.2.3-alpha.4', 'darwin')).toBe('stable-mac.yml')
+    expect(desktopUpdateMetadataFilename('1.2.3-beta.2', 'win32')).toBe('stable.yml')
+    expect(desktopUpdateMetadataFilename('1.2.3', 'darwin', 'nightly')).toBe('nightly-mac.yml')
+    expect(desktopUpdateMetadataFilename('1.2.3-beta.2', 'win32', 'nightly')).toBe('nightly.yml')
+    expect(resolveDesktopAutoUpdateConfig({
+      DSH_DESKTOP_AUTO_UPDATE_ENV: 'production',
+      DSH_DESKTOP_UPDATE_CHANNEL: 'nightly',
+    }, 'win32', 'x64')).toMatchObject({
+      channel: 'nightly',
+      binaryKeyPrefix: 'dsh-desk/bin/win-x64',
+    })
     expect(() => desktopUpdateMetadataFilename('not-semver', 'darwin')).toThrow(/invalid Desktop version/u)
     expect(() => desktopUpdateMetadataFilename('1.2.3', 'linux')).toThrow(/unsupported metadata platform/u)
   })

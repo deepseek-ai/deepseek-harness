@@ -25,9 +25,11 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
       .parse(JSON.parse(await readFile(join(values.record, 'operation.json'), 'utf8')))
     z.object({ status: z.enum(['complete', 'published-tag-pending']) })
       .parse(JSON.parse(await readFile(join(values.record, 'result.json'), 'utf8')))
-    const { plan, config, root, manifest } = await prepareDesktopPublication(process.env)
-    const route = z.object({ runId: z.string(), attempt: z.string() }).parse(JSON.parse(process.env.DESKTOP_PUBLISH_ROUTE || '{}'))
-    const destination = `${plan.bucket}/${plan.publicUrl}${manifest.source.channel}`
+    const route = z.object({ runId: z.string(), attempt: z.string(), channel: z.enum(['nightly', 'stable']) })
+      .parse(JSON.parse(process.env.DESKTOP_PUBLISH_ROUTE || '{}'))
+    const { plan, config, root } = await prepareDesktopPublication(process.env, undefined, { rollbackChannel: route.channel })
+    if (plan === undefined) throw new Error('desktop rollback: rollback requires a channel upload plan')
+    const destination = `${plan.bucket}/${plan.publicUrl}${route.channel}`
     if (operation.runId !== route.runId || operation.attempt !== route.attempt
       || operation.repository !== process.env.GITHUB_REPOSITORY || operation.destination !== destination) {
       throw new Error('desktop rollback: successful publication record does not match the selected package')

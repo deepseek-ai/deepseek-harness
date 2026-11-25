@@ -356,4 +356,30 @@ describe('desktop upload plan', () => {
     })}\n`)
     await expect(createDesktopUploadPlan('mac-arm64', paths)).rejects.toThrow(/mac-arm64\.zip/u)
   })
+
+  it('decouples target publication channels from the packaged channel marker', async () => {
+    const stablePaths = await fixture('mac-arm64', '1.2.3-rc.1', 'production', 'stable')
+    const toNightly = await createDesktopUploadPlan('mac-arm64', {
+      ...stablePaths,
+      packagedChannel: 'stable',
+      stagingPercentage: 25,
+      environment: { ...stablePaths.environment, DSH_DESKTOP_UPDATE_CHANNEL: 'nightly' },
+    })
+    expect(toNightly.artifacts.map(artifact => artifact.key)).toEqual([
+      'dsh-desk/bin/mac-arm64/deepseek-harness-1.2.3-rc.1-mac-arm64.dmg',
+      'dsh-desk/bin/mac-arm64/deepseek-harness-1.2.3-rc.1-mac-arm64.zip',
+      'dsh-desk/bin/mac-arm64/deepseek-harness-1.2.3-rc.1-mac-arm64.zip.blockmap',
+      'dsh-desk/feeds/mac-arm64/nightly-mac.yml',
+    ])
+    expect(load(toNightly.artifacts[3]!.contents!)).toMatchObject({
+      version: '1.2.3-rc.1',
+      stagingPercentage: 25,
+      files: [{ url: 'https://download.deepseek.com/dsh-desk/bin/mac-arm64/deepseek-harness-1.2.3-rc.1-mac-arm64.zip' }],
+    })
+    await expect(createDesktopUploadPlan('mac-arm64', {
+      ...stablePaths,
+      packagedChannel: 'nightly',
+      environment: { ...stablePaths.environment, DSH_DESKTOP_UPDATE_CHANNEL: 'nightly' },
+    })).rejects.toThrow(/completion record/u)
+  })
 })
