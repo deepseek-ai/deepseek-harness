@@ -64,8 +64,8 @@ export interface QqErrorRule {
 }
 
 /**
- * Platform error code table. Codes outside this table and the quota range below are classified `invalid`: the platform
- * rejected the request, but the taxonomy cannot say why.
+ * Platform error code table. Codes outside this table and the quota range below are classified `invalid` and keep the
+ * platform's own sentence (see {@link classify}): the platform rejected the request, and its text says why.
  */
 export const QQ_ERRORS: Readonly<Record<number, QqErrorRule>> = {
   /** Same `(msg_id, msg_seq)` sent twice. `send.ts` bumps `msg_seq` and retries once. */
@@ -96,6 +96,15 @@ export const QQ_ERRORS: Readonly<Record<number, QqErrorRule>> = {
   22009: { kind: 'rate-limit', message: 'message quota exceeded' },
   /** 主动消息 frequency limit. */
   40034100: { kind: 'rate-limit', message: 'active-message frequency limit exceeded' },
+  /**
+   * The chat grants no 主动消息 permission, and the reply could not answer an inbound event: nothing was being
+   * answered, or the passive window of the event it answers is spent.
+   */
+  40034105: { kind: 'permission', message: 'this chat does not allow active messages' },
+  /** The passive window or the reply budget of the event being answered is spent. */
+  40034128: { kind: 'invalid', message: 'the passive window or reply budget of the answered event is spent' },
+  /** The interaction id this reply answers is not the form the message body takes. */
+  40034025: { kind: 'invalid', message: 'the platform rejected the event id of the answer' },
 }
 
 /** Lowest / highest code of the quota family the platform answers with `304…`. */
@@ -159,7 +168,8 @@ function isAbort(error: unknown): boolean {
  * or a 4xx (it definitively rejected the request) and `'unknown'` for a 5xx or a transport failure, whose request
  * may have reached the platform; a network failure and a 5xx are `retryable`; a cancellation is `fatal` and its
  * `published` is `'unknown'`, because the request may already have been written and answered — only a `published`
- * the thrown error itself carries overrides that.
+ * the thrown error itself carries overrides that. A code the table does not list keeps the platform's own sentence,
+ * which the client put into the error, so an unclassified refusal still says what the platform refused.
  *
  * @param error - the thrown value.
  * @returns the classified error; an already classified `PlatformError` passes through.
@@ -192,7 +202,10 @@ export function classify(error: unknown): PlatformError {
  // a 5xx leaves publication unknown unless the caller decided otherwise.
     init.published = error.published
       ?? (error.code !== undefined || (error.status !== undefined && error.status < 500) ? 'no' : 'unknown')
-    return new PlatformError(kind, fallback?.message ?? error.message, init)
+ // A code the table does not list keeps the platform's own sentence, which the client put into the error
+ // (`… answered 400 (code 40034105: 主动消息失败, 无权限)`); a bare HTTP status takes the status rule's sentence.
+    const message = rule === undefined && error.code !== undefined ? error.message : fallback?.message ?? error.message
+    return new PlatformError(kind, message, init)
   }
 
   const response = responseOf(error)

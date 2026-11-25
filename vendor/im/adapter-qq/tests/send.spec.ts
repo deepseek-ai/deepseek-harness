@@ -13,6 +13,7 @@ import QQBot, {
   Config,
   DELETE_WINDOW_MS,
   deleteSentPart,
+  INVALID_EVENT_ID_CODE,
   messageKindOf,
   sendMessagePayload,
   type QQConfig,
@@ -130,6 +131,35 @@ describe('sendMessagePayload — passive replies', () => {
     const click = clickReferrer('INTERACTION_CREATE:abc')
     await sendMessagePayload(bot, { msg_type: 0, content: 'pressed' }, { ...group, referrer: click }, context())
     expect(calls[0]!.data).toEqual({ msg_type: 0, content: 'pressed', event_id: 'INTERACTION_CREATE:abc' })
+  })
+
+  it('adds the interaction prefix to a click id the gateway reported bare', async () => {
+    // `d.id` of the `INTERACTION_CREATE` frame is a bare uuid and `PUT /interactions/{id}` takes it verbatim, but the
+    // message body refusing it with 40034025 is what a click looked like as a dead button.
+    const { bot, calls } = await mount()
+    const click = clickReferrer('1b13d569-4610-4ab9-bc51-feecc5def6d4')
+    await sendMessagePayload(bot, { msg_type: 0, content: 'pressed' }, { ...group, referrer: click }, context())
+    expect(calls[0]!.data).toEqual({
+      msg_type: 0,
+      content: 'pressed',
+      event_id: 'INTERACTION_CREATE:1b13d569-4610-4ab9-bc51-feecc5def6d4',
+    })
+  })
+
+  it('falls back to one active send when the platform refuses the event id', async () => {
+    const { bot, calls } = await mount((_call, index) => index === 0
+      ? { status: 400, body: { code: INVALID_EVENT_ID_CODE, message: '请求参数event_id无效' } }
+      : { body: { id: 'ROBOT1.0_after_fallback' } })
+    const part = await sendMessagePayload(bot, { msg_type: 0, content: 'pressed' }, {
+      ...group,
+      referrer: clickReferrer('bare-id'),
+    }, context())
+    // The refusal published nothing, so the reply without the passive field cannot duplicate it.
+    expect(calls.map(call => call.data)).toEqual([
+      { msg_type: 0, content: 'pressed', event_id: 'INTERACTION_CREATE:bare-id' },
+      { msg_type: 0, content: 'pressed' },
+    ])
+    expect(part.id).toBe('ROBOT1.0_after_fallback')
   })
 
   it('strips passive fields a payload must not carry and re-fills them', async () => {

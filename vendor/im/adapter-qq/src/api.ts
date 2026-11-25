@@ -283,6 +283,29 @@ function codeOf(body: unknown): number | undefined {
   return typeof code === 'number' ? code : undefined
 }
 
+/** The platform's own sentence of an answer body, if it carries one. */
+function platformMessageOf(body: unknown): string | undefined {
+  const message = (body as { message?: unknown } | undefined)?.message
+  return typeof message === 'string' && message.trim() ? message.trim() : undefined
+}
+
+/**
+ * The platform's own code and sentence of an answer body, as the detail a request failure carries.
+ *
+ * The taxonomy names the codes it knows (`errors.ts`), but a code it does not must still reach the operator: dropping
+ * it left `40034105 主动消息失败, 无权限`, `40034128 被动回复时间或者次数超过限制` and `40034025 event_id 无效` behind one
+ * anonymous sentence.
+ *
+ * @param body - decoded answer body.
+ * @returns ` (code 40034105: 主动消息失败, 无权限)`, or `''` when the body names no code.
+ */
+function detailOf(body: unknown): string {
+  const code = codeOf(body)
+  if (code === undefined) return ''
+  const message = platformMessageOf(body)
+  return message === undefined ? ` (code ${code})` : ` (code ${code}: ${message})`
+}
+
 /** `Retry-After` of an answer in milliseconds (the header is in seconds). */
 function retryAfterOf(response: Response): number | undefined {
   const value = Number(response.headers.get('retry-after'))
@@ -355,7 +378,7 @@ export class QqApi {
     const body = parseBody(text)
     const code = codeOf(body)
     if (response.status >= 400) {
-      throw new QqApiError(`${method} ${path} answered ${response.status}`, {
+      throw new QqApiError(`${method} ${path} answered ${response.status}${detailOf(body)}`, {
         code,
         status: response.status,
         body,
@@ -365,7 +388,12 @@ export class QqApi {
  // A `code` in a 2xx body is still a failure (audit rejection, quota …) unless the body also carries the
  // object the route promises (a message `id`).
     if (code !== undefined && code !== 0 && !(body && typeof body === 'object' && 'id' in body)) {
-      throw new QqApiError(`${method} ${path} answered code ${code}`, { code, status: response.status, body })
+      const message = platformMessageOf(body)
+      throw new QqApiError(`${method} ${path} answered code ${code}${message === undefined ? '' : `: ${message}`}`, {
+        code,
+        status: response.status,
+        body,
+      })
     }
     if (expect === 'text') return text as T
     if (expect === 'none') return undefined as T
