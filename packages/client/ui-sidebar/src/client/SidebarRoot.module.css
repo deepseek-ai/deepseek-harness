@@ -474,15 +474,20 @@
   }
 }
 
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
-   controls; the glass tokens lower its alpha in dark mode. */
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+   controls; the glass tokens lower its alpha in dark mode. Window fullscreen
+   paints the opaque Web sidebar fill, so the Web control fills return. */
+:global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])) .newSession {
   background: var(--dsw-specific-sidebar-glass-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
+  :global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])) .newSession:hover {
     background: var(--dsw-specific-sidebar-glass-hover);
   }
 }
@@ -512,12 +517,12 @@
   }
 }
 
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession {
+:global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])).collapsed .newSession {
   background: var(--dsw-specific-sidebar-glass-collapsed-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
+  :global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
     background: var(--dsw-specific-sidebar-glass-collapsed-hover);
   }
 }
@@ -628,7 +633,15 @@
   pointer-events: none;
 }
 
-:global([data-platform='darwin']) .scrollFade,
+:global([data-platform='darwin']) .scrollFade {
+  opacity: 1;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+:global([data-platform='darwin']:not([data-fullscreen])) .scrollFade {
+  opacity: 0;
+}
+
 .collapsed .scrollFade,
 .collapsed .scrollArea::before,
 .collapsed .scrollArea::after {
@@ -875,6 +888,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession,
+  :global([data-platform='darwin']) .scrollFade,
   :global([data-animating]:not([data-dragging])) .root,
   .wide,
   .fading > *,
