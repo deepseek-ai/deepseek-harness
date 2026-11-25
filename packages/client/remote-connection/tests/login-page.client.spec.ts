@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 /** Anonymous login-page effects before the authenticated application loads. */
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { enterAuthenticationPage, renderAuthenticationPage } from '../src/login-page.ts'
 import type { AuthenticationPageOptions } from '../src/login-page.ts'
@@ -16,8 +19,8 @@ afterEach(() => {
   document.documentElement.innerHTML = '<head></head><body></body>'
 })
 
-function page(path = `/?login=qr#${TOKEN}`, language = 'en-US') {
-  const html = new DOMParser().parseFromString(renderAuthenticationPage({ tokenLoginEnabled: true }), 'text/html')
+function page(path = `/?login=qr#${TOKEN}`, language = 'en-US', markup = renderAuthenticationPage({ tokenLoginEnabled: true })) {
+  const html = new DOMParser().parseFromString(markup, 'text/html')
   document.documentElement.innerHTML = html.documentElement.innerHTML
   history.replaceState(null, '', path)
   const actualLocation = window.location
@@ -250,8 +253,12 @@ it.each(['', '#short', `#${'a'.repeat(42)}!`])('removes an invalid fragment with
   expect(fixture.replace).not.toHaveBeenCalled()
 })
 
-it('clears the credential before POST and keeps the mount prefix when opening the authenticated app', async () => {
-  const fixture = page(`/mount/?login=qr&token=unrelated&other=value#${TOKEN}`, 'ZH-cn')
+it('exchanges the scanned credential and opens the app from the source-launched login page', async ({ task }) => {
+  const entry = pathToFileURL(resolve(import.meta.dirname, '../src/login-page.ts')).href
+  const markup = execFileSync(process.execPath, ['--import', 'tsx/esm', '--input-type=module', '--eval',
+    `import { renderAuthenticationPage } from ${JSON.stringify(entry)}; process.stdout.write(renderAuthenticationPage({ tokenLoginEnabled: true, pairingEnabled: true }))`,
+  ], { encoding: 'utf8', timeout: task.timeout })
+  const fixture = page(`/mount/?login=qr&token=unrelated&other=value#${TOKEN}`, 'ZH-cn', markup)
   const pending = Promise.withResolvers<Response>()
   fixture.exchange.mockImplementation((input, init) => {
     expect(fixture.actualLocation.href).not.toContain(TOKEN)
@@ -264,7 +271,9 @@ it('clears the credential before POST and keeps the mount prefix when opening th
     expect(init?.signal).toBeInstanceOf(AbortSignal)
     return pending.promise
   })
-  enterAuthenticationPage(loginLocales)
+  window.eval(document.querySelector<HTMLScriptElement>('script:not([src])')!.text)
+  expect(fixture.exchange).toHaveBeenCalledTimes(1)
+  expect(fixture.notice.hidden).toBe(false)
   expect(document.documentElement.lang).toBe('zh')
   expect(document.title).toBe(loginLocales.zh.authenticationTitle)
   expect(document.getElementById('title')?.textContent).toBe(loginLocales.zh.authenticationTitle)
