@@ -1665,7 +1665,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     : { role: 'tabpanel', id: `${tabsId}-${INSTALLED_TAB}-panel`, 'aria-labelledby': `${tabsId}-${INSTALLED_TAB}` }
   const activated = listed.find(pkg => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name))
   const setBundleEnabled = (name: string, enabled: boolean): void => {
-    setActivation(enabled ? name : null)
+    setActivation(enabled && openPkg?.name !== name ? name : null)
     props.setEnabled(name, enabled)
   }
   const setRowEnabled = (row: PackageRow, enabled: boolean): void => {
