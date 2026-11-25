@@ -65,7 +65,10 @@ describe.skipIf(MODE === 'record')('web e2e: mention path presence', () => {
     for (const reload of [false, true]) {
       if (reload) await page.reload({ waitUntil: 'load' })
       const bubble = page.locator('[data-chat-flow-kind="user"]')
-      await expect.poll(() => bubble.locator('[data-ref-chip]').allTextContents()).toEqual(['LICENSE', 'docs'])
+      // After a reload the bubble renders once the client reopens the Session; each chip then waits for
+      // the Host's `workspaceFiles/stat` answer for its path.
+      await bubble.waitFor()
+      await expect.poll(() => bubble.locator('[data-ref-chip]').allTextContents(), { timeout: 10_000 }).toEqual(['LICENSE', 'docs'])
       expect(await bubble.textContent()).toContain('@ceshi @随便写点文字 ')
       expect(await bubble.textContent()).toContain(' mail@host')
       await bubble.getByRole('button', { name: 'LICENSE', exact: true }).click()
