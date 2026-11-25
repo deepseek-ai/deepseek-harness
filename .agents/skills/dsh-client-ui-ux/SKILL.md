@@ -37,10 +37,6 @@ Before handoff, review or push, check only new cumulative interactions, missing 
 
 These effort levels change only the additional design-review procedure. Existing [client test requirements](../../../packages/client/AGENTS.md), [GUI PR GIF requirements](../record-browser-gif/SKILL.md#every-gui-pull-request-includes-a-gif), and [designer/product approval](#design-review-escalation) still apply, including to local changes when their original triggers are met.
 
-### PR preview coverage
-
-Each pull request publishes a WebWorker preview ([workflow](../../../.github/workflows/build-preview-cloudflare.yml)) so reviewers can inspect its UI changes in the preview's built-in showcase, the `vfs-example` fixture. When a PR changes how Session content renders and the showcase Sessions lack that content, such as one kind of message content or a very long table, add showcase messages in the same PR so the changed part appears there. Change [the fixture generator](../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts) after its 28-turn history prefix, then update the current-generation files in [the committed fixture tree](../../../packages/experimental/webworker-runtime/tests/fixtures/vfs-example) to its output; [its spec](../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.spec.ts) requires them to match. Never edit the committed `session.v2.jsonl` or `session.v3.jsonl` predecessors.
-
 ## Select the rule owners
 
 For layout changes, read the alignment and spacing references. Read the icon reference when selecting, drawing or reviewing artwork, or when adding, changing or reviewing icon buttons, icon-only actions or informational icons, including reuse without artwork changes. Other tasks use the relevant sections below. Do not load all references by default. Existing responsive and official-artwork skills retain their scopes; numeric scales stay with their implementation owners.
