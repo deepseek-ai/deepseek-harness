@@ -465,12 +465,35 @@ describe('frame layout conversion', () => {
     writeFrameLayout(inspect, (db) => { db.prepare("UPDATE frames SET payload = ? WHERE segment_uuid = 'seg-root' AND start_seq = ?").run(Buffer.from('damaged'), start) })
     await logs.start()
     expect((await logs.stat(SessionId('root')))?.eventCount).toBe(framed.root.length)
-    expect(rows("SELECT count(*) AS stand_ins FROM events WHERE type = 'storage/unreadable-frame' AND codec = 255")).toEqual([{ stand_ins: 1 }])
+    expect(rows("SELECT count(*) AS stand_ins FROM events WHERE type = 'storage/unreadable' AND codec = 255")).toEqual([{ stand_ins: 1 }])
     const damaged = await logs.open(SessionId('root'), 'read')
     try { await expect(damaged.read()).rejects.toThrow(message) } finally { await damaged.close() }
     await expect(logs.open(SessionId('root'), 'write')).rejects.toThrow()
     const apart = await logs.open(SessionId('tools'), 'read')
     try { expect((await apart.read(0, 2)).events).toEqual(framed.tools.slice(0, 2)) } finally { await apart.close() }
+  })
+
+  it('carries over the readable events of a frame in which other events are damaged, so reads that avoid those still succeed', async () => {
+    const reportSetAside = vi.fn<(detail: string, error: unknown) => void>()
+    const { logs, inspect, rows } = await fixture({ reportSetAside })
+    const lines = framed.root.slice(0, 3).map(entry => JSON.stringify(entry))
+    writeFrameLayout(inspect, (db) => {
+      db.prepare("UPDATE frames SET codec = 0, payload = ? WHERE segment_uuid = 'seg-root' AND start_seq = 0")
+        .run(Buffer.from([lines[0], '{"type":', JSON.stringify(marker(9))].join('\n')))
+    })
+    await logs.start()
+    expect(reportSetAside.mock.calls.map(([detail]) => detail)).toEqual(['frame at 0 of Segment seg-root'])
+    expect(rows(`SELECT group_concat(seq) AS stand_ins FROM (SELECT seq FROM events WHERE type = 'storage/unreadable'
+      AND segment_id = (SELECT segment_id FROM segments WHERE segment_uuid = 'seg-root') ORDER BY seq)`)).toEqual([{ stand_ins: '1,2' }])
+    expect(rows("SELECT count(*) AS stored FROM events WHERE segment_id = (SELECT segment_id FROM segments WHERE segment_uuid = 'seg-root')"))
+      .toEqual([{ stored: framed.root.length }])
+    expect(rows('SELECT count(*) AS kept FROM frames_set_aside')).toEqual([{ kept: 1 }])
+    const reader = await logs.open(SessionId('root'), 'read')
+    try {
+      expect((await reader.read(0, 1)).events).toEqual(framed.root.slice(0, 1))
+      expect((await reader.read(3, 2)).events).toEqual(framed.root.slice(3))
+      await expect(reader.read()).rejects.toThrow(/stored event at index 1 is invalid/)
+    } finally { await reader.close() }
   })
 
   it('refuses a Session whose only frame is set aside instead of reading it as empty', async () => {
@@ -539,8 +562,8 @@ describe('frame layout conversion', () => {
     })
     await persistence.start()
     expect(warn.mock.calls.map(([message]) => String(message))).toEqual([
-      'The Session database upgrade set aside the frame at 3 of Segment seg-root, which cannot be read; its Session reads as damaged: '
-      + 'RangeError: SQLite frame at 3 does not hold its recorded range',
+      'The Session database upgrade set aside the frame at 3 of Segment seg-root, which holds data that cannot be read; '
+      + 'reads that reach it are refused: RangeError: SQLite frame at 3 does not hold its recorded range',
     ])
   })
 
@@ -603,8 +626,6 @@ describe('upgrade steps', () => {
     prepareSchema(fresh, options)
     expect(layout(upgraded)).toEqual([
       ['index', 'events_by_type', null],
-      ['index', 'sessions_by_cwd', null],
-      ['index', 'sessions_by_parent', null],
       ['table', 'events', 'event_no segment_id seq type time surface_op source_seqs ignorable codec data'],
       ['table', 'segment_paths', 'segment_id member_id end_seq'],
       ['table', 'segments', 'segment_id segment_uuid parent_id base_seq'],

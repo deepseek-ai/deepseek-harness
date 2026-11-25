@@ -68,8 +68,6 @@ CREATE TABLE sessions (
   origin TEXT GENERATED ALWAYS AS (${member('origin', 'text')}) VIRTUAL,
   agent_preset TEXT GENERATED ALWAYS AS (${member('agentPreset', 'text')}) VIRTUAL
 ) STRICT;
-CREATE INDEX sessions_by_cwd ON sessions(cwd, created_at);
-CREATE INDEX sessions_by_parent ON sessions(parent_session) WHERE parent_session IS NOT NULL;
 CREATE TABLE events (
   event_no INTEGER PRIMARY KEY,
   segment_id INTEGER NOT NULL REFERENCES segments(segment_id),

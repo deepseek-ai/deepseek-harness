@@ -66,7 +66,8 @@ export class SqliteSessionPersistence extends SessionPersistence {
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },
       reportDerivation: (failure) => { owner.logger.warn(describeDerivationFailure(failure)) },
       reportSetAside: (detail, error) => {
-        owner.logger.warn(`The Session database upgrade set aside the ${detail}, which cannot be read; its Session reads as damaged: ${String(error)}`)
+        owner.logger.warn(`The Session database upgrade set aside the ${detail}, which holds data that cannot be read; `
+          + `reads that reach it are refused: ${String(error)}`)
       },
       reportUpgrade: (from, to) => {
         owner.logger.info(`Upgrading the Session database from schema version ${from} to ${to}; Sessions open when it finishes`)

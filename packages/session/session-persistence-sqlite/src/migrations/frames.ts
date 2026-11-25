@@ -14,8 +14,8 @@ import { EVENT_CODEC_UNREADABLE, encodeRow } from '../row.ts'
 import { SCHEMA } from '../schema.ts'
 import type { Migration } from './types.ts'
 
-/** `events.type` of the row that stands in for a frame this step could not read. */
-const UNREADABLE_TYPE = 'storage/unreadable-frame'
+/** `events.type` of a row that stands in for stored data this step could not read. */
+const UNREADABLE_TYPE = 'storage/unreadable'
 /** Version 1 `frames.codec` for one Zstandard frame; every other stored value was UTF-8 text. */
 const FRAME_CODEC_ZSTD = 1
 const FRAME_TABLES = ['frames', 'traces', 'segments', 'segment_ancestors']
@@ -32,12 +32,14 @@ const frame = z.object({ frame: z.number().int(), segment_id: z.number().int(), 
  * were Segment-local, and each event's own `seq` supplies the Session sequence.
  * Events are carried over by their envelope alone, so an event type this build
  * does not know upgrades with the rest and is judged when its Session is read.
- * A frame that cannot be read (damaged bytes, a range it does not hold, an event
- * out of sequence, or an envelope the event row cannot hold) was unreadable before
- * the upgrade too. It is reported and copied unchanged into `frames_set_aside`,
- * a table that exists only then. One row that no reader decodes stands in for
- * its events, so the Segment keeps its event count: a read that reaches the frame
- * is refused, as it was before the upgrade, and every other Session upgrades.
+ * Damage that made a read fail before the upgrade makes the same read fail after
+ * it, and nothing else. A frame whose bytes cannot be split into its recorded
+ * number of lines gets one row that no reader decodes, at its last sequence. A
+ * frame that splits is carried over event by event, and only an event that
+ * cannot be read (not JSON, out of sequence, or an envelope the event row cannot
+ * hold) gets such a row. The Segment keeps its event count either way. Each
+ * damaged frame is reported once and copied unchanged into `frames_set_aside`,
+ * a table that exists only then.
  */
 export const frames: Migration = {
   from: 1,
@@ -70,28 +72,42 @@ export const frames: Migration = {
     const stored = db.prepare(`SELECT f.rowid AS frame, s.segment_id, s.segment_uuid, s.base_seq, f.start_seq, f.end_seq, f.codec, f.payload
       FROM frames f JOIN segments s ON s.segment_uuid = f.segment_uuid ORDER BY s.segment_id, f.start_seq`)
     const damaged: number[] = []
+    const standIn = (segment: number, seq: number): void => {
+      insert.run(segment, seq, UNREADABLE_TYPE, 0, null, null, null, EVENT_CODEC_UNREADABLE, new Uint8Array())
+    }
     for (const raw of stored.iterate()) {
       const { frame: rowid, segment_id: segment, segment_uuid: uuid, base_seq: base, start_seq: start, end_seq: end,
         codec, payload } = frame.parse(raw)
-      let events: StoredEnvelope[]
+      const setAside = (error: unknown): void => {
+        if (damaged.at(-1) === rowid) return
+        damaged.push(rowid)
+        onSetAside(`frame at ${base + start} of Segment ${uuid}`, error)
+      }
+      let texts: string[]
       try {
         const bytes = codec === FRAME_CODEC_ZSTD ? zstdDecompressSync(payload) : payload
-        const texts = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf8').split('\n')
+        texts = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf8').split('\n')
         if (texts.length !== end - start) throw new RangeError(`SQLite frame at ${start} does not hold its recorded range`)
-        events = texts.map((text, index) => {
-          const event = decodeEnvelope(JSON.parse(text))
-          if (event.seq !== base + start + index) throw new RangeError(`SQLite frame event ${event.seq} is out of sequence`)
-          return event
-        })
       } catch (error: unknown) {
-        // The frame was unreadable before the upgrade too. A row no reader decodes holds its last sequence, so
-        // the Segment keeps its event count and a read that reaches the frame is refused; the bytes are kept below.
-        damaged.push(rowid)
-        insert.run(segment, base + end - 1, UNREADABLE_TYPE, 0, null, null, null, EVENT_CODEC_UNREADABLE, new Uint8Array())
-        onSetAside(`frame at ${base + start} of Segment ${uuid}`, error)
+        // No line of the frame can be placed. A row no reader decodes holds its last sequence, so the Segment
+        // keeps its event count and a read that reaches the frame is refused, as it was before the upgrade.
+        setAside(error)
+        standIn(segment, base + end - 1)
         continue
       }
-      for (const event of events) {
+      for (const [index, text] of texts.entries()) {
+        const seq = base + start + index
+        let event: StoredEnvelope
+        try {
+          event = decodeEnvelope(JSON.parse(text))
+          if (event.seq !== seq) throw new RangeError(`SQLite frame event ${event.seq} is out of sequence`)
+        } catch (error: unknown) {
+          // The frame layout parsed only the lines a read asked for, so the other events of this frame stayed
+          // readable; they are carried over, and only this event is replaced.
+          setAside(error)
+          standIn(segment, seq)
+          continue
+        }
         const row = encodeRow(event, compression)
         insert.run(segment, row.seq, row.type, row.time, row.surface_op, row.source_seqs, row.ignorable, row.codec, row.data)
       }
