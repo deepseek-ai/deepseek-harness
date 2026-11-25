@@ -1,10 +1,10 @@
 // Private desktop fixture: commands inspect or arrange only the windows owned by this process.
 using System.Globalization;
 using System.Runtime.InteropServices;
+using DeepSeek.Cua.Windows;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
-using DeepSeek.Cua.Windows;
 
 internal sealed class FixtureForm : Form
 {
@@ -55,12 +55,12 @@ internal sealed class FixtureForm : Form
 
     internal void PointAtButton() => Cursor.Position = button.PointToScreen(new Point(button.Width / 2, button.Height / 2));
 
-    internal void SetIdentity(string appId)
+    internal void SetIdentity()
     {
         var id = typeof(Win32.IPropertyStore).GUID;
         Marshal.ThrowExceptionForHR(Win32.SHGetPropertyStoreForWindow(Handle, ref id, out var store));
         var key = new Win32.PropertyKey { FormatId = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), PropertyId = 5 };
-        var value = new Win32.PropVariant { ValueType = 31, Pointer = Marshal.StringToCoTaskMemUni(appId) };
+        var value = new Win32.PropVariant { ValueType = 31, Pointer = Marshal.StringToCoTaskMemUni("DSH.Fixture." + (long)Handle) };
         try { Marshal.ThrowExceptionForHR(store!.SetValue(ref key, ref value)); }
         finally { Win32.PropVariantClear(ref value); Marshal.FinalReleaseComObject(store!); }
     }
@@ -114,6 +114,8 @@ internal sealed class FixtureForm : Form
 
 internal static class Program
 {
+    private static void Write(object value) { Console.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); }
+
     private static void SendMouse(params uint[] flags)
     {
         var inputs = flags.Select(flag => new Input { Type = 0, Data = new MouseInput { Flags = flag } }).ToArray();
@@ -133,27 +135,16 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        var controlPath = Path.Combine(AppContext.BaseDirectory, "control-pipe.txt");
-        using var control = File.Exists(controlPath)
-            ? new System.IO.Pipes.NamedPipeClientStream(".", File.ReadAllText(controlPath), System.IO.Pipes.PipeDirection.InOut) : null;
-        control?.Connect(10000);
-        using var input = control is null ? null : new StreamReader(control);
-        using var output = control is null ? null : new StreamWriter(control) { AutoFlush = true };
-        var reader = input ?? Console.In;
-        var writer = output ?? Console.Out;
-        void Write(object value) { writer.WriteLine(JsonSerializer.Serialize(value)); writer.Flush(); }
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         using var form = new FixtureForm("DSH CUA owned test window");
         using var sibling = new FixtureForm("DSH CUA sibling test window");
-        if (control is not null) form.SetIdentity("DSH.Fixture.Launch");
-        FileStream? imageLock = null;
         form.Shown += (_, _) =>
         {
             Write(new { pid = Environment.ProcessId, state = form.Inspect() });
             _ = Task.Run(() =>
             {
-                while (reader.ReadLine() is { } command)
+                while (Console.ReadLine() is { } command)
                 {
                     form.Invoke(() =>
                     {
@@ -162,9 +153,7 @@ internal static class Program
                             case "sibling": sibling.Show(); sibling.Activate(); sibling.Editor.Focus(); Write(sibling.Inspect()); break;
                             case "change-text": form.Editor.Text = "CUA notification sample"; Write(form.Inspect()); break;
                             case "inspect": Write(form.Inspect()); break;
-                            case "identity-a": form.SetIdentity("DSH.Fixture.A"); Write(form.Inspect()); break;
-                            case "identity-b": form.SetIdentity("DSH.Fixture.B"); Write(form.Inspect()); break;
-                            case "lock-image": imageLock = File.Open(Environment.ProcessPath!, FileMode.Open, FileAccess.Read, FileShare.None); Write(form.Inspect()); break;
+                            case "identity": form.SetIdentity(); Write(form.Inspect()); break;
                             case "inspect-sibling": Write(sibling.Inspect()); break;
                             case "focus": form.Activate(); form.Editor.Focus(); Write(form.Inspect()); break;
                             case "pointer": form.PointAtButton(); Write(form.Inspect()); break;
@@ -192,8 +181,7 @@ internal static class Program
                 if (!form.IsDisposed) form.BeginInvoke(form.Close);
             });
         };
-        try { Application.Run(form); }
-        finally { imageLock?.Dispose(); }
+        Application.Run(form);
     }
 
     [DllImport("user32.dll")]

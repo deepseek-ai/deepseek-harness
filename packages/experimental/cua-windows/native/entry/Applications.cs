@@ -1,4 +1,4 @@
-// Process identity, executable metadata, and the authorized application's own window state.
+// Executable metadata, helper verification, and the selected application's window state.
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,8 +6,6 @@ using System.Text.Json;
 using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
-
-internal sealed record RunningApplication(int Pid, long Started, string Path, string Name);
 
 internal sealed class AppState(string handle, string appId, string name, ApplicationAuthorization authorization,
     bool isRunning, string launchTarget) : IDisposable
@@ -20,9 +18,6 @@ internal sealed class AppState(string handle, string appId, string name, Applica
     internal ApplicationAuthorization Authorization { get; } = authorization;
     internal Dictionary<nint, WindowState> Windows { get; } = [];
     internal Dictionary<nint, Snapshot> Snapshots { get; } = [];
-
-    internal bool Owns(ResolvedWindow window) => string.Equals(AppId, window.AppId, StringComparison.Ordinal)
-        || Path.IsPathFullyQualified(AppId) && string.Equals(AppId, window.ExecutablePath, StringComparison.OrdinalIgnoreCase);
 
     public void Dispose()
     {
@@ -51,13 +46,6 @@ internal static class Applications
             if (ApplicationIcons.Read(path) is { } icon) result[path] = icon;
         }
         return result;
-    }
-
-    internal static long Started(System.Diagnostics.Process process)
-    {
-        if (!Win32.GetProcessTimes(process.SafeHandle, out var created, out _, out _, out _))
-            throw new NativeFailure("STALE_APP", "The process lifetime is unavailable; select the application again");
-        return created;
     }
 
     internal static string CanonicalPath(string path)
@@ -115,7 +103,7 @@ internal static class Applications
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
-            // File metadata is optional; the canonical file name remains visible with its full path.
+            // File metadata is optional; the file name still labels the selected executable.
         }
         return Path.GetFileNameWithoutExtension(path);
     }
@@ -141,7 +129,7 @@ internal static class Applications
         return Convert.ToHexStringLower(digest.GetHashAndReset());
     }
 
-    internal static RunningApplication Running(int pid)
+    internal static string RunningExecutable(int pid)
     {
         try
         {
@@ -150,7 +138,7 @@ internal static class Applications
                 throw new NativeFailure("UNSUPPORTED_SESSION", "Select an application in this interactive desktop session");
             var path = process.MainModule?.FileName
                 ?? throw new NativeFailure("APP_IDENTITY_UNAVAILABLE", "The application executable is unavailable");
-            return new(pid, Started(process), CanonicalPath(path), process.ProcessName);
+            return CanonicalPath(path);
         }
         catch (System.ComponentModel.Win32Exception)
         {

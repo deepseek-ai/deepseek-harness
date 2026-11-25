@@ -1,5 +1,5 @@
 ---
-description: "Discover Windows applications by AUMID and observe or operate explicitly selected windows."
+description: "Discover Windows applications, manage application consent, and observe or operate explicitly selected windows."
 kind: "package-reference"
 ---
 
@@ -33,9 +33,9 @@ In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to 
 
 `cua.listApps()` aggregates applications from eligible visible top-level windows in the current Windows session. Name searches and empty `cua.findApps` queries return installed applications from the StartApps catalog, enumerated through AppsFolder. Window observations supplement those catalog entries with running state and known executable paths. The catalog may be incomplete; if an application is missing, ask the user for its location.
 
-Each result contains `id`, `displayName`, `identity: null`, and `isRunning`. IDs are opaque selectors; pass the returned ID unchanged to `cua.getApp`, or supply an existing absolute `.exe` path. Shell names and icons describe the application. The file description and file name provide labels for unregistered executables. Applications with the same AUMID share one entry; names alone never merge applications.
+Discovery results contain `id`, `identity: null`, and `isRunning`, with `name` in `listApps` and `displayName` in `findApps`. A window's ID comes from its explicit AUMID, then the package process AUMID, then the executable path. Only identical ID strings merge, using case-sensitive equality, after the [known application aliases](#known-application-aliases) are applied to path fallbacks. Pass the returned ID unchanged to `cua.getApp`, or supply an existing absolute `.exe` path. Shell names, process names and executable metadata provide display labels; labels do not determine identity.
 
-`listApps` results have `isRunning: true`. In `findApps` results, `isRunning` indicates an associated window; a catalog application without a window reports `false`. Inaccessible windows or processes are omitted. If canonicalizing a running image fails, discovery uses the executable path reported by Windows. Failure to read the application catalog fails `findApps`. `cua.getState().apps` comes from `listApps()`.
+`listApps` results have `isRunning: true`. In `findApps` results, `isRunning` indicates an associated window; a catalog application without a window reports `false`. Inaccessible windows or processes are omitted. Failure to read the application catalog fails name and empty `findApps` queries. `listApps` and explicit path selection do not read the application catalog. `cua.getState().apps` comes from `listApps()`.
 
 `cua.findApps(query)` uses case-insensitive literal substring matching on display names, IDs, and known executable paths, or checks an absolute `.exe` path directly. `""` and `null` return all catalog applications. Nonempty queries must contain a non-whitespace character and use `maxAppMatches` (default 20); excessive matches return `AMBIGUOUS_APP`. Response-size and time limits apply to all queries.
 
@@ -43,21 +43,31 @@ Each result contains `id`, `displayName`, `identity: null`, and `isRunning`. IDs
 
 The first time a conversation selects an application without a saved grant, the approval card offers **Reject**, **Allow for this session**, and, when the profile can save grants, **Always allow**. **Always allow** is the primary button. Selecting it grants access across conversations in the same profile until revoked on the Computer Use plugin page. Pressing Enter in the approval details grants access for the current conversation.
 
-Application consent follows the AUMID, matching macOS consent by bundle identifier. Versions and copies with the same AUMID share consent regardless of executable location or signing. Window properties and package process metadata supply explicit AUMIDs; Windows Shell resolves desktop applications whose IDs are not exposed there. A launcher and its windows share consent when Shell associates them with the same AUMID. Without an application ID, consent follows the canonical executable path; this selection also accepts windows from that executable when they report an AUMID after launch. Search and known path selectors reuse the same decision; a path hosting multiple application IDs returns `AMBIGUOUS_APP`.
+Application consent follows the selected ID. Versions and copies with the same AUMID share consent regardless of executable location or signing. Explicit path selection uses the canonical executable path, with only the known application aliases below applied; it does not search for an AUMID. Other launcher and runtime executables can require separate grants. AUMIDs and path aliases do not authenticate publishers or signatures.
 
 The approval card and permission list use the shared Computer Use presentation and copy, showing the application name and icon. Reusing an application's consent within a conversation preserves its saved name and icon lookup target. Only an explicit **Always allow** choice saves a cross-conversation grant; existing session consent is not upgraded. Selecting an executable path retains that launch target even when its application ID is shared with other copies.
 
-Desktop resolution uses the Windows 8+ Shell `IApplicationResolver` interface also used by [System Informer](https://github.com/winsiderss/systeminformer/blob/master/phlib/appresolver.c). This interface is undocumented; an unavailable resolver fails application discovery explicitly. An unregistered executable with no discoverable AUMID uses its path, so moving it or selecting a launcher unrelated by Shell can require another approval. AUMIDs are application identifiers, not publisher or signature verification. See the [upgrade guide](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.md).
-
 - `cua.getApp(id)` requests application consent and returns an App on success. It does not read accessibility state or activate the application. Stopped applications are launched through Explorer after consent.
 - `app.getWindows()` reads the application's current window list. One application can have multiple windows across multiple processes. Previously admitted HWNDs remain listed while valid, including hidden windows.
-- `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Each observation and input checks the owning process, process start time, and application identity. Reused handles and changed identities invalidate the window and its snapshots.
+- `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Windows checks application association on first admission, then trusts the HWND while it remains valid; later observations and input do not compare target PIDs, process start times or application identities.
 - `window.getAccessibilityTree()` explicitly reads accessibility state. Element IDs belong to the current observation; reading another window of the same App replaces the facade's current snapshot. Do not mix elements or snapshots across windows.
 - Pass `showDiff: true` on successive reads to receive UI Automation structure, property and text notifications for one window. The initial read and the first read after a cancellation return the observed tree. Changing the window or read options, or reaching a traversal limit, also returns the observed tree. Set `maxDiffNotifications` in the Windows provider configuration to limit distinct (event type, RuntimeId) pairs per read interval (default 50). When the count exceeds the limit or the nonempty summary reaches the current tree’s UTF-8 byte count, the first line reads `Diff too large. Showing the current tree instead.`, followed by the current tree within the requested traversal limits. A notification names the current element when available. A removal can identify a previous element. Providers can omit changes or report a whole container. Omit the option or pass `false` to read the current tree and stop listening. The helper can acknowledge connection close while unsubscription is queued on the UIA thread. It logs one diagnostic if removal fails.
 - Use `getActionSchema(action)` to query an action's parameter JSON Schema.
 - `window.getScreenshot()` captures that explicit window and does not read or replace its accessibility tree. Screenshots can remain usable when an accessibility read fails.
 - `app.launch()` requests a new application instance and waits for the selected application's HWND set to change or the launch wait limit to expire. A single-instance program may only activate its existing instance, and a launched instance may belong to another application ID.
 - `app.activate()` explicitly requests foreground activation. `app.show()` restores a default window without requesting activation; `window.show()` restores the named window. An absent default returns `WINDOW_NOT_FOUND`; an ambiguous default returns `AMBIGUOUS_WINDOW`.
+
+<a id="known-application-aliases"></a>
+### Known application aliases
+
+The maintained list in [KnownApplications.cs](native/entry/KnownApplications.cs) maps these executable layouts to their Start menu IDs. It applies only when a window has no explicit or package AUMID, or when selecting an explicit executable path. An existing AUMID takes precedence.
+
+| Application | Paths below an installation directory | Shared ID |
+|---|---|---|
+| Feishu | `Feishu\Feishu.exe`, `Feishu\app\Feishu.exe`, `Feishu\<version>\Feishu.exe` | `com.electron.Feishu` |
+| GitHub Desktop | `GitHubDesktop\GitHubDesktop.exe`, `GitHubDesktop\app-<version>\GitHubDesktop.exe` | `com.squirrel.GitHubDesktop.GitHubDesktop` |
+
+`<version>` has three or four numeric components separated by dots. Installation parents may vary; the product directory, executable name and listed subdirectory layout must match, ignoring path case. Other executables, including `Update.exe`, uninstallers and helpers, do not inherit this mapping. Directory membership, process ancestry and signing do not extend it. See the [Windows identity decision](../../../.agents/notes/implemented/architecture/2026-11-25-windows-cua-application-aliases.md) and [upgrade guide](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.md).
 
 <a id="interaction-rules"></a>
 ## Interaction rules

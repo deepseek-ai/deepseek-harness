@@ -1,4 +1,4 @@
-// Each observation and input revalidates window ownership and the authorized application identity.
+// Window state trusts a valid HWND after its initial application association.
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,10 +12,10 @@ internal readonly record struct WindowGeometry(Win32.Rect Pixels, uint Dpi)
     internal Bounds Bounds => new(Pixels.Left, Pixels.Top, Pixels.Width, Pixels.Height);
 }
 
-internal sealed class WindowState(ResolvedWindow admitted)
+internal sealed class WindowState(nint handle)
 {
     internal nint Id => Handle;
-    internal nint Handle { get; } = admitted.Handle;
+    internal nint Handle { get; } = handle;
     private WindowGeometry? observation;
 
     internal void RequireCurrent(AppState app, RequestContext context)
@@ -23,10 +23,6 @@ internal sealed class WindowState(ResolvedWindow admitted)
         context.Check();
         if (!Win32.IsWindow(Handle))
             throw Remove(app, "The selected window is no longer available; read fresh application state");
-        var current = DesktopWindows.ResolveWindow(Handle, context);
-        if (current is null || current.ProcessId != admitted.ProcessId || current.Started != admitted.Started
-            || !app.Owns(current))
-            throw Remove(app, "The window owner or application identity changed; select a fresh application window");
     }
 
     // A stale window and its snapshots must not remain selectable after a direct operation detects the change.
@@ -110,20 +106,17 @@ internal static class Windows
         foreach (var handle in app.Windows.Keys.ToArray())
         {
             context.Check();
-            try { app.Windows[handle].RequireCurrent(app, context); }
-            catch (NativeFailure error) when (error.Code is "WINDOW_CHANGED" or "PERMISSION_DENIED" or "APP_NOT_FOUND")
-            {
-                app.Windows.Remove(handle);
-                app.Snapshots.Remove(handle);
-            }
+            if (Win32.IsWindow(handle)) continue;
+            app.Windows.Remove(handle);
+            app.Snapshots.Remove(handle);
         }
         var observation = DesktopWindows.Observe(context, app.Windows.Keys.ToHashSet());
         foreach (var window in observation.Windows)
         {
             context.Check();
-            if (!app.Owns(window)) continue;
+            if (!string.Equals(window.AppId, app.AppId, StringComparison.Ordinal)) continue;
             app.Snapshots.Remove(window.Handle);
-            app.Windows[window.Handle] = new WindowState(window);
+            app.Windows[window.Handle] = new WindowState(window.Handle);
         }
         return app.Windows.Values.OrderBy(window => (long)window.Handle).ToArray();
     }
@@ -132,6 +125,7 @@ internal static class Windows
     {
         if (app.Windows.TryGetValue(id, out var known))
         {
+            // Cached windows retain their initial application association while the HWND remains valid.
             known.Geometry(app, context);
             return known;
         }
@@ -139,11 +133,11 @@ internal static class Windows
         if (!DesktopWindows.Eligible(id))
             throw new NativeFailure("WINDOW_CHANGED", "Select a current window from getWindows");
         var observed = DesktopWindows.ResolveWindow(id, context);
-        if (observed is null || !app.Owns(observed))
+        if (observed is null || !string.Equals(observed.AppId, app.AppId, StringComparison.Ordinal))
             throw new NativeFailure("WINDOW_CHANGED", "The window does not belong to the authorized application; read fresh application state");
         // A newly appeared explicit window may join the application; no default target is inferred.
         app.Snapshots.Remove(id);
-        var window = new WindowState(observed);
+        var window = new WindowState(observed.Handle);
         app.Windows[id] = window;
         return window;
     }

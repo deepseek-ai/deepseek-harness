@@ -36,7 +36,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
     private static nint? WindowId(JsonElement value) => value.TryGetProperty("windowId", out var id) ? ParseWindowId(id) : null;
     private static string[] Modifiers(JsonElement value) => value.TryGetProperty("modifiers", out var items) ? items.EnumerateArray().Select(item => item.GetString()!).ToArray() : [];
 
-    // Window-scoped operations revalidate the target's process and authorized application identity.
+    // Window-scoped operations use the HWND admitted to the selected application.
     private static WindowState Selected(AppState app, JsonElement parameters, RequestContext context)
     {
         if (!parameters.TryGetProperty("windowId", out var raw))

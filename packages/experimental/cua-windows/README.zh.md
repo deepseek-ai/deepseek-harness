@@ -1,5 +1,5 @@
 ---
-description: "按 AUMID 发现 Windows 应用，并观察或操作明确选择的窗口。"
+description: "发现 Windows 应用、管理应用授权，并观察或操作明确选择的窗口。"
 kind: "package-reference"
 ---
 
@@ -33,9 +33,9 @@ kind: "package-reference"
 
 `cua.listApps()` 从当前 Windows 会话中符合条件的可见顶层窗口聚合应用。名称搜索和空查询的 `cua.findApps` 返回通过 AppsFolder 枚举的 StartApps 目录中的已安装应用。窗口观察用于补充这些目录条目的运行状态和已知可执行文件路径。目录可能不完整；找不到应用时，可以询问用户其位置。
 
-每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是不透明的选择标识；将返回值原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。应用展示使用 Shell 名称和图标；未注册程序使用文件说明或文件名。相同 AUMID 的应用共用一个条目；不会仅因同名合并应用。
+发现结果包含 `id`、`identity: null` 和 `isRunning`；`listApps` 使用 `name`，`findApps` 使用 `displayName`。窗口 ID 依次取其显式 AUMID、打包应用的进程 AUMID、可执行文件路径。路径回退先应用[已知应用别名](#known-application-aliases)，之后只有完全相同的 ID 字符串才合并，比较区分大小写。将返回的 ID 原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。Shell 名称、进程名和可执行文件元数据提供显示名称；显示名称不决定身份。
 
-`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。运行中映像的路径规范化失败时，应用发现使用 Windows 报告的可执行文件路径。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
+`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，按名称或空查询调用的 `findApps` 请求失败。`listApps` 和显式路径选择不读取应用目录。`cua.getState().apps` 来自 `listApps()`。
 
 `cua.findApps(query)` 对显示名称、ID 和已知可执行文件路径做不区分大小写的字面子串匹配，或直接检查 `.exe` 绝对路径。`""` 和 `null` 返回目录中的全部应用。非空查询须包含非空白字符，并受 `maxAppMatches` 限制，默认 20；匹配过多时返回 `AMBIGUOUS_APP`。响应大小和时间限制适用于所有查询。
 
@@ -43,21 +43,31 @@ kind: "package-reference"
 
 在当前会话中首次选择尚未授权的应用时，审批窗口提供“拒绝”和“本会话允许”。如果当前 profile 可以保存授权，窗口还会显示“始终允许”，并将它作为主按钮高亮。选择“始终允许”后，同一 profile 的其他会话可以访问该应用，直到用户在自动电脑操作插件页撤销授权。在审批详情区按 Enter 只允许当前会话访问。
 
-应用授权依据 AUMID，与 macOS 按 bundle identifier 授权的取舍一致。同一 AUMID 的不同版本和副本共享授权，不区分可执行文件位置或签名。窗口属性与打包应用的进程元数据提供显式 AUMID；Windows Shell 补充解析未在这些位置暴露标识的桌面应用。Shell 将启动器与其窗口关联到同一 AUMID 时，两者共用授权。没有应用标识时，授权依据规范化的可执行文件路径；这种选择也接纳该可执行文件在启动后报告 AUMID 的窗口。搜索与已知路径选择复用同一决定；一个路径承载多个应用 ID 时返回 `AMBIGUOUS_APP`。
+应用授权依据选择的 ID。同一 AUMID 的不同版本和副本共享授权，不区分可执行文件位置或签名。显式路径选择使用规范化的可执行文件路径，仅应用下方的已知应用别名，不搜索 AUMID。其他启动器和实际运行的可执行文件可能需要分别授权。AUMID 和路径别名都不验证发布者或签名。
 
 审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。在同一会话内复用应用授权时，保留已保存的名称和图标查询目标。只有明确选择“始终允许”才保存跨会话授权，已有会话授权不会升级。选择可执行文件路径时保留该启动目标，即使它的应用 ID 与其他副本相同。
 
-桌面应用解析使用 Windows 8+ Shell 的 `IApplicationResolver` 接口，[System Informer](https://github.com/winsiderss/systeminformer/blob/master/phlib/appresolver.c) 也使用此接口。该接口未公开文档；解析器不可用时，应用发现会明确失败。未注册且无法发现 AUMID 的可执行文件使用路径，因此移动它，或选择 Shell 未关联的启动器，可能需要再次授权。AUMID 是应用标识，不是发布者或签名验证。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
-
 - `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。尚未运行的应用在授权后通过 Explorer 启动。
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口。已接纳的 HWND 在有效期间保留在列表中，包括隐藏窗口。
-- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。每次观察和输入均检查所属进程、进程启动时间及应用身份。句柄复用或身份改变会使窗口及其快照失效。
+- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。Windows 在首次接纳时检查应用关联，之后在 HWND 有效期间信任该句柄；后续观察和输入不比较目标 PID、进程启动时间或应用身份。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
 - 连续读取同一窗口时传入 `showDiff: true`，可查看 UI Automation 的结构、属性和文本通知。首次读取、取消读取后的下一次观察、更换窗口或读取选项、树被截断时，返回本次读到的树。Windows 提供方配置 `maxDiffNotifications` 限制两次读取之间的通知条数，默认 50 条，相同事件类型和 RuntimeId 只计一次。超过条数上限，或非空摘要的 UTF-8 字节数达到当前树的大小时，首行显示 `Diff too large. Showing the current tree instead.`，下一行起返回本次读取范围内的树。能定位到当前元素的通知会附上元素信息，删除通知可能带有旧元素的 ID。控件可能漏报变化，也可能只报告整个容器。省略该参数或传 `false` 可读取当前树并停止监听。关闭连接时，退订仍在 UIA 线程上排队也能收到关闭应答。退订抛错时，helper 记录一次诊断。
 - 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
 - `app.launch()` 请求启动应用的新实例，等待所选应用的 HWND 集合变化或启动等待时限到达。单例程序可能仅激活已有实例，启动的实例也可能归属于另一个应用 ID。
 - `app.activate()` 显式请求前台激活。`app.show()` 恢复默认窗口而不请求激活；`window.show()` 恢复指定窗口。没有默认窗口时返回 `WINDOW_NOT_FOUND`，无法唯一确定默认窗口时返回 `AMBIGUOUS_WINDOW`。
+
+<a id="known-application-aliases"></a>
+### 已知应用别名
+
+[KnownApplications.cs](native/entry/KnownApplications.cs) 中维护的名单将下列可执行文件布局映射到对应的开始菜单 ID。映射仅用于没有显式或打包应用 AUMID 的窗口，以及显式可执行文件路径选择。已有 AUMID 优先。
+
+| 应用 | 安装目录下的路径 | 共享 ID |
+|---|---|---|
+| 飞书 | `Feishu\Feishu.exe`、`Feishu\app\Feishu.exe`、`Feishu\<version>\Feishu.exe` | `com.electron.Feishu` |
+| GitHub Desktop | `GitHubDesktop\GitHubDesktop.exe`、`GitHubDesktop\app-<version>\GitHubDesktop.exe` | `com.squirrel.GitHubDesktop.GitHubDesktop` |
+
+`<version>` 由点分隔的三段或四段数字组成。安装位置的上级目录可以不同，但产品目录、可执行文件名和列出的子目录布局必须匹配，路径比较不区分大小写。其他可执行文件，包括 `Update.exe`、卸载程序和辅助程序，不继承此映射。目录归属、进程祖先和签名都不扩大映射范围。参见 [Windows 身份决策](../../../.agents/notes/implemented/architecture/2026-11-25-windows-cua-application-aliases.zh.md)和[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
 
 <a id="interaction-rules"></a>
 ## 交互规范

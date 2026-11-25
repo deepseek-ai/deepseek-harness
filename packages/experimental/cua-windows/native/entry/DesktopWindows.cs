@@ -1,4 +1,4 @@
-// Shell and window AUMIDs identify applications across versions and copies.
+// AppsFolder AUMID enumeration, exact-ordinal merge, and exact window identity resolution.
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -7,13 +7,11 @@ using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
 
-internal sealed record ShellApplication(string AppId, string DisplayName, string? ExecutablePath);
+internal sealed record ShellApplication(string AppId, string DisplayName, bool HasShellName);
 internal sealed record ShellCatalog(ShellApplication[] Applications, int Omitted);
-internal sealed record ResolvedWindow(nint Handle, string AppId, string ExecutablePath, string ProcessName,
-    uint ProcessId, long Started);
+internal sealed record ResolvedWindow(nint Handle, string AppId, string? ExecutablePath, string ProcessName);
 internal sealed record WindowObservation(ResolvedWindow[] Windows, int Denied, int Gone);
-internal sealed record CatalogApplication(string AppId, string DisplayName, string[] ExecutablePaths, bool IsRunning,
-    string IconPath, string LaunchTarget);
+internal sealed record CatalogApplication(string AppId, string DisplayName, string? ExecutablePath, bool IsRunning);
 
 internal static class DesktopWindows
 {
@@ -52,7 +50,7 @@ internal static class DesktopWindows
         if (string.IsNullOrEmpty(query)) matches = await Discover(context, includeWindowOnly: false);
         else if (Path.IsPathFullyQualified(query))
         {
-            var application = FindExecutable(query, await Discover(context, includeWindowOnly: true));
+            var application = FindExecutable(query, Observe(context).Windows);
             matches = application is null ? [] : [application];
         }
         else matches = FindMatches(await Discover(context, includeWindowOnly: false), query, maxAppMatches, context.Cancellation);
@@ -73,7 +71,7 @@ internal static class DesktopWindows
             cancellation.ThrowIfCancellationRequested();
             if (!application.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
                 && !application.AppId.Contains(query, StringComparison.OrdinalIgnoreCase)
-                && !application.ExecutablePaths.Any(path => path.Contains(query, StringComparison.OrdinalIgnoreCase))) continue;
+                && application.ExecutablePath?.Contains(query, StringComparison.OrdinalIgnoreCase) != true) continue;
             matches.Add(application);
             if (matches.Count > maxAppMatches)
                 throw new NativeFailure("AMBIGUOUS_APP", "Too many matching applications; use a more specific name or path");
@@ -82,29 +80,36 @@ internal static class DesktopWindows
         return matches.ToArray();
     }
 
-    internal static CatalogApplication? FindExecutable(string query, IReadOnlyList<CatalogApplication> applications)
+    internal static CatalogApplication? FindExecutable(string query, IReadOnlyList<ResolvedWindow> windows)
     {
         string path;
         try { path = Applications.ResolveExecutable(query); }
         catch (NativeFailure error) when (error.Code is "APP_NOT_FOUND" or "INVALID_ARGUMENT") { return null; }
-        var matches = applications.Where(app => app.ExecutablePaths.Contains(path, StringComparer.OrdinalIgnoreCase)).DistinctBy(app => app.AppId).ToArray();
-        if (matches.Length > 1)
-            throw new NativeFailure("AMBIGUOUS_APP", "This executable hosts multiple applications; use an exact id from listApps or findApps");
-        return matches.SingleOrDefault() is { } match ? match with { LaunchTarget = path }
-            : new(path, Applications.DisplayName(path), [path], false, path, path);
+        var appId = KnownApplications.ResolvePath(path);
+        return new(appId, Applications.DisplayName(path), path,
+            windows.Any(window => string.Equals(window.AppId, appId, StringComparison.Ordinal)));
     }
 
     internal static async Task<AppState> Select(string selector, RequestContext context)
     {
         context.Check();
+        if (Path.IsPathFullyQualified(selector))
+        {
+            var path = Applications.ResolveExecutable(selector);
+            var appId = KnownApplications.ResolvePath(path);
+            var name = Applications.DisplayName(path);
+            var windows = Observe(context).Windows;
+            context.Check();
+            return new AppState(Guid.NewGuid().ToString("N"), appId, name,
+                ApplicationAuthorization.Create(appId, name, path),
+                windows.Any(window => string.Equals(window.AppId, appId, StringComparison.Ordinal)), path);
+        }
         var applications = await Discover(context, includeWindowOnly: true);
-        var application = Path.IsPathFullyQualified(selector)
-            ? FindExecutable(selector, applications) ?? throw new NativeFailure("APP_NOT_FOUND", "The selected executable does not exist")
-            : SelectApplication(applications, selector);
+        var application = SelectApplication(applications, selector);
         context.Check();
         return new AppState(Guid.NewGuid().ToString("N"), application.AppId, application.DisplayName,
-            ApplicationAuthorization.Create(application.AppId, application.DisplayName, application.ExecutablePaths.FirstOrDefault(), application.IconPath),
-            application.IsRunning, application.LaunchTarget);
+            ApplicationAuthorization.Create(application.AppId, application.DisplayName, @"shell:AppsFolder\" + application.AppId),
+            application.IsRunning, @"shell:AppsFolder\" + application.AppId);
     }
 
     private static async Task<CatalogApplication[]> Discover(RequestContext context, bool includeWindowOnly)
@@ -149,18 +154,8 @@ internal static class DesktopWindows
                 string? aumid = property as string;
                 string? name = displayName as string;
                 if (string.IsNullOrWhiteSpace(aumid)) { omitted++; continue; }
-                string? target = item.ExtendedProperty("System.Link.TargetParsingPath") as string;
-                string? executable = null;
-                if (!string.IsNullOrWhiteSpace(target) && Path.IsPathFullyQualified(target)
-                    && string.Equals(Path.GetExtension(target), ".exe", StringComparison.OrdinalIgnoreCase))
-                {
-                    try { executable = Applications.ResolveExecutable(target); }
-                    catch (NativeFailure error) when (error.Code is "APP_NOT_FOUND" or "PERMISSION_DENIED" or "APP_IDENTITY_UNAVAILABLE")
-                    {
-                        // The Shell AUMID still identifies entries without readable executable metadata.
-                    }
-                }
-                applications.Add(new(aumid, string.IsNullOrWhiteSpace(name) ? aumid : name, executable));
+                var hasName = !string.IsNullOrWhiteSpace(name);
+                applications.Add(new(aumid, hasName ? name! : aumid, hasName));
             }
             return new(applications.ToArray(), omitted);
         }
@@ -180,29 +175,64 @@ internal static class DesktopWindows
     {
         if (string.IsNullOrEmpty(selector))
             throw new NativeFailure("INVALID_ARGUMENT", "An exact application id from listApps or an absolute .exe file path is required");
-        var exact = applications.FirstOrDefault(application => application.AppId == selector);
-        if (exact is not null) return exact;
+        foreach (var application in applications)
+            if (string.Equals(application.AppId, selector, StringComparison.Ordinal)) return application;
         throw new NativeFailure("APP_NOT_FOUND", "Use an exact application id from listApps or an existing absolute .exe file path");
     }
 
     private static CatalogApplication[] Merge(ShellApplication[] shellApplications, ResolvedWindow[] windows, bool includeWindowOnly)
     {
-        var applications = new Dictionary<string, CatalogApplication>(StringComparer.Ordinal);
+        var applications = new Dictionary<string, Builder>(StringComparer.Ordinal);
         foreach (var shell in shellApplications)
         {
-            var matches = windows.Where(window => window.AppId == shell.AppId).ToArray();
-            applications.TryAdd(shell.AppId, new(shell.AppId, shell.DisplayName,
-                matches.Select(window => window.ExecutablePath).Concat(shell.ExecutablePath is { } path ? [path] : [])
-                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), matches.Length != 0,
-                @"shell:AppsFolder\" + shell.AppId, @"shell:AppsFolder\" + shell.AppId));
+            if (string.IsNullOrEmpty(shell.AppId)) continue;
+            if (!applications.TryGetValue(shell.AppId, out var existing))
+                applications.Add(shell.AppId, new(shell.AppId, shell.DisplayName, shell.HasShellName, shellNamed: true));
+            else existing.PreferShellName(shell.DisplayName, shell.HasShellName);
         }
-        if (includeWindowOnly) foreach (var group in windows.GroupBy(window => window.AppId, StringComparer.Ordinal))
+        foreach (var window in windows.OrderBy(window => window.AppId, StringComparer.Ordinal)
+                     .ThenBy(window => (long)window.Handle))
         {
-            var window = group.First();
-            applications.TryAdd(window.AppId, new(window.AppId, Applications.DisplayName(window.ExecutablePath),
-                group.Select(item => item.ExecutablePath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(), true, window.ExecutablePath, window.ExecutablePath));
+            if (string.IsNullOrEmpty(window.AppId) || string.IsNullOrEmpty(window.ProcessName)) continue;
+            if (!applications.TryGetValue(window.AppId, out var builder))
+            {
+                if (!includeWindowOnly) continue;
+                builder = new(window.AppId, window.ProcessName, hasShellName: false, shellNamed: false);
+                applications.Add(window.AppId, builder);
+            }
+            builder.Add(window);
         }
-        return applications.Values.OrderBy(application => application.AppId, StringComparer.Ordinal).ToArray();
+        return applications.Values.Select(builder => builder.Build())
+            .OrderBy(application => application.AppId, StringComparer.Ordinal).ToArray();
+    }
+
+    private sealed class Builder(string appId, string displayName, bool hasShellName, bool shellNamed)
+    {
+        private readonly HashSet<string> executablePaths = new(StringComparer.Ordinal);
+        private readonly HashSet<string> processNames = new(StringComparer.Ordinal);
+        private string shellDisplayName = displayName;
+        private bool shellNameProvided = hasShellName;
+
+        internal void PreferShellName(string candidate, bool provided)
+        {
+            if (provided && !shellNameProvided) { shellDisplayName = candidate; shellNameProvided = true; }
+            else if (provided == shellNameProvided && string.CompareOrdinal(candidate, shellDisplayName) < 0)
+                shellDisplayName = candidate;
+        }
+
+        internal void Add(ResolvedWindow window)
+        {
+            if (!string.IsNullOrEmpty(window.ExecutablePath)) executablePaths.Add(window.ExecutablePath);
+            processNames.Add(window.ProcessName);
+        }
+
+        internal CatalogApplication Build()
+        {
+            var name = shellNamed ? shellDisplayName
+                : processNames.Count == 0 ? shellDisplayName : processNames.Min(StringComparer.Ordinal)!;
+            var executablePath = executablePaths.Count == 1 ? executablePaths.First() : null;
+            return new(appId, name, executablePath, processNames.Count != 0);
+        }
     }
 
     // Supplied HWNDs already belong to the caller's application and need no process metadata lookup.
@@ -221,7 +251,6 @@ internal static class DesktopWindows
                 else windows.Add(window);
             }
             catch (NativeFailure error) when (error.Code == "PERMISSION_DENIED") { denied++; }
-            catch (NativeFailure error) when (error.Code is "APP_NOT_FOUND" or "STALE_APP") { gone++; }
         }
         return new(windows.ToArray(), denied, gone);
     }
@@ -269,24 +298,19 @@ internal static class DesktopWindows
             var processName = ReadProcessName(processId);
             if (string.IsNullOrEmpty(processName)) return null;
             context.Check();
-            var appId = ApplicationAuthorization.AsAumid(ReadWindowAumid(handle, context))
-                ?? ApplicationAuthorization.AsAumid(ReadProcessAumid(process, context))
-                ?? ApplicationAuthorization.AsAumid(context.Sta.InvokeSync(_ => ApplicationResolver.ForWindow(handle), context.Cancellation));
-            var image = ReadExecutablePath(process, context);
-            if (image is null) return null;
-            string executablePath;
-            try { executablePath = Applications.CanonicalPath(image); }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException
-                or NativeFailure { Code: "APP_IDENTITY_UNAVAILABLE" })
+            var windowAumid = ReadWindowAumid(handle, context);
+            string? executablePath = null;
+            string? appId = null;
+            if (!string.IsNullOrEmpty(windowAumid)) appId = windowAumid;
+            else
             {
-                // The process-reported path remains usable when its image cannot be reopened.
-                executablePath = image;
+                appId = ReadProcessAumid(process, context);
+                if (string.IsNullOrEmpty(appId)) executablePath = ReadExecutablePath(process, context);
+                appId ??= executablePath is null ? null : KnownApplications.ResolvePath(executablePath);
             }
-            if (!Win32.GetProcessTimes(process, out var started, out _, out _, out _)) throw Unavailable();
-            Win32.GetWindowThreadProcessId(handle, out var currentOwner);
-            if (currentOwner != rawProcessId) return null;
+            if (appId is null) return null;
             context.Check();
-            return new(handle, appId ?? executablePath, executablePath, processName, rawProcessId, started);
+            return new(handle, appId, executablePath, processName);
         }
         finally { Win32.CloseHandle(process); }
     }

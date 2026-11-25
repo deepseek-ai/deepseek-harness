@@ -1,14 +1,12 @@
 /** Opt-in real desktop admission through the shipped managed subprocess provider. */
 import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
-import { NativeClient, NativeError } from '@deepseek-ai/dsh-cua/native-client'
+import { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
 import { AppResult, AppsResult, NativeAppsResult, StateResult } from '@deepseek-ai/dsh-cua/protocol'
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { once } from 'node:events'
-import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
-import { createServer, type Socket } from 'node:net'
+import { cp, copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
@@ -54,25 +52,6 @@ it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or n
   for (const query of ['', null]) {
     const all = AppsResult.parse(await client.request('findApps', { query, maxAppMatches: 1 }, new AbortController().signal))
     expect(all.length).toBeGreaterThan(0)
-  }
-  const selectedSchema = z.object({ authorization: z.object({
-    id: z.string(), name: z.string(), executablePath: z.string().optional(), iconPath: z.string(),
-  }),
-  applicationIcon: z.string().optional() })
-  for (const app of installed.filter(app => app.isRunning)) {
-    if (app.id === undefined) throw new Error('A running application lacks a selector')
-    const selected = selectedSchema.parse(await client.request('getApp', { selector: app.id }, signal))
-    expect(selected.authorization.name).toBe(app.displayName)
-    if (selected.authorization.executablePath === undefined) continue
-    const found = AppsResult.parse(await client.request('findApps', { query: selected.authorization.executablePath, maxAppMatches: 1000 }, signal)
-      .catch((error: unknown) => {
-        // Several hosted apps may intentionally share one executable; the path must then refuse selection.
-        if (error instanceof NativeError && error.code === 'AMBIGUOUS_APP') return []
-        throw error
-      }))
-    if (found.length !== 1) continue
-    const same = selectedSchema.parse(await client.request('getApp', { selector: selected.authorization.executablePath }, signal))
-    expect(same.authorization.id).toBe(selected.authorization.id)
   }
 }, 60_000)
 
@@ -121,62 +100,54 @@ it.skipIf(!helperPath)('describes one action argument without an application or 
 }, 60_000)
 
 const fixturePath = process.env.DSH_CUA_DESKTOP_TEST_FIXTURE
-it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
-  'launches an unregistered executable and keeps its windows accessible when its image cannot be reopened',
-  async ({ signal }) => {
-    const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-launch-'))
-    const sockets = new Set<Socket>()
-    const connected = Promise.withResolvers<Socket>()
-    const server = createServer((socket) => { sockets.add(socket); connected.resolve(socket) })
-    const pipe = 'dsh-cua-launch-' + randomUUID()
-    onTestFinished(async () => {
-      const closed = new Promise<void>((resolve, reject) => {
-        server.close((error) => { if (error) reject(error); else resolve() })
-      })
-      for (const socket of sockets) socket.end('close\n')
-      await closed
-      await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-    })
-    const listening = once(server, 'listening')
-    server.listen('\\\\.\\pipe\\' + pipe)
-    await listening
-    await cp(dirname(fixturePath!), directory, { recursive: true })
-    await writeFile(join(directory, 'control-pipe.txt'), pipe)
-    const path = join(directory, basename(fixturePath!))
-    const { client } = await connect()
-    const selected = AppResult.parse(await client.request('getApp', { selector: path }, signal))
-    expect(selected.running).toBe(false)
-    const other = AppResult.parse(await client.request('getApp', { selector: path }, signal))
-    const ready = connected.promise.then(async (socket) => {
-      const reader = createInterface({ input: socket })
-      onTestFinished(() => { reader.close() })
-      const first = await reader[Symbol.asyncIterator]().next()
-      if (first.done) throw new Error('The launched fixture exited before reporting its window')
-      const windowId = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value)).state.window
-      return { windowId, command: async (command: string) => {
-        const changed = once(reader, 'line')
-        socket.write(command + '\n')
-        await changed
-      } }
-    })
-    const [launched, fixture] = await Promise.all([
-      client.request('launchApp', { appHandle: selected.appHandle }, signal), ready,
-    ])
-    expect(launched).toMatchObject({ running: true, dispatched: true })
-    const { windowId } = fixture
-    const params = { appHandle: selected.appHandle, windowId, maxElements: 20, maxDepth: 5 }
-    expect(StateResult.parse(await client.request('getState', { ...params, appHandle: other.appHandle }, signal)).tree)
-      .toContain('DSH CUA owned test window')
-    expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
-    await fixture.command('identity-a')
-    await fixture.command('lock-image')
-    expect(NativeAppsResult.parse(await client.request('listApps', {}, signal)).length).toBeGreaterThan(0)
-    expect(AppsResult.parse(await client.request('findApps', { query: null, maxAppMatches: 1 }, signal)).length).toBeGreaterThan(0)
-    expect(AppResult.parse(await client.request('getApp', { selector: 'DSH.Fixture.A' }, signal)).running).toBe(true)
-    expect(await client.request('listWindows', { appHandle: selected.appHandle }, signal))
-      .toEqual(expect.arrayContaining([expect.objectContaining({ windowId })]))
-    expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath).for([
+  { directory: 'Feishu', version: 'app', appId: 'com.electron.Feishu' },
+  { directory: 'GitHubDesktop', version: 'app-3.4.12', appId: 'com.squirrel.GitHubDesktop.GitHubDesktop' },
+])('shares consent for listed $directory executables and retains an admitted HWND', { timeout: 60_000 }, async ({ directory, version, appId }, { signal }) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-cua-known-'))
+  onTestFinished(() => rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  const root = join(temporary, directory)
+  const runtimeDirectory = join(root, version)
+  await cp(dirname(fixturePath!), runtimeDirectory, { recursive: true })
+  const launcherPath = join(root, directory + '.exe')
+  const runtimePath = join(runtimeDirectory, directory + '.exe')
+  await copyFile(fixturePath!, launcherPath)
+  await copyFile(join(runtimeDirectory, basename(fixturePath!)), runtimePath)
+  const { client } = await connect()
+  const selection = AppResult.extend({ authorization: z.object({ id: z.string(), persistable: z.literal(true), iconPath: z.string() }) })
+  const launcher = selection.parse(await client.request('getApp', { selector: launcherPath }, signal))
+  const runtime = selection.parse(await client.request('getApp', { selector: runtimePath }, signal))
+  expect(runtime.authorization.id).toBe(launcher.authorization.id)
+  expect(AppsResult.parse(await client.request('findApps', { query: runtimePath, maxAppMatches: 1 }, signal)))
+    .toEqual([expect.objectContaining({ id: appId })])
+  const fixture = spawn(runtimePath, [], { windowsHide: true })
+  const exited = once(fixture, 'exit')
+  const reader = createInterface({ input: fixture.stdout })
+  onTestFinished(async () => {
+    const deadline = setTimeout(() => fixture.kill(), 5000)
+    try { fixture.stdin.end('close\n'); await exited }
+    finally { clearTimeout(deadline); reader.close() }
   })
+  const first = await reader[Symbol.asyncIterator]().next()
+  if (first.done) throw new Error('The desktop fixture exited before reporting its window')
+  const { state: { window: windowId } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
+  const params = { appHandle: launcher.appHandle, windowId, maxElements: 20, maxDepth: 5 }
+  expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+  const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
+  expect(listed.filter(app => app.id === appId)).toHaveLength(1)
+  const byId = selection.parse(await client.request('getApp', { selector: appId }, signal))
+  expect(byId.authorization.id).toBe(launcher.authorization.id)
+  const changed = once(reader, 'line')
+  fixture.stdin.write('identity\n')
+  await changed
+  expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+  expect(await client.request('listWindows', { appHandle: launcher.appHandle }, signal))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ windowId })]))
+  expect(NativeAppsResult.parse(await client.request('listApps', {}, signal)))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'DSH.Fixture.' + windowId })]))
+  await expect(client.request('getState', { ...params, appHandle: runtime.appHandle }, signal))
+    .rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
+})
 
 it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
   'reports a UIA change from a private editor and resolves its ID in the new snapshot',
@@ -194,19 +165,8 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const first = await reader[Symbol.asyncIterator]().next()
     if (first.done) throw new Error('The desktop fixture exited before reporting its window')
     const { state: { window: windowId } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
-    const identified = once(reader, 'line')
-    fixture.stdin.write('identity-b\n')
-    await identified
     const { client, channel } = await connect()
-    const selected = await client.request('getApp', { selector: fixturePath! }, signal)
-    const { appHandle } = AppResult.parse(selected)
-    const authorization = z.object({ authorization: z.object({
-      id: z.string(), name: z.string(), executablePath: z.string(), iconPath: z.string(),
-    }) })
-    const original = authorization.parse(selected).authorization
-    const sameFile = authorization.parse(await client.request('getApp', { selector: fixturePath!.toUpperCase() }, signal)).authorization
-    expect(sameFile.id).toBe(original.id)
-    expect(original.name).not.toBe(original.executablePath)
+    const { appHandle } = AppResult.parse(await client.request('getApp', { selector: fixturePath! }, signal))
     const params = { appHandle, windowId, maxElements: 200, maxDepth: 20 }
     const read = async (showDiff: boolean) => StateResult.parse(await client.request('getState', { ...params, showDiff }, signal))
     // Interrupt after the helper produces its baseline, before the client consumes the reply.
@@ -226,73 +186,4 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     expect(await client.request('listActions', { appHandle, windowId, ...target }, signal)).toEqual(expect.any(Array))
     expect((await read(false)).tree).toContain('CUA notification sample')
     expect((await read(true)).tree).toContain('CUA test text')
-    const changed = once(reader, 'line')
-    fixture.stdin.write('identity-a\n')
-    await changed
-    await expect(read(false)).rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
-    const named = authorization.parse(await client.request('getApp', { selector: fixturePath! }, signal)).authorization
-    expect(named.id).not.toBe(original.id)
-    const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
-    const discovered = listed.find(app => app.id === 'DSH.Fixture.A')
-    if (discovered?.id === undefined) throw new Error('The selected application was not returned by discovery')
-    expect(authorization.parse(await client.request('getApp', { selector: discovered.id }, signal)).authorization.id).toBe(named.id)
-    const iconResult = z.record(z.string(), z.string()).parse(await client.request('applicationIcons', { paths: [named.iconPath] }, signal))
-    expect(iconResult[named.iconPath]).toMatch(/^data:image\/png;base64,/)
-  }, 60_000)
-
-
-it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
-  'shares one application across executable copies and separates a changed window AUMID',
-  async ({ signal }) => {
-    const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-copies-'))
-    const processes: Array<() => Promise<void>> = []
-    onTestFinished(async () => {
-      await Promise.all(processes.map(close => close()))
-      await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-    })
-    const originalDirectory = join(directory, 'original')
-    const copyDirectory = join(directory, 'copy')
-    await cp(dirname(fixturePath!), originalDirectory, { recursive: true })
-    await cp(dirname(fixturePath!), copyDirectory, { recursive: true })
-    const originalPath = join(originalDirectory, basename(fixturePath!))
-    const copyPath = join(copyDirectory, basename(fixturePath!))
-    const start = async (path: string) => {
-      const fixture = spawn(path, [], { windowsHide: true })
-      const exited = once(fixture, 'exit')
-      const reader = createInterface({ input: fixture.stdout })
-      processes.push(async () => {
-        const deadline = setTimeout(() => fixture.kill(), 5000)
-        try { fixture.stdin.end('close\n'); await exited }
-        finally { clearTimeout(deadline); reader.close() }
-      })
-      const first = await reader[Symbol.asyncIterator]().next()
-      if (first.done) throw new Error('The desktop fixture exited before reporting its window')
-      const { state: { window } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
-      const identify = async (identity: 'a' | 'b') => {
-        const changed = once(reader, 'line')
-        fixture.stdin.write('identity-' + identity + '\n')
-        await changed
-      }
-      await identify('a')
-      return { window, identify }
-    }
-    const first = await start(originalPath)
-    const second = await start(copyPath)
-    const { client } = await connect()
-    const selection = AppResult.extend({ authorization: z.object({ id: z.string() }) })
-    const original = selection.parse(await client.request('getApp', { selector: originalPath }, signal))
-    const copy = selection.parse(await client.request('getApp', { selector: copyPath }, signal))
-    expect(copy.authorization.id).toBe(original.authorization.id)
-    const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
-    expect(listed.filter(app => app.id === 'DSH.Fixture.A')).toHaveLength(1)
-    const windows = z.array(z.object({ windowId: z.string() }))
-    const owned = async () => windows.parse(await client.request('listWindows', { appHandle: original.appHandle }, signal))
-    expect((await owned()).map(window => window.windowId)).toEqual(expect.arrayContaining([first.window, second.window]))
-    await second.identify('b')
-    expect((await owned()).map(window => window.windowId)).not.toContain(second.window)
-    await expect(client.request('getState', {
-      appHandle: original.appHandle, windowId: second.window, maxElements: 20, maxDepth: 5,
-    }, signal)).rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
-    const distinct = selection.parse(await client.request('getApp', { selector: copyPath }, signal))
-    expect(distinct.authorization.id).not.toBe(original.authorization.id)
   }, 60_000)

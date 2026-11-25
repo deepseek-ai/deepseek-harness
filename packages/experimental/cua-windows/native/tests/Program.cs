@@ -22,19 +22,18 @@ void Refuses(Action action, string code)
 var editorId = "Fixture.Editor!App";
 var originalPath = Path.GetFullPath("Editor.exe");
 var movedPath = Path.GetFullPath(Path.Combine("moved", "Editor.exe"));
-var original = ApplicationAuthorization.Create(editorId, "Editor", originalPath, originalPath);
-var updated = ApplicationAuthorization.Create(editorId, "Updated Editor", movedPath, movedPath);
+var original = ApplicationAuthorization.Create(editorId, "Editor", originalPath);
+var updated = ApplicationAuthorization.Create(editorId, "Updated Editor", movedPath);
 Check(original.Persistable, "Application consent can be saved");
 Check(original.Id == updated.Id, "Versions and copies declaring the same AUMID share consent");
-Check(original.Id != ApplicationAuthorization.Create("Fixture.Editor!Other", "Other", originalPath, originalPath).Id,
+Check(original.Id != ApplicationAuthorization.Create("Fixture.Editor!Other", "Other", originalPath).Id,
     "Distinct application identifiers do not share consent even at the same executable path");
 Check(original.Id == Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
     System.Text.Encoding.UTF8.GetBytes("windows-aumid\0" + editorId))), "Existing AUMID authorization keys remain stable");
-Check(ApplicationAuthorization.Create(originalPath, "Editor", originalPath, originalPath).Id
-    != ApplicationAuthorization.Create(movedPath, "Editor", movedPath, movedPath).Id,
+Check(ApplicationAuthorization.Create(originalPath, "Editor", originalPath).Id
+    != ApplicationAuthorization.Create(movedPath, "Editor", movedPath).Id,
     "Unidentified applications use separate canonical paths");
-Check(ApplicationAuthorization.AsAumid(originalPath) is null && ApplicationAuthorization.AsAumid(editorId) == editorId,
-    "Shell path fallbacks are not declared application identifiers");
+KnownApplicationChecks.Run(Check);
 
 var handshakeConfig = new JsonObject
 {

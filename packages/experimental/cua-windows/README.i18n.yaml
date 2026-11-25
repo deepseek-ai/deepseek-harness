@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua-windows/README.md
 /:
-  en: d66919d08b144c72
-  zh: 08566047a1f34c68
+  en: de349e7dc6e661fa
+  zh: 3eb8e9dc9ea4d5b7
 /deepseek-ai-dsh-cua-windows:
   en: a1211ae1bdb841b5
   zh: 47b1b00b712658c5
@@ -21,11 +21,14 @@
   en: 13ff5154e3ed57cf
   zh: b6a976028b104068
 /deepseek-ai-dsh-cua-windows/interface-semantics/application-discovery:
-  en: 6cbb2228fe5f3ce3
-  zh: c66efe5321bf43cf
+  en: 3688f415a2383d49
+  zh: 7be7be589c0a2ed2
 /deepseek-ai-dsh-cua-windows/interface-semantics/application-and-window-selection:
-  en: d38c1def13a9a5c7
-  zh: 87f5067cf99b9318
+  en: e52a7587a39c12d7
+  zh: 814f231a967d60f1
+/deepseek-ai-dsh-cua-windows/interface-semantics/known-application-aliases:
+  en: 0ed4c03d4ce57164
+  zh: bd786443948f163b
 /deepseek-ai-dsh-cua-windows/interaction-rules:
   en: cf2de5ea4584e508
   zh: 9e589b0b6d43189a
