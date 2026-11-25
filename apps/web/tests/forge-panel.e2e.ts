@@ -1759,8 +1759,9 @@ it.skipIf(MODE === 'record')('stages, unstages, and restores files of the local 
   const local = page.locator('[data-forge-changes="local"]')
   const files = local.locator('[data-forge-diff-file]')
   const listed = (): Promise<(string | null)[]> => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file')))
-  // The branch line keeps the first entry's status column, which the helper would trim.
-  const status = async (): Promise<string[]> => (await git(project, 'status', '--short', '--branch')).split('\n').slice(1)
+  // The branch line keeps the first entry's status column, which the helper would trim. A plain `git status` holds the
+  // index lock while it refreshes the index, and a write of the view that needs the lock at that moment fails.
+  const status = async (): Promise<string[]> => (await git(project, '--no-optional-locks', 'status', '--short', '--branch')).split('\n').slice(1)
   const scope = async (from: string, to: string): Promise<void> => {
     await local.getByRole('button', { name: from, exact: true }).click()
     await page.getByRole('menuitem', { name: to, exact: true }).click()
@@ -1774,12 +1775,15 @@ it.skipIf(MODE === 'record')('stages, unstages, and restores files of the local 
   await local.getByRole('button', { name: '暂存 README.md', exact: true }).click({ timeout: 20_000 })
   const staged = page.getByRole('alert').filter({ hasText: '已暂存 README.md' })
   await staged.waitFor()
-  await expect.poll(listed).toEqual(['notes.md'])
+  // A settled write and a scope change each read the scope again through the Host, which runs Git several times; the
+  // list waits for that read as long as for the first one.
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['notes.md'])
   expect(await status()).toEqual(['M  README.md', '?? notes.md'])
-  // Undoing returns the index to the edit staged before the write, not to HEAD.
+  // Undoing returns the index to the edit staged before the write, not to HEAD. The view reads the scope again only
+  // after the Host answers the undo, so a listed README means Git has written the index.
   await staged.getByRole('button', { name: '撤销', exact: true }).click()
-  await expect.poll(status).toEqual(['MM README.md', '?? notes.md'])
-  await expect.poll(listed).toEqual(['README.md', 'notes.md'])
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['README.md', 'notes.md'])
+  expect(await status()).toEqual(['MM README.md', '?? notes.md'])
   expect(await git(project, 'show', ':README.md')).toBe('line 1\nline 2\nstaged')
 
   await local.getByRole('button', { name: '全部暂存', exact: true }).click()
@@ -1788,13 +1792,13 @@ it.skipIf(MODE === 'record')('stages, unstages, and restores files of the local 
   expect(await status()).toEqual(['M  README.md', 'A  notes.md'])
 
   await scope('未暂存', '已暂存')
-  await expect.poll(listed).toEqual(['README.md', 'notes.md'])
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['README.md', 'notes.md'])
   await local.getByRole('button', { name: '取消暂存 notes.md', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '已取消暂存 notes.md' }).waitFor()
   await expect.poll(status).toEqual(['M  README.md', '?? notes.md'])
 
   await scope('已暂存', '未暂存')
-  await expect.poll(listed).toEqual(['notes.md'])
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['notes.md'])
   // A narrow pane shows a file's writes only under the pointer, keeps the viewed mark and the menu in place, and offers
   // the writes in the menu.
   await page.setViewportSize({ width: 360, height: 780 })
