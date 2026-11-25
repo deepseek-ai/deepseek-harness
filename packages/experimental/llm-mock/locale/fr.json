@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Modèle simulé",
+    "description": "Répond à chaque appel de modèle par un texte fixe, sans clé de fournisseur."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Modelo simulado",
+    "description": "Responde a cada chamada de modelo com texto fixo, sem chave de provedor."
+  }
+}

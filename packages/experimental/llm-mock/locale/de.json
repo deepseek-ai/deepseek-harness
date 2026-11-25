@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Mock-Modell",
+    "description": "Beantwortet jeden Modellaufruf mit festem Text, ohne Anbieterschlüssel."
+  }
+}

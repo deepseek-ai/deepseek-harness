@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it, type TestContext } from 'vitest'
 import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
-import { HOME_PATCH_PATH, MANIFEST_PATH, packVfsImage } from '../src/pack.ts'
-import { installationManifest, platformHomePatch, profileRoster } from '../src/repository.ts'
+import { HOME_PATCH_PATH, MANIFEST_PATH, packVfsImage, profilePatchPath } from '../src/pack.ts'
+import { installationManifest, platformHomePatch, previewProfilePatch, profileRoster } from '../src/repository.ts'
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 
@@ -27,6 +27,8 @@ describe('profile roster', () => {
       // Rows inserted by optional bundles, including grouped ones.
       '@deepseek-ai/dsh-session-title-all-prompts-llm', '@deepseek-ai/dsh-experimental-inspector',
       '@deepseek-ai/dsh-tool-session-query',
+      // The preview profile patch's keyless model row.
+      '@deepseek-ai/dsh-llm-mock',
     ]))
     expect(new Set(roster).size).toBe(roster.length)
     expect(roster.every(name => name.startsWith('@') || !name.includes('/'))).toBe(true)
@@ -50,6 +52,19 @@ describe('platform home patch', () => {
       id: 'session-persistence-jsonl',
       config: { root: { __jsExpr: "dshHomePath('sessions')" }, compression: 'none' },
     }])
+  })
+})
+
+describe('preview profile patch', () => {
+  it('inserts the mock model row, starts new Agents on it, and keeps the credential prompt closed', () => {
+    const [insert, defaultModel, models] = previewProfilePatch(repoRoot, 'web')
+    expect(insert).toEqual({ insert: [expect.objectContaining({ id: 'llm-mock', name: '@deepseek-ai/dsh-llm-mock' })] })
+    expect(defaultModel).toEqual({ id: 'agent-default-model', config: { provider: 'mock', model: 'mock' } })
+    expect(models).toEqual({ id: 'ui-settings-models', config: { credentialOnboarding: false } })
+  })
+
+  it('omits the rows a profile does not compose', () => {
+    expect(previewProfilePatch(repoRoot, 'headless').map(row => row.id)).toEqual([undefined, 'agent-default-model'])
   })
 })
 
@@ -93,6 +108,17 @@ describe('image layout', () => {
     const text = new TextDecoder().decode(result.files[HOME_PATCH_PATH])
     expect(text).toContain("!!js dshHomePath('sessions')")
     expect(parseEntryYaml(text)).toEqual(homePatch)
+  })
+
+  it('writes the profile patch under the profile directory', (test) => {
+    const { root, installation } = subject(test)
+    const profilePatch = [{ id: 'agent-default-model', config: { provider: 'mock', model: 'mock' } }]
+    const result = packVfsImage({
+      profile: 'web', roster: ['subject'], installation: { name: '@scope/app', manifest: installation },
+      workspaces: new Map([['subject', join(root, 'subject')]]), resolveFrom: root, entries: [], profilePatch,
+    })
+    expect(profilePatchPath('web')).toBe('home/profiles/web/cordis.patch.yml')
+    expect(parseEntryYaml(new TextDecoder().decode(result.files[profilePatchPath('web')]))).toEqual(profilePatch)
   })
 
   it('refuses an installation that is also a roster package', (test) => {

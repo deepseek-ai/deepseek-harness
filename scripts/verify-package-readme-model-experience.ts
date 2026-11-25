@@ -51,6 +51,7 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
  */
 const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/experimental/im-bundle': { kind: 'indirect', reason: 'The application bundle delegates message context and tools to the IM packages.' },
+  'packages/experimental/llm-mock': { kind: 'none', reason: 'The mock route answers every call with fixed text and sends no model request.' },
   'packages/client/config': { kind: 'none', reason: 'Browser configuration types register nothing and add no model input.' },
   'packages/client/script-realm': { kind: 'none', reason: 'Optional browser execution-provider registration contributes no model input.' },
   'packages/client/script-realm-iframe': { kind: 'none', reason: 'Same-origin browser script environments contribute no model input.' },
