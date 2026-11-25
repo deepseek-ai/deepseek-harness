@@ -14,7 +14,11 @@ on:
         description: Open pull request to re-evaluate
         type: string
         required: true
-  workflow_call: {}
+  workflow_call:
+    secrets:
+      DSH_APPROVAL_BOT_TOKEN:
+        description: Approval credential supplied by the called job's protected environment
+        required: true
 
 permissions:
   contents: read

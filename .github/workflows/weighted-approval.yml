@@ -114,3 +114,6 @@ jobs:
       contents: read
       pull-requests: read
     uses: ./.github/workflows/weighted-approval-machine.yml
+    # Forward only this name. The called job receives the value from its protected environment.
+    secrets:
+      DSH_APPROVAL_BOT_TOKEN: ${{ secrets.DSH_APPROVAL_BOT_TOKEN }}
