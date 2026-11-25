@@ -123,8 +123,8 @@ describe('parseBaseBranches', () => {
     '',
   ].join('\r\n')
 
-  it('keeps the listed order, leaving out symbolic refs, the checked-out branch, and other ref kinds', () => {
-    expect(parseBaseBranches(output, 'feat', '', 10)).toEqual({
+  it('keeps the listed order, leaving out symbolic refs, the shown branch, and other ref kinds', () => {
+    expect(parseBaseBranches(output, 'refs/heads/feat', '', 10)).toEqual({
       remote: [
         { ref: 'refs/remotes/origin/main', name: 'origin/main' },
         { ref: 'refs/remotes/upstream/release/2.3', name: 'upstream/release/2.3' },
@@ -134,6 +134,11 @@ describe('parseBaseBranches', () => {
         { ref: 'refs/heads/main', name: 'main' },
       ],
     })
+  })
+
+  it('leaves out a shown remote-tracking branch and keeps a local branch of the same short name', () => {
+    const listed = parseBaseBranches('refs/remotes/origin/main\0\nrefs/heads/origin/main\0\n', 'refs/remotes/origin/main', '', 10)
+    expect(listed).toEqual({ remote: [], local: [{ ref: 'refs/heads/origin/main', name: 'origin/main' }] })
   })
 
   it('keeps names containing the trimmed query in any case, at most limit in each group', () => {

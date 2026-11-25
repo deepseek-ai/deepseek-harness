@@ -57,11 +57,27 @@ describe('changesDefinition', () => {
 })
 
 describe('createChangesStore', () => {
+  it('shows another head with its automatic base and every commit, and the branch scope for a branch', () => {
+    const store = createChangesStore().create()
+    store.actions.navigated('tab-1', 1)
+    store.actions.scoped('tab-1', 'staged')
+    store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
+    store.actions.committed('tab-1', { from: 'a'.repeat(40), to: 'b'.repeat(40) })
+    const related = { kind: 'session', sessionId: brandString<SessionId>('child-1'), name: 'cache', root: '/work/cache' } as const
+    store.actions.headed('tab-1', related)
+    expect(store.getSnapshot().byTab['tab-1']).toMatchObject({ scope: 'staged', head: related, base: null, commits: null })
+    const branch = { kind: 'branch', ref: 'refs/heads/topic', name: 'topic' } as const
+    store.actions.headed('tab-1', branch)
+    expect(store.getSnapshot().byTab['tab-1']).toMatchObject({ scope: 'branch', head: branch })
+    store.actions.headed('tab-1', null)
+    expect(store.getSnapshot().byTab['tab-1']).toMatchObject({ scope: 'branch', head: null })
+  })
+
   it('seeds a tab on its first navigation, keeps its choices, and forgets it', () => {
     const store = createChangesStore().create()
     store.actions.navigated('tab-1', 1)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'branch', base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
+      scope: 'branch', head: null, base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
     })
     store.actions.scoped('tab-1', 'staged')
     store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
@@ -72,7 +88,7 @@ describe('createChangesStore', () => {
     store.actions.filtered('tab-1', 'fixture/exports')
     store.actions.navigated('tab-1', 2)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
+      scope: 'staged', head: null, base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
       hideTests: true, split: false, wrap: false, navigated: 2,
     })
     store.actions.navigated('tab-2', 1)

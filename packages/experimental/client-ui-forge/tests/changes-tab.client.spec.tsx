@@ -29,6 +29,7 @@ import treeCss from '../src/client/ChangedFiles.module.css'
 import threadCss from '../src/client/ReviewThreads.module.css'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeExtensionState, ForgeLensId, ForgeLocalDiff,
+  ForgeRelatedCheckout,
   ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
 import type {
@@ -148,6 +149,11 @@ const BASES: ForgeBaseBranches = {
   remote: [{ ref: 'refs/remotes/origin/main', name: BASE }, { ref: 'refs/remotes/origin/release/2.4', name: 'origin/release/2.4' }],
   local: [TOPIC],
 }
+
+/** Two delegated Sessions share the `cache` worktree; nothing else is related. */
+const RELATED: readonly ForgeRelatedCheckout[] = [{
+  sessionId: brandString<SessionId>('child-1'), root: '/work/repo/.agents/worktrees/cache', branch: 'cache', commit: 'abc1234', labels: ['Add a cache', 'Check the cache'],
+}]
 
 /** Panel state of `/work/repo` on `main` whose `branch` scope changes `src/app.ts` against `origin/main`. */
 const LOCAL_STATE = ready({ local: { base: BASE, files: [{ path: 'src/app.ts', additions: 2, deletions: 2, binary: false }] } })
@@ -316,6 +322,7 @@ function mount(options: MountOptions = {}) {
     localDiff: vi.fn<ChangesTabInjected['localDiff']>(async () => ok(LOCAL)),
     localWrite: vi.fn<ChangesTabInjected['localWrite']>(async () => ok({ undo: 'tree-1' })),
     diffBases: vi.fn<ChangesTabInjected['diffBases']>(async () => ok(BASES)),
+    relatedCheckouts: vi.fn<ChangesTabInjected['relatedCheckouts']>(async () => ok(RELATED)),
     localText: vi.fn<ChangesTabInjected['localText']>(async () => ok(APP_TEXT)),
     changeRequestDiff: vi.fn<ChangesTabInjected['changeRequestDiff']>(async () => ok(CHANGE)),
     changeRequestText: vi.fn<ChangesTabInjected['changeRequestText']>(async () => ok(APP_TEXT)),
@@ -876,7 +883,7 @@ describe('ChangesTab base branch', () => {
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
     await settle()
-    expect(m.faces.diffBases).toHaveBeenCalledWith('', expect.any(AbortSignal))
+    expect(m.faces.diffBases).toHaveBeenCalledWith(null, '', expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref, commits: null }, expect.any(AbortSignal))
@@ -2500,7 +2507,7 @@ describe('ChangesTab commits', () => {
       })
     } })
     await settle()
-    expect(m.faces.localCommits).toHaveBeenCalledWith(null, expect.any(AbortSignal))
+    expect(m.faces.localCommits).toHaveBeenCalledWith(null, null, expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
     await settle()
     fireEvent.click(within(document.body).getByRole('menuitem', { name: /^2222222/ }))
@@ -3333,5 +3340,138 @@ describe('ChangesTab local writes', () => {
     expect(mark()?.querySelector('[data-forge-file-mark]')).toBeNull()
     expect(mark()?.querySelector('svg')).not.toBeNull()
     expect(mark()?.hasAttribute('data-checked')).toBe(true)
+  })
+})
+
+describe('ChangesTab heads', () => {
+  const CACHE = { kind: 'session', sessionId: brandString<SessionId>('child-1') } as const
+  const CACHE_HEAD = { ...CACHE, name: 'cache', root: '/work/repo/.agents/worktrees/cache' }
+  const TOPIC_HEAD = { kind: 'branch', ref: TOPIC.ref, name: 'topic' } as const
+  const head = (m: ReturnType<typeof mount>): HTMLElement | null => m.view.container.querySelector('[data-forge-head]')
+
+  it('shows a related Session\'s checkout chosen in the head picker, read-only and without other plugins\' additions', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]) })
+    await settle()
+    expect(m.view.getByRole('button', { name: en['changes.local.create'] })).toBeTruthy()
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).not.toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch shown: main' }))
+    await settle()
+    expect(m.faces.relatedCheckouts).toHaveBeenCalledTimes(1)
+    // The branches a reader can show are those of the Session's own checkout.
+    expect(m.faces.diffBases).toHaveBeenLastCalledWith(null, '', expect.any(AbortSignal))
+    m.slotCalls.length = 0
+    fireEvent.click(m.view.getByRole('menuitem', { name: /^cache/ }))
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toEqual(CACHE_HEAD)
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: CACHE, base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(head(m)?.textContent).toBe('cache')
+    expect(head(m)?.getAttribute('data-forge-head')).toBe('session:child-1')
+    expect(m.view.getByRole('button', { name: 'Base branch: origin/main' })).toBeTruthy()
+    expect(m.view.getByText(en['diff.base.uncommitted'])).toBeTruthy()
+    expect(m.faces.localCommits).toHaveBeenLastCalledWith(CACHE, null, expect.any(AbortSignal))
+    expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+    expect(m.slotCalls).toEqual([])
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(m.faces.diffBases).toHaveBeenLastCalledWith(CACHE, '', expect.any(AbortSignal))
+    expect(within(document.body).getByText(en['diff.base.note'])).toBeTruthy()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    // The other scopes keep the picker and offer no write in a checkout the Session does not own.
+    act(() => { m.store.actions.scoped(TAB, 'unstaged') })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'unstaged', head: CACHE }, expect.any(AbortSignal))
+    expect(head(m)?.textContent).toBe('cache')
+    expect(m.view.getByText(en['diff.scopeNote.unstaged'])).toBeTruthy()
+    expect(m.view.container.querySelector('[data-forge-write], [data-forge-write-all]')).toBeNull()
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'More actions for app.ts' }))
+    expect(m.view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([en['diff.copyPath']])
+    expect(m.slotCalls).toEqual([])
+  })
+
+  it('shows another branch\'s committed content in the branch scope alone, then the own checkout again', async () => {
+    const m = mount()
+    await settle()
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'branch', head: TOPIC_HEAD, base: null, commits: null })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith(
+      { kind: 'branch', head: { kind: 'branch', ref: TOPIC.ref }, base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(head(m)?.getAttribute('data-forge-head')).toBe('branch:refs/heads/topic')
+    expect(m.view.container.querySelector('[data-forge-scope]')).toBeNull()
+    expect(m.view.queryByText(en['diff.base.uncommitted'])).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(within(document.body).getByText(en['diff.base.noteCommitted'])).toBeTruthy()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    act(() => { m.store.actions.headed(TAB, null) })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    expect(head(m)?.textContent).toBe('main')
+  })
+
+  it('names the base another head compared with only once its changes loaded', async () => {
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async scope => scope.head === undefined ? ok(LOCAL) : new Promise(() => {}))
+    } })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    await settle()
+    expect(m.view.getByRole('button', { name: 'Base branch: Default' })).toBeTruthy()
+  })
+
+  it('offers the Session\'s own checkout when the head is gone', async () => {
+    const gone = { ok: false as const, error: new RemoteError('forgePanel/head-missing', 'gone', {}) }
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async scope => scope.head === undefined ? ok(LOCAL) : gone)
+    } })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(m.view.getByText('cache was not found; it may have been deleted')).toBeTruthy()
+    expect(head(m)?.classList.contains(baseCss.missing ?? '')).toBe(true)
+    expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.head.back'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toBeNull()
+    await settle()
+    expect(m.paths()).toContain('src/app.ts')
+    expect(head(m)?.classList.contains(baseCss.missing ?? '')).toBe(false)
+  })
+
+  it('keeps viewed marks and quoted comments of one head apart from another\'s', async () => {
+    const m = mount()
+    await settle()
+    const viewed = (): HTMLInputElement => within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' })
+    fireEvent.click(viewed())
+    expect(viewed().checked).toBe(true)
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(false)
+    fireEvent.click(viewed())
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(false)
+
+    // A comment quoted from a head records whose code it is.
+    const section = within(m.section('src/app.ts'))
+    fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
+    fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+    fireEvent.change(section.getByRole('textbox'), { target: { value: 'Why?' } })
+    fireEvent.click(section.getByRole('button', { name: 'Add to input' }))
+    expect(m.faces.addReviewToInput.mock.lastCall?.[0].source).toMatchObject({
+      kind: 'local', scope: 'branch', head: { key: 'branch:refs/heads/topic', name: 'topic', root: null },
+    })
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(true)
+    expect(m.section('src/app.ts').textContent).not.toContain('Why?')
   })
 })

@@ -14,7 +14,10 @@ const selection = z.object({
 })
 const recordedSelection = selection.extend({ source: z.discriminatedUnion('kind', [
   selection.shape.source,
-  z.object({ kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null), commits }),
+  z.object({
+    kind: z.literal('local'), scope: z.string(), base: z.string().nullable().default(null), baseRef: z.string().nullable().default(null), commits,
+    head: z.object({ key: z.string(), name: z.string(), root: z.string().nullable() }).exactOptional(),
+  }),
 ]) })
 const record = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('agent'), selection: recordedSelection }),
@@ -277,10 +280,11 @@ export class ReviewQueue {
  * Compare review identity while allowing records from an older PR head to remain visible.
  * @param left - recorded source.
  * @param right - displayed source.
- * @returns whether the sources name the same PR, or the same local scope and base ref, with the same chosen commits.
+ * @returns whether the sources name the same PR, or the same local head, scope and base ref, with the same chosen commits.
  */
 export function sameReviewSource(left: ReviewSource, right: ReviewSource): boolean {
   if (left.commits?.from !== right.commits?.from || left.commits?.to !== right.commits?.to) return false
-  return left.kind === 'local' ? right.kind === 'local' && left.scope === right.scope && left.baseRef === right.baseRef
+  return left.kind === 'local'
+    ? right.kind === 'local' && left.scope === right.scope && left.baseRef === right.baseRef && left.head?.key === right.head?.key
     : right.kind === 'change' && left.url === right.url
 }

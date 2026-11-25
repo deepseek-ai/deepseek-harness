@@ -33,7 +33,7 @@ async function settle(ms = 0): Promise<void> {
 function mount(props: Partial<BaseMenuProps> = {}) {
   const list = props.list ?? vi.fn<BaseMenuProps['list']>(async () => ok(BRANCHES))
   const choose = vi.fn<BaseMenuProps['choose']>()
-  const all: BaseMenuProps = { chosen: null, label: 'origin/main', missing: false, visible: true, t, ...props, list, choose }
+  const all: BaseMenuProps = { chosen: null, label: 'origin/main', missing: false, note: en['diff.base.note'], visible: true, t, ...props, list, choose }
   const view = render(<BaseMenu {...all} />)
   const trigger = (): HTMLElement => view.getByRole('button', { name: `Base branch: ${all.label}` })
   const rows = (): string[] => view.queryAllByRole('menuitem').map(row => row.textContent ?? '')

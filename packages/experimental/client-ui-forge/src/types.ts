@@ -7,6 +7,7 @@ import type {
   ForgeReadiness, ForgeRepository, ForgeViewerFilter,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Git facts for the checkout that contains the Session's current directory. */
 export interface ForgeCheckout {
@@ -378,21 +379,56 @@ export interface ForgeCommitRange {
   readonly to: string
 }
 
-/** Which local changes a diff covers; each reads the Session's checkout through Git. */
+/** A checkout other than the Session's own whose working tree a local scope reads. */
+export interface ForgeRelatedHead {
+  readonly kind: 'session'
+  /** Session delegated from the reading Session, at any depth; the scope reads the checkout of its current directory. */
+  readonly sessionId: SessionId
+}
+
+/** A branch whose committed content the `branch` scope reads; no working tree is involved. */
+export interface ForgeBranchHead {
+  readonly kind: 'branch'
+  /** Full ref name under `refs/heads/` or `refs/remotes/`. */
+  readonly ref: string
+}
+
+/** What the `branch` scope shows in place of the Session's own checkout. */
+export type ForgeLocalHead = ForgeRelatedHead | ForgeBranchHead
+
+/**
+ * Which local changes a diff covers. Without `head` each reads the checkout of the Session's current directory through
+ * Git; with one, the related Session's checkout, or for the `branch` scope a branch's committed content, where HEAD
+ * below names that branch and no uncommitted or untracked file shows.
+ */
 export type ForgeLocalScope =
   /**
    * The working tree and untracked files against a fork point: the merge base of HEAD with the
-   * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
+   * `base` ref, or while `base` is null, the base commit of the worktree the checkout's Session created,
    * else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the changes
    * of those commits between the fork point and HEAD, without uncommitted or untracked files.
    */
-  | { readonly kind: 'branch'; readonly base: string | null; readonly commits: ForgeCommitRange | null }
+  | { readonly kind: 'branch'; readonly head?: ForgeLocalHead; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
-  | { readonly kind: 'uncommitted' }
+  | { readonly kind: 'uncommitted'; readonly head?: ForgeRelatedHead }
   /** The working tree and untracked files against the index. */
-  | { readonly kind: 'unstaged' }
+  | { readonly kind: 'unstaged'; readonly head?: ForgeRelatedHead }
   /** The index against HEAD. */
-  | { readonly kind: 'staged' }
+  | { readonly kind: 'staged'; readonly head?: ForgeRelatedHead }
+
+/** A checkout that Sessions delegated from the reading Session work in, other than the reading Session's own. */
+export interface ForgeRelatedCheckout {
+  /** The first of those Sessions in catalog order; a `session` head names the checkout by it. */
+  readonly sessionId: SessionId
+  /** Canonical top-level directory of the checkout. */
+  readonly root: string
+  /** Checked-out branch, or null when HEAD is detached. */
+  readonly branch: string | null
+  /** Abbreviated commit HEAD names, or null while the checked-out branch has no commit. */
+  readonly commit: string | null
+  /** What each Session working there was asked to do, or its name where no description was recorded, in catalog order. */
+  readonly labels: readonly string[]
+}
 
 /** One hunk of a file diff. */
 export interface ForgeDiffHunk {
@@ -750,6 +786,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/no-fork-point': Record<string, never>
     /** The base branch chosen for the `branch` scope does not exist, as after the branch was deleted. */
     'forgePanel/base-missing': Record<string, never>
+    /**
+     * What a local scope reads in place of the Session's own checkout is gone: the branch was deleted, the related
+     * Session is not delegated from the reading Session, or its directory is no longer a checkout.
+     */
+    'forgePanel/head-missing': Record<string, never>
     /** Filter configuration could not be read completely; no comparison ran. Correct Git settings or the output limit before retrying. */
     'forgePanel/filter-config-failed': Record<string, never>
     /**

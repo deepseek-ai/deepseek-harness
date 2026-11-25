@@ -21,6 +21,8 @@ export interface BaseMenuProps extends PropsLocale<typeof NS> {
   readonly label: string
   /** Whether the chosen branch no longer exists. */
   readonly missing: boolean
+  /** What the comparison covers, under the rows. */
+  readonly note: string
   /** Whether the owning tab is visible; a hidden tab keeps the menu closed. */
   readonly visible: boolean
   /** Read the branches whose names contain `query`; `signal` aborts the read. */
@@ -41,10 +43,10 @@ interface BaseOption {
  * Render the trigger and, while open, the searchable menu. Opening and each
  * search read the branches again; rows already shown follow the search at once
  * until the new listing arrives.
- * @param props - the choice, the trigger label, the listing read, the choose action, and copy.
+ * @param props - the choice, the trigger label, the note, the listing read, the choose action, and copy.
  * @returns the trigger with its portalled menu.
  */
-export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: BaseMenuProps): ReactNode {
+export function BaseMenu({ chosen, label, missing, note, visible, list, choose, t }: BaseMenuProps): ReactNode {
   const [open, setOpen] = useState(false)
   const shown = visible && open
   const { query, setQuery, listing, retry, reset } = useBranchSearch(shown, list)
@@ -130,7 +132,7 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
     >
       <div className={css.root} data-forge-base-menu="">
         <div className={css.rows}>{body}</div>
-        <div className={css.note}>{t('diff.base.note')}</div>
+        <div className={css.note}>{note}</div>
       </div>
     </Menu>
   )

@@ -129,6 +129,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
     localDiff: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     localWrite: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     diffBases: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
+    relatedCheckouts: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     localText: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     localCommits: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     changeRequestDiff: (url, commits, signal) => remote.reviewDiff(url, commits, signal),
