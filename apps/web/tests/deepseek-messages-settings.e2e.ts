@@ -91,10 +91,8 @@ it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', '
       const clear = card.getByRole('button', { name: '清除 API 密钥', exact: true })
       await clear.click()
       expect(await key.getAttribute('placeholder')).toBe(`留空使用环境认证（${envRef}）`)
-      // The field reads as it does without a saved key. The page has read only the saved
-      // reference, so the environment fallback is unconfirmed until the removal is applied.
-      await card.getByText('环境凭据状态尚未确认', { exact: true }).waitFor()
-      expect(await card.getByText(/保存以清除/).count()).toBe(0)
+      // Only the placeholder speaks for the cleared field; no hint sits below it.
+      expect(await card.locator('[id$="-credential-hint"]').count()).toBe(0)
       expect((await runtime.credentials.resolve(ref))?.source).toBe('file')
       if (messages) await compareOrRefreshGolden(join(EXPECTED, 'clear-key.expected.md'),
         await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
@@ -166,9 +164,8 @@ it.skipIf(webSnapshotMode() === 'record').each([{ name: 'Chromium', engine: chro
       await savedPreview.waitFor()
       expect(await key.count()).toBe(0)
       await clear.click()
-      await card.getByText('环境凭据状态尚未确认', { exact: true }).waitFor()
       expect(await key.getAttribute('placeholder')).toBe('留空使用环境认证（ANTHROPIC_AUTH_TOKEN）')
-      expect(await card.getByText(/保存以清除/).count()).toBe(0)
+      expect(await card.locator('[id$="-credential-hint"]').count()).toBe(0)
       await card.getByRole('button', { name: '取消', exact: true }).click()
       await edit.click()
       await savedPreview.waitFor()

@@ -439,23 +439,20 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       ? (nativeAuth?.env ?? []).filter(ref => !endpointEnv.includes(ref)) : [namedRef]
     const visibleRefs = authRefs.filter(ref => !ref.toLowerCase().includes('oauth'))
     const keyHint = visibleRefs[0]
-    // A staged removal reads as a field without a saved key. `credentials.describe` reports only the
-    // source in effect, so what the environment holds for the removed reference is unknown until Apply.
     const checkedRefs = authRefs.map(ref => [
-      ref,
-      ref === keyRemoval?.ref ? undefined
-        : props.credentialChecks?.[ref] ?? (ref === namedRef ? props.credential : undefined),
+      ref, props.credentialChecks?.[ref] ?? (ref === namedRef ? props.credential : undefined),
     ] as const)
     const detected = checkedRefs.find(([, info]) => info?.configured === true)
     const detectedRef = detected?.[0]
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
     const savedCredential = detected?.[1]?.source === 'file' && detectedVisibleRef !== undefined
-    // No hint accompanies a saved key or a typed draft; the hint reports the environment fallback,
-    // or a removal that completed before its settings write failed.
+    // No hint accompanies a saved key, a typed draft, or a staged removal: `credentials.describe` reports
+    // only the source in effect, so the environment status behind the saved key is unknown until Apply.
+    // The hint reports the environment fallback, or a removal that completed before its settings write failed.
     const credentialHint = props.credentialRequired === true || keyText.length > 0
       ? undefined
-      : keyRemoval?.removed === true ? t('keyRemoveApplied')
+      : keyRemoval !== undefined ? keyRemoval.removed === true ? t('keyRemoveApplied') : undefined
         : keyHint === undefined || savedCredential ? undefined
           : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
             : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
@@ -516,7 +513,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 setFailure(undefined)
               }}
             />
-            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval?.removed === true || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
+            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {/* A key the protocol requires is a requirement still to meet, not a fault. */}
             {shownKeyFailure === undefined
               ? null

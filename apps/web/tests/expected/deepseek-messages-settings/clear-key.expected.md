@@ -19,7 +19,6 @@
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
-      - paragraph: 环境凭据状态尚未确认
       - group: 自定义设置
       - button "取消"
       - button "保存"

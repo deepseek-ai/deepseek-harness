@@ -2473,9 +2473,9 @@ it('stages saved-key deletion with the clear action and can cancel it', async ()
   const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
   expect(document.activeElement).toBe(input)
   expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
-  // The field reads as it does without a saved key; nothing announces the pending removal.
-  expect(screen.getByText(en.keyFallbackUnchecked)).toBeTruthy()
-  expect(screen.queryByText(en.keyRemovePending)).toBeNull()
+  // Only the placeholder speaks for the cleared field; no hint sits below it.
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
+  expect(input.getAttribute('aria-describedby')).toBeNull()
   // A staged removal has no read-only form.
   fireEvent.blur(input)
   expect(screen.getByLabelText(en.keyInput)).toBe(input)
@@ -2530,7 +2530,7 @@ it.each([
   const envRef = removesReference && nativeAuth !== undefined ? nativeAuth.env[0] : ref
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
     .toBe(en.keyPlaceholderFallback.replace('{hint}', envRef))
-  expect(screen.getByText(en.keyFallbackUnchecked)).toBeTruthy()
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
   fireEvent.click(screen.getByText(en.customized))
   expect(screen.getByRole<HTMLButtonElement>('button', { name: en.fetchModels }).disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
@@ -2543,17 +2543,16 @@ it.each([
 })
 
 it.each([
-  ['a detected variable', { configured: true, source: 'env', writable: true }, en.keyFallbackDetected, 'savedNotice'],
-  ['a missing variable', { configured: false, writable: true }, en.keyFallbackMissing, 'notice'],
-] as const)('reads a cleared key like a field without a saved key: %s', (_label, check, hint, tone) => {
+  ['detected', { configured: true, source: 'env', writable: true }],
+  ['missing', { configured: false, writable: true }],
+] as const)('shows no hint for a cleared key whose environment fallback is %s', (_label, check) => {
   renderPiAiEditor('google', piAiNamespaceWith('google', { apiKeyEnv: 'GOOGLE_API_KEY' }), {
     nativeAuth: { env: ['GEMINI_API_KEY'], oauth: false },
     credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
     credentialChecks: { GEMINI_API_KEY: check },
   })
   fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
-  const shown = screen.getByText(hint.replace('{hint}', 'GEMINI_API_KEY'))
-  expect(shown.className).toContain(tone)
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
     .toBe(en.keyPlaceholderFallback.replace('{hint}', 'GEMINI_API_KEY'))
 })
