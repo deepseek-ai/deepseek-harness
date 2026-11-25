@@ -29,11 +29,13 @@ internal static class DesktopWindows
     private const int MaximumIdentityBuffer = 1_048_576;
     private static readonly Guid AppUserModelIdFormat = new("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
 
-    internal static async Task<object[]> ListApps(RequestContext context)
+    internal static object[] ListApps(RequestContext context)
     {
         context.Check();
-        var applications = await Discover(context, includeWindowOnly: true);
-        var result = applications.Where(application => application.IsRunning).Select(application => new
+        var observation = Observe(context);
+        ReportWindowOmissions(observation);
+        var applications = Merge([], observation.Windows, includeWindowOnly: true);
+        var result = applications.Select(application => new
         {
             id = application.AppId, identity = (string?)null, name = application.DisplayName, isRunning = application.IsRunning,
         }).ToArray();

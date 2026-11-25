@@ -110,7 +110,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 return ActionResult(before, dispatched);
             }
             DesktopSession.RequireInteractive();
-            if (request.Method == "listApps") return await DesktopWindows.ListApps(context);
+            if (request.Method == "listApps") return DesktopWindows.ListApps(context);
             if (request.Method == "findApps")
                 return await DesktopWindows.FindApps(parameters.GetProperty("query").GetString(), parameters.GetProperty("maxAppMatches").GetInt32(), context);
             if (request.Method == "getApp")
