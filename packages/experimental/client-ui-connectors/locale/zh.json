@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "连接器",
+    "description": "在“插件”页新增“连接器”标签，可查看、安装和打开官方连接器。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

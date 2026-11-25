@@ -788,6 +788,8 @@ export interface StoredFactory {
   readonly slots?: Readonly<Record<string, FactoryOutletSpec>> | undefined
   /** Diagnostics label of who registered the definition. */
   readonly registrant?: string | undefined
+  /** Owning Loader package, absent for a definition registered outside a Loader entry. */
+  readonly module?: string | undefined
 }
 
 /**
@@ -1115,6 +1117,7 @@ export class SlotCore {
       ...(options.locale === undefined ? {} : { locale: options.locale }),
       ...(options.slots === undefined ? {} : { slots: options.slots }),
       ...(options.registrant === undefined ? {} : { registrant: options.registrant }),
+      ...(options.module === undefined ? {} : { module: options.module }),
     }
     record.definition = definition
     this.markFactoryDirty(record)

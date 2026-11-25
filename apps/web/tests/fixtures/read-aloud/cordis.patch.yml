@@ -1,0 +1,12 @@
+# The read-aloud scenario points the API-key deployment, which `ctx.deepseekAuth` sends cloud synthesis to, at one
+# loopback double, and reads the key from a reference only this scenario sets. Segments are as short as the
+# configuration allows, so the second request falls due a few seconds after the first. The scenario substitutes
+# {{origin}} after the listener binds, so no port is ever committed here.
+- id: llm-deepseek
+  config:
+    baseURL: "{{origin}}/anthropic"
+    apiKeyEnv: DSH_READ_ALOUD_E2E_KEY
+- id: read-aloud
+  config:
+    segmentSeconds: 5
+    dispatchBelowSeconds: 3

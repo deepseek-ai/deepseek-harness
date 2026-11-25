@@ -38,7 +38,8 @@
         "@deepseek-ai/dsh-client-ui-session-status",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-workspace",
-        "@deepseek-ai/dsh-client-ui-context-menu"
+        "@deepseek-ai/dsh-client-ui-context-menu",
+        "@deepseek-ai/dsh-client-ui-responsive"
       ],
       "platform": "web"
     }
@@ -103,7 +104,8 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "zod": "4.6.6",
     "@deepseek-ai/dsh-client-ui-context-menu": "workspace:*",
-    "@deepseek-ai/dsh-client-config": "workspace:*"
+    "@deepseek-ai/dsh-client-config": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-responsive": "workspace:*"
   },
   "files": [
     "locale/*.json",

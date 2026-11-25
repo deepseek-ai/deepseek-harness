@@ -57,7 +57,7 @@ kind: "package-reference"
 
 `listBundles` 用 `update` 标明 `updateBundle` 如何替换组合包：以自身包名、按注册表 spec 保存（不是 `npm:` 别名）的第三方 profile 依赖为 `registry`，按固定到完整 40 位提交的 Git spec 保存的为 `git`；两者都要求清单声明 semver 版本，且不承载插件管理。以分支、标签或范围保存的 Git spec 不可更新，因为更新失败后重新安装它无法恢复被移除的版本。`listVersions(name, options)` 读取 `registry` 组合包较新的已发布版本。一次 `pnpm view <name> versions time dist-tags` 按注册表计划询问，计划从 `options.registry` 开始，否则从本进程上次安装该包所用的注册表开始，否则从配置的注册表开始。随后从作答的注册表逐个读取比已安装版本新的最新 `versionListLimit` 个版本，每个版本一次 `pnpm view <name>@<version>`，同时最多 `versionLookupConcurrency` 个，因为 pnpm 对范围只打印最高的匹配版本。列表按从新到旧排列，带有各版本的 dist-tag、发布时间、预发布标记、弃用说明、是否声明组合包，以及在其 `engines.dsh` 或 DSH peer 拒绝当前运行版本且没有豁免时的 `incompatible` 记录；`omitted` 统计未列出的新版本数，`attempts` 列出问过的每个注册表及其失败原因。拒绝为 `not-updatable`、`not-found`、`network` 或 `unknown`；任一版本查询失败都会拒绝整个列表。官方组合包跟随 DSH 版本，不会列出；`git` 组合包以 `not-updatable` 拒绝，因为 Git 仓库不发布版本列表，其新版本由插件索引列出。
 
-`updateBundle(name, version, options)` 把 `listBundles` 标有 `update` 的组合包替换为一个更新的确切版本；更旧的版本会被拒绝。`registry` 组合包更新到 `name@version`，`options.spec` 会被拒绝。其目标版本先按与 `listVersions` 相同的计划查询，版本不存在、未声明组合包，或其 `engines.dsh` 或 DSH peer 拒绝当前 DSH 时，更新停在 `step: 'check'`，profile 保持不变。`git` 组合包只更新到 `options.spec` 指定的 Git spec，该 spec 必须固定到一个完整提交，其仓库与 `path:` 目录须与已安装副本固定的相同；比较忽略 pnpm 保存的形式，因此为其无法读取的 HTTPS 仓库保存的 SSH 形式，以及为已知主机保存的 `github:`、`gitlab:` 或 `bitbucket:` 简写，都与其 HTTPS 形式相匹配。pnpm 只在安装时读取 Git 包，因此有 HMR 时预先只检查仓库所在的主机：`git ls-remote` 因网络错误失败或超出 `githubConnectionTimeoutMs` 时限时，更新停在 `step: 'check'`，标记 `failedAt: 'spec-host'`，profile 保持不变，因为主机不可达时，目标的安装与重新安装同样会失败；Git 无法运行的检查，或仓库因未提供凭据而拒绝的检查，交给 pnpm 处理。安装过程检查组合包声明与兼容性。两种目标的安装都带 `expected: { name, version }` 运行，因此安装了另一个包或另一个版本的目标会在其组合包加载前被撤销，并以 `unexpected-package` 失败；没有组合包声明的目标以同样方式被撤销，并以 `not-bundle` 失败。有 HMR 时，更新先移除已安装版本，使其插件停止，再以当前的选中状态安装目标：从作答的注册表以 `saveExact` 安装 `name@version`，或按原样安装 Git spec。该安装失败、被取消，或已安装但无法启动时，先移除仍留下的目标版本，再重新安装被移除的版本，结果以 `restore` 报告：注册表副本从本进程安装它所用的注册表重新安装，没有记录时按配置的计划安装，与移除的做法一致；Git 副本从 profile 保存的 spec 重新安装；重新安装也失败时，包处于未安装状态。移除或安装被拒绝（例如锁等待超时）时，报告为该步骤失败。没有 HMR 时，目标版本直接安装在运行中的版本之上，结果报告 `restart-required`。`plugin-manager/update-state` 以调用方的 `requestId` 通告 `checking`、`removing`、`installing` 与 `restoring`；目标版本的安装以同一 id 流式输出日志并接受 `cancelInstall`，重新安装不带 id，因此取消无法中止它。
+`updateBundle(name, version, options)` 把 `listBundles` 标有 `update` 的组合包替换为一个更新的确切版本；更旧的版本会被拒绝。`registry` 组合包更新到 `name@version`，`options.spec` 会被拒绝。其目标版本先按与 `listVersions` 相同的计划查询，版本不存在、未声明组合包，或其 `engines.dsh` 或 DSH peer 拒绝当前 DSH 时，更新停在 `step: 'check'`，profile 保持不变。`git` 组合包只更新到 `options.spec` 指定的 Git spec，该 spec 必须固定到一个完整提交，其仓库与 `path:` 目录须与已安装副本固定的相同；比较忽略 pnpm 保存的形式，因此为其无法读取的 HTTPS 仓库保存的 SSH 形式，以及为已知主机保存的 `github:`、`gitlab:` 或 `bitbucket:` 简写，都与其 HTTPS 形式相匹配。pnpm 只在安装时读取 Git 包，因此有 HMR 时预先只检查仓库所在的主机：`git ls-remote` 因网络错误失败或超出 `githubConnectionTimeoutMs` 时限时，更新停在 `step: 'check'`，标记 `failedAt: 'spec-host'`，profile 保持不变，因为主机不可达时，目标的安装与重新安装同样会失败；Git 无法运行的检查，或仓库因未提供凭据而拒绝的检查，交给 pnpm 处理。安装过程检查组合包声明与兼容性。两种目标的安装都带 `expected: { name, version }` 运行，因此安装了另一个包或另一个版本的目标会在其组合包加载前被撤销，并以 `unexpected-package` 失败；没有组合包声明的目标以同样方式被撤销，并以 `not-bundle` 失败。有 HMR 时，更新先移除已安装版本，使其插件停止，再以当前的选中状态安装目标：从作答的注册表以 `saveExact` 安装 `name@version`，或按原样安装 Git spec。该安装失败、被取消，或已安装但无法启动时，先移除仍留下的目标版本，再重新安装被移除的版本，结果以 `restore` 报告：注册表副本从本进程安装它所用的注册表重新安装，没有记录时按配置的计划安装，与移除的做法一致；Git 副本从 profile 保存的 spec 重新安装；重新安装也失败时，包处于未安装状态。移除或安装被拒绝（例如锁等待超时）时，报告为该步骤失败。没有 HMR 时，目标版本直接安装在运行中的版本之上，结果报告 `restart-required`。`plugin-manager/update-state` 以调用方的 `requestId` 通告 `checking`、`removing`、`installing` 与 `restoring`；目标版本的安装以同一 id 流式输出日志并接受 `cancelInstall`，重新安装不带 id，因此取消无法中止它。目标版本的安装失败时，与 `installBundle` 一样以 `result.pendingBuilds` 报告待决定的构建脚本。`options.approvedBuilds` 在移除已安装版本之前放行这些名字，因为 `pnpm remove` 会删除未决定的条目；更新失败时授权仍然保留，已不再待决定的名字会在任何改动之前以 `stale-approval` 让更新停在 `step: 'check'`。
 
 `installBundle` 在启动 pnpm 前通过 `git ls-remote` 检查 GitHub 仓库，使用 profile 目录及安装器的 Git 与代理配置。`githubConnectionTimeoutMs` 默认为 5000 毫秒，只限制这次检查，不限制包下载或构建。检查禁用凭据助手和认证提示；只有网络失败与超时会停止安装，通过现有失败类型与诊断日志返回，并标记 `failedAt: 'spec-host'`。被停止的安装会以调用方的 `requestId` 把该失败转发为这次安装唯一的 `plugin-manager/install-log` 运行，其命令行是去掉 URL 用户信息的 `git ls-remote`；因超时结束的检查不报告退出码。应答中的 `packageResult` 仍是普通结果，不含该命令行。认证、仓库查找及其他失败继续交给 pnpm，包括其 HTTPS 到 SSH 的回退。取消安装或销毁管理器会停止检查及其子进程。注册表包、本地路径、压缩包和其他 Git 主机跳过此检查。仓库可达后，下载或组合包验证仍可能失败。
 
@@ -163,6 +163,20 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 
 工具结果追加到对话中。启停其他工具可能改变后续工具声明及其缓存复用。
 
+### 插件引用
+
+#### 模型看到什么
+
+消息通过 `@[label](dsh-plugin:<package>)` 引用组合包时，模型步骤前会追加一条 user 角色的上下文消息。消息保留原样的提及。上下文 JSON 按 Web 显示的同一份组合包列表描述每个被引用的组合包：标题、版本、可用位置、安装与选中状态、依赖来源、包文件的真实路径及其 manifest 与 README 路径、这些文件是否位于会话工作目录内，以及声明的各行和已加载行的运行状态。不是组合包的名称，或文件无法解析的组合包，带有 `error`。配置值不写入。上下文是不可信背景，每次最多八个组合包，每个组合包最多十二行。
+
+#### Token 影响
+
+每个引用插件的步骤增加一条 JSON 上下文消息。
+
+#### KV Cache 影响
+
+上下文追加到对话中；后续步骤复用已缓存的前缀。
+
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -174,7 +188,7 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 - 更新把移除与安装作为两次 profile 操作运行，其他操作可能在两者之间运行。
 - 在移除已安装副本之前，只检查 Git 目标所在主机的可达性，且只通过 Git 检查：只有经 pnpm 自身的代理设置才能到达的主机会被视为不可达而拒绝。对于提交不存在、需要 pnpm 不具备的凭据、未声明组合包、拒绝当前 DSH 或安装了其他包或版本的目标，代价是插件停止一次并重新安装一次。重新安装使用保存的 spec，其中 http(s) URL 的 user information 已被去掉，因此私有仓库需要 Git 凭据助手或 SSH 形式。对于带端口的 HTTPS URL，SSH 回退保存的副本会丢失端口，因此其仓库来源不再与插件索引中的 HTTPS spec 相匹配，其更新会被拒绝。
 - 在 Windows 上，Git 传输探测沿用父进程的控制台，SSH 的主机密钥或密码提示可能出现在启动终端中，直到 `gitTransportTimeoutMs` 到期。在 POSIX 上，`known_hosts` 中没有的主机会让 SSH 探测失败，因此在接受一次主机密钥（例如执行 `ssh -T git@<host>`）之前一直走 HTTPS。凭据助手对话框或 ssh-agent 确认（例如 Touch ID 或 `ssh-add -c` 对话框）超过时限时算作探测失败；HTTPS 探测超时时，可达的 SSH 形式会写入 profile。私有仓库在 pnpm 启动前最多等待两倍 `gitTransportTimeoutMs`。SSH 形式固定使用 `git` 用户和 SSH 默认端口，其他 SSH 端点需要 `url.<base>.insteadOf` 规则。两种探测都失败时，诊断是 pnpm 的 HTTPS 失败，不报告 SSH 探测失败的原因。
-- 依赖需要新的构建脚本批准的新版本会更新失败，并重新安装为原版本；移除该包后通过普通安装批准其脚本。
+- 依赖需要新的构建脚本批准的新版本需要运行两次更新：pnpm 只在安装时报告这些脚本，因此第一次运行会移除已安装版本、安装失败并重新安装原版本，之后才能给出批准。
 - 没有 HMR 时，替换包需要重启进程。在 Plugin Manager 之外重新链接仍处于安装状态的包，需要等待重启。
 - 仅启动时加载的 profile 不能删除当前进程启动时使用的包；停止进程后使用 `dsh plugin`。
 - 管理器不能关闭自身所需的管理组件、修改其他 profile 或编辑 agent 预设组合。

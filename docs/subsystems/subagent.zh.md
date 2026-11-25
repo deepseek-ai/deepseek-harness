@@ -114,8 +114,8 @@ interface SubagentStartRequest {
   /**
    * Optional host-Agent provider, model, reasoning-effort, and output-token
    * overrides. Requires {@link SubagentCapabilities.agentOptions}; in-process
-   * providers merge them over the parent Agent's options when they create the
-   * child, while the DSH SDK provider merges them over its instance defaults
+   * providers resolve them against the parent's current model choice and
+   * output-token limit, while the DSH SDK provider merges them over its instance defaults
    * before initializing the separate child runtime.
    */
   readonly agentOptions?: AgentOptions
@@ -146,6 +146,8 @@ interface ResolvedSubagentStartRequest extends SubagentStartRequest {
 ## 本地子代理与 activation
 
 只有 spawn 支持独立的 `agentPreset`；省略选择与 fork 都继承父方的活跃组装。[子级 preset 规则](../../packages/subagent/subagent/README.zh.md#restoring-child-composition)定义显式选择、事件顺序和历史恢复行为。
+
+本地子级模型使用 Agent 的 `modelSelection` 投影。创建在继承历史之后、发布之前记录完整的初始选择；后续切换模型不重写 descriptor。descriptor 只记录身份字段；历史组装字段仍可读取。参见[子级模型规则](../../packages/subagent/subagent/README.zh.md#child-model-choices)。
 
 本地子代理拥有持久 Session，最多有一个在线 activation。Manager 预留身份和容量，通过后端准备子代理，并管理输入准入、冷恢复以及先子后父的释放顺序。activation 结果在资源释放和完成通知之后结算。释放操作单独报告清理失败，不会覆盖已捕获的结果。结构化结果提交会关闭该 activation 的输入；之后的冷恢复不会继承输出 schema。
 
@@ -204,9 +206,11 @@ interface SubagentMemberNames {
 }
 ```
 
-## 消息与中断
+## 消息、中断与模型选择
 
 `sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 等待整棵树释放；activation 回执的 `dispose()` 仅释放那一次执行。
+
+`selectModel` 使用目标子级的 Session id，以及用户或确切在线祖先权限。选择与图片准入共用子级锁。目标不在线时，在其在线树根下以维护方式恢复：不占容量，不发布生命周期事件，不运行任务，也不产生完成通知。远程 `selectModelByUser` 操作检查目标 Session 授权，并保持用户默认值不变。[模型选择规则](../../packages/subagent/subagent/README.zh.md#child-model-choices)定义创建、步骤时序与兼容行为。
 
 ```ts type-equiv
 /** Durable attribution for one model-authored message between Agents. */
@@ -250,13 +254,31 @@ interface SubagentSendMessageOptions {
 
 ```ts type-equiv
 /**
- * Authority under which one interrupt request is admitted. `user` is a trusted
+ * Authority under which a child control operation is admitted. `user` is a trusted
  * host operation; Remote callers need permission on the target Session before
  * invoking it. `ancestor` carries an exact live Agent in the target's creation ancestry.
  */
 type SubagentInterruptAuthority =
   | { readonly kind: 'user' }
   | { readonly kind: 'ancestor'; readonly agent: Agent }
+```
+
+```ts type-equiv
+/** Complete human-selected model choice for a continuable child. */
+interface SubagentSelectModelRequest {
+  readonly childSessionId: SessionId
+  readonly provider: string
+  readonly model: string
+  /** Omission clears an explicit effort and uses the selected model's default. */
+  readonly reasoningEffort?: string
+}
+```
+
+```ts type-equiv
+/** Choice returned after the child's persistence barrier confirms it. */
+interface SubagentSelectModelReceipt {
+  readonly selected: ModelSelection
+}
 ```
 
 ## 持久枚举
@@ -569,6 +591,21 @@ async sendMessage( sender: Agent, targetId: SessionId, content: ContentBlock[], 
 interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void
 
 /**
+ * Record a local child's complete model choice for future steps without
+ * adding a message or changing user defaults. Selection and image admission
+ * share the child's operation order; an already prepared step retains its model.
+ * @param childId - durable continuable child Session id.
+ * @param selection - complete choice; omitted effort follows adapter defaults.
+ * @param authority - trusted user operation or exact live creation ancestor.
+ * @param signal - cancellation before selection is recorded.
+ * @returns the recorded choice after its durability barrier completes.
+ * @throws {LlmError} when the LLM runtime rejects the selected route or effort.
+ * @throws {SubagentError} when access or child availability fails;
+ * PERSISTENCE_UNCONFIRMED means the choice may have changed but durability is unknown.
+ */
+async selectModel( childId: SessionId, selection: Readonly<ModelSelection>, authority: SubagentInterruptAuthority, signal: AbortSignal, ): Promise<ModelSelection>
+
+/**
  * Close admission and stop all instances in the selected subagent trees, then await
  * pending startup and cleanup. Ordinary members are ignored. The cutoff lasts
  * until each exact root leaves the registry; unrelated subagent trees remain live.
@@ -629,6 +666,19 @@ listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<Subagen
 @Remote({ name: 'interruptByUser', resources: { session: childSessionId => childSessionId } }) interruptByUser(childSessionId: SessionId): SubagentInterruptReceipt
 
 /**
+ * Select a local child's model under the caller's target-Session permission.
+ * Like Session model selection, it accepts only a model its provider lists in the
+ * current catalog. No message or global default is changed. A successful receipt
+ * confirms the child's persistence barrier; an unconfirmed failure may follow a live change.
+ * @param request - target and complete model choice; omitted effort uses adapter defaults.
+ * @param signal - caller cancellation before selection is recorded.
+ * @returns the recorded choice after confirmed persistence.
+ * @throws {RemoteError} validation, authorization, availability, cancellation,
+ * or subagent/model-selection-unconfirmed when the durable outcome is unknown.
+ */
+@Remote({ name: 'selectModelByUser', resources: { session: request => request.childSessionId } }) async selectModelByUser(request: SubagentSelectModelRequest, signal: AbortSignal): Promise<SubagentSelectModelReceipt>
+
+/**
  * Register a provider under its name. Registration is effect-scoped and HMR
  * safe; removing a provider blocks new starts but does not revoke runs that
  * were already returned to their holders. Providers without either execution
@@ -646,7 +696,7 @@ registerProvider(provider: SubagentProvider): () => void
 getProvider(name: string): SubagentProvider | undefined
 ```
 
-Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [MessageId](llm-streaming.zh.md) · [SessionId](core.zh.md)
+Types: [Agent](core.zh.md) · [ContentBlock](llm-streaming.zh.md) · [MessageId](llm-streaming.zh.md) · [ModelSelection](core.zh.md) · [SessionId](core.zh.md)
 
 Source: [`packages/subagent/subagent/src/index.ts`](../../packages/subagent/subagent/src/index.ts)
 

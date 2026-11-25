@@ -2268,11 +2268,35 @@ describe('version checks and updates', () => {
     const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }, { ...BUNDLE, name: 'dsh-linked' }])))
     const { face, state } = bench({ listVersions, listBundles })
     face.refresh()
+    expect(state().refreshProgress).toEqual({ phase: 'loading' })
     await vi.waitFor(() => { expect(order).toEqual(['dsh-a', 'dsh-better-sidebar']) })
     expect(state().refreshStatus).toBe('refreshing')
+    expect(state().refreshProgress).toEqual({ phase: 'checking', current: 2, total: 2 })
     last.resolve(ok(LISTED))
+    // The spinner's minimum hold no longer reports a step.
+    await vi.waitFor(() => { expect(state().refreshProgress).toBeNull() })
+    expect(state().refreshStatus).toBe('refreshing')
     await vi.waitFor(() => { expect(state().refreshStatus).toBe('idle') })
     expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
+  })
+
+  it('counts each check of a manual refresh and waits for a check another action started', async () => {
+    const answers = new Map([['dsh-a', deferred<ReturnType<typeof ok<typeof LISTED>>>()], ['dsh-better-sidebar', deferred<ReturnType<typeof ok<typeof LISTED>>>()]])
+    const listVersions = vi.fn((name: string) => answers.get(name)!.promise)
+    const listBundles = vi.fn(() => Promise.resolve(ok([UPDATABLE, { ...UPDATABLE, name: 'dsh-a' }])))
+    const { controller, face, state } = bench({ listVersions, listBundles })
+    await controller.load()
+    // The detail page starts the second package's check before the refresh reaches it.
+    face.checkVersions('dsh-better-sidebar')
+    face.refresh()
+    await vi.waitFor(() => { expect(state().refreshProgress).toEqual({ phase: 'checking', current: 1, total: 2 }) })
+    answers.get('dsh-a')!.resolve(ok(LISTED))
+    await vi.waitFor(() => { expect(state().refreshProgress).toEqual({ phase: 'checking', current: 2, total: 2 }) })
+    expect(listVersions).toHaveBeenCalledTimes(2)
+    answers.get('dsh-better-sidebar')!.resolve(ok(LISTED))
+    await vi.waitFor(() => { expect(state().refreshProgress).toBeNull() })
+    expect(state().versions['dsh-better-sidebar']?.phase).toBe('done')
+    await vi.waitFor(() => { expect(state().refreshStatus).toBe('idle') })
   })
 
   it('checks no versions after a failed refresh', async () => {
@@ -2281,6 +2305,7 @@ describe('version checks and updates', () => {
     const { face, state } = bench({ listVersions, listBundles })
     face.refresh()
     await vi.waitFor(() => { expect(state().refreshStatus).toBe('failed') })
+    expect(state().refreshProgress).toBeNull()
     expect(listVersions).not.toHaveBeenCalled()
   })
 
@@ -2338,6 +2363,37 @@ describe('version checks and updates', () => {
     expect(state().update).toBeNull()
     face.toggleUpdateOutput()
     expect(state().update).toBeNull()
+  })
+
+  it('runs a failed update again with the build scripts its target left pending', async () => {
+    const spec = 'git+https://git.example/o/plugins.git#bbbbbbb&path:/packages/sidebar'
+    const blocked = { ...UPDATED, result: { ...UPDATED.result, application: 'failed' as const, pendingBuilds: ['native'] } }
+    const updateBundle = vi.fn()
+      .mockResolvedValueOnce(ok({ ...UPDATED, result: { ...UPDATED.result, application: 'failed' as const } }))
+      .mockResolvedValueOnce(ok(blocked))
+      .mockResolvedValueOnce(ok(UPDATED))
+    const listBundles = vi.fn(() => Promise.resolve(ok([{ ...BUNDLE, update: 'git' as const, source: 'git+https://git.example/o/plugins.git#aaaaaaa&path:/packages/sidebar' }])))
+    const { controller, face, state } = bench({ updateBundle, listBundles })
+    await controller.load()
+    face.approveUpdateBuildsAndRetry()
+    face.openGitUpdate({ packageName: 'dsh-better-sidebar', version: '0.17.0', spec })
+    // Only a confirmed update starts without approval, and only a failure with pending scripts is retried with it.
+    face.approveUpdateBuildsAndRetry()
+    expect(updateBundle).not.toHaveBeenCalled()
+    face.runUpdate()
+    await vi.waitFor(() => { expect(state().update?.phase).toBe('done') })
+    face.approveUpdateBuildsAndRetry()
+    face.closeUpdate()
+    face.openGitUpdate({ packageName: 'dsh-better-sidebar', version: '0.17.0', spec })
+    face.runUpdate()
+    await vi.waitFor(() => { expect(state().update).toMatchObject({ phase: 'done', result: blocked }) })
+    face.toggleUpdateOutput()
+    face.approveUpdateBuildsAndRetry()
+    const requestId = state().update?.requestId as PluginInstallRequestId
+    expect(state().update).toMatchObject({ phase: 'running', outputOpen: false })
+    expect(updateBundle).toHaveBeenLastCalledWith('dsh-better-sidebar', '0.17.0', { spec, requestId, approvedBuilds: ['native'] })
+    await vi.waitFor(() => { expect(state().update).toMatchObject({ phase: 'done', result: UPDATED }) })
+    expect(updateBundle).toHaveBeenCalledTimes(3)
   })
 
   it('keeps a lost update answer as unknown and ignores an answer after disposal', async () => {

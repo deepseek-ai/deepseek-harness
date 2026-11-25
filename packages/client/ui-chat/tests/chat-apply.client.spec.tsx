@@ -83,7 +83,8 @@ async function bench() {
     'main': { kind: 'keyed', scope: 'root' },
     'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.approval.detail': { kind: 'single', scope: 'session' },
-    'settings.general.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.display.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.interaction.item': { kind: 'list', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
   const conversation = await runtime.mount({
     inject: [...injectConversation],
@@ -143,8 +144,10 @@ describe('Chat apply wiring', () => {
       .toMatchObject({ kind: 'keyed', scope: 'session' })
     expect(b.runtime.slots.entries('conversation.composer.dock').map(row => row.options.id))
       .toEqual(['activity', 'usage'])
-    expect(b.runtime.slots.entries('settings.general.item').map(row => row.options.id))
-      .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
+    expect(b.runtime.slots.entries('settings.general.group.display.item').map(row => row.options.id))
+      .toEqual(['transcript-view', 'performance-usage'])
+    expect(b.runtime.slots.entries('settings.general.group.interaction.item').map(row => row.options.id))
+      .toEqual(['composer-enter', 'link-opening'])
     expect(b.runtime.slots.spec('conversation.chat.markdown.fence')).toMatchObject({ kind: 'hoc', scope: 'session' })
     expect(b.runtime.slots.entries('conversation.chat.markdown.fence').map(row => [row.options.key, row.options.id]))
       .toEqual([
@@ -222,7 +225,7 @@ describe('Chat apply wiring', () => {
     }
     const b = await bench()
     onTestFinished(() => b.runtime.dispose())
-    const row = b.runtime.slots.entries('settings.general.item')
+    const row = b.runtime.slots.entries('settings.general.group.display.item')
       .find(entry => entry.options.id === 'transcript-view')!
     const face = (row.inject as unknown as () => TranscriptViewRowInjected)()
 
@@ -240,7 +243,7 @@ describe('Chat apply wiring', () => {
   it('restores saved collapse timing when the Chat plugin remounts', async () => {
     const b = await bench()
     try {
-      const row = b.runtime.slots.entries('settings.general.item')
+      const row = b.runtime.slots.entries('settings.general.group.display.item')
         .find(entry => entry.options.id === 'transcript-view')!
       const face = row.inject!()
       const hooks = face.hooks as TranscriptViewRowInjected['hooks']
@@ -252,13 +255,13 @@ describe('Chat apply wiring', () => {
       b.chatSettings.publish({ status: 'ready', value: { linkOpening: 'sidebar', transcriptView: 'standard', performanceUsage: 'detailed', collapseTiming: 'next-input' }, revision: 1, writable: true })
       expect(hooks.transcriptView.getSnapshot()).toBe('standard')
       expect(hooks.collapseTiming.getSnapshot()).toBe('next-input')
-      expect(b.runtime.slots.entries('settings.general.item').map(entry => entry.options.id))
-        .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
+      expect(b.runtime.slots.entries('settings.general.group.display.item').map(entry => entry.options.id))
+        .toEqual(['transcript-view', 'performance-usage'])
 
       await b.chat.dispose()
-      expect(b.runtime.slots.entries('settings.general.item').some(entry => entry.options.id === 'transcript-view')).toBe(false)
+      expect(b.runtime.slots.entries('settings.general.group.display.item').some(entry => entry.options.id === 'transcript-view')).toBe(false)
       await b.runtime.mount({ inject: [...injectChat], apply: applyChat })
-      const remountedRow = b.runtime.slots.entries('settings.general.item')
+      const remountedRow = b.runtime.slots.entries('settings.general.group.display.item')
         .find(entry => entry.options.id === 'transcript-view')!
       const remounted = remountedRow.inject!()
       const remountedHooks = remounted.hooks as TranscriptViewRowInjected['hooks']
@@ -266,8 +269,8 @@ describe('Chat apply wiring', () => {
       expect(remountedHooks.collapseTiming.getSnapshot()).toBe('next-input')
       expect(remountedHooks.transcriptView.getSnapshot()).toBe('standard')
       expect(b.chatSettings.set).toHaveBeenCalledExactlyOnceWith('collapseTiming', 'next-input')
-      expect(b.runtime.slots.entries('settings.general.item').map(entry => entry.options.id))
-        .toEqual(['transcript-view', 'link-opening', 'composer-enter', 'performance-usage'])
+      expect(b.runtime.slots.entries('settings.general.group.display.item').map(entry => entry.options.id))
+        .toEqual(['transcript-view', 'performance-usage'])
     } finally {
       await b.runtime.dispose()
     }
@@ -275,7 +278,7 @@ describe('Chat apply wiring', () => {
 
   it('shares the accepted performance preference with settings, composer, and turn tails', async () => {
     const b = await bench()
-    const row = b.runtime.slots.entries('settings.general.item').find(entry => entry.options.id === 'performance-usage')!
+    const row = b.runtime.slots.entries('settings.general.group.display.item').find(entry => entry.options.id === 'performance-usage')!
     const face = (row.inject as unknown as () => PerformanceUsageRowInjected)()
     expect(face.hooks.performanceUsage.getSnapshot()).toBe('detailed')
     face.setPerformanceUsage('compact')

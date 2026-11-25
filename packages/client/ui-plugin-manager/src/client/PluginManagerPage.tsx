@@ -38,6 +38,7 @@ import { managementText, noticeText, packageText, registryText, restartText, row
 import type { PluginPackageRef, PluginRowRef, PluginsSubject } from './slot-contract.ts'
 import type { ConfigPageForm } from './slot-contract.ts'
 import { UpdateDialog, VersionSection } from './versions.tsx'
+import { BuildApproval } from './BuildApproval.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
 import { ClientSyncNotice } from './ClientSyncNotice.tsx'
 import css from './PluginManagerPage.module.css'
@@ -545,8 +546,14 @@ function versionUpdate(check: VersionCheck | undefined): string | undefined {
   return check?.phase === 'done' ? updateCandidate(check.list)?.version : undefined
 }
 
-/** The list toolbar's sentence about the last update check of every registry package. */
-function updatesNote(packages: readonly PackageView[], versions: PluginManagerState['versions'], t: Translate): { text: string; tone?: 'info' | 'error' } | undefined {
+/**
+ * The list toolbar's sentence: the last update check of every registry package. During a manual refresh it names
+ * what the refresh waits for to screen readers only, since the Refresh button shows the count.
+ */
+function updatesNote(packages: readonly PackageView[], state: PluginManagerState, t: Translate): { text: string; tone?: 'info' | 'error'; hidden?: true } | undefined {
+  const { versions, refreshProgress: progress } = state
+  if (progress?.phase === 'loading') return { text: t('loading'), hidden: true }
+  if (progress?.phase === 'checking') return { text: t('refreshChecking', { current: String(progress.current), total: String(progress.total) }), hidden: true }
   const checks = packages.filter(pkg => pkg.update === 'registry').map(pkg => versions[pkg.name])
   if (checks.length === 0 || checks.some(check => check === undefined || check.phase === 'checking')) return undefined
   const available = checks.filter(check => versionUpdate(check) !== undefined).length
@@ -1085,7 +1092,6 @@ function InstallDialog({
   const errorId = useId()
   const templateHintId = useId()
   const guideId = useId()
-  const approvalId = useId()
   const registryId = useId()
   const registryErrorId = useId()
   const [guideOpen, setGuideOpen] = useState(false)
@@ -1459,18 +1465,7 @@ function InstallDialog({
             ? null
             : <SubjectCard subject={phase === 'done' && install.installedVersion !== null ? { ...subject, version: install.installedVersion } : subject} confirmed={install.confirmed} t={t} />}
           {approvable
-            ? (
-              <section className={css.approval} role="group" aria-labelledby={approvalId} data-install-approval>
-                <h3 id={approvalId} className={css.approvalTitle}>{t('installApprovalTitle')}</h3>
-                <p className={css.approvalText}>{t('installApprovalDescription')}</p>
-                <ul className={css.approvalList}>
-                  {pendingBuilds.map(name => <li key={name}><code>{name}</code></li>)}
-                </ul>
-                <p className={css.approvalText}>{t('installApprovalConsequence')}</p>
-                <p className={css.approvalCaution}>{t('installApprovalCaution')}</p>
-                <Button variant="primary" className={css.wide} onClick={onApproveBuilds}>{t('installApproveAndRetry')}</Button>
-              </section>
-            )
+            ? <BuildApproval names={pendingBuilds} t={t} onApprove={onApproveBuilds} />
             : null}
           {phase === 'done' && install.installed === null
             ? <p className={css.result} role="status">{t('installDoneNothing')}</p>
@@ -1679,7 +1674,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)) || sectionsOf(pkg, row).length > 0,
     open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...pkgOrigin }) },
   })
-  const updates = updatesNote(mine, state.versions, t)
+  const updates = updatesNote(mine, state, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
   const packageBusy = (pkg: PackageView): boolean => bundleBusy(state, pkg.name)
   const packageCard = (pkg: PackageView): ReactNode => (
@@ -1747,12 +1742,14 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                   </div>
                 </div>
                 <div className={css.toolbar} data-plugin-toolbar data-plugin-header-part="toolbar" hidden={!onInstalled}>
-                  {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
+                  {updates === undefined ? null : <span role="status" className={updates.hidden ? css.progressAnnouncement : css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
                   <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
                     <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
                       disabled={!loaded || refreshing} onClick={props.refresh}
                       icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
-                      <span className={css.toolbarLabel}>{t('refresh')}</span>
+                      {state.refreshProgress?.phase === 'checking'
+                        ? <span className={`${css.toolbarLabel} ${css.refreshCount}`}>{t('refreshCount', { current: String(state.refreshProgress.current), total: String(state.refreshProgress.total) })}</span>
+                        : <span className={css.toolbarLabel}>{t('refresh')}</span>}
                     </Button>
                   </Tooltip>
                   {state.install.requestId === undefined
@@ -1931,6 +1928,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           onRun={props.runUpdate}
           onClose={props.closeUpdate}
           onToggleOutput={props.toggleUpdateOutput}
+          onApproveBuilds={props.approveUpdateBuildsAndRetry}
         />
       )}
       <InstallDialog

@@ -2,20 +2,20 @@
 
 [English](office-kit.md) | 中文
 
-[document 包族](../../packages/document/README.zh.md) 在 Node 宿主上渲染、转换 Office 文件并重算工作簿。消费者负责源文件读取授权与展示；共享提供方负责引擎、有界准入、临时输出复用和私有输出存储。[`office_render`、`office_convert` 和 `office_recalculate` 工具](../../packages/document/tool-office/README.zh.md)是面向模型的消费者；提供方本身不创建 Session 事件。
+[document 包族](../../packages/document/README.zh.md) 在 Node 宿主上渲染、转换 Office 文件并重算工作簿。消费者负责源文件读取授权与展示；共享提供方负责引擎、有界准入、临时输出复用和私有输出存储。[`document_render`、`document_convert` 和 `document_recalculate` 工具](../../packages/document/tool-document/README.zh.md)是面向模型的消费者；提供方本身不创建 Session 事件。
 
 ## 所有权
 
 | 所有者 | 职责 |
 |---|---|
-| [office-kit](../../packages/document/office-kit/README.zh.md) | `ctx.officeKit`：共享 LibreOffice 渲染、转换与重算，有界准入、输出缓存和按 Session 划分的输出存储；解析提供方自身的 Kit 入口、从该安装定位的引擎清单，以及映射到 ASAR 解包目录的原生路径 |
-| [tool-office](../../packages/document/tool-office/README.zh.md) | 按需激活的 `office_render`、`office_convert` 和 `office_recalculate` 工具：工具结果中的渲染图片，以及供 shell 复制的转换或重算文件 |
-| [Web bundle](../../packages/bundle/web-app/README.zh.md)与 [SDK bundle](../../packages/bundle/sdk-app/README.zh.md) | 由宿主消费者共享的单个可配置提供方及 `tool-office` |
+| [office-kit](../../packages/document/office-kit/README.zh.md) | `ctx.officeKit`：共享 LibreOffice 渲染、转换与重算，Poppler PDF 渲染，有界准入、输出缓存和按 Session 划分的输出存储；解析提供方自身的 Kit 入口、从该安装定位的引擎清单，以及映射到 ASAR 解包目录的原生路径 |
+| [tool-document](../../packages/document/tool-document/README.zh.md) | 按需激活的 `document_render`、`document_convert` 和 `document_recalculate` 工具：工具结果中的渲染图片，以及供 shell 复制的转换或重算文件 |
+| [Web bundle](../../packages/bundle/web-app/README.zh.md)与 [SDK bundle](../../packages/bundle/sdk-app/README.zh.md) | 由宿主消费者共享的单个可配置提供方及 `tool-document` |
 | [Office 预览 Client](../../packages/client/ui-sidebar-documentpreview/README.zh.md#office-preview) | Office 扩展名选择、PDF 复用和缺失字体提示 |
 
 ## 请求和结果
 
-[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts)包含已授权的源键与版本、可选 stat 大小、延迟的 `read(signal, maxBytes)` 回调、前台或后台优先级以及 `OfficeExtension`：`doc`、`docx`、`xls`、`xlsx`、`ppt` 或 `pptx`。`OfficeKit.convert(request, signal?)` 返回一个完整 PDF 结果。`renderImages()` 返回选定页、幻灯片或工作表区域的有界 PNG 图片；`convertTo()` 与 `recalculate()` 把输出按请求的属主保存在提供方的 `outputDirectory` 下并返回其 Host 路径。它们的请求类型接受 OpenDocument 输入，图片渲染还接受 PDF。所有方法共用准入和缓存。取消遵循调用方和提供方生命周期；校验、输出和引擎失败以分类的 `OfficeKitError` 拒绝。
+[`OfficeKitRequest`](../../packages/document/office-kit/src/types.ts)包含已授权的源键与版本、可选 stat 大小、延迟的 `read(signal, maxBytes)` 回调、前台或后台优先级以及 `OfficeExtension`：`doc`、`docx`、`xls`、`xlsx`、`ppt` 或 `pptx`。`OfficeKit.convert(request, signal?)` 返回一个完整 PDF 结果。`renderImages()` 返回选定页、幻灯片或工作表区域的有界 PNG 图片；`convertTo()` 与 `recalculate()` 把输出按请求的属主保存在提供方的 `outputDirectory` 下并返回其 Host 路径。它们的请求类型接受 OpenDocument 输入，图片渲染还接受 PDF；可选的 `renderer` 选择 `libreoffice` 或 `poppler`，结果注明所用后端。所有方法共用准入和缓存。取消遵循调用方和提供方生命周期；校验、输出和引擎失败以分类的 `OfficeKitError` 拒绝。
 
 `OfficeKitPriority` 对请求的预览或 QA 使用 `foreground`，对推测工作使用 `background`。`OfficeSourceKey` 为调用方拥有的已授权源定位符增加品牌类型。`OfficeKitGeneration` 表示提供方生命周期，`OfficeKitKey` 表示其内容身份；消费者不解析这两种不透明值。
 
@@ -54,7 +54,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.officeKit` — `OfficeKit`
 
-A provider lifetime owns all converters, queued calls, and temporary files.
+A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.
 
 ```ts cordis-catalog
 /**
@@ -68,12 +68,17 @@ async convert(request: OfficeKitRequest, signal?: AbortSignal): Promise<OfficeKi
 
 /**
  * Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission
- * queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.
- * @param request - authorized metadata, deferred bounded source read, selection, and complete-result limits.
+ * queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority. The backend
+ * is chosen before admission: `request.renderer` exclusively, otherwise the first available entry of the configured
+ * `renderers` order, where the last entry is used without an availability check. A backend that fails after it
+ * starts rejects without trying another. Poppler renders without a LibreOffice converter slot.
+ * @param request - authorized metadata, deferred bounded source read, selection, backend, and complete-result limits.
  * @param signal - caller cancellation; provider disposal also stops active work.
- * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.
- * @throws {OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the
- * selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
+ * @returns caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits,
+ * with the backend that rendered them.
+ * @throws {OfficeKitError} `unsupported-format` for `poppler` with non-PDF input, `unavailable` when the requested
+ * or last configured backend cannot run, `invalid-request` for a selection the engine rejects, `output-too-large`
+ * when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.
  */
 async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>
 

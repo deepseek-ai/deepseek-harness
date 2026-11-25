@@ -37,19 +37,21 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
-import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ContentBlock, MessageId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { Remote, RemoteError, TypertRemoteService, principalOf, type Principal } from '@deepseek-ai/dsh-typert-protocol'
 import {
-  rejectPrompt, validateControlRequest,
+  rejectModelSelection, rejectPrompt, validateControlRequest,
 } from './control.ts'
 import type {
   SubagentInterruptReceipt,
   SubagentPromptReceipt,
   SubagentPromptRequest,
   SubagentPromptRequestId,
+  SubagentSelectModelReceipt,
+  SubagentSelectModelRequest,
 } from './control-types.ts'
 import type {
   SubagentCapabilities,
@@ -410,6 +412,28 @@ export class SubagentRuntime extends TypertRemoteService {
   }
 
   /**
+   * Record a local child's complete model choice for future steps without
+   * adding a message or changing user defaults. Selection and image admission
+   * share the child's operation order; an already prepared step retains its model.
+   * @param childId - durable continuable child Session id.
+   * @param selection - complete choice; omitted effort follows adapter defaults.
+   * @param authority - trusted user operation or exact live creation ancestor.
+   * @param signal - cancellation before selection is recorded.
+   * @returns the recorded choice after its durability barrier completes.
+   * @throws {LlmError} when the LLM runtime rejects the selected route or effort.
+   * @throws {SubagentError} when access or child availability fails;
+   * PERSISTENCE_UNCONFIRMED means the choice may have changed but durability is unknown.
+   */
+  async selectModel(
+    childId: SessionId,
+    selection: Readonly<ModelSelection>,
+    authority: SubagentInterruptAuthority,
+    signal: AbortSignal,
+  ): Promise<ModelSelection> {
+    return this.requireManager().selectModel(childId, selection, authority, signal)
+  }
+
+  /**
    * Close admission and stop all instances in the selected subagent trees, then await
    * pending startup and cleanup. Ordinary members are ignored. The cutoff lasts
    * until each exact root leaves the registry; unrelated subagent trees remain live.
@@ -522,9 +546,48 @@ export class SubagentRuntime extends TypertRemoteService {
     try {
       this.interrupt(childSessionId, { kind: 'user' })
     } catch (error: unknown) {
-      throw new RemoteError('gateway/internal', 'subagent interrupt failed', {}, { cause: error })
+      throw new RemoteError('gateway/internal', `subagent interrupt failed: ${String(error)}`, {}, { cause: error })
     }
     return { accepted: true }
+  }
+
+  /**
+   * Select a local child's model under the caller's target-Session permission.
+   * Like Session model selection, it accepts only a model its provider lists in the
+   * current catalog. No message or global default is changed. A successful receipt
+   * confirms the child's persistence barrier; an unconfirmed failure may follow a live change.
+   * @param request - target and complete model choice; omitted effort uses adapter defaults.
+   * @param signal - caller cancellation before selection is recorded.
+   * @returns the recorded choice after confirmed persistence.
+   * @throws {RemoteError} validation, authorization, availability, cancellation,
+   * or subagent/model-selection-unconfirmed when the durable outcome is unknown.
+   */
+  @Remote({ name: 'selectModelByUser', resources: { session: request => request.childSessionId } })
+  async selectModelByUser(request: SubagentSelectModelRequest, signal: AbortSignal): Promise<SubagentSelectModelReceipt> {
+    validateControlRequest('subagent.selectModel', request)
+    const selection: ModelSelection = {
+      provider: request.provider,
+      model: request.model,
+      ...request.reasoningEffort === undefined ? {} : { reasoningEffort: brandString<ReasoningEffortId>(request.reasoningEffort) },
+    }
+    try {
+      await this.assertListedModel(selection)
+      const selected = await this.selectModel(request.childSessionId, selection, { kind: 'user' }, signal)
+      return { selected }
+    } catch (error: unknown) {
+      return rejectModelSelection(error, request.childSessionId, signal)
+    }
+  }
+
+  /** Refuse a user choice that the provider catalog does not list. */
+  private async assertListedModel(selection: ModelSelection): Promise<void> {
+    const llm = this.ctx.get('llm')
+    if (llm === undefined) {
+      throw new SubagentError('cannot validate the selected subagent model because the LLM service is unavailable', 'MODEL_UNAVAILABLE')
+    }
+    if (!await llm.isModelInCatalog(selection.provider, selection.model)) {
+      throw new SubagentError(`provider "${selection.provider}" does not list model "${selection.model}"`, 'MODEL_UNAVAILABLE')
+    }
   }
 
   /**

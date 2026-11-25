@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Lectura en voz alta",
+    "description": "Lee en voz alta las respuestas del asistente con la síntesis de voz en la nube de DeepSeek mediante una cuenta de DeepSeek o una API Key. La síntesis se factura por carácter.",
+    "detail": "docs/DETAIL.md"
+  }
+}

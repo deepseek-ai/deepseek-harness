@@ -2,7 +2,10 @@
 // verbatim, and hostile shapes (cycles, empty messages, bare values) cannot
 // break the status text they feed.
 import { describe, expect, it } from 'vitest'
-import { describeError, McpLocalError, mcpRequestError, redactSecrets } from '@deepseek-ai/dsh-mcp-client/src/diagnostic.ts'
+import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client'
+import {
+  describeError, eventStreamRefused, McpLocalError, mcpRequestError, redactSecrets, sessionRejected,
+} from '@deepseek-ai/dsh-mcp-client/src/diagnostic.ts'
 import { withDeadline } from '@deepseek-ai/dsh-mcp-client/src/deadline.ts'
 import { MissingTemplateValue, resolveTemplateString } from '@deepseek-ai/dsh-mcp-client/src/templates.ts'
 
@@ -83,6 +86,37 @@ describe('local failure codes', () => {
     const redacted = mcpRequestError(failure, 'resources/read', text => text.replace('secret-value', '[redacted]'))
     expect(redacted.message).toBe('MCP resources/read failed: Error: rejected [redacted]')
     expect(redacted.cause).toBeUndefined()
+  })
+})
+
+describe('session rejection', () => {
+  const post = (status: number, text: string | null): SdkHttpError =>
+    new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, `Error POSTing to endpoint: ${text}`, { status, text })
+  const stream = new SdkHttpError(SdkErrorCode.ClientHttpFailedToOpenStream, 'Failed to open SSE stream: Not Found', { status: 404 })
+
+  it.each([
+    [404, 'Session not found'],
+    [404, null],
+    [400, 'Bad Request: No valid session ID provided'],
+    [400, '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Bad Request: Server not initialized"},"id":null}'],
+  ])('reads a POST answered with %i %s as a session the server no longer knows', (status, text) => {
+    expect(sessionRejected(post(status, text))).toBe(true)
+  })
+
+  it.each([
+    [400, 'Bad Request: invalid JSON'],
+    [400, null],
+    [500, 'session store unavailable'],
+  ])('reads a POST answered with %i %s as an ordinary request failure', (status, text) => {
+    expect(sessionRejected(post(status, text))).toBe(false)
+  })
+
+  it('keeps a refused event stream apart from a rejected session', () => {
+    expect(sessionRejected(stream)).toBe(false)
+    expect(eventStreamRefused(stream)).toBe(true)
+    expect(eventStreamRefused(post(404, 'Session not found'))).toBe(false)
+    expect(sessionRejected(new TypeError('fetch failed'))).toBe(false)
+    expect(eventStreamRefused(new TypeError('fetch failed'))).toBe(false)
   })
 })
 

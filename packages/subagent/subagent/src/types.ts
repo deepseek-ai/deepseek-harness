@@ -82,7 +82,7 @@ export interface SubagentMemberNames {
 }
 
 /**
- * Authority under which one interrupt request is admitted. `user` is a trusted
+ * Authority under which a child control operation is admitted. `user` is a trusted
  * host operation; Remote callers need permission on the target Session before
  * invoking it. `ancestor` carries an exact live Agent in the target's creation ancestry.
  */
@@ -178,8 +178,8 @@ export interface SubagentStartRequest {
   /**
    * Optional host-Agent provider, model, reasoning-effort, and output-token
    * overrides. Requires {@link SubagentCapabilities.agentOptions}; in-process
-   * providers merge them over the parent Agent's options when they create the
-   * child, while the DSH SDK provider merges them over its instance defaults
+   * providers resolve them against the parent's current model choice and
+   * output-token limit, while the DSH SDK provider merges them over its instance defaults
    * before initializing the separate child runtime.
    */
   readonly agentOptions?: AgentOptions

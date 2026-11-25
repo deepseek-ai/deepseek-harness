@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-subagent/control-types
  */
 
+import type { ModelSelection } from '@deepseek-ai/dsh-agent/types'
 import type { PromptContentPart } from '@deepseek-ai/dsh-attachment/types'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
@@ -100,9 +101,22 @@ export interface SubagentInterruptReceipt {
   readonly accepted: true
 }
 
+/** Complete human-selected model choice for a continuable child. */
+export interface SubagentSelectModelRequest {
+  readonly childSessionId: SessionId
+  readonly provider: string
+  readonly model: string
+  /** Omission clears an explicit effort and uses the selected model's default. */
+  readonly reasoningEffort?: string
+}
+
+/** Choice returned after the child's persistence barrier confirms it. */
+export interface SubagentSelectModelReceipt {
+  readonly selected: ModelSelection
+}
+
 /**
- * Failure details the control surface answers with. Prompts and interrupts
- * share these failures with the Client Remote result.
+ * Subagent activity reported to Workspace archive admission.
  */
 declare module '@deepseek-ai/dsh-workspace/types' {
   interface SessionActivityKindMap {
@@ -123,5 +137,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'subagent/attachment-invalid': { readonly reason: string }
     /** The child exists but its inbox cannot admit the message now. */
     'subagent/delivery-unavailable': { readonly childSessionId: SessionId }
+    /** The requested route or effort is unavailable; the previous choice is unchanged. */
+    'subagent/model-unavailable': { readonly childSessionId: SessionId }
+    /** The child cannot accept a model selection now. */
+    'subagent/model-selection-unavailable': { readonly childSessionId: SessionId }
+    /** Selection may have changed; reload child state before deciding whether to retry. */
+    'subagent/model-selection-unconfirmed': { readonly childSessionId: SessionId }
   }
 }

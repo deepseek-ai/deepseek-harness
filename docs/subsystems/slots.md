@@ -18,6 +18,8 @@ The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.
 
 [ui-session-panel](../../packages/client/ui-session-panel/README.md#contribute-a-section) documents the Session panel's section, title-control, row, and toggle-indicator extension positions.
 
+General Settings declares the root-scoped list `settings.general.group`; each group entry owns its child item-list declaration. The settings base declares the six built-in grouped item keys and exports their union as `SettingsGeneralGroupItemSlot`; custom groups declaration-merge their exact `settings.general.group.<id>.item` key into `SlotMap`. The default Preferences group owns the compatible `settings.general.item` key. [ui-settings-general](../../packages/client/ui-settings-general/README.md#the-general-section) documents group labels, ordering, shared cards, and registration examples.
+
 ## Declaration and lifecycle
 
 `SlotMap` is the compile-time registry. A package declaration-merges the key, cardinality, scope, owner props, keyed props, and optional slot-level inject face. The runtime declaration is the matching `children` entry on the component that owns the render location.
@@ -70,13 +72,29 @@ The slot declaration fixes two independent axes.
 
 `priority` is a shadowing rank for `single`, `list`, `keyed`, and `hoc` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list or hoc `id`, or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
 
+<a id="slot-style-ownership"></a>
+
+### Which package supplies the rendered content?
+
+`data-slot` identifies a position; `data-plugin` identifies the package supplying its content, regardless of that package's CSS settings. For [scoped styles](../../packages/client/ui-renderer/README.md#package-style-isolation), a different package name ends the enclosing package's scope; a nested root with the original name starts it again. An unknown supplier or framework error has `data-plugin=""`. A shared outlet with no `data-plugin` leaves the enclosing scope unchanged.
+
+| Position | Existing element | Whose package name goes in `data-plugin`? |
+|---|---|---|
+| `root`, `single`, `keyed` | `[data-slot]` | The winner, or the caller for a `single` or `keyed` fallback. An exhausted cell shows a framework error instead. An unregistered `root` is an assembly error. |
+| `chain` | `[data-slot]`; `[data-chain-overlay-fallback]` for an overlay's fallback | The elected registration, or the caller for no match or `fallbackOnly`. The separate fallback element always names its supplier, even while hidden. |
+| `list`, including `only` | `[data-slot-item]` for a winner; `[data-slot]` for a fallback | Each item's winner. An outlet with rows is unmarked, even for a single row. With no matching `id`, the outlet names the caller; an exhausted `id` gets `data-plugin=""` on its direct error element. |
+| `hoc` | `[data-slot]`; `[data-slot-children]` where a layer forwards children | The outermost applicable layer, or the caller with no layers. Each children outlet names the supplier of its *contents*: the next layer, or the original caller at the innermost layer. |
+| Component Factory | `[data-slot-factory]`; `[data-slot-factory-children]` for a mounted local replacement | The definition supplies the body; the caller supplies the selected local. A default local has no separate root. A missing definition returns the caller's fallback without a Factory root. |
+
+No additional DOM element or render permission comes with these attributes. The [style scoping decision](../../.agents/notes/implemented/architecture/2026-11-23-slot-module-boundaries-for-css-scope.md) shows how a button keeps its caller's styles inside another package's Factory and how HOC layers forward children.
+
 <a id="list-item-roots"></a>
 
 ### List item roots
 
 A `list` outlet (`[data-slot="key"]`) has one direct `[data-slot-item]` child for the winning registration of each selected `id`, even when `only` selects a single `id`. The attribute has an empty value; it does not identify the registration or the render instance. The outlet and its item roots are `div`s by default or `span`s when the list declares `inline: true`. Both use `display: contents` and have no layout box of their own.
 
-A winner that returns `null` leaves an empty item. Text and all local nodes of a React Fragment stay inside one item; portal content stays at its destination. Counting item roots does not tell you how many controls are visible. If the list has no registrations or `only` matches no `id`, the owner's `fallback` renders directly inside the outlet (nothing if omitted). If all registrations for a matching `id` have failed, its `[data-slot-error="key"]` placeholder is a direct child of the outlet instead of an item.
+A winner that returns `null` leaves an empty item. Text and all local nodes of a React Fragment stay inside one item; portal content stays at its destination. Counting item roots does not tell you how many controls are visible. If the list has no registrations or `only` matches no `id`, the owner's `fallback` renders directly inside the outlet (nothing if omitted). If all registrations for a matching `id` have failed, its `[data-slot-error="key"]` placeholder is a direct child of the outlet instead of an item. Reordering siblings or switching `only` preserves the item, its controls and their state while the same registration remains selected.
 
 <a id="hoc-layers"></a>
 
@@ -109,6 +127,8 @@ Both buttons have `inner.frame` as their nearest `[data-slot]`, and `[data-slot-
 
 The [context-menu plugin](../../packages/client/ui-context-menu/README.md) contributes `useContextMenu` through `provideRoot`; every scope receives the same plugin-owned trigger factory. Its prop and retained handlers retire when the provider unloads. Its root-scoped keyed `contextMenu.icon` Slot renders business-owned icons from action metadata.
 
+<a id="component-inputs"></a>
+
 ## Component inputs
 
 A registered component receives inputs assembled at its binding site. Components derive these types rather than copying their members.
@@ -127,6 +147,8 @@ A registered component receives inputs assembled at its binding site. Components
 
 Components never receive `ctx`. Parent-owned point-in-time values enter through the owner argument to `renderSlot`; shared view state uses a declared store; services and model objects stay in the `apply` closure and are projected into callbacks or observable sources.
 
+<a id="framework-provided-hooks"></a>
+
 ## Framework-provided hooks
 
 The shipped adapters add these standard props. They are available according to the target slot's scope, independent of which package registered the component.
@@ -138,12 +160,17 @@ The shipped adapters add these standard props. They are available according to t
 | every scope | `useWorkspaces`, `useWorkspaceAccess` | `ui-workspace` |
 | every scope | `useRemoteAccess` (the `global` resource) | `api-remote-access` |
 | every scope | `usePanelInfo` | `ui-layout` |
+| every mounted scope | `useDocumentPortal`, `useDocumentViewport` | [ui-renderer](../../packages/client/ui-renderer/README.md#use-this-package) |
+| every scope | `useMediaQuery` | `ui-responsive` |
+| every scope | `useMobile` | `ui-responsive` |
 | `session` | `sessionId`, `useSession`, `useProjection`, `useAccess` (the bound Session's answer) | `ui-session` |
 | `session-maybe` | optional `sessionId`, `useSession`, `useProjection`, `useAccess` results | `ui-session` |
 | `session` | `useConversation`, `useInput`, `inputActions` | `ui-conversation` |
 | `session-maybe` | optional `useConversation`, `useInput`, `inputActions` results | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
 | `session` | `useTrajectory` | `ui-trajectory` |
+
+`useMediaQuery(query)` answers whether a CSS media query matches in the page window and rerenders the component when the answer changes; use it when the answer selects rendered structure or behavior, and keep a style-only difference in a CSS `@media` rule. `useMobile()` answers whether the page runs on a phone or tablet and stays fixed for the page lifetime; use it only for automatic focus and soft-keyboard behavior, and select layouts with width media queries. A plugin whose components read either prop injects the `uiResponsive` service, so it starts after both props exist and unloads with them.
 
 The renderer also creates `useStore` from a declared store and `t` from a declared locale namespace. These are registration-derived props rather than global standard props.
 
@@ -255,6 +282,8 @@ Factory: conversation.chat.reasoning.content [ReasoningContent / MarkdownText]
 All four image Slots default to `MessageImages`, which calls `conversation.images.content` with the caller's image references and authorized loader. User and output image replacements are independent. The `conversation.user.text` Factory is shared by user content, Queue, and Goal; its `inline: true` keyed Slot renders span anchors and inline error placeholders rather than block wrappers.
 
 The generated [Client inspect catalog](../../packages/extensions/cordis-client-runner/src/client/slot-catalog.ts) covers all shell branches and is the exhaustive contract for each key: cardinality, scope, owner props, standard props, current occupants, declaration owner, and replacement risk. A running dynamic package can query the live tree and an exact key with `cordis_inspect what:"client"`; the source catalog is generated from `SlotMap` declarations and `slots.register()` call sites by `pnpm run gen-client-catalog`.
+
+<a id="extension-rules"></a>
 
 ## Extension rules
 

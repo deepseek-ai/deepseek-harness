@@ -173,12 +173,14 @@ describe('keyed toolview hole through the real machinery', () => {
   })
 
   it.each([
+    ['document_render', 'Render document'],
+    ['document_convert', 'Convert document'],
+    ['document_recalculate', 'Recalculate workbook'],
     ['office_render', 'Render document'],
     ['office_convert', 'Convert document'],
-    ['office_recalculate', 'Recalculate workbook'],
   ])('dispatches %s to its Office row through the real call tree', async (name, title) => {
     const output = `${name} result`
-    const args = { input: 'input.xlsx', ...name === 'office_render' ? {} : { format: 'xlsx' } }
+    const args = { input: 'input.xlsx', ...name.endsWith('_render') ? {} : { format: 'xlsx' } }
     const b = await bench([
       toolResult(3, 'office-call', name, JSON.stringify(args), {
         meta: { path: '/w/input.xlsx' }, content: [{ type: 'text', text: output }],
@@ -188,7 +190,7 @@ describe('keyed toolview hole through the real machinery', () => {
       const view = b.runtime.renderRoot()
       expect(view.getByText(title)).toBeTruthy()
       expect(view.queryByText('Tool call')).toBeNull()
-      expect(view.getByRole('button', { name: name === 'office_render' ? 'input.xlsx' : 'input.xlsx → xlsx' })).toBeTruthy()
+      expect(view.getByRole('button', { name: name.endsWith('_render') ? 'input.xlsx' : 'input.xlsx → xlsx' })).toBeTruthy()
       fireEvent.click(view.container.querySelector('[data-expandable]')!)
       expect(view.getByText(output)).toBeTruthy()
     } finally { await b.runtime.dispose() }

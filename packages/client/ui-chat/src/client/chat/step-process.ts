@@ -26,3 +26,18 @@ export function processTitle(
   const title = [first, ...labels.slice(1).map(continuation)].join(t('message.stepProcess.comma'))
   return summary.counts.length > 3 ? t('message.stepProcess.more', { title }) : title
 }
+
+/**
+ * Title an open group while no tool runs: the request analysis before any non-Context work, then the completed work and the next step.
+ * @param summary - ranked work and phase evidence for this range.
+ * @param t - Chat namespace translator.
+ * @returns the live title without its detail.
+ */
+export function thinkingTitle(
+  summary: ProcessActivitySummary,
+  t: ChatViewSlotProps['t'],
+): string {
+  const first = summary.counts[0]
+  if (first === undefined || first.kind === 'context') return t('message.stepProcess.thinking')
+  return t('message.stepProcess.thinkingNext', { title: processTitle(summary, t) })
+}

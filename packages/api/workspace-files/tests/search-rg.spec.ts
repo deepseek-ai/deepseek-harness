@@ -171,7 +171,10 @@ describe('ripgrep-backed workspace discovery', () => {
 
   it('reports synchronous and asynchronous launch failures with a stable Remote code', async () => {
     const spawn = vi.spyOn(harness.ctx.subprocess, 'spawn').mockImplementation(() => { throw new Error('remote executable missing') })
-    expect((await failureOf(search('a'))).code).toBe('workspace-file/search-failed')
+    await expect(search('a')).rejects.toMatchObject({
+      code: 'workspace-file/search-failed',
+      message: expect.stringContaining('workspace file search: Error: remote executable missing;') as string,
+    })
     spawn.mockRestore()
     const original = harness.ctx.subprocess.spawn.bind(harness.ctx.subprocess)
     vi.spyOn(harness.ctx.subprocess, 'spawn').mockImplementation(spec => original({ ...spec, argv: [join(harness.workspace, 'missing-rg')] }))

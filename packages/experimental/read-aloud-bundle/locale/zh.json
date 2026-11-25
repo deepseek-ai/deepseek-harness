@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "语音朗读",
+    "description": "登录 DeepSeek 账号或配置 API Key 后，朗读助手回复。使用 DeepSeek 云端语音合成，按字符计费。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

@@ -1,4 +1,7 @@
-/** Multipart request bodies reach the fetch implementation the HTTP service dispatches with. */
+/**
+ * Multipart request bodies reach the fetch implementation the HTTP service dispatches with, and request
+ * configuration resolves through the Core rc.12 intercept API the vendored http 1.6.0 source uses.
+ */
 import { createServer, type IncomingHttpHeaders } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -71,6 +74,40 @@ describe('cordis http multipart bodies', () => {
       const [request] = captured
       expect(request?.headers['content-type']).toBe('application/json')
       expect(request?.body).toBe('{"app_id":"cli_probe","app_secret":"secret"}')
+    } finally {
+      await close()
+    }
+  })
+})
+
+describe('cordis http request configuration', () => {
+  it('applies a context intercept and lets the request config replace its headers', async () => {
+    const { url, captured, close } = await loopback()
+    const ctx = new Context()
+    contexts.push(ctx)
+    try {
+      await ctx.plugin(Http, { headers: { 'x-service': 'service' } })
+      const scoped = ctx.intercept('http', { headers: { 'x-intercept': 'intercept' } })
+      await scoped.http.get(url)
+      await scoped.http.get(url, { headers: { 'x-request': 'request' } })
+      const [intercepted, requested] = captured
+      expect(intercepted?.headers['x-intercept']).toBe('intercept')
+      expect(intercepted?.headers['x-service']).toBeUndefined()
+      expect(requested?.headers['x-request']).toBe('request')
+      expect(requested?.headers['x-intercept']).toBeUndefined()
+    } finally {
+      await close()
+    }
+  })
+
+  it('keeps service-level headers when neither the intercept nor the request sets any', async () => {
+    const { url, captured, close } = await loopback()
+    const ctx = new Context()
+    contexts.push(ctx)
+    try {
+      await ctx.plugin(Http, { headers: { 'x-service': 'service' } })
+      await ctx.intercept('http', { timeout: 5000 }).http.get(url)
+      expect(captured[0]?.headers['x-service']).toBe('service')
     } finally {
       await close()
     }

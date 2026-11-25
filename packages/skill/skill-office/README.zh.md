@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-目录只列出一个 `office` 技能。其说明按需加载，内联涵盖 Word、PowerPoint 和 Excel 的易错点以及 [`office_render`、`office_convert` 和 `office_recalculate`](../../document/tool-office/README.zh.md)，并在末尾附上配置的 Python 环境说明。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
+目录只列出一个 `office` 技能。其说明按需加载，内联涵盖 Word、PowerPoint 和 Excel 的易错点以及 [`document_render`、`document_convert` 和 `document_recalculate`](../../document/tool-document/README.zh.md)，并在末尾附上配置的 Python 环境说明。Web 应用和 SDK profile 挂载该提供者；只有 Desktop 或带主运行时的 SDK 还挂载内置依赖查询。
 
 ## 目录
 
@@ -26,7 +26,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责 `office` 说明，并追加 Python 环境说明。说明把操作交给 `office_render`、`office_convert` 和 `office_recalculate`，因此需在本提供者旁组合 [`tool-office`](../../document/tool-office/README.zh.md)。
+在技能注册表和 `dsh-tool-skill` 旁挂载技能提供者。提供者负责 `office` 说明，并追加 Python 环境说明。说明把操作交给 `document_render`、`document_convert` 和 `document_recalculate`，因此需在本提供者旁组合 [`tool-document`](../../document/tool-document/README.zh.md)。
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-office'
@@ -45,7 +45,7 @@ kind: "package-reference"
 <a id="progressive-loading"></a>
 ### 渐进加载
 
-模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，`office` 技能列入目录，可通过 `skill` 加载或由用户以 `/office` 显式调用。加载 `office` 会返回 Word、PowerPoint 和 Excel 易错点的精简内联说明，指出内置 Python 提供 `pypdf` 用于读取现有 PDF，并使三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），说明会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法打开的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `office_convert` 转换。
+模型依据任务选择技能；宿主不会根据文件扩展名注入完整说明。资源完整时，`office` 技能列入目录，可通过 `skill` 加载或由用户以 `/office` 显式调用。加载 `office` 会返回 Word、PowerPoint 和 Excel 易错点的精简内联说明，指出内置 Python 提供 `pypdf` 用于读取现有 PDF，并使三个 Office 工具从下一步开始可用；工具不在列表中时（例如 PTC 模式 resume 或 fork 之后），说明会指示模型重新加载 `office`。python-docx、openpyxl 和 python-pptx 无法打开的旧格式 `.doc`、`.xls`、`.ppt` 文件，先用 `document_convert` 转换。
 
 ```mermaid
 flowchart TD
@@ -56,21 +56,21 @@ flowchart TD
     B -->|Create or edit| D["Author and validate content, structure and data"]
     D -->|No additional operation needed| F["Deliver"]
 
-    B -->|Render or inspect| R["office_render: images in the tool result"]
+    B -->|Render or inspect| R["document_render: images in the tool result"]
     D -->|Changed slides or visual inspection| R
     R --> V["Inspect rendered images"]
     V --> F
 
-    B -->|Formula recalculation| X["office_recalculate, shell copy"]
+    B -->|Formula recalculation| X["document_recalculate, shell copy"]
     D -->|Formula recalculation| X
     X --> F
 
-    B -->|Format conversion or PDF export| P["office_convert, shell copy"]
+    B -->|Format conversion or PDF export| P["document_convert, shell copy"]
     D -->|Format conversion or PDF export| P
     P --> F
 ```
 
-内联说明列出了各格式容易导致静默数据丢失的要点：Word 文本编辑在 run 内部修改文字，因为直接给 `paragraph.text` 赋值会丢弃段落内 run 的格式，且中日韩文字除设置 `run.font.name` 外还需设置 `w:eastAsia` 字体；PowerPoint 编辑后渲染修改过的幻灯片，因为 python-pptx 无法测量文字是否超出文本框；Excel 编辑在需要显示公式结果时调用 `office_recalculate`，因为 openpyxl 写入公式时不计算结果，且不要将 pandas DataFrame 直接覆盖写入已有工作簿，否则会丢失其他工作表、公式和格式；除非用户要求覆盖，否则保留原文件。预览图片直接出现在 `office_render` 结果中，转换和重算的文件以临时路径返回，由模型用 `cp` 或 `Copy-Item` 复制进工作区。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
+内联说明列出了各格式容易导致静默数据丢失的要点：Word 文本编辑在 run 内部修改文字，因为直接给 `paragraph.text` 赋值会丢弃段落内 run 的格式，且中日韩文字除设置 `run.font.name` 外还需设置 `w:eastAsia` 字体；PowerPoint 编辑后渲染修改过的幻灯片，因为 python-pptx 无法测量文字是否超出文本框；Excel 编辑在需要显示公式结果时调用 `document_recalculate`，因为 openpyxl 写入公式时不计算结果，且不要将 pandas DataFrame 直接覆盖写入已有工作簿，否则会丢失其他工作表、公式和格式；除非用户要求覆盖，否则保留原文件。预览图片直接出现在 `document_render` 结果中，转换和重算的文件以临时路径返回，由模型用 `cp` 或 `Copy-Item` 复制进工作区。操作结束后，已加载的说明仍属于会话历史。图中描述各端常规预设，不改变 minimal 或 sdk-minimal 的纯 shell 定义。
 
 -----
 
@@ -100,7 +100,7 @@ flowchart TD
 - [技能注册表](../skill/README.zh.md) — 发现和优先级。
 - [技能工具](../tool-skill/README.zh.md) — 模型目录和加载正文。
 - [文件交付](../../deliverables/tool-present/README.zh.md) — 当前源文件路径交付。
-- [Office 工具](../../document/tool-office/README.zh.md) — 渲染、转换和重算。
+- [Office 工具](../../document/tool-document/README.zh.md) — 渲染、转换和重算。
 
 -----
 
@@ -111,7 +111,7 @@ flowchart TD
 
 #### KV Cache 影响
 
-技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-office` 时，首次成功加载 `office` 会在下一步启用三个工具声明。因技能文件不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，不含 Python 环境说明的正文为 232 token，含 Python 环境说明的完整 `office` 正文最多 350 token（`'workspace-dependencies'` 为 344 token，`'user'` 为 346 token）。配置不变时，追加的 Python 环境说明保持不变，并计入 `office` 正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
+技能结果追加到历史中，操作完成后已加载文本或图片仍保留在历史中。挂载 `tool-document` 时，首次成功加载 `office` 会在下一步启用三个工具声明。因技能文件不可读而省略或移除的技能会改变目录，后续步骤会将其作为目录更新发布。字符估算采用 `ceil(字符数 / 4)`：摘要最多 50 token，不含 Python 环境说明的正文为 235 token，含 Python 环境说明的完整 `office` 正文最多 350 token（`'workspace-dependencies'` 为 346 token，`'user'` 为 348 token）。配置不变时，追加的 Python 环境说明保持不变，并计入 `office` 正文。技能包装、通用目录、shell 与 Office 工具声明和 `load_workspace_dependencies` 单独计费；这些估算不等同于服务端 usage。
 
 ## 已知限制与后续工作
 

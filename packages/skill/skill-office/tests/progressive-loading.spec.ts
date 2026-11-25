@@ -80,7 +80,7 @@ it.each(['native', 'ptc'] as const)('loads the office skill in %s; resume and fo
   expect(requests[1]).toContain(resourceBase)
   if (mode === 'native') expect(requests[1]).toContain('Base directory for this skill:')
   expect(requests[1]).toContain('python-docx')
-  expect(requests[1]).toContain('`office_render`')
+  expect(requests[1]).toContain('`document_render`')
   if (mode === 'ptc') {
     expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'skill-invocation')).toEqual([])
   }
@@ -93,7 +93,7 @@ it.each(['native', 'ptc'] as const)('loads the office skill in %s; resume and fo
   for (const request of adapter.requests.slice(2)) {
     const text = JSON.stringify(request)
     expect(text).toContain('python-docx')
-    expect(text).toContain('`office_render`')
+    expect(text).toContain('`document_render`')
     expect(text).not.toMatch(/dsoffice|fragment rectangles/u)
   }
   expect(agent.session.snapshotEvents()).toEqual(seed)
@@ -104,7 +104,7 @@ it('routes standalone operations to dedicated Office tools', async () => {
   await send(agent)
   const loaded = JSON.stringify(adapter.requests.at(-1))
   expect(loaded).toContain('# Office tasks')
-  for (const name of ['office_render', 'office_recalculate', 'office_convert']) expect(loaded).toContain(`\`${name}\``)
+  for (const name of ['document_render', 'document_recalculate', 'document_convert']) expect(loaded).toContain(`\`${name}\``)
   expect(loaded).not.toContain('operation:')
 })
 

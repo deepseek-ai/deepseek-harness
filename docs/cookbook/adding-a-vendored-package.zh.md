@@ -39,7 +39,7 @@ vendored TypeScript 源码中的本地相对导入/导出在复制后使用显�
 |---|---|
 | `tsconfig.base.json` | 在 `paths` 中添加 `"<npm-name>": ["./vendor/<dir>/src"]` |
 | `tsconfig.host.json` | 在 `references` 中添加 `{ "path": "./vendor/<dir>" }`（置于 `packages/*` 条目之前；vendored 代码只经 host 聚合进图） |
-| `vendor/README.md` | 添加一行 manifest 表格行（dir、npm name、version、upstream repo、commit SHA）并记录所有本地修改 |
+| `vendor/README.md` | 添加一行 manifest 表格行（dir、npm name、version、upstream repo、commit SHA），并按 Build、Upstream、Patches 分类记录所有本地修改；IM 包放在 `vendor/im/` 下，改为记录在 `vendor/im/README.md` |
 | `scripts/rescope-vendor.ts` | 添加上游名称与作用域名称的映射，并同步 `docs/rescope.md` 及其中文版本 |
 | `scripts/check-workspace-constraints.ts` | 将包加入源代码发布豁免集合 |
 
@@ -47,7 +47,7 @@ vendored TypeScript 源码中的本地相对导入/导出在复制后使用显�
 
 ## 3. 注意 manifest 守卫
 
-`scripts/check-vendor-manifest.sh`（pre-commit 钩子）会在 `vendor/*/src` 下有暂存改动但 `vendor/README.md` 未一起暂存时失败。请将 manifest 更新与源码一起暂存，以通过提交检查。
+`scripts/check-vendor-manifest.sh`（pre-commit 钩子）会在 `vendor/*/src` 下有暂存改动但 `vendor/README.md` 未一起暂存时失败；`vendor/im/*/src` 对应的是 `vendor/im/README.md`。请将 manifest 更新与源码一起暂存，以通过提交检查。
 
 ## 4. 验证
 

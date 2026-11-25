@@ -1914,7 +1914,7 @@ describe('forgePanel leaving a worktree', () => {
     await expect(opened.ctx.forgePanel.continueInProject(unloaded, signal))
       .rejects.toMatchObject({ code: 'forgePanel/session-busy', message: 'The Session is not loaded' })
     await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal))
-      .rejects.toMatchObject({ code: 'forgePanel/session-busy', message: 'The Session is busy' })
+      .rejects.toMatchObject({ code: 'forgePanel/session-busy', message: expect.stringMatching(/^The Session is busy: agent ".+" /) as string })
     await release()
 
     expect(opened.ctx.workingDirectory.get(unloaded)).toBe(created.path)

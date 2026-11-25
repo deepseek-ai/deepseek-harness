@@ -59,7 +59,7 @@ try {
   const parent = await ctx.agents.create({
     sessionId: brandString("built-parent"),
     meta: { cwd: storageRoot },
-    agentOptions: { model: "test" },
+    agentOptions: { provider: "test", model: "test" },
   });
   const unregister = ctx.subagents.registerProvider({
     name: "built-local",

@@ -251,7 +251,10 @@ it('reports a failed access stream without leaving its reading follower open', a
   })
   const iterator = service.follow(new AbortController().signal)[Symbol.asyncIterator]()
   await nextFrame(iterator)
-  await expect(iterator.next()).rejects.toMatchObject({ code: 'session-status/unavailable' })
+  await expect(iterator.next()).rejects.toMatchObject({
+    code: 'session-status/unavailable',
+    message: expect.stringContaining('could not be updated: Error: access stream failed.') as string,
+  })
 })
 
 it('discards every record when the service reloads', async () => {

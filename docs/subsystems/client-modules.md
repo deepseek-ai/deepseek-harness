@@ -8,7 +8,7 @@ Source: [`packages/client/modules/src/client/manifest.ts`](../../packages/client
 
 ## The wire
 
-The graph is the wire single source between the Node and browser halves. The host composes `WebBootEntry` rows and `WebBootBatch` descriptors from scanned packages, then contributes the registration facade, application preloads, bootstrap scripts, and graph global to the structured index-injection table before the Vite entry. The `global` row renders as `globalThis["__DSH_BOOT__"]` with `<` escaped so plugin-controlled strings cannot break out of the script element. A page without a valid manifest cannot boot: the browser parser rejects malformed rows or batches, unknown members, and entries without exactly one initial combo descriptor.
+The graph is the wire single source between the Node and browser halves. The host composes `WebBootEntry` rows and `WebBootBatch` descriptors from scanned packages, then contributes the registration facade, application preloads, bootstrap scripts, and graph global to the structured index-injection table before the Vite entry. The `global` row renders as `globalThis["__DSH_BOOT__"]` with `<` escaped so plugin-controlled strings cannot break out of the script element. A page without a valid manifest cannot boot: the browser parser rejects malformed rows or batches, unknown members, and entries whose descriptor membership contradicts their isolation — an entry with `isolation: style` or no isolation must belong to exactly one initial combo descriptor; entries with `script` or `scriptandstyle` must belong to none.
 
 ```ts type-equiv
 /**
@@ -37,6 +37,8 @@ interface WebBootEntry {
   external?: string[]
   /** Browser-synced values of the plugin's top-level volatile Config fields, secrets removed; omitted when it has none. */
   config?: SyncedConfigValues
+  /** Unstable isolation switch copied from the row's Loader entry; omitted when the package is not isolated. */
+  isolation?: ClientIsolation
 }
 ```
 
@@ -82,7 +84,10 @@ interface WebBootGraph {
    * unrelated and remains owned by fiber service waiting.
    */
   entries: WebBootEntry[]
-  /** Initial combo descriptors; every entry belongs to exactly one descriptor. */
+  /**
+   * Initial combo descriptors. Every entry whose isolation excludes `script` belongs to exactly one
+   * descriptor; a script-isolated entry belongs to none and loads from its own {@link WebBootEntry.url}.
+   */
   batches: WebBootBatch[]
 }
 ```

@@ -29,12 +29,12 @@ const image: ImageAttachmentRef = {
 }
 const SUMMARY = 'Rendered 1 image of /w/app/docs/deck.pptx (3 in the document) at 144 DPI.'
 
-const running = (argsRaw = RENDER_ARGS, name = 'office_render'): StartedToolCall => ({
+const running = (argsRaw = RENDER_ARGS, name = 'document_render'): StartedToolCall => ({
   phase: 'start', args: PartialArguments.fromText(argsRaw), callId: 'c1', name, argsRaw,
   turn: 1, step: 1, time: 1_000, subCalls: [],
 })
 
-const settled = (over: Partial<ToolResultNode> = {}, argsRaw = RENDER_ARGS, name = 'office_render'): ToolResultNode => ({
+const settled = (over: Partial<ToolResultNode> = {}, argsRaw = RENDER_ARGS, name = 'document_render'): ToolResultNode => ({
   kind: 'tool-result', seq: 10, time: 2_000, callId: 'c1', name,
   args: PartialArguments.fromText(argsRaw), call: { name, argsRaw }, callTime: 1_000,
   content: [{ type: 'text', text: SUMMARY }, { type: 'text', text: 'Page 2: 800x600 px' }, { type: 'image', attachment: image }],
@@ -43,23 +43,25 @@ const settled = (over: Partial<ToolResultNode> = {}, argsRaw = RENDER_ARGS, name
 
 describe('officeRowModel', () => {
   it('derives a render row from the recorded input path', () => {
-    expect(officeRowModel('office_render', settled(), '/w/app')).toEqual({
+    expect(officeRowModel('document_render', settled(), '/w/app')).toEqual({
       titleKey: 'tool.title.officeRender', summary: 'docs/deck.pptx', filePath: '/w/app/docs/deck.pptx',
     })
   })
 
   it('titles each tool and summarizes written outputs without an operation argument', () => {
     const convert = '{"input":"/w/app/deck.pptx","format":"pdf"}'
-    expect(officeRowModel('office_convert', running(convert, 'office_convert'), '/w/app')).toEqual({
+    expect(officeRowModel('document_convert', running(convert, 'document_convert'), '/w/app')).toEqual({
       titleKey: 'tool.title.officeConvert', summary: 'deck.pptx → pdf', filePath: '/w/app/deck.pptx',
     })
-    expect(officeRowModel('office_recalculate', running('{"input":"book.xlsx"}', 'office_recalculate'))).toMatchObject({
+    expect(officeRowModel('document_recalculate', running('{"input":"book.xlsx"}', 'document_recalculate'))).toMatchObject({
       titleKey: 'tool.title.officeRecalculate', summary: 'book.xlsx', filePath: undefined,
     })
     expect(officeRowModel('other', running('{"input":"unfinished'))).toMatchObject({ titleKey: 'tool.title.generic', summary: '' })
   })
 
   it.each([
+    ['document_render', 'tool.title.officeRender'], ['document_convert', 'tool.title.officeConvert'],
+    ['document_recalculate', 'tool.title.officeRecalculate'],
     ['office_render', 'tool.title.officeRender'], ['office_convert', 'tool.title.officeConvert'],
     ['office_recalculate', 'tool.title.officeRecalculate'],
   ])('selects %s from its wire name even when operation metadata conflicts', (name, titleKey) => {
@@ -68,8 +70,15 @@ describe('officeRowModel', () => {
     expect(officeRowModel(name, block).titleKey).toBe(titleKey)
   })
 
+  it('summarizes calls recorded under the earlier office_* names like current calls', () => {
+    expect(officeRowModel('office_render', settled(), '/w/app')).toEqual(officeRowModel('document_render', settled(), '/w/app'))
+    const convert = '{"input":"/w/app/deck.pptx","format":"pdf"}'
+    expect(officeRowModel('office_convert', running(convert, 'office_convert'), '/w/app'))
+      .toEqual({ titleKey: 'tool.title.officeConvert', summary: 'deck.pptx → pdf', filePath: '/w/app/deck.pptx' })
+  })
+
   it('ignores a relative recorded path', () => {
-    expect(officeRowModel('office_render', settled({ meta: { path: 'relative.pptx' } })).filePath).toBeUndefined()
+    expect(officeRowModel('document_render', settled({ meta: { path: 'relative.pptx' } })).filePath).toBeUndefined()
   })
 })
 
@@ -108,8 +117,8 @@ describe('OfficeRow', () => {
   })
 
   it.each([
-    ['office_convert', 'pdf', '转换文档', 'Converted', ', 3 pages'],
-    ['office_recalculate', 'xlsx', '重算工作簿', 'Recalculated', ''],
+    ['document_convert', 'pdf', '转换文档', 'Converted', ', 3 pages'],
+    ['document_recalculate', 'xlsx', '重算工作簿', 'Recalculated', ''],
   ])('keeps the %s result text and output path while its title link opens the input', (name, format, title, verb, pages) => {
     const input = '/w/app/input.xlsx'
     const file = `/tmp/office/output.${format}`
@@ -128,7 +137,7 @@ describe('OfficeRow', () => {
     expect(view.container.textContent).toContain(`${output}\n${warning}`)
   })
 
-  it('registers all three wire names and removes them on disposal', async () => {
+  it('registers the current and earlier wire names and removes them on disposal', async () => {
     const runtime = await SlotTestRuntime.create()
     onTestFinished(() => runtime.dispose())
     const locale = new LocaleRuntime(runtime.ctx)
@@ -139,6 +148,7 @@ describe('OfficeRow', () => {
     expect(runtime.slots.entries('tool.call.toolview')).toHaveLength(0)
     await runtime.root.declare({ 'tool.call.toolview': { kind: 'keyed', scope: 'session' } }, () => null)
     expect(runtime.slots.entries('tool.call.toolview').map(entry => [entry.options.key, entry.component])).toEqual([
+      ['document_render', OfficeRow], ['document_convert', OfficeRow], ['document_recalculate', OfficeRow],
       ['office_render', OfficeRow], ['office_convert', OfficeRow], ['office_recalculate', OfficeRow],
     ])
     await fiber.dispose()

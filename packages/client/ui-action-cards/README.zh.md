@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-Web 组合（[`dsh-web-app`](../../bundle/web-app/README.zh.md)）会在本包旁挂载对应的 [Host 服务](../../interaction/action-cards/README.zh.md)。本浏览器组件没有配置字段。它在“设置 → 通用设置”中加入“个性化推荐”开关，写入 Host 服务的 `enabled` 字段。
+Web 组合（[`dsh-web-app`](../../bundle/web-app/README.zh.md)）会在本包旁挂载对应的 [Host 服务](../../interaction/action-cards/README.zh.md)。本浏览器组件没有配置字段。它在“设置 → 通用设置 → 会话偏好”中加入“个性化推荐”开关，位于工作步骤的三项偏好（“工作步骤展示”、“工作步骤收起时机”和“收起后显示的回复”）之后、“显示代码工作视图”之前。该开关写入 Host 服务的 `enabled` 字段。
 
 ### 注册卡片正文
 

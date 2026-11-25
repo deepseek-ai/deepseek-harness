@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-23-bundle-plugin-rows-load-bundle-selected-packages.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-23-bundle-plugin-rows-load-bundle-selected-packages.md
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select:
+  en: 3e8a9e80c194e072
+  zh: f6f7467a3f739923
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/problem:
+  en: 36e5af01b5f093e5
+  zh: bf501a87896d43a3
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/decision:
+  en: e213e3b1ab018127
+  zh: a483931c5766d7a9
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/decision/binding:
+  en: 94e1810041de3219
+  zh: 26a6149659bf2578
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/decision/matching:
+  en: 0539d8bae51a8641
+  zh: c610525639f97b32
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/decision/successor-generations:
+  en: 0df3497888a8143e
+  zh: e864e13665c7af4a
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/alternatives-considered:
+  en: f0a6ebe2223c5fa4
+  zh: 2b6c06a20722b532
+/agent-note-load-bundle-plugin-rows-from-the-packages-their-bundles-select/consequences:
+  en: 8c8794d888dba2c8
+  zh: 2df252385c1ee124

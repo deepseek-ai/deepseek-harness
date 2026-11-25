@@ -103,8 +103,8 @@ jobs:
           cp apps/web/dist/preview.html apps/web/dist/index.html
 
       # Reviewers read snapshot changes at /snapshot-diff/, which opens on the
-      # SDK blank-Session catalog (system prompt and tool schemas); the source
-      # chooser links to it. The page serves review only, so a failure warns
+      # SDK and Web blank-Session catalogs (system prompt and tool schemas);
+      # the source chooser links to it. The page serves review only, so a failure warns
       # like publication instead of failing the build.
       - name: Render the snapshot diff page
         id: snapshot-diff

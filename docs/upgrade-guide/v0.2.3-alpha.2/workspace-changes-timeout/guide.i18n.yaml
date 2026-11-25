@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/workspace-changes-timeout/guide.md
+/:
+  en: 7a2f7f6109b8b319
+  zh: f9e94429c08e8df1
+/workspace-changes-give-up-a-git-command-after-3-seconds:
+  en: aee012e6a3556f45
+  zh: 4728c8f80e791237
+/workspace-changes-give-up-a-git-command-after-3-seconds/change:
+  en: ec458c8b35f5c789
+  zh: 66f9a9dece38992d
+/workspace-changes-give-up-a-git-command-after-3-seconds/migration:
+  en: fa92e5be40cc471d
+  zh: f5ae3b0c11d12997

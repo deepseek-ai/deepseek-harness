@@ -19,4 +19,12 @@ describe('dsh-sdk-jsonrpc-server plugin export shape', () => {
     expect(unwrapped.Config).toBeDefined()
     expect(typeof unwrapped.apply).toBe('function')
   })
+
+  it('defaults startupWaitMs to no wait and rejects values outside the timer range', () => {
+    expect(jsonrpc.Config({})).toMatchObject({ startupWaitMs: 0 })
+    expect(jsonrpc.Config({ startupWaitMs: 5000 })).toMatchObject({ startupWaitMs: 5000 })
+    for (const startupWaitMs of [-1, 1.5, 2_147_483_648]) {
+      expect(() => jsonrpc.Config({ startupWaitMs })).toThrow()
+    }
+  })
 })

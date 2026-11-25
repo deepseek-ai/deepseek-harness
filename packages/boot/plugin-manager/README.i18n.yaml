@@ -15,8 +15,8 @@
   en: 87679c51aa3693f5
   zh: 11684a48a5806afb
 /deepseek-ai-dsh-plugin-manager/use-this-package:
-  en: 6fb033e80e3e6629
-  zh: 5403f5ae8650ca1f
+  en: 13bfe44b01d5f21d
+  zh: c17911086e052034
 /deepseek-ai-dsh-plugin-manager/use-this-package/version-compatibility-and-exemptions:
   en: 483285658e267dd5
   zh: 846bec2daac59a96
@@ -47,9 +47,21 @@
 /deepseek-ai-dsh-plugin-manager/model-experience/management-tool/kv-cache-effect:
   en: c29f60be7f3edc1a
   zh: d9b9388b96ef95cc
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references:
+  en: 4df89f1fd74b0103
+  zh: 5d44e686e7250bf8
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references/what-the-model-sees:
+  en: d6127a74592911cd
+  zh: c70ace1450a90dd9
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references/token-effect:
+  en: 545a4c0b0964cbf7
+  zh: dd0f53e1e439369a
+/deepseek-ai-dsh-plugin-manager/model-experience/plugin-references/kv-cache-effect:
+  en: 749f36747c9e0f91
+  zh: d8f3920a3da2947d
 /deepseek-ai-dsh-plugin-manager/known-limitations-and-deferred-work:
-  en: d8ea2d28e9e8c3e7
-  zh: 4efd7e073dde1b96
+  en: 6ac5376855f976b2
+  zh: e8cc45b78ff0c577
 /deepseek-ai-dsh-plugin-manager/known-limitations-and-deferred-work/failure-behavior:
   en: 3fde425e82bbd0f4
   zh: 531e2365e7d67480

@@ -632,6 +632,110 @@
         }
       },
       {
+        "name": "document_convert",
+        "description": "Convert a document to another format. Return a temporary file to copy to its destination with the shell.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "string",
+              "description": "Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, or odp; not modified."
+            },
+            "format": {
+              "type": "string",
+              "description": "Word: pdf, docx, odt, txt. Excel: pdf, xlsx, ods, csv. PowerPoint: pdf, pptx, odp.",
+              "enum": [
+                "pdf",
+                "docx",
+                "odt",
+                "txt",
+                "xlsx",
+                "ods",
+                "csv",
+                "pptx",
+                "odp"
+              ]
+            },
+            "sheet": {
+              "type": "string",
+              "description": "Exact worksheet name for CSV only; required when the workbook has several sheets."
+            }
+          },
+          "required": [
+            "input",
+            "format"
+          ]
+        }
+      },
+      {
+        "name": "document_recalculate",
+        "description": "Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "string",
+              "description": "Path to an xls, xlsx, or ods workbook; not modified."
+            },
+            "format": {
+              "type": "string",
+              "description": "Output workbook format.",
+              "enum": [
+                "xlsx",
+                "ods"
+              ]
+            }
+          },
+          "required": [
+            "input",
+            "format"
+          ]
+        }
+      },
+      {
+        "name": "document_render",
+        "description": "Render document pages, slides, or worksheet areas as images you can view.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "input": {
+              "type": "string",
+              "description": "Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified."
+            },
+            "pages": {
+              "type": "array",
+              "description": "Distinct one-based pages or slides; omit for all. Spreadsheets use sheet and range instead.",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "sheet": {
+              "type": "string",
+              "description": "Exact worksheet name; omit to render every visible sheet."
+            },
+            "range": {
+              "type": "string",
+              "description": "A1 range, such as A1:H40; requires sheet. Omit for the used area."
+            },
+            "dpi": {
+              "type": "integer",
+              "description": "Resolution from 24 to 600; default 144."
+            },
+            "renderer": {
+              "type": "string",
+              "description": "Rendering backend; omit to use the first available for this file type. poppler renders pdf only.",
+              "enum": [
+                "libreoffice",
+                "poppler"
+              ]
+            }
+          },
+          "required": [
+            "input"
+          ]
+        }
+      },
+      {
         "name": "edit",
         "description": "Edit an existing UTF-8 text file by replacing literal text.",
         "parameters": {
@@ -791,102 +895,6 @@
         "parameters": {
           "type": "object",
           "properties": {}
-        }
-      },
-      {
-        "name": "office_convert",
-        "description": "Convert a document to another format. Return a temporary file to copy to its destination with the shell.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "input": {
-              "type": "string",
-              "description": "Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, or odp; not modified."
-            },
-            "format": {
-              "type": "string",
-              "description": "Word: pdf, docx, odt, txt. Excel: pdf, xlsx, ods, csv. PowerPoint: pdf, pptx, odp.",
-              "enum": [
-                "pdf",
-                "docx",
-                "odt",
-                "txt",
-                "xlsx",
-                "ods",
-                "csv",
-                "pptx",
-                "odp"
-              ]
-            },
-            "sheet": {
-              "type": "string",
-              "description": "Exact worksheet name for CSV only; required when the workbook has several sheets."
-            }
-          },
-          "required": [
-            "input",
-            "format"
-          ]
-        }
-      },
-      {
-        "name": "office_recalculate",
-        "description": "Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "input": {
-              "type": "string",
-              "description": "Path to an xls, xlsx, or ods workbook; not modified."
-            },
-            "format": {
-              "type": "string",
-              "description": "Output workbook format.",
-              "enum": [
-                "xlsx",
-                "ods"
-              ]
-            }
-          },
-          "required": [
-            "input",
-            "format"
-          ]
-        }
-      },
-      {
-        "name": "office_render",
-        "description": "Render document pages, slides, or worksheet areas as images you can view.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "input": {
-              "type": "string",
-              "description": "Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified."
-            },
-            "pages": {
-              "type": "array",
-              "description": "Distinct one-based pages or slides; omit for all. Spreadsheets use sheet and range instead.",
-              "items": {
-                "type": "integer"
-              }
-            },
-            "sheet": {
-              "type": "string",
-              "description": "Exact worksheet name; omit to render every visible sheet."
-            },
-            "range": {
-              "type": "string",
-              "description": "A1 range, such as A1:H40; requires sheet. Omit for the used area."
-            },
-            "dpi": {
-              "type": "integer",
-              "description": "Resolution from 24 to 600; default 144."
-            }
-          },
-          "required": [
-            "input"
-          ]
         }
       },
       {

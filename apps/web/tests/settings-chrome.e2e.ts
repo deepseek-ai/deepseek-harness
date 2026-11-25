@@ -255,20 +255,20 @@ describe('web e2e: settings modal and General preferences', () => {
     // control on one line rather than stacking.
     await cells.nth(1).click()
     await expect.poll(() => cells.nth(1).getAttribute('aria-current')).toBe('true')
-    await expect.poll(() => dialog.getByText('权限', { exact: true }).count()).toBe(0)
+    await expect.poll(() => dialog.getByText('会话默认权限', { exact: true }).count()).toBe(0)
     await cells.first().click()
-    await expect.poll(() => dialog.getByText('权限', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
-    const permissionRow = dialog.getByText('权限', { exact: true }).locator('..')
+    await expect.poll(() => dialog.getByText('会话默认权限', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
+    const permissionRow = dialog.getByText('会话默认权限', { exact: true }).locator('..')
     const permissionBox = await permissionRow.boundingBox()
     const controlBox = await dialog.getByRole('button', { name: '工作区内修改' }).boundingBox()
     expect(controlBox).not.toBeNull()
     expect(permissionBox).not.toBeNull()
     expect(controlBox!.y).toBeLessThan(permissionBox!.y + permissionBox!.height)
 
-    // The Appearance cubes share one row instead of wrapping to two.
+    // Below the 360px container width the three Appearance cubes stack.
     const cubes = dialog.getByRole('button', { name: /浅色|深色|跟随系统/ })
     const cubeBoxes = await cubes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().top))
-    expect(new Set(cubeBoxes.map(top => Math.round(top))).size).toBe(1)
+    expect(new Set(cubeBoxes.map(top => Math.round(top))).size).toBe(3)
 
     await cells.first().focus()
     for (let index = 1; index < await cells.count(); index += 1) {

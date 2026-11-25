@@ -15,8 +15,8 @@
   en: 2ab844073ec7c336
   zh: b25e39f2f80b0d7e
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/1-only-the-root-manifest-declares-react-type-packages:
-  en: 1101c94d04f9c7e9
-  zh: 413b7b15f98a5f62
+  en: 8ae969f4c783b711
+  zh: 295a2e67d52da8a4
 /agent-note-build-speed-ups-that-keep-outputs-unchanged/decision/2-typert-selects-packages-by-manifest-first:
   en: 1ae4b65792db0975
   zh: a11c0d90842a3b55

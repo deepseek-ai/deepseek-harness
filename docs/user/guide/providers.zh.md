@@ -216,6 +216,26 @@ DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。�
 
 全部开关、各自接受的取值，以及接受它们的协议，都列在[生成的 `dsh-llm-pi-ai` 配置参考](../../config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)的 `PiAiCompatProfile` 之下——该参考派生自源码，因此不会落后于适配器实际接受的内容。
 
+### 由部署方提供的提供商
+
+部署方可以把提供商条目写入 home patch（`$DSH_HOME/cordis.patch.yml`），从而为这台机器上的每个 profile 提供提供商。每个条目对应一个提供商：`provider` 是它的 ID，与它并列的是该提供商在 profile 自身文件中使用的同一组字段。
+
+```yaml
+- insert:
+    - id: llm-pi-ai-team-gateway
+      name: '@deepseek-ai/dsh-llm-pi-ai/provider'
+      config:
+        provider: team-gateway
+        displayName: Team Gateway
+        apiKeyEnv: TEAM_GATEWAY_API_KEY
+        api: openai-completions
+        baseURL: https://gateway.example/v1
+        models:
+          - id: team-model
+```
+
+模型页把这类提供商与你自己的提供商并列列出，打开后显示部署方为它配置的设置。它不能在此删除。你可以为它填写自己的 API 密钥；修改其他字段会在保存时被拒绝，因为该提供商保存在部署方的文件中。你自己的提供商仍保存在 profile 的文件中，部署方替换其文件时不受影响。一个提供商 ID 只对应一份配置，因此两个文件使用同一个 ID 时，部署方的条目生效，你的同 ID 提供商不显示，待部署方移除其条目后重新生效。部署方若要提供你自己也可能配置的厂商，应给条目使用独立的 ID 并设置显示名称。只有与内置提供商同名的 ID 才取得该提供商的地址和模型；其他 ID 需要像示例那样声明 `api`、`baseURL` 和 `models`。
+
 ## 排错
 
 - **`MISSING_CREDENTIAL`**：通过模型页存储提供商密钥，或提供被引用的环境变量。

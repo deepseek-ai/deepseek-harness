@@ -103,7 +103,7 @@ API Gateway 包同时拥有 Host dispatcher 与 Client Remote endpoint 两个对
 
 根构建首先通过 `scripts/generate-typert.ts` 运行仅源码的 Host 分析，再编译并打包 Host 与 Client face，最后构建 Web（[步骤顺序](development.zh.md#typescript-project-layout)）。生成器以 Host aggregate 为唯一 `ts.Program` 种子，在包编译前写出 Remote 声明。Host tsdown 阶段转换装饰器，但不重复生成元数据；Client 阶段消费这些声明与运行时贡献。
 
-两次 tsdown 都匹配 `vendor/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`（[构建顺序](development.zh.md#typescript-project-layout)），且都只打包 `lib/types` 中由对应 tsc 阶段发射的 JavaScript。根配置不扫描 Client 产物、不按包名分类，也不向 tsdown 传维护式 filter；各包的本地配置根据 `DSH_BUILD_FACE` 返回当前阶段的入口。普通 Client 插件在 Client 阶段一起生成 Node loader 入口与 browser bundle。
+两次 tsdown 都匹配 `vendor/*`、`vendor/im/*`、`packages/*/*` 与 `apps/cli`，Host 阶段另外匹配 `apps/desktop-host`（[构建顺序](development.zh.md#typescript-project-layout)），且都只打包 `lib/types` 中由对应 tsc 阶段发射的 JavaScript。根配置不扫描 Client 产物、不按包名分类，也不向 tsdown 传维护式 filter；各包的本地配置根据 `DSH_BUILD_FACE` 返回当前阶段的入口。普通 Client 插件在 Client 阶段一起生成 Node loader 入口与 browser bundle。
 
 `api/remotes`、`api/gateway`、`api/session-controller` 与 `api/workspace-controller`（外加 `client/connection`）都拆分 TypeScript face。`api/remotes` 的 Client project 依赖业务包在包编译前生成的 `/remote` 声明；根 aggregate 与直接消费方必须分别引用各拆分包自己的 `tsconfig.host.json` 或 `tsconfig.client.json`。`api-remotes` 的 `clientBundle(..., { hostPhase: true })` 让 Host 入口在 Host tsdown 中生成，让 Client tsdown 只生成 browser 入口。Agent/Session lookup 策略位于 `@deepseek-ai/dsh-api-session-controller`，而非 `api-remotes`。
 

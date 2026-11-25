@@ -76,7 +76,7 @@ function generalLabel(c: TestClient): string | undefined {
 }
 
 function developerToolsRowOf(c: TestClient): DeveloperToolsRowInjected {
-  const developerRow = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'developer-tools')!
+  const developerRow = c.ctx.slots.entries('settings.general.group.display.item').find(row => row.options.id === 'developer-tools')!
   return (developerRow.inject as unknown as () => DeveloperToolsRowInjected)()
 }
 
@@ -111,7 +111,9 @@ describe('ui-settings-general apply', () => {
     expect(generalLabel(c)).toBe('通用设置')
     expect(c.ctx.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
     // The shared developer-tool control belongs to General; onboarding remains feature-owned.
-    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools', 'current-version'])
+    expect(c.ctx.slots.spec('settings.general.group')).toEqual({ kind: 'list', scope: 'root' })
+    expect(c.ctx.slots.entries('settings.general.group.display.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools'])
+    expect(c.ctx.slots.entries('settings.general.group.updates.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['current-version'])
     expect(c.ctx.slots.entries('settings.onboarding').filter(row => row.locale === NS)).toEqual([])
     const developer = developerToolsRowOf(c)
     expect(developer.hooks.developerTools).toBe(c.ctx.configForms.developerTools.enabled)
@@ -184,11 +186,14 @@ describe('ui-settings-general apply', () => {
     expect(track).toHaveBeenLastCalledWith('code_work_view_toggle', { is_enabled: false }, 300)
   })
 
-  it('registers the zh/en settings dictionaries and frees the seats when its row unloads', async ({ mock, start }) => {
+  it('registers all eight settings dictionaries and frees the seats when its row unloads', async ({ mock, start }) => {
     const { c, settings } = await client(mock, start)
     const english = localeView('en', 1)
     settings.mutate.mockResolvedValueOnce(ok(english))
     const t = c.ctx.locale.bind(NS)
+    for (const locale of ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const) {
+      expect(() => { c.ctx.locale.register(NS, locale, {}) }).toThrow(`already has locale "${locale}"`)
+    }
     expect(t('title')).toBe('设置')
     expect(t('connection.error')).toBe('连接异常，刷新重试')
     expect(t('connection.connecting')).toBe('重新连接中')
@@ -206,8 +211,9 @@ describe('ui-settings-general apply', () => {
     await c.unload(SELF)
     await c.flush()
     // The (ns, locale) seats are free again — the dictionary disposer ran.
-    expect(() => { c.ctx.locale.register(NS, 'zh', {})() }).not.toThrow()
-    expect(() => { c.ctx.locale.register(NS, 'en', {})() }).not.toThrow()
+    for (const locale of ['zh', 'en', 'ja', 'es', 'fr', 'de', 'ru', 'pt'] as const) {
+      expect(() => { c.ctx.locale.register(NS, locale, {})() }).not.toThrow()
+    }
   })
 
   it('removes the Desktop channel row and shell subscription when its plugin unloads', async ({ mock, start }) => {
@@ -221,7 +227,8 @@ describe('ui-settings-general apply', () => {
       status: async () => ({ phase: 'idle' }), open, subscribe: () => () => {} } })
     onTestFinished(() => { vi.unstubAllGlobals() })
     const { c } = await client(mock, start)
-    const row = c.ctx.slots.entries('settings.general.item').find(row => row.options.id === 'desktop-update-channel')!
+    const row = c.ctx.slots.entries('settings.general.group.updates.item').find(row => row.options.id === 'desktop-update-channel')!
+    expect(row.options.order).toBe(100)
     expect(c.ctx.slots.entries('shell.overlay').some(entry => entry.options.id === 'desktop-channel-toast')).toBe(true)
     const select = row.inject!().select as DesktopChannelRowInjected['select']
     await select('stable')
@@ -349,7 +356,9 @@ describe('ui-settings-general apply', () => {
       else expect(ownEntries(c, name)[0]).not.toBe(before[index])
     })
     expect(c.ctx.slots.spec('settings.general.item')).toEqual({ kind: 'list', scope: 'root' })
-    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools', 'current-version'])
+    expect(c.ctx.slots.spec('settings.general.group')).toEqual({ kind: 'list', scope: 'root' })
+    expect(c.ctx.slots.entries('settings.general.group.display.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools'])
+    expect(c.ctx.slots.entries('settings.general.group.updates.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['current-version'])
     // The recovered registrations still ride the locale path.
     const english = localeView('en', 1)
     const chinese = localeView('zh', 2)
@@ -367,14 +376,16 @@ describe('ui-settings-general apply', () => {
     })
   })
 
-  it('removes every seat and the item declaration when its row unloads', async ({ mock, start }) => {
+  it('removes every seat, group, and child declaration when its row unloads', async ({ mock, start }) => {
     const { c } = await client(mock, start)
     expect(c.ctx.slots.spec('settings.general.item')).toBeDefined()
     await c.unload(SELF)
     await c.flush()
     for (const [name] of SEATS) expect(ownEntries(c, name)).toHaveLength(0)
-    expect(c.ctx.slots.entries('settings.general.item').filter(row => row.locale === NS)).toEqual([])
-    expect(c.ctx.slots.spec('settings.general.item')).toBeUndefined()
+    expect(c.ctx.slots.entries('settings.general.group')).toEqual([])
+    for (const name of ['settings.general.item', 'settings.general.group', 'settings.general.group.display.item', 'settings.general.group.updates.item'] as const) {
+      expect(c.ctx.slots.spec(name)).toBeUndefined()
+    }
   })
 
   it('asks about another Host release in the shell overlay and stops asking once dismissed', async ({ mock, start }) => {

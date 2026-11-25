@@ -69,7 +69,7 @@ export function requestsResource(remote: Pick<Context['remote']['remoteConnectio
         } catch (error) {
           return {
             ok: false,
-            error: remoteErrorOf(error) ?? new RemoteError('pairing/read-failed', 'Could not read pairing requests.', {}),
+            error: remoteErrorOf(error) ?? new RemoteError('pairing/read-failed', `Could not read pairing requests: ${String(error)}`, {}),
           }
         }
       }

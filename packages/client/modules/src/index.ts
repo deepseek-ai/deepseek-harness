@@ -41,19 +41,32 @@ import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
-import { exactPackageSpecifier, parseDshClient, stripClientSuffix } from './client/manifest.ts'
+import { exactPackageSpecifier, parseClientIsolation, parseDshClient, stripClientSuffix } from './client/manifest.ts'
 import { SyncedConfigPublisher } from './config-sync.ts'
-import type { WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease } from './client/manifest.ts'
+import type {
+  ClientIsolation, ClientIsolationFlags, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
+} from './client/manifest.ts'
 
 export { stripClientSuffix } from './client/manifest.ts'
 export type {
-  BootManifest, BootModuleRow, BootPluginRow, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
+  BootManifest, BootModuleRow, BootPluginRow, ClientIsolation, WebBootBatch, WebBootBatchPhase, WebBootEntry, WebBootGraph, WebBootRelease,
 } from './client/manifest.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** The web plugin table (provided by the client-modules node half). */
     clientModules: ClientModuleRegistry
+  }
+}
+
+declare module '@deepseek-ai/cordis-plugin-loader' {
+  interface EntryOptions {
+    /**
+     * Test this Client package with script isolation in an iframe (`script`), scoped stylesheets (`style`),
+     * or both (`scriptandstyle`). Omission or null requests neither. Unknown modes and script isolation of
+     * a stage-one (`immediately`) row fail composition. Loaded module records retain their package’s stylesheet choice.
+     */
+    __unstable_enable_client_isolation?: ClientIsolation | null
   }
 }
 
@@ -93,6 +106,9 @@ interface ResolvedPkgMeta {
 interface ClientPackageSource extends ResolvedPkgMeta {
   /** Loader specifier from the active row. */
   loaderName: string
+  /** Validated Loader spelling published in the boot graph. */
+  isolationMode: ClientIsolation | undefined
+  isolation: ClientIsolationFlags
   /** Resolution base of the config tree that owns the row. */
   baseUrl: string
   /** Stable source identity and contribution key. */
@@ -143,6 +159,7 @@ class ClientPackageCompositionError extends AggregateError {
 /** One composed table row: the wire entry plus the resolved package metadata behind it. */
 interface WebPluginRecord {
   entry: WebBootEntry
+  isolation: ClientIsolationFlags
   /** Loader specifier whose active row contributes this browser module. */
   loaderName: string
   /** Loader resolution input that selected this package instance. */
@@ -529,7 +546,7 @@ function buildBatch(
 }
 
 /** Graph row for one bundle rev (the reference carries the rev as its cache-busting query). */
-function graphRow(id: string, rev: string, fields: WebBootRowFields): WebBootEntry {
+function graphRow(id: string, rev: string, fields: WebBootRowFields, isolation: ClientIsolation | undefined): WebBootEntry {
   return {
     id,
     url: comboReference([id], rev),
@@ -537,6 +554,7 @@ function graphRow(id: string, rev: string, fields: WebBootRowFields): WebBootEnt
     ...(fields.inject !== undefined ? { inject: fields.inject } : {}),
     ...(fields.immediately ? { immediately: true } : {}),
     ...(fields.external.length > 0 ? { external: fields.external } : {}),
+    ...(isolation === undefined ? {} : { isolation }),
   }
 }
 
@@ -800,7 +818,7 @@ export class ClientModuleRegistry extends Service {
     if (rev === record.entry.rev) return rev
     const bundle = readFileSync(record.meta.clientPath)
     record.baseline = baseline
-    record.entry = graphRow(id, rev, record.meta)
+    record.entry = { ...record.entry, rev, url: comboReference([id], rev) }
     record.bundle = bundle
     this.composed = this.compose()
     for (const notify of this.rebuildListeners) {
@@ -846,10 +864,10 @@ export class ClientModuleRegistry extends Service {
       .map(id => this.table.get(id))
       .filter((record): record is WebPluginRecord => record !== undefined)
     const bootstrapIds = new Set(bootstrap.map(record => record.entry.id))
+    // A script-isolated row executes in its own Realm, never inside a Main Realm batch.
     const application = entries
-      .filter(entry => !bootstrapIds.has(entry.id))
       .map(entry => this.table.get(entry.id))
-      .filter((record): record is WebPluginRecord => record !== undefined)
+      .filter((record): record is WebPluginRecord => record !== undefined && !bootstrapIds.has(record.entry.id) && !record.isolation.script)
     const artifacts: BatchArtifact[] = []
     for (const records of partitionComboRecords(bootstrap)) {
       artifacts.push(buildBatch('bootstrap', records, this.readSourceMap))
@@ -1101,7 +1119,16 @@ export class ClientModuleRegistry extends Service {
     }
     const resolved = this.resolveMeta(loaderName, baseUrl)
     if (resolved === null) return undefined
-    return { ...resolved, loaderName, baseUrl, sourceKey: this.sourceKey(loaderName, baseUrl) }
+    const isolationMode = entry.options.__unstable_enable_client_isolation ?? undefined
+    const isolation = parseClientIsolation(
+      `loader entry ${JSON.stringify(entry.options.id)} (${resolved.packageName})`,
+      '__unstable_enable_client_isolation',
+      isolationMode,
+    )
+    if (isolation.script && resolved.meta.immediately) {
+      throw new Error(`client-modules: ${resolved.packageName} is a stage-one (immediately) row and cannot isolate its scripts`)
+    }
+    return { ...resolved, loaderName, isolationMode, isolation, baseUrl, sourceKey: this.sourceKey(loaderName, baseUrl) }
   }
 
   private reconcilePackage(packageName: string): boolean {
@@ -1122,7 +1149,7 @@ export class ClientModuleRegistry extends Service {
     const { clientPath } = source.meta
     // Startup and HMR share revisions so unchanged artifacts survive a server restart.
     const baseline = this.readClientBundle(packageName, clientPath, () => this.captureArtifactBaseline(clientPath))
-    const entry = graphRow(packageName, artifactRevision(baseline), source.meta)
+    const entry = graphRow(packageName, artifactRevision(baseline), source.meta, source.isolationMode)
     const current = this.table.get(packageName)
     // A restart that finds the same manifest and bundle metadata leaves the published graph as it is, unread.
     const unchanged = current?.sourceKey === source.sourceKey
@@ -1130,6 +1157,7 @@ export class ClientModuleRegistry extends Service {
     if (unchanged) return false
     this.table.set(packageName, {
       entry,
+      isolation: source.isolation,
       loaderName: source.loaderName,
       sourceKey: source.sourceKey,
       meta: source.meta,

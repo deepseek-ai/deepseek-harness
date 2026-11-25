@@ -156,8 +156,8 @@ The Gateway decides each call through remote access, so a `share-viewer` Peer is
 @Remote('testRelay') testRelay(): Promise<RelayConnectivityView>
 
 /**
- * Register one throwaway share to check whether this host may publish.
- * @param request - Session the throwaway registration names.
+ * Ask the Liveshare server whether this host may publish one Session's share.
+ * @param request - Session the check names.
  * @returns The Liveshare server's decision about this host's credential.
  */
 @Remote('testPublish') testPublish(request: TestPublishRequest): Promise<RelayPublishView>

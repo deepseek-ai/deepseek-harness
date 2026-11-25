@@ -1,6 +1,7 @@
 /** Ordered module styles owned by one renderer presentation destination. */
 import type { ClientModuleMeta } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientModuleLoader, ClientModuleRecord } from '@deepseek-ai/dsh-client-modules/client'
+import { scopeStylesheet } from './style-scope.ts'
 
 interface StyleRecord {
   readonly element: HTMLStyleElement
@@ -87,7 +88,8 @@ export class DocumentStyles {
     }
     for (const [path, descriptor] of Object.entries(stylesheets)) {
       try {
-        styles.set(path, descriptor.text({ asset: reference => this.modules.resolveAsset(reference) }))
+        const css = descriptor.text({ asset: reference => this.modules.resolveAsset(reference) })
+        styles.set(path, record.isolation.style ? scopeStylesheet(this.container.ownerDocument, record.ownerId, css) : css)
       } catch (error) {
         console.error(`module styles: ${JSON.stringify(path)} of ${JSON.stringify(record.id)} failed and is not installed`, error)
       }

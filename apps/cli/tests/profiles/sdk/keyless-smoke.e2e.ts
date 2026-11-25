@@ -680,11 +680,11 @@ it.each(['unset', 'empty', 'full', 'python-only', 'python-only-patched', 'wrong-
   const names = (requests[0]!.tools as { name: string }[]).map(value => value.name)
   expect(names.includes('load_workspace_dependencies')).toBe(enabled)
   expect(JSON.stringify(requests[0]!.messages)).toContain('`office`')
-  const officeTools = ['office_convert', 'office_recalculate', 'office_render']
-  expect(names.filter(name => name.startsWith('office'))).toEqual([])
+  const officeTools = ['document_convert', 'document_recalculate', 'document_render']
+  expect(names.filter(name => name.startsWith('document_'))).toEqual([])
   const lastNames = (requests.at(-1)!.tools as { name: string }[]).map(value => value.name)
   // Loading an Office skill declares the Office tools from the following request.
-  expect(lastNames.filter(name => name.startsWith('office')).sort()).toEqual(officeTools)
+  expect(lastNames.filter(name => name.startsWith('document_')).sort()).toEqual(officeTools)
   expect(names).not.toContain('render_document')
   expect(JSON.stringify(requests[0]!.messages)).not.toMatch(/office-(?:docx|pptx|xlsx)/u)
   expect(requests).toHaveLength(toolUses.length + 1)

@@ -596,40 +596,128 @@ describe('relay probes and claims', () => {
     await expect(h.supervision.probeRelayConnectivity(RELAY)).resolves.toMatchObject({ error: `${RELAY}: no cause` })
   })
 
-  it('reports a publish probe success, a transient failure, and each refusal status', async () => {
+  it('asks the registration check and reports its verdict', async () => {
     const h = harness()
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
-    // The probe settles through the worker; deliver the connected event after the add reaches it.
-    const pending = h.supervision.probeRelayPublish(RELAY, spec())
-    await vi.waitFor(() => { expect(h.worker().sent.length).toBeGreaterThan(0) })
-    const add = h.worker().sent.at(-1) as { share: { shareId: string } }
-    h.worker().emit({ type: 'share-connected', registrationToken: 'r', shareId: add.share.shareId })
-    await expect(pending).resolves.toEqual({ ok: true, blocking: false })
+    const calls: Array<{ url: string; init: RequestInit }> = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input)
+      calls.push({ url, init: init ?? {} })
+      return Response.json({ ok: true })
+    }))
+    await expect(h.supervision.probeRelayPublish(RELAY, spec({ ownerCredential: 'owner-token' })))
+      .resolves.toEqual({ ok: true, blocking: false })
 
-    const transient = h.supervision.probeRelayPublish(RELAY, spec())
-    await vi.waitFor(() => { expect(h.worker().sent.at(-1)?.type).toBe('add-share') })
-    const failing = h.worker().sent.at(-1) as { share: { shareId: string } }
-    h.worker().emit({ type: 'share-error', registrationToken: 'r', shareId: failing.share.shareId, message: 'network down' })
-    await expect(transient).resolves.toEqual({ ok: false, blocking: false, error: `${RELAY}: network down` })
+    // The check is one POST carrying this host's credential, the Session, the access mode, and the
+    // digest of the gateway token the share would present.
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe(`${RELAY}/__liveshare/owner-registration-check`)
+    expect(calls[0]?.init.method).toBe('POST')
+    const headers = calls[0]?.init.headers as Record<string, string>
+    expect(headers['x-liveshare-owner-credential']).toBe('owner-token')
+    expect(headers['content-type']).toBe('application/json')
+    expect(JSON.parse(calls[0]?.init.body as string)).toEqual({
+      sessionId: 'session-1',
+      gatewayTokenDigest: '8VrltYmfgyf1J3nAgbeyXVIX9iBCrkttZ3sPJQluIUE=',
+      accessMode: 'open',
+    })
+    // Nothing is registered: the check decides without publishing a share.
+    expect(FakeTunnelWorker.instances).toHaveLength(0)
+  })
 
-    const unexplained = h.supervision.probeRelayPublish(RELAY, spec())
-    await vi.waitFor(() => { expect(h.worker().sent.at(-1)?.type).toBe('add-share') })
-    const silent = h.worker().sent.at(-1) as { share: { shareId: string } }
-    h.worker().emit({ type: 'share-error', registrationToken: 'r', shareId: silent.share.shareId, message: '' })
-    await expect(unexplained).resolves.toEqual({ ok: false, blocking: false })
+  it('leaves the credential header off when the share carries none', async () => {
+    const h = harness()
+    const calls: RequestInit[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      calls.push(init ?? {})
+      return Response.json({ ok: true })
+    }))
+    await h.supervision.probeRelayPublish(RELAY, spec())
+    expect(calls[0]?.headers).not.toHaveProperty('x-liveshare-owner-credential')
+  })
 
-    for (const [status, text] of [[401, 'did not accept'], [410, 'refused this registration']] as const) {
-      const refused = h.supervision.probeRelayPublish(RELAY, spec())
-      await vi.waitFor(() => { expect(h.worker().sent.at(-1)?.type).toBe('add-share') })
-      const entry = h.worker().sent.at(-1) as { share: { shareId: string } }
-      h.worker().emit({
-        type: 'share-error', registrationToken: 'r', shareId: entry.share.shareId,
-        message: `relay refused registration status=${String(status)}`,
+  it.each([
+    ['owner credential required', 'code=owner credential required'],
+    ['owner credential invalid', 'code=owner credential invalid'],
+  ])('treats a %s verdict as a blocking credential failure', async (code, named) => {
+    const h = harness()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ok: false, code, reason: 'signature-invalid' })))
+    const answer = await h.supervision.probeRelayPublish(RELAY, spec())
+    expect(answer).toMatchObject({ ok: false, blocking: true })
+    expect(answer.error).toContain('did not accept this host\'s owner credential')
+    expect(answer.error?.startsWith(`${RELAY}: `)).toBe(true)
+    expect(answer.error).toContain(named)
+  })
+
+  it('names a gateway mismatch as the share token rather than the credential', async () => {
+    const h = harness()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ok: false, code: 'gateway authentication required' })))
+    const answer = await h.supervision.probeRelayPublish(RELAY, spec())
+    expect(answer).toMatchObject({ ok: false, blocking: true })
+    expect(answer.error).toContain('registration token does not match the one the Relay holds')
+    expect(answer.error).toContain('code=gateway authentication required')
+    // The two refusals ask the owner for different actions, so they never share one sentence.
+    expect(answer.error).not.toContain('owner credential')
+  })
+
+  it('reports a refusal with an unknown code as blocking without inventing a cause', async () => {
+    const h = harness()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ok: false, code: 'share withdrawn' })))
+    const answer = await h.supervision.probeRelayPublish(RELAY, spec())
+    expect(answer).toMatchObject({ ok: false, blocking: true })
+    expect(answer.error).toBe(`${RELAY}: the Relay refused this registration (relay refused registration code=share withdrawn)`)
+  })
+
+  it.each([503, 500])('keeps a %s check transient instead of blocking the share', async (status) => {
+    const h = harness()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status })))
+    await expect(h.supervision.probeRelayPublish(RELAY, spec())).resolves.toEqual({
+      ok: false,
+      blocking: false,
+      error: `${RELAY}: relay answered registration-check status=${String(status)}`,
+    })
+  })
+
+  it('reports a transport failure and a body that is not JSON as transient', async () => {
+    const h = harness()
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline', { cause: Object.assign(new Error('dns'), { code: 'ENOTFOUND' }) }) }))
+    await expect(h.supervision.probeRelayPublish(RELAY, spec())).resolves.toEqual({
+      ok: false, blocking: false, error: `${RELAY}: ENOTFOUND: dns`,
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 200 })))
+    const unreadable = await h.supervision.probeRelayPublish(RELAY, spec())
+    expect(unreadable).toMatchObject({ ok: false, blocking: false })
+    expect(unreadable.error?.startsWith(`${RELAY}: `)).toBe(true)
+  })
+
+  it('treats a 200 answer it cannot read as a failed check rather than a refusal', async () => {
+    const h = harness()
+    // Only an explicit `ok: false` with a code is the Relay's verdict. An empty object, an empty list,
+    // and a body missing either field decide nothing about this credential or share.
+    for (const body of [{}, [], { ok: false }, { ok: false, code: 7 }, { verdict: 'accepted' }, null, 'accepted']) {
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json(body)))
+      await expect(h.supervision.probeRelayPublish(RELAY, spec())).resolves.toEqual({
+        ok: false,
+        blocking: false,
+        error: `${RELAY}: unrecognized registration-check response`,
       })
-      const refusedAnswer = await refused
-      expect(refusedAnswer).toMatchObject({ ok: false, blocking: true })
-      expect(String((refusedAnswer as { readonly error?: unknown }).error)).toContain(text)
     }
+    // An empty body is not JSON at all, and reads the same way.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })))
+    await expect(h.supervision.probeRelayPublish(RELAY, spec())).resolves.toMatchObject({ ok: false, blocking: false })
+  })
+
+  it('asks for the check under a timeout signal', async () => {
+    const h = harness()
+    const signals: Array<AbortSignal | null> = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      signals.push(init?.signal ?? null)
+      return Response.json({ ok: true })
+    }))
+    await h.supervision.probeRelayPublish(RELAY, spec())
+    // The Relay reads two ledgers, so the check carries its own deadline instead of waiting on the
+    // transport; an expired signal rejects the request and the caller reports a transient failure.
+    expect(signals[0]).toBeInstanceOf(AbortSignal)
+    expect(signals[0]?.aborted).toBe(false)
   })
 
   it('disposes a supervisor with no armed timers', async () => {

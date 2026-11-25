@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Comportement adaptatif",
+    "description": "Permet aux composants de l'interface de suivre les requêtes média de la fenêtre et de distinguer les téléphones et tablettes des ordinateurs de bureau."
+  }
+}

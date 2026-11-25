@@ -11,15 +11,18 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { createScope } from '@deepseek-ai/dsh-api-session-controller/client'
+import { ProjectionValueStore } from '@deepseek-ai/dsh-api-session-controller/src/client/sessions/projection-store.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent/types'
+import type { SessionSelectModelRequest } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import type { CommandContribution, PopupSelectSpec, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
+import type { SubagentAddress, SubagentSelectModelRequest } from '@deepseek-ai/dsh-subagent/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { zh } from '../src/client/locales.ts'
@@ -72,13 +75,27 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
   const ctx = new Context()
   let defaultSelection: ModelSelection = { provider: 'deepseek-official', model: 'deepseek-v4-flash' }
   let selected = defaultSelection
-  const calls = { models: 0, select: 0 }
-  const projections = new Map<SessionId, SnapshotStore<ModelSelectionProjection | undefined>>()
+  const calls = { models: 0, select: 0, childSelect: 0 }
+  let lastSelection: SessionSelectModelRequest | SubagentSelectModelRequest | undefined
+  const projections = new Map<SessionId, ProjectionValueStore>()
+  let seq = 0
   // Whether the Host advertises available models for the current route.
   let routable = true
   let catalogFailure = false
   let groups = GROUPS
   let selectionFailure: RemoteError<'session/writer-held'> | undefined
+  const acceptSelection = async (payload: Pick<SessionSelectModelRequest, 'provider' | 'model' | 'reasoningEffort'>) => {
+    if (selectionFailure !== undefined) return Promise.resolve({ ok: false as const, error: selectionFailure })
+    selected = {
+      provider: payload.provider,
+      model: payload.model,
+      ...payload.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: brandString<ReasoningEffortId>(payload.reasoningEffort) },
+    }
+    ++seq
+    return Promise.resolve({ ok: true as const, value: { selected } })
+  }
   const sessionRemote = {
     modelCatalog: () => {
       calls.models += 1
@@ -93,22 +110,27 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         },
       })
     },
-    selectModel: (payload: { sessionId: SessionId; provider: string; model: string; reasoningEffort?: string }) => {
+    selectModel: async (payload: SessionSelectModelRequest) => {
       calls.select += 1
-      if (selectionFailure !== undefined) return Promise.resolve({ ok: false as const, error: selectionFailure })
-      selected = {
-        provider: payload.provider,
-        model: payload.model,
-        ...payload.reasoningEffort === undefined
-          ? {}
-          : { reasoningEffort: brandString<ReasoningEffortId>(payload.reasoningEffort) },
-      }
-      projections.get(payload.sessionId)?.set({ lastUsed: null, next: selected })
-      return Promise.resolve({ ok: true as const, value: { selected } })
+      lastSelection = payload
+      const result = await acceptSelection(payload)
+      if (!result.ok) return result
+      projections.get(payload.sessionId)!.apply('modelSelection', { lastUsed: null, next: selected }, SessionSeq(seq))
+      return { ok: true as const, value: { selected: result.value.selected } }
     },
   }
-  const remote = Object.assign(new TestRemote(ctx), { session: sessionRemote })
+  const subagentRemote = {
+    selectModelByUser: async (payload: SubagentSelectModelRequest) => {
+      calls.childSelect += 1
+      lastSelection = payload
+      const result = await acceptSelection(payload)
+      if (result.ok) projections.get(payload.childSessionId)!.apply('modelSelection', { lastUsed: null, next: selected }, SessionSeq(seq))
+      return result
+    },
+  }
+  const remote = Object.assign(new TestRemote(ctx), { session: sessionRemote, subagents: subagentRemote })
   ctx.reflect.provide('remote.session', sessionRemote)
+  ctx.reflect.provide('remote.subagents', subagentRemote)
   const blocks = new Map<SessionId, { reason: string } | undefined>()
   ctx.provide('conversation', {
     blocks: {
@@ -144,20 +166,21 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
     session: {
       sessionId: SessionId
       getSnapshot: () => { blank: boolean }
-      projections: { faceOf: () => SnapshotStore<ModelSelectionProjection | undefined> }
+      projections: {
+        faceOf: ProjectionValueStore['faceOf']
+      }
     }
     ctx: Context
   }>()
-  const addressed = new Set<SessionId>()
+  const addressed = new Map<SessionId, SubagentAddress>()
   ctx.provide('sessions', {
     scope: (id: SessionId) => scopes.get(id),
     binding: (id: SessionId) => bindings.get(id),
-    subagentAddress: (id: SessionId) => addressed.has(id)
-      ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
-      : undefined,
+    subagentAddress: (id: SessionId) => addressed.get(id),
   })
   const track = vi.fn()
   ctx.provide('productAnalytics', { enabled: true, track } as never)
+  ctx.provide('uiResponsive', {} as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
   await ctx.plugin(function probe() {}).await()
@@ -165,14 +188,14 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
     const id = sid(key)
     const handle = createScope(ctx, id)
     scopes.set(id, handle.ctx)
-    const projection = createSnapshotStore<ModelSelectionProjection | undefined>({
-      lastUsed: null,
-      next: null,
-    })
+    const projection = new ProjectionValueStore()
+    projection.apply('modelSelection', { lastUsed: null, next: null }, SessionSeq(0))
     projections.set(id, projection)
     const binding = {
       sessionId: id,
-      session: { sessionId: id, getSnapshot: () => ({ blank }), projections: { faceOf: () => projection } },
+      session: { sessionId: id, getSnapshot: () => ({ blank }), projections: {
+        faceOf: (key: string) => projection.faceOf(key),
+      } },
       ctx: handle.ctx,
     }
     bindings.set(id, binding)
@@ -195,8 +218,13 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
       selectionFailure = new RemoteError('session/writer-held', 'writer held', { sessionId: sid('owned') })
     },
     setHostCurrent: (selection: ModelSelection) => { defaultSelection = selection },
-    setProjected: (id: SessionId, value: ModelSelectionProjection) => { projections.get(id)?.set(value) },
-    address: (id: SessionId) => { addressed.add(id) },
+    setProjected: (id: SessionId, value: ModelSelectionProjection) => {
+      projections.get(id)!.apply('modelSelection', value, SessionSeq(++seq))
+    },
+    address: (id: SessionId, mode: SubagentAddress['mode'] = 'continuable') => {
+      addressed.set(id, { parentSessionId: sid('parent'), childSessionId: id, mode })
+    },
+    lastSelection: () => lastSelection,
     setGroups: (next: typeof GROUPS) => { groups = next },
     setCatalogFailure: (next: boolean) => { catalogFailure = next },
     setRoutable: (next: boolean) => { routable = next },
@@ -542,10 +570,97 @@ describe('ui-model-selection dual entry', () => {
     expect(() => b.seat().inject!(sid('ghost'))).toThrow(/resolved no scope/)
   })
 
-  it('withholds both model entries from addressed subagent sessions without Agent-bound RPCs', async () => {
+  it('shares pushed continuable child choices between both entries', async () => {
+    const b = await bench()
+    const scope = b.mint('child')
+    b.address(sid('child'))
+    try {
+      expect(b.contribution().available(projection('child'))).toBe(true)
+      const face = b.seat().inject!(sid('child'))
+      await b.ctx.modelDirectories.directoryFor(sid('child')).load()
+      expect(face.directory.getSnapshot().current).toBeNull()
+      b.setProjected(sid('child'), {
+        lastUsed: null, next: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: brandString<ReasoningEffortId>('max') },
+      })
+      const rows = await b.popup().options(projection('child'), new AbortController().signal)
+      expect(face.available).toBe(true)
+      expect(face.directory.getSnapshot().current?.reasoningEffort).toBe('max')
+      expect(rows.find(row => row.active)?.id).toBe('deepseek-official/deepseek-v4-pro')
+      await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'off' })
+      expect(b.lastSelection()).toEqual({
+        childSessionId: 'child', provider: 'deepseek-official',
+        model: 'deepseek-v4-flash', reasoningEffort: 'off',
+      })
+      expect(b.calls.childSelect).toBe(1)
+      expect(b.calls.select).toBe(0)
+      expect(face.directory.getSnapshot().current?.model).toBe('deepseek-v4-flash')
+      const updated = await b.popup().options(projection('child'), new AbortController().signal)
+      expect(updated.find(row => row.active)?.id).toBe('deepseek-official/deepseek-v4-flash')
+      expect(face.directory.getSnapshot().current?.reasoningEffort).toBe('off')
+    } finally { await scope.fiber.dispose(); await b.ctx.fiber.dispose() }
+  })
+
+  it.each(['newer projection', 'reset', 'dispose'] as const)('preserves newer state when a child save settles after %s', async (action) => {
+    const b = await bench()
+    const scope = b.mint('child')
+    b.address(sid('child'))
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const select = b.remote.subagents.selectModelByUser.bind(b.remote.subagents)
+    vi.spyOn(b.remote.subagents, 'selectModelByUser').mockImplementation(async (request) => {
+      const receipt = await select(request)
+      entered.resolve(undefined)
+      await release.promise
+      return receipt
+    })
+    let pending: Promise<unknown> | undefined
+    try {
+      const face = b.seat().inject!(sid('child'))
+      await b.ctx.modelDirectories.directoryFor(sid('child')).load()
+      pending = face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+      await entered.promise
+      const newer = { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: brandString<ReasoningEffortId>('max') }
+      if (action === 'newer projection') b.setProjected(sid('child'), { lastUsed: newer, next: newer })
+      else if (action === 'reset') b.ctx.emit('connection/reset')
+      else await scope.fiber.dispose()
+      release.resolve(undefined)
+      await pending
+      expect(scope.projection.get('modelSelection')).toEqual(action === 'newer projection'
+        ? { lastUsed: newer, next: newer } : { lastUsed: null, next: { provider: 'deepseek-official', model: 'deepseek-v4-pro' } })
+      if (action === 'newer projection') expect(face.directory.getSnapshot().current).toEqual(newer)
+      else expect(b.track).not.toHaveBeenCalled()
+    } finally {
+      release.resolve(undefined)
+      await pending
+      await scope.fiber.dispose()
+      await b.ctx.fiber.dispose()
+    }
+  })
+
+  it('ignores an older child projection after a newer selection reaches both entries', async () => {
+    const b = await bench()
+    const scope = b.mint('child')
+    b.address(sid('child'))
+    try {
+      const face = b.seat().inject!(sid('child'))
+      await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+      await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' })
+      scope.projection.apply('modelSelection', {
+        lastUsed: null, next: { provider: 'deepseek-official', model: 'deepseek-v4-pro' },
+      }, SessionSeq(1))
+      expect(face.directory.getSnapshot().current).toEqual({
+        provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max',
+      })
+      const rows = await b.popup().options(projection('child'), new AbortController().signal)
+      expect(rows.find(row => row.active)?.id).toBe('deepseek-official/deepseek-v4-flash')
+      expect(b.calls).toEqual({ models: 1, select: 0, childSelect: 2 })
+    } finally { await scope.fiber.dispose(); await b.ctx.fiber.dispose() }
+  })
+
+  it.each(['one-shot', 'unknown'] as const)('withholds model entries from %s children', async (mode) => {
     const b = await bench()
     b.mint('child')
-    b.address(sid('child'))
+    b.address(sid('child'), mode)
 
     expect(b.contribution().available(projection('child'))).toBe(false)
     await expect(b.popup().options(
@@ -565,7 +680,7 @@ describe('ui-model-selection dual entry', () => {
     })).rejects.toThrow(/unavailable for addressed subagent/)
     b.ctx.emit('connection/reset')
     await Promise.resolve()
-    expect(b.calls).toEqual({ models: 2, select: 0 })
+    expect(b.calls).toEqual({ models: 2, select: 0, childSelect: 0 })
   })
 })
 

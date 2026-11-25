@@ -58,7 +58,7 @@ pnpm run benchmark:npm-resolution -- --runs=5 --timeout-ms=300000
 pnpm run benchmark:npm-resolution -- --ref=origin/master --runs=5 --timeout-ms=300000
 ```
 
-通过两个互不兼容的 DSH 合成版本验证包落位。验证器把每份当前 DSH manifest 分别复制为 `0.1.0` 和 `0.2.0`，只要求 npm 生成 package lock，并拒绝跨版本 DSH 解析、非预期 DSH 路径、两套版本清单不一致、多个 Cordis 实例以及包归档请求。本地索引只包含当前平台已安装的 metadata，因此只报告而不拒绝 npm 已接受的不可用可选包探测。
+通过两个互不兼容的 DSH 合成版本验证包落位。验证器把每份当前 DSH manifest 分别复制为 `0.1.0` 和 `0.2.0`，只要求 npm 生成 package lock，并拒绝跨版本 DSH 解析、非预期 DSH 路径、两套版本清单不一致、多个 Cordis 实例以及包归档请求。本地索引只包含当前平台已安装的 metadata，因此只报告而不拒绝 npm 已接受的不可用可选包探测。在此之前，验证器先解析单个版本：索引里额外放入一个比已安装版本高一个次版本的 zod，即日后 registry 会提供的版本，并拒绝 `node_modules/zod` 以外的任何 zod 安装。DSH 包把 zod 固定在同一个精确版本，外部依赖把 zod 声明为 peer 的 DSH 包也固定这个版本：否则 npm 会为这个 peer 把最新版本提升到顶层，每个固定 zod 的 DSH 包都会各装一份。验证器按这条规则检查每一份 DSH manifest，包括不在 `@deepseek-ai/dsh` 依赖图里的包，因为没有提供方的 peer 被 npm 放在哪里取决于它处理依赖树的顺序。
 
 ```sh
 pnpm run verify-npm-install-layout

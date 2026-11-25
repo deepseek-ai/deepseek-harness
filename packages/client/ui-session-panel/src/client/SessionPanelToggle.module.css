@@ -42,20 +42,11 @@
   white-space: nowrap;
 }
 
-/* The indicators' wrapper only gives the accessible name a reference; it lays out nothing. */
+/* All indicator contributions share this corner of the button. */
 .indicators {
-  display: contents;
-}
-
-/* One 6px dot at the glyph's corner; the ring separates it from the glyph, and the occupant colors it. */
-.indicators > :global([data-slot='conversation.session.panel.indicator']) > :where([data-slot-error]),
-.indicators > :global([data-slot='conversation.session.panel.indicator']) > :where([data-slot-item]) > * {
   position: absolute;
   top: 5px;
   right: 5px;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
-  corner-shape: round;
-  box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base);
 }

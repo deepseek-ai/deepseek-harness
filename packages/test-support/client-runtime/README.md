@@ -48,7 +48,11 @@ await runtime.dispose()
 
 The runtime installs `allowAllAccessPlugin` before ui-session: its `remoteAccess` service, a `StaticRemoteAccess`, answers true for every resource, so every access Hook allows every action and every `whenAccess` callback runs at once. `TestClientOptions.access` fixes the answer per action instead, through `staticAccessPlugin(allows)`. Hand-built component props spread `...allowAllAccess` to receive the same Hooks; a spec of a refused path overrides one Hook or provides `new StaticRemoteAccess(ctx, allows)`.
 
-The optional render options select a keyed entry with `entryKey` or a list item with `only`; `view.update(owner)` retains that selection. `runtime.panelInfo` supplies the default `usePanelInfo` source with no global panel selected. Release it with `releasePanelInfoSource()` before mounting the production Layout owner. `dispose()` releases both default Workspace and panel-info root sources; early release is idempotent and does not remove replacement owners.
+The optional render options select a keyed entry with `entryKey` or a list item with `only`; `view.update(owner)` retains that selection. `runtime.panelInfo` supplies the default `usePanelInfo` source with no global panel selected. Release it with `releasePanelInfoSource()` before mounting the production Layout owner. `dispose()` releases the default Workspace, panel-info, and responsive root sources; early release is idempotent and does not remove replacement owners.
+
+`StaticUiResponsive` publishes the media-query and device props; the test renderer supplies the document props independently. Hand-built component props can spread `...responsiveHooks(options)` to receive the same defaults: `useMobile()` and `useMediaQuery(query)` return false, `useDocumentViewport()` returns a 1024 × 768 CSS-pixel viewport, and `useDocumentPortal()` renders children inline without document listeners. Override them with `mobile`, `matches(query)`, `viewport`, and `portal`, respectively.
+
+For actual portal placement, document keyboard events and viewport changes, mount the production UI renderer. To test live media queries in the Slot tier, first `await runtime.releaseResponsiveSource()` and mount the production `ui-responsive` service. Stub `window.matchMedia` in jsdom when testing a media query.
 
 The Session fixture resolves subagent addresses from explicitly supplied addresses or loaded parent projections without retaining a Session generation. External catalog entries have no local browsing address.
 
@@ -130,6 +134,7 @@ The bench copies no production logic: it mounts the production `SlotRegistry`, p
 | [`src/fixtures.ts`](src/fixtures.ts) | Plain fixture builders: conversation snapshots, workspace list state |
 | [`src/snapshot.ts`](src/snapshot.ts) | DOM snapshot serializer (class-hash folding, `<svg>` fingerprint) |
 | [`src/access.ts`](src/access.ts) | `allowAllAccess` props, `StaticRemoteAccess`, `staticAccessPlugin`, and `allowAllAccessPlugin`, the fixed-answer stand-ins for the remote-access Client row |
+| [`src/responsive.ts`](src/responsive.ts) | `responsiveHooks` and `StaticUiResponsive`, the fixed-answer stand-ins for the `ui-responsive` Client row |
 | [`src/remote.ts`](src/remote.ts) | `TestRemote` double for host RPC, `RemoteError` value re-export |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | Translation and pinned-browser-language test helpers |
 | [`src/config-form.ts`](src/config-form.ts) | `stubConfigForm` with test-driven publications and write spies |

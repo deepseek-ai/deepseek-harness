@@ -2619,8 +2619,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'testPublish\') testPublish(request: TestPublishRequest): Promise<RelayPublishView>',
-        description: 'Register one throwaway share to check whether this host may publish.',
-        parameters: [{ name: 'request', description: 'Session the throwaway registration names.' }],
+        description: 'Ask the Liveshare server whether this host may publish one Session\'s share.',
+        parameters: [{ name: 'request', description: 'Session the check names.' }],
         returns: 'The Liveshare server\'s decision about this host\'s credential.',
       },
     ],
@@ -2702,6 +2702,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Discover models advertised by one registered provider. Catalog membership does not constrain core routing. Catalog-driven entry points may restrict selection and submission to the advertised models.',
         parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }],
         returns: 'detached model metadata in adapter-preferred order.',
+      },
+      {
+        signature: 'async isModelInCatalog(provider: string, model: string): Promise<boolean>',
+        description: 'Report whether a registered provider advertises a model in its current catalog. Catalog-driven entry points use it to accept only listed models.',
+        parameters: [{ name: 'provider', description: 'provider route to inspect.' }, { name: 'model', description: 'provider-owned model id.' }],
+        returns: 'false when the provider is unregistered or its catalog omits the model.',
+        throws: ['the provider\'s catalog failure, unchanged.'],
       },
       {
         signature: 'async resolveModelInfo( provider: string, model: string, signal?: AbortSignal, ): Promise<LlmResolvedModelInfo>',
@@ -2820,6 +2827,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'coalesced server lists until the subscriber or the manager stops.',
       },
       {
+        signature: 'async whenSettled(signal: AbortSignal): Promise<string[]>',
+        description: 'Wait until no listed server is in the first attempt of a connection: `list()` reports none as `connecting` with `attempt: 0`. Every later state counts, including failures, reconnect attempts, and waiting for credentials or authorization. Servers that join while the wait runs are included. Host callers only; this is not a Remote method.',
+        parameters: [{ name: 'signal', description: 'ends the wait before every server leaves its first attempt.' }],
+        returns: 'the names still in their first attempt when the signal or manager disposal ended the wait; empty once settled.',
+      },
+      {
         signature: '@Remote async restart(name: string): Promise<void>',
         description: 'Rebuild one server from its current entry: dispose the live instance (if any) and mount a fresh one with a fresh reconnect budget. Incomplete cleanup blocks replacement until the Host restarts.',
         parameters: [{ name: 'name', description: 'the configured or registered server key.' }],
@@ -2896,8 +2909,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'officeKit',
-    summary: 'A provider lifetime owns all converters, queued calls, and temporary files.',
-    description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
+    summary: 'A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.',
+    description: 'A provider lifetime owns all converters, Poppler processes, queued calls, and temporary files.',
     methods: [
       {
         signature: 'readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())',
@@ -2918,10 +2931,10 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async renderImages(request: OfficeImagesRequest, signal?: AbortSignal): Promise<OfficeImagesResult>',
-        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority.',
-        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
-        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits.',
-        throws: ['{OfficeKitError} `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
+        description: 'Render selected pages, slides, or worksheet areas of one document as PNG images. Requests share the admission queue, concurrency, source-byte reservation, and cache with previews, and run at foreground priority. The backend is chosen before admission: `request.renderer` exclusively, otherwise the first available entry of the configured `renderers` order, where the last entry is used without an availability check. A backend that fails after it starts rejects without trying another. Poppler renders without a LibreOffice converter slot.',
+        parameters: [{ name: 'request', description: 'authorized metadata, deferred bounded source read, selection, backend, and complete-result limits.' }, { name: 'signal', description: 'caller cancellation; provider disposal also stops active work.' }],
+        returns: 'caller-owned images in document order whose count, per-image size, and total bytes satisfy the limits, with the backend that rendered them.',
+        throws: ['{OfficeKitError} `unsupported-format` for `poppler` with non-PDF input, `unavailable` when the requested or last configured backend cannot run, `invalid-request` for a selection the engine rejects, `output-too-large` when the selection exceeds a limit, and the other conversion codes; cancellation rejects with its reason.'],
       },
       {
         signature: 'async convertTo(request: OfficeConversionRequest, signal?: AbortSignal): Promise<OfficeFileResult>',
@@ -3022,6 +3035,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'piAiProviders',
+    summary: 'Service through which provider rows add their routes to the pi-ai adapter.',
+    description: 'Service through which provider rows add their routes to the pi-ai adapter.',
+    methods: [
+      {
+        signature: 'register(provider: string, profile: PiAiProviderProfile): PiAiProviderRegistration',
+        description: 'Register one provider route for the calling plugin; the registration is withdrawn with that plugin.',
+        parameters: [{ name: 'provider', description: 'route key.' }, { name: 'profile', description: 'the route\'s profile. Catalog defects are kept as diagnostics on the route; any other invalid field throws.' }],
+        returns: 'the registration handle.',
+      },
+    ],
+  },
+  {
     key: 'planMode',
     summary: '`ctx.planMode`: owns logged plan state, applies and narrates selected state at step start, the `plan:policy` section, the `/plan` command, and the conditional exit tool.',
     description: '`ctx.planMode`: owns logged plan state, applies and narrates selected state at step start, the `plan:policy` section, the `/plan` command, and the conditional exit tool. Client carriers expose the projection\'s cropped `{ active, pending }` view. Agent prompt assembly fails while the projection reader is not ready; callers must await plugin activation before running an agent.',
@@ -3099,7 +3125,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: '@Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>',
         description: 'Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from; with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads a Git package only while installing it, so its bundle and compatibility are checked then. Either target installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running version and the result reports the restart.',
-        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; and the request id naming the progress and the target installation\'s logs and cancellation.' }],
+        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; the request id naming the progress and the target installation\'s logs and cancellation; and the pending build scripts to allow, saved before anything is removed.' }],
         returns: 'The versions, the last step that ran with its result, and the reinstallation when one ran.',
       },
       {
@@ -3312,6 +3338,42 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Execute resolved inputs; program outcomes resolve as result fields.',
         parameters: [{ name: 'spec', description: 'directory, deadline, program, bindings, cancellation and supported policy.' }],
         returns: 'Captured output and the execution outcome.',
+      },
+    ],
+  },
+  {
+    key: 'readAloud',
+    summary: 'Read-aloud calls never activate, read from, or submit to an Agent, and append no Session event.',
+    description: 'Read-aloud calls never activate, read from, or submit to an Agent, and append no Session event.',
+    methods: [
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<ReadAloudStatus>',
+        description: 'Follow whether a reading can start and which voices exist, so the Client offers the action only while it can and shows the saved voice.',
+        parameters: [{ name: 'signal', description: 'Client observation lifetime.' }],
+        returns: 'the current status, then each change of it.',
+      },
+      {
+        signature: '@Remote async configure(selection: VoiceSelection): Promise<void>',
+        description: 'Save the voice that readings started afterwards use.',
+        parameters: [{ name: 'selection', description: 'one of the voices `follow()` reports.' }],
+      },
+      {
+        signature: '@Remote({ resources: { session: target => target.sessionId } }) async plan(target: ReadingTarget, signal: AbortSignal): Promise<ReadingPlan>',
+        description: 'Locate one finalized assistant message and cut its readable text into segments.',
+        parameters: [{ name: 'target', description: 'Session and message to read.' }, { name: 'signal', description: 'Client cancellation.' }],
+        returns: 'the message\'s log position, its segments, the voice, and the pacing and audio facts; no text leaves the Host.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\', resources: { session: request => request.sessionId } }) async *synthesize(request: SegmentRequest, signal: AbortSignal): AsyncIterable<AudioFrame>',
+        description: 'Synthesize one planned segment in the plan\'s voice. The range must be a segment of the message under the current configuration, so a Client cannot have other text spoken.',
+        parameters: [{ name: 'request', description: 'message position, one segment of its plan, and the plan\'s voice.' }, { name: 'signal', description: 'Client cancellation; it ends the provider request.' }],
+        returns: 'frames of whole PCM samples in playback order.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *sample(request: SampleRequest, signal: AbortSignal): AsyncIterable<AudioFrame>',
+        description: 'Speak the Host\'s sample sentence in one voice, so a listener can choose between voices.',
+        parameters: [{ name: 'request', description: 'voice to hear and the language of the sentence.' }, { name: 'signal', description: 'Client cancellation; it ends the provider request.' }],
+        returns: 'frames of whole PCM samples in playback order, at `SynthesisFacts.sampleRate`.',
       },
     ],
   },
@@ -4634,6 +4696,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{SubagentError} `UNAUTHORIZED` when the authority does not own the live target.'],
       },
       {
+        signature: 'async selectModel( childId: SessionId, selection: Readonly<ModelSelection>, authority: SubagentInterruptAuthority, signal: AbortSignal, ): Promise<ModelSelection>',
+        description: 'Record a local child\'s complete model choice for future steps without adding a message or changing user defaults. Selection and image admission share the child\'s operation order; an already prepared step retains its model.',
+        parameters: [{ name: 'childId', description: 'durable continuable child Session id.' }, { name: 'selection', description: 'complete choice; omitted effort follows adapter defaults.' }, { name: 'authority', description: 'trusted user operation or exact live creation ancestor.' }, { name: 'signal', description: 'cancellation before selection is recorded.' }],
+        returns: 'the recorded choice after its durability barrier completes.',
+        throws: ['{LlmError} when the LLM runtime rejects the selected route or effort.', '{SubagentError} when access or child availability fails; PERSISTENCE_UNCONFIRMED means the choice may have changed but durability is unknown.'],
+      },
+      {
         signature: 'async drainDescendants(parents: readonly Agent[]): Promise<void>',
         description: 'Close admission and stop all instances in the selected subagent trees, then await pending startup and cleanup. Ordinary members are ignored. The cutoff lasts until each exact root leaves the registry; unrelated subagent trees remain live.',
         parameters: [{ name: 'parents', description: 'exact live subagent tree roots entering teardown.' }],
@@ -4660,6 +4729,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'childSessionId', description: 'durable child session id to interrupt.' }],
         returns: 'acknowledgement that the cancel signal was admitted, not that the target is quiescent.',
         throws: ['{RemoteError} `gateway/bad-request` for an empty id, otherwise `gateway/internal`.'],
+      },
+      {
+        signature: '@Remote({ name: \'selectModelByUser\', resources: { session: request => request.childSessionId } }) async selectModelByUser(request: SubagentSelectModelRequest, signal: AbortSignal): Promise<SubagentSelectModelReceipt>',
+        description: 'Select a local child\'s model under the caller\'s target-Session permission. Like Session model selection, it accepts only a model its provider lists in the current catalog. No message or global default is changed. A successful receipt confirms the child\'s persistence barrier; an unconfirmed failure may follow a live change.',
+        parameters: [{ name: 'request', description: 'target and complete model choice; omitted effort uses adapter defaults.' }, { name: 'signal', description: 'caller cancellation before selection is recorded.' }],
+        returns: 'the recorded choice after confirmed persistence.',
+        throws: ['{RemoteError} validation, authorization, availability, cancellation, or subagent/model-selection-unconfirmed when the durable outcome is unknown.'],
       },
       {
         signature: 'registerProvider(provider: SubagentProvider): () => void',
@@ -4906,6 +4982,49 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List fresh snapshots for exactly one owner.',
         parameters: [{ name: 'owner', description: 'exact owner whose sessions are visible.' }],
         returns: 'owner-visible snapshots in publication order.',
+      },
+    ],
+  },
+  {
+    key: 'textToSpeech',
+    summary: 'Registry shared by all synthesis consumers in one Host composition.',
+    description: 'Registry shared by all synthesis consumers in one Host composition.',
+    methods: [
+      {
+        signature: 'register(provider: SynthesisProvider): () => Promise<void>',
+        description: 'Register one synthesizer; a duplicate id fails without replacing the original.',
+        parameters: [{ name: 'provider', description: 'synthesizer owned by the contributing fiber.' }],
+        returns: 'idempotent disposer which rejects later pulls, cancels, and joins provider calls in flight.',
+      },
+      {
+        signature: 'snapshot(): SynthesisSnapshot',
+        description: 'Read provider availability, the configured selection, and the voice preference together.',
+        parameters: [],
+        returns: 'one detached complete observation.',
+      },
+      {
+        signature: 'async configure(patch: SynthesisSelectionPatch): Promise<void>',
+        description: 'Persist the voice preference into this plugin\'s profile entry. The configured provider must be registered and offer the voice.',
+        parameters: [{ name: 'patch', description: 'voice that later syntheses use when they name none.' }],
+        returns: 'after the profile write and the live update it applies.',
+      },
+      {
+        signature: 'async *follow(caller: AbortSignal): AsyncIterable<SynthesisSnapshot>',
+        description: 'Observe complete snapshots; an observer that falls behind receives only the latest one.',
+        parameters: [{ name: 'caller', description: 'observer lifetime.' }],
+        returns: 'an initial snapshot followed by one per change, ending when the observer or the service stops.',
+      },
+      {
+        signature: 'resolve(request: SynthesisRequest): SynthesisSpec',
+        description: 'Apply the configured provider and the voice preference, and capture both. A missing provider, a text over the provider\'s limit, and a named voice the provider does not offer fail explicitly.',
+        parameters: [{ name: 'request', description: 'complete text to speak and optionally its voice.' }],
+        returns: 'provider-pinned input for synthesize().',
+      },
+      {
+        signature: 'synthesize(spec: SynthesisSpec, signal: AbortSignal): AsyncIterable<Uint8Array>',
+        description: 'Speak through exactly the resolved provider; no fallback sends text elsewhere. A stream nobody pulls holds no provider call: withdrawal aborts the provider\'s signal and joins only calls in flight.',
+        parameters: [{ name: 'spec', description: 'resolved input; a withdrawn or replaced registration is rejected.' }, { name: 'signal', description: 'caller cancellation.' }],
+        returns: 'the provider\'s audio; pulls after cancellation or withdrawal reject.',
       },
     ],
   },
@@ -6756,6 +6875,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AllowedModelRoute {\n    readonly provider: string;\n    readonly model: string;\n}',
   },
   {
+    name: 'AlwaysRetryPolicyConfig',
+    declaration: 'export interface AlwaysRetryPolicyConfig {\n    mode: \'always\';\n    backoff?: BackoffConfig;\n}',
+  },
+  {
     name: 'AnalyticsPreset',
     declaration: 'export type AnalyticsPreset = \'creator\' | \'ptc\' | \'minimal\' | \'standard\';',
   },
@@ -6892,6 +7015,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AudioFrame',
+    declaration: 'export interface AudioFrame {\n    readonly pcm: string;\n}',
+  },
+  {
     name: 'AuthenticationProvider',
     declaration: 'export interface AuthenticationProvider {\n    authenticate(request: ConnectionTrustRequest): PeerScope | undefined;\n}',
   },
@@ -6950,6 +7077,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
+  },
+  {
+    name: 'BackoffConfig',
+    declaration: 'export interface BackoffConfig {\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    jitterRatio?: number;\n}',
   },
   {
     name: 'BashEnvContributor',
@@ -7146,6 +7277,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ClientArtifactBaseline',
     declaration: 'export interface ClientArtifactBaseline {\n    readonly path: string;\n    readonly mtimeMs: number;\n    readonly ctimeMs: number;\n    readonly size: number;\n}',
+  },
+  {
+    name: 'ClientIsolation',
+    declaration: 'export type ClientIsolation = \'script\' | \'style\' | \'scriptandstyle\';',
   },
   {
     name: 'CliOperationControl',
@@ -7674,6 +7809,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'DirectoryRegistrationHandle',
     declaration: 'export interface DirectoryRegistrationHandle {\n    (): void;\n    replace(entries: readonly LlmConfigurableProvider[]): void;\n}',
+  },
+  {
+    name: 'DocumentRenderer',
+    declaration: 'export type DocumentRenderer = \'libreoffice\' | \'poppler\';',
   },
   {
     name: 'Domain',
@@ -8897,7 +9036,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(conf /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    imageRequestTarget(provider: string, model: string, image: ImageAttachmentRef): ImageRequestTarget;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async isModelInCatalog(provider: string, model: string): Promise<boolean>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallCo /* …truncated — full shape in source */',
   },
   {
     name: 'LocalAtInput',
@@ -9232,6 +9371,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ModDefinition {\n    readonly name: string;\n    readonly version?: string;\n    readonly root?: string;\n    readonly options?: PluginOptions;\n    readonly register: ModRegister;\n}',
   },
   {
+    name: 'Model',
+    declaration: 'export interface Model {\n    current(): Readonly<ModelSelection> | undefined;\n    select(selection: Readonly<ModelSelection>): void;\n}',
+  },
+  {
     name: 'ModelCatalog',
     declaration: 'export interface ModelCatalog {\n    readonly default: ModelSelection;\n    readonly routableProviders: readonly string[];\n    readonly groups: readonly ModelProviderGroup[];\n    readonly failures: readonly ModelCatalogFailure[];\n}',
   },
@@ -9296,6 +9439,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface NativeFileApplication {\n    readonly id: string;\n    readonly name: string;\n    readonly default: boolean;\n    readonly icon: string | null;\n}',
   },
   {
+    name: 'NormalRetryPolicyConfig',
+    declaration: 'export interface NormalRetryPolicyConfig {\n    mode: \'normal\';\n    maxRetries?: number;\n    retryableCodes?: string[];\n    backoff?: BackoffConfig;\n}',
+  },
+  {
     name: 'NpmFileSource',
     declaration: 'export type NpmFileSource = \'jsdelivr\' | \'unpkg\' | \'npmmirror\';',
   },
@@ -9333,11 +9480,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OfficeImagesRequest',
-    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
+    declaration: 'export interface OfficeImagesRequest {\n    readonly extension: OfficeImageInputExtension;\n    readonly source: OfficeKitSource;\n    readonly renderer?: DocumentRenderer;\n    readonly pages?: readonly number[];\n    readonly sheet?: string;\n    readonly range?: string;\n    readonly dpi?: number;\n    readonly maxImages: number;\n    readonly maxPixels: number;\n    readonly maxDimension: number;\n    readonly maxBytes: number;\n}',
   },
   {
     name: 'OfficeImagesResult',
-    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n}',
+    declaration: 'export interface OfficeImagesResult {\n    readonly images: readonly OfficeImage[];\n    readonly pageCount: number;\n    readonly dpi: number;\n    readonly missingFonts: string[];\n    readonly renderer: DocumentRenderer;\n}',
   },
   {
     name: 'OfficeKitGeneration',
@@ -9504,8 +9651,44 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PermissionSelection {\n    currentValue: string;\n}',
   },
   {
+    name: 'PiAiCompatProfile',
+    declaration: 'export interface PiAiCompatProfile {\n    supportsStore?: boolean;\n    supportsDeveloperRole?: boolean;\n    supportsReasoningEffort?: boolean;\n    supportsUsageInStreaming?: boolean;\n    supportsFinishReason?: boolean;\n    maxTokensField?: NonNullable<OpenAICompletionsCompat[\'maxTokensField\']>;\n    requiresToolResultName?: boolean;\n    requiresAssistantAfterToolResult?: boolean;\n    requiresThinkingAsText?: boolean;\n    requiresReasoningContentOnAssistantMessages?: boolean;\n    thinkingFormat?: PiAiThinkingFormat;\n    chatTemplateKwargs?: NonNullable<OpenAICompletionsCompat[\'chatTemplateKwargs\']>;\n    chatTemplateArgs?: NonNullable<OpenAICompletionsCompat[\'chatTemplateArgs\']>;\n    supportsThinkingTokenBudget?: boolean;\n    thinkingTokenBudgetField?: PiAiThinkingTokenBudgetField;\n    vllmPriority?: number;\n    supportsMaxOutputTokens?: boolean;\n    supportsStrictMode?: boolean;\n    cacheControlFormat?: NonNullable<OpenAICompletionsCompat[\'cacheControlFormat\']>;\n    supportsLongCacheRetention?: boolean;\n    supportsEagerToolInputStreaming?: boolean;\n    supportsCacheControlOnTools?: boolean;\n    supportsTemperature?: boolean;\n    forceAdaptiveThinking?: boolean;\n    allowEmptySignature?: boolean;\n    supportsStrictTools?: boolean;\n}',
+  },
+  {
+    name: 'PiAiModality',
+    declaration: 'export type PiAiModality = Model<Api>[\'input\'][number];',
+  },
+  {
+    name: 'PiAiModelOverride',
+    declaration: 'export type PiAiModelOverride = Omit<PiAiModelProfile, \'id\'>;',
+  },
+  {
+    name: 'PiAiModelProfile',
+    declaration: 'export interface PiAiModelProfile {\n    id: string;\n    name?: string;\n    contextWindow?: number;\n    maxTokens?: number;\n    input?: PiAiModality[];\n    reasoningEfforts?: false | PiAiReasoningEfforts;\n    compat?: PiAiCompatProfile;\n}',
+  },
+  {
+    name: 'PiAiProviderProfile',
+    declaration: 'export interface PiAiProviderProfile {\n    apiKeyEnv?: string;\n    displayName?: string;\n    api?: string;\n    baseURL?: string;\n    models?: PiAiModelProfile[];\n    modelOverrides?: Record<string, PiAiModelOverride>;\n    compat?: PiAiCompatProfile;\n    defaultContextWindow?: number;\n    defaultMaxTokens?: number;\n    defaultInput?: PiAiModality[];\n    headers?: Record<string, string>;\n    reasoning?: ModelThinkingLevel;\n    thinkingBudgets?: ThinkingBudgets;\n    cacheRetention?: CacheRetention;\n    transport?: Transport;\n    timeoutMs?: number;\n    websocketConnectTimeoutMs?: number;\n    streamIdleTimeoutMs?: number;\n    maxRequestImageBytes?: number;\n    maxRequestImages?: number;\n    imageOffloadCountQuantum?: number;\n    requestImageBudgetCount?: number;\n    requestImagePixelBudget?: number;\n    requestImageMaxDimension?: number;\n    requestImageMaxBytes?: number;\n    retryPolicy?: RetryPolicyConfig;\n}',
+  },
+  {
+    name: 'PiAiProviderRegistration',
+    declaration: 'export interface PiAiProviderRegistration {\n    (): void;\n    replace(profile: PiAiProviderProfile): void;\n}',
+  },
+  {
+    name: 'PiAiReasoningEfforts',
+    declaration: 'export type PiAiReasoningEfforts = Partial<Record<ModelThinkingLevel, string | null>>;',
+  },
+  {
     name: 'PiAiRequestHeaderContext',
     declaration: 'export interface PiAiRequestHeaderContext extends Readonly<Pick<GenerateOptions<string>, \'provider\' | \'model\' | \'sessionId\' | \'purpose\'>> {\n    readonly baseURL: string;\n}',
+  },
+  {
+    name: 'PiAiThinkingFormat',
+    declaration: 'export type PiAiThinkingFormat = NonNullable<OpenAICompletionsCompat[\'thinkingFormat\']>;',
+  },
+  {
+    name: 'PiAiThinkingTokenBudgetField',
+    declaration: 'export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat[\'thinkingTokenBudgetField\']>;',
   },
   {
     name: 'PlatformSession',
@@ -9828,8 +10011,24 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type QueueAction = {\n    readonly kind: \'edit\';\n    readonly content: readonly TextBlock[];\n} | {\n    readonly kind: \'remove\';\n} | {\n    readonly kind: \'steer\';\n};',
   },
   {
+    name: 'ReadAloudStatus',
+    declaration: 'export interface ReadAloudStatus {\n    readonly state: \'ready\' | \'sign-in-required\' | \'unavailable\';\n    readonly synthesis?: SynthesisFacts;\n}',
+  },
+  {
     name: 'ReadFileLine',
     declaration: 'export interface ReadFileLine {\n    number: number;\n    text: string;\n}',
+  },
+  {
+    name: 'ReadingPlan',
+    declaration: 'export interface ReadingPlan {\n    readonly seq: number;\n    readonly segments: readonly ReadingSegment[];\n    readonly dispatchBelowMs: number;\n    readonly sampleRate: number;\n    readonly voice: string;\n}',
+  },
+  {
+    name: 'ReadingSegment',
+    declaration: 'export interface ReadingSegment {\n    readonly start: number;\n    readonly end: number;\n}',
+  },
+  {
+    name: 'ReadingTarget',
+    declaration: 'export interface ReadingTarget {\n    readonly sessionId: SessionId;\n    readonly messageId: MessageId;\n}',
   },
   {
     name: 'ReadOnlyReason',
@@ -10072,6 +10271,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
+    name: 'RetryPolicyConfig',
+    declaration: 'export type RetryPolicyConfig = NormalRetryPolicyConfig | AlwaysRetryPolicyConfig;',
+  },
+  {
     name: 'ReviewDecision',
     declaration: 'export type ReviewDecision = \'approved\' | \'changes-requested\' | \'review-required\' | \'none\';',
   },
@@ -10090,6 +10293,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RunnerFailureRule',
     declaration: 'export interface RunnerFailureRule {\n    allowedExitCodes?: readonly number[];\n    fatalSignatures: readonly string[];\n    informationalLines?: readonly string[];\n}',
+  },
+  {
+    name: 'SampleRequest',
+    declaration: 'export interface SampleRequest {\n    readonly voice: string;\n    readonly language: string;\n}',
   },
   {
     name: 'SandboxEnforcement',
@@ -10266,6 +10473,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SearchResultView',
     declaration: 'export type SearchResultView = SearchMatchesResultView | SearchPathsResultView;',
+  },
+  {
+    name: 'SegmentRequest',
+    declaration: 'export interface SegmentRequest extends ReadingTarget, ReadingSegment {\n    readonly seq: number;\n    readonly voice: string;\n}',
   },
   {
     name: 'SerializedElement',
@@ -11365,7 +11576,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SubagentRuntime',
-    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    get maxActiveSubagents(): number;\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    capacityOf(caller: Agent): SubagentCapacity;\n    namesOf(agent: Agent): SubagentMemberNames;\n    async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>;\n    async waitForTreeWork(root: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote({ name: \'prompt\', resources: { session: request => request.childSessionId } })\n    async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt>;\n    @Remote({ name: \'interruptByUser\', resources: { session: childSessionId => childSes /* …truncated — full shape in source */',
+    declaration: 'export class SubagentRuntime extends TypertRemoteService {\n    static Config;\n    static inject;\n    constructor(ctx: Context, private config: Config);\n    get maxActiveSubagents(): number;\n    resolveMaxDepth(configured?: number | \'provider-managed\'): number | undefined;\n    startActivation(spec: SubagentActivationSpec & {\n        readonly childId: SessionId;\n    }): Promise<SubagentActivation & {\n        readonly messageId: MessageId;\n    }>;\n    startActivation(spec: SubagentActivationSpec): Promise<SubagentActivation>;\n    rootOf(caller: Agent): Agent;\n    capacityOf(caller: Agent): SubagentCapacity;\n    namesOf(agent: Agent): SubagentMemberNames;\n    async resolveName(caller: Agent, name: string, signal: AbortSignal): Promise<SessionId>;\n    async waitForTreeWork(root: Agent): Promise<boolean>;\n    async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId>;\n    interrupt(targetSessionId: SessionId, authority: SubagentInterruptAuthority): void;\n    async selectModel(childId: SessionId, selection: Readonly<ModelSelection>, authority: SubagentInterruptAuthority, signal: AbortSignal): Promise<ModelSelection>;\n    async drainDescendants(parents: readonly Agent[]): Promise<void>;\n    listDescendants(rootSessionId: SessionId, signal?: AbortSignal): Promise<SubagentDescendantListEntry[]>;\n    @Remote({ name: \'prompt\', resources: { session: request => request.childSessionId } })\n    async prompt(request: /* …truncated — full shape in source */',
+  },
+  {
+    name: 'SubagentSelectModelReceipt',
+    declaration: 'export interface SubagentSelectModelReceipt {\n    readonly selected: ModelSelection;\n}',
+  },
+  {
+    name: 'SubagentSelectModelRequest',
+    declaration: 'export interface SubagentSelectModelRequest {\n    readonly childSessionId: SessionId;\n    readonly provider: string;\n    readonly model: string;\n    readonly reasoningEffort?: string;\n}',
   },
   {
     name: 'SubagentSendMessageOptions',
@@ -11478,6 +11697,62 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SyncedConfigValues',
     declaration: 'export type SyncedConfigValues = {\n    readonly [field: string]: JsonValue;\n};',
+  },
+  {
+    name: 'SynthesisAudioFormat',
+    declaration: 'export interface SynthesisAudioFormat {\n    readonly encoding: \'pcm-s16le\';\n    readonly sampleRate: number;\n}',
+  },
+  {
+    name: 'SynthesisAvailability',
+    declaration: 'export type SynthesisAvailability = {\n    readonly phase: \'ready\';\n} | {\n    readonly phase: \'unavailable\';\n    readonly reason: SynthesisUnavailableReason;\n} | {\n    readonly phase: \'failed\';\n    readonly message: string;\n};',
+  },
+  {
+    name: 'SynthesisAvailabilitySource',
+    declaration: 'export interface SynthesisAvailabilitySource {\n    snapshot(): SynthesisAvailability;\n    subscribe(listener: () => void): () => void;\n}',
+  },
+  {
+    name: 'SynthesisFacts',
+    declaration: 'export interface SynthesisFacts {\n    readonly voices: readonly string[];\n    readonly voice: string;\n    readonly sampleRate: number;\n}',
+  },
+  {
+    name: 'SynthesisInput',
+    declaration: 'export interface SynthesisInput {\n    readonly text: string;\n    readonly voice: string;\n}',
+  },
+  {
+    name: 'SynthesisProvider',
+    declaration: 'export interface SynthesisProvider {\n    readonly info: SynthesisProviderInfo;\n    readonly availability?: SynthesisAvailabilitySource;\n    synthesize(input: SynthesisInput, signal: AbortSignal): AsyncIterable<Uint8Array>;\n}',
+  },
+  {
+    name: 'SynthesisProviderId',
+    declaration: 'export type SynthesisProviderId = Branded<\'SynthesisProviderId\'>;',
+  },
+  {
+    name: 'SynthesisProviderInfo',
+    declaration: 'export interface SynthesisProviderInfo {\n    readonly id: SynthesisProviderId;\n    readonly name: string;\n    readonly location: \'host-local\' | \'cloud\';\n    readonly audio: SynthesisAudioFormat;\n    readonly maxCharacters: number;\n    readonly voices: readonly string[];\n}',
+  },
+  {
+    name: 'SynthesisProviderView',
+    declaration: 'export interface SynthesisProviderView extends SynthesisProviderInfo {\n    readonly availability: SynthesisAvailability;\n    readonly voice: string;\n}',
+  },
+  {
+    name: 'SynthesisRequest',
+    declaration: 'export interface SynthesisRequest {\n    readonly text: string;\n    readonly voice?: string;\n}',
+  },
+  {
+    name: 'SynthesisSelectionPatch',
+    declaration: 'export interface SynthesisSelectionPatch {\n    readonly voice: string;\n}',
+  },
+  {
+    name: 'SynthesisSnapshot',
+    declaration: 'export interface SynthesisSnapshot {\n    readonly providers: readonly SynthesisProviderView[];\n    readonly selected: SynthesisProviderId;\n}',
+  },
+  {
+    name: 'SynthesisSpec',
+    declaration: 'export interface SynthesisSpec extends SynthesisInput {\n    readonly provider: SynthesisProvider;\n}',
+  },
+  {
+    name: 'SynthesisUnavailableReason',
+    declaration: 'export type SynthesisUnavailableReason = \'sign-in-required\';',
   },
   {
     name: 'SystemMessage',
@@ -12061,7 +12336,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'UpdateBundleOptions',
-    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n}',
+    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n    readonly approvedBuilds?: string[];\n}',
   },
   {
     name: 'UpdateSharePermissionsRequest',
@@ -12104,6 +12379,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ViewerPluginPolicy {\n    readonly plugin: string;\n    readonly mode: \'all\' | \'none\' | \'selected\';\n    readonly endpoints?: readonly string[];\n}',
   },
   {
+    name: 'VoiceSelection',
+    declaration: 'export interface VoiceSelection {\n    readonly voice: string;\n}',
+  },
+  {
     name: 'WebAdmission',
     declaration: 'export type WebAdmission = {\n    kind: \'allow\';\n    peer?: PeerScope;\n} | {\n    kind: \'deny\';\n    status: 401 | 403 | 503;\n};',
   },
@@ -12129,7 +12408,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WebBootEntry',
-    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n}',
+    declaration: 'export interface WebBootEntry {\n    id: string;\n    url: string;\n    rev: string;\n    inject?: string[];\n    immediately?: boolean;\n    external?: string[];\n    config?: SyncedConfigValues;\n    isolation?: ClientIsolation;\n}',
   },
   {
     name: 'WebBootGraph',

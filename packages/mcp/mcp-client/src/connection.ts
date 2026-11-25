@@ -1,8 +1,9 @@
 /**
  * Connection supervisor: owns the MCP client/transport generations for one
  * plugin instance, keeps the harness tool registry in sync with the live
- * generation, and — when the connection drops — restarts the configured
- * server with bounded exponential backoff.
+ * generation, and — when the connection drops or the server no longer knows
+ * its Streamable HTTP session — restarts the configured server with bounded
+ * exponential backoff.
  *
  * One outage shares one attempt budget (`maxAttempts` consecutive failed
  * attempts, delays doubling from `initialDelayMs` up to `maxDelayMs`). A
@@ -22,16 +23,18 @@ import { assertNever, deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-uti
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { withDeadline } from './deadline.ts'
-import { McpAuthorizationRequired, McpLocalError, mcpRequestError, McpToolError, oauthFailure } from './diagnostic.ts'
+import {
+  eventStreamRefused, McpAuthorizationRequired, McpLocalError, mcpRequestError, McpToolError, oauthFailure, sessionRejected,
+} from './diagnostic.ts'
 import type { McpOAuthCredentials, McpOAuthGrant } from './oauth-credentials.ts'
 import type { McpStatusCell } from './status.ts'
 import type { McpCloseResult } from './types.ts'
 import { McpGeneration } from './generation.ts'
 import { McpTemplateBinding } from './credentials.ts'
 import { MissingTemplateValue } from './templates.ts'
-import { McpToolRegistrationError, syncTools } from './tools.ts'
+import { McpSessionRefused, McpToolRegistrationError, syncTools } from './tools.ts'
 import { McpToolLoader } from './tool-loading.ts'
-import type { ToolDisposers } from './tools.ts'
+import type { McpToolSend, ToolDisposers } from './tools.ts'
 import type { Config } from './index.ts'
 
 /** Automatic reconnect policy for one MCP server connection. */
@@ -56,6 +59,12 @@ export const RECONNECT_DEFAULTS: Required<ReconnectConfig> = Object.freeze({
 
 /** Default UTF-8 byte limit for attributed server instructions. */
 export const DEFAULT_MAX_INSTRUCTION_BYTES = 32_768
+
+/**
+ * What requests still awaiting an answer report when the client closes a connection whose session the server no
+ * longer knows. A request the server had refused by then reports {@link McpSessionRefused} instead.
+ */
+const SESSION_EXPIRED = 'MCP server session expired; this call returned no result and may not have run. A new call may succeed after the client reconnects. State the server kept for the expired session may be lost.'
 
 /** Fully resolved reconnect policy captured at plugin load. */
 export type ResolvedReconnectPolicy = Readonly<Required<ReconnectConfig>>
@@ -142,12 +151,21 @@ export function startConnection(
   const loader = config.toolLoading === 'on-demand'
     ? new McpToolLoader(ctx, config.serverName, config.catalogDescriptionMaxLength)
     : undefined
-  type Generation = { wire: McpGeneration; connectedAt?: number }
+  type Generation = {
+    wire: McpGeneration
+    connectedAt?: number
+    /**
+     * Present once the server refused a request for this generation's session. The generation then stays current
+     * and open until `reconnectTimer` closes it.
+     */
+    expired?: McpSessionRefused['replacement']
+  }
   let current: Generation | undefined
   let bindingValue: { config?: Config; grantId?: string } | undefined
   let disposed = false
   let serverInstructions = ''
   let disposers: ToolDisposers = new Map()
+  let sends: ReadonlyMap<string, McpToolSend> = new Map()
   let syncChain: Promise<void> = Promise.resolve()
   let settling: Promise<void> = Promise.resolve()
   let reconnectTimer: NodeJS.Timeout | undefined
@@ -194,6 +212,7 @@ export function startConnection(
       }
     }
     disposers = new Map()
+    sends = new Map()
     serverInstructions = ''
   }
 
@@ -218,6 +237,7 @@ export function startConnection(
           serverName: config.serverName,
           toolCallTimeoutMs: config.toolCallTimeoutMs,
           signal,
+          recovery: { refusal: error => refusal(record, error), publish: (next) => { sends = next } },
           ...binding.redacting ? { redact: (text: string) => binding.redact(text) } : {},
           ...loader === undefined ? {} : { loader },
         }, disposers, () => isCurrent(record))
@@ -252,18 +272,61 @@ export function startConnection(
       nextRetryAtMs: Date.now() + delayMs, lastError: error })
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined
-      settling = connectGeneration()
+      // Only a generation whose session expired stays current during the delay.
+      const expired = current
+      settling = expired === undefined ? connectGeneration() : release(expired).then(connectGeneration)
     }, delayMs)
     reconnectTimer.unref()
   }
 
-  function lost(record: Generation, error: string): void {
-    if (!isCurrent(record)) return
+  function lost(record: Generation, error: string, reason?: Error): void {
+    // `reconnectTimer` closes a generation whose session expired.
+    if (!isCurrent(record) || record.expired !== undefined) return
     current = undefined
-    settling = close(record).then((confirmed) => {
+    settling = close(record, reason).then((confirmed) => {
       readiness.resolve({ error: new Error(error) })
       if (confirmed) scheduleReconnect(error, record.connectedAt)
     })
+  }
+
+  /**
+   * Close a generation whose session expired. Its requests still awaiting an answer fail with
+   * {@link SESSION_EXPIRED}.
+   */
+  async function release(record: Generation): Promise<void> {
+    current = undefined
+    await close(record, new McpLocalError(SESSION_EXPIRED, 'MCP_CONNECTION_CLOSED'))
+  }
+
+  /**
+   * The outcome of the connection attempt that follows a lost connection.
+   * @returns the replacement's tool call attempts once it is connected, or undefined when the attempt fails, none
+   *   is made, or the instance is disposed first.
+   */
+  function replacement(): McpSessionRefused['replacement'] {
+    const outcome: PromiseWithResolvers<ReadonlyMap<string, McpToolSend> | undefined> = Promise.withResolvers()
+    let attempted = false
+    const settle = (connected: boolean): void => {
+      stop()
+      lifetime.signal.removeEventListener('abort', cancel)
+      outcome.resolve(connected ? sends : undefined)
+    }
+    const cancel = (): void => { settle(false) }
+    const stop = status.onChange((next) => {
+      if (next.state === 'connecting') attempted = true
+      // `reconnecting` before the attempt is its delay; after the attempt it is the attempt's failure.
+      else if (next.state !== 'reconnecting' || attempted) settle(next.state === 'connected')
+    })
+    lifetime.signal.addEventListener('abort', cancel, { once: true })
+    return outcome.promise
+  }
+
+  /**
+   * Classify the rejection of one request sent on `record`.
+   * @returns the failure to report when the server refused that request for its session; undefined otherwise.
+   */
+  function refusal(record: Generation, error: unknown): McpSessionRefused | undefined {
+    return record.expired !== undefined && sessionRejected(error) ? new McpSessionRefused(record.expired) : undefined
   }
 
   function isStopped(): boolean { return disposed || closureFailure !== undefined }
@@ -330,8 +393,30 @@ export function startConnection(
     client.onclose = () => {
       if (record.connectedAt !== undefined) lost(record, 'connection closed')
     }
-    if (oauth !== undefined) client.onerror = (error) => {
-      const failure = oauthFailure(error)
+    client.onerror = (error) => {
+      // Before startup completes, and on a connection without a session id, these statuses are ordinary answers.
+      if (record.connectedAt !== undefined && client.transport?.sessionId !== undefined) {
+        if (sessionRejected(error)) {
+          if (!isCurrent(record) || record.expired !== undefined) return
+          record.expired = replacement()
+          // The generation stays open for the reconnect delay: each request the server refuses receives its own
+          // rejection, and a request the server accepted can still return its result.
+          scheduleReconnect('server session expired', record.connectedAt)
+          // No reconnect follows: the timer only closes the generation, after the refused request has rejected
+          // with its own error instead of the closure reason.
+          reconnectTimer ??= setTimeout(() => {
+            reconnectTimer = undefined
+            settling = release(record)
+          })
+          return
+        }
+        if (eventStreamRefused(error)) {
+          // A ping the server rejects for its session reports through this handler; any other outcome changes nothing.
+          void record.wire.run(signal => client.ping({ signal, timeout: config.toolCallTimeoutMs })).catch(() => undefined)
+          return
+        }
+      }
+      const failure = oauth === undefined ? undefined : oauthFailure(error)
       if (failure === undefined) return
       // A committed grant replacement fails this generation's later requests with `binding` before the
       // pending credential check replaces the generation; that check owns recovery.
@@ -343,12 +428,16 @@ export function startConnection(
       ctx.logger.info(`${label}: tool list changed, re-syncing`)
       try {
         await enqueueSync(record)
-        if (isCurrent(record) && record.connectedAt !== undefined) {
+        // An expired generation stays `reconnecting`: calls the server rejected wait for the next `connected`.
+        if (isCurrent(record) && record.expired === undefined && record.connectedAt !== undefined) {
           status.update({ state: 'connected', toolCount: loader?.size ?? disposers.size, connectedAt: record.connectedAt })
         }
       } catch (error) {
         if (error instanceof McpToolRegistrationError) lost(record, diagnostic(error, 'tool synchronization'))
-        else if (isCurrent(record)) ctx.logger.error(`${label}: tool re-sync failed: ${diagnostic(error, 'tool synchronization')}`)
+        // An expired session already has its reconnect pending.
+        else if (isCurrent(record) && record.expired === undefined) {
+          ctx.logger.error(`${label}: tool re-sync failed: ${diagnostic(error, 'tool synchronization')}`)
+        }
       }
     }
     try {
@@ -440,7 +529,8 @@ export function startConnection(
           })
         } catch (error) {
           exec.signal.throwIfAborted()
-          throw mcpRequestError(error, request.method, binding.redacting ? text => binding.redact(text) : undefined)
+          throw refusal(record, error)
+            ?? mcpRequestError(error, request.method, binding.redacting ? text => binding.redact(text) : undefined)
         }
       },
     },

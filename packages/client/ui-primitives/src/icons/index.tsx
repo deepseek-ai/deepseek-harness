@@ -336,6 +336,12 @@ export const IconPauseOutlineRegular = productIcon('pause-outline', 'regular')
 /** Medium IconPauseOutline artwork with a 1.3px stroke. */
 export const IconPauseOutlineMedium = productIcon('pause-outline', 'medium')
 
+/** Regular one-pixel IconSpeakerOutline artwork. */
+export const IconSpeakerOutlineRegular = productIcon('speaker-outline', 'regular')
+
+/** Medium IconSpeakerOutline artwork with a 1.3px stroke. */
+export const IconSpeakerOutlineMedium = productIcon('speaker-outline', 'medium')
+
 /** Regular one-pixel IconFullscreenOutline artwork. */
 export const IconFullscreenOutlineRegular = productIcon('fullscreen-outline', 'regular')
 

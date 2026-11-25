@@ -16,11 +16,42 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 
+/** Row id of the pi-ai adapter, whose `providers` dict holds the pi-ai routes that the page adds and edits. */
+export const PI_AI_ADAPTER_NS = 'llm-pi-ai'
+
 /**
- * Any route key walks a dict schema to the same profile node, so the lookup
- * names one that cannot collide with a configured route.
+ * Path of a route's profile in the pi-ai adapter's own form. Any route key
+ * walks a dict schema to the same profile node, so the path names one that
+ * cannot collide with a configured route.
  */
-const PROBE_ROUTE = '\u0000probe'
+export const PI_AI_PROFILE_PATH: readonly string[] = ['providers', '\u0000probe']
+
+/** Field names of an object form node, in a fixed order. */
+function fieldsOf(node: unknown): string {
+  return Object.keys((node as { dict?: Record<string, unknown> } | undefined)?.dict ?? {}).toSorted().join('\n')
+}
+
+/**
+ * The namespace of the adapter that serves the routes of one settings
+ * namespace: it selects the editor layout, keys the provider-card extension
+ * seat, and is the namespace model discovery answers under. A namespace whose
+ * whole form is the pi-ai adapter's profile form is a pi-ai provider row, a
+ * plugin row beside the adapter's; every other route is configured in its
+ * adapter's own row.
+ * @param namespace - the view of the namespace that holds a route's profile.
+ * @param piAi - the pi-ai adapter's namespace view, when it is mounted.
+ * @param schema - settings schema operations.
+ * @returns the serving adapter's namespace.
+ */
+export function adapterNsOf(
+  namespace: SettingsNamespaceView,
+  piAi: SettingsNamespaceView | undefined,
+  schema: SettingsSchemaOperations,
+): string {
+  if (piAi === undefined || namespace.ns === piAi.ns) return namespace.ns
+  const profile = fieldsOf(schema.nodeAtPath(schema.rehydrate(piAi.schema), PI_AI_PROFILE_PATH))
+  return profile.length > 0 && fieldsOf(schema.rehydrate(namespace.schema)) === profile ? piAi.ns : namespace.ns
+}
 
 /** One provider row after joining the configurable directory with live routes. */
 export interface ProviderDirectoryEntry {
@@ -85,6 +116,8 @@ export interface ProviderRow {
   configured: boolean
   /** Whether the user layer alone carries the profile (removal restores the base). */
   removable: boolean
+  /** Namespace of the adapter that serves the route (see {@link adapterNsOf}). */
+  adapterNs: string
   /** The credential reference the resolved profile names, when one does. */
   apiKeyEnv: string | undefined
   /** Credential state for {@link apiKeyEnv}, once described. */
@@ -131,16 +164,18 @@ export function deriveKeyRef(provider: string): string {
  * namespace's own schema. This stays a schema read rather than a wire field so
  * the choices the page offers cannot drift from the ones the adapter accepts:
  * both come from the same `Config`.
- * @param namespace - the namespace view whose schema declares the profile shape.
+ * @param namespace - the namespace view whose schema declares the profile fields.
+ * @param path - path from the namespace's root to the profile.
  * @param schema - settings schema operations.
  * @returns the protocol identifiers, or an empty list when the schema has none.
  */
 export function protocolChoices(
   namespace: SettingsNamespaceView | undefined,
+  path: readonly string[],
   schema: SettingsSchemaOperations,
 ): string[] {
   if (namespace === undefined) return []
-  const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), ['providers', PROBE_ROUTE, 'api'])
+  const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), [...path, 'api'])
   const list = (node as { type?: string; list?: readonly { value?: unknown }[] } | undefined)
   if (list?.type !== 'union' || list.list === undefined) return []
   return list.list.map(entry => entry.value).filter((value): value is string => typeof value === 'string')
@@ -151,17 +186,18 @@ export function protocolChoices(
  * the owning namespace's own schema for the same reason as
  * {@link protocolChoices}: the levels the page offers and the keys the
  * adapter accepts in `reasoningEfforts` come from the same `Config`.
- * @param namespace - the namespace view whose schema declares the profile shape.
+ * @param namespace - the namespace view whose schema declares the profile fields.
+ * @param path - path from the namespace's root to the profile.
  * @param schema - settings schema operations.
  * @returns the levels in the schema's escalation order, or an empty list when the schema has none.
  */
 export function reasoningLevelChoices(
   namespace: SettingsNamespaceView | undefined,
+  path: readonly string[],
   schema: SettingsSchemaOperations,
 ): string[] {
   if (namespace === undefined) return []
-  const path = ['providers', PROBE_ROUTE, 'models', '0', 'reasoningEfforts']
-  const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), path)
+  const node = schema.nodeAtPath(schema.rehydrate(namespace.schema), [...path, 'models', '0', 'reasoningEfforts'])
   // `false | { [level]: value }`: the dict branch's key schema lists the levels.
   const branches = (node as { list?: readonly { type?: string; sKey?: unknown }[] } | undefined)?.list ?? []
   const keys = branches.find(branch => branch.type === 'dict')?.sKey as { list?: readonly { value?: unknown }[] } | undefined
@@ -260,6 +296,7 @@ export class ModelsSettingsStore {
         entry,
         configured,
         removable,
+        adapterNs: namespace === undefined ? entry.settingsNs : adapterNsOf(namespace, namespaces.get(PI_AI_ADAPTER_NS), this.schema),
         apiKeyEnv: entry.provider === 'deepseek-account' ? undefined : apiKeyEnvOf(namespace, entry.settingsPath, this.schema),
         credential: undefined,
       }

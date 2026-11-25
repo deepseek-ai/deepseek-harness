@@ -1,11 +1,11 @@
 /**
- * Browser-facing subagent prompt and interrupt request validation plus the
- * stable prompt failure codes returned by the Remote surface.
+ * Browser-facing subagent request validation and stable control failures.
  *
  * @module @deepseek-ai/dsh-subagent
  */
 
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
@@ -19,6 +19,12 @@ const CONTROL_ID_SCHEMAS = {
   }),
   'subagent.interrupt': z.object({
     childSessionId: SESSION_ID_SCHEMA,
+  }),
+  'subagent.selectModel': z.object({
+    childSessionId: SESSION_ID_SCHEMA,
+    provider: z.string().min(1),
+    model: z.string().min(1),
+    reasoningEffort: z.string().min(1).optional(),
   }),
 } as const
 
@@ -100,4 +106,63 @@ export function rejectPrompt(error: unknown, childSessionId: SessionId, signal: 
 
 function isCancellation(error: unknown, signal: AbortSignal): boolean {
   return signal.aborted || (error instanceof SubagentError && error.code === 'CANCELLED')
+}
+
+/**
+ * Report selection failures while preserving an uncertain persistence outcome.
+ * @param error - failure from model selection or its durability barrier.
+ * @param childSessionId - addressed child.
+ * @param signal - caller cancellation before recording.
+ * @returns Never — the refusal is thrown.
+ * @throws {RemoteError} always; persistence uncertainty takes precedence over cancellation.
+ */
+export function rejectModelSelection(error: unknown, childSessionId: SessionId, signal: AbortSignal): never {
+  if (error instanceof SubagentError && error.code === 'PERSISTENCE_UNCONFIRMED') {
+    throw new RemoteError(
+      'subagent/model-selection-unconfirmed',
+      'the child model choice may have changed, but persistence is unconfirmed; reload its state before retrying',
+      { childSessionId },
+      { cause: error },
+    )
+  }
+  if (isCancellation(error, signal)) {
+    throw new RemoteError('gateway/cancelled', 'subagent model selection was cancelled', {}, { cause: error })
+  }
+  // LLM validation names the rejected provider, model, or effort.
+  if (error instanceof LlmError) {
+    throw new RemoteError('subagent/model-unavailable', error.message, { childSessionId }, { cause: error })
+  }
+  if (error instanceof SubagentError) {
+    switch (error.code) {
+      case 'MODEL_UNAVAILABLE':
+        throw new RemoteError(
+          'subagent/model-unavailable', 'the selected subagent model is unavailable; choose another model or retry',
+          { childSessionId }, { cause: error },
+        )
+      case 'UNAUTHORIZED':
+        throw new RemoteError(
+          'subagent/unauthorized', 'subagent model selection is not authorized',
+          { childSessionId }, { cause: error },
+        )
+      case 'NOT_RESUMABLE':
+      case 'UNSUPPORTED_CAPABILITY':
+      case 'NOT_CONTINUABLE':
+        throw new RemoteError(
+          'subagent/not-resumable', 'subagent does not support model selection',
+          { childSessionId }, { cause: error },
+        )
+      case 'DRAINING':
+      case 'ACTIVATION_CLOSING':
+      case 'CONTINUATION_UNAVAILABLE':
+      case 'PERSISTENCE_UNAVAILABLE':
+        throw new RemoteError(
+          'subagent/model-selection-unavailable', 'subagent model selection is temporarily unavailable',
+          { childSessionId }, { cause: error },
+        )
+      // Other backend failures do not expose provider details through Remote.
+      default:
+        break
+    }
+  }
+  throw new RemoteError('gateway/internal', 'subagent model selection failed', {}, { cause: error })
 }

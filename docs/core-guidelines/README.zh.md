@@ -13,6 +13,7 @@
   - [G.2：避免在公共接口参数中使用回调](general.zh.md#g2)
 - [F：前端](frontend.zh.md)
 - [B：后端](backend.zh.md)
+  - [B.1：用生命周期事件驱动插件工作，而不是用轮询 Agent 状态的循环](backend.zh.md#b1)
 - [D：数据交换](data-exchange.zh.md)
 
 ## 地位与范围

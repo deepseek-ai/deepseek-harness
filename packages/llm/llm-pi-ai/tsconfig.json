@@ -49,6 +49,9 @@
     },
     {
       "path": "../../settings/settings"
+    },
+    {
+      "path": "../../boot/app-boot"
     }
   ]
 }

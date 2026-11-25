@@ -1973,6 +1973,29 @@ describe('Git hooks', () => {
       expect(pairing).toMatchObject({ exclude: ['.agents/notes/archived/**'] })
     }
   })
+
+  it('repeats the pre-commit whitespace check in CI over the pull request range, with the history that range needs', () => {
+    const preCommit = loadWorkflow('lefthook.yml')['pre-commit']
+    if (!isRecord(preCommit) || !Array.isArray(preCommit.jobs)) throw new TypeError('lefthook must define pre-commit jobs')
+    expect(preCommit.jobs).toContainEqual({ name: 'whitespace (staged)', run: 'git diff --cached --check' })
+
+    const { steps } = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24')
+    if (!Array.isArray(steps)) throw new TypeError('node-24 must define steps')
+    const names = steps.map((step: unknown) => isRecord(step) ? step.name ?? step.uses : undefined)
+    const whitespace = names.indexOf('Check whitespace in the pull request\'s changes')
+    expect(steps[whitespace]).toEqual({
+      name: 'Check whitespace in the pull request\'s changes',
+      env: {
+        BASE_SHA: '${{ github.event.pull_request.base.sha }}',
+        HEAD_SHA: '${{ github.event.pull_request.head.sha }}',
+      },
+      run: 'git diff --check "$BASE_SHA...$HEAD_SHA"',
+    })
+    // The merge base can be any number of commits behind either tip, and the check needs no installed dependency.
+    expect(names[whitespace - 1]).toMatch(/^actions\/checkout@/)
+    expect(steps[whitespace - 1]).toMatchObject({ with: { 'fetch-depth': 0 } })
+    expect(whitespace).toBeLessThan(names.indexOf('Install (immutable)'))
+  })
 })
 
 function loadWorkflow(path: string): Record<string, unknown> {

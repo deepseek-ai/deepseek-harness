@@ -107,6 +107,7 @@ interface CompiledEntry extends RuntimeResolutionEntry {
 
 interface CompiledResolution {
   readonly entries: ReadonlyMap<string, CompiledEntry>
+  readonly bundlePlugins: ReadonlyMap<string, string>
   readonly profilesDir: string
   readonly profileDir: string | undefined
   readonly profilePaths: readonly string[]
@@ -200,6 +201,7 @@ function prefixes(path: string): readonly string[] {
 function compileResolution(resolution: RuntimeResolution): CompiledResolution {
   return {
     entries: new Map(resolution.entries.map(entry => [entry.name, { ...entry, realDir: canonicalPath(entry.packageDir) }])),
+    bundlePlugins: new Map((resolution.bundlePlugins ?? []).map(plugin => [plugin.name, plugin.bundleDir])),
     profilesDir: resolution.profilesDir,
     profileDir: resolution.profileDir,
     profilePaths: prefixes(resolution.profilesDir),
@@ -685,12 +687,39 @@ class ResolutionRouter {
     return state
   }
 
+  /**
+   * Route a plugin row that the config tree requests to the bundle plugin of that name. The config tree's importer is
+   * the active profile directory itself; a module file inside the profile, such as a package in its node_modules, is
+   * another importer and keeps its own lookup.
+   */
+  private routeBundlePlugin(
+    request: string, parentRoutes: ParentRoutes, resolution: CompiledResolution,
+  ): ResolutionRouteState | undefined {
+    const name = barePackageName(request)
+    const { layer, parent } = parentRoutes
+    if (name === undefined || layer.kind !== 'profile' || !resolution.profile.includes(parent)) return undefined
+    const bundleDir = resolution.bundlePlugins.get(name)
+    if (bundleDir === undefined) return undefined
+    // The row resolves again as an import of the bundle it is bound to. The importer is the bundle's real manifest:
+    // the source launcher maps a workspace package to its sources only for an importer outside node_modules.
+    const bundle = join(canonicalPath(bundleDir), 'package.json')
+    const imported = this.routeUrl(request, pathToFileURL(bundle).href)
+    // Where the bundle's own import continues natively, Node continues from the bundle, not from the profile directory.
+    const state: ResolutionRouteState = imported === undefined || imported.route.kind === 'native'
+      ? { route: { kind: 'native-after-interception', parent: bundle } }
+      : imported
+    parentRoutes.requests.set(request, state)
+    return state
+  }
+
   routeUrl(request: string, parentURL: string): ResolutionRouteState | undefined {
     const resolution = this.current
     const parentRoutes = this.getOrCreateParentRoutesForUrl(parentURL)
     if (parentRoutes === false) return undefined
     const cached = parentRoutes.requests.get(request)
     if (cached !== undefined) return cached
+    const plugin = this.routeBundlePlugin(request, parentRoutes, resolution)
+    if (plugin !== undefined) return plugin
     const local = this.routeLocalPackage(request, parentRoutes, resolution)
     if (local !== undefined) return local
     return this.routeScoped(request, parentRoutes, resolution, 'esm')

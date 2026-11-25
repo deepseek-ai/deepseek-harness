@@ -4,7 +4,7 @@ import { createIFrameScriptRealmFactory } from './iframe.ts'
 
 /** Provider plugin identity. */
 export const name = 'script-realm-iframe'
-/** Provider registry supplied by the kernel Client plugin. */
+/** Factory registry supplied by the script-realm plugin. */
 export const inject = ['scriptRealms']
 
 /**

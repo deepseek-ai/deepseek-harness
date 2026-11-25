@@ -58,6 +58,7 @@
   "references": [
     { "path": "./packages/client/ui-action-cards" },
     { "path": "./packages/client/ui-creation-recommendations" },
+    { "path": "./packages/experimental/client-ui-connectors" },
     { "path": "./packages/client/ui-plugin-recommendations" },
     { "path": "./packages/client/ui-file-drag" },
     { "path": "./packages/session/message-quotes" },
@@ -66,6 +67,7 @@
     { "path": "./apps/desktop/tsconfig.client.json" },
     { "path": "./packages/util/atomic-write" },
     { "path": "./packages/experimental/client-ui-voice-input" },
+    { "path": "./packages/experimental/client-ui-read-aloud" },
     { "path": "./packages/experimental/client-ui-claude-code-mods" },
 
     { "path": "./packages/client/ui-sidebar-terminal" },
@@ -117,6 +119,7 @@
     { "path": "./packages/client/ui-context-menu" },
     { "path": "./packages/client/ui-file-actions" },
     { "path": "./packages/client/ui-layout" },
+    { "path": "./packages/client/ui-responsive" },
     { "path": "./packages/client/ui-sidebar" },
     { "path": "./packages/client/ui-brand-official" },
     { "path": "./packages/client/ui-approval" },

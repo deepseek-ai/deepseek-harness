@@ -46,6 +46,8 @@ A settings surface registers into the slot types this package declares. The shel
 
 To customize a page's navigation icon, use `ctx.slots.inject('settings.section.icon', ...)` and register an icon component with the same `id` as its `settings.section` contribution. Unmatched ids never render, and the icon's `label` option is not displayed. The component receives `size` in pixels and `active`; the shell owns the button, label, and decorative icon wrapper. Without a matching icon registration, the shell renders its default glyph. Disposing the icon contribution restores that glyph.
 
+General Settings exposes the root-scoped `settings.general.group` list with registration options `id`, localized `label`, and `order`. Each group declares and renders its own child list, named `settings.general.group.<id>.item`; custom groups declaration-merge their exact child key into `SlotMap`. The default Preferences group retains `settings.general.item` for compatible additive contributions. Groups and items receive no owner data. Choose an existing group by its item slot name, not a `groupId` property; [ui-settings-general](../ui-settings-general/README.md#the-general-section) documents the built-in targets and custom-group registration. The `/client` entrypoint exports `SettingsGeneralGroupItemSlot` (the six built-in grouped item keys), `SettingsGeneralGroupOwnerProps`, and `SettingsGeneralItemOwnerProps`.
+
 ### Observable success and failures
 
 A committed write folds its answer into the shared mirror. Refused writes refresh the latest Host values. Browser validation uses the serialized Config schema; the Host validates complete configuration, including checks that cannot be serialized.

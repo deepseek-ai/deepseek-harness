@@ -1,4 +1,4 @@
-/** Target Session permissions are enforced before subagent input or cancellation is admitted. */
+/** Target Session permissions are enforced before subagent control operations are admitted. */
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,7 +26,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 
 const GUEST: Principal = { kind: 'test-guest', guest: 'subagent-controls' }
-const ACTIONS = ['subagents/prompt', 'subagents/interruptByUser'] as const
+const METHODS = ['prompt', 'interruptByUser', 'selectModelByUser'] as const
+const ACTIONS = METHODS.map(method => `subagents/${method}` as const)
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
@@ -51,6 +52,8 @@ async function harness() {
     prepareContinuable: async () => ({}),
   })
   const adapter = new MockAdapter(['hang'])
+  // User model selection accepts only catalog models.
+  vi.spyOn(adapter, 'listModels').mockResolvedValue([{ provider: 'mock', id: 'selected', name: 'Selected' }])
   ctx.llm.registerAdapter(['mock'], adapter)
   const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   const run = await ctx.subagents.startActivation({
@@ -63,7 +66,7 @@ async function harness() {
   await ctx.plugin(TypertGatewayService)
   const bindings: RemoteAccessBinding[] = []
   ctx.remoteAccess.registerPolicy('test-guest', { bindings: () => bindings })
-  const call = (method: 'prompt' | 'interruptByUser', principal: Principal = GUEST, image = false) => {
+  const call = (method: typeof METHODS[number], principal: Principal = GUEST, image = false) => {
     const peer: PeerScope = {
       id: 'subagent-access-peer' as PeerId, ctx, principal, interactions: 'answer',
       signal: new AbortController().signal, dispose: async () => {},
@@ -73,23 +76,26 @@ async function harness() {
       args: method === 'prompt' ? { request: {
         requestId: 'access-follow-up', childSessionId: child.id, delivery: 'queue',
         content: image ? [{ type: 'image', mediaType: 'image/png', data: 'aGk=' }] : [{ type: 'text', text: 'follow-up' }],
-      } } : { childSessionId: child.id },
+      } } : method === 'selectModelByUser'
+        ? { request: { childSessionId: child.id, provider: 'mock', model: 'selected' } }
+        : { childSessionId: child.id },
     })
   }
   return { ctx, parent, child, bindings, call }
 }
 
 describe('subagent target Session access', () => {
-  it.each(['prompt', 'interruptByUser'] as const)('requires the target permission for %s', async (method) => {
+  it.each(METHODS)('requires the target permission for %s', async (method) => {
     const { ctx, parent, child, bindings, call } = await harness()
     const attachments = vi.spyOn(ctx.attachments, 'admitPromptContent')
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession')
     const cancel = vi.spyOn(child, 'cancel')
+    const select = vi.spyOn(child.model, 'select')
     const grants: RemoteAccessBinding[][] = [
       [],
       [{ role: { name: 'global controls', resource: 'global', actions: ACTIONS }, resource: { kind: 'global' } }],
       [{ role: { name: 'parent controls', resource: 'session', actions: ACTIONS }, resource: { kind: 'session', id: parent.id } }],
-      [{ role: { name: 'other control', resource: 'session', actions: [method === 'prompt' ? ACTIONS[1] : ACTIONS[0]] }, resource: { kind: 'session', id: child.id } }],
+      [{ role: { name: 'other control', resource: 'session', actions: [method === 'prompt' ? 'subagents/interruptByUser' : 'subagents/prompt'] }, resource: { kind: 'session', id: child.id } }],
     ]
     for (const grant of grants) {
       bindings.splice(0, bindings.length, ...grant)
@@ -100,6 +106,7 @@ describe('subagent target Session access', () => {
     expect(attachments).not.toHaveBeenCalled()
     expect(observe).not.toHaveBeenCalled()
     expect(cancel).not.toHaveBeenCalled()
+    expect(select).not.toHaveBeenCalled()
     expect(child.inbox.nextTurn).toHaveLength(0)
 
     bindings.splice(0, bindings.length, {
@@ -111,10 +118,16 @@ describe('subagent target Session access', () => {
       expect(child.inbox.nextTurn).toHaveLength(1)
       expect(accepted).toEqual({ messageId: child.inbox.nextTurn[0]?.id })
       expect(child.inbox.nextTurn[0]?.source).toMatchObject({ kind: 'user', principal: GUEST })
-    } else {
+    } else if (method === 'interruptByUser') {
       expect(accepted).toEqual({ accepted: true })
       expect(cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
       await child.whenIdle()
+    } else {
+      const selection = { provider: 'mock', model: 'selected' }
+      expect(accepted).toEqual({ selected: selection })
+      expect(select).toHaveBeenCalledWith(selection)
+      expect(child.model.current()).toEqual(selection)
+      expect(child.inbox.nextTurn).toHaveLength(0)
     }
   })
 
@@ -123,6 +136,8 @@ describe('subagent target Session access', () => {
     const accepted = await call('prompt', { kind: 'owner' })
     expect(child.inbox.nextTurn).toHaveLength(1)
     expect(accepted).toEqual({ messageId: child.inbox.nextTurn[0]?.id })
+    await expect(call('selectModelByUser', { kind: 'owner' }))
+      .resolves.toEqual({ selected: { provider: 'mock', model: 'selected' } })
     await expect(call('interruptByUser', { kind: 'owner' })).resolves.toEqual({ accepted: true })
     await child.whenIdle()
   })
