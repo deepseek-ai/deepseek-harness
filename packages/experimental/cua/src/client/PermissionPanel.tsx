@@ -2,6 +2,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { CuaApplicationGrant, CuaSystemPermissionState } from '../access-types.ts'
@@ -11,6 +12,12 @@ import css from './PermissionPanel.module.css'
 
 /** Renderer-bound permission observation and localized controls. */
 export type PermissionProps = InjectFace<PermissionFace> & PropsLocale<typeof NS>
+
+/** Permission page controls plus optional Settings navigation to Agent presets. */
+export type PermissionPanelProps = PermissionProps & InjectFace<{
+  hooks: { canOpenPresets: SnapshotStore<boolean> }
+  openPresets: () => void
+}>
 
 /** Permission guidance only navigates to the existing bundle details. */
 export type PermissionSetupProps = PermissionProps
@@ -105,10 +112,23 @@ function NoticeBox({ tone, role, title, body, action }: {
   </div>
 }
 
-function WindowsGuidance({ system, error, busy, refresh, t }: Pick<PermissionProps, 'refresh' | 't'> & {
+function PtcRecommendation({ canOpenPresets, openPresets, t }: Pick<PermissionPanelProps, 'openPresets' | 't'> & {
+  canOpenPresets: boolean
+}) {
+  const [before, after] = t('ptcRecommendation').split('{ptcMode}')
+  const label = t('ptcModeLink')
+  return <p>
+    {before}
+    {canOpenPresets ? <button type="button" className={css.inlineLink} onClick={openPresets}>{label}</button> : label}
+    {after}
+  </p>
+}
+
+function WindowsGuidance({ system, error, busy, refresh, canOpenPresets, openPresets, t }: Pick<PermissionPanelProps, 'refresh' | 'openPresets' | 't'> & {
   system: Extract<CuaSystemPermissionState, { platform: 'windows' }> | null
   error: string | null
   busy: boolean
+  canOpenPresets: boolean
 }) {
   return <div className={css.guidance} data-cua-guidance>
     {error !== null && <NoticeBox tone="danger" role="alert"
@@ -127,7 +147,7 @@ function WindowsGuidance({ system, error, busy, refresh, t }: Pick<PermissionPro
     <NoticeBox tone="warn" role="note" title={t('previewNoticeTitle')} body={t('previewNotice')} />
     <p>{t('windowsInstructions')}</p>
     {error === null && system !== null && !system.elevated && <p>{t('standardPrivileges')}</p>}
-    <p>{t('ptcRecommendation')}</p>
+    <PtcRecommendation canOpenPresets={canOpenPresets} openPresets={openPresets} t={t} />
   </div>
 }
 
@@ -141,9 +161,10 @@ function systemReady(system: CuaSystemPermissionState): boolean {
 }
 
 /** @param props Host observation and explicit user actions. @returns Permission controls without automatic system prompts. */
-export function PermissionPanel(props: PermissionProps) {
+export function PermissionPanel(props: PermissionPanelProps) {
   const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
+  const canOpenPresets = props.useCanOpenPresets(value => value)
   const observed = state.system.value
   const windows = observed?.platform === 'windows' || (observed === null && state.windowsProvider.value === true)
   const apps = state.applications.value
@@ -160,11 +181,12 @@ export function PermissionPanel(props: PermissionProps) {
     return () => { window.removeEventListener('focus', refresh) }
   }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
-    {windows ? <WindowsGuidance system={win} error={state.system.error} busy={busy} refresh={refresh} t={t} />
+    {windows ? <WindowsGuidance system={win} error={state.system.error} busy={busy} refresh={refresh}
+      canOpenPresets={canOpenPresets} openPresets={props.openPresets} t={t} />
       : <section className={css.panel} aria-label={t('title')}>
         <div className={`${css.guidance} ${css.panelGuidance}`} data-cua-guidance>
           <NoticeBox tone="warn" role="note" title={t('previewNoticeTitle')} body={t('previewNotice')} />
-          <p>{t('ptcRecommendation')}</p>
+          <PtcRecommendation canOpenPresets={canOpenPresets} openPresets={props.openPresets} t={t} />
         </div>
         <h3>{t('title')}</h3>
         {state.system.error !== null && <NoticeBox tone="danger" role="alert"

@@ -61,12 +61,41 @@ async function fixture(fail = false) {
     'plugins.bundle.activation': { kind: 'keyed', scope: 'root' },
     'plugins.bundle.config': { kind: 'keyed', scope: 'root' }, 'shell.overlay': { kind: 'list', scope: 'root' },
     'conversation.composer': { kind: 'chain', scope: 'session' },
+    'settings.section': { kind: 'list', scope: 'root' },
   } } as never, () => null)
   if (fail) vi.spyOn(ctx.slots, 'inject').mockImplementationOnce(() => { throw new Error('slot unavailable') })
   return { ctx, changes, unmount, status, systemStatus, applicationIcons, list,
     requestPermission, openSettings, revoke, retryApproval,
   }
 }
+
+it('enables the PTC mode link only while settings navigation and the Agent presets section are mounted', async () => {
+  const f = await fixture()
+  try {
+    await f.ctx.plugin({ inject: [...inject], apply: ctx => mountCuaPermissions(ctx, contribution) })
+    const injected = f.ctx.slots.entries('plugins.bundle.config')[0]!.inject!() as {
+      hooks: { canOpenPresets: { getSnapshot(): boolean } }
+      openPresets(): void
+    }
+    expect(injected.hooks.canOpenPresets.getSnapshot()).toBe(false)
+    injected.openPresets()
+    const open = vi.fn()
+    const navFiber = f.ctx.plugin((scope) => { scope.provide('settingsNavigation', { open }) })
+    await navFiber
+    expect(injected.hooks.canOpenPresets.getSnapshot()).toBe(false)
+    const disposeSection = f.ctx.slots.register({ name: 'settings.section', id: 'agent-presets' } as never, () => null)
+    await vi.waitFor(() => { expect(injected.hooks.canOpenPresets.getSnapshot()).toBe(true) })
+    injected.openPresets()
+    expect(open).toHaveBeenCalledExactlyOnceWith('agent-presets')
+    disposeSection()
+    await vi.waitFor(() => { expect(injected.hooks.canOpenPresets.getSnapshot()).toBe(false) })
+    const disposeAgain = f.ctx.slots.register({ name: 'settings.section', id: 'agent-presets' } as never, () => null)
+    await vi.waitFor(() => { expect(injected.hooks.canOpenPresets.getSnapshot()).toBe(true) })
+    await navFiber.dispose()
+    expect(injected.hooks.canOpenPresets.getSnapshot()).toBe(false)
+    disposeAgain()
+  } finally { await f.ctx.fiber.dispose() }
+})
 
 it('reads the Windows provider from the Host inventory when the helper cannot report permissions', async () => {
   const f = await fixture()

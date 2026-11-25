@@ -230,6 +230,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   conversation: 'client-side interface-typed browser service — packages/client/ui-conversation/README.md owns the API',
   layout: 'client-side interface-typed browser service — packages/client/ui-layout/README.md owns the API',
   pluginNavigation: 'client-side bundle navigation — packages/client/ui-plugin-manager/README.md owns the API',
+  settingsNavigation: 'client-side settings modal navigation — packages/client/ui-settings-general/README.md owns the API',
   pluginChanges: 'client-side read-only management activity — packages/client/ui-plugin-manager/README.md owns the API',
   accountSignIn: 'client-side account sign-in entry — packages/client/ui-settings-account/README.md owns the API',
   locale: 'client-side interface-typed browser service — packages/client/locale/README.md owns the API',

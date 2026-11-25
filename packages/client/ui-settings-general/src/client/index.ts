@@ -70,6 +70,19 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Cross-plugin navigation to the Settings modal. */
+    settingsNavigation: {
+      /**
+       * Open Settings, optionally selecting a contributed section by id.
+       * @param sectionId - optional `settings.section` registration id.
+       */
+      open(sectionId?: string): void
+    }
+  }
+}
+
 /** Dictionary namespace owned by this plugin (shell chrome + General copy). */
 const NS = 'settings'
 
@@ -292,7 +305,13 @@ export function apply(ctx: ClientContext): void {
         },
         inject: shellInjected,
       }, SettingsRoot)
-      return () => { disposeCommand(); disposeSlot() }
+      const disposeNavigation = ctx.reflect.provide('settingsNavigation', {
+        open: (sectionId?: string) => {
+          if (sectionId === undefined) shellInstance.actions.open()
+          else shellInstance.actions.openSection(sectionId)
+        },
+      })
+      return () => { void disposeNavigation(); disposeCommand(); disposeSlot() }
     }))
 
   ctx.slots.inject('settings.trigger', () =>

@@ -4,7 +4,8 @@ export const NS = 'cuaPermissions'
 export const en = {
   previewNoticeTitle: 'Experimental feature',
   previewNotice: 'Computer use is experimental and results are not guaranteed. The agent may click the wrong button or type in the wrong window. Use caution in important or production environments.',
-  ptcRecommendation: 'We recommend using PTC mode so the agent can operate apps and call other tools in the same program.',
+  ptcModeLink: 'PTC mode',
+  ptcRecommendation: 'We recommend using {ptcMode} so the agent can operate apps and call other tools in the same program.',
   approvalRisks: 'Risks',
   approvalRiskTitle: 'Computer use risks',
   approvalRiskNotice: 'The agent can access only apps you approve, and can read and control them in the background.\n\nOnline games, messaging apps, and other apps may restrict automation. Violating their rules could result in your account with that app being suspended or banned.\n\nProceed at your own risk. To stop automated control at any time, press Stop in DeepSeek Harness.',
@@ -49,7 +50,8 @@ export type CuaPermissionLocaleKey = keyof typeof en
 export const zh: Record<CuaPermissionLocaleKey, string> = {
   previewNoticeTitle: '实验性功能提示',
   previewNotice: '自动电脑操作仍处于实验阶段，不保证操作结果。智能体可能误点按钮或在错误的窗口中输入内容，请谨慎在重要或生产环境中使用。',
-  ptcRecommendation: '建议配合 PTC 模式使用，让智能体在同一段代码中完成应用操作并调用其他工具。',
+  ptcModeLink: 'PTC 模式',
+  ptcRecommendation: '建议配合 {ptcMode} 使用，让智能体在同一段代码中完成应用操作并调用其他工具。',
   approvalRisks: '风险提示',
   approvalRiskTitle: '自动电脑操作风险提示',
   approvalRiskNotice: '智能体只能访问你已授权的应用，并可在后台读取应用内容、操作应用。\n\n网络游戏、即时通讯等应用可能对自动化操作有所限制。违反相关规则可能导致你在该应用中的账号被暂停使用或封禁。\n\n请自行承担使用风险。如需停止自动化操作，可随时点击 DeepSeek Harness 中的停止按钮。',
@@ -92,7 +94,8 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 export const ja = {
   previewNoticeTitle: '実験的機能について',
   previewNotice: 'Computer Use は実験的な機能であり、操作結果は保証されません。エージェントが誤ったボタンをクリックしたり、別のウィンドウに入力したりする可能性があります。重要な環境や本番環境では慎重に使用してください。',
-  ptcRecommendation: '同じプログラム内でアプリの操作と他のツールの呼び出しを行えるよう、PTC モードの使用をおすすめします。',
+  ptcModeLink: 'PTC モード',
+  ptcRecommendation: '同じプログラム内でアプリの操作と他のツールの呼び出しを行えるよう、{ptcMode} の使用をおすすめします。',
   windowsSetupTitle: 'デスクトップ実行環境を確認',
   windowsSetupBody: 'デスクトップがロックされています。ロックを解除して再試行してください。',
   windowsSessionUnknownTitle: 'デスクトップセッションを利用できません',
@@ -150,7 +153,8 @@ export const ja = {
 export const es = {
   previewNoticeTitle: 'Función experimental',
   previewNotice: 'Computer Use es experimental y sus resultados no están garantizados. El agente puede pulsar el botón equivocado o escribir en la ventana incorrecta. Úsala con precaución en entornos importantes o de producción.',
-  ptcRecommendation: 'Recomendamos usar el modo PTC para que el agente pueda controlar aplicaciones y llamar a otras herramientas en el mismo programa.',
+  ptcModeLink: 'modo PTC',
+  ptcRecommendation: 'Recomendamos usar el {ptcMode} para que el agente pueda controlar aplicaciones y llamar a otras herramientas en el mismo programa.',
   windowsSetupTitle: 'Comprobar el entorno del escritorio',
   windowsSetupBody: 'El escritorio está bloqueado. Desbloquéalo e inténtalo de nuevo.',
   windowsSessionUnknownTitle: 'Sesión de escritorio no disponible',
@@ -194,7 +198,8 @@ export const es = {
 export const fr = {
   previewNoticeTitle: 'Fonctionnalité expérimentale',
   previewNotice: 'Computer Use est une fonctionnalité expérimentale dont les résultats ne sont pas garantis. L’agent peut cliquer sur le mauvais bouton ou saisir du texte dans la mauvaise fenêtre. Soyez prudent dans les environnements importants ou de production.',
-  ptcRecommendation: 'Nous recommandons d’utiliser le mode PTC afin que l’agent puisse piloter des applications et appeler d’autres outils dans le même programme.',
+  ptcModeLink: 'mode PTC',
+  ptcRecommendation: 'Nous recommandons d’utiliser le {ptcMode} afin que l’agent puisse piloter des applications et appeler d’autres outils dans le même programme.',
   windowsSetupTitle: 'Vérifier l’environnement de bureau',
   windowsSetupBody: 'Le bureau est verrouillé. Déverrouillez-le puis réessayez.',
   windowsSessionUnknownTitle: 'Session de bureau indisponible',
@@ -238,7 +243,8 @@ export const fr = {
 export const de = {
   previewNoticeTitle: 'Experimentelle Funktion',
   previewNotice: 'Computer Use ist experimentell und Ergebnisse werden nicht garantiert. Der Agent kann auf die falsche Schaltfläche klicken oder im falschen Fenster tippen. Seien Sie in wichtigen oder produktiven Umgebungen vorsichtig.',
-  ptcRecommendation: 'Wir empfehlen den PTC-Modus, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann.',
+  ptcModeLink: 'PTC-Modus',
+  ptcRecommendation: 'Wir empfehlen den {ptcMode}, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann.',
   windowsSetupTitle: 'Desktopumgebung prüfen',
   windowsSetupBody: 'Der Desktop ist gesperrt. Entsperren Sie ihn und versuchen Sie es erneut.',
   windowsSessionUnknownTitle: 'Desktopsitzung nicht verfügbar',
@@ -282,7 +288,8 @@ export const de = {
 export const ru = {
   previewNoticeTitle: 'Экспериментальная функция',
   previewNotice: 'Управление компьютером находится на экспериментальной стадии, и результат не гарантируется. Агент может нажать не ту кнопку или ввести текст не в то окно. Будьте осторожны в важных и рабочих средах.',
-  ptcRecommendation: 'Рекомендуем использовать режим PTC, чтобы агент мог управлять приложениями и вызывать другие инструменты в одной программе.',
+  ptcModeLink: 'режим PTC',
+  ptcRecommendation: 'Рекомендуем использовать {ptcMode}, чтобы агент мог управлять приложениями и вызывать другие инструменты в одной программе.',
   windowsSetupTitle: 'Проверить среду рабочего стола',
   windowsSetupBody: 'Рабочий стол заблокирован. Разблокируйте его и повторите попытку.',
   windowsSessionUnknownTitle: 'Сеанс рабочего стола недоступен',
@@ -326,7 +333,8 @@ export const ru = {
 export const pt = {
   previewNoticeTitle: 'Recurso experimental',
   previewNotice: 'Computer Use é experimental e os resultados não são garantidos. O agente pode clicar no botão errado ou digitar na janela errada. Use com cautela em ambientes importantes ou de produção.',
-  ptcRecommendation: 'Recomendamos usar o modo PTC para que o agente possa operar aplicativos e chamar outras ferramentas no mesmo programa.',
+  ptcModeLink: 'modo PTC',
+  ptcRecommendation: 'Recomendamos usar o {ptcMode} para que o agente possa operar aplicativos e chamar outras ferramentas no mesmo programa.',
   windowsSetupTitle: 'Verificar ambiente da área de trabalho',
   windowsSetupBody: 'A área de trabalho está bloqueada. Desbloqueie-a e tente novamente.',
   windowsSessionUnknownTitle: 'Sessão de área de trabalho indisponível',
