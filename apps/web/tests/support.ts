@@ -4,7 +4,7 @@ import { createServer } from 'node:net'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Locator, Page } from 'playwright'
+import type { Browser, Locator, Page, Request } from 'playwright'
 import { expect, vi, type MockInstance } from 'vitest'
 import type { RegionRect } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 
@@ -482,7 +482,26 @@ export function conversationContextKey(kind: string, id: string): string {
   return `${kind.length}:${kind}${id}`
 }
 
+/**
+ * Resolve on the first-run credential onboarding step's provider-directory
+ * read. The Settings onboarding coordinator mounts that step only after the
+ * first Session-list pull lands and the welcome step finishes, and from then
+ * on it leaves an open Settings panel in place (#9234). Arm it before the
+ * navigation it observes; a page whose Models settings already loaded sends
+ * no such read.
+ * @param page - page about to load an application with automatic credential onboarding.
+ * @returns the read request.
+ */
+export function credentialOnboardingStarted(page: Page): Promise<Request> {
+  return page.waitForRequest(request => new URL(request.url()).pathname === '/api/llm/listConfigurableProviders')
+}
+
 /** Open Settings through the sidebar account menu.
+ * A panel opened before the first Session-list pull lands closes again when
+ * the onboarding coordinator mounts its first-run steps on that pull (#9234),
+ * so a caller that opens Settings right after loading first waits for a state
+ * that follows the pull, such as {@link credentialOnboardingStarted} or the
+ * Session that startup navigation opens.
  * @param page - browser page with the mounted sidebar.
  * @param locale - current UI language.
  */
