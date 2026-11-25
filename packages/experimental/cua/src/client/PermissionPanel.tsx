@@ -85,21 +85,50 @@ function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: b
   })
 }
 
-function WindowsStatus({ system, uncertain, t }: Pick<PermissionProps, 't'> & {
-  system: Extract<CuaSystemPermissionState, { platform: 'windows' }>
-  uncertain: boolean
+function NoticeBox({ tone, role, title, body }: {
+  tone: 'warn' | 'danger'
+  role: 'note' | 'alert'
+  title: string
+  body: string
 }) {
-  const unlocked = system.sessionLocked === false
-  return <>
-    <div className={css.permission} role="group" aria-label={t('windowsDesktop')}>
-      <div><strong>{t('windowsDesktop')}</strong><p>{t('windowsDesktopUse')}</p></div>
-      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked ? 'available' : 'locked')}</span>
+  const danger = tone === 'danger'
+  return <div className={danger ? css.dangerNotice : css.caution} role={role}>
+    <span className={danger ? css.dangerIcon : css.cautionIcon} aria-hidden="true"><IconWarningOutlineRegular size={14} /></span>
+    <div className={css.cautionBody}>
+      <p className={danger ? css.dangerTitle : css.cautionTitle}>{title}</p>
+      <p>{body}</p>
     </div>
-    <div className={css.permission} role="group" aria-label={t('windowsCapture')}>
-      <div><strong>{t('windowsCapture')}</strong><p>{t('screenRecordingUse')}</p></div>
-      <span>{uncertain || system.sessionLocked === null ? t('unknown') : t(unlocked && system.captureAvailable ? 'available' : 'unavailable')}</span>
-    </div>
-  </>
+  </div>
+}
+
+function WindowsGuidance({ system, error, busy, refresh, t }: Pick<PermissionProps, 'refresh' | 't'> & {
+  system: Extract<CuaSystemPermissionState, { platform: 'windows' }> | null
+  error: string | null
+  busy: boolean
+}) {
+  return <div className={css.guidance} data-cua-guidance>
+    {error !== null && <div className={css.systemError} role="alert">
+      <div className={css.systemErrorBody}>
+        <p className={css.error}>{t('windowsHelperFailed', { message: error })}</p>
+        <p>{t('queryFailedHint')}</p>
+      </div>
+      <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
+    </div>}
+    {error === null && system !== null && <>
+      {system.sessionLocked === true && <NoticeBox tone="danger" role="alert"
+        title={t('windowsLockedTitle')} body={t('windowsLockedBody')} />}
+      {system.sessionLocked === null && <NoticeBox tone="danger" role="alert"
+        title={t('windowsSessionUnknownTitle')} body={t('windowsSessionUnknown')} />}
+      {system.elevated && <NoticeBox tone="danger" role="alert"
+        title={t('windowsElevatedTitle')} body={t('windowsElevatedWarning')} />}
+      {system.sessionLocked === false && !system.captureAvailable && <NoticeBox tone="warn" role="note"
+        title={t('windowsCaptureUnavailableTitle')} body={t('windowsCaptureUnavailableNotice')} />}
+    </>}
+    <NoticeBox tone="warn" role="note" title={t('previewNoticeTitle')} body={t('previewNotice')} />
+    <p>{t('windowsInstructions')}</p>
+    {error === null && system !== null && !system.elevated && <p>{t('standardPrivileges')}</p>}
+    <p>{t('ptcRecommendation')}</p>
+  </div>
 }
 
 function systemReady(system: CuaSystemPermissionState): boolean {
@@ -116,12 +145,14 @@ export function PermissionPanel(props: PermissionProps) {
   const { t, refresh } = props
   const state = props.useCuaPermissions(value => value)
   const observed = state.system.value
+  const windows = observed?.platform === 'windows' || (observed === null && state.windowsProvider.value === true)
   const apps = state.applications.value
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
   const appsBusy = transitioning || state.applications.busy
   const loading = observed === null && state.system.error === null
   const mac = observed?.platform === 'darwin' ? observed : null
+  const win = observed?.platform === 'windows' ? observed : null
   const application = state.system.error !== null ? undefined : mac?.launchApplication
   useEffect(() => {
     refresh()
@@ -129,34 +160,28 @@ export function PermissionPanel(props: PermissionProps) {
     return () => { window.removeEventListener('focus', refresh) }
   }, [refresh])
   return <div className={css.panels} data-cua-settings aria-busy={transitioning || state.busy || loading}>
-    <section className={css.panel} aria-label={t('title')}>
-      <div className={css.guidance} data-cua-guidance>
-        <div className={css.caution} role="note">
-          <span className={css.cautionIcon} aria-hidden="true"><IconWarningOutlineRegular size={14} /></span>
-          <div className={css.cautionBody}>
-            <p className={css.cautionTitle}>{t('previewNoticeTitle')}</p>
-            <p>{t('previewNotice')}</p>
+    {windows ? <WindowsGuidance system={win} error={state.system.error} busy={busy} refresh={refresh} t={t} />
+      : <section className={css.panel} aria-label={t('title')}>
+        <div className={`${css.guidance} ${css.panelGuidance}`} data-cua-guidance>
+          <NoticeBox tone="warn" role="note" title={t('previewNoticeTitle')} body={t('previewNotice')} />
+          <p>{t('ptcRecommendation')}</p>
+        </div>
+        <h3>{t('title')}</h3>
+        {state.system.error !== null && <div className={css.systemError} role="alert">
+          <div className={css.systemErrorBody}>
+            <p className={css.error}>{t('queryFailed', { message: state.system.error })}</p>
+            <p>{t('queryFailedHint')}</p>
           </div>
-        </div>
-        <p>{t('ptcRecommendation')}</p>
-      </div>
-      <h3>{t('title')}</h3>
-      {state.system.error !== null && <div className={css.systemError} role="alert">
-        <div className={css.systemErrorBody}>
-          <p className={css.error}>{t('queryFailed', { message: state.system.error })}</p>
-          <p>{t('queryFailedHint')}</p>
-        </div>
-        <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
-      </div>}
-      {(observed !== null || state.system.error === null) && <p
-        className={observed === null ? css.pendingHint : undefined}
-        aria-hidden={observed === null || undefined}
-      >
-        {t(observed?.platform === 'windows' ? 'windowsPermissionsIntro' : 'permissionsIntro')}
-      </p>}
-      <div className={css.card}>
-        {observed === null ? <UnknownStatus loading={loading} t={t} />
-          : observed.platform === 'windows' ? <WindowsStatus system={observed} uncertain={state.system.error !== null} t={t} />
+          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
+        </div>}
+        {(observed !== null || state.system.error === null) && <p
+          className={observed === null ? css.pendingHint : undefined}
+          aria-hidden={observed === null || undefined}
+        >
+          {t('permissionsIntro')}
+        </p>}
+        <div className={css.card}>
+          {mac === null ? <UnknownStatus loading={loading} t={t} />
             : (['accessibility', 'screenRecording'] as const).map(permission => <div className={css.permission} key={permission}
               role="group" aria-label={t(permission)}>
               <div>
@@ -164,12 +189,11 @@ export function PermissionPanel(props: PermissionProps) {
                 <PermissionDescription application={application} permission={permission} t={t} />
               </div>
               <PermissionAction permission={permission}
-                granted={mac === null || state.system.error !== null ? null : mac[permission]}
+                granted={state.system.error !== null ? null : mac[permission]}
                 busy={busy} request={props.request} openSettings={props.openSettings} t={t} />
             </div>)}
-      </div>
-      {observed?.platform === 'windows' && <p>{t('windowsInstructions')} {t(observed.elevated ? 'elevated' : 'standardPrivileges')}</p>}
-    </section>
+        </div>
+      </section>}
     <section className={css.panel} aria-label={t('applicationsTitle')}>
       <h3>{t('applicationsTitle')}</h3>
       <div className={css.card}>

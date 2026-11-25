@@ -22,6 +22,7 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
+    windowsProvider: { value: null, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
   })
@@ -403,32 +404,72 @@ it.each([en, zh])('highlights the experimental notice and keeps the PTC recommen
   expect(ptc.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
-it.each([true, false, null] as const)('shows Windows desktop access for lock state %s without macOS permission actions', (sessionLocked) => {
+it.each([true, false, null] as const)('omits system permissions on Windows and places warnings above the experimental notice for lock=%s', (sessionLocked) => {
   const f = fixture()
   f.publish({ ...observe(value), system: { value: { platform: 'windows', sessionLocked, captureAvailable: true,
     elevated: false, helper: { path: 'C:\\helper.exe' } }, error: null, busy: false } })
   render(<PermissionPanel {...f.props} />)
-  expect(screen.getByText(en.previewNoticeTitle)).toBeTruthy()
-  expect(screen.getByText(en.previewNotice)).toBeTruthy()
-  expect(screen.getByText(en.ptcRecommendation)).toBeTruthy()
-  expect(screen.getByText(en.windowsPermissionsIntro)).toBeTruthy()
-  expect(screen.queryByText(/helperPath/)).toBeNull()
-  expect(screen.queryByText(/pnpm run build:native/)).toBeNull()
-  const desktop = screen.getByRole('group', { name: en.windowsDesktop })
-  const capture = screen.getByRole('group', { name: en.windowsCapture })
-  expect(within(desktop).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.locked : en.available)).toBeTruthy()
-  expect(within(capture).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.unavailable : en.available)).toBeTruthy()
-  expect(screen.getByText(en.standardPrivileges, { exact: false })).toBeTruthy()
-  expect(screen.queryByRole('group', { name: en.accessibility })).toBeNull()
+  expect(screen.queryByRole('heading', { name: en.title })).toBeNull()
+  expect(screen.queryByRole('region', { name: en.title })).toBeNull()
+  expect(screen.queryByRole('group')).toBeNull()
   expect(screen.queryByRole('button', { name: en.request })).toBeNull()
   expect(screen.queryByRole('button', { name: en.granted })).toBeNull()
   expect(screen.queryByText('C:\\helper.exe')).toBeNull()
+  expect(screen.queryByText(/helperPath/)).toBeNull()
+  expect(screen.queryByText(/pnpm run build:native/)).toBeNull()
+  const experimental = screen.getByText(en.previewNoticeTitle)
+  const instructions = screen.getByText(en.windowsInstructions)
+  const privileges = screen.getByText(en.standardPrivileges)
+  const ptc = screen.getByText(en.ptcRecommendation)
+  expect(experimental.compareDocumentPosition(instructions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(instructions.compareDocumentPosition(privileges) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(privileges.compareDocumentPosition(ptc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  if (sessionLocked === true) {
+    const alert = screen.getByRole('alert')
+    expect(within(alert).getByText(en.windowsLockedTitle)).toBeTruthy()
+    expect(within(alert).getByText(en.windowsLockedBody)).toBeTruthy()
+    expect(alert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  } else if (sessionLocked === null) {
+    const alert = screen.getByRole('alert')
+    expect(within(alert).getByText(en.windowsSessionUnknownTitle)).toBeTruthy()
+    expect(within(alert).getByText(en.windowsSessionUnknown)).toBeTruthy()
+    expect(alert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  } else {
+    expect(screen.queryByRole('alert')).toBeNull()
+  }
   f.publish({ system: { value: { platform: 'windows', sessionLocked: false, captureAvailable: false,
     elevated: true, helper: {} }, error: null, busy: false } })
-  expect(within(capture).getByText(en.unavailable)).toBeTruthy()
-  expect(screen.getByText(en.elevated, { exact: false })).toBeTruthy()
+  const adminAlert = screen.getByRole('alert')
+  expect(within(adminAlert).getByText(en.windowsElevatedTitle)).toBeTruthy()
+  expect(within(adminAlert).getByText(en.windowsElevatedWarning)).toBeTruthy()
+  expect(adminAlert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  const captureNotice = screen.getByText(en.windowsCaptureUnavailableTitle)
+  expect(screen.getByText(en.windowsCaptureUnavailableNotice)).toBeTruthy()
+  expect(captureNotice.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.queryByText(en.standardPrivileges)).toBeNull()
   f.publish({ system: { ...f.state.getSnapshot().system, error: 'offline' } })
-  expect(screen.getAllByText(en.unknown)).toHaveLength(2)
+  const helperAlert = screen.getByRole('alert')
+  expect(within(helperAlert).getByText(en.windowsHelperFailed.replace('{message}', 'offline'))).toBeTruthy()
+  expect(within(helperAlert).getByText(en.queryFailedHint)).toBeTruthy()
+  expect(helperAlert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.queryByText(en.windowsElevatedTitle)).toBeNull()
+  expect(screen.queryByText(en.windowsCaptureUnavailableTitle)).toBeNull()
+  fireEvent.click(within(helperAlert).getByRole('button', { name: en.retry }))
+  expect(f.props.refresh).toHaveBeenCalledTimes(2)
+})
+
+it('shows the Windows helper warning above the experimental notice when startup fails before reporting platform', () => {
+  const f = fixture()
+  f.publish({ system: { value: null, error: 'Native helper not found', busy: false },
+    windowsProvider: { value: true, error: null, busy: false } })
+  render(<PermissionPanel {...f.props} />)
+  expect(screen.queryByRole('heading', { name: en.title })).toBeNull()
+  expect(screen.queryByRole('group')).toBeNull()
+  const alert = screen.getByRole('alert')
+  expect(within(alert).getByText(en.windowsHelperFailed.replace('{message}', 'Native helper not found'))).toBeTruthy()
+  expect(within(alert).getByText(en.queryFailedHint)).toBeTruthy()
+  const experimental = screen.getByText(en.previewNoticeTitle)
+  expect(alert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it.each([[true, true], [false, true], [false, false], [null, true]] as const)('offers Windows setup for lock=%s and capture=%s', (sessionLocked, captureAvailable) => {

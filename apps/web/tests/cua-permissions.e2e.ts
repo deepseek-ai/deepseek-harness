@@ -361,7 +361,7 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
   expect(await guidance.textContent()).not.toContain('helperPath')
   const preview = page.locator('[data-detail-document] img')
   await preview.evaluate(async (image) => { await (image as HTMLImageElement).decode() })
-  const firstSetting = panel.getByRole('heading', { name: 'System permissions', exact: true })
+  const firstSetting = panel.getByRole('heading', { name: process.platform === 'win32' ? 'Manage applications computer use can access' : 'System permissions', exact: true })
   const previewBox = await preview.boundingBox(), guidanceBox = await guidance.boundingBox(), settingBox = await firstSetting.boundingBox()
   expect(previewBox!.y + previewBox!.height).toBeLessThanOrEqual(guidanceBox!.y)
   expect(guidanceBox!.y + guidanceBox!.height).toBeLessThanOrEqual(settingBox!.y)
