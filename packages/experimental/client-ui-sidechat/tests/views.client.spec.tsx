@@ -64,11 +64,12 @@ it.each([
 })
 
 it.each([
-  { address: 'dsh-resource://sidechat/session/child', title: 'Live title', byId: { child: { title: 'Live title' } } },
-  { address: 'dsh-resource://sidechat/session/child', title: 'Stored title', byId: {} },
-  { address: 'https://example.test', title: 'Stored title', byId: {} },
-])('shows the child title with a stored fallback: $title', ({ address, title, byId }) => {
+  { address: 'dsh-resource://sidechat/session/child', title: 'Live title', byId: { child: { displayTitle: 'Live title' } } },
+  { address: 'dsh-resource://sidechat/session/child', title: en.title, byId: {} },
+  { address: 'https://example.test', title: en.title, byId: {} },
+])('shows the child display title with the localized type title as fallback: $title', ({ address, title, byId }) => {
   const props: Partial<Parameters<typeof SidechatTitle>[0]> = {
+    t,
     useTabInfo: () => ({ tab: { contentId: address, title: 'Stored title' } }) as never,
     useSessions: selector => selector({ byId } as never),
   }

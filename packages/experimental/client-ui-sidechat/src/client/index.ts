@@ -56,6 +56,6 @@ export function apply(ctx: Context): void {
     name: 'sidechat.conversation',
   }, SidechatConversation)), 'sidechat: embedded Conversation')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
-    name: 'sidebar.right.pane.tab.title', key: id,
+    name: 'sidebar.right.pane.tab.title', key: id, locale: NS,
   }, SidechatTitle)), 'sidechat: tab title')
 }

@@ -53,11 +53,14 @@ export function SidechatConversation({ useSession, renderFactorySlot }: PropsRun
   })
 }
 
-/** Live child title with the side glyph in docked and floating headers; the stored title covers an unlisted child. */
-export function SidechatTitle({ useTabInfo, useSessions }: PropsRuntime<'sidebar.right.pane.tab.title'>) {
+/**
+ * Live child title with the side glyph in docked and floating headers, matching the Session list's display title;
+ * an unlisted child shows the localized type title.
+ */
+export function SidechatTitle({ useTabInfo, useSessions, t }: PropsRuntime<'sidebar.right.pane.tab.title'> & PropsLocale<typeof NS>) {
   const { tab } = useTabInfo()
   const id = parseSidechatAddress(tab.contentId)
-  const title = useSessions(value => id === undefined ? tab.title : value.byId[id]?.title ?? tab.title)
+  const title = useSessions(value => (id === undefined ? undefined : value.byId[id]?.displayTitle)) ?? t('title')
   return <><IconCompareSplitOutlineRegular size={16} className={css.titleIcon} />{title}</>
 }
 
