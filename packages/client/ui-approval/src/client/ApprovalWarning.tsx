@@ -1,20 +1,21 @@
 /** Formatted hover notice that keeps the pending approval unanswered. */
 import { useEffect, useId, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
-import { createPortal } from 'react-dom'
 import {
   Button, IconWarningOutlineRegular, MenuSurface, Tag,
   isBehindModal, observeComposition, useDismissOnOutsidePointer, usePointerGrace,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ApprovalCardInput } from './contract/slots.ts'
 import css from './ApprovalPanel.module.css'
 
 /**
  * Present caller-owned risks on hover, keyboard focus, or touch activation.
- * @param props Localized warning content.
+ * @param props Localized warning content and the portal that places the hover card in the application document.
  * @returns The warning tag and its readable, nonmodal hover card.
  */
-export function ApprovalWarning({ warning }: {
+export function ApprovalWarning({ warning, Portal }: {
   warning: NonNullable<ApprovalCardInput['warning']>
+  Portal: ReturnType<GlobalStandardProps['useDocumentPortal']>
 }) {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLButtonElement>(null)
@@ -42,7 +43,7 @@ export function ApprovalWarning({ warning }: {
   }
   const blur = (event: FocusEvent<HTMLElement>) => {
     const next = event.relatedTarget
-    if (next instanceof Node && (anchor.current?.contains(next) || panel.current?.contains(next))) return
+    if (anchor.current?.contains(next) || panel.current?.contains(next)) return
     cancelClose()
     setOpen(false)
   }
@@ -51,7 +52,8 @@ export function ApprovalWarning({ warning }: {
     const composition = observeComposition(document)
     const close = () => { cancelClose(); setOpen(false) }
     const focusOutside = (event: Event) => {
-      if (event.target instanceof Node && !anchor.current?.contains(event.target) && !panel.current?.contains(event.target)) close()
+      const target = event.target as Node
+      if (!anchor.current?.contains(target) && !panel.current?.contains(target)) close()
     }
     const visibilityChanged = () => { if (document.visibilityState === 'hidden') close() }
     const dismiss = (event: KeyboardEvent) => {
@@ -85,13 +87,13 @@ export function ApprovalWarning({ warning }: {
         <IconWarningOutlineRegular size={12} />{warning.label}
       </Tag>
     </Button>
-    {open && createPortal(
+    {open && <Portal>
       <MenuSurface ref={panel} id={id} role="dialog" aria-labelledby={titleId} tabIndex={-1}
         className={css.warningPopover} style={{ positionAnchor: anchorName }}
         onPointerEnter={enter} onPointerLeave={leave} onFocus={cancelClose} onBlur={blur}>
         <h3 id={titleId} className={css.warningTitle}>{warning.title}</h3>
         {warning.detail.split('\n\n').map(paragraph => <p key={paragraph}>{paragraph}</p>)}
-      </MenuSurface>, document.body,
-    )}
+      </MenuSurface>
+    </Portal>}
   </>
 }

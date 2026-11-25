@@ -9,7 +9,9 @@ export interface CodeSelection {
 }
 
 function codeAt(node: Node | null): HTMLElement | null {
-  return (node instanceof Element ? node : node?.parentElement)?.closest<HTMLElement>('[data-review-code]') ?? null
+  // A text node has no `closest`, so its parent element answers.
+  return (node as Partial<Element> | null)?.closest?.<HTMLElement>('[data-review-code]')
+    ?? node?.parentElement?.closest<HTMLElement>('[data-review-code]') ?? null
 }
 
 /**

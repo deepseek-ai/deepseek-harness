@@ -4,11 +4,15 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, expect, it, vi } from 'vitest'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { TypeFilter } from '../src/client/views/TypeFilter.tsx'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 const t = makeTranslate(en)
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 it('discards out-of-order responses and confirms the typed fragment with Enter', async () => {
   const empty = Promise.withResolvers<readonly string[]>()
@@ -16,11 +20,13 @@ it('discards out-of-order responses and confirms the typed fragment with Enter',
   const later = Promise.withResolvers<readonly string[]>()
   const suggest = vi.fn((query: string) => query === '' ? empty.promise : query === 'd' ? earlier.promise : later.promise)
   const apply = vi.fn()
-  const ui = render(<TypeFilter value="" suggest={suggest} apply={apply} t={t} />)
+  const ui = render(<TypeFilter value="" suggest={suggest} apply={apply} t={t} Portal={Portal} />)
   await act(async () => { fireEvent.click(ui.getByRole('button', { name: 'Filter types' })) })
   const input = ui.getByRole('combobox', { name: 'Type keyword' })
   expect(document.activeElement).toBe(input)
-  expect(ui.getByRole('dialog').parentElement).toBe(document.body)
+  // The editor leaves the table header for the document body, so the table's overflow cannot crop it.
+  expect(ui.container.contains(ui.getByRole('dialog'))).toBe(false)
+  expect(document.body.contains(ui.getByRole('dialog'))).toBe(true)
   await act(async () => { fireEvent.change(input, { target: { value: 'd' } }) })
   await act(async () => { fireEvent.change(input, { target: { value: 'delta' } }) })
   expect(suggest.mock.calls.map(([query]) => query)).toEqual(['', 'd', 'delta'])
@@ -40,7 +46,7 @@ it('discards out-of-order responses and confirms the typed fragment with Enter',
 it('confirms candidates by keyboard or click and scrolls the active option into view', async () => {
   const suggest = async () => ['reasoning-delta', 'tool-call-delta']
   const apply = vi.fn()
-  const ui = render(<TypeFilter value="delta" suggest={suggest} apply={apply} t={t} />)
+  const ui = render(<TypeFilter value="delta" suggest={suggest} apply={apply} t={t} Portal={Portal} />)
   await act(async () => { fireEvent.click(ui.getByRole('button', { name: 'Filter types' })) })
   const input = ui.getByRole('combobox', { name: 'Type keyword' })
   const options = ui.getAllByRole('option')
@@ -60,7 +66,7 @@ it('confirms candidates by keyboard or click and scrolls the active option into 
 
 it('discards drafts on dismissal and requires confirmation after clearing', async () => {
   const apply = vi.fn()
-  const ui = render(<TypeFilter value="tool" suggest={async () => []} apply={apply} t={t} />)
+  const ui = render(<TypeFilter value="tool" suggest={async () => []} apply={apply} t={t} Portal={Portal} />)
   const trigger = ui.getByRole('button', { name: 'Filter types' })
   expect(trigger.getAttribute('aria-pressed')).toBe('true')
   await act(async () => { fireEvent.click(trigger) })
@@ -93,7 +99,7 @@ it('contains candidate failures and ignores results after closing or unmounting'
   const unmounted = Promise.withResolvers<readonly string[]>()
   const suggest = vi.fn().mockReturnValueOnce(failed.promise).mockReturnValueOnce(closed.promise).mockReturnValueOnce(unmounted.promise)
   const apply = vi.fn()
-  const ui = render(<TypeFilter value="" suggest={suggest} apply={apply} t={t} />)
+  const ui = render(<TypeFilter value="" suggest={suggest} apply={apply} t={t} Portal={Portal} />)
   await act(async () => { fireEvent.click(ui.getByRole('button', { name: 'Filter types' })) })
   await act(async () => { failed.reject(new Error('candidate source failed')) })
   expect(ui.getByRole('alert').textContent).toContain('candidate source failed')
@@ -110,7 +116,7 @@ it('contains candidate failures and ignores results after closing or unmounting'
 })
 
 it('keeps focus inside the panel until blur leaves it and lets the trigger close an open editor', async () => {
-  const ui = render(<TypeFilter value="" suggest={async () => ['first', 'second']} apply={vi.fn()} t={t} />)
+  const ui = render(<TypeFilter value="" suggest={async () => ['first', 'second']} apply={vi.fn()} t={t} Portal={Portal} />)
   const trigger = ui.getByRole('button', { name: 'Filter types' })
   await act(async () => { fireEvent.click(trigger) })
   const input = ui.getByRole('combobox')
@@ -141,7 +147,7 @@ it('keeps an empty candidate list unselected and ignores a rejection after dismi
   const delayed = Promise.withResolvers<readonly string[]>()
   const apply = vi.fn()
   const suggest = vi.fn<() => Promise<readonly string[]>>().mockResolvedValueOnce([]).mockReturnValueOnce(delayed.promise)
-  const ui = render(<TypeFilter value="fragment" suggest={suggest} apply={apply} t={t} />)
+  const ui = render(<TypeFilter value="fragment" suggest={suggest} apply={apply} t={t} Portal={Portal} />)
   const trigger = ui.getByRole('button', { name: 'Filter types' })
   await act(async () => { fireEvent.click(trigger) })
   const input = ui.getByRole('combobox')
@@ -157,7 +163,7 @@ it('keeps an empty candidate list unselected and ignores a rejection after dismi
 })
 
 it('renders a non-Error candidate failure without losing the editable draft', async () => {
-  const ui = render(<TypeFilter value="kept" suggest={async () => { throw 'candidate failure' }} apply={vi.fn()} t={t} />)
+  const ui = render(<TypeFilter value="kept" suggest={async () => { throw 'candidate failure' }} apply={vi.fn()} t={t} Portal={Portal} />)
   await act(async () => { fireEvent.click(ui.getByRole('button', { name: 'Filter types' })) })
   expect(ui.getByRole('alert').textContent).toContain('candidate failure')
   expect((ui.getByRole('combobox') as HTMLInputElement).value).toBe('kept')

@@ -14,9 +14,10 @@ function excluded(element: Element): boolean {
 }
 
 function projectedBoundary(node: Node): '\n' | '\t' | '' {
-  if (!(node instanceof Element)) return ''
-  if (PROJECTED_CELL_TAGS.has(node.tagName)) return '\t'
-  return PROJECTED_BLOCK_TAGS.has(node.tagName) ? '\n' : ''
+  // A node other than an element has no tag name, so it marks no boundary.
+  const tag = (node as Element).tagName
+  if (PROJECTED_CELL_TAGS.has(tag)) return '\t'
+  return PROJECTED_BLOCK_TAGS.has(tag) ? '\n' : ''
 }
 
 function projectedSeparator(previous: Node, current: Node): '\n' | '\t' | '' {
@@ -47,8 +48,7 @@ function projectedText(node: Text): ProjectedText {
   if (structuralWhitespace) return { text: '', offsets }
   let text = ''
   let cursor = 0
-  if (!preservesBreaks && node.previousSibling instanceof HTMLElement
-    && node.previousSibling.tagName === 'BR' && source.startsWith('\n')) {
+  if (!preservesBreaks && (node.previousSibling as Element | null)?.tagName === 'BR' && source.startsWith('\n')) {
     cursor = 1
   }
   while (cursor < source.length) {
@@ -92,11 +92,13 @@ function projectedFragment(node: Node): ProjectedFragment {
       boundaries: [],
     }
   }
-  if (!(node instanceof Element)) {
+  // Comments and other nodes that are neither text nor elements project nothing and own no offsets.
+  if (node.nodeType !== Node.ELEMENT_NODE) {
     return { text: '', spans: [], boundaries: [] }
   }
-  if (excluded(node)) return { text: '', spans: [], boundaries: [] }
-  if (node.tagName === 'BR') return { text: '\n', spans: [], boundaries: [] }
+  const element = node as Element
+  if (excluded(element)) return { text: '', spans: [], boundaries: [] }
+  if (element.tagName === 'BR') return { text: '\n', spans: [], boundaries: [] }
   let text = ''
   let previous: Node | null = null
   const spans: ProjectedTextSpan[] = []
@@ -156,8 +158,9 @@ export interface TextSelection {
 export function readTextSelection(root: HTMLElement, selection: Selection | null): TextSelection | null {
   if (selection === null || selection.rangeCount !== 1 || selection.isCollapsed) return null
   const range = selection.getRangeAt(0)
-  const sourceOf = (node: Node): HTMLElement | null =>
-    (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>('[data-text-interaction-source]') ?? null
+  // A text container has no `closest`, so its parent element answers.
+  const sourceOf = (node: Node): HTMLElement | null => (node as Partial<Element>).closest?.<HTMLElement>('[data-text-interaction-source]')
+    ?? node.parentElement?.closest<HTMLElement>('[data-text-interaction-source]') ?? null
   const source = sourceOf(range.startContainer)
   if (source === null || source !== sourceOf(range.endContainer) || !root.contains(source)
     || source.closest('[hidden], [inert], [data-text-interaction-exclude]') !== null) return null

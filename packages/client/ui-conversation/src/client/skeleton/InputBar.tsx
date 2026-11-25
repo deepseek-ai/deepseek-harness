@@ -50,7 +50,7 @@ export const InputBar = memo(function InputBar({
   retryFileUpload, registerFileIntake,
   toggleCommandMenu, stop, retry, t,
   renderSlot, renderSlotChain, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
-  useAccess, useMobile,
+  useAccess, useMobile, useDocumentPortal,
   useProjection, sessionId, variant, occurrence, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
@@ -60,6 +60,7 @@ export const InputBar = memo(function InputBar({
   const busyEnter = useBusyEnter(s => s)
   const stopKeys = useStopShortcut(keys => keys)
   const mobile = useMobile()
+  const Portal = useDocumentPortal()
   // A page whose access snapshot excludes prompting, stopping, or uploading to this Session is offered
   // no Send, no Stop, or no file intake rather than a disabled control. `useAccess` is undefined only
   // without a Session, where the bar is an inert placeholder with no keyboard, stop, or file intake.
@@ -334,9 +335,10 @@ export const InputBar = memo(function InputBar({
 
   const onCardMouseDown = (e: MouseEvent<HTMLDivElement>): void => {
     if (!editable || editor === null || e.button !== 0 || e.defaultPrevented) return
-    const target = e.target
-    if (!(target instanceof Element) || !e.currentTarget.contains(target)) return
-    if (target.closest('[data-composer-overlay]') !== null) return
+    const target = e.target as Element
+    if (!e.currentTarget.contains(target)) return
+    // Only an element outside the composer overlays moves the caret; a text target has no `closest` and keeps the browser default.
+    if ((target as Partial<Element>).closest?.('[data-composer-overlay]') !== null) return
     if (scrollRef.current?.contains(target)) return
     const control = target.closest('button, a, input, select, textarea, [role="button"], [contenteditable], [tabindex]')
     if (control !== null && control !== e.currentTarget && e.currentTarget.contains(control)) return
@@ -601,7 +603,7 @@ export const InputBar = memo(function InputBar({
         {variant === 'composer' && input !== undefined && sessionId !== undefined
           ? renderSlot('conversation.composer.dock', {})
           : null}
-        {activity ? null : <ContextMeter useProjection={useProjection} t={t} />}
+        {activity ? null : <ContextMeter useProjection={useProjection} t={t} Portal={Portal} />}
       </div>
     </div>
   )

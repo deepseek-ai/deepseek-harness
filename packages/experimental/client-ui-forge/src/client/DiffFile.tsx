@@ -345,7 +345,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     if (nativeSide === null) return
     const copy = (event: ClipboardEvent): void => {
       if (root.current === null || event.clipboardData === null
-        || (event.target instanceof Element && event.target.closest('input, textarea, [contenteditable="true"]') !== null)) return
+        || (event.target as Partial<Element>).closest?.('input, textarea, [contenteditable="true"]') != null) return
       const selected = readCodeSelection(root.current, nativeSide)
       if (selected === undefined) return
       event.preventDefault()
@@ -646,8 +646,8 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     data-review={review === undefined ? undefined : ''}
     data-native-side={nativeSide ?? undefined}
     onPointerDownCapture={(event) => {
-      if (event.button !== 0 || !(event.target instanceof Node)) return
-      const side = codeSideAt(event.currentTarget, event.target)
+      if (event.button !== 0) return
+      const side = codeSideAt(event.currentTarget, event.target as Node)
       if (side === undefined) return
       if (!event.shiftKey || nativeSide !== side) window.getSelection()?.removeAllRanges()
       dragging.current = 'text'

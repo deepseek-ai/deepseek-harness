@@ -14,7 +14,7 @@ import { InspectorJsonTree, InspectorObjectTree } from './InspectorObjectTree.ts
 import type { InspectorChatTarget, InspectorObjects, InspectorObjectReference } from './objects.ts'
 import { InspectorTableLayout, INSPECTOR_ROW_HEIGHT, type InspectorRowAnchor } from './table-layout.ts'
 import { InspectorTypeFilter } from './type-filter.ts'
-import { TypeFilter } from './TypeFilter.tsx'
+import { TypeFilter, type DocumentPortal } from './TypeFilter.tsx'
 import css from './inspector.module.css'
 
 /** Framework-bound row sources and Session pagination command. */
@@ -43,6 +43,8 @@ export type InspectorTableProps = Pick<ConvViewProps, 'useSession'> & InjectFace
     }
     readonly pickedRow?: { readonly key: string } | undefined
     readonly notice?: string | undefined
+    /** Portal that places the type-filter editor in the application document's body. */
+    readonly Portal: DocumentPortal
   }
 
 interface RowProps extends Pick<InspectorTableProps, 'useRecord' | 't' | 'flash' | 'showTime'> {
@@ -106,11 +108,11 @@ const DataRow = memo(function DataRow({ row, selected, branch, collapsed, added,
 
 /**
  * Render a paged hierarchy with stable virtual row keys and live JSON details.
- * @param props - Framework hooks, pagination, locale, and the view's highlight policy.
+ * @param props - Framework hooks, pagination, locale, the view's highlight policy, and the document portal for the type filter.
  * @returns Virtual table and selected raw data.
  */
 export function InspectorTable({ title, flash, showTime, modeSelector, objects, navigation, pickedRow, notice,
-  useRows, useRecord, useSession, loadOlder, typeOf, t }: InspectorTableProps) {
+  useRows, useRecord, useSession, loadOlder, typeOf, t, Portal }: InspectorTableProps) {
   const allRows = useRows(value => value)
   const hasMore = useSession(value => value.hasMore)
   const loading = useSession(value => value.loadingOlder)
@@ -297,7 +299,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
     }}>
       <table className={css.table} aria-label={title} aria-rowcount={rows.length + 1}>
         <thead><tr><th className={css.idColumn}>{t('table.id')}</th><th className={css.typeColumn}>
-          <span className={css.typeHeader}>{t('table.type')}<TypeFilter value={typeQuery} suggest={suggestTypes} apply={applyTypeFilter} t={t} /></span>
+          <span className={css.typeHeader}>{t('table.type')}<TypeFilter value={typeQuery} suggest={suggestTypes} apply={applyTypeFilter} t={t} Portal={Portal} /></span>
         </th>
         <th className={css.locationColumn}>{t('table.location')}</th>
         {showTime && <th className={css.timeColumn}>{t('table.time')}</th>}<th>{t('table.data')}</th></tr></thead>

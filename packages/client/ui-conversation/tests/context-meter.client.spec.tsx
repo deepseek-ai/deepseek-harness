@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { en as commonEn, zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/index.ts'
 import { ContextMeter, type ContextMeterProps } from '../src/client/skeleton/ContextMeter.tsx'
 import { contextOccupancy } from '../src/client/context-occupancy.ts'
@@ -10,6 +11,9 @@ import css from '../src/client/skeleton/ContextMeter.module.css'
 import { en, zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 const t = makeTranslate(zh, commonZh) as ContextMeterProps['t']
 const tEn = makeTranslate(en, commonEn) as ContextMeterProps['t']
@@ -24,7 +28,7 @@ function projections(values: Record<string, unknown>): ContextMeterProps['usePro
 }
 
 function meter(values: Record<string, unknown>, translate: ContextMeterProps['t'] = t) {
-  return render(<ContextMeter useProjection={projections(values)} t={translate} />)
+  return render(<ContextMeter useProjection={projections(values)} t={translate} Portal={Portal} />)
 }
 
 describe('ContextMeter', () => {
@@ -54,6 +58,9 @@ describe('ContextMeter', () => {
     expect(view.queryByRole('dialog')).toBeNull()
     fireEvent.click(trigger)
     const panel = view.queryByRole('dialog')!
+    // The panel leaves the composer subtree, so its overflow clips cannot crop it.
+    expect(view.container.contains(panel)).toBe(false)
+    expect(document.body.contains(panel)).toBe(true)
     expect(panel.textContent).toContain('~32K / 128K')
     expect(panel.textContent).toContain('25%')
     expect(panel.textContent).toContain('上下文已用')
@@ -139,19 +146,19 @@ describe('ContextMeter', () => {
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
       contextBreakdown: BREAKDOWN,
     }
-    const view = render(<ContextMeter useProjection={(key: string) => values[key]} t={t} />)
+    const view = render(<ContextMeter useProjection={(key: string) => values[key]} t={t} Portal={Portal} />)
     fireEvent.click(view.getByRole('button', { name: '上下文已用 25%' }))
     expect(view.queryByRole('dialog')).not.toBeNull()
 
     values = { contextPressure: { pressureTokens: 32_000 }, contextBreakdown: BREAKDOWN }
-    view.rerender(<ContextMeter useProjection={(key: string) => values[key]} t={t} />)
+    view.rerender(<ContextMeter useProjection={(key: string) => values[key]} t={t} Portal={Portal} />)
     expect(view.container.textContent).toBe('')
 
     values = {
       contextPressure: { pressureTokens: 32_000, contextWindow: 128_000 },
       contextBreakdown: BREAKDOWN,
     }
-    view.rerender(<ContextMeter useProjection={(key: string) => values[key]} t={t} />)
+    view.rerender(<ContextMeter useProjection={(key: string) => values[key]} t={t} Portal={Portal} />)
     expect(view.getByRole('button', { name: '上下文已用 25%' }).getAttribute('aria-expanded')).toBe('false')
     expect(view.queryByRole('dialog')).toBeNull()
   })

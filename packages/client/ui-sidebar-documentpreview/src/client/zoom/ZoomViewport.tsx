@@ -21,8 +21,8 @@ function pointerAnchor(clientX: number, clientY: number): PointerAnchor | undefi
   const lookup: unknown = Reflect.get(document, 'elementFromPoint')
   if (typeof lookup !== 'function') return undefined
   const hit: unknown = Reflect.apply(lookup, document, [clientX, clientY])
-  const surface = hit instanceof Element ? hit.closest<HTMLElement>('[data-document-zoom-surface]') : null
-  if (surface === null) return undefined
+  const surface = (hit as Element | null)?.closest<HTMLElement>('[data-document-zoom-surface]')
+  if (surface == null) return undefined
   const bounds = surface.getBoundingClientRect()
   return { surface, x: clientX - bounds.left, y: clientY - bounds.top, clientX, clientY }
 }

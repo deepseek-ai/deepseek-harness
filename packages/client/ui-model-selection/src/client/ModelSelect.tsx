@@ -32,7 +32,6 @@ import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent, type FocusEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -75,8 +74,8 @@ interface EffortChoice {
  * @returns the trigger and, while open, the two-level menu.
  */
 export function ModelSelect(
-  { locked, available, directory, load, select, resolveText, t, renderSlot, useMobile }:
-  ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked' | 'useMobile'> & PropsLocale<'model'>
+  { locked, available, directory, load, select, resolveText, t, renderSlot, useMobile, useDocumentPortal }:
+  ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked' | 'useMobile' | 'useDocumentPortal'> & PropsLocale<'model'>
     & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.options' | 'conversation.input.model.pane'>, 'SessionProvider'>,
 ) {
   const state = useSyncExternalStore(
@@ -84,6 +83,7 @@ export function ModelSelect(
     () => directory.getSnapshot(),
   )
   const mobile = useMobile()
+  const Portal = useDocumentPortal()
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>(ROOT_PANE)
   const [query, setQuery] = useState('')
@@ -336,7 +336,8 @@ export function ModelSelect(
       }
       return
     }
-    if (pane.kind === 'model' && showSearch && event.target instanceof HTMLInputElement
+    // The search field is the model pane's only text input.
+    if (pane.kind === 'model' && showSearch && event.target === searchRef.current
       && (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey))) {
       if (event.key === 'Tab' && visibleModels.length === 0) return
       event.preventDefault()
@@ -362,9 +363,10 @@ export function ModelSelect(
       const rows = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
         'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
       ) ?? [])
-      if (focused instanceof HTMLButtonElement && rows.includes(focused)) {
+      const row = rows.find(item => item === focused)
+      if (row !== undefined) {
         event.preventDefault()
-        focused.click()
+        row.click()
         return
       }
       if (focused !== triggerRef.current) return
@@ -387,10 +389,8 @@ export function ModelSelect(
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
     // Clicking explanation text can clear focus without leaving its page.
     if (pane.kind === 'detail' && event.relatedTarget === null) return
-    if (event.relatedTarget instanceof Node && (
-      rootRef.current?.contains(event.relatedTarget) === true
-      || menuRef.current?.contains(event.relatedTarget) === true
-    )) return
+    if (rootRef.current?.contains(event.relatedTarget) === true
+      || menuRef.current?.contains(event.relatedTarget) === true) return
     close()
   }
 
@@ -491,12 +491,12 @@ export function ModelSelect(
         // through onBlur; other focusable controls, which plugin options may
         // render, keep their default focus, and a detail pane keeps the default
         // so its prose stays selectable.
-        const { target } = event
-        if (target instanceof Element && (
-          target.closest('button') !== null
-          || (pane.kind !== 'detail' && menuRef.current?.contains(target) === true
-            && target.closest('a[href], input, select, textarea, [role="button"], [contenteditable], [tabindex]') === null)
-        )) event.preventDefault()
+        // A text target has no `closest`, so it matches neither test.
+        const target = event.target as Partial<Element>
+        if (target.closest?.('button') != null
+          || (pane.kind !== 'detail' && menuRef.current?.contains(event.target as Node) === true
+            && target.closest?.('a[href], input, select, textarea, [role="button"], [contenteditable], [tabindex]') === null)
+        ) event.preventDefault()
       }}
     >
       <button
@@ -531,10 +531,10 @@ export function ModelSelect(
           : <IconChevronDownOutlineRegular className={clsx(css.chevron, open && css.chevronOpen)} />}
       </button>
 
-      {/* Portaled to body (Menu primitive's portal mode) so the sidebar and
+      {/* Portaled to the application document's body so the sidebar and
           column overflow clips cannot crop the card; synthetic events still
           bubble through this React subtree, keeping onKeyDown/onBlur live. */}
-      {open && createPortal(
+      {open && <Portal>
         <MenuSurface
           ref={menuRef}
           data-model-menu=""
@@ -711,9 +711,8 @@ export function ModelSelect(
               {renderSlot('conversation.input.model.pane', controls, { entryKey: pane.pane.key })}
             </div>
           )}
-        </MenuSurface>,
-        document.body,
-      )}
+        </MenuSurface>
+      </Portal>}
       {toast !== null && (
         <Toast
           key={toast.seq}

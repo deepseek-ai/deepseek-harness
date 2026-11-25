@@ -47,8 +47,8 @@ export function scrollToLine(body: HTMLElement, line: number): HTMLElement | und
   const innerCode = body.hasAttribute('data-code-block-content')
   const plain = body.querySelector(`[data-textpreview-line="${line}"]`)
   const code = innerCode ? body.querySelectorAll('pre .line').item(line - 1) : null
-  const row = plain ?? code
-  if (!(row instanceof HTMLElement)) return undefined
+  const row = (plain ?? code) as HTMLElement | null
+  if (row === null) return undefined
   body.scrollTop = Math.max(0, row.offsetTop)
   return row
 }

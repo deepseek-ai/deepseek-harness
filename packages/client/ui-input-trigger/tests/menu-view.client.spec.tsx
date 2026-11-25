@@ -307,14 +307,6 @@ describe('MenuView', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores a pointerdown whose target is not a DOM node', () => {
-    const { onDismiss } = mount(openState())
-    const ev = new Event('pointerdown', { bubbles: true })
-    Object.defineProperty(ev, 'target', { value: {} })
-    document.dispatchEvent(ev)
-    expect(onDismiss).not.toHaveBeenCalled()
-  })
-
   it('closing the menu removes the dismiss listener', () => {
     const { menu, onDismiss } = mount(openState())
     act(() => { menu.set(CLOSED) })

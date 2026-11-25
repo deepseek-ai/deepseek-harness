@@ -65,9 +65,8 @@ export function createComposerFileIntake(): ComposerFileIntake {
     const paste = (event: ClipboardEvent): void => {
       // A focused composer editor consumes its own paste before bubbling here.
       if (event.defaultPrevented || event.clipboardData === null) return
-      // The first path element sees through shadow roots, which retarget event.target to their host.
-      const origin = event.composedPath().find(value => value instanceof Element)
-      if (origin instanceof Element && origin.closest(EDITABLE) !== null) return
+      // The first path entry sees through shadow roots, which retarget event.target to their host.
+      if ((event.composedPath()[0] as Partial<Element> | undefined)?.closest?.(EDITABLE) != null) return
       const { files, directories } = clipboardFiles(event.clipboardData)
       if (files.length === 0) return
       const target = pasteTarget(document)

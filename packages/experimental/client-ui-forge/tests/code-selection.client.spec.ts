@@ -30,6 +30,23 @@ it('preserves blank code lines and excludes an empty endpoint from the selected 
   expect(readCodeSelection(root, 'L')).toBeUndefined()
 })
 
+it('finds the side of code drawn on a page in another window, as a script-isolated plugin sees it', () => {
+  const frame = document.body.appendChild(document.createElement('iframe'))
+  try {
+    const page = frame.contentDocument!
+    const root = page.body.appendChild(page.createElement('div'))
+    const code = root.appendChild(page.createElement('span'))
+    code.setAttribute('data-review-code', '')
+    code.setAttribute('data-new-line', '2')
+    code.textContent = 'new first'
+    expect(code instanceof Element).toBe(false)
+    expect(codeSideAt(root, code)).toBe('R')
+    expect(codeSideAt(root, code.firstChild)).toBe('R')
+  } finally {
+    frame.remove()
+  }
+})
+
 function fixture() {
   const root = document.createElement('div')
   document.body.append(root)

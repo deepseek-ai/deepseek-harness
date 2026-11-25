@@ -351,6 +351,6 @@
 }
 
 /* No app-region rule here: the overlay portals beside #root (SettingsRoot), so
-   ui-web base.css's `body > :not(#root)` subtraction covers it wherever it
-   overlaps a chrome row's drag — including above every column, which an in-root
-   overlay could not promise once a chrome row declares drag itself. */
+   ui-web base.css's body-portal subtraction covers it wherever it overlaps a
+   chrome row's drag — including above every column, which an in-root overlay
+   could not promise once a chrome row declares drag itself. */

@@ -66,7 +66,7 @@ export function SearchSettings({ rules, respectGitignore, onRespectGitignore, tr
       }}
       onBlur={(event) => {
         const next = event.relatedTarget
-        if (next instanceof Node && (event.currentTarget.contains(next) || trigger.current?.contains(next) === true)) return
+        if (event.currentTarget.contains(next) || trigger.current?.contains(next) === true) return
         onClose(false)
       }}
     >

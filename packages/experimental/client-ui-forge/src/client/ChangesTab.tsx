@@ -1168,8 +1168,9 @@ export function ChangesView({
   /** Whether a key press belongs to a field, a comment, a menu, or a text selection rather than to the file list. */
   const typing = (container: HTMLElement, origin: EventTarget): boolean => {
     const selection = window.getSelection()
-    return !(origin instanceof HTMLElement) || !container.contains(origin)
-      || origin.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-forge-comment], [role="menu"]') !== null
+    // A target other than an element has no `closest`, so it counts as typing.
+    return !container.contains(origin as Node)
+      || (origin as Partial<Element>).closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-forge-comment], [role="menu"]') !== null
       || (selection !== null && !selection.isCollapsed)
   }
   const navigateFiles = (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -1203,8 +1204,10 @@ export function ChangesView({
   }
   /** The shown file whose section holds an element or a text node, if any. */
   const fileAt = (target: EventTarget | null | undefined): ForgeDiffFile | undefined => {
-    const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
-    const path = element?.closest('[data-forge-diff-file]')?.getAttribute('data-forge-diff-file')
+    // A text node has no `closest`, so its parent element answers.
+    const node = target as Partial<Element> | null | undefined
+    const section = node?.closest?.('[data-forge-diff-file]') ?? node?.parentElement?.closest('[data-forge-diff-file]')
+    const path = section?.getAttribute('data-forge-diff-file')
     return files.find(file => file.path === path)
   }
   // `V` marks or clears the file being read, from anywhere in the tab except fields, comments, and menus: the file

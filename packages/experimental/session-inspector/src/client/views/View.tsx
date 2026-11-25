@@ -40,7 +40,7 @@ export interface SessionInspectorInjected {
 }
 
 /** Sidebar Session source and Inspector-owned actions and data. */
-export type SessionInspectorProps = Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useSession'>
+export type SessionInspectorProps = Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useSession' | 'useDocumentPortal'>
   & InjectFace<SessionInspectorInjected> & PropsLocale<'session-inspector'>
 
 /** @param props - Session-bound sources. @returns One Inspector with an in-toolbar presentation selector. */
@@ -50,6 +50,7 @@ export function SessionInspectorView(props: SessionInspectorProps) {
   const [pickFailed, setPickFailed] = useState(false)
   const [pickedRow, setPickedRow] = useState<{ key: string }>()
   const pickButton = useRef<HTMLButtonElement>(null)
+  const Portal = props.useDocumentPortal()
   const chat = mode === 'chat-node'
   const revealer = useMemo(() => new InspectorChatRevealer(props.chatRoot), [props.chatRoot])
   useEffect(() => () => { revealer.dispose() }, [revealer, mode])
@@ -94,5 +95,5 @@ export function SessionInspectorView(props: SessionInspectorProps) {
     useRows={chat ? props.useChatRows : props.useLogRows}
     useRecord={chat ? props.useChatRecord : props.useLogRecord} useSession={props.useSession}
     loadOlder={props.loadOlder} typeOf={typeOf} t={props.t} flash={chat} showTime={!chat}
-    navigation={navigation} {...chat ? { objects: props.objects } : {}} />
+    navigation={navigation} Portal={Portal} {...chat ? { objects: props.objects } : {}} />
 }

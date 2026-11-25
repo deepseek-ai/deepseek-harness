@@ -689,6 +689,18 @@ describe('FileNavigator beside a preview', () => {
     expect(h.instance.getSnapshot().byPane[PANE]?.open).toBe(true)
   })
 
+  it('closes on Escape in the row when its plugin runs in another window than the page, as a script-isolated plugin does', async () => {
+    const h = mountNavigator(A)
+    act(() => { h.instance.actions.shown(PANE, true) })
+    await act(() => h.script.watches.ready(ROOT))
+    const frame = document.body.appendChild(document.createElement('iframe'))
+    onTestFinished(() => { frame.remove(); vi.unstubAllGlobals() })
+    // The plugin's own `Node` belongs to its window; the row's nodes belong to the page.
+    vi.stubGlobal('Node', Reflect.get(frame.contentWindow!, 'Node'))
+    act(() => { fireEvent.keyDown(h.view.container.querySelector('[data-test-row]')!, { key: 'Escape' }) })
+    expect(h.instance.getSnapshot().byPane[PANE]?.open).toBe(false)
+  })
+
   it('lists files no tab type can open without opening them, and opens them once one can', async () => {
     const h = mountNavigator(A)
     await revealSrc(h)

@@ -5,7 +5,7 @@
  * and the Escape order. A scripted search stands in for the Host's: it
  * answers every query with fixed matches, or leaves a query open.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, within } from '@testing-library/react'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { zh } from '../src/client/locales.ts'
@@ -448,6 +448,18 @@ describe('the settings panel', () => {
     pointerClick(settingsButton(h))
     expect(dialog(h)).toBeNull()
     expect(stored(h)).toBe(before)
+  })
+
+  it('stays open while focus moves inside it when its plugin runs in another window than the page, as a script-isolated plugin does', async () => {
+    const h = mountNavigator('sidebar://files')
+    await shown(h)
+    const panel = open(h)
+    const frame = document.body.appendChild(document.createElement('iframe'))
+    onTestFinished(() => { frame.remove(); vi.unstubAllGlobals() })
+    // The plugin's own `Node` belongs to its window; the panel's nodes belong to the page.
+    vi.stubGlobal('Node', Reflect.get(frame.contentWindow!, 'Node'))
+    act(() => { within(panel).getByRole('checkbox', { name: t('settings.toggle', { path: 'dist' }) }).focus() })
+    expect(dialog(h)).toBe(panel)
   })
 
   it('shows the restore control whenever the list differs from the defaults, and replaces the list with the defaults', async () => {

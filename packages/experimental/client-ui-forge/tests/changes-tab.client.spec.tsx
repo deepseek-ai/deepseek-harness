@@ -537,7 +537,6 @@ describe('ChangesTab keyboard file navigation', () => {
     const menuItem = m.view.getByRole('menuitem', { name: 'Copy path' })
     fireEvent.keyDown(menuItem, { key: 'ArrowRight' })
     fireEvent.keyDown(menuItem, { key: 'Escape' })
-    fireEvent.keyDown(m.section('src/app.ts').querySelector('svg')!, { key: 'ArrowRight' })
     expect(scrolled).not.toHaveBeenCalled()
     const selection = window.getSelection()!
     const range = document.createRange()

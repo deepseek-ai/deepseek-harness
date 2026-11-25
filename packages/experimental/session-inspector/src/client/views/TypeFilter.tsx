@@ -1,24 +1,28 @@
 /** Anchored type-filter editor with asynchronous suggestions and explicit confirmation. */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './inspector.module.css'
+
+/** The application-document portal a mounted Slot component receives from `useDocumentPortal()`. */
+export type DocumentPortal = ReturnType<GlobalStandardProps['useDocumentPortal']>
 
 /** Current confirmed query and an asynchronous candidate source. */
 export type InspectorTypeFilterProps = PropsLocale<'session-inspector'> & {
   readonly value: string
   readonly suggest: (query: string) => Promise<readonly string[]>
   readonly apply: (query: string) => void
+  /** Portal that places the editor in the application document's body. */
+  readonly Portal: DocumentPortal
 }
 
 /**
  * Edit a type fragment without filtering until Enter, Apply, or a candidate is selected.
- * @param props - Confirmed query, candidate resolver, commit callback, and localized copy.
+ * @param props - Confirmed query, candidate resolver, commit callback, localized copy, and the document portal for the editor.
  * @returns A header button and its portaled editor; stale responses cannot replace newer suggestions.
  */
-export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProps) {
+export function TypeFilter({ value, suggest, apply, t, Portal }: InspectorTypeFilterProps) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState(value)
   const [active, setActive] = useState(-1)
@@ -42,8 +46,10 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
   useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent): void => {
-      const target = event.target
-      if (target instanceof Node && !panel.current?.contains(target) && !anchor.current?.contains(target)) close(false)
+      // Besides nodes, the listening window itself can be the target, and `contains` accepts only nodes.
+      if (event.target === event.currentTarget) return
+      const target = event.target as Node
+      if (!panel.current?.contains(target) && !anchor.current?.contains(target)) close(false)
     }
     const blur = (): void => { close(false) }
     window.addEventListener('pointerdown', outside, true)
@@ -83,13 +89,13 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
         <path d="M2 3h12L9.5 8v5l-3-1.5V8L2 3Z" />
       </svg>
     </button>
-    {open && createPortal(<MenuSurface compact ref={panel} className={css.typeFilterPanel} role="dialog" aria-label={t('filter.title')}
+    {open && <Portal><MenuSurface compact ref={panel} className={css.typeFilterPanel} role="dialog" aria-label={t('filter.title')}
       style={{ positionAnchor: anchorName }}
       onKeyDown={(event) => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true) }
       }}
       onBlur={(event) => {
-        if (event.relatedTarget instanceof Node && !event.currentTarget.contains(event.relatedTarget)
+        if (event.relatedTarget !== null && !event.currentTarget.contains(event.relatedTarget)
           && !anchor.current?.contains(event.relatedTarget)) close(false)
       }}>
       <div>
@@ -124,6 +130,6 @@ export function TypeFilter({ value, suggest, apply, t }: InspectorTypeFilterProp
           <button type="button" onClick={() => { commit(draft) }}>{t('filter.apply')}</button>
         </div>
       </div>
-    </MenuSurface>, document.body)}
+    </MenuSurface></Portal>}
   </>
 }

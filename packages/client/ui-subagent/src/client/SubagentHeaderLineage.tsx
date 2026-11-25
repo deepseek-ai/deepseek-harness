@@ -1,9 +1,8 @@
 /** Breadcrumb switcher for subagent Sessions: the current title opens its siblings' tree. */
-import { useMemo, useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useMemo, useEffect, useId, useRef, useState } from 'react'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { MenuSurface } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps, InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
@@ -53,6 +52,8 @@ interface SwitcherProps extends InjectFace<SubagentCatalogInjected> {
   useSessions: SubagentHeaderLineageProps['useSessions']
   useSessionStatus: SubagentHeaderLineageProps['useSessionStatus']
   t: TranslateNS<typeof NS>
+  /** Portal that places the tree in the application document's body. */
+  Portal: ReturnType<GlobalStandardProps['useDocumentPortal']>
 }
 
 /**
@@ -66,7 +67,7 @@ interface SwitcherProps extends InjectFace<SubagentCatalogInjected> {
  */
 function Switcher({
   rootSessionId, currentSessionId, displayTitle, openTitle,
-  useSessions, useSessionStatus, openChild, openChildAside, prepareCatalog, t,
+  useSessions, useSessionStatus, openChild, openChildAside, prepareCatalog, t, Portal,
 }: SwitcherProps) {
   const projections = useSessions(state => state.projectionsBySession)
   const summaries = useSessions(state => state.byId)
@@ -84,33 +85,32 @@ function Switcher({
   const title = currentEntry !== undefined ? currentEntry.label || entryName(currentEntry) : displayTitle
   const shown = open !== 'closed'
 
-  const cancelHover = (): void => {
+  const cancelHover = useCallback((): void => {
     clearTimeout(hoverTimer.current)
     hoverTimer.current = undefined
-  }
-  const close = (restoreFocus = false): void => {
+  }, [])
+  const close = useCallback((restoreFocus = false): void => {
     cancelHover()
     setOpen('closed')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
-  }
+  }, [cancelHover])
+  const dismiss = useCallback((event: globalThis.KeyboardEvent): void => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    close(menuRef.current?.contains(document.activeElement) === true)
+  }, [close])
 
   useEffect(() => {
     if (!shown) return
     const closeOutside = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) close()
-    }
-    const dismiss = (event: globalThis.KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      close(menuRef.current?.contains(document.activeElement) === true)
+      const target = event.target as Node
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) close()
     }
     document.addEventListener('pointerdown', closeOutside)
-    document.addEventListener('keydown', dismiss)
     return () => {
       document.removeEventListener('pointerdown', closeOutside)
-      document.removeEventListener('keydown', dismiss)
     }
-  }, [shown])
+  }, [shown, close])
   useEffect(() => cancelHover, [])
 
   const hoverIn = (pointerType: string): void => {
@@ -163,7 +163,7 @@ function Switcher({
         <span className={css.switcherTitle}>{title}</span>
         <SubagentSwitcherIcon />
       </button>
-      {shown && createPortal((
+      {shown && <Portal onKeyDown={dismiss}>
         <MenuSurface
           ref={menuRef}
           className={css.menu}
@@ -201,7 +201,7 @@ function Switcher({
             />
           </div>
         </MenuSurface>
-      ), document.body)}
+      </Portal>}
     </div>
   )
 }
@@ -214,8 +214,9 @@ function Switcher({
  */
 export function SubagentHeaderLineage({
   lineageSessionId, displayTitle, openTitle,
-  useSessions, useSession, useSessionStatus, openChild, openChildAside, refreshProjection, prepareCatalog, t,
+  useSessions, useSession, useSessionStatus, openChild, openChildAside, refreshProjection, prepareCatalog, t, useDocumentPortal,
 }: SubagentHeaderLineageProps) {
+  const Portal = useDocumentPortal()
   const address = useSession(session => session.subagent?.address)
   const parentId = useSessions((state) => {
     if (address?.childSessionId === lineageSessionId) return address.parentSessionId
@@ -240,6 +241,7 @@ export function SubagentHeaderLineage({
       refreshProjection={refreshProjection}
       prepareCatalog={prepareCatalog}
       t={t}
+      Portal={Portal}
     />
   )
 }

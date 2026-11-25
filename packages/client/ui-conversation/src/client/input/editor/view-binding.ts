@@ -55,11 +55,12 @@ export function revealDraftSelection(scrollRef: RefObject<HTMLDivElement>): void
   let rect = range.getBoundingClientRect()
   if (rect.height === 0 && rect.width === 0) {
     // A collapsed caret at an empty line reports a zero rect in some
-    // engines; the anchor's element box is the line the caret sits on.
+    // engines; the anchor's element box is the line the caret sits on. A
+    // text anchor has no box of its own, so its parent element's box is used.
     const anchor = selection.anchorNode
-    const el = anchor instanceof HTMLElement ? anchor : anchor?.parentElement
-    if (el === undefined || el === null) return
-    rect = el.getBoundingClientRect()
+    const line = (anchor as Partial<Element> | null)?.getBoundingClientRect?.() ?? anchor?.parentElement?.getBoundingClientRect()
+    if (line === undefined) return
+    rect = line
   }
   const box = scrollEl.getBoundingClientRect()
   if (rect.bottom > box.bottom) scrollEl.scrollTop += rect.bottom - box.bottom
@@ -88,7 +89,7 @@ export function installDraftWheel(scrollRef: RefObject<HTMLDivElement>): (() => 
   if (el === null) return
   const onWheel = (e: WheelEvent): void => {
     const host = el.closest('[data-conversation-scroll]')
-    if (!(host instanceof HTMLElement) || e.deltaY === 0) return
+    if (host === null || e.deltaY === 0) return
     const atTop = el.scrollTop <= 0
     const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
     if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return

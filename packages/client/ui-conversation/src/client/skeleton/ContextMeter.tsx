@@ -4,8 +4,7 @@
  * Renders nothing until a provider reports both pressure and a route
  * capacity. */
 
-import { useEffect, useId, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 // Type-only: the `contextPressure` / `contextBreakdown` projection key merges.
 import type {} from '@deepseek-ai/dsh-token-meter/client'
@@ -51,9 +50,11 @@ export interface ContextMeterProps {
   useProjection: UseProjection
   /** The owning bar's locale seat, passed down as a plain prop. */
   t: ComposerBarProps['t']
+  /** The owning bar's application-document portal, which holds the breakdown panel. */
+  Portal: ReturnType<ComposerBarProps['useDocumentPortal']>
 }
 
-export function ContextMeter({ useProjection, t }: ContextMeterProps) {
+export function ContextMeter({ useProjection, t, Portal }: ContextMeterProps) {
   const pressure = useProjection('contextPressure')
   const breakdown = useProjection('contextBreakdown')
   const [open, setOpen] = useState(false)
@@ -70,14 +71,9 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
     if (!available && open) setOpen(false)
   }, [available, open])
 
-  useEffect(() => {
-    if (!open || !available) return
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [available, open])
+  const closeOnEscape = useCallback((e: KeyboardEvent): void => {
+    if (e.key === 'Escape') setOpen(false)
+  }, [])
 
   if (context === null) return null
   const percent = context.percent
@@ -123,7 +119,8 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
           <span>{reading}</span>
         </button>
       </Tooltip>
-      {open && createPortal(
+      {/* Escape anywhere closes the panel. */}
+      {open && <Portal onKeyDown={closeOnEscape}>
         <div
           ref={panelRef}
           className={css.panel}
@@ -165,9 +162,8 @@ export function ContextMeter({ useProjection, t }: ContextMeterProps) {
               ))}
             </dl>
           )}
-        </div>,
-        document.body,
-      )}
+        </div>
+      </Portal>}
     </span>
   )
 }
