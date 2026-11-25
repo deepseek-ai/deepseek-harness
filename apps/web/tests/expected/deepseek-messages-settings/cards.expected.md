@@ -17,9 +17,9 @@
       - button "编辑 DeepSeek API (deepseek-official)": 编辑
       - text: DeepSeek API deepseek-official API 密钥
       - button "认证说明": "?"
-      - textbox "API 密钥":
-        - /placeholder: sk-messa••••••••••ding
-      - paragraph: 已保存 API 密钥。输入或粘贴新密钥即可替换
+      - text: sk-messa••••••••••ding
+      - button "更换 API 密钥"
+      - button "清除 API 密钥"
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":
