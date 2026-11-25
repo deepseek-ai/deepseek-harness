@@ -17,6 +17,7 @@ import type {
   OwnerIdentityStatus,
   OwnerRelayState,
   OwnerShareList,
+  ReconnectShareRequest,
   RelayConnectivityView,
   RelayPublishView,
   SetRelayRequest,
@@ -61,6 +62,13 @@ export interface OwnerShares {
    * @returns Whether the Relay row still needs a retry.
    */
   stop(request: StopShareRequest): Promise<RemoteResult<StopShareResult>>
+
+  /**
+   * Reconnect an existing share without changing its link or permissions.
+   * @param request - Share to reconnect.
+   * @returns The Host's result for this connection attempt.
+   */
+  reconnect(request: ReconnectShareRequest): Promise<RemoteResult<void>>
 
   /**
    * Change one share's tier, fork switch, or both.

@@ -268,10 +268,9 @@
   min-width: 0;
 }
 
-/* Fixed title, state, and action columns so every managed share lines up. */
 .managerRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 80px auto;
+  grid-template-columns: minmax(0, 1fr) fit-content(50%);
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -284,14 +283,17 @@
   white-space: nowrap;
 }
 
-.managerRow > :last-child {
-  justify-self: end;
-}
-
 .managerActions {
   display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px;
-  justify-self: end;
+}
+
+.managerActions > [role="alert"] {
+  order: 1;
+  flex-basis: 100%;
 }
 
 /* A long Session title wraps instead of pushing the status off the row. */

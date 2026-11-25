@@ -2564,6 +2564,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Every share this host publishes.',
       },
       {
+        signature: '@Remote(\'reconnect\') reconnect(request: ReconnectShareRequest): Promise<void>',
+        description: 'Reconnect an unexpired owner share at its original address. An online share needs no registration.',
+        parameters: [{ name: 'request', description: 'Share whose existing link is to be reconnected.' }],
+        returns: 'Completion when connected; rejects if the share is gone, expired, or cannot reconnect.',
+      },
+      {
         signature: '@Remote(\'stop\') stop(request: StopShareRequest): Promise<StopShareResult>',
         description: 'Stop one share locally, revoke its forks, and delete its row on the Liveshare server when reachable.',
         parameters: [{ name: 'request', description: 'Share to stop.' }],
@@ -9572,7 +9578,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OwnerShareView',
-    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionIds: readonly string[];\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerPluginAccess?: ViewerPluginAccess;\n    readonly viewerPlugins: readonly ViewerPluginPolicy[];\n    readonly online: boolean;\n    readonly access?: ShareAccess;\n}',
+    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionIds: readonly string[];\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerPluginAccess?: ViewerPluginAccess;\n    readonly viewerPlugins: readonly ViewerPluginPolicy[];\n    readonly online: boolean;\n    readonly reconnectStopped?: boolean;\n    readonly access?: ShareAccess;\n}',
   },
   {
     name: 'PackageResult',
@@ -10053,6 +10059,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ReconnectConfig',
     declaration: 'export interface ReconnectConfig {\n    enabled?: boolean;\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    maxAttempts?: number;\n}',
+  },
+  {
+    name: 'ReconnectShareRequest',
+    declaration: 'export interface ReconnectShareRequest {\n    readonly shareId: string;\n}',
   },
   {
     name: 'RecurringScheduleRecord',

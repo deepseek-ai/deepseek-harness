@@ -442,13 +442,20 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
     if (event.type === 'share-connected') {
       deps.relay.forgetRelayAccess(event.shareId)
       const share = deps.ownerShares.get(event.shareId)
-      if (share !== undefined) share.online = true
+      if (share !== undefined) {
+        share.online = true
+        delete share.reconnectStopped
+      }
       // A share the Relay admitted proves this host can reach it, so the rows it owes may go now.
       void flushPendingRemovals()
     } else if (event.type === 'share-error' || event.type === 'share-closed') {
       deps.relay.invalidateRelayAccess(event.shareId)
       const share = deps.ownerShares.get(event.shareId)
-      if (share !== undefined) share.online = false
+      if (share !== undefined) {
+        share.online = false
+        if (event.type === 'share-error' && event.reconnectStopped === true) share.reconnectStopped = true
+        else delete share.reconnectStopped
+      }
       // A share restored from owner state has no waiter to receive this, so the reason a share is
       // offline would otherwise exist only inside the worker. Recording it is what makes a share that
       // never came back diagnosable from the owner side.
@@ -477,6 +484,10 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
   const send = (command: TunnelWorkerInput): void => {
     if (command.type === 'remove-share') deps.relay.invalidateRelayAccess(command.shareId)
     ensureWorker().send(command)
+    if (command.type === 'add-share') {
+      const share = deps.ownerShares.get(command.share.shareId)
+      if (share !== undefined) delete share.reconnectStopped
+    }
   }
 
   const waitForShare = (

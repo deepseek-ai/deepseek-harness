@@ -1,6 +1,6 @@
 /** Global owner-side list of shares; each row opens that Session's share dialog. */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Modal, RiskConfirmation } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
@@ -16,6 +16,60 @@ export interface LiveshareManageSharesDialogProps extends PropsLocale<typeof NS>
   readonly onOpenShare?: (sessionId: string, sessionTitle: string) => void
   /** Close the manager. */
   readonly onClose: () => void
+}
+
+/** Reconnect controls for an offline share keep failures and pending work on that row. */
+function ReconnectAction({ share, shares, refreshRow, t }: {
+  readonly share: OutgoingShare
+  readonly shares: OwnerShares
+  readonly refreshRow: (shareId: string) => Promise<void>
+  readonly t: LiveshareManageSharesDialogProps['t']
+}): ReactNode {
+  const [busy, setBusy] = useState(false)
+  const pending = useRef(false)
+  const [error, setError] = useState<'dialog.ownerStateHeld' | 'manage.reconnectFailed' | 'viewer.reason.share-not-found' | 'viewer.reason.share-expired'>()
+  const deadline = share.expiresAt === undefined ? Infinity : Date.parse(share.expiresAt)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (!Number.isFinite(deadline) || deadline <= now) return
+    const timer = setTimeout(() => { setNow(Date.now()) }, Math.min(0x7fffffff, Math.max(0, deadline - Date.now())))
+    return () => { clearTimeout(timer) }
+  }, [deadline, now])
+  if (!(now < deadline)) return null
+
+  const reconnect = async (): Promise<void> => {
+    if (pending.current) return
+    if (Date.now() >= deadline) { setNow(Date.now()); return }
+    pending.current = true
+    setBusy(true)
+    setError(undefined)
+    try {
+      const result = await shares.reconnect({ shareId: share.shareId })
+      if (!result.ok) {
+        switch (result.error.code) {
+          case 'liveshareShares/share-not-found': setError('viewer.reason.share-not-found'); break
+          case 'liveshareShares/share-expired': setError('viewer.reason.share-expired'); break
+          case 'liveshareShares/owner-state-held': setError('dialog.ownerStateHeld'); break
+          default: setError('manage.reconnectFailed')
+        }
+      }
+    } catch {
+      setError('manage.reconnectFailed')
+    } finally {
+      // Even a failed manual attempt can restart the worker's automatic retry loop.
+      await refreshRow(share.shareId)
+      pending.current = false
+      setBusy(false)
+    }
+  }
+  return <>
+    {error !== 'viewer.reason.share-not-found' && error !== 'viewer.reason.share-expired' && (
+      <Button variant="outline" size="sm" disabled={busy} onClick={() => { void reconnect() }}>
+        {t(busy ? 'manage.reconnecting' : 'manage.reconnect')}
+      </Button>
+    )}
+    {error !== undefined && <span className={css.error} role="alert">{t(error)}</span>}
+  </>
 }
 
 /**
@@ -46,6 +100,18 @@ export function LiveshareManageSharesDialog({ shares, onOpenShare, onClose, t }:
       })
     return () => { cancelled = true }
   }, [shares, t])
+
+  const refreshRow = async (shareId: string): Promise<void> => {
+    try {
+      const listed = await shares.list()
+      if (!listed.ok) { setError(t('manage.unavailable')); return }
+      const row = listed.value.shares.find(share => share.shareId === shareId)
+      setShareList(current => current.flatMap(share => share.shareId === shareId ? row ?? [] : share))
+      setError('')
+    } catch {
+      setError(t('manage.unavailable'))
+    }
+  }
 
   const stopShare = async (): Promise<void> => {
     const target = stopTarget
@@ -98,9 +164,10 @@ export function LiveshareManageSharesDialog({ shares, onOpenShare, onClose, t }:
                   <div className={css.managerRow}>
                     <strong title={share.sessionTitle}>{share.sessionTitle}</strong>
                     <span className={share.online ? css.online : css.offline}>
-                      {t(share.online ? 'dialog.share.online' : 'dialog.share.offline')}
+                      {t(share.online ? 'dialog.share.online' : share.reconnectStopped === true ? 'manage.reconnectStopped' : 'dialog.share.offline')}
                     </span>
                     <div className={css.managerActions}>
+                      {!share.online && <ReconnectAction share={share} shares={shares} refreshRow={refreshRow} t={t} />}
                       <Button
                         variant="outline"
                         size="sm"

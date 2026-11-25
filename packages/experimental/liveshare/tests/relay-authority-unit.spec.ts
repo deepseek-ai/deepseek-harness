@@ -256,7 +256,7 @@ describe('relay authority reads', () => {
     const h = harness()
     h.ownerShares.set('share-1', storedShare())
     vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 200 })))
-    await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+    await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'unavailable' })
     expect(h.viewerRead.closeShare).not.toHaveBeenCalled()
     expect(h.cancelShareTurn).not.toHaveBeenCalled()
   })
@@ -271,7 +271,7 @@ describe('relay authority reads', () => {
       const h = harness()
       h.ownerShares.set('share-1', storedShare({ online: true }))
       vi.stubGlobal('fetch', vi.fn(answer))
-      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'unavailable' })
       expect(h.viewerRead.closeShare).not.toHaveBeenCalled()
       expect(h.cancelShareTurn).not.toHaveBeenCalled()
       expect(h.cancelChildTurns).not.toHaveBeenCalled()
@@ -286,7 +286,7 @@ describe('relay authority reads', () => {
       // A fork a viewer started stays listed here, so its streams are released with the admission.
       h.forks.listForShare.mockReturnValue([{ childSessionId: 'child', creator: VIEWER }] as never)
       vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status })))
-      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'refused' })
       // No viewer input is served through the share any more: open calls and streams are released.
       expect(h.viewerRead.closeShare).toHaveBeenCalledWith('share-1')
       expect(h.viewerRead.closeViewerStreams).toHaveBeenCalledWith('share-1', VIEWER)
@@ -304,7 +304,7 @@ describe('relay authority reads', () => {
       const h = harness()
       h.ownerShares.set('share-1', storedShare({ online: true }))
       vi.stubGlobal('fetch', vi.fn(async () => new Response('gone', { status })))
-      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'missing' })
       expect(h.viewerRead.closeShare).toHaveBeenCalledWith('share-1')
       expect(h.cancelShareTurn).toHaveBeenCalledWith('share-1')
       expect(h.cancelChildTurns).toHaveBeenCalledWith('share-1')
@@ -332,7 +332,7 @@ describe('relay authority reads', () => {
       h.authority.invalidateRelayAccess('share-1')
       return Response.json({ version: 9, accessMode: 'open', allowedSubjectIds: [], sessionMode: 'view' })
     }))
-    await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+    await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'superseded' })
     expect(h.ownerShares.get('share-1')?.revision).toBe(1)
     expect(h.viewerRead.closeShare).toHaveBeenCalledTimes(1)
   })
@@ -348,7 +348,7 @@ describe('relay authority reads', () => {
         h.ownerShares.set('share-1', storedShare(change))
         return Response.json({ version: 9, accessMode: 'open', allowedSubjectIds: [], sessionMode: 'view' })
       }))
-      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'superseded' })
     }
   })
 
@@ -359,7 +359,7 @@ describe('relay authority reads', () => {
       h.state.disposed = true
       return Response.json({ version: 9, accessMode: 'open', allowedSubjectIds: [], sessionMode: 'view' })
     }))
-    await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+    await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false, failure: 'superseded' })
   })
 })
 
