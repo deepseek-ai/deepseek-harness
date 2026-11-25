@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Add the **/side** command to the composer. It forks the conversation at its latest completed Turn through the ordinary Session fork and opens the child as a tab in the right Sidebar of the conversation on screen, with the Chat view, composer and message actions. The child is an ordinary Session that also appears in the left sidebar beside its source. Default profiles do not install this plugin.
+Add the **/side** command to the composer. It forks the conversation at its latest completed Turn through the ordinary Session fork and opens the child as a tab in the right Sidebar of the conversation on screen, with the Chat view, composer and message actions. The child Session records `origin: 'side'`, so the left sidebar does not list it. Default profiles do not install this plugin.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ The [patch](cordis.patch.yml) adds the `ui-sidechat` row after the Web layers; i
 
 **/side** appears in the composer's command menu and is always consumed as a command, so a typed `/side` never reaches the model as a message. It forks with the ordinary fork's omitted cut, so the Host selects the latest completed Turn and the standalone events after it; a running Turn stays with the source. The Host refuses a conversation without a completed Turn, such as a blank Session or one still in its first Turn, which the plugin reports as having no completed turn. A subagent conversation reports that it cannot start a side conversation: its child would inherit the delegated approval policy and preset without the delegation itself. Each `/side` creates its own side conversation. The side conversation opens as a tab in the right Sidebar of the conversation on screen; `/side` inside a side conversation adds the new child beside it rather than inside it. **Branch into a new conversation** keeps its existing behavior and navigates the main area to the child.
 
-The side tab shows the child's live title with the branch glyph and renders the Chat view with its composer and message actions, like the subagent Sidebar chat; it has no Session header or view switch. The child receives a numbered title like an ordinary fork and appears in the left sidebar list beside its source, where it can be opened as a main conversation. Closing the tab closes only this window's tab; the Session and its history stay in the list. Saved tabs reopen after reload; a tab whose Session can no longer be retained shows a failure message in place.
+The side tab shows the child's live title with the branch glyph and renders the Chat view with its composer and message actions, like the subagent Sidebar chat; it has no Session header or view switch. The child receives a numbered title like an ordinary fork. Closing the tab closes only this window's tab; the Session and its history remain stored, but the left sidebar does not list them. Saved tabs reopen after reload; a tab whose Session can no longer be retained shows a failure message in place.
 
 A failed creation shows a transient notice at the top of the window; the source conversation stays unchanged. A child whose numbered title could not be set still opens.
 
@@ -75,9 +75,9 @@ None; the package does not modify model requests.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Window-local tabs** — open side tabs are part of this window's saved Sidebar layout; another window connected to the same Host sees the child only in the Session list.
-- **No group record** — nothing persists which Sessions were created as sides; the child is distinguishable from an ordinary fork only by where it was opened.
-- **Lost fork response** — if the fork response is lost after the Host created the child, the child remains in the Session list without an open tab, and the notice reports a failure.
+- **Window-local tabs** — open side tabs are part of this window's saved Sidebar layout; another window connected to the same Host does not show the child.
+- **No source record** — the child header records `origin: 'side'` but not its source Session; once its tab is closed, the left sidebar offers no way back to it.
+- **Lost fork response** — if the fork response is lost after the Host created the child, the child remains stored without an open tab or a left sidebar row, and the notice reports a failure.
 
 <a id="dev-note"></a>
 ### Dev Note

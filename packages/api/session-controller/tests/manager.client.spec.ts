@@ -1253,6 +1253,17 @@ describe('remaining branches', () => {
     expect(manager.getListSnapshot().items[0]).not.toHaveProperty('parentSessionId')
   })
 
+  it('forwards a side origin and records it on the fork placeholder', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.fork.mockResolvedValueOnce(ok({ sessionId: S2 }))
+
+    await expect(manager.fork({ sessionId: S1, origin: 'side' })).resolves.toEqual(ok({ sessionId: S2 }))
+
+    expect(remote.session.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: S1, origin: 'side' })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2, origin: 'side', blank: true })
+  })
+
   it('reconciles a fork child published before workspace attachment fails', async ({ mock, remote }) => {
     remote.session.fork.mockResolvedValue(err(new RemoteError('session/workspace-attach-failed', 'forked but unattached', {
       sessionId: S2, workspaceId: 'w1',

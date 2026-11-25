@@ -30,7 +30,8 @@ export class SidechatControl {
    * the right Sidebar of the Session on screen. Forking from a side conversation therefore adds the child
    * beside it, not inside it. A subagent source reports that it cannot start a side conversation: its child
    * would inherit the delegated approval policy and preset without the delegation itself. The Host refuses a
-   * source without a completed Turn, which the notice reports as having no completed turn. Every other call forks.
+   * source without a completed Turn, which the notice reports as having no completed turn. The child records
+   * `origin: 'side'`, which keeps it out of the left Sidebar. Every other call forks.
    * @param sessionId - source conversation.
    */
   fork(sessionId: SessionId): void {
@@ -59,16 +60,17 @@ export class SidechatControl {
   private async create(sessionId: SessionId, main: SessionId): Promise<void> {
     let childId: SessionId | undefined
     try {
-      // `onCreated` runs before the child title rename, so a rename failure still opens the created child.
-      await this.ctx.sessions.fork({ sessionId, increaseTitle: true, onCreated: (id) => { childId = id } })
+      // `onCreated` runs before the child title rename and also reports a child whose Workspace attachment
+      // failed, so either failure still opens the created child.
+      await this.ctx.sessions.fork({ sessionId, origin: 'side', increaseTitle: true, onCreated: (id) => { childId = id } })
     } catch (error) {
       if (childId === undefined && !this.closed) {
         this.notice.set({ serial: ++this.serial, key: forkUnavailable(error) ? 'noTurn' : 'createFailed' })
       }
       if (forkUnavailable(error)) return
-      this.ctx.logger.error(childId === undefined ? 'Side conversation creation failed' : 'Side conversation title rename failed', error)
+      this.ctx.logger.error(childId === undefined ? 'Side conversation creation failed' : 'Side conversation setup failed after creation', error)
     }
-    // A released main Session store makes the open a no-op; the child remains in the Session list.
+    // A released main Session store makes the open a no-op; the stored child then has no left sidebar row.
     if (childId !== undefined && !this.closed) this.ctx.sidebarRight.openResourceIn(main, sidechatAddress(childId))
   }
 }

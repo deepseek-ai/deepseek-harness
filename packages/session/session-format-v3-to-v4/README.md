@@ -213,7 +213,7 @@ An input already marked V4 never runs V3→V4. Native validation preserves recor
 
 | Data | Native rule |
 |---|---|
-| Logical header | Exact required fields `version`, `id`, `createdAt`, `isSeeded`, `delegationDepth`; optional `cwd`, `parentSession`, `origin`, `agentPreset`; no other keys. Version is 4, id is a string, creation time/depth are nonnegative safe integers, seeded is boolean, cwd is absolute when present, optional ids are strings, and origin is `subagent` when present. |
+| Logical header | Exact required fields `version`, `id`, `createdAt`, `isSeeded`, `delegationDepth`; optional `cwd`, `parentSession`, `origin`, `agentPreset`; no other keys. Version is 4, id is a string, creation time/depth are nonnegative safe integers, seeded is boolean, cwd is absolute when present, optional ids are strings, and origin is `subagent` or `side` when present. The physical codec passes `side` around the frozen V2 header codec, which admits only `subagent`. |
 | Event envelope | Required `type`, `seq`, `time`, and JSON `data`; only optional `surfaceOp`, `sourceEventSeqs`, and `ignorable` are admitted. Sequences are dense nonnegative safe integers, time is a safe integer, and a present `ignorable` is exactly true. |
 | Surface messages | System, user, developer, assistant, and tool/result require placement and identified messages with their matching role. Installed Session validation owns ordinary message envelopes and role-specific source acceptance. |
 | Replacements and references | Endpoints select an inclusive current-surface span in surface order; references name earlier events and cover removed nodes. The protected first system head can be replaced only by one system message covering exactly that head. |

@@ -213,9 +213,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'bounded results, or a business/transport error.',
       },
       {
-        signature: 'fork(opts: { sessionId: SessionId atSeq?: number increaseTitle?: boolean onCreated?: (childId: SessionId) => void /** False refuses source migration; omission preserves the Host default. */ allowMigration?: boolean }): Promise<SessionId>',
+        signature: 'fork(opts: { sessionId: SessionId atSeq?: number increaseTitle?: boolean onCreated?: (childId: SessionId) => void /** False refuses source migration; omission preserves the Host default. */ allowMigration?: boolean /** `side` records the child as a side conversation; omission creates an ordinary Session. */ origin?: \'side\' }): Promise<SessionId>',
         description: 'Fork a session from an exact inclusive prefix of the source; on resolution the child is catalogued and can be explicitly retained.',
-        parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title, skipping numbers Host-listed titles already use, before resolving. `onCreated` observes the catalogued child before that optional rename.' }],
+        parameters: [{ name: 'opts', description: 'source session id, the optional exact inclusive boundary seq (a real event seq the caller already knows; a cut inside an open turn is balanced Host-side with synthetic closers, and omission selects the latest completed-turn prefix), and whether to increment an inherited durable title, skipping numbers Host-listed titles already use, before resolving. `onCreated` observes the catalogued child before that optional rename, including a child published before Workspace attachment failed.' }],
         returns: 'the child session id.',
         throws: ['when the fork fails, or when a requested child-title rename fails after creation.'],
       },
@@ -681,7 +681,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ISessions',
-    declaration: 'export interface ISessions {\n    readonly list: ObservableSnapshot<SessionListState>;\n    retain(target: SessionTarget, options: SessionRetainOptions): SessionReference;\n    using<T>(target: SessionTarget, options: SessionRetainOptions, operation: (reference: SessionReference) => T | Promise<T>): Promise<T>;\n    retainInfo(id: SessionId): ObservableSnapshot<SessionRetainInfo>;\n    readonly searchResultLimit: number;\n    create(opts?: {\n        workspaceId?: WorkspaceId;\n        cwd?: string;\n        sessionId?: SessionId;\n        agentPreset?: string;\n    }): Promise<SessionId>;\n    subagentAddress(id: SessionId): SubagentAddress | undefined;\n    refreshProjections(sessionId: SessionId): Promise<void>;\n    refresh(): Promise<void>;\n    search(query: string, signal: AbortSignal): Promise<RemoteResult<{\n        items: SessionSearchResultItem[];\n        hasMore: boolean;\n    }>>;\n    fork(opts: {\n        sessionId: SessionId;\n        atSeq?: number;\n        increaseTitle?: boolean;\n        onCreated?: (childId: SessionId) => void;\n        allowMigration?: boolean;\n    }): Promise<SessionId>;\n    scope(id: SessionId): AgentContext | undefined;\n    scopeOf(ctx: Context): SessionId | undefined;\n    sessionOf(ctx: Context): SessionFace | undefined;\n    binding(id: SessionId): SessionBinding | undefined;\n}',
+    declaration: 'export interface ISessions {\n    readonly list: ObservableSnapshot<SessionListState>;\n    retain(target: SessionTarget, options: SessionRetainOptions): SessionReference;\n    using<T>(target: SessionTarget, options: SessionRetainOptions, operation: (reference: SessionReference) => T | Promise<T>): Promise<T>;\n    retainInfo(id: SessionId): ObservableSnapshot<SessionRetainInfo>;\n    readonly searchResultLimit: number;\n    create(opts?: {\n        workspaceId?: WorkspaceId;\n        cwd?: string;\n        sessionId?: SessionId;\n        agentPreset?: string;\n    }): Promise<SessionId>;\n    subagentAddress(id: SessionId): SubagentAddress | undefined;\n    refreshProjections(sessionId: SessionId): Promise<void>;\n    refresh(): Promise<void>;\n    search(query: string, signal: AbortSignal): Promise<RemoteResult<{\n        items: SessionSearchResultItem[];\n        hasMore: boolean;\n    }>>;\n    fork(opts: {\n        sessionId: SessionId;\n        atSeq?: number;\n        increaseTitle?: boolean;\n        onCreated?: (childId: SessionId) => void;\n        allowMigration?: boolean;\n        origin?: \'side\';\n    }): Promise<SessionId>;\n    scope(id: SessionId): AgentContext | undefined;\n    scopeOf(ctx: Context): SessionId | undefined;\n    sessionOf(ctx: Context): SessionFace | undefined;\n    binding(id: SessionId): SessionBinding | undefined;\n}',
   },
   {
     name: 'KeyedHooksSources',
@@ -796,8 +796,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type PendingSubmissionRetirement = {\n    readonly reason: \'observed\';\n    readonly attachments: readonly (ImageAttachmentRef | FileAttachmentRef)[];\n} | {\n    readonly reason: \'failed\';\n};',
   },
   {
+    name: 'ProjectionsBaseline',
+    declaration: 'export interface ProjectionsBaseline {\n    asOfSeq: SessionSeqCursor;\n    values: Readonly<Record<string, unknown>>;\n}',
+  },
+  {
     name: 'ProjectionsFace',
     declaration: 'export interface ProjectionsFace {\n    faceOf(key: string): ObservableSnapshot<unknown>;\n}',
+  },
+  {
+    name: 'ProjectionValueStore',
+    declaration: 'export class ProjectionValueStore {\n    faceOf(key: string): ObservableSnapshot<unknown>;\n    get(key: string): unknown;\n    seqOf(key: string): SessionSeqCursor | undefined;\n    values(): Readonly<Partial<SessionProjectionMap>>;\n    subscribeAny(listener: () => void): () => void;\n    apply(key: string, value: unknown, seq: SessionSeqCursor): void;\n    applyCached(values: Readonly<Record<string, unknown>>): void;\n    seed(baseline: ProjectionsBaseline): void;\n    clear(): void;\n}',
   },
   {
     name: 'PromptContentPart',
@@ -884,6 +892,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ScopeStandardProps<S extends SlotScope> = (S extends \'session\' ? SessionStandardProps : S extends \'session-maybe\' ? SessionMaybeStandardProps : object) & GlobalStandardProps;',
   },
   {
+    name: 'Session',
+    declaration: 'export class Session implements SessionFace {\n    readonly projections: ProjectionValueStore;\n    readonly eventSource;\n    constructor(readonly sessionId: SessionId, private readonly remote: SessionRemotes, private readonly options: SessionOptions = {});\n    bindScope(actx: Context): void;\n    unbindScope(): void;\n    beginSubmission(input: BeginSubmissionInput): SubmissionHandle;\n    async prompt(content: PromptContentPart[], mode: \'queue\' | \'steer\', signal?: AbortSignal, requestId?: SessionRequestId): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    async readAttachment(attachment: ImageAttachmentRef): Promise<RemoteResult<{\n        attachment: ImageAttachmentRef;\n        data: Uint8Array;\n    }>>;\n    async updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    async cancel(): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    async rename(title: string): Promise<RemoteResult<{\n        title: string;\n        seq: SessionSeq;\n    }>>;\n    async command(line: string): Promise<RemoteResult<{\n        matched: boolean;\n    }>>;\n    open(): Promise<void>;\n    async loadOlder(options?: {\n        deferConsumption?: boolean;\n    }): Promise<void>;\n    consumeOlder(): boolean;\n    loadThrough(seq: SessionSeq): Promise<void>;\n    async resync(): Promise<void>;\n    subscribe(listener: () => void): () => void;\n    getSnapshot(): SessionSnapshot;\n    handleRunning(running: boolean): void;\n    configureSubagent(address: SubagentAddress | undefined): void;\n    handleBlank(blank: boolean): void;\n    handleRemoved(): void;\n    handleAgentError(message: string): void;\n    bufferOlder(): void;\n    async disconnect(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
+  },
+  {
     name: 'SessionAreaProps',
     declaration: 'export interface SessionAreaProps {\n    readonly session?: SlotScopeTargetMap[keyof SlotScopeTargetMap & \'session\'] | undefined;\n    empty?: (() => ReactNode) | undefined;\n    children: ReactNode;\n}',
   },
@@ -894,6 +906,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionBinding',
     declaration: 'export interface SessionBinding {\n    readonly sessionId: SessionId;\n    readonly session: SessionFace;\n    readonly eventSource: SessionEventSource;\n    readonly ctx: AgentContext;\n}',
+  },
+  {
+    name: 'SessionCommandsRemote',
+    declaration: 'export interface SessionCommandsRemote {\n    execute(agentId: SessionId, line: string, attachments: readonly CommandSubmitAttachment[], signal?: AbortSignal): Promise<RemoteResult<object | undefined>>;\n}',
   },
   {
     name: 'SessionEventChange',
@@ -932,6 +948,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionMaybeStandardProps {\n}',
   },
   {
+    name: 'SessionOptions',
+    declaration: 'export interface SessionOptions {\n    address?: SubagentAddress;\n    onEngaged?(session: Session): void;\n    projections?: ProjectionValueStore;\n}',
+  },
+  {
     name: 'SessionProjectionSnapshot',
     declaration: 'export interface SessionProjectionSnapshot {\n    readonly values: Readonly<Partial<SessionProjectionViewValues>>;\n    readonly state: \'idle\' | \'loading\' | \'ready\' | \'migration-required\' | \'error\';\n    readonly error: RemoteFailure | null;\n}',
   },
@@ -950,6 +970,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionReferenceSourceMap',
     declaration: 'export interface SessionReferenceSourceMap {\n    controllerOperation: unknown;\n    gateway: unknown;\n}',
+  },
+  {
+    name: 'SessionRemote',
+    declaration: 'export type SessionRemote = ClientRemote[\'session\'];',
+  },
+  {
+    name: 'SessionRemotes',
+    declaration: 'export interface SessionRemotes {\n    readonly $stream: ClientRemote[\'$stream\'];\n    readonly commands: SessionCommandsRemote;\n    readonly session: SessionRemote;\n    readonly subagents: SessionSubagentsRemote;\n}',
   },
   {
     name: 'SessionRequestId',
@@ -982,6 +1010,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionStandardProps',
     declaration: 'export interface SessionStandardProps {\n}',
+  },
+  {
+    name: 'SessionSubagentsRemote',
+    declaration: 'export interface SessionSubagentsRemote {\n    prompt(request: SubagentPromptRequest, signal?: AbortSignal): Promise<RemoteResult<SubagentPromptReceipt>>;\n    interruptByUser(childSessionId: SessionId): Promise<RemoteResult<SubagentInterruptReceipt>>;\n}',
   },
   {
     name: 'SessionTarget',

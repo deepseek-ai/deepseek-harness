@@ -13,6 +13,7 @@ const CHILD = 'session-child' as SessionId
 interface ForkCall {
   sessionId: SessionId
   atSeq?: number | undefined
+  origin?: 'side' | undefined
   increaseTitle?: boolean | undefined
   onCreated?: (id: SessionId) => void
 }
@@ -28,7 +29,7 @@ function harness(mounted: SessionId | null = MAIN, origin?: 'subagent') {
   const forks: ForkCall[] = []
   const opened: { main: SessionId; address: string }[] = []
   const fork = vi.fn((opts: ForkCall) => {
-    forks.push({ sessionId: opts.sessionId, atSeq: opts.atSeq, increaseTitle: opts.increaseTitle })
+    forks.push({ sessionId: opts.sessionId, atSeq: opts.atSeq, origin: opts.origin, increaseTitle: opts.increaseTitle })
     opts.onCreated?.(CHILD)
     return Promise.resolve(CHILD)
   })
@@ -50,7 +51,7 @@ describe('SidechatControl.fork', () => {
     const { control, forks, opened } = harness()
     control.fork(SOURCE)
     await vi.waitFor(() => { expect(opened).toHaveLength(1) })
-    expect(forks).toEqual([{ sessionId: SOURCE, atSeq: undefined, increaseTitle: true }])
+    expect(forks).toEqual([{ sessionId: SOURCE, atSeq: undefined, origin: 'side', increaseTitle: true }])
     expect(opened).toEqual([{ main: MAIN, address: sidechatAddress(CHILD) }])
   })
 
@@ -110,7 +111,7 @@ describe('SidechatControl.fork', () => {
     h.control.fork(SOURCE)
     await vi.waitFor(() => { expect(h.opened).toEqual([{ main: MAIN, address: sidechatAddress(CHILD) }]) })
     expect(h.control.notice.getSnapshot()).toBeNull()
-    expect(h.error).toHaveBeenCalledWith('Side conversation title rename failed', expect.any(Error))
+    expect(h.error).toHaveBeenCalledWith('Side conversation setup failed after creation', expect.any(Error))
   })
 
   it('neither opens nor reports after disposal', async () => {
