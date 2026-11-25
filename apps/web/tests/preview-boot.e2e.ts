@@ -8,7 +8,8 @@
  * Two milestones prove that happened — the host's `tree active` boot line,
  * whose lowering contract must be the one this checkout's packer emits, and the
  * workspace hero, which paints only after the client tree comes up over the
- * tunnel. The same page opens the seeded Workspace and showcase Session,
+ * tunnel. A first prompt answers from the keyless mock model without an API-key
+ * prompt. The same page opens the seeded Workspace and showcase Session,
  * verifies its tool/subagent/history examples, then writes through the
  * settings and credentials providers. That keeps the upstream Chokidar
  * instances exercised over the Worker filesystem implementation. The same
@@ -76,6 +77,9 @@ const SESSION_INSPECTOR_MODULE = '@deepseek-ai/dsh-experimental-session-inspecto
 /** Package whose terminal chunk the page requests through `require.async`. */
 const TERMINAL_PACKAGE = '@deepseek-ai/dsh-client-ui-sidebar-terminal'
 const TERMINAL_CHUNK = `node_modules/${TERMINAL_PACKAGE}/lib/client.terminal.js`
+
+/** Fixed reply of the keyless mock model the preview image's profile patch selects. */
+const PREVIEW_MOCK_REPLY = 'This Preview starts on a mock model that needs no API key. To chat with a real model, add an API key in Settings → Models, then select its model.'
 
 /** Stable labels authored by the deterministic VFS example fixture. */
 const SHOWCASE_TITLE = 'WebWorker Preview Showcase'
@@ -352,12 +356,16 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     const continueButton = page.getByRole('button', { name: 'Continue' })
     await continueButton.waitFor({ timeout: HERO_TIMEOUT_MS })
     await continueButton.click()
-    await page.getByRole('button', { name: 'Add API Key', exact: true }).click()
-    const configureLater = page.getByRole('button', { name: 'Configure later' })
-    await configureLater.waitFor({ timeout: 30_000 })
-    await configureLater.click()
-    await page.locator('[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]')
-      .waitFor({ timeout: 30_000 })
+    // The image's profile patch starts new Agents on the keyless mock model and
+    // keeps the API-key prompt closed, so a first prompt answers without a key.
+    const composer = page.locator('[data-composer-input][contenteditable="true"][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]')
+    await composer.waitFor({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Mock model' }).waitFor({ timeout: 30_000 })
+    expect(await page.getByRole('button', { name: 'Add API Key', exact: true }).count()).toBe(0)
+    await composer.click()
+    await page.keyboard.type('hello')
+    await page.keyboard.press('Enter')
+    await page.getByText(PREVIEW_MOCK_REPLY, { exact: true }).first().waitFor({ timeout: 30_000 })
 
     const exercised = await page.evaluate(async ({ seededSessionId, seededSessionTitle }) => {
       type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { code: string; message: string } } }

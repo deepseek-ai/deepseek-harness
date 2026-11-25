@@ -2500,6 +2500,23 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-api-key -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-mock -->
+<a id="deepseek-aidsh-llm-mock"></a>
+
+## `@deepseek-ai/dsh-llm-mock`
+
+- `inject`: `llm`
+- `source`: [`packages/experimental/llm-mock/src/index.ts:17`](../packages/experimental/llm-mock/src/index.ts)
+
+```ts config-catalog
+/** Mock route settings. */
+export interface Config {
+  /** Text every model call returns. */
+  reply: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-mock -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-pi-ai -->
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 

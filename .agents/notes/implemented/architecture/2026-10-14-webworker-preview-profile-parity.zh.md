@@ -27,6 +27,7 @@ Status: implemented
   - 镜像里放一份只含清单的 `node_modules/@deepseek-ai/dsh/package.json`（原样复制 `apps/cli/package.json`），作为安装锚点，镜像 manifest 在 `installation` 里记录它。
   - 镜像不带组合好的配置，也没有 `config/cordis.yml`；镜像 manifest 记录 Worker 要启动的 `profile`。
   - 镜像带一份 home patch `home/cordis.patch.yml`：对运行时 `PLATFORM_ENTRY_CONFIG` 列出的每一行（`session-persistence-jsonl`），写入模板各 bundle 层合成出的配置，并在其上设置所需字段（`compression: none`）。补丁会整体替换一行的配置，所以保留合成出的字段；打包时读取的 bundle 文件就是镜像里的那些。
+  - 镜像预置 profile patch `home/profiles/<profile>/cordis.patch.yml`，写入 Preview 无需密钥的模型默认值：插入 [`llm-mock`](../../../../packages/experimental/llm-mock/README.zh.md) 行，把 `agent-default-model` 设为 `mock` 路由，并在 `ui-settings-models` 上设置 `credentialOnboarding: false`。App-boot 初始化 profile 时保留已有的 profile patch，ConfigEditor 写入该层，因此用户仍可在模型设置中选择并保存其他模型、添加提供方密钥。Profile 恢复流程把该 patch 移走时，这些默认值也会一并丢失。
 - **Worker**
   - 用镜像里 app-boot 的 `loadProfile` 从模板初始化 `home/profiles/<profile>`，写空的根 `cordis.yml`，用 `readProfilePatches` 组合。
   - profileContext 按 `runProfile` 填写：name、dir、patchPath、installAnchor、startedBundles、cwd、home，overlay 列表为空，因此 Worker 与不带 `--patch` 的启动器一样只调用一次 `readProfilePatches`。
@@ -81,7 +82,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 
 ## 后果
 
-Preview 启动的组合与正式 Web 相同。不开 bundle 时，Worker 组合与正式 Web 只差 jsonl 的平台覆盖；开任一 bundle 都没有被跳过的补丁。插件页列出全部 `OPTIONAL_BUNDLES`，每个都显示标题和图标，没有元信息错误。11 个 optional bundle 逐个开启再关闭，两次都返回 `applied`；开启后它改动的每个启用行都是 active，关闭后插件列表恢复原样。启用 session-titles 会禁用 `@deepseek-ai/dsh-session-title-first-prompt-llm`（行 `session-title-llm`）并启用 `@deepseek-ai/dsh-session-title-all-prompts-llm`，与正式 Web 一致；启用 inspector-profile 后 Session Inspector 运行，NodeJS Inspector 降级启动。降级以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 为前提，所以正常 `dsh web` 运行完整的 Inspector。
+Preview 启动的组合与正式 Web 相同。不开 bundle 时，Worker 组合与正式 Web 只差 jsonl 的平台覆盖和预置 profile patch 中无需密钥的模型默认值；开任一 bundle 都没有被跳过的补丁。插件页列出全部 `OPTIONAL_BUNDLES`，每个都显示标题和图标，没有元信息错误。11 个 optional bundle 逐个开启再关闭，两次都返回 `applied`；开启后它改动的每个启用行都是 active，关闭后插件列表恢复原样。启用 session-titles 会禁用 `@deepseek-ai/dsh-session-title-first-prompt-llm`（行 `session-title-llm`）并启用 `@deepseek-ai/dsh-session-title-all-prompts-llm`，与正式 Web 一致；启用 inspector-profile 后 Session Inspector 运行，NodeJS Inspector 降级启动。降级以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 为前提，所以正常 `dsh web` 运行完整的 Inspector。
 
 体积（MiB，实测）：基础镜像 9.20（打包期组合且 chunk 随启动下载时为 12.79，−28%），含 11 个 optional bundle；另有 5 个 lazy tar 共 4.45（pdf 2.88、excel 1.39、terminal 0.13、frontmatter 0.05、inspector 底部面板 0.00）。基础镜像不含懒加载 chunk，页面请求 chunk 时才拉取对应 archive。
 

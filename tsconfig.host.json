@@ -571,6 +571,7 @@
     { "path": "./packages/llm/llm-deepseek-api-key" },
     { "path": "./packages/llm/llm-deepseek-account" },
     { "path": "./packages/llm/llm-pi-ai" },
+    { "path": "./packages/experimental/llm-mock" },
     { "path": "./packages/shell/bash-local" },
     { "path": "./packages/shell/shell-env" },
     { "path": "./packages/shell/pwsh-local" },

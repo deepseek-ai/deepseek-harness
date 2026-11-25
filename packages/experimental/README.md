@@ -49,6 +49,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`webhook`](webhook/README.md) | Authenticated delivery dispatch and Workspace Session creation | `ctx.webhookRuntime` |
 | [`webhook-github`](webhook-github/README.md) | Signed GitHub webhook ingress | — |
 | [`session-title-all-prompts-llm`](session-title-all-prompts-llm/README.md) | Session titles from all human prompts | — |
+| [`llm-mock`](llm-mock/README.md) | Keyless mock model route with a fixed reply | — |
 | [`tool-terminal`](tool-terminal/README.md) | Persistent terminal tools | — |
 | [`terminal-panel`](terminal-panel/README.md) | Agent terminals in the Web sidebar and read-only user terminal tools | — |
 | [`tool-ralph`](tool-ralph/README.md) | Bounded repeated delegated tasks | — |
