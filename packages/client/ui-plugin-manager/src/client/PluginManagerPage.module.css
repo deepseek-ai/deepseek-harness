@@ -1861,11 +1861,16 @@ label.registryOption {
   gap: 24px;
 }
 
-/* The list toolbar's sentence about the last update check. */
+/* The list toolbar's sentence about a manual refresh or the last update check; its count keeps a fixed digit width. */
 .updatesNote {
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* The Refresh button's check count keeps its width while the digits change. */
+.refreshCount {
+  font-variant-numeric: tabular-nums;
 }
 
 .updatesNote[data-tone='info'] {

@@ -418,6 +418,14 @@ export interface PluginManagerState {
    * cached refresh failures reported by toast. Background reads do not start the spinner.
    */
   readonly refreshStatus: 'idle' | 'refreshing' | 'failed'
+  /**
+   * What a manual refresh is waiting for: its reads, then the version check of the `current`th of `total` registry
+   * packages; `null` outside a manual refresh and once its reads and checks settled.
+   */
+  readonly refreshProgress:
+    | { readonly phase: 'loading' }
+    | { readonly phase: 'checking'; readonly current: number; readonly total: number }
+    | null
   readonly packages: readonly PackageView[]
   /** Package names and row keys with an action crossing the wire. */
   readonly busy: readonly string[]
@@ -696,6 +704,8 @@ interface InstallRequest {
 export class PluginManagerController {
   private readonly store: SnapshotStore<PluginManagerState>
   private inFlight: Promise<void> | undefined
+  /** Version checks in flight by package name, so a refresh waits for a check another action started. */
+  private readonly versionChecks = new Map<string, Promise<void>>()
   private rerun = false
   private generation = 0
   private disposed = false
@@ -725,7 +735,7 @@ export class PluginManagerController {
   ) {
     this.details = new BundleDetailController(ctx, () => document.baseURI)
     this.store = createSnapshotStore<PluginManagerState>({
-      status: 'idle', refreshStatus: 'idle', packages: [], busy: [], notice: null,
+      status: 'idle', refreshStatus: 'idle', refreshProgress: null, packages: [], busy: [], notice: null,
       install: IDLE_INSTALL, confirm: null, highlight: null, versions: {}, update: null,
     })
   }
@@ -960,21 +970,37 @@ export class PluginManagerController {
     this.patch({ update: { ...update, steps: [...update.steps, progress.step] } })
   }
 
-  /** Read one package's newer versions; a transport failure reads as an unknown refusal. */
-  private async checkVersions(packageName: string): Promise<void> {
-    const { versions, update } = this.getSnapshot()
+  /**
+   * Read one package's newer versions; a transport failure reads as an unknown refusal.
+   * @returns settlement of this check, or of the one already in flight for the package.
+   */
+  private checkVersions(packageName: string): Promise<void> {
+    const inFlight = this.versionChecks.get(packageName)
+    if (inFlight !== undefined) return inFlight
+    const { update } = this.getSnapshot()
     // A check during the package's update would answer for the version being replaced.
-    if (this.disposed || versions[packageName]?.phase === 'checking' || (update?.phase === 'running' && update.packageName === packageName)) return
+    if (this.disposed || (update?.phase === 'running' && update.packageName === packageName)) return Promise.resolve()
     this.patchVersions(packageName, { phase: 'checking' })
-    // The generated Remote takes every business argument before its optional signal; `{}` asks the Host's own plan.
-    const answer = await this.ctx.remote.pluginManager.listVersions(packageName, {})
-    const list: PluginVersionList = answer.ok ? answer.value : { status: 'refused', problem: 'unknown', reason: answer.error.message, attempts: [] }
-    this.patchVersions(packageName, { phase: 'done', list, checkedAt: Date.now() })
+    const check = (async () => {
+      // The generated Remote takes every business argument before its optional signal; `{}` asks the Host's own plan.
+      const answer = await this.ctx.remote.pluginManager.listVersions(packageName, {})
+      const list: PluginVersionList = answer.ok ? answer.value : { status: 'refused', problem: 'unknown', reason: answer.error.message, attempts: [] }
+      this.patchVersions(packageName, { phase: 'done', list, checkedAt: Date.now() })
+    })().finally(() => { this.versionChecks.delete(packageName) })
+    this.versionChecks.set(packageName, check)
+    return check
   }
 
-  /** Check the registry packages one after another, so one click starts at most one package's registry lookups. */
-  private async checkAllVersions(): Promise<void> {
-    for (const pkg of this.getSnapshot().packages.filter(item => item.update === 'registry')) await this.checkVersions(pkg.name)
+  /**
+   * Check the registry packages one after another, so one click starts at most one package's registry lookups.
+   * @param report - called with the 1-based position and the count before each package's check.
+   */
+  private async checkAllVersions(report: (current: number, total: number) => void): Promise<void> {
+    const registry = this.getSnapshot().packages.filter(item => item.update === 'registry')
+    for (const [index, pkg] of registry.entries()) {
+      report(index + 1, registry.length)
+      await this.checkVersions(pkg.name)
+    }
   }
 
   /**
@@ -1116,15 +1142,17 @@ export class PluginManagerController {
     const startedAt = Date.now()
     this.patch({
       refreshStatus: 'refreshing',
+      refreshProgress: { phase: 'loading' },
       ...this.getSnapshot().notice?.kind === 'refresh-failed' ? { notice: null } : {},
     })
     try {
       await this.load()
-      if (this.getSnapshot().status !== 'error') await this.checkAllVersions()
+      if (this.getSnapshot().status !== 'error') await this.checkAllVersions((current, total) => { this.patch({ refreshProgress: { phase: 'checking', current, total } }) })
     } catch (_error) {
       // A rejected transport request leaves the cached cards available for retry.
       this.patch({ status: 'error' })
     } finally {
+      this.patch({ refreshProgress: null })
       // Hold the spinner to its minimum so a fast read does not flash it, then settle.
       const remaining = REFRESH_SPINNER_MIN_MS - (Date.now() - startedAt)
       if (remaining > 0) await new Promise<void>((resolve) => { setTimeout(resolve, remaining) })

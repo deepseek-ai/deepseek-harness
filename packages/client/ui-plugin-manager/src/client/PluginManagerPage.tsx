@@ -546,8 +546,14 @@ function versionUpdate(check: VersionCheck | undefined): string | undefined {
   return check?.phase === 'done' ? updateCandidate(check.list)?.version : undefined
 }
 
-/** The list toolbar's sentence about the last update check of every registry package. */
-function updatesNote(packages: readonly PackageView[], versions: PluginManagerState['versions'], t: Translate): { text: string; tone?: 'info' | 'error' } | undefined {
+/**
+ * The list toolbar's sentence: the last update check of every registry package. During a manual refresh it names
+ * what the refresh waits for to screen readers only, since the Refresh button shows the count.
+ */
+function updatesNote(packages: readonly PackageView[], state: PluginManagerState, t: Translate): { text: string; tone?: 'info' | 'error'; hidden?: true } | undefined {
+  const { versions, refreshProgress: progress } = state
+  if (progress?.phase === 'loading') return { text: t('loading'), hidden: true }
+  if (progress?.phase === 'checking') return { text: t('refreshChecking', { current: String(progress.current), total: String(progress.total) }), hidden: true }
   const checks = packages.filter(pkg => pkg.update === 'registry').map(pkg => versions[pkg.name])
   if (checks.length === 0 || checks.some(check => check === undefined || check.phase === 'checking')) return undefined
   const available = checks.filter(check => versionUpdate(check) !== undefined).length
@@ -1668,7 +1674,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
     has: row => ledger.rows.has(rowConfigKey(pkg.name, row.rowId)) || sectionsOf(pkg, row).length > 0,
     open: (row) => { setView({ kind: 'row', name: pkg.name, rowId: row.rowId, ...pkgOrigin }) },
   })
-  const updates = updatesNote(mine, state.versions, t)
+  const updates = updatesNote(mine, state, t)
   const updatePkg = state.update === null ? undefined : state.packages.find(pkg => pkg.name === state.update?.packageName)
   const packageBusy = (pkg: PackageView): boolean => bundleBusy(state, pkg.name)
   const packageCard = (pkg: PackageView): ReactNode => (
@@ -1736,12 +1742,14 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                   </div>
                 </div>
                 <div className={css.toolbar} data-plugin-toolbar data-plugin-header-part="toolbar" hidden={!onInstalled}>
-                  {updates === undefined ? null : <span className={css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
+                  {updates === undefined ? null : <span role="status" className={updates.hidden ? css.progressAnnouncement : css.updatesNote} data-tone={updates.tone}>{updates.text}</span>}
                   <Tooltip label={t('refresh')} delayMs={500} focusDelayMs={500} side="bottom" portal disabled={!loaded || refreshing}>
                     <Button variant="outline" size="sm" className={css.addButton} aria-label={t('refresh')} aria-busy={refreshing}
                       disabled={!loaded || refreshing} onClick={props.refresh}
                       icon={refreshing ? <StateDot state="ongoing" size={13} /> : <IconRefreshOutlineRegular size={13} />}>
-                      <span className={css.toolbarLabel}>{t('refresh')}</span>
+                      {state.refreshProgress?.phase === 'checking'
+                        ? <span className={`${css.toolbarLabel} ${css.refreshCount}`}>{t('refreshCount', { current: String(state.refreshProgress.current), total: String(state.refreshProgress.total) })}</span>
+                        : <span className={css.toolbarLabel}>{t('refresh')}</span>}
                     </Button>
                   </Tooltip>
                   {state.install.requestId === undefined

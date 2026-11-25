@@ -78,6 +78,7 @@ const IDLE_INSTALL: InstallState = {
 const READY: PluginManagerState = {
   status: 'ready',
   refreshStatus: 'idle',
+  refreshProgress: null,
   packages: [],
   busy: [],
   notice: null,
@@ -3013,7 +3014,7 @@ it('keeps bundle configuration mounted while its operation is pending', () => {
 
 describe('registry versions and updates', () => {
   const MIRROR = 'https://registry.npmmirror.com/'
-  const updatable = (): PackageView => pkg({ update: 'registry', version: '0.16.0', source: 'dsh-better-sidebar@0.16.0' })
+  const updatable = (more: Partial<PackageView> = {}): PackageView => pkg({ update: 'registry', version: '0.16.0', source: 'dsh-better-sidebar@0.16.0', ...more })
   const runtime = '0.8.3'
   const listed = (versions: PluginVersion[], attempts: RegistryAttempt[] = [{ registry: null }]): VersionCheck => ({
     phase: 'done', checkedAt: 0,
@@ -3146,6 +3147,23 @@ describe('registry versions and updates', () => {
     expect(screen.getByText(en.updatesNone)).toBeTruthy()
     set({ versions: { 'dsh-better-sidebar': { phase: 'done', checkedAt: 0, list: { status: 'refused', problem: 'unknown', reason: 'x', attempts: [] } } } })
     expect(screen.getByText(en.updatesFailed)).toBeTruthy()
+  })
+
+  it('counts a manual refresh\'s checks on the Refresh button and announces its progress', () => {
+    const second = updatable({ name: 'dsh-second' })
+    const { set } = renderTab({ packages: [updatable(), second], refreshStatus: 'refreshing', refreshProgress: { phase: 'loading' } })
+    const toolbar = (): HTMLElement => document.querySelector<HTMLElement>('[data-plugin-toolbar]')!
+    const note = (): HTMLElement => within(toolbar()).getByRole('status')
+    const refresh = (): HTMLElement => within(toolbar()).getByRole('button', { name: en.refresh })
+    expect(note().textContent).toBe(en.loading)
+    expect(refresh().textContent).toBe(en.refresh)
+    set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': { phase: 'checking' } }, refreshProgress: { phase: 'checking', current: 2, total: 2 } })
+    expect(note().textContent).toBe(en.refreshChecking.replace('{current}', '2').replace('{total}', '2'))
+    expect(refresh().textContent).toBe(en.refreshCount.replace('{current}', '2').replace('{total}', '2'))
+    // The spinner's minimum hold already shows what the checks found.
+    set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': listed([]) }, refreshProgress: null })
+    expect(note().textContent).toBe(en.updatesNone)
+    expect(refresh().textContent).toBe(en.refresh)
   })
 
   const base: UpdateState = {
