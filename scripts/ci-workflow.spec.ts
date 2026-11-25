@@ -1668,62 +1668,27 @@ describe('Weighted approval workflow', () => {
       if (expression === undefined) throw new TypeError('weighted approval concurrency group must contain an expression')
       return value.group.replace(match[0], String(runInNewContext(expression, { github, contains, inputs: {}, format }, { timeout: 1000 })))
     }
-    // GitHub omits changes.base for title and body edits. The JavaScript evaluation needs the key
-    // present without a ref object, because it has no null-safe property access.
-    for (const [label, changes] of [
-      ['title', { base: {}, title: { from: 'Old title' } }],
-      ['body', { base: {}, body: { from: 'Old body' } }],
-    ] as const) {
-      const github = pullRequestEvent('edited', changes)
-      expect(condition(publishCondition, github), label).toBe(false)
-      expect(condition(machineCondition, github), label).toBe(false)
-      expect(group(publisher.concurrency, github), label).toBe('weighted-approval-ignored:9001')
-      expect(group(machineJob.concurrency, github), label).toBe('weighted-approval-machine-ignored:9001')
+    const cases: Array<[string, Record<string, unknown>, boolean]> = [
+      ['title edit', pullRequestEvent('edited', { base: {}, title: { from: 'Old title' } }), false],
+      ['body edit', pullRequestEvent('edited', { base: {}, body: { from: 'Old body' } }), false],
+      ['base retarget', pullRequestEvent('edited', { base: { ref: { from: '0' } } }), true],
+      ['current /delegate', comment('/delegate @reviewer'), true],
+      ['previous /delegate', comment('plain text', '/delegate @reviewer'), true],
+      ['status comment', comment('<!-- weighted-approval -->\nApproval score: 1/2'), false],
+      ['plain chat', comment('plain text'), false],
+      ['failed review signal', workflowRun('failure'), false],
+      ['successful review signal', workflowRun('success'), true],
+    ]
+    for (const action of ['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']) {
+      cases.push([action, pullRequestEvent(action, {}), true])
     }
-    // A branch named '0' coerces to the same number as null in a loose comparison, so the guard
-    // reads the presence of changes.base.ref, not the previous branch name.
-    const baseChange = pullRequestEvent('edited', { base: { ref: { from: '0' } } })
-    expect(condition(publishCondition, baseChange)).toBe(true)
-    expect(condition(machineCondition, baseChange)).toBe(true)
-    expect(group(publisher.concurrency, baseChange)).toBe('weighted-approval-weighted-approval-review-event:42')
-    expect(group(machineJob.concurrency, baseChange)).toBe('weighted-approval-machine-weighted-approval-review-event:42')
-    for (const action of ['synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']) {
-      const github = pullRequestEvent(action, {})
-      expect(condition(publishCondition, github), action).toBe(true)
-      expect(condition(machineCondition, github), action).toBe(true)
-      expect(group(publisher.concurrency, github), action).toBe('weighted-approval-weighted-approval-review-event:42')
-      expect(group(machineJob.concurrency, github), action).toBe('weighted-approval-machine-weighted-approval-review-event:42')
+    for (const [label, github, scores] of cases) {
+      const suffix = scores ? 'weighted-approval-review-event:42' : 'ignored:9001'
+      expect(condition(publishCondition, github), label).toBe(scores)
+      expect(condition(machineCondition, github), label).toBe(scores)
+      expect(group(publisher.concurrency, github), label).toBe(`weighted-approval-${suffix}`)
+      expect(group(machineJob.concurrency, github), label).toBe(`weighted-approval-machine-${suffix}`)
     }
-    for (const [label, github] of [
-      ['current /delegate', comment('/delegate @reviewer')],
-      ['previous /delegate', comment('plain text', '/delegate @reviewer')],
-    ] as const) {
-      expect(condition(publishCondition, github), label).toBe(true)
-      expect(condition(machineCondition, github), label).toBe(true)
-      expect(group(publisher.concurrency, github), label).toBe('weighted-approval-weighted-approval-review-event:42')
-      expect(group(machineJob.concurrency, github), label).toBe('weighted-approval-machine-weighted-approval-review-event:42')
-    }
-    // The machine account's status comment and any other non-/delegate chat are skipped and
-    // isolated, so their runs cannot replace queued scoring work.
-    for (const [label, github] of [
-      ['status comment', comment('<!-- weighted-approval -->\nApproval score: 1/2')],
-      ['plain chat', comment('plain text')],
-    ] as const) {
-      expect(condition(publishCondition, github), label).toBe(false)
-      expect(condition(machineCondition, github), label).toBe(false)
-      expect(group(publisher.concurrency, github), label).toBe('weighted-approval-ignored:9001')
-      expect(group(machineJob.concurrency, github), label).toBe('weighted-approval-machine-ignored:9001')
-    }
-    const failedSignal = workflowRun('failure')
-    expect(condition(publishCondition, failedSignal)).toBe(false)
-    expect(condition(machineCondition, failedSignal)).toBe(false)
-    expect(group(publisher.concurrency, failedSignal)).toBe('weighted-approval-ignored:9001')
-    expect(group(machineJob.concurrency, failedSignal)).toBe('weighted-approval-machine-ignored:9001')
-    const successfulSignal = workflowRun('success')
-    expect(condition(publishCondition, successfulSignal)).toBe(true)
-    expect(condition(machineCondition, successfulSignal)).toBe(true)
-    expect(group(publisher.concurrency, successfulSignal)).toBe('weighted-approval-weighted-approval-review-event:42')
-    expect(group(machineJob.concurrency, successfulSignal)).toBe('weighted-approval-machine-weighted-approval-review-event:42')
   })
 })
 
