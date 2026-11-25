@@ -7246,6 +7246,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useContextMenu: UseContextMenu',
       'useWorkspaces: SnapshotSelectorHook<WorkspaceSnapshot>',
       'usePanelInfo: UsePanelInfo',
+      'useDocumentPortal: () => FC<DocumentPortalProps>',
+      'useDocumentViewport: () => DocumentViewport',
       'useMediaQuery: (query: string) => boolean',
       'useMobile: () => boolean',
       'useSessionStatus: UseSessionStatus',
