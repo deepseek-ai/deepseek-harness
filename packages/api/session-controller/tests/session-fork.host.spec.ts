@@ -554,7 +554,7 @@ describe('sessions.fork', () => {
   it('validates the request before the migration preflight reads storage', async () => {
     const ctx = await composed()
     try {
-      const stat = vi.fn(() => Promise.resolve({ formatStatus: 'migration-required' }))
+      const stat = vi.fn(() => Promise.reject(new Error('unexpected metadata read')))
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
       // @ts-expect-error -- a forged wire request can name an origin outside the typed request.
       await expect((await remote(ctx)).fork(request({ sessionId: sid('cold'), allowMigration: false, origin: 'subagent' })))
