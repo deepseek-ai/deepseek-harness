@@ -27,7 +27,19 @@ permissions:
 jobs:
   evaluate:
     concurrency:
-      group: weighted-approval-machine-${{ (inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
+      # Events this job skips take a run-scoped group so they cannot replace queued evaluations;
+      # a base-branch retarget is not skipped. Review scope is omitted: a run outside the scope
+      # targets a different pull request's group, or no evaluation exists when the scope is unset.
+      group: >-
+        weighted-approval-machine-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' ||
+        (github.event.action == 'edited' && github.event.changes.base.ref == null))) ||
+        (github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success') ||
+        (github.event_name == 'issue_comment' && (!github.event.issue.pull_request || github.event.issue.state != 'open' ||
+        (!contains(github.event.comment.body, '/delegate') && !contains(github.event.changes.body.from, '/delegate'))))) &&
+        format('ignored:{0}', github.run_id) ||
+        ((inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) ||
+        github.event.workflow_run.display_title) }}
       cancel-in-progress: false
     if: >-
       (vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&
@@ -35,6 +47,7 @@ jobs:
         vars.DSH_APPROVAL_REVIEW_SCOPE == format('{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number)))) &&
       (github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) &&
       (github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') &&
+      (github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.base.ref != null) &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
       (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&
         (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))

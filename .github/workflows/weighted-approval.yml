@@ -16,13 +16,24 @@ permissions:
   statuses: write
 
 concurrency:
-  group: weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
+  # Events the publisher skips take a run-scoped group so they cannot replace queued scoring
+  # work; a base-branch retarget is not skipped.
+  group: >-
+    weighted-approval-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' ||
+    (github.event.action == 'edited' && github.event.changes.base.ref == null))) ||
+    (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success') ||
+    (github.event_name == 'issue_comment' && (!github.event.issue.pull_request || github.event.issue.state != 'open' ||
+    (!contains(github.event.comment.body, '/delegate') && !contains(github.event.changes.body.from, '/delegate'))))) &&
+    format('ignored:{0}', github.run_id) ||
+    ((github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) ||
+    github.event.workflow_run.display_title) }}
   cancel-in-progress: false
 
 jobs:
   publish-status:
     if: >-
       (github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') &&
+      (github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.base.ref != null) &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
       (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&
         (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))
@@ -97,11 +108,8 @@ jobs:
   evaluate-machine:
     needs: publish-status
     # always(): a failure after the confirmed dismissal still needs the pilot to see the new state.
-    if: >-
-      always() && needs.publish-status.outputs.dismissed == 'true' &&
-      (vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&
-        (github.event_name == 'workflow_run' && github.event.workflow_run.display_title == format('weighted-approval-review-event:{0}', vars.DSH_APPROVAL_REVIEW_SCOPE) ||
-        vars.DSH_APPROVAL_REVIEW_SCOPE == format('{0}', github.event.pull_request.number || github.event.issue.number))))
+    # The called workflow owns the review scope and the event filters, so this caller adds none.
+    if: always() && needs.publish-status.outputs.dismissed == 'true'
     permissions:
       contents: read
       pull-requests: read
