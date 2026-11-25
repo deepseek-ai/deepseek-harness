@@ -3125,7 +3125,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: '@Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>',
         description: 'Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from; with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads a Git package only while installing it, so its bundle and compatibility are checked then. Either target installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running version and the result reports the restart.',
-        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; and the request id naming the progress and the target installation\'s logs and cancellation.' }],
+        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; the request id naming the progress and the target installation\'s logs and cancellation; and the pending build scripts to allow, saved before anything is removed.' }],
         returns: 'The versions, the last step that ran with its result, and the reinstallation when one ran.',
       },
       {
@@ -12336,7 +12336,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'UpdateBundleOptions',
-    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n}',
+    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n    readonly approvedBuilds?: string[];\n}',
   },
   {
     name: 'UpdateSharePermissionsRequest',

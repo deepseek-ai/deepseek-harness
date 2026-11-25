@@ -2454,6 +2454,72 @@ it.each([
   expect(readProfileManifest('test', dir).dependencies).toEqual({ extra: GIT_A })
 })
 
+it('reports the build scripts pnpm blocked for a Git target and allows them on a retried update', async () => {
+  const { manager, dir, bundle } = await fixture()
+  const policy = join(dir, 'pnpm-workspace.yaml')
+  installedFromGit(dir)
+  const pnpm = gitPnpm(dir, bundle, { [GIT_A]: { name: 'extra', version: '1.0.0' }, [GIT_B]: { name: 'extra', version: '1.1.0' } })
+  const install = pnpm.getMockImplementation()!
+  let blocked = true
+  pnpm.mockImplementation(async (context, args, options) => {
+    // As pnpm does, a removal drops the entries still awaiting a decision.
+    if (args[0] === 'remove') writeFileSync(policy, readFileSync(policy, 'utf8').replace(/^ {2}\S+: set this to true or false\n/gm, ''))
+    if (args[0] !== 'add' || args[1] !== GIT_B || !blocked) return install(context, args, options)
+    blocked = false
+    writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
+    return { exitCode: 1, output: 'ERR_PNPM_IGNORED_BUILDS', truncated: false, logPath: '/install.log', kind: 'build-blocked' as const }
+  })
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B })).toMatchObject({
+    step: 'install', result: { application: 'failed', pendingBuilds: ['native'] }, restore: { application: 'applied', version: '1.0.0' },
+  })
+  // The reinstallation allows nothing, so the target's blocked script stays undecided.
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: 'set this to true or false' } })
+  // A name no longer pending is refused before the installed version is removed.
+  pnpm.mockClear()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['other'] })).toMatchObject({
+    step: 'check', result: { application: 'failed', changed: false, error: { code: 'stale-approval' } },
+  })
+  const pending = readFileSync(policy, 'utf8')
+  writeFileSync(policy, 'allowBuilds: false\n')
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'check', result: { application: 'failed', error: { code: 'operation-error', diagnostic: 'allowBuilds must be a YAML mapping' } },
+  })
+  writeFileSync(policy, pending)
+  expect(pnpm).not.toHaveBeenCalled()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'install', result: { application: 'applied', version: '1.1.0', approvedBuilds: ['native'] },
+  })
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: true } })
+})
+
+it('allows pending build scripts before installing a Git target over the running version without HMR', async () => {
+  const { manager, dir, bundle } = await fixture('startup')
+  const policy = join(dir, 'pnpm-workspace.yaml')
+  writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
+  installedFromGit(dir)
+  const pnpm = gitPnpm(dir, bundle, { [GIT_B]: { name: 'extra', version: '1.1.0' } })
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['other'] })).toMatchObject({
+    step: 'check', result: { error: { code: 'stale-approval' } },
+  })
+  expect(pnpm).not.toHaveBeenCalled()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'install', result: { application: 'restart-required', approvedBuilds: ['native'] },
+  })
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: true } })
+})
+
+it('saves no update approval once the manager is disposed', async () => {
+  const { ctx, manager, dir } = await fixture('startup')
+  const policy = join(dir, 'pnpm-workspace.yaml')
+  writeFileSync(policy, 'allowBuilds:\n  native: set this to true or false\n')
+  installedFromGit(dir)
+  await [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:manager')?.fiber?.dispose()
+  expect(await manager.updateBundle('extra', '1.1.0', { spec: GIT_B, approvedBuilds: ['native'] })).toMatchObject({
+    step: 'check', result: { application: 'failed', changed: false },
+  })
+  expect(parse(readFileSync(policy, 'utf8'))).toEqual({ allowBuilds: { native: 'set this to true or false' } })
+})
+
 it('updates a copy pnpm saved as a known host\'s shortcut to the HTTPS spec of another commit', async () => {
   const { manager, dir, bundle } = await fixture()
   const target = `git+https://github.com/o/plugins.git#${'b'.repeat(40)}&path:/packages/extra`

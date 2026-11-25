@@ -734,8 +734,9 @@
   max-height: min(800px, 100%);
 }
 
-/* The spec screen's content scrolls inside the card when the guide is open on a short viewport; the footer stays put. */
-.installContent {
+/* The spec screen's content, and an update's outcome, scroll inside the card on a short viewport; the footer stays put. */
+.installContent,
+.updateContent {
   min-height: 0;
   overflow-y: auto;
 }
@@ -2129,6 +2130,7 @@ button.versionSummary:focus-visible {
 /* The update dialog: the versions it moves between, then the Host's steps and the outcome. */
 .updateDialog {
   width: min(460px, 100%);
+  max-height: min(800px, 100%);
 }
 
 .updateBody {
