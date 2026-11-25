@@ -317,7 +317,9 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     case 'text':
       return node.value
     case 'paragraph':
-      return <p key={key}>{renderChildren(node.children, context)}</p>
+      return <p key={key} className={isImageRow(node.children) ? css.imageRow : undefined}>
+        {renderChildren(node.children, context)}
+      </p>
     case 'heading':
       return createElement(`h${node.depth}`, { key }, ...renderChildren(node.children, context))
     case 'blockquote':
@@ -590,6 +592,22 @@ function renderTableRow(
  */
 function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
   return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
+}
+
+/**
+ * True when a paragraph holds several images, optionally linked, separated only by whitespace;
+ * such a paragraph wraps its images into rows. A hard break keeps the inline layout so it still starts a new line.
+ */
+function isImageRow(children: Md.PhrasingContent[]): boolean {
+  let images = 0
+  for (const child of children) {
+    if (child.type === 'text' && child.value.trim() === '') continue
+    const image = child.type === 'image' || child.type === 'imageReference'
+      || ((child.type === 'link' || child.type === 'linkReference') && anchorWrapsOnlyImages(child.children))
+    if (!image) return false
+    images += 1
+  }
+  return images > 1
 }
 
 /** Anchor over a safe absolute href, with optional owner navigation for HTTP(S). */

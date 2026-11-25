@@ -141,3 +141,24 @@ describe('MarkdownText local-path images', () => {
       .toBe('https://cdn.example.com/graph.png')
   })
 })
+
+describe('MarkdownText image rows', () => {
+  const pathImages: MarkdownPathImages = { resolve: value => `https://example.com${value}` }
+  const rowCount = (text: string) => render(<MarkdownText text={text} pathImages={pathImages} />)
+    .container.querySelectorAll('p[class*="imageRow"]').length
+
+  it.each([
+    ['consecutive images', '![a](/a.png)\n![b](/b.png)'],
+    ['linked and referenced images', '[![a](/a.png)](https://example.com) ![b][b]\n[![c](/c.png)][l]\n\n[b]: /b.png\n[l]: https://example.com'],
+  ])('lays out %s as one wrapping row', (_name, text) => {
+    expect(rowCount(text)).toBe(1)
+  })
+
+  it.each([
+    ['a single image', '![a](/a.png)'],
+    ['images mixed with text', '![a](/a.png) caption ![b](/b.png)'],
+    ['images split by a hard break', '![a](/a.png)\\\n![b](/b.png)'],
+  ])('keeps %s inline', (_name, text) => {
+    expect(rowCount(text)).toBe(0)
+  })
+})
