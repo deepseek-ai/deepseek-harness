@@ -263,6 +263,19 @@ function modelRow(index: number): HTMLElement {
   return row
 }
 
+/** The reason a refused save put under one model-row field, inside that field's label; `undefined` while the field is not marked. */
+function markOf(label: string): string | undefined {
+  const field = screen.getByLabelText(label)
+  if (field.getAttribute('aria-invalid') !== 'true') return undefined
+  const reason = field.closest('label')?.querySelector(`[id="${field.getAttribute('aria-describedby') ?? ''}"]`)
+  return reason?.textContent ?? undefined
+}
+
+/** The labels of the fields the page marks invalid, in document order. */
+function invalidFields(): (string | null)[] {
+  return [...document.querySelectorAll('[aria-invalid="true"]')].map(el => el.getAttribute('aria-label'))
+}
+
 /** The labels of the fields on the page, in document order, leaving out those inside a folded section. */
 function shownFields(): (string | null)[] {
   return [...document.querySelectorAll('input,select')]
@@ -360,7 +373,7 @@ describe('model list editing', () => {
     })
   })
 
-  it('names a duplicate model id in the edit flow too', async () => {
+  it('marks a duplicate model id on its field in the edit flow too', async () => {
     const { mutate } = await mountSection({
       providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'dup' }] } },
     })
@@ -369,11 +382,107 @@ describe('model list editing', () => {
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'dup' } })
 
+    // Nothing is reported while typing, and the action stays available.
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    expect(invalidFields()).toEqual([])
+
     // The create card refuses this in place; an edited route must not have to
-    // learn it from the host's refusal instead.
-    // The reason sits beside the action it disables.
-    expect(footerOf(en.apply).contains(screen.getByText(`${en.model} 2: ${en.modelIdDuplicate}`))).toBe(true)
-    expect(buttonNamed(en.apply).disabled).toBe(true)
+    // learn it from the host's refusal instead. The reason sits under the
+    // field it is about, which takes the keyboard.
+    fireEvent.click(screen.getByText(en.apply))
+    expect(markOf(`${en.modelId} 2`)).toBe(en.modelIdDuplicate)
+    expect(invalidFields()).toEqual([`${en.modelId} 2`])
+    expect(modelRow(2).hasAttribute('data-invalid')).toBe(true)
+    expect(modelRow(1).hasAttribute('data-invalid')).toBe(false)
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.modelId} 2`))
+    expect(footerOf(en.apply).querySelector('p')).toBeNull()
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('unfolds the model list and the row a refused save names, and leaves the passing rows folded', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'same' }, { id: 'same' }] } },
+    })
+    openRow('openai')
+    const models = screen.getByRole('button', { name: en.models })
+    fireEvent.click(models)
+    expect(models.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(screen.getByText(en.apply))
+
+    expect(models.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByLabelText(`${en.modelAdvanced} 2`).getAttribute('aria-expanded')).toBe('true')
+    expect(markOf(`${en.modelId} 2`)).toBe(en.modelIdDuplicate)
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.modelId} 2`))
+    expect(screen.getByLabelText(`${en.modelAdvanced} 1`).getAttribute('aria-expanded')).toBe('false')
+    expect(modelRow(1).hasAttribute('data-invalid')).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
+
+    // Folded again, the row still says it holds a refused field, and the
+    // reason is back under the field when the row unfolds.
+    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 2`))
+    expect(modelRow(2).querySelector('input')).toBeNull()
+    expect(modelRow(2).getAttribute('data-invalid')).toBe('true')
+    expandModel(2)
+    expect(markOf(`${en.modelId} 2`)).toBe(en.modelIdDuplicate)
+
+    // Meeting the requirement removes the mark at once.
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'other' } })
+    expect(invalidFields()).toEqual([])
+    expect(modelRow(2).hasAttribute('data-invalid')).toBe(false)
+  })
+
+  it('shows a failure that appears after a refused save only at the next refused save', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept' }] } },
+    })
+    openRow('openai')
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.click(screen.getByText(en.apply))
+    expect(markOf(`${en.modelId} 2`)).toBe(en.modelIdRequired)
+
+    // Neither a row added afterwards nor a field broken afterwards is reported yet.
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 2`), { target: { value: 'Second' } })
+    fireEvent.change(screen.getByLabelText(`${en.maxTokens} 2`), { target: { value: 'abc' } })
+    expect(invalidFields()).toEqual([`${en.modelId} 2`])
+    expect(modelRow(3).hasAttribute('data-invalid')).toBe(false)
+
+    // A row the last refused save marked is cleared by the next one once it passes.
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'second' } })
+    fireEvent.change(screen.getByLabelText(`${en.maxTokens} 2`), { target: { value: '' } })
+    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 2`))
+    fireEvent.click(screen.getByText(en.apply))
+    expect(invalidFields()).toEqual([`${en.modelId} 3`])
+    expect(markOf(`${en.modelId} 3`)).toBe(en.modelIdRequired)
+    expect(screen.getByLabelText(`${en.modelAdvanced} 2`).getAttribute('aria-expanded')).toBe('false')
+    expect(modelRow(2).hasAttribute('data-invalid')).toBe(false)
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.modelId} 3`))
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('marks every refused field of one row, each with its own reason', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'kept' }] } },
+    })
+    openEditor('openai')
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: '64 KiB' } })
+    fireEvent.change(screen.getByLabelText(`${en.maxTokens} 1`), { target: { value: '-1' } })
+
+    fireEvent.click(screen.getByText(en.apply))
+
+    expect(markOf(`${en.modelId} 1`)).toBe(en.modelIdRequired)
+    expect(markOf(`${en.contextWindow} 1`)).toBe(en.modelContextInvalid)
+    expect(markOf(`${en.maxTokens} 1`)).toBe(en.modelMaxTokensInvalid)
+    expect(markOf(`${en.modelName} 1`)).toBeUndefined()
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.modelId} 1`))
+
+    // Each mark goes with its own fault; the row stays marked while one is left.
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'kept' } })
+    fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: '64K' } })
+    expect(invalidFields()).toEqual([`${en.maxTokens} 1`])
+    expect(modelRow(1).hasAttribute('data-invalid')).toBe(true)
     expect(mutate).not.toHaveBeenCalled()
   })
 
@@ -411,10 +520,19 @@ describe('model list editing', () => {
 
     // Silently dropping it would store a route sized differently from what the
     // field shows, so the text stays put and the write is refused instead.
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.apply))
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).value).toBe('abc')
-    expect(screen.getByText(`${en.model} 1: ${en.modelMaxTokensInvalid}`)).toBeTruthy()
-    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expect(markOf(`${en.maxTokens} 1`)).toBe(en.modelMaxTokensInvalid)
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.maxTokens} 1`))
     expect(mutate).not.toHaveBeenCalled()
+
+    // A readable count clears the mark, and the same action then writes.
+    fireEvent.change(screen.getByLabelText(`${en.maxTokens} 1`), { target: { value: '8K' } })
+    expect(markOf(`${en.maxTokens} 1`)).toBeUndefined()
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'm', maxTokens: 8000 }])
   })
 
   it('spells a stored capacity back the way it is typed', async () => {
@@ -1225,11 +1343,22 @@ describe('hand-declared providers', () => {
     openEditor('acme-gateway')
     fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
 
-    expect(screen.getByText(en.keyRequired)).toBeTruthy()
-    expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).required).toBe(true)
-    expect(buttonNamed(en.apply).disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gemini-key' } })
+    // A requirement still to meet reads as guidance until a save is refused for it.
+    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+    expect(screen.getByText(en.keyRequired).className).toMatch(/advancedHint/)
+    expect(key.required).toBe(true)
+    expect(key.getAttribute('aria-invalid')).toBe('false')
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.apply))
+    expect(screen.getByText(en.keyRequired).className).toMatch(/error/)
+    expect(key.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(key)
+    expect(mutate).not.toHaveBeenCalled()
+    expect(set).not.toHaveBeenCalled()
+
+    fireEvent.change(key, { target: { value: 'gemini-key' } })
     expect(screen.queryByText(en.keyRequired)).toBeNull()
+    expect(key.getAttribute('aria-invalid')).toBe('false')
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledOnce() })
     expect(firstMutate(mutate).ops).toContainEqual(
@@ -1246,8 +1375,8 @@ describe('hand-declared providers', () => {
     expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).required).toBe(false)
   })
 
-  it('blocks a protocol switch that the route\'s inherited reasoning levels would break', async () => {
-    await mountSection({
+  it('refuses a protocol switch that the route\'s inherited reasoning levels would break', async () => {
+    const { mutate } = await mountSection({
       providers: { 'acme-gateway': {
         apiKeyEnv: 'ACME_KEY', api: 'openai-completions', baseURL: 'https://acme.test/v1',
         models: [{ id: 'm', reasoningEfforts: { off: null, high: 'high' } }],
@@ -1256,9 +1385,17 @@ describe('hand-declared providers', () => {
       baseProviders: { 'acme-gateway': { models: [{ id: 'm', reasoningEfforts: { off: null, high: 'high' } }] } },
       declaredRoutes: ['acme-gateway'],
     })
-    openEditor('acme-gateway')
+    openRow('acme-gateway')
+    fireEvent.click(screen.getByRole('button', { name: en.customized }))
     fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
-    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    expect(screen.getByLabelText(`${en.modelAdvanced} 1`).getAttribute('aria-expanded')).toBe('false')
+
+    // The refused save unfolds the inherited row, whose reasoning control says what the protocol refuses.
+    fireEvent.click(screen.getByText(en.apply))
+    expect(screen.getByLabelText(`${en.modelAdvanced} 1`).getAttribute('aria-expanded')).toBe('true')
+    expect(within(screen.getByRole('group', { name: `${en.modelReasoning} 1` })).getByText(en.modelReasoningLevelsOnly)).toBeTruthy()
+    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('renames a declared route and falls back to its id when the name is cleared', async () => {
@@ -1391,10 +1528,11 @@ describe('hand-declared providers', () => {
   it.each([
     ['a hand-declared route', true],
     ['a catalog route', false],
-  ])('blocks %s whose stored reasoning levels the adapter refuses', async (_label, declared) => {
+  ])('refuses to save %s whose stored reasoning levels the adapter refuses', async (_label, declared) => {
     // The adapter refuses the same declarations on both kinds of route, and
-    // both edit them, so the card names the row and offers the switch that repairs it.
-    await mountSection({
+    // both edit them, so a refused save unfolds the row, whose reasoning
+    // control names the fault beside the switch that repairs it.
+    const { mutate } = await mountSection({
       providers: {
         'acme-gateway': {
           api: 'openai-completions',
@@ -1403,10 +1541,27 @@ describe('hand-declared providers', () => {
       },
       declaredRoutes: declared ? ['acme-gateway'] : [],
     })
-    openEditor('acme-gateway')
+    openRow('acme-gateway')
+    const toggle = screen.getByLabelText(`${en.modelAdvanced} 1`)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(buttonNamed(en.apply).disabled).toBe(false)
 
-    expect(screen.getByText(`${en.model} 1: ${en.modelReasoningNeedsLevel}`)).toBeTruthy()
-    expect(buttonNamed(en.apply).disabled).toBe(true)
+    fireEvent.click(screen.getByText(en.apply))
+
+    // The row's four fields pass, so none is marked: its reasoning levels are the only fault.
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(within(screen.getByRole('group', { name: `${en.modelReasoning} 1` })).getByText(en.modelReasoningNeedsLevel)).toBeTruthy()
+    expect(invalidFields()).toEqual([])
+    expect(modelRow(1).hasAttribute('data-invalid')).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
+
+    // Turning the levels off repairs the row, and the same action then writes it.
+    fireEvent.click(screen.getByRole('switch', { name: `${en.modelReasoning} 1` }))
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'set', path: ['providers', 'acme-gateway', 'models'], value: [{ id: 'acme-large' }],
+    }])
   })
 
   it('retries only the key after the profile landed, and reports the provider on cancel', async () => {
@@ -1463,30 +1618,39 @@ describe('hand-declared providers', () => {
     expect(onClose).toHaveBeenCalledWith(true)
   })
 
-  it('never contradicts a filled-in field with the next gate\u2019s copy', () => {
-    mountCard()
+  it('never contradicts a filled-in field when a create is refused for another one', () => {
+    const { mutate } = mountCard()
     const routeField = screen.getByLabelText(en.customRoute)
     fireEvent.change(routeField, { target: { value: '2' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
 
-    // The route field explains itself right under the input; the shared line
-    // must stay silent rather than falling through to "no models yet" while
-    // the list above plainly has one.
+    // The route field explains itself right under the input, before and after
+    // the refused create; the endpoint and the list, which are filled in, are
+    // not reported.
     expect(screen.getByText(en.customRouteInvalid)).toBeTruthy()
+    fireEvent.click(screen.getByText(en.create))
+    expect(invalidFields()).toEqual([en.customRoute])
+    expect(document.activeElement).toBe(routeField)
+    expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
     expect(screen.queryByText(en.customNeedsModels)).toBeNull()
+    expect(mutate).not.toHaveBeenCalled()
 
-    // Fixing the route hands the line back to the gate that is actually unmet.
+    // Fixing the route leaves nothing reported.
     fireEvent.change(routeField, { target: { value: 'acme' } })
+    expect(invalidFields()).toEqual([])
     expect(screen.queryByText(en.customNeedsModels)).toBeNull()
     expect(buttonNamed(en.create).disabled).toBe(false)
   })
 
-  it('refuses a route id whose derived credential reference would be illegal', () => {
-    mountCard()
+  it('refuses a route id whose derived credential reference would be illegal', async () => {
+    const { mutate, onClose } = mountCard()
     const routeField = screen.getByLabelText(en.customRoute)
     fireEvent.change(routeField, { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
 
     // Without this check a digit-leading id passes the card and fails at the
     // credential seam with a raw regular expression: the
@@ -1494,10 +1658,32 @@ describe('hand-declared providers', () => {
     // POSIX shell identifier, which cannot start with a digit.
     fireEvent.change(routeField, { target: { value: '123' } })
     expect(screen.getByText(en.customRouteInvalid)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    expect(routeField.getAttribute('aria-invalid')).toBe('true')
+    fireEvent.click(screen.getByText(en.create))
+    expect(document.activeElement).toBe(routeField)
+    expect(mutate).not.toHaveBeenCalled()
 
     fireEvent.change(routeField, { target: { value: 'a1' } })
     expect(screen.queryByText(en.customRouteInvalid)).toBeNull()
+    expect(routeField.getAttribute('aria-invalid')).toBe('false')
+    fireEvent.click(screen.getByText(en.create))
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.path).toEqual(['providers', 'a1'])
+  })
+
+  it('refuses a route id another provider already uses', () => {
+    const { mutate } = mountCard()
+    const routeField = screen.getByLabelText(en.customRoute)
+    fireEvent.change(routeField, { target: { value: 'openai' } })
+    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
+
+    expect(screen.getByText(en.customRouteTaken)).toBeTruthy()
+    expect(routeField.getAttribute('aria-invalid')).toBe('true')
+    fireEvent.click(screen.getByText(en.create))
+    expect(document.activeElement).toBe(routeField)
+    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('styles a rejected route id as a fault and its guidance as a hint', () => {
@@ -1526,7 +1712,11 @@ describe('hand-declared providers', () => {
       expect(screen.getByLabelText(en.baseUrl).getAttribute('aria-invalid')).toBe('true')
       expect(buttonNamed(en.fetchModels).disabled).toBe(true)
       expect(buttonNamed(en.fetchModels).title).toBe(en.customBaseUrlInvalid)
-      expect(buttonNamed(en.create).disabled).toBe(true)
+      // The address is filled in, so a refused create adds no "needs an address" beside the syntax fault.
+      fireEvent.click(screen.getByText(en.create))
+      expect(invalidFields()).toEqual([en.baseUrl])
+      expect(document.activeElement).toBe(screen.getByLabelText(en.baseUrl))
+      expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
       expect(discover).not.toHaveBeenCalled()
       expect(mutate).not.toHaveBeenCalled()
     },
@@ -1590,25 +1780,74 @@ describe('hand-declared providers', () => {
     }
   })
 
-  it('names the blocked gate under the form, and nothing once it is satisfied', () => {
-    mountCard()
-    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+  it('marks each unmet requirement on its own field when a create is refused, and nothing once it is met', async () => {
+    const { mutate, set, onClose } = mountCard()
+    const routeField = screen.getByLabelText(en.customRoute)
+    const baseUrl = screen.getByLabelText(en.baseUrl)
+    const models = screen.getByRole('region', { name: en.models })
 
-    // Endpoint first: the gate names the one thing standing in the way,
-    // beside the action it blocks.
-    expect(footerOf(en.create).contains(screen.getByText(en.customNeedsBaseUrl))).toBe(true)
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
-    expect(footerOf(en.create).contains(screen.getByText(en.customNeedsModels))).toBe(true)
-
-    // Satisfied: the shared line disappears rather than rendering empty.
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
-    expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
-    expect(screen.queryByText(en.customNeedsModels)).toBeNull()
+    // An untouched card reports nothing and offers the action.
     expect(buttonNamed(en.create).disabled).toBe(false)
+    expect(invalidFields()).toEqual([])
+    expect(screen.getByText(en.customRouteHint)).toBeTruthy()
+
+    fireEvent.click(screen.getByText(en.create))
+
+    // A blank id is no valid id, so it is refused in the words of an invalid one.
+    expect(routeField.closest('div')?.querySelector('p')?.textContent).toBe(en.customRouteInvalid)
+    expect(screen.queryByText(en.customRouteHint)).toBeNull()
+    expect(baseUrl.closest('div')?.querySelector('p')?.textContent).toBe(en.customNeedsBaseUrl)
+    // The missing model is reported under the Models heading, above the rows.
+    const needsModels = within(models).getByText(en.customNeedsModels)
+    expect(needsModels.className).toMatch(/error/)
+    expect(needsModels.compareDocumentPosition(within(models).getByRole('button', { name: en.addModel }))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The key is optional on this protocol, so it is not among them.
+    expect(invalidFields()).toEqual([en.customRoute, en.baseUrl])
+    expect(document.activeElement).toBe(routeField)
+    expect(footerOf(en.create).querySelector('p')).toBeNull()
+    expect(mutate).not.toHaveBeenCalled()
+    expect(set).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+
+    // Each mark goes when its own requirement is met, and the others stay.
+    fireEvent.change(routeField, { target: { value: 'acme' } })
+    expect(screen.queryByText(en.customRouteInvalid)).toBeNull()
+    expect(screen.getByText(en.customRouteHint)).toBeTruthy()
+    expect(invalidFields()).toEqual([en.baseUrl])
+    expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
+
+    // An address of spaces alone is reported once, as no valid URL.
+    fireEvent.change(baseUrl, { target: { value: '   ' } })
+    expect([...baseUrl.closest('div')?.querySelectorAll('p') ?? []].map(reason => reason.textContent))
+      .toEqual([en.customBaseUrlInvalid])
+
+    fireEvent.change(baseUrl, { target: { value: 'https://acme.test/v1' } })
+    expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
+    expect(invalidFields()).toEqual([])
+    expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
+
+    // The list has a row now. That the row has no id yet appeared after the
+    // refused create, so it waits for the next one.
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expect(screen.queryByText(en.customNeedsModels)).toBeNull()
+    expect(invalidFields()).toEqual([])
+    expect(modelRow(1).hasAttribute('data-invalid')).toBe(false)
+
+    fireEvent.click(screen.getByText(en.create))
+    expect(markOf(`${en.modelId} 1`)).toBe(en.modelIdRequired)
+    expect(invalidFields()).toEqual([`${en.modelId} 1`])
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.modelId} 1`))
+    expect(mutate).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
+    expect(invalidFields()).toEqual([])
+    fireEvent.click(screen.getByText(en.create))
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(mutate).toHaveBeenCalledOnce()
   })
 
-  it('keeps the required model list in view and leaves the missing model to the line beside the actions', () => {
+  it('keeps the required model list in view and says nothing about the missing model until a create is refused', () => {
     mountCard()
 
     // A provider cannot be created without a model, so the heading does not fold the list.
@@ -1624,7 +1863,7 @@ describe('hand-declared providers', () => {
   })
 
   it('refuses to create while a capacity is unreadable', () => {
-    mountCard()
+    const { mutate } = mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
@@ -1632,8 +1871,12 @@ describe('hand-declared providers', () => {
     expandModel(1)
     fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: '64 KiB' } })
 
-    expect(screen.getByText(`${en.model} 1: ${en.modelContextInvalid}`)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    expect(buttonNamed(en.create).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.create))
+    expect(markOf(`${en.contextWindow} 1`)).toBe(en.modelContextInvalid)
+    expect(invalidFields()).toEqual([`${en.contextWindow} 1`])
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.contextWindow} 1`))
+    expect(mutate).not.toHaveBeenCalled()
   })
 
   it('keeps each half-typed capacity with its own row across a removal', () => {
@@ -1658,22 +1901,31 @@ describe('hand-declared providers', () => {
     expect(screen.getByLabelText<HTMLInputElement>(`${en.contextWindow} 2`).value).toBe('3.')
   })
 
-  it('refuses two models sharing one id', () => {
-    mountCard()
+  it('refuses two models sharing one id', async () => {
+    const { mutate, onClose } = mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'same' } })
     fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'same' } })
+    // Folded, the second row shows no field for a reason to sit under.
+    fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} 2`))
 
-    // The adapter refuses a duplicate outright, so the form must not offer to
-    // write one.
-    expect(screen.getByText(`${en.model} 2: ${en.modelIdDuplicate}`)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    // The adapter refuses a duplicate outright, so the form does not write
+    // one: it unfolds the row that repeats the id and marks the field.
+    fireEvent.click(screen.getByText(en.create))
+    expect(markOf(`${en.modelId} 2`)).toBe(en.modelIdDuplicate)
+    expect(invalidFields()).toEqual([`${en.modelId} 2`])
+    expect(modelRow(2).hasAttribute('data-invalid')).toBe(true)
+    expect(document.activeElement).toBe(screen.getByLabelText(`${en.modelId} 2`))
+    expect(mutate).not.toHaveBeenCalled()
 
     fireEvent.change(screen.getByLabelText(`${en.modelId} 2`), { target: { value: 'other' } })
-    expect(buttonNamed(en.create).disabled).toBe(false)
+    expect(invalidFields()).toEqual([])
+    fireEvent.click(screen.getByText(en.create))
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ models: [{ id: 'same' }, { id: 'other' }] })
   })
 
   it('creates a model with no capacities, which the route\u2019s fallbacks size', async () => {
@@ -1692,26 +1944,37 @@ describe('hand-declared providers', () => {
     expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ models: [{ id: 'bare' }] })
   })
 
-  it('refuses to create until the route, endpoint, and a model are usable', () => {
-    mountCard()
-    expect(buttonNamed(en.create).disabled).toBe(true)
+  it('refuses to create until the route, endpoint, and a model are usable', async () => {
+    const { mutate, onClose } = mountCard()
+    const create = (): void => { fireEvent.click(screen.getByText(en.create)) }
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'Acme Gateway' } })
     expect(screen.getByText(en.customRouteInvalid)).toBeTruthy()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'openai' } })
     expect(screen.getByText(en.customRouteTaken)).toBeTruthy()
 
+    // Each requirement is named only by the create it stops.
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
+    expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
+    create()
     expect(screen.getByText(en.customNeedsBaseUrl)).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByLabelText(en.baseUrl))
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
     expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    create()
+    expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
+    // The list has no field of its own to take the keyboard.
+    expect(invalidFields()).toEqual([])
 
     // A model row with no id is not a model.
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    create()
+    expect(markOf(`${en.modelId} 1`)).toBe(en.modelIdRequired)
+    expect(mutate).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
-    expect(buttonNamed(en.create).disabled).toBe(false)
+    create()
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(mutate).toHaveBeenCalledOnce()
   })
 
   it('surfaces a refused write without closing', async () => {
@@ -1851,9 +2114,21 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'gemini-pro' } })
 
-    expect(screen.getByText(en.keyRequired)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gemini-key' } })
+    // A requirement still to meet reads as guidance; the create it stops turns it into a fault on the field.
+    const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+    expect(screen.getByText(en.keyRequired).className).toMatch(/advancedHint/)
+    expect(key.required).toBe(true)
+    expect(key.getAttribute('aria-invalid')).toBe('false')
+    expect(buttonNamed(en.create).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.create))
+    expect(screen.getByText(en.keyRequired).className).toMatch(/error/)
+    expect(invalidFields()).toEqual([en.keyInput])
+    expect(document.activeElement).toBe(key)
+    expect(mutate).not.toHaveBeenCalled()
+
+    fireEvent.change(key, { target: { value: 'gemini-key' } })
+    expect(screen.queryByText(en.keyRequired)).toBeNull()
+    expect(invalidFields()).toEqual([])
     fireEvent.click(screen.getByText(en.create))
 
     await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
@@ -1865,8 +2140,9 @@ describe('hand-declared providers', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'google-generative-ai' } })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: '   ' } })
-    expect(screen.getByText(en.keyRequired)).toBeTruthy()
+    expect(screen.getByText(en.keyRequired).className).toMatch(/advancedHint/)
     expect(screen.queryByText(en.keyBlankNew)).toBeNull()
+    expect(screen.getByLabelText(en.keyInput).getAttribute('aria-invalid')).toBe('false')
   })
 
   it('offers a Gemini model only the levels the protocol accepts', () => {
@@ -1893,13 +2169,18 @@ describe('hand-declared providers', () => {
 
     // A hand-declared route reaches the same judgement as an edited one, so a
     // key that no header can carry never becomes a profile plus a bad secret.
-    expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    // The fault is on the field as soon as it is typed.
+    const key = screen.getByLabelText(en.keyInput)
+    expect(screen.getByText(en.keyIllegalCharacters).className).toMatch(/error/)
+    expect(key.getAttribute('aria-invalid')).toBe('true')
+    expect(buttonNamed(en.create).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.create))
+    expect(document.activeElement).toBe(key)
     expect(mutate).not.toHaveBeenCalled()
     expect(set).not.toHaveBeenCalled()
   })
 
-  it('stays silent about the other gates when only the key is refused', () => {
+  it('stays silent about the other requirements when only the key is refused', () => {
     mountCard()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
@@ -1907,12 +2188,15 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-\u{1F600}' } })
+    fireEvent.click(screen.getByText(en.create))
 
-    // Route, endpoint, and models are all satisfied, so answering with the
-    // next unmet gate would print a second, false fault beside the real one.
+    // Route, endpoint, and models are all satisfied, so reporting one of
+    // them would print a second, false fault beside the real one.
     expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
+    expect(invalidFields()).toEqual([en.keyInput])
     expect(screen.queryByText(en.customNeedsModels)).toBeNull()
     expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
+    expect(screen.queryByText(en.customRouteInvalid)).toBeNull()
   })
 
   it('tells a whitespace-only key what a blank field means on a create card', () => {
@@ -1926,10 +2210,13 @@ describe('hand-declared providers', () => {
 
     // There is no stored key to keep here, so the blank case says the thing
     // that is true of a route being declared: it may authenticate elsewhere.
-    expect(screen.getByText(en.keyBlankNew)).toBeTruthy()
+    expect(screen.getByText(en.keyBlankNew).className).toMatch(/error/)
     expect(screen.queryByText(en.keyBlank)).toBeNull()
     expect(buttonNamed(en.fetchModels).title).toBe(en.keyBlankNew)
-    expect(buttonNamed(en.create).disabled).toBe(true)
+    expect(buttonNamed(en.create).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.create))
+    expect(invalidFields()).toEqual([en.keyInput])
+    expect(document.activeElement).toBe(screen.getByLabelText(en.keyInput))
     expect(mutate).not.toHaveBeenCalled()
   })
 
@@ -1977,37 +2264,46 @@ describe('API key field', () => {
     expect(ops.some(op => op.op === 'unset' && op.path.includes('baseURL'))).toBe(true)
   })
 
-  it('blocks submit and names the field when the key holds only whitespace', async () => {
-    const { mutate, set } = await mountSection()
+  /** Press Apply on a card whose key field already names a fault, and expect the save refused on that field. */
+  function expectKeyRefused(wire: { mutate: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> }): void {
+    const key = screen.getByLabelText(en.keyInput)
+    expect(key.getAttribute('aria-invalid')).toBe('true')
+    expect(buttonNamed(en.apply).disabled).toBe(false)
+    fireEvent.click(screen.getByText(en.apply))
+    expect(invalidFields()).toEqual([en.keyInput])
+    expect(document.activeElement).toBe(key)
+    expect(wire.mutate).not.toHaveBeenCalled()
+    expect(wire.set).not.toHaveBeenCalled()
+  }
+
+  it('refuses the save and names the field when the key holds only whitespace', async () => {
+    const wire = await mountSection()
     openEditor('openai')
 
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: '   ' } })
 
     expect(screen.getByText(en.keyBlank)).toBeTruthy()
-    expect(buttonNamed(en.apply).disabled).toBe(true)
-    expect(mutate).not.toHaveBeenCalled()
-    expect(set).not.toHaveBeenCalled()
+    expectKeyRefused(wire)
   })
 
-  it('blocks submit when the key contains characters no header can carry', async () => {
-    const { set } = await mountSection()
+  it('refuses the save when the key contains characters no header can carry', async () => {
+    const wire = await mountSection()
     openEditor('openai')
 
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-\u{1F600}' } })
 
     expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
-    expect(buttonNamed(en.apply).disabled).toBe(true)
-    expect(set).not.toHaveBeenCalled()
+    expectKeyRefused(wire)
   })
 
-  it('blocks submit when a whole NAME=value line was pasted', async () => {
-    await mountSection()
+  it('refuses the save when a whole NAME=value line was pasted', async () => {
+    const wire = await mountSection()
     openEditor('openai')
 
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'OPENAI_API_KEY=sk-abc' } })
 
     expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
-    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expectKeyRefused(wire)
   })
 
   it('trims a padded key before storing it', async () => {

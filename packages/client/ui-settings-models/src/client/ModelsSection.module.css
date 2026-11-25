@@ -555,28 +555,13 @@
 .foldToggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   margin-left: -4px;
-  padding: 2px 4px;
+  padding: 2px 2px 2px 4px;
   border: none;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
   cursor: pointer;
-}
-
-/* The chevron the nested folds draw, turned by the toggle's own state. */
-.foldToggle::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentcolor;
-  border-bottom: 1.5px solid currentcolor;
-  transform: rotate(-45deg) translate(-1px, -1px);
-  transition: transform 120ms ease;
-}
-
-.foldToggle[aria-expanded='true']::before {
-  transform: rotate(45deg) translate(-1px, -1px);
 }
 
 @media (hover: hover) {
@@ -691,6 +676,21 @@
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-lg);
   padding: 6px 6px 6px 12px;
+}
+
+/* A row with a field the last save refused: its head aligns to the top, so the
+   reason under one field does not move the other controls of the head. Folded,
+   the row hides the marked field, so its own outline carries the mark. */
+.modelEntry[data-invalid]:not(:has(> .modelRow[data-expanded])) {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.modelEntry[data-invalid] > .modelRow {
+  align-items: start;
+}
+
+.modelEntry[data-invalid] > .modelRow > .iconButton {
+  margin-top: 2px;
 }
 
 /* A folded row is the drag source for reordering, as the Session panel's
@@ -1080,6 +1080,11 @@ select.input {
   border-color: var(--dsw-alias-state-business-primary);
 }
 
+/* A field a save refused keeps its mark while it has the keyboard. */
+.input[aria-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
 .input::placeholder {
   color: var(--dsw-alias-label-tertiary);
 }
@@ -1182,7 +1187,6 @@ select.input {
 
 @media (prefers-reduced-motion: reduce) {
   .customizedSummary::before,
-  .foldToggle::before,
   .switchThumb {
     transition: none;
   }

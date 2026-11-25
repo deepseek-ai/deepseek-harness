@@ -18,7 +18,7 @@ function Editor(props: {
 }) {
   const [models, setModels] = useState(props.initial)
   const shared = {
-    models, disabled: props.disabled === true, overridden: true,
+    models, disabled: props.disabled === true, overridden: true, attempt: 0,
     t: (key: keyof typeof en) => en[key],
     onChange: (next: DeepSeekModelDraft[]): void => { props.changed(next); setModels(next) },
     onReset: (): void => { setModels(props.initial) },

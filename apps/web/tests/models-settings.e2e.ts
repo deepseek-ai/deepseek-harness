@@ -153,12 +153,18 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await dialog.getByRole('button', { name: '隐藏密钥', exact: true }).click()
     expect(await key.getAttribute('type')).toBe('password')
     await dialog.getByText('该 API 密钥格式错误，请检查。').waitFor({ timeout: 10_000 })
-    await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(false)
+    // Save is refused: the card stays open on the marked field and nothing is written.
+    const patch = join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
+    const before = await readFile(patch, 'utf8')
+    await save.click()
+    await expect.poll(() => key.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
+    expect(await key.getAttribute('aria-invalid')).toBe('true')
+    expect(await readFile(patch, 'utf8')).toBe(before)
 
-    // Clearing it restores submit: an empty field means "keep what is stored",
-    // never a refusal, or editing any other setting would demand the key.
+    // Clearing it lifts the refusal: an empty field means "keep what is stored",
+    // or editing any other setting would demand the key.
     await key.fill('')
-    await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(true)
+    expect(await key.getAttribute('aria-invalid')).toBe('false')
     expect(await dialog.getByText('该 API 密钥格式错误，请检查。').count()).toBe(0)
   }, 60_000)
 
@@ -302,7 +308,17 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     // The third-party panel stays mounted, hidden, beside this one, so the
     // form is addressed through its own panel.
     const custom = dialog.getByRole('tabpanel', { name: '自定义模型 API' })
-    await custom.getByLabel('Provider ID').fill('acme-gateway')
+    // A refused create writes nothing and marks each unmet requirement where it is.
+    const before = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
+    await custom.getByRole('button', { name: '创建提供商', exact: true }).click()
+    const routeId = custom.getByLabel('Provider ID')
+    await expect.poll(() => routeId.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
+    expect(await custom.locator('[aria-invalid="true"]').evaluateAll(fields => fields.map(field => field.getAttribute('aria-label'))))
+      .toEqual(['Provider ID', 'API 地址'])
+    await custom.getByText('自定义模型 API 至少需要一个模型。', { exact: true }).waitFor()
+    expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toBe(before)
+    await routeId.fill('acme-gateway')
+    expect(await routeId.getAttribute('aria-invalid')).toBe('false')
     await custom.getByLabel('显示名称').fill('Acme Gateway')
     await custom.getByLabel('API 地址').fill('https://gateway.acme.example/v1')
     // No provider-scoped reasoning control: effort is a per-model capability

@@ -11,8 +11,11 @@
  * for both families, and the display name and wire protocol of a pi-ai route
  * the adapter does not ship — the two fields the create card asked that route
  * for, editable here for the same reason). The actions stay at the scroll
- * edge of the settings page while the card is taller than the page, with
- * whatever blocks or refused the last save beside them.
+ * edge of the settings page while the card is taller than the page. Apply
+ * checks the card: a refused field is marked where it is, with its fold and
+ * row unfolded and the keyboard moved to the first one, and nothing is
+ * written; only a failure no field owns, such as a refused write, is reported
+ * beside the actions.
  * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
  * the models under one provider disagree about it, so a provider-scoped
  * control can only be set to a value some of them reject. The composer's
@@ -39,6 +42,7 @@ import { ModelListEditor } from './ModelListEditor.tsx'
 import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import type { ReasoningEffortsFailure } from './ModelReasoningEfforts.tsx'
 import { deriveKeyRef, protocolChoices, reasoningLevelChoices } from './store.ts'
+import { useInvalidFocus } from './useInvalidFocus.ts'
 import { protocolLabel } from './protocol-label.ts'
 import { protocolNeedsKey, protocolReasoningLevels } from './protocol-rules.ts'
 import type { ModelsOperations } from './operations.ts'
@@ -212,6 +216,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   useEffect(() => { onBusyChange?.(busy || listBusy) }, [busy, listBusy, onBusyChange])
   const [failure, setFailure] = useState<string | undefined>(undefined)
   const [customizedOpen, setCustomizedOpen] = useState(false)
+  /** Refused saves so far, and whether the last one found the required key missing. */
+  const [refused, setRefused] = useState({ attempt: 0, keyMissing: false })
+  const card = useInvalidFocus(refused.attempt)
   // A settings success advances both retry baselines immediately. Keeping the
   // derived fields in the draft prevents a pushed namespace refresh from
   // turning them into deletions when the following credential write is retried.
@@ -297,6 +304,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     ? 'keyRequired' as const
     : undefined
   const shownKeyFailure = credentialRequiredFailure ?? keyFailure
+  const keyRequirementQuiet = protocolKeyMissing && !refused.keyMissing
   // An edited-but-unsaved endpoint, and a key typed but not yet stored.
   const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
   const probe = {
@@ -326,12 +334,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       ? schema.setPath(profileDraft, ['apiKeyEnv'], keyRef)
       : profileDraft
     if (props.credentialOnly !== true) {
-      // The same checker gates the submit button, so a card cannot reach this
+      // The same checker refuses the save in the submit handler, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
       // nothing but this function decides what is written.
       const failure = validateModels(schema.getPath(next, ['models']))
-      /* v8 ignore next 3 -- unreachable from the card: the same failure disables submit */
+      /* v8 ignore next 3 -- unreachable from the card: the same failure refuses the save before it reaches this */
       if (failure !== undefined) {
         return `${t('model')} ${String(failure.index + 1)}: ${t(failure.key)}`
       }
@@ -475,6 +483,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       overridden: modelsOverridden,
       t,
       disabled,
+      attempt: refused.attempt,
       onChange: (next: Record<string, unknown>[]) => {
         setDraft(current => schema.setPath(current, ['models'], next))
       },
@@ -501,7 +510,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               } : {}}
               placeholder={keyPlaceholder}
               aria-label={t('keyInput')}
-              aria-invalid={shownKeyFailure !== undefined && !protocolKeyMissing}
+              aria-invalid={shownKeyFailure !== undefined && !keyRequirementQuiet}
               aria-describedby={credentialHint === undefined ? undefined : `${props.provider}-credential-hint`}
               required={props.credentialRequired === true || protocolNeedsKeyHere}
               autoFocus={props.autoFocusCredential === true}
@@ -514,10 +523,10 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               }}
             />
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : keyText.length > 0 || detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
-            {/* A key the protocol requires is a requirement still to meet, not a fault. */}
+            {/* A key the protocol requires is a requirement still to meet, and a fault once a save was refused for it. */}
             {shownKeyFailure === undefined
               ? null
-              : <p className={styles[protocolKeyMissing ? 'advancedHint' : 'error']}>{t(shownKeyFailure)}</p>}
+              : <p className={styles[keyRequirementQuiet ? 'advancedHint' : 'error']}>{t(shownKeyFailure)}</p>}
           </div>}
         {props.credentialOnly === true
           ? null
@@ -549,7 +558,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                     onBusyChange={setListBusy}
                   />
                 )}
-              <FoldSection title={t('customized')} defaultOpen={false} onToggle={setCustomizedOpen}>
+              <FoldSection title={t('customized')} open={customizedOpen} onToggle={setCustomizedOpen}>
                 {/* The name and the protocol are the create card's two remaining
                     profile fields; a route the adapter ships defaults both from
                     its catalog entry and neither belongs on its card. */}
@@ -629,7 +638,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                       defaults={retryDefaults}
                       failure={retryFailure}
                       failureId={`${props.provider}-retry-failure`}
-                      showFailure={customizedOpen}
                       t={t}
                       disabled={disabled}
                       onChange={(next) => {
@@ -647,7 +655,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   }
 
   return (
-    <div className={props.credentialOnly === true ? styles['addBlock'] : styles['editor']}>
+    <div ref={card} className={props.credentialOnly === true ? styles['addBlock'] : styles['editor']}>
       {props.hideTitle === true
         ? null
         : (
@@ -666,28 +674,24 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         busy={busy}
         sticky={props.credentialOnly !== true}
         submitDisabled={disabled || layout === 'unknown'
-          || (props.credentialOnly !== true && modelFailure !== undefined)
-          || retryFailure !== undefined
-          || shownKeyFailure !== undefined
           || (props.credentialRequired === true && keyValue.length === 0)}
         submitLabelKey={props.submitLabelKey ?? 'apply'}
         submitBusyLabelKey={props.submitBusyLabelKey ?? 'applying'}
         cancelLabelKey={keyRemoval?.removed === true ? 'close' : props.cancelLabelKey ?? 'cancel'}
         onCancel={() => { props.onClose(false) }}
-        onSubmit={() => { props.onSubmitCredential?.(); void apply() }}
+        onSubmit={() => {
+          if ((props.credentialOnly !== true && modelFailure !== undefined)
+            || retryFailure !== undefined || shownKeyFailure !== undefined) {
+            // The retry fields sit in a fold that may be closed; the model list unfolds its own rows.
+            if (retryFailure !== undefined) setCustomizedOpen(true)
+            setRefused({ attempt: refused.attempt + 1, keyMissing: protocolKeyMissing })
+            return
+          }
+          props.onSubmitCredential?.()
+          void apply()
+        }}
       >
         {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
-        {props.credentialOnly === true || modelFailure === undefined
-          ? null
-          : (
-            <p className={styles['advancedHint']}>
-              {`${t('model')} ${String(modelFailure.index + 1)}: ${t(modelFailure.key)}`}
-            </p>
-          )}
-        {/* A closed fold hides the fields, so a refused stored policy still explains a disabled Apply. */}
-        {retryFailure === undefined || customizedOpen
-          ? null
-          : <p id={`${props.provider}-retry-failure`} className={styles['error']}>{retryFailure.message}</p>}
       </EditorFooter>
     </div>
   )

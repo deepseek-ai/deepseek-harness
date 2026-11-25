@@ -18,7 +18,7 @@ import { ApiKeyInput } from '../src/client/ApiKeyInput.tsx'
 import { ProviderEditor, pathOps } from '../src/client/ProviderEditor.tsx'
 import type { ProviderEditorProps } from '../src/client/ProviderEditor.tsx'
 import {
-  DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
+  DeepSeekModelsEditor, formatCapacity, modelDrafts, modelRowFailures, parseCapacity, validateDeepSeekModels,
 } from '../src/client/DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from '../src/client/apiKey.ts'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -58,6 +58,22 @@ function editorFooter(submitLabel: string = en.apply): HTMLElement {
   const footer = screen.getByText(submitLabel).closest<HTMLElement>('[class*="editorFooter"]')
   if (footer === null) throw new Error('the editor card has no footer')
   return footer
+}
+
+/** The notes of the one editor card on the page: what its footer says before its actions. */
+function editorNotes(submitLabel: string = en.apply): string | null {
+  return editorFooter(submitLabel).querySelector('[class*="editorNotes"]')?.textContent ?? null
+}
+
+/**
+ * The reason a refused save put under one model field: the text the invalid
+ * input is described by, inside the input's own label. Null while the field is
+ * not marked.
+ */
+function refusalOf(field: HTMLElement): string | null {
+  if (field.getAttribute('aria-invalid') !== 'true') return null
+  const reason = field.closest('label')?.querySelector(`[id="${field.getAttribute('aria-describedby') ?? ''}"]`)
+  return reason?.textContent ?? null
 }
 
 /** The capacity inputs of every open row, in row order. */
@@ -882,6 +898,7 @@ describe('ModelsSection', () => {
     }))
     const { face, mutate } = scriptedFace({ set })
     const onClose = vi.fn()
+    const onSubmitCredential = vi.fn()
     const { ProviderEditor } = await import('../src/client/ProviderEditor.tsx')
 
     render(<ProviderEditor
@@ -901,6 +918,7 @@ describe('ModelsSection', () => {
       submitLabelKey="onboardingSave"
       submitBusyLabelKey="onboardingSaving"
       onClose={onClose}
+      onSubmitCredential={onSubmitCredential}
     />)
 
     const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
@@ -920,11 +938,26 @@ describe('ModelsSection', () => {
     expect(key.getAttribute('aria-invalid')).toBe('true')
     expect(save.disabled).toBe(true)
 
+    // An ill-formed key leaves Save available; pressing it stores nothing and
+    // returns the keyboard to the field.
+    fireEvent.change(key, { target: { value: 'DEEPSEEK_API_KEY=sk-onboarding' } })
+    expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
+    expect(key.getAttribute('aria-invalid')).toBe('true')
+    expect(save.disabled).toBe(false)
+    save.focus()
+    fireEvent.click(save)
+    expect(document.activeElement).toBe(key)
+    expect(onSubmitCredential).not.toHaveBeenCalled()
+    expect(set).not.toHaveBeenCalled()
+
     fireEvent.change(key, { target: { value: '  sk-onboarding  ' } })
     expect(screen.queryByText(en.keyRequired)).toBeNull()
+    expect(screen.queryByText(en.keyIllegalCharacters)).toBeNull()
+    expect(key.getAttribute('aria-invalid')).toBe('false')
     expect(save.disabled).toBe(false)
     fireEvent.click(save)
 
+    expect(onSubmitCredential).toHaveBeenCalledOnce()
     expect(await screen.findByText(en.onboardingSaving)).toBeTruthy()
     expect(set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'sk-onboarding')
     expect(mutate).not.toHaveBeenCalled()
@@ -1047,14 +1080,83 @@ describe('ModelsSection', () => {
   it('rejects duplicate DeepSeek model ids before writing', async () => {
     const { mutate } = await mountDeepSeekCard()
     fireEvent.click(screen.getByText(en.addModel))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 3`), { target: { value: 'deepseek-v4-flash' } })
-    fireEvent.click(screen.getByText(en.apply))
+    const id = screen.getByLabelText<HTMLInputElement>(`${en.modelId} 3`)
+    fireEvent.change(id, { target: { value: 'deepseek-v4-flash' } })
+    // Nothing is marked while the row is typed, and Apply stays available.
+    expect(refusalOf(id)).toBeNull()
+    expect(screen.queryByText(en.modelIdDuplicate)).toBeNull()
+    expect(screen.getByText<HTMLButtonElement>(en.apply).disabled).toBe(false)
 
-    // The note sits in the footer that stays in view, beside the Apply it explains.
-    const note = await screen.findByText(`Model 3: ${en.modelIdDuplicate}`)
-    expect(editorFooter().contains(note)).toBe(true)
+    fireEvent.click(screen.getByText(en.apply))
+    // The refused field says why under its own input and takes the keyboard;
+    // the footer that stays in view names no row.
+    expect(refusalOf(id)).toBe(en.modelIdDuplicate)
+    expect(id.closest('[data-row-key]')?.hasAttribute('data-invalid')).toBe(true)
+    expect(document.activeElement).toBe(id)
+    expect(editorNotes()).toBe('')
     expect(editorFooter().className).toContain('editorFooterSticky')
     expect(mutate).not.toHaveBeenCalled()
+
+    fireEvent.change(id, { target: { value: 'deepseek-v4-max' } })
+    expect(refusalOf(id)).toBeNull()
+    expect(screen.queryByText(en.modelIdDuplicate)).toBeNull()
+    expect(id.closest('[data-row-key]')?.hasAttribute('data-invalid')).toBe(false)
+  })
+
+  it('marks every refused model field on its own row, unfolds what hides them, and writes once each is fixed', async () => {
+    const { mutate } = await mountDeepSeekCard({
+      mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
+    })
+    const field = (label: string, position: number) => screen.getByLabelText<HTMLInputElement>(`${label} ${String(position)}`)
+    const marked = () => [...document.querySelectorAll('[data-row-key]')].map(row => row.hasAttribute('data-invalid'))
+    // An output cap nobody can read on a row that is folded again, a row with
+    // no ID, and a row repeating the first row's ID, all under a folded list.
+    expandRow(2)
+    fireEvent.change(field(en.maxTokens, 2), { target: { value: 'plenty' } })
+    fireEvent.click(rowToggle(2))
+    fireEvent.click(screen.getByText(en.addModel))
+    fireEvent.click(screen.getByText(en.addModel))
+    fireEvent.change(field(en.modelId, 4), { target: { value: 'deepseek-v4-flash' } })
+    fireEvent.click(screen.getByRole('button', { name: en.models }))
+    expect(marked()).toEqual([false, false, false, false])
+
+    fireEvent.click(screen.getByText(en.apply))
+    expect(mutate).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: en.models }).getAttribute('aria-expanded')).toBe('true')
+    // A row that passes stays folded and unmarked.
+    expect(rowToggle(1).getAttribute('aria-expanded')).toBe('false')
+    expect(marked()).toEqual([false, true, true, true])
+    expect(refusalOf(field(en.maxTokens, 2))).toBe(en.modelMaxTokensInvalid)
+    expect(refusalOf(field(en.contextWindow, 2))).toBeNull()
+    expect(refusalOf(field(en.modelId, 3))).toBe(en.modelIdRequired)
+    expect(refusalOf(field(en.modelId, 4))).toBe(en.modelIdDuplicate)
+    expect(document.activeElement).toBe(field(en.maxTokens, 2))
+
+    // Each mark leaves with its own fault.
+    fireEvent.change(field(en.maxTokens, 2), { target: { value: '64K' } })
+    expect(marked()).toEqual([false, false, true, true])
+    fireEvent.change(field(en.modelId, 3), { target: { value: 'private-preview' } })
+    expect(marked()).toEqual([false, false, false, true])
+    expect(refusalOf(field(en.modelId, 4))).toBe(en.modelIdDuplicate)
+    fireEvent.change(field(en.modelId, 4), { target: { value: 'private-preview-2' } })
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull()
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(mutate.mock.calls[0]).toEqual([
+      'llm-deepseek',
+      [{
+        op: 'set',
+        path: ['models'],
+        value: [
+          DEFAULT_DEEPSEEK_MODELS[0],
+          { ...DEFAULT_DEEPSEEK_MODELS[1], maxTokens: 64_000 },
+          { id: 'private-preview' },
+          { id: 'private-preview-2' },
+        ],
+      }],
+      0,
+    ])
   })
 
   it('validates every adapter-owned model catalog invariant', () => {
@@ -1079,6 +1181,25 @@ describe('ModelsSection', () => {
     expect(validateDeepSeekModels([{ id: 'model', maxTokens: 0 }]))
       .toEqual({ index: 0, key: 'modelMaxTokensInvalid' })
     expect(validateDeepSeekModels([{ id: 'model', maxTokens: 8192 }])).toBeUndefined()
+  })
+
+  it('reports every failing field of every row, and the first of them as the catalog failure', () => {
+    const models = [
+      { id: 'model', name: '', maxTokens: 0 },
+      { id: 'fine', contextWindow: 131_072 },
+      { id: ' model ', contextWindow: 1.5, maxTokens: null },
+      {},
+    ]
+    expect(modelRowFailures(models).map(row => [...row])).toEqual([
+      [['name', 'modelNameInvalid'], ['maxTokens', 'modelMaxTokensInvalid']],
+      [],
+      [['id', 'modelIdDuplicate'], ['contextWindow', 'modelContextInvalid'], ['maxTokens', 'modelMaxTokensInvalid']],
+      [['id', 'modelIdRequired']],
+    ])
+    expect(validateDeepSeekModels(models)).toEqual({ index: 0, key: 'modelNameInvalid' })
+    // A value that is not a list has no rows to refuse.
+    expect(modelRowFailures(undefined)).toEqual([])
+    expect(modelRowFailures('models')).toEqual([])
   })
 
   it('reads context windows written as counts, thousands, or millions', () => {
@@ -1167,8 +1288,17 @@ describe('ModelsSection', () => {
     expect((windows[0] as HTMLInputElement).value).toBe('1 gazillion')
 
     fireEvent.click(screen.getByText(en.apply))
-    await screen.findByText(`Model 1: ${en.modelContextInvalid}`)
     expect(mutate).not.toHaveBeenCalled()
+    // The reason sits under the text it refuses, which takes the keyboard.
+    expect(refusalOf(windows[0] as HTMLInputElement)).toBe(en.modelContextInvalid)
+    expect(refusalOf(windows[1] as HTMLInputElement)).toBeNull()
+    expect(document.activeElement).toBe(windows[0])
+    expect((windows[0] as HTMLInputElement).value).toBe('1 gazillion')
+    expect(editorNotes()).toBe('')
+
+    fireEvent.change(windows[0] as HTMLInputElement, { target: { value: '512K' } })
+    expect(refusalOf(windows[0] as HTMLInputElement)).toBeNull()
+    expect(screen.queryByText(en.modelContextInvalid)).toBeNull()
   })
 
   it.each([
@@ -1346,6 +1476,7 @@ describe('ModelsSection', () => {
       defaultMaxTokens={undefined}
       t={t}
       disabled={true}
+      attempt={0}
       onChange={vi.fn()}
       onReset={vi.fn()}
     />)
@@ -1847,6 +1978,19 @@ describe('ModelsSection', () => {
     fireEvent.click(models)
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: `${en.contextWindow} 1` }).value).toBe('half typed')
     expect(screen.getByRole('button', { name: en.addModel })).toBeTruthy()
+  })
+
+  it('points a fold heading\'s chevron right while folded and down while unfolded', async () => {
+    await mountDeepSeekCard()
+    const chevron = (title: string): string | null | undefined =>
+      screen.getByRole('button', { name: title }).querySelector('[data-icon]')?.getAttribute('data-icon')
+    // The chevron adds nothing to the heading's name, which stays the title.
+    expect(chevron(en.models)).toBe('dsw-icon-chevron-down-outline-regular')
+    expect(chevron(en.customized)).toBe('dsw-icon-chevron-right-outline-regular')
+    fireEvent.click(screen.getByRole('button', { name: en.models }))
+    fireEvent.click(screen.getByRole('button', { name: en.customized }))
+    expect(chevron(en.models)).toBe('dsw-icon-chevron-right-outline-regular')
+    expect(chevron(en.customized)).toBe('dsw-icon-chevron-down-outline-regular')
   })
 
   it('keeps the model list of the create card in view under a heading that does not fold', async () => {
@@ -2386,6 +2530,39 @@ it.each([
   expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'TEAM_API_KEY'))).toBeTruthy()
   expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'TEAM_API_KEY'))
   expect(screen.queryByLabelText(en.keyReveal)).toBeNull()
+})
+
+it('shows a key the route\'s protocol requires as a hint, and as an error once Apply was refused for it', async () => {
+  const { face, set, mutate } = scriptedFace()
+  const closed = vi.fn()
+  render(<ProviderEditor provider="gemini-gateway" displayName="Gemini gateway" declared
+    namespace={piAiNamespaceWith('gemini-gateway', { api: 'google-generative-ai', baseURL: 'https://gemini.example/v1beta' })}
+    settingsPath={['providers', 'gemini-gateway']} schema={settingsSchema} operations={operationsWith(face)}
+    t={t} readOnly={false} onClose={closed} />)
+  const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+  const apply = screen.getByRole<HTMLButtonElement>('button', { name: en.apply })
+  // A requirement still to meet: stated, not yet a fault, and no reason to hold Apply.
+  expect(key.required).toBe(true)
+  expect(key.getAttribute('aria-invalid')).toBe('false')
+  expect(screen.getByText(en.keyRequired).className).toContain('advancedHint')
+  expect(apply.disabled).toBe(false)
+
+  fireEvent.click(apply)
+  expect(screen.getByText(en.keyRequired).className).toContain('error')
+  expect(key.getAttribute('aria-invalid')).toBe('true')
+  expect(document.activeElement).toBe(key)
+  expect(mutate).not.toHaveBeenCalled()
+  expect(set).not.toHaveBeenCalled()
+
+  fireEvent.change(key, { target: { value: 'gemini-key' } })
+  expect(screen.queryByText(en.keyRequired)).toBeNull()
+  expect(key.getAttribute('aria-invalid')).toBe('false')
+  fireEvent.click(apply)
+  await waitFor(() => { expect(closed).toHaveBeenCalledWith(true) })
+  expect(set).toHaveBeenCalledExactlyOnceWith('GEMINI_GATEWAY_API_KEY', 'gemini-key')
+  expect(mutate.mock.calls).toEqual([[
+    'llm-pi-ai', [{ op: 'set', path: ['providers', 'gemini-gateway', 'apiKeyEnv'], value: 'GEMINI_GATEWAY_API_KEY' }], 0,
+  ]])
 })
 
 it('hides the reveal control and masks a disabled key draft', () => {

@@ -2,15 +2,17 @@
  * One model of either adapter catalog editor. A folded row is a line of text
  * that names the model and is the drag source for reordering, marked by six
  * dots at its start while the pointer is on it; unfolding it replaces the
- * text with the fields, and an unfolded row is not dragged.
+ * text with the fields, and an unfolded row is not dragged. A field the card's
+ * last save refused is marked invalid with the reason under it.
  */
 
+import { useId } from 'react'
 import type { DragEvent, ReactNode } from 'react'
 import {
   IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragDotsFillRegular, IconTrashOutlineRegular,
   useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import type { DeepSeekModelDraft, ModelFailureField } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
 import { ModelInputTypes } from './ModelInputTypes.tsx'
 import { ModelReasoningEfforts } from './ModelReasoningEfforts.tsx'
@@ -39,6 +41,8 @@ interface ModelRowProps {
   /** Whether the route's protocol accepts only {@link reasoningLevels}, each sent under its own name. */
   reasoningLevelsOnly?: boolean | undefined
   expanded: boolean
+  /** The fields the card's last save refused that still fail, each with its message key. */
+  failures: ReadonlyMap<ModelFailureField, ModelsKey>
   disabled: boolean
   t: (key: ModelsKey) => string
   contextWindow: CapacityInput
@@ -67,8 +71,16 @@ function textOf(model: DeepSeekModelDraft, field: 'id' | 'name'): string {
  * @returns one expandable model entry.
  */
 export function ModelRow(props: ModelRowProps): ReactNode {
-  const { model, position, t, disabled } = props
+  const { model, position, t, disabled, failures } = props
   const preview = useRowDragPreview(styles['modelDragPreview'] as string)
+  const rowId = useId()
+  /** The invalid state of one field's input, and the reason shown under it. */
+  const refusal = (field: ModelFailureField): { input: { 'aria-invalid'?: true; 'aria-describedby'?: string }; reason: ReactNode } => {
+    const key = failures.get(field)
+    if (key === undefined) return { input: {}, reason: null }
+    const id = `${rowId}-${field}`
+    return { input: { 'aria-invalid': true, 'aria-describedby': id }, reason: <span id={id} className={styles['error']}>{t(key)}</span> }
+  }
   // Only a folded row moves: its text carries no caret or selection for a drag to interrupt.
   const draggable = !props.expanded && !disabled
   const modelField = (field: 'id' | 'name') => (
@@ -83,12 +95,14 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         placeholder={t(field === 'id' ? 'modelId' : 'modelName')}
         aria-label={`${t(field === 'id' ? 'modelId' : 'modelName')} ${String(position)}`}
         disabled={disabled}
+        {...refusal(field).input}
         onChange={(event) => {
           const value = event.target.value
           props.onFieldChange(field, field === 'name' && value === '' ? undefined : value)
         }}
         onBlur={field === 'id' ? event => props.onIdBlur?.(event.target.value) : undefined}
       />
+      {refusal(field).reason}
     </label>
   )
   const id = textOf(model, 'id')
@@ -97,6 +111,7 @@ export function ModelRow(props: ModelRowProps): ReactNode {
     <div
       className={styles['modelEntry']}
       data-row-key={props.rowKey}
+      data-invalid={failures.size > 0 || undefined}
       data-dragging={props.order.dragging || undefined}
       data-drop-target={props.order.dragging ? undefined : props.order.target}
       draggable={draggable || undefined}
@@ -182,9 +197,11 @@ export function ModelRow(props: ModelRowProps): ReactNode {
                     placeholder={props[field].placeholder}
                     aria-label={`${t(field)} ${String(position)}`}
                     disabled={disabled}
+                    {...refusal(field).input}
                     onChange={(event) => { props[field].onChange(event.target.value) }}
                     onBlur={props[field].onBlur}
                   />
+                  {refusal(field).reason}
                 </label>
               ))}
               <ModelInputTypes
