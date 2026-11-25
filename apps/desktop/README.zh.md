@@ -124,7 +124,7 @@ Desktop/SDK 共享运行时构建器在复制或签名产物前，裁剪 NumPy �
 | 发布身份 | 桌面壳 API、Web 客户端、后端与插件依赖图作为一个组合完成验证；独立版本会产生未经验证的组合，并让更新可用性含糊不清。 | Electron 与 `@deepseek-ai/dsh` 始终使用同一精确版本。即使桌面壳代码不变，升级 dsh 也必须发布新 Desktop 版本。 |
 | 运行时 | 应用必须能够在没有系统 Node.js 或 pnpm 的机器上运行。 | dsh 通过设置 `ELECTRON_RUN_AS_NODE=1` 和 `--expose-internals` 的 Electron 运行，所有包操作都使用内置 pnpm。包管理器配置和 Host 环境遵循用户设置。包脚本通过 `node` shell 启动器转发给 Electron。 |
 | 包来源 | 即使离线，启动时安装核心依赖也会增加开销。 | `app.asar/dsh` 携带完整生产依赖树；profile 只安装外部插件。 |
-| 状态归属 | 共享可执行依赖图会让 CLI（命令行界面）与 Desktop 相互改变 dsh、Cordis、插件或原生模块版本，而两个桌面进程还可能争用同一个 profile。 | Electron 在访问任何 profile 前获取进程生命周期单实例锁，并独占 `$DSH_HOME/profiles/desktop` 及其包管理器状态。CLI 与 Desktop 共享 `$DSH_HOME` 下受支持的产品数据，但绝不共享可执行包、插件激活、锁文件或 `node_modules`。 |
+| 状态归属 | 共享可执行依赖图会让 CLI（命令行界面）与 Desktop 相互改变 dsh、Cordis、插件或原生模块版本，而两个桌面进程还可能争用同一个 profile。 | Electron 在访问任何 profile 前获取按其 `userData` 目录区分的进程生命周期单实例锁，并负责 `$DSH_HOME/profiles/desktop` 及其包管理器状态。`userData` 不同的应用（例如已安装应用与 `dev:desktop`）可以同时运行在同一个 profile 上；profile 准备和恢复仍会获取 profile 锁。CLI 与 Desktop 共享 `$DSH_HOME` 下受支持的产品数据，但绝不共享可执行包、插件激活、锁文件或 `node_modules`。 |
 | 传输 | Web 与 Desktop 共享请求准入和基于 Peer 的授权。 | Electron 加载打包的 Web 资源；私有 Desktop Provider 认证原生 Host 请求，Host 提供该 Peer 的启动注入。 |
 | 插件变更 | Desktop 与 Web 需要一致的安装和激活行为。 | 主应用使用共享 Web 插件管理器和内置 pnpm。 |
 | 更新 | 桌面壳与 dsh 独立更新会重新产生版本分裂，而桌面壳未变化的数据块不应强制完整传输。 | Electron 壳、匹配的 dsh 运行时与 pnpm 组成一个已签名更新单元。平台更新产物可以复用未变化的数据块，但运行时版本选择绝不脱离 Desktop 发布。 |
@@ -199,7 +199,7 @@ macOS 和 Linux 从图形界面启动的程序只继承会话管理器提供的�
 pnpm run dev:desktop
 ```
 
-开发 Harness 状态默认写入 `apps/desktop/.desktop-dev/home`，Electron 浏览器数据默认写入 `apps/desktop/.desktop-dev/electron-user-data`；`pnpm run clean` 会删除 `.desktop-build`，但保留该目录。一次性 npm 项目位于 `apps/desktop/.desktop-build/development/project`。因此，会话、设置、凭据、包链接和浏览器数据都不会进入用户正常使用的 Harness home。启动时会把每个缺失的默认目录从 `.desktop-build/development` 移过来；若正在运行的 Harness Dev 仍在使用那里的浏览器数据，启动会停止而不迁移。显式 `DSH_HOME` 只会替换开发 Harness home，`DSH_DESKTOP_USER_DATA_DIR` 只会替换浏览器数据。Renderer DevTools 默认自动打开，Main、Renderer 和 dsh Host 调试端口依次为 9229、9222 和 9230。`DSH_DESKTOP_MAIN_INSPECT_PORT`、`DSH_DESKTOP_RENDERER_DEBUG_PORT` 与 `DSH_DESKTOP_HOST_INSPECT_PORT` 可以替换这些端口，`DSH_DESKTOP_OPEN_DEVTOOLS=0` 则保持 Renderer 调试窗口关闭。
+未设置 `DSH_HOME` 时，开发模式使用正常的 Harness home `~/.dsh`，其中包括已安装应用的 `profiles/desktop` 插件 profile。非空的本地开发 home `apps/desktop/.desktop-dev/home` 会在 `~/.dsh` 不存在或为空时移入 `~/.dsh`；两者都有数据，或 `~/.dsh` 是符号链接时，不合并，启动继续使用本地 home。移到另一个卷时会先复制到 `~/.dsh` 旁边，因此 `~/.dsh` 只会以完整状态出现。Harness Dev 仍在使用默认的 `.desktop-dev` 浏览器数据或所选浏览器数据时，也不会移动。Electron 浏览器数据默认写入 `apps/desktop/.desktop-dev/electron-user-data`；`pnpm run clean` 会删除 `.desktop-build`，但保留 `.desktop-dev`。一次性 npm 项目位于 `apps/desktop/.desktop-build/development/project`。启动时会把每个缺失的 `.desktop-dev` 目录从 `.desktop-build/development` 移过来；若正在运行的 Harness Dev 仍在使用那里的浏览器数据，启动会停止而不迁移。与已安装应用同时运行并调试插件变更、原生恢复或数据格式变更时，请显式设置独立的 `DSH_HOME`。非空的 `DSH_HOME` 与其他模式一样解析（包括展开 `~`），且不移动任何数据；`DSH_DESKTOP_USER_DATA_DIR` 只会替换浏览器数据。Renderer DevTools 默认自动打开，Main、Renderer 和 dsh Host 调试端口依次为 9229、9222 和 9230。`DSH_DESKTOP_MAIN_INSPECT_PORT`、`DSH_DESKTOP_RENDERER_DEBUG_PORT` 与 `DSH_DESKTOP_HOST_INSPECT_PORT` 可以替换这些端口，`DSH_DESKTOP_OPEN_DEVTOOLS=0` 则保持 Renderer 调试窗口关闭。
 
 显式构建完成后，`start:desktop` 会重新生成一次性项目，并跳过构建直接启动已有产物：
 

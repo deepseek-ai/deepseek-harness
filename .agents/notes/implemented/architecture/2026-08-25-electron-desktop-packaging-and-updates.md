@@ -24,7 +24,7 @@ Electron owns the reserved profile at `.dsh/profiles/desktop`. The [bundled-runt
 
 One Desktop release number identifies the Electron artifact and its exact `@deepseek-ai/dsh` and `@deepseek-ai/dsh-desktop-host` dependencies. A release cannot select a different core version at build or runtime. Updating dsh therefore requires a new Electron release even when shell code is unchanged.
 
-The Desktop Host exposes the shared Web plugin manager for its reserved profile and supplies bundled pnpm through launcher facts. The CLI reserves every case variant of the `desktop` name and rejects boot, config-dump, and plugin-management requests for it. Electron acquires its process-lifetime single-instance lock before profile recovery or Host startup; later launches focus or recreate the primary window without touching profile state.
+The Desktop Host exposes the shared Web plugin manager for its reserved profile and supplies bundled pnpm through launcher facts. The CLI reserves every case variant of the `desktop` name and rejects boot, config-dump, and plugin-management requests for it. Electron acquires its process-lifetime single-instance lock, scoped to its `userData` directory, before profile recovery or Host startup; later launches with the same `userData` focus or recreate the primary window without touching profile state. Applications with different `userData`, such as the installed application and `dev:desktop`, can run together on one profile.
 
 ## Ownership
 
@@ -63,7 +63,7 @@ Update confirmations use the shell static origin because they must remain availa
 
 The shared Web plugin manager owns profile package operations. Electron retains startup preparation and native recovery; the [Web wrapper decision](2026-09-10-desktop-web-wrapper.md) owns this separation.
 
-The process-lifetime Electron lock is the authoritative Desktop owner. Profile preparation and native recovery use an exclusive lock recording the Electron PID; a live owner blocks a competing operation, while a stale PID can be recovered. Web package operations use the shared plugin manager’s locking.
+The process-lifetime Electron lock is the authoritative owner among Desktop processes that share one `userData` directory. Profile preparation and native recovery use an exclusive lock recording the Electron PID; a live owner blocks a competing operation, while a stale PID can be recovered. Web package operations use the shared plugin manager’s locking.
 
 Core materialization, first launch, plugin installation, and shared-module resolution follow the [bundled-runtime decision](2026-09-08-desktop-bundled-runtime-and-external-plugins.md). The actual Host composes enabled desktop plugins contributing `dsh.client` code when it starts.
 
@@ -106,7 +106,7 @@ Architecture-specific builds report actual component-level compressed and instal
 | Package state | Electron RunAsNode executes immutable core resources; bundled pnpm modifies only the external plugin graph in the Desktop profile. |
 | Qualification | macOS packaging requires the configured company identity and notary credentials, verifies every native runtime file before inventory generation, verifies the completed application signature, and requires notarization plus Gatekeeper acceptance for both the application and DMG. Windows packaging requires the configured public certificate, SafeNet private-key container, Token Password, and SignTool, and verifies every produced signature. Update hosting, previous-version installed-artifact tests, and platform GUI recordings remain release-environment gates. |
 
-`dev:desktop` builds the current workspace, projects the built CLI and private Desktop Host packages plus their dependency links into a disposable project, uses an isolated Harness home, opens the Main, Renderer, and Host debuggers, and starts unpackaged Electron without preparing release resources. The development runtime supplies workspace links to a separate plugin profile; plugin management and recovery use the same flow as packaged applications. Fixed macOS arm64, macOS x64, and Windows x64 package commands pass one target through runtime preparation, dsh preparation, and electron-builder; each also has an unpacked-directory variant for release-path verification before installer generation.
+`dev:desktop` builds the current workspace, projects the built CLI and private Desktop Host packages plus their dependency links into a disposable project, uses the normal Harness home, opens the Main, Renderer, and Host debuggers, and starts unpackaged Electron without preparing release resources. The disposable project supplies the workspace links; the `$DSH_HOME/profiles/desktop` plugin profile, its plugin management and recovery are shared with the installed application, so a workspace build can install plugins or write data formats that the installed version rejects. Fixed macOS arm64, macOS x64, and Windows x64 package commands pass one target through runtime preparation, dsh preparation, and electron-builder; each also has an unpacked-directory variant for release-path verification before installer generation.
 
 ## Alternatives considered
 
