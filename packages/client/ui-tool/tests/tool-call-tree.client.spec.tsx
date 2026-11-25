@@ -104,6 +104,22 @@ describe('ToolCallTree', () => {
     expect(owners.map(owner => owner.callId)).toEqual(['parent', 'child'])
   })
 
+  it('dispatches only the current sub-call for a collapsed running program call', () => {
+    const owners: ToolCallOwnerProps[] = []
+    const started = (callId: string, name: string): ToolCallBlock => ({
+      phase: 'start' as const, args: PartialArguments.fromText('{}'), callId, name, argsRaw: '{}', turn: 1, step: 0, time: 1_000, subCalls: [],
+    })
+    const block = {
+      ...started('parent', 'run_code'),
+      subCalls: [root('settled', { name: 'custom_child', argsRaw: '{}' }), started('unsettled', 'custom_child')],
+    }
+    const view = render(<ToolCallTree {...props(block, undefined, owners)} />)
+    expect(owners.map(owner => [owner.callId, owner.phase])).toEqual([['unsettled', 'start']])
+    expect(view.container.querySelector('[data-chat-call-id="unsettled"]')).toBeNull()
+    openProgramCalls(view.container)
+    expect(owners.slice(1).map(owner => owner.callId)).toEqual(['parent', 'settled', 'unsettled'])
+  })
+
   it('dispatches only the parent and changed child among 24 sibling calls', () => {
     const children = Array.from({ length: 24 }, (_, index) => root(`child-${index}`, { name: 'custom_child', argsRaw: '{}' }))
     const block = { ...root('parent', { name: 'custom_parent', argsRaw: '{}' }), subCalls: children }

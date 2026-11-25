@@ -74,9 +74,19 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: PTC answered question'
     await input.fill('Ask me which color to retain.')
     await input.press('Enter')
     const composer = page.locator('[data-question-key]')
+    // The collapsed program call shows the sub-call it is running as one row that cannot be operated.
+    const program = page.locator('[data-program-call="run_code"]')
+    const current = page.locator('[data-chat-call-id]:has([data-program-call="run_code"]) [data-current-subcall]')
+    await current.locator('[data-tool="ask_user_question"][data-state="running"]').waitFor({ state: 'visible' })
+    expect(await program.locator('[data-disclosure-row]').first().getAttribute('aria-expanded')).toBe('false')
+    expect(await current.evaluate(row => ({
+      inert: row.closest('[inert]') === row,
+      rowHeights: [row, row.querySelector('[data-disclosure-row]')!].map(element => element.getBoundingClientRect().height),
+    }))).toEqual({ inert: true, rowHeights: [24, 24] })
     await composer.getByRole('radio', { name: 'Blue', exact: true }).click()
     await composer.getByRole('button', { name: 'Submit', exact: true }).click()
     await settled
+    await expect.poll(() => current.count()).toBe(0)
     const dispatch = events.find(event => event.type === 'tool/ptc-dispatch' && event.data.name === 'ask_user_question')
     expect(dispatch?.type).toBe('tool/ptc-dispatch')
     if (dispatch?.type !== 'tool/ptc-dispatch') throw new Error('missing PTC question settlement')

@@ -94,3 +94,15 @@ describe('ProgramCallRow.module.css header line', () => {
     expect(declarations('.detail', sheet)).toEqual(expect.arrayContaining(['flex: none', 'white-space: nowrap']))
   })
 })
+
+describe('ToolCallTree.module.css current sub-call row', () => {
+  const sheet = readFileSync(fileURLToPath(new URL('../src/client/tool/ToolCallTree.module.css', import.meta.url)), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+
+  it('clips the row to the height of one disclosure row', () => {
+    // The dispatched view owns its own markup, so the container bounds what a collapsed program call shows.
+    expect(declarations('.currentSubCall', sheet)).toEqual(expect.arrayContaining([
+      'overflow: hidden', 'height: calc(24px + var(--dsh-content-font-delta, 0px))',
+    ]))
+  })
+})
