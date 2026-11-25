@@ -3,7 +3,8 @@
  * durable write as one row of `frames` holding its events as JSON lines, as text
  * or one Zstandard frame, with Segments and Sessions keyed by UUID in `segments`,
  * `segment_ancestors` and `traces`. This module is the only reader of that
- * layout. @module
+ * layout. Its statements are the files of `resources/sql/upgrade/1-to-2/`; it
+ * reads no other SQL file except the version 2 schema it writes. @module
  */
 import type { DatabaseSync } from 'node:sqlite'
 import { zstdDecompressSync } from 'node:zlib'
@@ -11,7 +12,6 @@ import { z } from 'zod'
 import { decodeEnvelope } from '../codec.ts'
 import type { StoredEnvelope } from '../codec.ts'
 import { EVENT_CODEC_UNREADABLE, encodeRow } from '../row.ts'
-import { SCHEMA } from '../schema.ts'
 import type { Migration } from './types.ts'
 
 /** `events.type` of a row that stands in for stored data this step could not read. */
@@ -44,33 +44,24 @@ const frame = z.object({ frame: z.number().int(), segment_id: z.number().int(), 
 export const frames: Migration = {
   from: 1,
   to: 2,
-  apply(db: DatabaseSync, { compression, onSetAside }): void {
-    const present = new Set(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all().map(row => row.name))
+  apply(db: DatabaseSync, { compression, sql, onSetAside }): void {
+    const present = new Set(db.prepare(sql.text('upgrade/1-to-2/table-names')).all().map(row => row.name))
     if (!FRAME_TABLES.every(name => present.has(name))) {
       throw new Error('schema version 1 is stored without the tables of the frame layout')
     }
     // Parents precede children so the path trigger of the new schema sees each parent's path.
-    db.exec(`DROP TRIGGER frames_no_update; DROP TRIGGER frames_no_delete; DROP TRIGGER segments_no_reparent;
-      DROP TRIGGER segments_index_ancestors; DROP TRIGGER ancestors_no_update; DROP TRIGGER ancestors_no_delete;
-      DROP INDEX exclusive_trace_head;
-      ALTER TABLE segments RENAME TO segments_v1; ALTER TABLE segment_ancestors RENAME TO segment_ancestors_v1;
-      ${SCHEMA};`)
+    db.exec(sql.text('upgrade/1-to-2/retire-v1-objects'))
+    db.exec(sql.text('schema/v2'))
     // One statement per Segment: a single INSERT ... SELECT reads `segments` before it stores any row,
     // so no child would find its parent.
-    const segment = db.prepare(`INSERT INTO segments (segment_uuid, parent_id, base_seq)
-      VALUES (?, (SELECT segment_id FROM segments WHERE segment_uuid = ?), ?)`)
-    for (const raw of db.prepare(`SELECT s.segment_uuid, s.parent_segment_uuid, s.base_seq FROM segments_v1 s
-      ORDER BY (SELECT count(*) FROM segment_ancestors_v1 a WHERE a.segment_uuid = s.segment_uuid)`).all()) {
+    const segment = db.prepare(sql.text('upgrade/1-to-2/insert-segment'))
+    for (const raw of db.prepare(sql.text('upgrade/1-to-2/segments-parents-first')).all()) {
       const { segment_uuid: uuid, parent_segment_uuid: parent, base_seq: base } = segmentV1.parse(raw)
       segment.run(uuid, parent, base)
     }
-    db.exec(`INSERT INTO sessions (session_id, header, head_segment_id, inherited_count)
-      SELECT trace_uuid, header, (SELECT segment_id FROM segments WHERE segment_uuid = tail_segment_uuid), inherited_count
-      FROM traces ORDER BY rowid`)
-    const insert = db.prepare(`INSERT INTO events (segment_id, seq, type, time, surface_op, source_seqs, ignorable, codec, data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    const stored = db.prepare(`SELECT f.rowid AS frame, s.segment_id, s.segment_uuid, s.base_seq, f.start_seq, f.end_seq, f.codec, f.payload
-      FROM frames f JOIN segments s ON s.segment_uuid = f.segment_uuid ORDER BY s.segment_id, f.start_seq`)
+    db.exec(sql.text('upgrade/1-to-2/insert-sessions'))
+    const insert = db.prepare(sql.text('upgrade/1-to-2/insert-event'))
+    const stored = db.prepare(sql.text('upgrade/1-to-2/frames-by-segment'))
     const damaged: number[] = []
     const standIn = (segment: number, seq: number): void => {
       insert.run(segment, seq, UNREADABLE_TYPE, 0, null, null, null, EVENT_CODEC_UNREADABLE, new Uint8Array())
@@ -113,13 +104,9 @@ export const frames: Migration = {
       }
     }
     if (damaged.length > 0) {
-      db.exec(`CREATE TABLE frames_set_aside (segment_uuid TEXT NOT NULL, start_seq INTEGER NOT NULL, end_seq INTEGER NOT NULL,
-        codec INTEGER NOT NULL, payload BLOB NOT NULL) STRICT`)
-      db.prepare(`INSERT INTO frames_set_aside SELECT segment_uuid, start_seq, end_seq, codec, payload FROM frames
-        WHERE rowid IN (SELECT value FROM json_each(?))`).run(JSON.stringify(damaged))
+      db.exec(sql.text('upgrade/1-to-2/create-frames-set-aside'))
+      db.prepare(sql.text('upgrade/1-to-2/set-aside-frames')).run(JSON.stringify(damaged))
     }
-    // Dropping a table checks every row that references it; the self-reference needs this index to stay linear.
-    db.exec('CREATE INDEX segments_v1_parent ON segments_v1(parent_segment_uuid)')
-    db.exec('DROP TABLE frames; DROP TABLE traces; DROP TABLE segment_ancestors_v1; DROP TABLE segments_v1;')
+    db.exec(sql.text('upgrade/1-to-2/drop-v1-tables'))
   },
 }

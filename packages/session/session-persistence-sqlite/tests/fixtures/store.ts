@@ -11,14 +11,20 @@ import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { SqliteStore } from '../../src/sqlite.ts'
 import type { SqliteStoreOptions } from '../../src/sqlite.ts'
-import { DERIVATIONS } from '../../src/derivations.ts'
+import { builtinDerivations } from '../../src/derivations.ts'
+import { SqlFiles } from '../../src/sql.ts'
+import type { SqlFile } from '../../src/sql.ts'
 import { decodeRow, encodeRow, eventRow } from '../../src/row.ts'
 import type { EventCompression } from '../../src/row.ts'
 import { SessionWriteLease } from '../../src/lease.ts'
 import { sessionDir } from '../../src/paths.ts'
 
+/** The built-in derivations, as the plugin passes them to its store. */
+const SQL = new SqlFiles()
+export const DERIVATIONS = builtinDerivations(SQL)
+
 /** Plugin defaults for the row encoding and derived tables of a directly constructed store. */
-export const STORE_DEFAULTS = { compression: 'zstd', derivations: DERIVATIONS } as const satisfies Partial<SqliteStoreOptions>
+export const STORE_DEFAULTS = { compression: 'zstd', sql: SQL, derivations: DERIVATIONS } as const satisfies Partial<SqliteStoreOptions>
 
 /**
  * Construct a store with the plugin defaults and no-op provider callbacks.
@@ -131,11 +137,14 @@ export async function routeOf(root: string, id: SessionId): Promise<'sqlite' | '
  */
 export function countSqliteReads(): { eventRows: () => number; segmentQueries: () => number } {
   let eventRows = 0, segmentQueries = 0
+  const files = new SqlFiles()
+  const segmentFiles: readonly SqlFile[] = ['store/segment-by-id', 'store/segment-ancestors', 'store/fork-attachment']
+  const segmentTexts = new Set(segmentFiles.map(file => files.text(file)))
   // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
   const prepare = DatabaseSync.prototype.prepare
   const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSync, sql: string) {
     const statement = prepare.call(this, sql)
-    if (sql.startsWith('SELECT s.*')) {
+    if (segmentTexts.has(sql)) {
       const get = statement.get.bind(statement), all = statement.all.bind(statement)
       Object.defineProperty(statement, 'get', { value: (...args: Parameters<StatementSync['get']>) => {
         segmentQueries++
@@ -146,7 +155,7 @@ export function countSqliteReads(): { eventRows: () => number; segmentQueries: (
         return all(...args)
       } })
     }
-    if (sql.startsWith('SELECT seq, type, time, surface_op, source_seqs, ignorable, codec, data FROM events')) {
+    if (sql === files.text('store/events-in-range')) {
       const all = statement.all.bind(statement)
       Object.defineProperty(statement, 'all', { value: (...args: Parameters<StatementSync['all']>) => {
         const rows = all(...args)

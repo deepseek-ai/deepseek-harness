@@ -15,7 +15,8 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
 import { SqliteStore, isAbsent } from './sqlite.ts'
-import { DERIVATIONS } from './derivations.ts'
+import { builtinDerivations } from './derivations.ts'
+import { SqlFiles } from './sql.ts'
 import type { DerivationFailure } from './derive.ts'
 import { SessionWriteLease } from './lease.ts'
 import { sessionDir } from './paths.ts'
@@ -56,11 +57,13 @@ export class SqliteSessionPersistence extends SessionPersistence {
     this.rootPath = resolve(config.root)
     this.listLimit = pLimit(config.listConcurrency ?? 3)
     this.directory = join(this.rootPath, '.segments')
+    const sql = new SqlFiles()
     this.sqlite = new SqliteStore({
       path: join(this.directory, 'sessions.sqlite'),
       legacyRoot: this.rootPath,
       compression: config.compression ?? 'zstd',
-      derivations: DERIVATIONS,
+      sql,
+      derivations: builtinDerivations(sql),
       publish: id => this.publish(id),
       acquireCreationLease: header => this.acquireCreationLease(header),
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },

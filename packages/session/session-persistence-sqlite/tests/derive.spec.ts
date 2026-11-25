@@ -10,12 +10,12 @@ import { createAssistantMessage, createToolResultMessage } from '@deepseek-ai/ds
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import { DERIVATIONS } from '../src/derivations.ts'
 import { DerivedTables } from '../src/derive.ts'
 import type { DerivableEvent, Derivation, DerivationFailure } from '../src/derive.ts'
 import { SqliteSessionPersistence } from '../src/persistence.ts'
 import type { SqliteStoreOptions } from '../src/sqlite.ts'
-import { headSegment, sqliteLogs } from './fixtures/store.ts'
+import { SqlFiles } from '../src/sql.ts'
+import { DERIVATIONS, headSegment, sqliteLogs } from './fixtures/store.ts'
 
 const id = SessionId('derived')
 const header = (session: SessionId = id): SessionHeader => ({ version: SESSION_FORMAT_VERSION, id: session, createdAt: 0, isSeeded: false })
@@ -314,7 +314,8 @@ describe('derived schema', () => {
     await writer.append([title(0, 'ab'), title(1, 'abcd')]); await writer.close()
     expect(names('table')).toContain('title_lengths')
     expect(names('index')).toEqual(expect.arrayContaining(['title_lengths_by_length', 'title_lengths_by_time_length', 'tool_results_by_segment_id_call_seq']))
-    expect(names('view')).toEqual(['longest_titles', 'session_compactions', 'session_events', 'session_llm_calls', 'session_segments', 'session_summary',
+    expect(names('view')).toEqual(['longest_titles', 'segment_extents', 'session_compactions', 'session_events', 'session_heads', 'session_llm_calls',
+      'session_segments', 'session_summary',
       'session_title_lengths', 'session_tool_calls', 'session_tool_results', 'session_tools'])
     expect(rows('SELECT session_id, seq, time, length FROM session_title_lengths ORDER BY seq'))
       .toEqual([{ session_id: id, seq: 0, time: 0, length: 2 }, { session_id: id, seq: 1, time: 1, length: 4 }])
@@ -329,7 +330,7 @@ describe('derived schema', () => {
     ['view', { views: { 'longest titles': 'SELECT 1' } }],
   ] as const)('rejects a %s identifier that is not lowercase snake case at construction', (_kind, invalid) => {
     const derivation: Derivation = { ...titles(1, event => [titleOf(event)]), ...invalid }
-    expect(() => new DerivedTables([derivation], () => {})).toThrow(TypeError)
+    expect(() => new DerivedTables([derivation], () => {}, new SqlFiles())).toThrow(TypeError)
     expect(() => sqliteLogs('/unused/sessions.sqlite', '/unused', { derivations: [derivation] })).toThrow('must be lowercase snake case')
   })
 })
@@ -536,11 +537,12 @@ describe('provider reports', () => {
   })
 
   it('warns once without a Segment when a derivation throws before its event is stored, and stores the events', async () => {
-    const toolCalls = DERIVATIONS.find(derivation => derivation.name === 'tool_calls')
-    if (toolCalls === undefined) throw new Error('Missing derivation tool_calls')
-    const fault = vi.spyOn(toolCalls, 'derive').mockImplementation(() => { throw new Error('derivation refused') })
-    onTestFinished(() => { fault.mockRestore() })
     const { persistence, warnings } = await provider()
+    // The provider builds its own built-in derivations, so the fault is placed on the list its store holds.
+    const held: readonly Derivation[] = persistence['sqlite']['derived']['derivations']
+    const toolCalls = held.find(derivation => derivation.name === 'tool_calls')
+    if (toolCalls === undefined) throw new Error('Missing derivation tool_calls')
+    vi.spyOn(toolCalls, 'derive').mockImplementation(() => { throw new Error('derivation refused') })
     const writer = await persistence.create(header())
     await writer.append([result(0, 0), call(1, 'read_file'), call(2, 'write_file')]); await writer.close()
     expect(warnings()).toEqual(['Derived table tool_calls skipped the row of event 1; its later skipped rows are not logged until restart: Error: derivation refused'])

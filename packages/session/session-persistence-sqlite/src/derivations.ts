@@ -7,6 +7,7 @@
  */
 import { z } from 'zod'
 import type { Derivation, DerivedValue } from './derive.ts'
+import type { SqlFiles } from './sql.ts'
 
 const usage = z.object({ inputTokens: z.number().int(), outputTokens: z.number().int(),
   cacheReadTokens: z.number().int().optional(), cacheWriteTokens: z.number().int().optional(),
@@ -24,58 +25,57 @@ function tokens(value: z.infer<typeof usage>): DerivedValue[] {
     value.reasoningTokens ?? null]
 }
 
-/** The built-in derivations, in the order their views depend on each other. */
-export const DERIVATIONS: readonly Derivation[] = [{
-  name: 'llm_calls', version: 1, types: ['assistant/message', 'compaction/summary'],
-  columns: { time: 'INTEGER NOT NULL', provider: 'TEXT NOT NULL', model: 'TEXT NOT NULL', turn: 'INTEGER', step: 'INTEGER',
-    input_tokens: 'INTEGER NOT NULL', output_tokens: 'INTEGER NOT NULL', cache_read_tokens: 'INTEGER',
-    cache_write_tokens: 'INTEGER', reasoning_tokens: 'INTEGER' },
-  derive(event) {
-    if (event.type === 'compaction/summary') {
-      const call = summary.safeParse(event.data)
-      return call.success ? [event.time, call.data.provider, call.data.model, null, null, ...tokens(call.data.usage)] : undefined
-    }
-    const call = assistantMessage.safeParse(event.data)
-    if (!call.success) return undefined
-    const { provider, model } = call.data.message.source
-    return [event.time, provider, model, call.data.turn, call.data.step, ...tokens(call.data.usage)]
-  },
-}, {
-  name: 'tool_calls', version: 1, types: ['tool/call'],
-  columns: { time: 'INTEGER NOT NULL', tool: 'TEXT NOT NULL', turn: 'INTEGER NOT NULL', step: 'INTEGER NOT NULL' },
-  derive(event) {
-    const call = toolCall.safeParse(event.data)
-    return call.success ? [event.time, call.data.name, call.data.turn, call.data.step] : undefined
-  },
-}, {
-  name: 'tool_results', version: 1, types: ['tool/result'],
-  columns: { time: 'INTEGER NOT NULL', call_seq: 'INTEGER', is_error: 'INTEGER NOT NULL', error_code: 'TEXT' },
-  indexes: [['segment_id', 'call_seq']],
-  // A result can sit in a later Segment of the Session than its call, so the pair is looked up along the
-  // Session's path. The lookup is correlated so a filter on one Session never reads another's results.
-  views: { session_tools: `SELECT p.session_id, c.seq, c.time, c.tool, c.turn, c.step, r.seq AS result_seq,
-    r.is_error, r.error_code, r.time - c.time AS duration_ms
-    FROM sessions p JOIN segment_paths m ON m.segment_id = p.head_segment_id
-    JOIN tool_calls c ON c.segment_id = m.member_id AND c.seq < m.end_seq
-    LEFT JOIN tool_results r ON r.call_seq = c.seq
-      AND r.segment_id IN (SELECT member_id FROM segment_paths WHERE segment_id = p.head_segment_id)
-      AND r.seq < (SELECT end_seq FROM segment_paths WHERE segment_id = p.head_segment_id AND member_id = r.segment_id)` },
-  derive(event) {
-    const result = toolResult.safeParse(event.data)
-    if (!result.success) return undefined
-    // A result appended to the conversation cites its call; one that replaces an earlier result cites that result.
-    const call = event.surfaceOp === 'append' ? event.sourceEventSeqs?.[0] : undefined
-    return [event.time, call ?? null, result.data.message.isError === true ? 1 : 0, result.data.error?.code ?? null]
-  },
-}, {
-  name: 'compactions', version: 1, types: ['compaction/prune', 'compaction/summary'],
-  columns: { time: 'INTEGER NOT NULL', kind: 'TEXT NOT NULL', shadowed_tokens: 'INTEGER NOT NULL',
-    shadowed_start: 'INTEGER NOT NULL', shadowed_end: 'INTEGER NOT NULL' },
-  derive(event) {
-    const range = shadowed.safeParse(event.data)
-    return range.success
-      ? [event.time, event.type === 'compaction/prune' ? 'prune' : 'summary', range.data.shadowedTokenCount,
-        range.data.shadowedRange.start, range.data.shadowedRange.end]
-      : undefined
-  },
-}]
+/**
+ * The built-in derivations, in the order their views depend on each other.
+ * @param sql - SQL files holding the built-in view bodies; none is read until a view body is first used.
+ * @returns the derivations every store maintains.
+ */
+export function builtinDerivations(sql: SqlFiles): readonly Derivation[] {
+  return [{
+    name: 'llm_calls', version: 1, types: ['assistant/message', 'compaction/summary'],
+    columns: { time: 'INTEGER NOT NULL', provider: 'TEXT NOT NULL', model: 'TEXT NOT NULL', turn: 'INTEGER', step: 'INTEGER',
+      input_tokens: 'INTEGER NOT NULL', output_tokens: 'INTEGER NOT NULL', cache_read_tokens: 'INTEGER',
+      cache_write_tokens: 'INTEGER', reasoning_tokens: 'INTEGER' },
+    derive(event) {
+      if (event.type === 'compaction/summary') {
+        const call = summary.safeParse(event.data)
+        return call.success ? [event.time, call.data.provider, call.data.model, null, null, ...tokens(call.data.usage)] : undefined
+      }
+      const call = assistantMessage.safeParse(event.data)
+      if (!call.success) return undefined
+      const { provider, model } = call.data.message.source
+      return [event.time, provider, model, call.data.turn, call.data.step, ...tokens(call.data.usage)]
+    },
+  }, {
+    name: 'tool_calls', version: 1, types: ['tool/call'],
+    columns: { time: 'INTEGER NOT NULL', tool: 'TEXT NOT NULL', turn: 'INTEGER NOT NULL', step: 'INTEGER NOT NULL' },
+    derive(event) {
+      const call = toolCall.safeParse(event.data)
+      return call.success ? [event.time, call.data.name, call.data.turn, call.data.step] : undefined
+    },
+  }, {
+    name: 'tool_results', version: 1, types: ['tool/result'],
+    columns: { time: 'INTEGER NOT NULL', call_seq: 'INTEGER', is_error: 'INTEGER NOT NULL', error_code: 'TEXT' },
+    indexes: [['segment_id', 'call_seq']],
+    // Read when the view is created, so building this list reads no file.
+    views: { get session_tools() { return sql.text('derived/session-tools') } },
+    derive(event) {
+      const result = toolResult.safeParse(event.data)
+      if (!result.success) return undefined
+      // A result appended to the conversation cites its call; one that replaces an earlier result cites that result.
+      const call = event.surfaceOp === 'append' ? event.sourceEventSeqs?.[0] : undefined
+      return [event.time, call ?? null, result.data.message.isError === true ? 1 : 0, result.data.error?.code ?? null]
+    },
+  }, {
+    name: 'compactions', version: 1, types: ['compaction/prune', 'compaction/summary'],
+    columns: { time: 'INTEGER NOT NULL', kind: 'TEXT NOT NULL', shadowed_tokens: 'INTEGER NOT NULL',
+      shadowed_start: 'INTEGER NOT NULL', shadowed_end: 'INTEGER NOT NULL' },
+    derive(event) {
+      const range = shadowed.safeParse(event.data)
+      return range.success
+        ? [event.time, event.type === 'compaction/prune' ? 'prune' : 'summary', range.data.shadowedTokenCount,
+          range.data.shadowedRange.start, range.data.shadowedRange.end]
+        : undefined
+    },
+  }]
+}

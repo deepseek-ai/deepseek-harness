@@ -14,11 +14,13 @@ import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { ZodError } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { DerivedTables } from '../src/derive.ts'
+import { frames } from '../src/migrations/frames.ts'
 import { MIGRATIONS, prepareSchema } from '../src/migrations/index.ts'
 import type { Migration, MigrationOptions } from '../src/migrations/types.ts'
 import { SqliteSessionPersistence } from '../src/persistence.ts'
 import { EVENT_CODEC_JSON, EVENT_CODEC_ZSTD } from '../src/row.ts'
-import { APPLICATION_ID, SCHEMA, SCHEMA_VERSION } from '../src/schema.ts'
+import { APPLICATION_ID, SCHEMA_VERSION } from '../src/schema.ts'
+import { SQL_FILES, SqlFiles } from '../src/sql.ts'
 import type { SqliteStoreOptions } from '../src/sqlite.ts'
 import { forkSession, headSegment, sqliteLogs, storedRows } from './fixtures/store.ts'
 
@@ -30,20 +32,10 @@ const event = (seq: number): SessionEvent => seq % 2 === 0
   : { type: 'turn/end', seq: SessionSeq(seq), time: 10 + seq, data: { turn: (seq + 1) / 2, reason: { kind: 'completed' } } }
 const events = (count: number): SessionEvent[] => Array.from({ length: count }, (_, seq) => event(seq))
 
-/** Version 1 tables and the trigger that indexed ancestry as Segments were inserted. */
-const FRAME_TABLES = `CREATE TABLE segments (segment_uuid TEXT PRIMARY KEY, parent_segment_uuid TEXT REFERENCES segments(segment_uuid), parent_end_seq INTEGER, base_seq INTEGER NOT NULL CHECK(base_seq >= 0), CHECK((parent_segment_uuid IS NULL AND parent_end_seq IS NULL AND base_seq = 0) OR (parent_segment_uuid IS NOT NULL AND parent_end_seq IS NOT NULL AND parent_end_seq >= 0 AND parent_segment_uuid != segment_uuid))) STRICT;
-CREATE TABLE traces (trace_uuid TEXT PRIMARY KEY, header TEXT NOT NULL, tail_segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid), inherited_count INTEGER NOT NULL CHECK(inherited_count >= 0)) STRICT;
-CREATE UNIQUE INDEX exclusive_trace_head ON traces(tail_segment_uuid);
-CREATE TABLE frames (segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid), start_seq INTEGER NOT NULL CHECK(start_seq >= 0), end_seq INTEGER NOT NULL CHECK(end_seq > start_seq), codec INTEGER NOT NULL CHECK(codec IN (0, 1)), payload BLOB NOT NULL, PRIMARY KEY(segment_uuid, start_seq)) STRICT;
-CREATE TABLE segment_ancestors (segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid), ancestor_uuid TEXT NOT NULL REFERENCES segments(segment_uuid), end_seq INTEGER NOT NULL CHECK(end_seq >= 0), PRIMARY KEY(segment_uuid, ancestor_uuid), CHECK(segment_uuid != ancestor_uuid)) STRICT, WITHOUT ROWID;
-CREATE TRIGGER segments_index_ancestors AFTER INSERT ON segments WHEN NEW.parent_segment_uuid IS NOT NULL BEGIN INSERT INTO segment_ancestors VALUES (NEW.segment_uuid, NEW.parent_segment_uuid, NEW.parent_end_seq); INSERT INTO segment_ancestors SELECT NEW.segment_uuid, ancestor_uuid, end_seq FROM segment_ancestors WHERE segment_uuid = NEW.parent_segment_uuid; END;`
-/** Version 1 immutability triggers and identity, applied after a fixture has stored its rows. */
+/** The version 1 triggers that refuse frame changes, recreated after a fixture has damaged its stored frames. */
 const FRAME_SEAL = `CREATE TRIGGER frames_no_update BEFORE UPDATE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
-CREATE TRIGGER frames_no_delete BEFORE DELETE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
-CREATE TRIGGER segments_no_reparent BEFORE UPDATE OF parent_segment_uuid, parent_end_seq, base_seq ON segments BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
-CREATE TRIGGER ancestors_no_update BEFORE UPDATE ON segment_ancestors BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
-CREATE TRIGGER ancestors_no_delete BEFORE DELETE ON segment_ancestors BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
-PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = 1;`
+CREATE TRIGGER frames_no_delete BEFORE DELETE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;`
+const sql = new SqlFiles()
 
 const user = (seq: number, text: string, extra: Partial<SessionEvent<'user/message'>> = {}): SessionEvent<'user/message'> => ({
   type: 'user/message', surfaceOp: 'append', seq: SessionSeq(seq), time: 10 + seq,
@@ -75,11 +67,12 @@ const framedHeaders = {
 }
 
 /**
- * Store a version 1 database by hand. Frame ranges and `parent_end_seq` are Segment-local; each event's JSON carries
- * its Session sequence.
+ * Store a version 1 database from the schema its release created. Frame ranges and `parent_end_seq` are
+ * Segment-local; each event's JSON carries its Session sequence. `damage` changes stored rows with the
+ * triggers that refuse frame changes lifted, as a fault outside SQLite would.
  */
 function writeFrameLayout(db: DatabaseSync, damage?: (db: DatabaseSync) => void): void {
-  db.exec(FRAME_TABLES)
+  db.exec(sql.text('schema/v1'))
   const segment = db.prepare('INSERT INTO segments VALUES (?, ?, ?, ?)')
   const trace = db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)')
   const frame = (uuid: string, start: number, batch: readonly SessionEvent[], compressed: boolean) => {
@@ -100,7 +93,9 @@ function writeFrameLayout(db: DatabaseSync, damage?: (db: DatabaseSync) => void)
   frame('seg-child', 0, framed.child, false)
   frame('seg-grand', 0, framed.grand, true)
   frame('seg-tools', 0, framed.tools, true)
-  damage?.(db)
+  if (damage === undefined) return
+  db.exec('DROP TRIGGER frames_no_update; DROP TRIGGER frames_no_delete')
+  damage(db)
   db.exec(FRAME_SEAL)
 }
 
@@ -602,11 +597,11 @@ describe('upgrade steps', () => {
     return db
   }
   const stored = (db: DatabaseSync) => db.prepare('PRAGMA user_version').get()?.user_version
-  const options: MigrationOptions = { path: '/stored/sessions.sqlite', compression: 'zstd', onStep: () => {}, onSetAside: () => {} }
+  const options: MigrationOptions = { path: '/stored/sessions.sqlite', compression: 'zstd', sql, onStep: () => {}, onSetAside: () => {} }
   /** A step that records the version it found and, as the last one, creates the current tables. */
   const step = (from: number, seen: number[]): Migration => ({ from, to: from + 1, apply(db) {
     seen.push(Number(stored(db)))
-    if (from + 1 === SCHEMA_VERSION) db.exec(SCHEMA)
+    if (from + 1 === SCHEMA_VERSION) db.exec(sql.text('schema/v2'))
   } })
   /** Every schema object with its columns, without SQLite's own objects. */
   const layout = (db: DatabaseSync) => db.prepare(`SELECT m.type, m.name, (SELECT group_concat(c.name, ' ') FROM pragma_table_xinfo(m.name) c) AS columns
@@ -617,14 +612,11 @@ describe('upgrade steps', () => {
       .toEqual(Array.from({ length: SCHEMA_VERSION - 1 }, (_, index) => [index + 1, index + 2]))
   })
 
-  // Fails when the current schema changes: the version 1 to 2 step must then take its own copy of this one.
-  it('leaves a version 1 database with exactly the version 2 objects and columns, derived tables aside', () => {
-    const upgraded = new DatabaseSync(':memory:'), fresh = new DatabaseSync(':memory:')
-    onTestFinished(() => { upgraded.close(); fresh.close() })
-    writeFrameLayout(upgraded)
-    prepareSchema(upgraded, options)
+  it('creates exactly the version 2 objects and columns, derived tables aside', () => {
+    const fresh = new DatabaseSync(':memory:')
+    onTestFinished(() => { fresh.close() })
     prepareSchema(fresh, options)
-    expect(layout(upgraded)).toEqual([
+    expect(layout(fresh)).toEqual([
       ['index', 'events_by_type', null],
       ['table', 'events', 'event_no segment_id seq type time surface_op source_seqs ignorable codec data'],
       ['table', 'segment_paths', 'segment_id member_id end_seq'],
@@ -636,15 +628,40 @@ describe('upgrade steps', () => {
       ['trigger', 'paths_no_update', null],
       ['trigger', 'segments_index_paths', null],
       ['trigger', 'segments_no_reparent', null],
+      ['view', 'segment_extents', 'segment_id segment_uuid parent_id base_seq event_count'],
       ['view', 'session_events', 'session_id seq type time surface_op source_seqs ignorable codec data segment_id event_no'],
+      ['view', 'session_heads', 'session_id header head_segment_id head_segment_uuid inherited_count base_seq event_count'],
       ['view', 'session_segments', 'session_id segment_id end_seq'],
       ['view', 'session_summary', 'session_id created_at cwd parent_session origin agent_preset inherited_count event_count last_event_time'],
     ])
-    expect(layout(fresh)).toEqual(layout(upgraded))
+  })
+
+  it('leaves a version 1 database with the schema a new database has', () => {
+    const upgraded = new DatabaseSync(':memory:'), fresh = new DatabaseSync(':memory:')
+    onTestFinished(() => { upgraded.close(); fresh.close() })
+    writeFrameLayout(upgraded)
+    prepareSchema(upgraded, options)
+    prepareSchema(fresh, options)
+    const schema = (db: DatabaseSync) => db.prepare('SELECT type, name, sql FROM sqlite_schema ORDER BY type, name').all().map(row => ({ ...row }))
+    expect(schema(upgraded)).toEqual(schema(fresh))
+    expect(schema(fresh).length).toBeGreaterThan(0)
     for (const db of [upgraded, fresh]) {
       expect(stored(db)).toBe(2)
       expect(db.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID })
     }
+  })
+
+  it('runs the version 1 to 2 step from its own statement files and the version 2 schema file alone', () => {
+    const db = new DatabaseSync(':memory:'), files = new SqlFiles()
+    onTestFinished(() => { db.close() })
+    writeFrameLayout(db, (damaged) => { damaged.prepare("UPDATE frames SET payload = ? WHERE segment_uuid = 'seg-grand'").run(Buffer.from('damaged')) })
+    const read = vi.spyOn(files, 'text')
+    frames.apply(db, { ...options, sql: files })
+    const names = read.mock.calls.map(([name]) => name)
+    expect(names).toContain('schema/v2')
+    expect(names.filter(name => name !== 'schema/v2' && !name.startsWith('upgrade/1-to-2/'))).toEqual([])
+    // The damaged frame makes the step run every one of its statements.
+    expect(new Set(names)).toEqual(new Set(['schema/v2', ...SQL_FILES.filter(name => name.startsWith('upgrade/1-to-2/'))]))
   })
 
   it('applies each step from the stored version in order and stamps the version it reaches', () => {

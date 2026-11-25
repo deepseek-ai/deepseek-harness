@@ -1,6 +1,7 @@
 /** Types of the schema upgrade steps. @module */
 import type { DatabaseSync } from 'node:sqlite'
 import type { EventCompression } from '../row.ts'
+import type { SqlFiles } from '../sql.ts'
 
 /** Store settings and reports a schema upgrade uses. */
 export interface MigrationOptions {
@@ -8,6 +9,8 @@ export interface MigrationOptions {
   readonly path: string
   /** Encoding for event rows a step writes. */
   readonly compression: EventCompression
+  /** SQL files of the store that opens the database. */
+  readonly sql: SqlFiles
   /** Receives each step before it runs: a step blocks the process for as long as it rewrites the database. */
   readonly onStep: (step: Migration) => void
   /** Receives each part of the stored data a step could not carry over and set aside instead of failing the upgrade. */
@@ -17,9 +20,10 @@ export interface MigrationOptions {
 /**
  * One upgrade of the stored schema by exactly one version. A step runs inside
  * the transaction that opens the database, so a thrown error leaves the
- * database at `from`, unchanged. A step writes the schema of its `to` version:
- * while that is the current version it uses the current schema module, and it
- * takes its own copy of that schema in the change that introduces the next version.
+ * database at `from`, unchanged. A step writes the schema of its `to` version
+ * from `resources/sql/schema/v<to>.sql` and keeps its own statements under
+ * `resources/sql/upgrade/<from>-to-<to>/`; it reads no other SQL file, so a
+ * later version adds files and leaves a released step as it was.
  */
 export interface Migration {
   /** Stored `user_version` this step reads. */

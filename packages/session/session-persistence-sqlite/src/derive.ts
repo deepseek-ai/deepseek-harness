@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { decodeEnvelope } from './codec.ts'
 import type { StoredEnvelope } from './codec.ts'
 import { decodeRow, eventRow } from './row.ts'
+import type { SqlFiles } from './sql.ts'
 
 /**
  * The envelope members a derivation reads. `type` is any stored event type,
@@ -96,9 +97,11 @@ export class DerivedTables {
    * @param derivations - tables to maintain, in dependency order for their views.
    * @param report - receives the first failure of each kind and table; later ones of the same kind and
    * table are not reported, so a derivation that fails on every event reports once.
+   * @param sql - SQL files of the owning store.
    * @throws {TypeError} for a table, column, index column or view name that is not lowercase snake case.
    */
-  constructor(private readonly derivations: readonly Derivation[], private readonly report: (failure: DerivationFailure) => void) {
+  constructor(private readonly derivations: readonly Derivation[], private readonly report: (failure: DerivationFailure) => void,
+    private readonly sql: SqlFiles) {
     for (const derivation of derivations) {
       identifier(derivation.name)
       for (const column of Object.keys(derivation.columns)) identifier(column)
@@ -123,23 +126,24 @@ export class DerivedTables {
    * @param populated - whether events already exist, so a new table starts behind them.
    */
   install(db: DatabaseSync, populated: boolean): void {
-    db.exec('CREATE TABLE IF NOT EXISTS derivations (name TEXT PRIMARY KEY, version INTEGER NOT NULL, cursor INTEGER) STRICT, WITHOUT ROWID')
+    db.exec(this.sql.text('derived/create-registry'))
     // A current table this build does not maintain stops receiving rows here; its cursor lets a later build resume it.
-    db.prepare(`UPDATE derivations SET cursor = (SELECT COALESCE(max(event_no), 0) FROM events)
-      WHERE cursor IS NULL AND name NOT IN (SELECT value FROM json_each(?))`).run(JSON.stringify(this.derivations.map(derivation => derivation.name)))
-    const stored = new Map(db.prepare('SELECT name, version FROM derivations').all().map((row) => {
+    db.prepare(this.sql.text('derived/mark-unmaintained-behind')).run(JSON.stringify(this.derivations.map(derivation => derivation.name)))
+    const stored = new Map(db.prepare(this.sql.text('derived/registered-versions')).all().map((row) => {
       const entry = registered.parse(row)
       return [entry.name, entry.version]
     }))
-    const present = new Set(db.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all().map(row => row.name))
+    const present = new Set(db.prepare(this.sql.text('store/table-names')).all().map(row => row.name))
     // A recorded table that is missing is rebuilt like one of another version. Views read tables, so every
     // stale object is dropped before any is created again.
     const stale = this.derivations.filter(derivation => stored.get(derivation.name) !== derivation.version || !present.has(derivation.name))
+    // The statements that drop and create derived objects stay inline: their identifiers, columns and view
+    // bodies come from each derivation, so they have no fixed text.
     for (const derivation of stale.toReversed()) {
       for (const view of Object.keys(derivation.views ?? {}).toReversed()) db.exec(`DROP VIEW IF EXISTS ${view}`)
       db.exec(`DROP VIEW IF EXISTS session_${derivation.name}; DROP TABLE IF EXISTS ${derivation.name}`)
     }
-    const record = db.prepare('INSERT INTO derivations VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET version = excluded.version, cursor = excluded.cursor')
+    const record = db.prepare(this.sql.text('derived/record-derivation'))
     for (const derivation of stale) {
       const { name } = derivation
       db.exec(`CREATE TABLE ${name} (
@@ -189,6 +193,7 @@ export class DerivedTables {
       const bound: SQLInputValue[] = [segment, seq, ...values]
       try {
         // Prepared on first use, inside the guard: a table that vanished under a running store costs its rows, not the append.
+        // Inline because the table name and the number of columns come from the derivation.
         let statement = inserts.get(derivation)
         if (statement === undefined) {
           statement = db.prepare(`INSERT OR REPLACE INTO ${derivation.name} VALUES (?, ?${', ?'.repeat(Object.keys(derivation.columns).length)})`)
@@ -219,7 +224,7 @@ export class DerivedTables {
       if (derivation !== undefined) behind.set(derivation, entry.cursor)
     }
     if (behind.size === 0) return false
-    const stored = statements.scan.all(Math.min(...behind.values()), ...this.byType.keys(), REBUILD_CHUNK_EVENTS)
+    const stored = statements.scan.all(Math.min(...behind.values()), JSON.stringify([...this.byType.keys()]), REBUILD_CHUNK_EVENTS)
     let scanned = 0
     for (const raw of stored) {
       const row = pending.parse(raw)
@@ -245,10 +250,9 @@ export class DerivedTables {
     if (statements === undefined) {
       statements = {
         inserts: new Map(),
-        behind: db.prepare('SELECT name, cursor FROM derivations WHERE cursor IS NOT NULL'),
-        scan: db.prepare(`SELECT event_no, segment_id, seq, type, time, surface_op, source_seqs, ignorable, codec, data FROM events
-          WHERE event_no > ? AND type IN (${[...this.byType.keys()].map(() => '?').join(', ')}) ORDER BY event_no LIMIT ?`),
-        advance: db.prepare('UPDATE derivations SET cursor = ? WHERE name = ?'),
+        behind: db.prepare(this.sql.text('derived/tables-behind')),
+        scan: db.prepare(this.sql.text('derived/events-after')),
+        advance: db.prepare(this.sql.text('derived/advance-cursor')),
       }
       this.statements.set(db, statements)
     }

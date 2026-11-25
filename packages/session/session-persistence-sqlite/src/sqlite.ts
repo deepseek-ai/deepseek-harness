@@ -30,6 +30,8 @@ import type { EventCompression, EventRow } from './row.ts'
 import { DerivedTables } from './derive.ts'
 import type { DerivedRows, Derivation, DerivationFailure } from './derive.ts'
 import { prepareSchema } from './migrations/index.ts'
+import type { SqlFiles } from './sql.ts'
+import type { SqlFile } from './sql.ts'
 
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
@@ -75,12 +77,6 @@ interface PendingAppend {
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
   head_segment_id: z.number().int(), head_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
 const sessionIdentityRow = z.object({ session_id: z.string().transform(sessionIdentity) })
-/** A Segment's stored event count: one past its last sequence, less its base; a Segment without events holds none. */
-const SEGMENT_EVENT_COUNT = 'COALESCE((SELECT seq + 1 FROM events WHERE segment_id = s.segment_id ORDER BY seq DESC LIMIT 1) - s.base_seq, 0)'
-const SESSION_METADATA_SQL = `SELECT n.session_id, header, s.segment_id AS head_segment_id, s.segment_uuid AS head_segment_uuid, inherited_count, base_seq,
-  base_seq + ${SEGMENT_EVENT_COUNT} AS event_count
-  FROM sessions n LEFT JOIN segments s ON s.segment_id = n.head_segment_id`
-const SEGMENT_SQL = `SELECT s.*, ${SEGMENT_EVENT_COUNT} AS event_count FROM segments s`
 const segmentFields = { segment_id: z.number().int(), segment_uuid: z.string().transform(segmentId),
   event_count: z.number().int().nonnegative() }
 const segmentRow = z.union([
@@ -122,6 +118,8 @@ export interface SqliteStoreOptions {
   readonly legacyRoot: string
   /** Physical `data` encoding for new rows; stored rows decode by their own codec regardless. */
   readonly compression: EventCompression
+  /** Reader of the package's SQL files, shared with whatever built the derivations. */
+  readonly sql: SqlFiles
   /** Derived tables to maintain beside events. */
   readonly derivations: readonly Derivation[]
   /** Publish a Session's routing record after its first commit. */
@@ -161,7 +159,9 @@ export class SqliteStore {
   }>()
   private readonly creating = new Set<SessionId>()
   private readonly directorySyncs = new Set<string>()
-  private readonly statements = new Map<string, StatementSync>()
+  /** SQL text of this store's statements, shared with its derived tables and upgrade steps. */
+  private readonly sql: SqlFiles
+  private readonly statements = new Map<SqlFile, StatementSync>()
   private ready: Promise<DatabaseSync> | undefined
   private closing: Promise<void> | undefined
   private failure: Error | undefined
@@ -175,7 +175,8 @@ export class SqliteStore {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
     this.compression = options.compression
-    this.derived = new DerivedTables(options.derivations, options.reportDerivation)
+    this.sql = options.sql
+    this.derived = new DerivedTables(options.derivations, options.reportDerivation, this.sql)
     this.reportDerivation = options.reportDerivation
     this.reportUpgrade = options.reportUpgrade
     this.reportSetAside = options.reportSetAside
@@ -249,6 +250,7 @@ export class SqliteStore {
     try {
       const opened = new DatabaseSync(this.path, { timeout: BUSY_TIMEOUT_MS })
       db = opened
+      // Connection pragmas stay inline: each is one setting whose meaning is this call site.
       // Readers can acquire a snapshot as soon as schema creation commits.
       opened.exec('PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL;')
       const deadline = performance.now() + BUSY_TIMEOUT_MS
@@ -262,13 +264,13 @@ export class SqliteStore {
         }
       }
       this.transaction(opened, () => {
-        prepareSchema(opened, { path: this.path, compression: this.compression,
+        prepareSchema(opened, { path: this.path, compression: this.compression, sql: this.sql,
           onStep: (step) => {
             this.upgrading = true
             this.reportUpgrade(step.from, step.to)
           },
           onSetAside: this.reportSetAside })
-        this.derived.install(opened, opened.prepare('SELECT 1 FROM events LIMIT 1').get() !== undefined)
+        this.derived.install(opened, opened.prepare(this.sql.text('store/any-event')).get() !== undefined)
       })
       this.upgrading = false
       this.scheduleRebuild(opened)
@@ -309,6 +311,7 @@ export class SqliteStore {
 
   private transaction<T>(db: DatabaseSync, operation: () => T, mode: 'IMMEDIATE' | 'DEFERRED' = 'IMMEDIATE'): T {
     this.assertHealthy()
+    // Transaction control stays inline here and in the group commit: each statement is a keyword this code sequences.
     db.exec(`BEGIN ${mode}`)
     let result: T
     try { result = operation() }
@@ -340,18 +343,19 @@ export class SqliteStore {
     this.assertHealthy()
   }
 
-  private statement(db: DatabaseSync, sql: string): StatementSync {
-    let statement = this.statements.get(sql)
+  /** Prepare one SQL file's statement on first use; the store holds a single connection. */
+  private statement(db: DatabaseSync, file: SqlFile): StatementSync {
+    let statement = this.statements.get(file)
     if (statement === undefined) {
-      statement = db.prepare(sql)
-      this.statements.set(sql, statement)
+      statement = db.prepare(this.sql.text(file))
+      this.statements.set(file, statement)
     }
     return statement
   }
 
   private row(db: DatabaseSync, id: SessionId) {
     this.assertHealthy()
-    const raw = this.statement(db, `${SESSION_METADATA_SQL} WHERE n.session_id = ?`).get(id)
+    const raw = this.statement(db, 'store/session-by-id').get(id)
     if (raw === undefined) return undefined
     return this.parseMetadata(raw, id)
   }
@@ -362,7 +366,7 @@ export class SqliteStore {
   }
 
   private segment(db: DatabaseSync, id: number): Segment {
-    const row = this.statement(db, `${SEGMENT_SQL} WHERE s.segment_id = ?`).get(id)
+    const row = this.statement(db, 'store/segment-by-id').get(id)
     if (row === undefined) throw new HarnessError('Session references a missing segment', 'SESSION_STORAGE_CORRUPT')
     try { return segmentRow.parse(row) }
     catch (error: unknown) { throw this.corruption(`stored SQLite segment ${id} metadata is invalid`, error) }
@@ -370,8 +374,7 @@ export class SqliteStore {
 
   /** Fetch the metadata of every ancestor on the Segment's path together, retaining the authoritative chain checks during reads. */
   private parents(db: DatabaseSync, id: number, offset: number, nodes: Map<number, Segment>): void {
-    const rows = this.statement(db, `${SEGMENT_SQL} JOIN segment_paths p ON p.member_id = s.segment_id
-      WHERE p.segment_id = ? AND p.member_id != p.segment_id AND p.end_seq > ?`).all(id, offset)
+    const rows = this.statement(db, 'store/segment-ancestors').all(id, offset)
     for (const row of rows) {
       let parsed: Segment
       try { parsed = segmentRow.parse(row) }
@@ -383,21 +386,18 @@ export class SqliteStore {
   /** Insert a Segment whose first sequence is `end` events into `parent`, returning its row id. */
   private newSegment(db: DatabaseSync, id: SegmentId, parent: Segment | undefined, end: number): number {
     const base = parent === undefined ? 0 : parent.base_seq + end
-    return Number(this.statement(db, 'INSERT INTO segments (segment_uuid, parent_id, base_seq) VALUES (?, ?, ?)')
-      .run(id, parent?.segment_id ?? null, base).lastInsertRowid)
+    return Number(this.statement(db, 'store/insert-segment').run(id, parent?.segment_id ?? null, base).lastInsertRowid)
   }
 
   private insertSession(db: DatabaseSync, header: SessionHeader, head: number,
     inheritedCount: number, encoded: readonly EncodedEvent[]): void {
-    this.statement(db, 'INSERT INTO sessions (session_id, header, head_segment_id, inherited_count) VALUES (?, ?, ?, ?)')
-      .run(header.id, JSON.stringify(header), head, inheritedCount)
+    this.statement(db, 'store/insert-session').run(header.id, JSON.stringify(header), head, inheritedCount)
     this.insertEvents(db, head, encoded)
   }
 
   /** Store consecutive event rows; the last row's sequence fixes the Segment's event count. */
   private insertEvents(db: DatabaseSync, segment: number, encoded: readonly EncodedEvent[]): void {
-    const insert = this.statement(db, `INSERT INTO events (segment_id, seq, type, time, surface_op, source_seqs, ignorable, codec, data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    const insert = this.statement(db, 'store/insert-event')
     for (const { row, derived } of encoded) {
       insert.run(segment, row.seq, row.type, row.time, row.surface_op, row.source_seqs, row.ignorable, row.codec, row.data)
       this.derived.insert(db, segment, row.seq, derived)
@@ -448,9 +448,7 @@ export class SqliteStore {
     const tail = this.segment(db, source.head_segment_id)
     if (end >= tail.base_seq) return { parent: tail, end: end - tail.base_seq }
     // Among ancestors starting at or before the cut, the deepest one holds it; an empty-prefix tie is logically equivalent.
-    const raw = this.statement(db, `SELECT s.*, p.end_seq - s.base_seq AS visible_end, ${SEGMENT_EVENT_COUNT} AS event_count FROM segment_paths p
-      JOIN segments s ON s.segment_id = p.member_id
-      WHERE p.segment_id = ? AND p.member_id != p.segment_id AND s.base_seq <= ? ORDER BY s.base_seq DESC, p.end_seq DESC LIMIT 1`).get(tail.segment_id, end)
+    const raw = this.statement(db, 'store/fork-attachment').get(tail.segment_id, end)
     if (raw === undefined) throw new HarnessError('Invalid Session segment chain', 'SESSION_STORAGE_CORRUPT')
     let parent: Segment, visible: number
     try {
@@ -719,8 +717,7 @@ export class SqliteStore {
       // Rows of each Segment range, oldest Segment first.
       const rows: EventRow[] = []
       const stop = offset + Math.min(length, Math.max(0, meta.event_count - offset))
-      const select = this.statement(db, `SELECT seq, type, time, surface_op, source_seqs, ignorable, codec, data FROM events
-        WHERE segment_id = ? AND seq >= ? AND seq < ? ORDER BY seq`)
+      const select = this.statement(db, 'store/events-in-range')
       for (const { segment, end } of ranges.reverse()) {
         const start = Math.max(segment.base_seq, offset), finish = Math.min(segment.base_seq + end, stop)
         if (finish <= start) continue
@@ -931,7 +928,7 @@ export class SqliteStore {
       const db = await this.database()
       // One joined query observes all durable metadata in the same read snapshot.
       this.transaction(db, () => {
-        for (const stored of this.statement(db, `${SESSION_METADATA_SQL} ORDER BY n.session_id`).all()) {
+        for (const stored of this.statement(db, 'store/sessions').all()) {
           signal?.throwIfAborted()
           const id = sessionIdentityRow.parse(stored).session_id
           seen.add(id)
