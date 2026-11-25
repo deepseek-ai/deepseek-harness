@@ -121,7 +121,7 @@ describe('npm install layout verifier', () => {
 
 /**
  * One DSH release in which `dsh-first` depends on a package that requires zod as a peer and `dsh-second`
- * declares zod. npm processes `dsh-first` before `dsh-second`.
+ * pins zod. npm processes `dsh-first` before `dsh-second`.
  */
 function sharedZodRegistry(firstDeclaresZod: boolean): RegistryIndex {
   const manifest = (name: string, fields: object = {}) =>
@@ -131,9 +131,9 @@ function sharedZodRegistry(firstDeclaresZod: boolean): RegistryIndex {
       dependencies: { '@deepseek-ai/dsh-first': '1.0.0', '@deepseek-ai/dsh-second': '1.0.0' },
     }),
     manifest('@deepseek-ai/dsh-first', {
-      dependencies: { 'zod-peer-host': '1.0.0', ...(firstDeclaresZod ? { zod: '~4.6.6' } : {}) },
+      dependencies: { 'zod-peer-host': '1.0.0', ...(firstDeclaresZod ? { zod: '4.6.6' } : {}) },
     }),
-    manifest('@deepseek-ai/dsh-second', { dependencies: { zod: '~4.6.6' } }),
+    manifest('@deepseek-ai/dsh-second', { dependencies: { zod: '4.6.6' } }),
     manifest('zod-peer-host', { peerDependencies: { zod: '^4.0.0' } }),
     ['zod', new Map([['4.6.6', { name: 'zod', version: '4.6.6' }]])],
   ])
@@ -194,7 +194,7 @@ describe('shared external package installation', () => {
         lockfileVersion: 3,
         packages: {
           '': { dependencies: { '@deepseek-ai/dsh': '1.0.0' } },
-          'node_modules/@deepseek-ai/dsh': { version: '1.0.0', dependencies: { zod: '~4.6.6' } },
+          'node_modules/@deepseek-ai/dsh': { version: '1.0.0', dependencies: { zod: '4.6.6' } },
           'node_modules/zod': { version: '4.6.6' },
         },
       }, 'zod')
@@ -240,7 +240,7 @@ describe('shared external package installation', () => {
     )
   })
 
-  it('accepts the layout npm computes once the package with the peer declares the DSH range', async () => {
+  it('accepts the layout npm computes once the package with the peer pins the same version', async () => {
     const result = await resolveNpmPackageLock(
       withNewerExternalRelease(sharedZodRegistry(true), 'zod'),
       { '@deepseek-ai/dsh': '1.0.0' },

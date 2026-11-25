@@ -46,6 +46,6 @@
     "@deepseek-ai/dsh-cordis-host-runner": "workspace:*",
     "@deepseek-ai/dsh-typert-registry": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "zod": "~4.6.6"
+    "zod": "4.6.6"
   }
 }

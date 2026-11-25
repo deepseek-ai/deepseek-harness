@@ -40,7 +40,7 @@
     "react-dom": "^18.2.0",
     "typescript": "^6.0.3",
     "@deepseek-ai/dsh-host-webserver": "workspace:*",
-    "zod": "~4.6.6",
+    "zod": "4.6.6",
     "@tanstack/react-virtual": "3.14.10"
   },
   "peerDependencies": {

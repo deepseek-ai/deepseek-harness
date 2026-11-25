@@ -67,7 +67,7 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-subprocess": "workspace:*",
-    "zod": "~4.6.6",
+    "zod": "4.6.6",
     "@deepseek-ai/dsh-home-paths": "workspace:*"
   }
 }

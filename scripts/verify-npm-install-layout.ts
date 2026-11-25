@@ -19,7 +19,7 @@ const CORDIS_PACKAGE = '@deepseek-ai/cordis'
 const NESTED_DSH_ALIAS = 'dsh-previous'
 const NESTED_DSH_PATH = `node_modules/${NESTED_DSH_ALIAS}`
 const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
-/** External package that about a hundred DSH packages declare with one range; each installation is about 9 MB. */
+/** External package that about a hundred DSH packages pin to one version; each installation is about 9 MB. */
 const SHARED_EXTERNAL_PACKAGE = 'zod'
 
 /**
@@ -251,8 +251,8 @@ export function assertResolutionWorkBudget(summary: DshInstallLayoutSummary): nu
  * Add the release a later registry holds: one minor above the newest indexed version of an external package.
  *
  * The local index lists only the versions in the pnpm lockfile, so every range resolves to the locked version
- * and npm cannot hoist anything else. A release above the DSH range that a third-party peer range accepts is
- * the input that makes npm hoist a version DSH packages cannot share.
+ * and npm cannot hoist anything else. A release other than the DSH pin that a third-party peer range accepts
+ * is the input that makes npm hoist a version DSH packages cannot share.
  * @param index - Registry metadata for one DSH release.
  * @param name - External package that receives the newer release.
  * @returns Registry metadata with that release added; `index` is unchanged.
@@ -306,7 +306,7 @@ export function assertRequiredPeerDeclared(index: RegistryIndex, name: string): 
   throw new Error(
     `DSH package(s) depend on a package that requires ${name} as a peer without declaring ${name}:\n`
     + `${undeclared.sort().map(line => `  - ${line}`).join('\n')}\n`
-    + `  Add ${name} to each package's dependencies with the range other DSH packages declare. npm otherwise\n`
+    + `  Add ${name} to each package's dependencies at the version other DSH packages pin. npm otherwise\n`
     + `  installs the newest ${name} release that peer range accepts, and DSH packages that cannot share it\n`
     + '  install their own copies.',
   )
@@ -328,9 +328,9 @@ export function assertSingleExternalInstallation(packageLock: NpmPackageLock, na
     `expected one ${name} installation at ${expected}, got ${String(paths.length)}: `
     + `${hoisted === undefined ? `no ${expected}` : `${expected}@${hoisted}`} and ${String(others.length)} other(s)`
     + `${others.length === 0 ? '' : ` such as ${others.slice(0, 3).join(', ')}`}\n`
-    + `  A ${name} release outside the range DSH packages declare reached the top level, so each of them\n`
-    + `  installs its own copy. A DSH package whose external dependency requires ${name} as a peer must declare\n`
-    + `  ${name} with the DSH range, so npm places that range first.`,
+    + `  A ${name} release other than the one DSH packages pin reached the top level, so each of them\n`
+    + `  installs its own copy. A DSH package whose external dependency requires ${name} as a peer must pin\n`
+    + `  ${name} to the same version, so npm places that version first.`,
   )
 }
 

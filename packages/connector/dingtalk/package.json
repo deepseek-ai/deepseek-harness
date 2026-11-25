@@ -50,7 +50,7 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "fflate": "^0.8.3",
     "tar": "^7.5.22",
-    "zod": "~4.6.6"
+    "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

@@ -69,7 +69,7 @@
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "undici": "8.12.4",
     "ws": "^8.18.3",
-    "zod": "~4.6.6"
+    "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

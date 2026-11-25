@@ -48,7 +48,7 @@
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session-format": "workspace:*",
     "@deepseek-ai/dsh-session-format-v3-to-v4": "workspace:*",
-    "zod": "~4.6.6",
+    "zod": "4.6.6",
     "@deepseek-ai/node-addon-system": "workspace:~",
     "p-limit": "7.3.3",
     "koffi": "3.1.1"
