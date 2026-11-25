@@ -167,9 +167,7 @@
     "@deepseek-ai/dsh-storage-json": "workspace:*",
     "@deepseek-ai/dsh-client-ui-user-questions": "workspace:*",
     "@deepseek-ai/dsh-client-ui-approval": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-settings-general": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-agent-preset": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*"
   },
   "dsh": {
     "client": {

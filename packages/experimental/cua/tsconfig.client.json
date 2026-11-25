@@ -57,12 +57,6 @@
     },
     {
       "path": "../../client/ui-conversation/tsconfig.client.json"
-    },
-    {
-      "path": "../../client/ui-settings-general/tsconfig.client.json"
-    },
-    {
-      "path": "../../client/ui-agent-preset/tsconfig.json"
     }
   ]
 }

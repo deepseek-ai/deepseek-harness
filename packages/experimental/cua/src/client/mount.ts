@@ -7,9 +7,6 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings-general/client'
-import type { AGENT_PRESETS_SECTION_ID } from '@deepseek-ai/dsh-client-ui-agent-preset/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ApplicationApproval, selectApplicationApproval } from './ApplicationApproval.tsx'
 import { PermissionController } from './controller.ts'
@@ -58,26 +55,8 @@ export async function mountCuaPermissions(ctx: Context, contribution: TypertRemo
     })
     ctx.effect(() => () => controller.dispose())
     ctx.on('connection/reset', face.refresh)
-    // A type-only import keeps the Agent presets Client out of this bundle while typechecking the section id it owns.
-    const presetsSection: typeof AGENT_PRESETS_SECTION_ID = 'agent-presets'
-    const canOpenPresets = createSnapshotStore(false)
-    ctx.inject(['settingsNavigation'], (scope) => {
-      const sync = () => {
-        canOpenPresets.set(ctx.slots.entries('settings.section').some(entry => entry.options.id === presetsSection))
-      }
-      sync()
-      scope.effect(() => {
-        const off = ctx.slots.subscribe('settings.section', sync)
-        return () => { off(); canOpenPresets.set(false) }
-      })
-    })
     ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
-      name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS,
-      inject: () => ({
-        ...face,
-        hooks: { ...face.hooks, canOpenPresets },
-        openPresets: () => { ctx.get('settingsNavigation')?.open(presetsSection) },
-      }),
+      name: 'plugins.bundle.config', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => face,
     }, PermissionPanel))
     ctx.slots.inject('plugins.bundle.activation', () => ctx.slots.register({
       name: 'plugins.bundle.activation', key: '@deepseek-ai/dsh-cua-bundle', locale: NS, inject: () => face,

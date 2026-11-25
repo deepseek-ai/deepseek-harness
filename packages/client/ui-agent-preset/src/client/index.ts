@@ -61,12 +61,6 @@ export type { AgentPresetSectionState, PresetView } from './section-store.ts'
 export type { AgentPresetOption, AgentPresetSettingsState } from './settings-store.ts'
 export { AGENT_PRESET_SETTINGS_NS, writeDefaultPreset } from './settings-store.ts'
 
-/**
- * `settings.section` id of the Agent presets page, for callers of `settingsNavigation.open`.
- * The registration repeats it literally so the Client slot catalog can read it.
- */
-export const AGENT_PRESETS_SECTION_ID = 'agent-presets'
-
 /** Required services (cordis fiber inject); `uiResponsive` owns the hero chip's `useMediaQuery` prop. */
 export const inject = [
   'slots', 'sessions', 'locale', 'remote', 'remote.agentPresets', 'remote.settings', 'configForms', 'uiResponsive',

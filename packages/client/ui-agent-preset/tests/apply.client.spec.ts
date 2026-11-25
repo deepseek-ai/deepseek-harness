@@ -14,7 +14,7 @@ import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-c
 import { RemoteError, StaticUiResponsive, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
-import { AGENT_PRESETS_SECTION_ID, apply, inject } from '@deepseek-ai/dsh-client-ui-agent-preset/client'
+import { apply, inject } from '@deepseek-ai/dsh-client-ui-agent-preset/client'
 import { AgentPresetLabel } from '../src/client/AgentPresetLabel.tsx'
 import type { AgentPresetLabelInjected } from '../src/client/AgentPresetLabel.tsx'
 import { AgentPresetSection } from '../src/client/AgentPresetSection.tsx'
@@ -365,7 +365,7 @@ describe('ui-agent-preset apply', () => {
     expect(slots.entries('settings.general.item')).toHaveLength(0)
     const section = slots.entries('settings.section')[0]!
     expect(section.component).toBe(AgentPresetSection)
-    expect(section.options).toMatchObject({ id: AGENT_PRESETS_SECTION_ID, order: 20 })
+    expect(section.options).toMatchObject({ id: 'agent-presets', order: 20 })
     // The nav label is a locale-following thunk; owners resolve it at read time.
     expect(resolveSlotLabel(section.options.label)).toBe('Agent 预设')
   })

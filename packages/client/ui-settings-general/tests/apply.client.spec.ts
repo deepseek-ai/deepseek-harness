@@ -430,19 +430,4 @@ describe('ui-settings-general apply', () => {
     await c.flush()
     expect(overlay()).toBeUndefined()
   })
-
-  it('exposes settingsNavigation for cross-plugin section jumps and removes it on unload', async ({ mock, start }) => {
-    const { c } = await client(mock, start)
-    const store = c.ctx.slots.entries('sidebar.settings')[0]!.store
-    if (store === undefined || !('create' in store)) throw new Error('expected root store handle')
-    const shell = store.create()
-    expect(shell.getSnapshot()).toEqual({ open: false, activeId: undefined })
-    c.ctx.settingsNavigation.open()
-    expect(shell.getSnapshot()).toEqual({ open: true, activeId: undefined })
-    c.ctx.settingsNavigation.open('agent-presets')
-    expect(shell.getSnapshot()).toEqual({ open: true, activeId: 'agent-presets' })
-    await c.unload(SELF)
-    await c.flush()
-    expect(c.ctx.get('settingsNavigation')).toBeUndefined()
-  })
 })

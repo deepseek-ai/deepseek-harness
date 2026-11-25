@@ -170,12 +170,6 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await expect.poll(() => accessibility.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1)
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   await compareOrRefreshGolden(expected, await captureStableAria(page, '[data-cua-settings]', scaffold.workspaceCwd), webSnapshotMode())
-  await panel.getByRole('button', { name: 'PTC mode', exact: true }).click()
-  const settingsDialog = page.getByRole('dialog', { name: 'Settings', exact: true })
-  await settingsDialog.waitFor()
-  expect(await settingsDialog.getByRole('button', { name: 'Agent presets', exact: true }).getAttribute('aria-current')).toBe('true')
-  await page.keyboard.press('Escape')
-  await settingsDialog.waitFor({ state: 'hidden' })
   try {
     for (const width of [1680, 390]) {
       await page.setViewportSize({ width, height: 1000 })

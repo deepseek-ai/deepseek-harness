@@ -5,7 +5,7 @@ import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-tes
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { afterEach, expect, it, vi } from 'vitest'
-import { PermissionPanel, PermissionSetup, PermissionToast, type PermissionPanelProps } from '../src/client/PermissionPanel.tsx'
+import { PermissionPanel, PermissionSetup, PermissionToast, type PermissionProps } from '../src/client/PermissionPanel.tsx'
 import type { PermissionView } from '../src/client/controller.ts'
 import { en, zh } from '../src/client/locales.ts'
 
@@ -26,15 +26,13 @@ function fixture() {
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
   })
-  const canOpenPresets = createSnapshotStore(false)
   const refresh = vi.fn()
-  const props = { useCuaPermissions: bindSnapshotSelector(state), useCanOpenPresets: bindSnapshotSelector(canOpenPresets),
-    t: makeTranslate(en), refresh, request: vi.fn(), openSettings: vi.fn(), openPresets: vi.fn(), revoke: vi.fn(),
+  const props = { useCuaPermissions: bindSnapshotSelector(state), t: makeTranslate(en),
+    refresh, request: vi.fn(), openSettings: vi.fn(), revoke: vi.fn(),
     retryApproval: vi.fn(), dismissToast: vi.fn(),
-  } satisfies PermissionPanelProps
-  return { state, canOpenPresets, props,
+  } satisfies PermissionProps
+  return { state, props,
     publish(patch: Partial<PermissionView>) { act(() => { state.set({ ...state.getSnapshot(), ...patch }) }) },
-    setPresetsAvailable(available: boolean) { act(() => { canOpenPresets.set(available) }) },
   }
 }
 
@@ -404,17 +402,11 @@ it.each([en, zh])('highlights the experimental notice and keeps the PTC recommen
   const note = screen.getByRole('note')
   expect(within(note).getByText(dictionary.previewNoticeTitle)).toBeTruthy()
   expect(within(note).getByText(dictionary.previewNotice)).toBeTruthy()
-  const fullPtc = dictionary.ptcRecommendation.replace('{ptcMode}', dictionary.ptcModeLink)
-  expect(within(note).queryByText(fullPtc)).toBeNull()
-  const ptc = screen.getByText(fullPtc)
+  expect(within(note).queryByText(dictionary.ptcRecommendation)).toBeNull()
+  const ptc = screen.getByText(dictionary.ptcRecommendation)
   const heading = screen.getByRole('heading', { name: dictionary.title })
   expect(note.compareDocumentPosition(ptc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(ptc.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(screen.queryByRole('button', { name: dictionary.ptcModeLink })).toBeNull()
-  f.setPresetsAvailable(true)
-  const link = screen.getByRole('button', { name: dictionary.ptcModeLink })
-  fireEvent.click(link)
-  expect(f.props.openPresets).toHaveBeenCalledOnce()
 })
 
 it.each([true, false, null] as const)('omits system permissions on Windows and places warnings above the experimental notice for lock=%s', (sessionLocked) => {
@@ -433,7 +425,7 @@ it.each([true, false, null] as const)('omits system permissions on Windows and p
   const experimental = screen.getByText(en.previewNoticeTitle)
   const instructions = screen.getByText(en.windowsInstructions)
   const privileges = screen.getByText(en.standardPrivileges)
-  const ptc = screen.getByText(en.ptcRecommendation.replace('{ptcMode}', en.ptcModeLink))
+  const ptc = screen.getByText(en.ptcRecommendation)
   expect(experimental.compareDocumentPosition(instructions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(instructions.compareDocumentPosition(privileges) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(privileges.compareDocumentPosition(ptc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
