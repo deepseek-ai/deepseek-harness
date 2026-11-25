@@ -45,7 +45,7 @@ kind: "package-reference"
 
 应用授权依据 AUMID，与 macOS 按 bundle identifier 授权的取舍一致。同一 AUMID 的不同版本和副本共享授权，不区分可执行文件位置或签名。窗口属性与打包应用的进程元数据提供显式 AUMID；Windows Shell 补充解析未在这些位置暴露标识的桌面应用。Shell 将启动器与其窗口关联到同一 AUMID 时，两者共用授权。没有应用标识时，授权依据规范化的可执行文件路径。搜索与已知路径选择复用同一决定；一个路径承载多个应用 ID 时返回 `AMBIGUOUS_APP`。
 
-审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。应用名称和图标查询目标在选择应用时保存。只有明确选择“始终允许”才保存跨会话授权，已有会话授权不会升级。选择可执行文件路径时保留该启动目标，即使它的应用 ID 与其他副本相同。
+审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。在同一会话内复用应用授权时，保留已保存的名称和图标查询目标。只有明确选择“始终允许”才保存跨会话授权，已有会话授权不会升级。选择可执行文件路径时保留该启动目标，即使它的应用 ID 与其他副本相同。
 
 桌面应用解析使用 Windows 8+ Shell 的 `IApplicationResolver` 接口，[System Informer](https://github.com/winsiderss/systeminformer/blob/master/phlib/appresolver.c) 也使用此接口。该接口未公开文档；解析器不可用时，应用发现会明确失败。未注册且无法发现 AUMID 的可执行文件使用路径，因此移动它，或选择 Shell 未关联的启动器，可能需要再次授权。AUMID 是应用标识，不是发布者或签名验证。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
 

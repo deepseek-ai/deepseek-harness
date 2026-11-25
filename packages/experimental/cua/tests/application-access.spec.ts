@@ -172,11 +172,14 @@ it('reuses session consent across application handles and connections without gr
 
 it.each(['Allow for this session', 'Always allow'])('shares %s across installation paths and revokes both handles', async (choice) => {
   const f = await setup(choice)
-  const copy = { ...identity, name: 'Second version', executablePath: '/Applications/Fixture Beta.app/Contents/MacOS/Fixture' }
+  const copy = { ...identity, name: 'Second version', executablePath: '/Applications/Fixture Beta.app/Contents/MacOS/Fixture',
+    iconPath: '/Applications/Fixture Beta.app' }
   const secondHandle = 'second-installation' as CuaAppHandle
   await f.access.select(f.agent, f.client, handle, identity, signal)
+  const saved = await f.store.withState(signal, async ({ state }) => state.applications[identity.id])
   await f.access.select(f.agent, f.client, secondHandle, copy, signal)
   expect(f.answer).toHaveBeenCalledOnce()
+  expect(await f.store.withState(signal, async ({ state }) => state.applications[identity.id])).toEqual(saved)
   for (const selected of [handle, secondHandle]) {
     await expect(f.access.run(f.client, selected, signal, async () => 'read')).resolves.toBe('read')
   }

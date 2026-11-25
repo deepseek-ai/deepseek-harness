@@ -200,11 +200,6 @@ export class ApplicationAccess {
         const { persistable: _persistable, ...grant } = identity
         const previous = app.sessions[agent.id]
         if (previous?.decision === 'allow' && (scope === 'session' || app.always)) {
-          if (JSON.stringify(previous.identity) !== JSON.stringify(grant)
-            || app.always && JSON.stringify(app.always) !== JSON.stringify(grant)) {
-            await this.save(transaction, identity.id, { ...app, ...(app.always ? { always: grant } : {}),
-              sessions: { ...app.sessions, [agent.id]: { ...previous, identity: grant } } })
-          }
           return { revoked: app.revoked, revision: previous.revision }
         }
         const revision = (previous?.revision ?? 0) + 1
