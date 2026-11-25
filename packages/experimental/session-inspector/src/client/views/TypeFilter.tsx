@@ -32,7 +32,7 @@ export function TypeFilter({ value, suggest, apply, t, Portal }: InspectorTypeFi
   const input = useRef<HTMLInputElement>(null)
   const id = useId()
   const listId = `${id}-types`
-  const anchorName = `--dsh-type-filter-${id.replaceAll(':', '')}`
+  const anchorName = `--dsh-type-filter-${id.replace(/[^\w-]/g, '')}`
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false)
     if (restoreFocus) anchor.current?.focus({ preventScroll: true })

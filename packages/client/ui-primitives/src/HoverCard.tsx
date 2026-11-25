@@ -74,7 +74,7 @@ export function HoverCard({
   copiedLabel?: string
 })) {
   const compact = variant !== 'preview' && !inline
-  const anchorName = `--dsh-hover-card-${useId().replaceAll(':', '')}`
+  const anchorName = `--dsh-hover-card-${useId().replace(/[^\w-]/g, '')}`
   const rootRef = useRef<HTMLSpanElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const portalRef = useRef<HTMLSpanElement>(null)

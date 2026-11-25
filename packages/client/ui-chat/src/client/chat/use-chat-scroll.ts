@@ -1,5 +1,5 @@
 /** Composes viewport operations, reading policy, and history navigation for Chat. */
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { TranscriptViewMode } from '../../chat-settings.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
@@ -27,8 +27,8 @@ export interface ChatScrollInput extends ChatNavigationInput {
 }
 
 interface ChatScrollState extends ChatReadingState {
-  readonly listRef: RefObject<HTMLDivElement>
-  readonly columnRef: RefObject<HTMLDivElement>
+  readonly listRef: MutableRefObject<HTMLDivElement | null>
+  readonly columnRef: MutableRefObject<HTMLDivElement | null>
   readonly busyTurn: number | null
   readonly navigateToTurn: ChatNavigation['navigateToTurn']
   readonly loadEarlier: ChatNavigation['loadEarlier']

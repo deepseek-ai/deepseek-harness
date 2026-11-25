@@ -125,7 +125,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   const objectTarget = objectHistory?.references.at(-1)
   const [reveal, setReveal] = useState<{ key: string; pulse: number } | null>(null)
   const appliedReveal = useRef<typeof reveal>(null)
-  const appliedPick = useRef<typeof pickedRow>()
+  const appliedPick = useRef<typeof pickedRow>(undefined)
   const [disclosures, setDisclosures] = useState<ReadonlyMap<string, InspectorDisclosure>>(new Map())
   const [typeQuery, setTypeQuery] = useState('')
   const typeFilter = useMemo(() => new InspectorTypeFilter(typeQuery), [typeQuery])
@@ -134,7 +134,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   const scroller = useRef<HTMLDivElement>(null)
   const followMode = useRef<'tail' | 'scroll' | 'manual'>('tail')
   const viewport = useRef({ offset: 0, height: 600 })
-  const disclosureAnchor = useRef<InspectorRowAnchor>()
+  const disclosureAnchor = useRef<InspectorRowAnchor>(undefined)
   const [spacingGeneration, resetSpacing] = useState(0)
   const toggle = useCallback((row: InspectorRow, element: HTMLTableRowElement) => {
     // oxlint-disable-next-line typescript/no-non-null-assertion -- Row disclosure runs only inside the mounted scrollport.
@@ -205,7 +205,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   }, [pickedRow, allRows, revealRow])
   const hierarchy = useMemo(() => new InspectorTableHierarchy(filtered.rows, disclosures), [filtered.rows, disclosures])
   const rows = hierarchy.rows
-  const committed = useRef<{ layout: InspectorTableLayout; disclosures: typeof disclosures; spacingGeneration: number }>()
+  const committed = useRef<{ layout: InspectorTableLayout; disclosures: typeof disclosures; spacingGeneration: number }>(undefined)
   const layout = useMemo(() => new InspectorTableLayout(hierarchy,
     committed.current?.disclosures === disclosures && committed.current.spacingGeneration === spacingGeneration
       ? committed.current.layout : undefined, viewport.current, disclosureAnchor.current), [hierarchy, disclosures, spacingGeneration])
@@ -223,7 +223,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   const keyOf = useCallback((index: number) => layout.items[index]!.key, [layout])
   // oxlint-disable-next-line typescript/no-non-null-assertion -- Virtualizer indexes are bounded by this layout's item count.
   const sizeOf = useCallback((index: number) => layout.items[index]!.size, [layout])
-  const virtualRef = useRef<Virtualizer<HTMLDivElement, HTMLTableRowElement>>()
+  const virtualRef = useRef<Virtualizer<HTMLDivElement, HTMLTableRowElement>>(undefined)
   const extractRange = useCallback((range: Range) => {
     // oxlint-disable-next-line typescript/no-non-null-assertion -- The enabled Virtualizer initializes its offset before range extraction.
     const offset = anchoredOffset ?? virtualRef.current!.scrollOffset!

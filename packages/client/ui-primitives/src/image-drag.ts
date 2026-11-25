@@ -22,7 +22,7 @@ export function useImageDrag(
   const source = useMemo<FileDragSource>(() => original === undefined
     ? { kind: 'url', url: src, name, mediaType: '', resourceAddress }
     : { kind: 'blob', blob: original, name, mediaType: original.type, resourceAddress }, [src, name, original, resourceAddress])
-  const state = useRef<Preparation>()
+  const state = useRef<Preparation>(undefined)
   const dragged = useRef(false)
   const release = useCallback((): void => {
     const previous = state.current

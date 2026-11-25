@@ -798,7 +798,7 @@ export type ComposerAttachmentsProps =
 /** Owner share common to blank-session Workspace pickers. */
 export interface EmptyWorkspaceOwnerProps {
   open: boolean
-  anchorRef?: RefObject<HTMLElement>
+  anchorRef?: RefObject<HTMLElement | null>
   /** Currently selected Workspace, when available. */
   selectedId?: WorkspaceId | undefined
   onPick: (workspaceId: WorkspaceId) => void

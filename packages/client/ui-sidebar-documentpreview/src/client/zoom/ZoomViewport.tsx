@@ -62,8 +62,8 @@ export function ZoomViewport(props: ZoomViewportProps): ReactNode {
   const frame = useRef<HTMLElement | null>(null)
   const scrollport = useRef<HTMLDivElement | null>(null)
   const controls = useRef<ZoomControlsHandle>(null)
-  const pinchTimer = useRef<ReturnType<typeof setTimeout>>()
-  const controlsHideTimer = useRef<ReturnType<typeof setTimeout>>()
+  const pinchTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const controlsHideTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pointerInRevealZone = useRef(false)
   const controlsActive = useRef(false)
   const clearControlsHide = useCallback((): void => {

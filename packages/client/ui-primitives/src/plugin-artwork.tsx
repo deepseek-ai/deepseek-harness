@@ -10,7 +10,7 @@ import type { IconProps } from './icons/props.ts'
  * A per-instance SVG def id prefix: the artwork repeats across cards and rows,
  * and duplicate document ids would make every `url(#…)` resolve to the first instance.
  */
-const useArtworkId = (): string => `dsh_plugin_art_${useId().replaceAll(':', '')}`
+const useArtworkId = (): string => `dsh_plugin_art_${useId().replace(/[^\w-]/g, '')}`
 
 /** Light-blue terminal artwork shared by plugin cards and sidebar guide entries. */
 export const PluginArtworkTerminal = ({ size = 36, className }: IconProps) => (

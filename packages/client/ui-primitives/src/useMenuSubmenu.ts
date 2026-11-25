@@ -1,6 +1,6 @@
 /** Owns one menu's child layout mode, pointer grace, and focus transitions. */
 import { useId, useLayoutEffect, useRef, useState } from 'react'
-import type { RefObject, SyntheticEvent } from 'react'
+import type { Ref, RefObject, SyntheticEvent } from 'react'
 import type { MenuEntry, MenuItem } from './Menu.tsx'
 import { submenuNeedsPage } from './menu-submenu-position.ts'
 import { usePointerGrace } from './pointer-grace.ts'
@@ -16,7 +16,7 @@ export function menuHoverAllowed(event: { pointerType: string }): boolean {
 
 interface MenuSubmenu {
   entry: (MenuItem & { submenu: readonly MenuEntry[] }) | undefined
-  panelRef: RefObject<HTMLDivElement>
+  panelRef: Ref<HTMLDivElement>
   /** CSS anchor name of the root card's anchor box; the child card is placed against it. */
   parentAnchor: string
   /** Whether the layout mode for the current child is known; the card stays hidden until it is. */
@@ -42,8 +42,8 @@ export function useMenuSubmenu(options: {
   open: boolean
   items: readonly MenuEntry[]
   footer: readonly MenuEntry[] | undefined
-  listRef: RefObject<HTMLDivElement>
-  searchRowsRef: RefObject<HTMLDivElement>
+  listRef: RefObject<HTMLDivElement | null>
+  searchRowsRef: RefObject<HTMLDivElement | null>
   refocusAnchor: () => void
 }): MenuSubmenu {
   const { open, items, footer, listRef, searchRowsRef, refocusAnchor } = options
@@ -55,7 +55,7 @@ export function useMenuSubmenu(options: {
     !('type' in item) && item.id === expanded?.id && item.disabled !== true
     && item.submenu !== undefined && item.submenu.length > 0)
   const trigger = expanded?.trigger ?? null
-  const anchorId = useId().replaceAll(':', '')
+  const anchorId = useId().replace(/[^\w-]/g, '')
   const parentAnchor = `--dsh-submenu-parent-${anchorId}`
   // Null until the active child has been measured against the layout viewport.
   const [needsPage, setNeedsPage] = useState<boolean | null>(null)

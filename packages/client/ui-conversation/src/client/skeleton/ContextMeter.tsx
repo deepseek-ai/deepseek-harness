@@ -62,7 +62,7 @@ export function ContextMeter({ useProjection, t, Portal }: ContextMeterProps) {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const context = contextOccupancy(pressure)
   const available = context !== null
-  const anchorName = `--dsh-context-${useId().replaceAll(':', '')}`
+  const anchorName = `--dsh-context-${useId().replace(/[^\w-]/g, '')}`
   useDismissOnOutsidePointer(rootRef, open && available, setOpen, panelRef)
 
   // A model switch can temporarily remove capacity while this component stays

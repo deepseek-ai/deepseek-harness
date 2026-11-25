@@ -143,7 +143,7 @@ export function useShareRelayAddress(options: ShareRelayAddressOptions): ShareRe
   const [permission, setPermission] = useState<RelayPermission>('idle')
   const [permissionError, setPermissionError] = useState('')
   /** Address the connectivity step has already been started for, so one address is asked once. */
-  const checkedAddress = useRef<string>()
+  const checkedAddress = useRef<string>(undefined)
 
   useEffect(() => {
     let cancelled = false

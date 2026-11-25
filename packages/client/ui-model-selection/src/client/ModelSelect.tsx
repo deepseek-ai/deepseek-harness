@@ -104,7 +104,7 @@ export function ModelSelect(
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
   const anchorStyle: CSSProperties & Record<'--dsh-model-anchor', string> = {
-    '--dsh-model-anchor': `--dsh-model-${id.replaceAll(':', '')}`,
+    '--dsh-model-anchor': `--dsh-model-${id.replace(/[^\w-]/g, '')}`,
   }
 
   const accountProviderName = t('provider.account')

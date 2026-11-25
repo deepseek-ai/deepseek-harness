@@ -37,9 +37,18 @@ export type AppFrameProps =
   & PropsLocale<'common'>
   & InjectFace<AppFrameInjected>
 
+/**
+ * Inert attribute props. React 18 forwards `inert` only as a string, and React 19 treats an empty
+ * string as false; a non-empty string sets the attribute under both. Typed `object` because React 18's
+ * DOM types omit `inert` and React 19's declare it boolean.
+ */
+function inertProps(inert: boolean): object {
+  return inert ? { inert: 'inert' } : {}
+}
+
 /** Center column grid item (session-body building block). */
 function CenterColumn(props: { children?: ReactNode; inert: boolean }) {
-  return <div className={css.centerCol} {...{ inert: props.inert ? '' : undefined }}>{props.children}</div>
+  return <div className={css.centerCol} {...inertProps(props.inert)}>{props.children}</div>
 }
 
 /** Subscribe to the main key without subscribing the column frame to each panel id. */
@@ -56,7 +65,7 @@ function MainPanel({ usePanelInfo, renderSlot }: Pick<PropsRuntime<'root'>, 'use
  * moves, so it can hang over the centre when there is no track.
  */
 function RightbarColumn(props: { children?: ReactNode; inert: boolean }) {
-  return <div className={css.rightbarCol} data-rightbar-col {...{ inert: props.inert ? '' : undefined }}>{props.children}</div>
+  return <div className={css.rightbarCol} data-rightbar-col {...inertProps(props.inert)}>{props.children}</div>
 }
 
 /**
@@ -313,7 +322,7 @@ export function AppFrame({
         onClick={drawerOpen ? () => { actions.toggleSidebar() } : undefined} />}
       <div className={css.sidebarCol}
         style={drawer ? { width: sidebarWidth } : undefined}
-        {...{ inert: drawer && sidebarCollapsed ? '' : undefined }}>
+        {...inertProps(drawer && sidebarCollapsed)}>
         {sidebar}
       </div>
       <>
@@ -322,14 +331,14 @@ export function AppFrame({
           {renderSlot('rightbar', { width: normal.rightbar, viewportWidth: viewport, canShow: normal.rightbar > 0 })}
         </RightbarColumn>
       </>
-      <div className={css.bottomRow} data-shell-bottom {...{ inert: drawerOpen ? '' : undefined }}>
+      <div className={css.bottomRow} data-shell-bottom {...inertProps(drawerOpen)}>
         {renderSlot('shell.bottom', {})}
       </div>
       <div className={css.overlayLayer} data-shell-overlay>
         {overlays}
       </div>
       {leadingMounted && (
-        <div className={css.leadingSeat} data-shell-leading {...{ inert: drawerOpen ? '' : undefined }}>
+        <div className={css.leadingSeat} data-shell-leading {...inertProps(drawerOpen)}>
           {leading}
         </div>
       )}

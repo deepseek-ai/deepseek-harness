@@ -87,7 +87,7 @@ function visibleBounds(root: HTMLElement, source: HTMLElement, view: Window): Bo
  * @returns current owner and area-local selection actions.
  */
 export function useTextInteraction(
-  rootRef: RefObject<HTMLElement>, surfaceRef: RefObject<HTMLElement>,
+  rootRef: RefObject<HTMLElement | null>, surfaceRef: RefObject<HTMLElement | null>,
   dispatchInteraction: (gesture: TextInteractionGesture) => string | null,
   registeredIds: readonly string[],
 ): TextInteractionBinding {

@@ -1116,8 +1116,8 @@ export class ChatViewport {
  */
 export function useChatViewport(): {
   viewport: ChatViewport
-  listRef: RefObject<HTMLDivElement>
-  columnRef: RefObject<HTMLDivElement>
+  listRef: RefObject<HTMLDivElement | null>
+  columnRef: RefObject<HTMLDivElement | null>
 } {
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)

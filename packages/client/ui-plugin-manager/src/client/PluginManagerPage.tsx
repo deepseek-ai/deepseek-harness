@@ -1108,7 +1108,7 @@ function InstallDialog({
   const registryShown = install.registryOpen && phase === 'idle'
   const specComposition = useInstallComposition(install.open && phase === 'idle')
   const registryComposition = useInstallComposition(install.open && registryShown)
-  const registryAnchorName = `--dsh-registry-${registryId.replaceAll(':', '')}`
+  const registryAnchorName = `--dsh-registry-${registryId.replace(/[^\w-]/g, '')}`
   useEffect(() => {
     if (registryShown && install.registryError) registryCustomRef.current?.focus()
   }, [registryShown, install.registryError])

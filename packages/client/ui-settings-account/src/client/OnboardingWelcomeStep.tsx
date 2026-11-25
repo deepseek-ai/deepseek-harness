@@ -1,5 +1,5 @@
 /** Welcome page with a required explicit start. */
-import type { RefObject } from 'react'
+import type { Ref } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DesktopOnboardingProps } from './onboarding-contract.ts'
 import { OnboardingIllustration } from './OnboardingIllustration.tsx'
@@ -11,7 +11,7 @@ import css from './DesktopOnboarding.module.css'
 
 /** @param props - localized content, focus target and navigation. @returns the welcome step. */
 export function OnboardingWelcomeStep({ t, locale, heading, busy, onStart }: Pick<DesktopOnboardingProps, 't' | 'locale'> & {
-  heading: RefObject<HTMLHeadingElement>
+  heading: Ref<HTMLHeadingElement>
   busy: boolean
   onStart: () => void
 }) {

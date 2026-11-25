@@ -79,7 +79,7 @@ function Switcher({
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const anchorName = `--dsh-subagents-${useId().replaceAll(':', '')}`
+  const anchorName = `--dsh-subagents-${useId().replace(/[^\w-]/g, '')}`
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const currentEntry = catalog.entries.find(entry => entry.id === currentSessionId)
   const title = currentEntry !== undefined ? currentEntry.label || entryName(currentEntry) : displayTitle
