@@ -255,6 +255,20 @@ async function width(locator: Locator): Promise<number> {
   throw new Error(`width never settled (last ${last}px)`)
 }
 
+/**
+ * Wait until no docked host in the column is sliding.
+ *
+ * A host shown while the panel marks its opening starts past the right edge and
+ * slides in. An opening slide cut short leaves that mark in place, so a tab
+ * opened later can still slide in (#9244); chip coordinates are only valid once
+ * no host's transform transition is running.
+ */
+async function dockAtRest(column: Locator): Promise<void> {
+  await expect.poll(() => column.evaluate(node => node.getAnimations({ subtree: true }).filter(animation =>
+    'transitionProperty' in animation && animation.transitionProperty === 'transform'
+    && animation.playState === 'running').length)).toBe(0)
+}
+
 describe('web e2e: shipped right Sidebar', () => {
   let scaffold: WebScaffold
   let browser: Browser
@@ -1310,6 +1324,7 @@ describe('web e2e: shipped right Sidebar', () => {
       const column = await resetSidebar(page)
       await proseChip(page).click()
       await expect.poll(() => tabTitles(column)).toEqual(['Files', SAMPLE_NAME])
+      await dockAtRest(column)
       const sample = column.getByRole('tab').filter({ hasText: SAMPLE_NAME })
       const from = await pointIn(sample, 0.25, 0.5)
       const to = await pointIn(column.getByRole('tab').filter({ hasText: 'Files' }), 0.25, 0.5)
