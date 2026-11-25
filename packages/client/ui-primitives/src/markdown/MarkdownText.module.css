@@ -491,12 +491,6 @@
 }
 .imageButton .image { max-width: min(100%, 640px); max-height: 360px; }
 .imageButton:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
-/* A paragraph of several images wraps them into rows separated by the paragraph gap. */
-.imageRow { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 4px; }
-.compact .imageRow { row-gap: 4px; }
-/* Items shrink to a narrow column; link borders are hit area and would widen the row gap. */
-.imageRow > * { min-width: 0; }
-.imageRow > :is(a, .fileLink) { border-block-width: 0; }
 .previewName {
   display: block;
   margin-top: 8px;
