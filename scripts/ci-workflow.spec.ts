@@ -1591,9 +1591,9 @@ describe('Weighted approval workflow', () => {
       // The called workflow owns the review scope and the event filters.
       if: "always() && needs.publish-status.outputs.dismissed == 'true'",
       permissions: { contents: 'read', 'pull-requests': 'read' },
-      secrets: { DSH_APPROVAL_BOT_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}' },
       uses: './.github/workflows/weighted-approval-machine.yml',
     })
+    expect(machineJob.secrets).toBeUndefined()
     expect(recordJob).toMatchObject({
       if: "github.event.pull_request.state == 'open'",
       name: 'record weighted approval review event',
@@ -1604,7 +1604,7 @@ describe('Weighted approval workflow', () => {
     expect(record?.run).toBe("echo 'Recorded a weighted approval review event.'")
     expect(recordSteps).toHaveLength(1)
     expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
-    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY', 'secrets.DSH_APPROVAL_BOT_TOKEN'])
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY'])
     expect(JSON.stringify(reviewEvent)).not.toContain('github.token')
     expect(JSON.stringify(reviewEvent)).not.toContain('secrets.')
   })
@@ -1708,14 +1708,8 @@ describe('Weighted approval machine workflow', () => {
     expect(workflowEvent(publisher, 'workflow_dispatch').inputs).toEqual({
       pull_number: { description: 'Open pull request to re-evaluate', type: 'string', required: true },
     })
-    expect(publisher.on.workflow_call).toEqual({
-      secrets: {
-        DSH_APPROVAL_BOT_TOKEN: {
-          description: 'Machine-user token that writes the approval review and status comment',
-          required: true,
-        },
-      },
-    })
+    expect(publisher.on.workflow_call).toEqual({})
+    expect(job.environment).toBe('weighted-approval')
     expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
     expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft', 'edited'])
     expect(workflowRun).toEqual({ workflows: ['weighted-approval-review-event'], types: ['completed'] })

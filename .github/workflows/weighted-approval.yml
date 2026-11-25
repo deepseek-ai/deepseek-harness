@@ -114,5 +114,3 @@ jobs:
       contents: read
       pull-requests: read
     uses: ./.github/workflows/weighted-approval-machine.yml
-    secrets:
-      DSH_APPROVAL_BOT_TOKEN: ${{ secrets.DSH_APPROVAL_BOT_TOKEN }}

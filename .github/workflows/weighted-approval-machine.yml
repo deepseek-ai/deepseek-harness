@@ -14,11 +14,7 @@ on:
         description: Open pull request to re-evaluate
         type: string
         required: true
-  workflow_call:
-    secrets:
-      DSH_APPROVAL_BOT_TOKEN:
-        description: Machine-user token that writes the approval review and status comment
-        required: true
+  workflow_call: {}
 
 permissions:
   contents: read
@@ -52,6 +48,7 @@ jobs:
       (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&
         (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))
     name: weighted approval review
+    environment: weighted-approval
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
