@@ -43,6 +43,7 @@
     "scripts/shipped-locales.ts",
     "scripts/bundle-input-isolation.ts",
     "scripts/experimental-package-policy.ts",
+    "scripts/test-css-identifier.ts",
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",
     "scripts/client-bundle-purity.spec.ts"

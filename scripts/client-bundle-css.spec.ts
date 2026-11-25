@@ -14,6 +14,7 @@ import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
 import { afterEach, describe, expect, it } from 'vitest'
 import { packageAssetRevision } from '../packages/client/modules/src/assets.ts'
 import { clientBundle } from '../packages/client/tsdown.client.ts'
+import { cssIdentifier } from './test-css-identifier.ts'
 
 interface EmittedAsset {
   type: 'asset'
@@ -215,7 +216,7 @@ describe('client bundle CSS Modules', () => {
     const classMap = manifest.factory(require)
     expect(Object.keys(classMap)).toEqual(['root'])
     expect(classMap['root']).toMatch(/_root$/u)
-    expect(stylesheetText(output, reference => reference)).toContain(`.${String(classMap['root'])}{color:red}`)
+    expect(stylesheetText(output, reference => reference)).toContain(`.${cssIdentifier(String(classMap['root']))}{color:red}`)
   })
 })
 
