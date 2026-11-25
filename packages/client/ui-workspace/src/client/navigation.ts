@@ -64,13 +64,13 @@ export interface UiWorkspace {
    * Fork a Session without changing the current selection.
    * @param sessionId - source Session.
    * @param onCreated - observer before the optional child-title update.
-   * @param options - optional permission to start source migration; omission preserves the Host default.
+   * @param options - optional migration permission (omission keeps the Host default) and inclusive event cut.
    * @returns the child SessionId after creation and inherited-title increment.
    */
   forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration' | 'atSeq'>,
   ): Promise<SessionId>
   /**
    * Resolve the Session for a new conversation in a Workspace: navigation names the first reusable
@@ -194,7 +194,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly directoryPicker: ClientRemote['directoryPicker'],
     private readonly workspaces: IWorkspaces,
     private readonly sessions: ISessions,
-    private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder'>,
+    private readonly view: Pick<WorkspaceViewStoreActions, 'pinSessionOrder' | 'placeForkOrder'>,
     private readonly notify: (toast: RowToast) => void,
     recentViewLimit: ObservableSnapshot<number | undefined>,
   ) {
@@ -333,14 +333,34 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   async forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration' | 'atSeq'>,
   ): Promise<SessionId> {
     return this.sessions.fork({
       sessionId,
       increaseTitle: true,
-      ...onCreated === undefined ? {} : { onCreated },
+      onCreated: (childId) => {
+        onCreated?.(childId)
+        this.placeFork(childId, sessionId)
+      },
       ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
+      ...options?.atSeq === undefined ? {} : { atSeq: options.atSeq },
     })
+  }
+
+  /**
+   * Save a Manual fork child directly above its source in each order that lists the source:
+   * the source's group or Ungrouped, and the flat list. An order that already saves the child keeps
+   * its position. Owner disposal or a pending Workspace list suppresses the write.
+   */
+  private placeFork(childId: SessionId, sourceId: SessionId): void {
+    const { items, pinnedSessionIds, archivedSessionIds, phase } = this.workspaces.list.getSnapshot()
+    if (this.lifetime.signal.aborted || phase !== 'ready') return
+    this.view.placeForkOrder(
+      childId,
+      sourceId,
+      pinOrderAccounts(items, sourceId),
+      pinOrderSource(items, this.sessions.list.getSnapshot(), { pinnedSessionIds, archivedSessionIds }),
+    )
   }
 
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void {

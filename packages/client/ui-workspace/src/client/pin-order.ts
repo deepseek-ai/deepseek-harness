@@ -1,5 +1,5 @@
 /**
- * The complete account memberships a Pin order write reconciles against,
+ * The complete account memberships a Pin or fork order write reconciles against,
  * derived from the same Host snapshots the browser orders by, so the
  * UiWorkspace service can complete the write without the browser in the loop.
  */
@@ -9,7 +9,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
 import { owningGroupKey, sessionMemberIds, type SessionRowState, UNGROUPED_KEY } from './tree.ts'
 
-/** What `pinSessionOrder` reconciles a pinned Session's accounts against. */
+/** What `pinSessionOrder` and `placeForkOrder` reconcile a Session's accounts against. */
 export interface PinOrderSource {
   members: Readonly<Record<string, readonly SessionId[]>>
   summaries: SessionListState['byId']
@@ -21,7 +21,7 @@ export interface PinOrderSource {
  * @param workspaces - current Host Workspaces.
  * @param list - current Session list snapshot.
  * @param rowState - registry-global pin and archive sets.
- * @returns the order source for one pin write.
+ * @returns the order source for one Pin or fork order write.
  */
 export function pinOrderSource(
   workspaces: readonly WorkspaceView[],
@@ -41,10 +41,10 @@ export function pinOrderSource(
 }
 
 /**
- * The accounts a pinned Session leads: its group (or Ungrouped) and the flat list.
+ * The accounts that list a Session: its group (or Ungrouped) and the flat list.
  * @param workspaces - current Host Workspaces.
- * @param sessionId - the Session being pinned.
- * @returns the account keys `pinSessionOrder` fronts.
+ * @param sessionId - the Session being pinned, or a fork source.
+ * @returns the account keys a Pin fronts or a fork is placed in.
  */
 export function pinOrderAccounts(workspaces: readonly WorkspaceView[], sessionId: SessionId): readonly string[] {
   return [owningGroupKey(workspaces, sessionId), FLAT_SESSION_ORDER_KEY]

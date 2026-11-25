@@ -41,7 +41,7 @@ kind: "package-reference"
 
 分组和平铺视图都先显示置顶 Session，再显示普通 Session。**最近更新**在各分区内严格按最近一次用户提示词或 steering（中途引导）时间降序排列，置顶时间不影响它。**手动排序**使用同一条完整 Session 序列中的相对位置，包括隐藏的归档项。返回最近更新会丢弃手动布局，再次进入手动排序时冻结当时的时间顺序。浏览器默认采用最近更新，并在重新加载后记住所选模式。
 
-置顶把 Session 移到完整保存序列的首位，但不切换所选模式。它在手动模式下排在置顶区最前，在最近更新模式下则不一定。取消置顶不改变保存的位置。拖拽置顶行或普通行都修改同一条完整序列并选择手动模式，隐藏的归档成员始终保留。缺失的置顶成员按置顶数组顺序补到头部。新增的普通 fork 使用与其他 Session 相同的补齐规则，不继承置顶成员关系。缺失的普通成员按最近更新时间追加，缺失归档项放在最后；可见置顶行仍排在普通行之前。补齐仅在内存中完成，直到一次 Session 顺序写入保存完整结果。单纯切换归档筛选既不改变保存的位置，也不改变成员关系。
+置顶把 Session 移到完整保存序列的首位，但不切换所选模式。它在手动模式下排在置顶区最前，在最近更新模式下则不一定。取消置顶不改变保存的位置。拖拽置顶行或普通行都修改同一条完整序列并选择手动模式，隐藏的归档成员始终保留。缺失的置顶成员按置顶数组顺序补到头部。在手动模式下从本浏览器发起的 fork，会保存到每个列出来源的顺序中来源的正上方：来源所在分组（或 Ungrouped）以及单列表。已经保存了该 fork 的顺序保持原位。它不继承置顶成员关系，因此置顶 Session 的 fork 会排在普通行的首位。其他新增的普通 Session（包括其他客户端发起的 fork）使用下述补齐规则。缺失的普通成员按最近更新时间追加，缺失归档项放在最后；可见置顶行仍排在普通行之前。补齐仅在内存中完成，直到一次 Session 顺序写入保存完整结果。单纯切换归档筛选既不改变保存的位置，也不改变成员关系。
 
 当前选中的空白**新会话**保留临时首位且无法拖拽；首条提示词落地后，它成为可拖拽的普通行，在手动排序中保留该位置，在最近更新中按当前时间戳排列。折叠分组的拖拽使用目标 Session 身份，并保持来源行可见。真实 Workspace、Ungrouped 与单列表的 Session 显示顺序都保留在浏览器本地；Workspace 分组的拖拽顺序仍由 Host 持久化。
 
@@ -91,7 +91,7 @@ Session 行渲染运行时的实时 `pendingInteraction` 分类：审批显示**
 
 -----
 
-`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；新会话与重新打开工作区打开同一个空白会话，因此会回到该空白会话中未发送的草稿。`forkSession(id, onCreated?, options?)` 创建子会话，不导航，也不替代尚未完成的导航；`allowMigration` 携带调用方的迁移许可。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。
+`ctx.uiWorkspace.openSession(target)` 会同步替换其拥有的 `mainView` reference，并让主区域返回 Conversation，而不等待 `reference.ready`，因此历史加载会显示在已经选中的 Session 视图内。目标可以是已知 Session id，也可以是持久的直接父子 subagent 地址；显式地址不要求预先加载 parent catalog。`openWorkspace(id, beforeOpen?, options?)` 仅在请求未被后续导航替代时打开工作区空白 Session；新会话与重新打开工作区打开同一个空白会话，因此会回到该空白会话中未发送的草稿。`forkSession(id, onCreated?, options?)` 创建子会话，不导航，也不替代尚未完成的导航；`allowMigration` 携带调用方的迁移许可，`atSeq` 选择精确的含边界截点。可选的同步准备回调在目标被 retain 后执行，并且仅对仍有效的 Workspace 请求执行，因此过期请求不会搬移 composer 草稿。后续导航或 owner 释放会阻止晚到的 UI 提交，但不取消底层 Session 创建。
 
 `mainView` 引用保留 `conversation` 子要素。主视图离开一个非空白、未归档的 Session 时，导航先以不带子要素的 `recentViews` 引用保留它，因此其历史仍已加载，切回时无需再请求历史，而 Conversation 组装在重新显示前停止。运行中、等待用户或完成未读的最近访问会话始终保留且不计数；其余最近访问会话最多保留 `recentViewLimit` 个（默认 10），不含主视图 Session。`recentViewLimit` 是插件 Host `Config` 的 volatile 字段，在其 `cordis.yml` 行中设置，并经 [Client Modules](../modules/README.zh.md#synced-plugin-configuration) 同步到浏览器；修改后无需刷新页面即生效，按新上限释放或保留最近访问会话，已释放的 Session 不会回来。浏览器收到值之前，所有计数的最近访问会话都会保留。超出时先释放最早离开的未置顶会话，再释放最早离开的置顶会话；被释放的最近访问会话只有在主视图再次离开该 Session 时才会回来。Session 回到主视图、被移除或归档，或插件卸载时，会释放其最近访问引用。
 
@@ -291,9 +291,10 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 <a id="known-limitations-and-deferred-work"></a>
 
 
-这些限制涵盖搜索、导航、归档和文件夹选择。
+这些限制涵盖搜索、导航、归档、fork 放置和文件夹选择。
 
 - **没有模糊内容搜索或事件深链接**：内容后端采用字面 token/短语匹配，选择结果会打开 Session，而不是匹配的事件。
+- **新 Session 可能短暂出现在 Ungrouped 下**：Host 在工作区内创建 Session 时，先通告 Session，再提交工作区成员变化，两条流到达客户端的先后没有保证，因此 fork 或新会话可能在成员关系到达之前短暂列在 Ungrouped 下。fork 行也可能在本浏览器保存其位置之前，先出现在分组末尾。
 - **没有 Session 删除**：会话可以归档但绝不会被删除；已归档的行通过「已归档会话」视图筛选与搜索结果中的取消归档操作原位恢复，删除 Workspace 注册记录不会删除 Session。
 - **待处理的用户交互不会聚合到折叠的分组上**：折叠分组内正在等待的行不会点亮分组头指示，只有展开该分组后才可见。
 - **树形列表键盘导航尚不完整**：Workspace 行和搜索结果行不接受 Tab 聚焦，浏览器树形列表也未实现方向键导航。

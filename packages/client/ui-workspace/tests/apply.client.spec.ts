@@ -442,7 +442,7 @@ describe('ui-workspace apply', () => {
     await vi.waitFor(() => {
       expect(toast.hooks.toast.getSnapshot()).toMatchObject({ kind: 'shortcutForkFailed', reason: 'unavailable' })
     })
-    expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('source'), increaseTitle: true })
+    expect(b.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('source'), increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void })
     expect(warning).not.toHaveBeenCalled()
     const unavailable = toast.hooks.toast.getSnapshot()
     b.fork.mockRejectedValueOnce(new Error('connection closed'))

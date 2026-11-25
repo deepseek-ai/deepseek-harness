@@ -348,9 +348,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['on failure; a refused creation is also shown through the Workspace notice unless a later navigation or disposal superseded the request.'],
       },
       {
-        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\'>, ): Promise<SessionId>',
+        signature: 'forkSession( sessionId: SessionId, onCreated?: (childId: SessionId) => void, options?: Pick<Parameters<ISessions[\'fork\']>[0], \'allowMigration\' | \'atSeq\'>, ): Promise<SessionId>',
         description: 'Fork a Session without changing the current selection.',
-        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }, { name: 'options', description: 'optional permission to start source migration; omission preserves the Host default.' }],
+        parameters: [{ name: 'sessionId', description: 'source Session.' }, { name: 'onCreated', description: 'observer before the optional child-title update.' }, { name: 'options', description: 'optional migration permission (omission keeps the Host default) and inclusive event cut.' }],
         returns: 'the child SessionId after creation and inherited-title increment.',
       },
       {
