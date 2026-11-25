@@ -71,6 +71,7 @@ kind: "package-group"
 | [`client-ui-read-aloud`](client-ui-read-aloud/README.zh.md) | 消息操作栏中的朗读按钮 | — |
 | [`read-aloud-bundle`](read-aloud-bundle/README.zh.md) | 默认禁用的可选朗读组合 | — |
 | [`client-ui-stats`](client-ui-stats/README.zh.md) | Web 端按轮次与步骤展示上下文、耗时、缓存与工具成本 | — |
+| [`client-ui-sidechat`](client-ui-sidechat/README.zh.md) | `/side` 把对话分出为右侧栏中的侧栏对话 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
 | [`subagent-oar`](subagent-oar/README.zh.md) | 通过 OAR 执行外部编程智能体的独立任务 | `ctx.subagents` |
 | [`tool-subagent-oar`](tool-subagent-oar/README.zh.md) | 为每项委派任务选择配置的外部代理 | `ctx.tools` |

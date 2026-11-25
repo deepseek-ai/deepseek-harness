@@ -71,6 +71,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`client-ui-read-aloud`](client-ui-read-aloud/README.md) | Read aloud control in the message action row | — |
 | [`read-aloud-bundle`](read-aloud-bundle/README.md) | Default-disabled optional read-aloud composition | — |
 | [`client-ui-stats`](client-ui-stats/README.md) | Per-turn and per-step context, timing, cache, and tool cost for Web | — |
+| [`client-ui-sidechat`](client-ui-sidechat/README.md) | `/side` forks the conversation into a side conversation in the right Sidebar | — |
 | [`auto-review`](auto-review/README.md) | Explicit Web layer for same-model review before each native or PTC inner tool call | — |
 | [`subagent-oar`](subagent-oar/README.md) | Run standalone external coding-agent tasks through OAR | `ctx.subagents` |
 | [`tool-subagent-oar`](tool-subagent-oar/README.md) | Select a configured external agent for each delegated task | `ctx.tools` |

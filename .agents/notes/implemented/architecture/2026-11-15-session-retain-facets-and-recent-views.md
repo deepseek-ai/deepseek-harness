@@ -69,6 +69,7 @@ The [input hub](../../../../packages/client/ui-conversation/src/client/input/hub
 | `mainView` | declared by ui-session, retained by ui-workspace | `{ conversation: true }` |
 | `sidebarView` | ui-sidebar-right | `{ conversation: true }` |
 | `sidebarChat` | ui-subagent | `{ conversation: true }` |
+| `sidechat` | client-ui-sidechat (experimental) | `{ conversation: true }` |
 | `recentViews` | ui-workspace | omitted: connection only |
 | `draft` | ui-conversation | `{ connection: false }` |
 | `using()` callers | their own packages | omitted |

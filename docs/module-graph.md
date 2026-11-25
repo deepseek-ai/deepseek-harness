@@ -284,6 +284,7 @@ flowchart TD
   subgraph group_experimental["packages/experimental"]
     pkg_client_ui_connectors["client-ui-connectors"]
     pkg_client_ui_read_aloud["client-ui-read-aloud"]
+    pkg_client_ui_sidechat["client-ui-sidechat"]
     pkg_cua["cua"]
     pkg_cua_bundle["cua-bundle"]
     pkg_cua_macos["cua-macos"]
@@ -1814,6 +1815,7 @@ flowchart TD
 | [`office-kit`](../packages/document/office-kit) | `document` | — |
 | [`client-ui-connectors`](../packages/experimental/client-ui-connectors) | `experimental` | — |
 | [`client-ui-read-aloud`](../packages/experimental/client-ui-read-aloud) | `experimental` | — |
+| [`client-ui-sidechat`](../packages/experimental/client-ui-sidechat) | `experimental` | — |
 | [`cua-bundle`](../packages/experimental/cua-bundle) | `experimental` | — |
 | [`experimental-badge-skill-bundle`](../packages/experimental/badge-skill-bundle) | `experimental` | — |
 | [`experimental-client-ui-claude-code-mods`](../packages/experimental/client-ui-claude-code-mods) | `experimental` | — |
