@@ -43,12 +43,14 @@ describe('web e2e: side conversations', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-sidechat'))
     // The main composer excludes sidebar chats, as the other Web specs select it.
     const mainInput = page.locator('[data-composer-input]:not([data-sidebar-chat] [data-composer-input])')
+    // Until the stored Session is restored, the same surface is the read-only workspace-picker trigger.
+    const mainEditable = mainInput.and(page.locator('[contenteditable="true"]'))
     const sideInput = page.locator('[data-sidechat][data-sidebar-chat] [data-composer-input]')
     const sideTab = page.getByRole('tab', { name: SIDE_TITLE })
 
-    await mainInput.waitFor()
-    await mainInput.fill('/side')
-    await mainInput.press('Enter')
+    await mainEditable.waitFor()
+    await mainEditable.fill('/side')
+    await mainEditable.press('Enter')
     await sideTab.waitFor()
     await sideInput.waitFor()
     expect(await mainInput.count()).toBe(1)
