@@ -730,7 +730,7 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   expect(result.toggles.map(toggle => toggle.name).filter(name => standalone.includes(name))).toEqual([])
   expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
   expect(result.optional.filter(entry => entry.error !== null)).toEqual([
-    expect.objectContaining({ name: '@deepseek-ai/dsh-cua-bundle', error: { code: 'unsupported-platform' } }),
+    expect.objectContaining({ name: '@deepseek-ai/dsh-cua-bundle', error: { code: 'unsupported-platform', platforms: ['darwin', 'win32'] } }),
   ])
   // Metadata resolves through the Worker's Node internal modules: every optional bundle shows its title and icon.
   expect(result.optional.filter(entry => entry.metaError !== null || entry.title !== 'object' || entry.icon !== 'string')).toEqual([])

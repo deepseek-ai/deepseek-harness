@@ -92,6 +92,11 @@ it.each([en, zh])('waits for platform identification before offering system perm
   expect(screen.queryByRole('group', { name: dictionary.accessibility })).toBeNull()
   expect(screen.getByText(dictionary.permissionsIntro).getAttribute('aria-hidden')).toBe('true')
   f.publish({ system: { ...f.state.getSnapshot().system, busy: false, error: 'connection lost' }, busy: false })
+  // The provider lookup has not answered yet, so neither platform's layout or failure appears.
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.queryAllByText(dictionary.unknown)).toHaveLength(0)
+  expect(screen.getByText(dictionary.permissionsIntro).getAttribute('aria-hidden')).toBe('true')
+  f.publish({ windowsProvider: { value: false, error: null, busy: false } })
   expect(screen.getAllByText(dictionary.unknown)).toHaveLength(2)
   expect(screen.queryByText(dictionary.granted)).toBeNull()
   expect(screen.queryByRole('button', { name: dictionary.request })).toBeNull()

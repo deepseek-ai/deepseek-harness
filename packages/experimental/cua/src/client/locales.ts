@@ -275,7 +275,7 @@ export const de = {
   setupBody: 'Computer Use ist aktiviert und benötigt die Berechtigungen für Bedienungshilfen und Bildschirmaufnahme. Öffnen Sie die Plugin-Details, um die Einrichtung abzuschließen.',
   setupQueryFailed: 'Computer Use ist aktiviert, aber die Systemberechtigungen konnten nicht geprüft werden. Öffnen Sie die Plugin-Details, um den Fehler anzuzeigen und es erneut zu versuchen.',
   openSetup: 'Einstellungen öffnen', later: 'Später', close: 'Schließen',
-  accessibility: 'Barrierefreiheit', screenRecording: 'Bildschirmaufzeichnung',
+  accessibility: 'Bedienungshilfen', screenRecording: 'Bildschirmaufnahme',
   accessibilityUse: 'Oberflächeninhalte lesen, klicken und tippen.', screenRecordingUse: 'Das Fenster der ausgewählten Anwendung aufnehmen.',
   accessibilityPermission: 'Erlauben Sie {application}, Oberflächeninhalte zu lesen, zu klicken und zu tippen.',
   screenRecordingPermission: 'Erlauben Sie {application}, das Fenster der ausgewählten Anwendung aufzunehmen.',

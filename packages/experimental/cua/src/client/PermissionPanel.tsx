@@ -172,7 +172,10 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const transitioning = state.changing
   const busy = transitioning || state.system.busy
   const appsBusy = transitioning || state.applications.busy
-  const loading = observed === null && state.system.error === null
+  // A failed native query leaves the platform unknown until the Host inventory says whether a Windows provider is enabled.
+  const platformPending = observed === null && state.system.error !== null
+    && state.windowsProvider.value === null && state.windowsProvider.error === null
+  const loading = observed === null && (state.system.error === null || platformPending)
   const mac = observed?.platform === 'darwin' ? observed : null
   const win = observed?.platform === 'windows' ? observed : null
   const application = state.system.error !== null ? undefined : mac?.launchApplication
@@ -192,13 +195,13 @@ export function PermissionPanel(props: PermissionPanelProps) {
           <PtcRecommendation canOpenPresets={canOpenPresets} openPresets={props.openPresets} t={t} />
         </div>
         <h3>{t('title')}</h3>
-        {state.system.error !== null && <NoticeBox tone="danger" role="alert"
+        {state.system.error !== null && !platformPending && <NoticeBox tone="danger" role="alert"
           title={providerError === null
             ? t('queryFailed', { message: state.system.error })
             : t('providerLookupFailed', { message: providerError })}
           body={t('queryFailedHint')}
           action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
-        {(observed !== null || state.system.error === null) && <p
+        {(observed !== null || loading) && <p
           className={observed === null ? css.pendingHint : undefined}
           aria-hidden={observed === null || undefined}
         >

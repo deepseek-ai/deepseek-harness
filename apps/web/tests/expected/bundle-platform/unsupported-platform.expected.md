@@ -1,1 +1,1 @@
-- status: 此插件不支持运行 DSH 的主机操作系统
+- status: 此插件仅支持 freebsd
