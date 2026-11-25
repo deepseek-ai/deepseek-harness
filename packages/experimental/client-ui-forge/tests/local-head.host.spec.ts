@@ -96,6 +96,14 @@ describe('forgePanel local changes of a branch head', () => {
     expect([names(own.remote), names(own.local)]).toEqual([['origin/main', 'origin/release'], ['topic']])
   })
 
+  it('lists every local branch as a base while the Session\'s HEAD is detached', async () => {
+    const { repo } = await project()
+    await git(repo, 'checkout', '--quiet', '--detach')
+    const opened = await open(repo)
+    const own = await opened.ctx.forgePanel.diffBases(opened.session, null, '', signal)
+    expect([names(own.remote), names(own.local)]).toEqual([['origin/main', 'origin/release'], ['main', 'topic']])
+  })
+
   it('classifies a branch head with a lens, reading both sides from Git', async () => {
     const { repo } = await project()
     const opened = await open(repo)

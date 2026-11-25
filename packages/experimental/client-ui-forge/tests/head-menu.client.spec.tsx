@@ -129,6 +129,22 @@ describe('HeadMenu listing', () => {
     expect(related.mock.calls[0]?.[0].aborted).toBe(true)
   })
 
+  it('drops related checkouts that arrive after the menu closed', async () => {
+    let finish: (result: RemoteResult<readonly ForgeRelatedCheckout[]>) => void = () => {}
+    const related = vi.fn<HeadMenuProps['related']>().mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+      .mockImplementation(() => new Promise(() => {}))
+    const m = mount({ related })
+    fireEvent.click(m.trigger())
+    await settle()
+    fireEvent.click(m.trigger())
+    await act(async () => { finish(ok([CACHE])) })
+    fireEvent.click(m.trigger())
+    await settle()
+    expect(related.mock.calls[0]?.[0].aborted).toBe(true)
+    expect(m.rows()).toEqual([])
+    expect(m.view.getByRole('status').textContent).toBe(en['diff.base.loading'])
+  })
+
   it('reports either failed listing with a retry of both', async () => {
     const related = vi.fn<HeadMenuProps['related']>().mockResolvedValueOnce(failed()).mockResolvedValue(ok([CACHE]))
     const m = mount({ related })
