@@ -21,6 +21,9 @@ internal sealed class AppState(string handle, string appId, string name, Applica
     internal Dictionary<nint, WindowState> Windows { get; } = [];
     internal Dictionary<nint, Snapshot> Snapshots { get; } = [];
 
+    internal bool Owns(ResolvedWindow window) => string.Equals(AppId, window.AppId, StringComparison.Ordinal)
+        || Path.IsPathFullyQualified(AppId) && string.Equals(AppId, window.ExecutablePath, StringComparison.OrdinalIgnoreCase);
+
     public void Dispose()
     {
         Snapshots.Clear();

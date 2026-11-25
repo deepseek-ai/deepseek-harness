@@ -272,7 +272,14 @@ internal static class DesktopWindows
                 ?? ApplicationAuthorization.AsAumid(context.Sta.InvokeSync(_ => ApplicationResolver.ForWindow(handle), context.Cancellation));
             var image = ReadExecutablePath(process, context);
             if (image is null) return null;
-            var executablePath = Applications.CanonicalPath(image);
+            string executablePath;
+            try { executablePath = Applications.CanonicalPath(image); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException
+                or NativeFailure { Code: "APP_IDENTITY_UNAVAILABLE" })
+            {
+                // The process-reported path remains usable when its image cannot be reopened.
+                executablePath = image;
+            }
             if (!Win32.GetProcessTimes(process, out var started, out _, out _, out _)) throw Unavailable();
             Win32.GetWindowThreadProcessId(handle, out var currentOwner);
             if (currentOwner != rawProcessId) return null;

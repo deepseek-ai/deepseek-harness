@@ -35,7 +35,7 @@ kind: "package-reference"
 
 每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是不透明的选择标识；将返回值原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。应用展示使用 Shell 名称和图标；未注册程序使用文件说明或文件名。相同 AUMID 的应用共用一个条目；不会仅因同名合并应用。
 
-`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
+`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。运行中映像的路径规范化失败时，应用发现使用 Windows 报告的可执行文件路径。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
 
 `cua.findApps(query)` 对显示名称、ID 和已知可执行文件路径做不区分大小写的字面子串匹配，或直接检查 `.exe` 绝对路径。`""` 和 `null` 返回目录中的全部应用。非空查询须包含非空白字符，并受 `maxAppMatches` 限制，默认 20；匹配过多时返回 `AMBIGUOUS_APP`。响应大小和时间限制适用于所有查询。
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 
 在当前会话中首次选择尚未授权的应用时，审批窗口提供“拒绝”和“本会话允许”。如果当前 profile 可以保存授权，窗口还会显示“始终允许”，并将它作为主按钮高亮。选择“始终允许”后，同一 profile 的其他会话可以访问该应用，直到用户在自动电脑操作插件页撤销授权。在审批详情区按 Enter 只允许当前会话访问。
 
-应用授权依据 AUMID，与 macOS 按 bundle identifier 授权的取舍一致。同一 AUMID 的不同版本和副本共享授权，不区分可执行文件位置或签名。窗口属性与打包应用的进程元数据提供显式 AUMID；Windows Shell 补充解析未在这些位置暴露标识的桌面应用。Shell 将启动器与其窗口关联到同一 AUMID 时，两者共用授权。没有应用标识时，授权依据规范化的可执行文件路径。搜索与已知路径选择复用同一决定；一个路径承载多个应用 ID 时返回 `AMBIGUOUS_APP`。
+应用授权依据 AUMID，与 macOS 按 bundle identifier 授权的取舍一致。同一 AUMID 的不同版本和副本共享授权，不区分可执行文件位置或签名。窗口属性与打包应用的进程元数据提供显式 AUMID；Windows Shell 补充解析未在这些位置暴露标识的桌面应用。Shell 将启动器与其窗口关联到同一 AUMID 时，两者共用授权。没有应用标识时，授权依据规范化的可执行文件路径；这种选择也接纳该可执行文件在启动后报告 AUMID 的窗口。搜索与已知路径选择复用同一决定；一个路径承载多个应用 ID 时返回 `AMBIGUOUS_APP`。
 
 审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。在同一会话内复用应用授权时，保留已保存的名称和图标查询目标。只有明确选择“始终允许”才保存跨会话授权，已有会话授权不会升级。选择可执行文件路径时保留该启动目标，即使它的应用 ID 与其他副本相同。
 

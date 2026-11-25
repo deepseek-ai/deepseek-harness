@@ -25,7 +25,7 @@ internal sealed class WindowState(ResolvedWindow admitted)
             throw Remove(app, "The selected window is no longer available; read fresh application state");
         var current = DesktopWindows.ResolveWindow(Handle, context);
         if (current is null || current.ProcessId != admitted.ProcessId || current.Started != admitted.Started
-            || !string.Equals(app.AppId, current.AppId, StringComparison.Ordinal))
+            || !app.Owns(current))
             throw Remove(app, "The window owner or application identity changed; select a fresh application window");
     }
 
@@ -121,7 +121,7 @@ internal static class Windows
         foreach (var window in observation.Windows)
         {
             context.Check();
-            if (!string.Equals(app.AppId, window.AppId, StringComparison.Ordinal)) continue;
+            if (!app.Owns(window)) continue;
             app.Snapshots.Remove(window.Handle);
             app.Windows[window.Handle] = new WindowState(window);
         }
@@ -139,7 +139,7 @@ internal static class Windows
         if (!DesktopWindows.Eligible(id))
             throw new NativeFailure("WINDOW_CHANGED", "Select a current window from getWindows");
         var observed = DesktopWindows.ResolveWindow(id, context);
-        if (observed is null || !string.Equals(app.AppId, observed.AppId, StringComparison.Ordinal))
+        if (observed is null || !app.Owns(observed))
             throw new NativeFailure("WINDOW_CHANGED", "The window does not belong to the authorized application; read fresh application state");
         // A newly appeared explicit window may join the application; no default target is inferred.
         app.Snapshots.Remove(id);

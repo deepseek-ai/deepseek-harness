@@ -114,8 +114,6 @@ internal sealed class FixtureForm : Form
 
 internal static class Program
 {
-    private static void Write(object value) { Console.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); }
-
     private static void SendMouse(params uint[] flags)
     {
         var inputs = flags.Select(flag => new Input { Type = 0, Data = new MouseInput { Flags = flag } }).ToArray();
@@ -135,16 +133,27 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        var controlPath = Path.Combine(AppContext.BaseDirectory, "control-pipe.txt");
+        using var control = File.Exists(controlPath)
+            ? new System.IO.Pipes.NamedPipeClientStream(".", File.ReadAllText(controlPath), System.IO.Pipes.PipeDirection.InOut) : null;
+        control?.Connect(10000);
+        using var input = control is null ? null : new StreamReader(control);
+        using var output = control is null ? null : new StreamWriter(control) { AutoFlush = true };
+        var reader = input ?? Console.In;
+        var writer = output ?? Console.Out;
+        void Write(object value) { writer.WriteLine(JsonSerializer.Serialize(value)); writer.Flush(); }
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         using var form = new FixtureForm("DSH CUA owned test window");
         using var sibling = new FixtureForm("DSH CUA sibling test window");
+        if (control is not null) form.SetIdentity("DSH.Fixture.Launch");
+        FileStream? imageLock = null;
         form.Shown += (_, _) =>
         {
             Write(new { pid = Environment.ProcessId, state = form.Inspect() });
             _ = Task.Run(() =>
             {
-                while (Console.ReadLine() is { } command)
+                while (reader.ReadLine() is { } command)
                 {
                     form.Invoke(() =>
                     {
@@ -155,6 +164,7 @@ internal static class Program
                             case "inspect": Write(form.Inspect()); break;
                             case "identity-a": form.SetIdentity("DSH.Fixture.A"); Write(form.Inspect()); break;
                             case "identity-b": form.SetIdentity("DSH.Fixture.B"); Write(form.Inspect()); break;
+                            case "lock-image": imageLock = File.Open(Environment.ProcessPath!, FileMode.Open, FileAccess.Read, FileShare.None); Write(form.Inspect()); break;
                             case "inspect-sibling": Write(sibling.Inspect()); break;
                             case "focus": form.Activate(); form.Editor.Focus(); Write(form.Inspect()); break;
                             case "pointer": form.PointAtButton(); Write(form.Inspect()); break;
@@ -182,7 +192,8 @@ internal static class Program
                 if (!form.IsDisposed) form.BeginInvoke(form.Close);
             });
         };
-        Application.Run(form);
+        try { Application.Run(form); }
+        finally { imageLock?.Dispose(); }
     }
 
     [DllImport("user32.dll")]

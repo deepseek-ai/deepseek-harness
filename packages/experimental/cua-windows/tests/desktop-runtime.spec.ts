@@ -6,7 +6,9 @@ import { AppResult, AppsResult, NativeAppsResult, StateResult } from '@deepseek-
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { once } from 'node:events'
-import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
@@ -20,9 +22,9 @@ async function connect() {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(LocalSubprocessRuntime)
-  const runtime = new WindowsNativeRuntime(ctx, 25, 1000, process.platform === 'win32' ? 'pipe' : 'stdio')
-  onTestFinished(() => runtime.dispose())
   const config = { ...Config({}), helperPath: helperPath!, cwd: process.cwd() }
+  const runtime = new WindowsNativeRuntime(ctx, 25, config.timeoutMs, process.platform === 'win32' ? 'pipe' : 'stdio')
+  onTestFinished(() => runtime.dispose())
   const channel = runtime.connect(config)
   const client = new NativeClient(ctx, config, () => channel)
   onTestFinished(() => client.dispose())
@@ -120,6 +122,63 @@ it.skipIf(!helperPath)('describes one action argument without an application or 
 
 const fixturePath = process.env.DSH_CUA_DESKTOP_TEST_FIXTURE
 it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
+  'launches an unregistered executable and keeps its windows accessible when its image cannot be reopened',
+  async ({ signal }) => {
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-launch-'))
+    const sockets = new Set<Socket>()
+    const connected = Promise.withResolvers<Socket>()
+    const server = createServer((socket) => { sockets.add(socket); connected.resolve(socket) })
+    const pipe = 'dsh-cua-launch-' + randomUUID()
+    onTestFinished(async () => {
+      const closed = new Promise<void>((resolve, reject) => {
+        server.close((error) => { if (error) reject(error); else resolve() })
+      })
+      for (const socket of sockets) socket.end('close\n')
+      await closed
+      await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    })
+    const listening = once(server, 'listening')
+    server.listen('\\\\.\\pipe\\' + pipe)
+    await listening
+    await cp(dirname(fixturePath!), directory, { recursive: true })
+    await writeFile(join(directory, 'control-pipe.txt'), pipe)
+    const path = join(directory, basename(fixturePath!))
+    const { client } = await connect()
+    const selected = AppResult.parse(await client.request('getApp', { selector: path }, signal))
+    expect(selected.running).toBe(false)
+    const other = AppResult.parse(await client.request('getApp', { selector: path }, signal))
+    const ready = connected.promise.then(async (socket) => {
+      const reader = createInterface({ input: socket })
+      onTestFinished(() => { reader.close() })
+      const first = await reader[Symbol.asyncIterator]().next()
+      if (first.done) throw new Error('The launched fixture exited before reporting its window')
+      const windowId = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value)).state.window
+      return { windowId, command: async (command: string) => {
+        const changed = once(reader, 'line')
+        socket.write(command + '\n')
+        await changed
+      } }
+    })
+    const [launched, fixture] = await Promise.all([
+      client.request('launchApp', { appHandle: selected.appHandle }, signal), ready,
+    ])
+    expect(launched).toMatchObject({ running: true, dispatched: true })
+    const { windowId } = fixture
+    const params = { appHandle: selected.appHandle, windowId, maxElements: 20, maxDepth: 5 }
+    expect(StateResult.parse(await client.request('getState', { ...params, appHandle: other.appHandle }, signal)).tree)
+      .toContain('DSH CUA owned test window')
+    expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+    await fixture.command('identity-a')
+    await fixture.command('lock-image')
+    expect(NativeAppsResult.parse(await client.request('listApps', {}, signal)).length).toBeGreaterThan(0)
+    expect(AppsResult.parse(await client.request('findApps', { query: null, maxAppMatches: 1 }, signal)).length).toBeGreaterThan(0)
+    expect(AppResult.parse(await client.request('getApp', { selector: 'DSH.Fixture.A' }, signal)).running).toBe(true)
+    expect(await client.request('listWindows', { appHandle: selected.appHandle }, signal))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ windowId })]))
+    expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+  })
+
+it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
   'reports a UIA change from a private editor and resolves its ID in the new snapshot',
   async ({ signal }) => {
     const fixture = spawn(fixturePath!, [], { windowsHide: true })
@@ -135,6 +194,9 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const first = await reader[Symbol.asyncIterator]().next()
     if (first.done) throw new Error('The desktop fixture exited before reporting its window')
     const { state: { window: windowId } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
+    const identified = once(reader, 'line')
+    fixture.stdin.write('identity-b\n')
+    await identified
     const { client, channel } = await connect()
     const selected = await client.request('getApp', { selector: fixturePath! }, signal)
     const { appHandle } = AppResult.parse(selected)

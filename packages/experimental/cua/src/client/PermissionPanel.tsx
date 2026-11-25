@@ -210,7 +210,7 @@ export function PermissionSetup({ t, refresh, useCuaPermissions, onDismiss, onOp
   </Modal>
 }
 
-/** @param props Shared operation outcome, independent of page lifetime. @returns The existing global toast icons. */
+/** @param props Shared operation outcome, independent of page lifetime. @returns The existing global toast presentation. */
 export function PermissionToast(props: PermissionProps) {
   const toast = props.useCuaPermissions(value => value.toast)
   if (!toast) return null
