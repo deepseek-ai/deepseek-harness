@@ -742,12 +742,9 @@ describe('web e2e: agent teamwork panel', () => {
       })).toEqual([{ panel: true, hasTree: true, hasBoard: true, fitsWidth: true }])
       expect((await measureScroll()).arrowsBeforeTrack).toBe(true)
       await panel.hover({ position: { x: 20, y: 20 } })
-      await Promise.all([
-        panel.evaluate(element => new Promise<void>((resolve) => {
-          element.addEventListener('scrollend', () => { resolve() }, { once: true })
-        })),
-        page.mouse.wheel(0, 180),
-      ])
+      // A `scrollend` listener attached alongside the wheel can miss the event, which does not repeat; the offset
+      // records the scroll either way.
+      await page.mouse.wheel(0, 180)
       await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
       await panel.evaluate((element) => { element.scrollTo({ top: 0 }) })
       await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBe(0)
