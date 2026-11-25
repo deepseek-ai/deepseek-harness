@@ -62,6 +62,16 @@ function toolSelector(callId: ToolCallId): string {
   return `[data-chat-call-id="${callId}"] [data-tool="subagent"]`
 }
 
+/**
+ * Wait until the view shows the Turn that {@link finishCall} ended as settled. The tool result can render before the
+ * Turn end that folds its process, so a card checked as visible in between can be hidden by that fold.
+ * @param page - page containing the Chat view.
+ * @param turn - the ended Turn.
+ */
+async function turnSettled(page: Page, turn: number): Promise<void> {
+  await page.locator(`[data-turn-process="${turn}"]`).waitFor({ state: 'attached', timeout: 10_000 })
+}
+
 async function expectSummary(card: Locator, text: string): Promise<void> {
   const header = card.locator('[data-disclosure-row]').first()
   await expect.poll(() => header.textContent(), { timeout: 10_000 }).toBe(`Create subagent${text}`)
@@ -156,6 +166,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     finishCall(agent, call, 'Delegation accepted.', false, { kind: 'activation', subagentId: 'child-foo' })
     await scaffold.ctx.sessions.flush(agent.session)
     await expect.poll(() => card.getAttribute('data-state')).toBe('ok')
+    await turnSettled(page, 1)
     await expectSummary(card, DESCRIPTION)
     await capture('Created')
     await expandTask(card, PROMPT)
@@ -203,6 +214,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
       finishCall(agent, call, fixture.result, fixture.error)
       await scaffold.ctx.sessions.flush(agent.session)
       await expect.poll(() => card.getAttribute('data-state')).toBe(fixture.error === true ? 'error' : 'ok')
+      await turnSettled(page, turn)
       await expectSummary(card, fixture.summary)
       if (fixture.args.prompt !== undefined && fixture.error !== true) {
         await expandTask(card, fixture.args.prompt)
@@ -248,6 +260,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent task summary', () => {
     finishCall(agent, call, 'started subagent fork-worker')
     await scaffold.ctx.sessions.flush(agent.session)
     await expect.poll(() => card.getAttribute('data-state')).toBe('ok')
+    await turnSettled(page, 6)
     await expandTask(card, prompt)
     await expectForkSummary()
     expect(await card.locator('dt').allTextContents()).toEqual(['Agent task description', 'ID'])
