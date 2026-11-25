@@ -1,6 +1,10 @@
-/* The panel toggle sizes and places this dot; it names the state for assistive technology. */
 .runningIndicator {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-state-business-primary);
+  box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base);
 }
 
 .visuallyHidden {

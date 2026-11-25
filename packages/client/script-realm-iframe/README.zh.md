@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-当框架代码明确需要拥有独立浏览器全局对象、同时保留直接对象引用的环境时使用此提供方。加载插件只注册 `iframe` 工厂，不分配 frame。它不会迁移应用插件，也不会改变插件的默认执行环境。
+当框架代码明确需要拥有独立浏览器全局对象、同时保留直接对象引用的环境时使用此提供方。加载插件只注册 `iframe` 工厂，不分配 frame。应用插件保留 Main 环境，除非其 Loader entry 请求脚本隔离；此时 [Client 模块](../modules/README.zh.md)通过此工厂为每个这样的包创建一个 frame。
 
 ## 目录
 
@@ -23,7 +23,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-普通 Client 插件注入 `scriptRealms` 并注册工厂。组合必须提供[注册表](../script-realm/README.zh.md)；两个包都不是默认应用条目。提供方不接受配置。
+普通 Client 插件注入 `scriptRealms` 并注册工厂。组合必须提供[注册表](../script-realm/README.zh.md)；默认 Web 名册把两个包都作为普通、非第一阶段的 entry 包含在内。提供方不接受配置。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
@@ -50,7 +50,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 同源访问不提供恶意代码隔离。原生 `window`、`document`、视口、计时器和 DOM 构造器属于 iframe；本包不透明模拟主页面。模块放置、池化和 Shadow DOM 留待后续设计。
+- 同源访问不提供恶意代码隔离。原生 `window`、`document`、视口、计时器和 DOM 构造器属于 iframe；本包不透明模拟主页面。池化、把多个包放入同一 frame 以及 Shadow DOM 留待后续设计。
 
 <a id="dev-note"></a>
 ### 开发备注

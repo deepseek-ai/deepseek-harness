@@ -31,7 +31,9 @@ afterEach(() => {
   for (const el of document.querySelectorAll('style, script')) el.remove()
 })
 
-const row = (id: string, fields: Partial<BootModuleRow> = {}): BootModuleRow =>
+type FixtureRow = Omit<BootModuleRow, 'isolation'>
+
+const row = (id: string, fields: Partial<FixtureRow> = {}): FixtureRow =>
   ({
     id,
     url: comboReference([id], '0'),
@@ -70,7 +72,7 @@ function registrationTarget(pending: ClientBundleRegistration[] = []): ClientMod
  * sink (`null` scripts a bundle that never calls load).
  */
 function bench(
-  entries: BootModuleRow[],
+  entries: FixtureRow[],
   bundles: Record<string, Factory | null> = {},
   opts: {
     seed?: readonly ClientBundleRegistration[]
@@ -777,9 +779,10 @@ describe('boot manifest wire', () => {
       ],
       batches: [{ phase: 'application', url: 'batch.js', rev: 'batch', entries: ['a', 'b'] }],
     })
+    const isolation = { script: false, style: false }
     expect(manifest.modules).toEqual([
-      { id: 'a', url: 'plugins/a/client.js', initialUrl: 'batch.js', rev: '1', inject: ['b'], external: [] },
-      { id: 'b', url: 'plugins/b/client.js', initialUrl: 'batch.js', rev: '2', inject: [], external: ['react'] },
+      { id: 'a', url: 'plugins/a/client.js', initialUrl: 'batch.js', rev: '1', inject: ['b'], external: [], isolation },
+      { id: 'b', url: 'plugins/b/client.js', initialUrl: 'batch.js', rev: '2', inject: [], external: ['react'], isolation },
     ])
   })
 

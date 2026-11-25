@@ -38,7 +38,7 @@ async function sessionEvents(cwd: string) {
   return events
 }
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('renders $format with office_render in $mode mode', async ({ format, mode }) => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mode: 'native' }, { format: 'pdf', mode: 'native' }, { format: 'docx', mode: 'ptc' }])('renders $format with document_render in $mode mode', async ({ format, mode }) => {
   let original: Buffer | undefined
   await runLoaderSmoke({
     label: 'Office rendering', tempDirPrefix: 'dsh-office-render-',
@@ -62,7 +62,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
         if (event.type === 'tool/ptc-dispatch') return [{ name: event.data.name, arguments: JSON.stringify(event.data.arguments) }]
         return []
       })
-      const renders = officeCalls(events).filter(call => call.name === 'office_render')
+      const renders = officeCalls(events).filter(call => call.name === 'document_render')
       expect(renders.length, JSON.stringify(calls)).toBeGreaterThan(0)
       expect(officeImages(events).length, JSON.stringify(calls)).toBeGreaterThan(0)
     },
@@ -87,7 +87,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('keeps Office skills and th
   })
 })
 
-it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with office_convert and preserves the source', async () => {
+it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with document_convert and preserves the source', async () => {
   let original: Buffer | undefined
   await runLoaderSmoke({
     ...launch,
@@ -110,9 +110,9 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime)('exports PDF with office_co
       const converted = convertedPdfFiles(events)
       const diagnostic = JSON.stringify({ calls: calls.map(call => call.name), skills, commands,
         office: office.map(call => ({ name: call.name, input: call.args.input, format: call.args.format })), converted })
-      expect(office.some(call => call.name === 'office_convert' && call.args.format === 'pdf'), diagnostic).toBe(true)
+      expect(office.some(call => call.name === 'document_convert' && call.args.format === 'pdf'), diagnostic).toBe(true)
       // The conversion reports the temporary output's byte count and that file is released when the conversation
-      // ends, so a matching size is what ties result.pdf to office_convert. Extra steps such as pdfinfo, a format
+      // ends, so a matching size is what ties result.pdf to document_convert. Extra steps such as pdfinfo, a format
       // skill, or a render of the result are model choices and do not change the deliverable.
       const delivered = await readFile(join(cwd, 'result.pdf'))
       expect(converted.some(conversion => conversion.bytes === delivered.length), diagnostic).toBe(true)

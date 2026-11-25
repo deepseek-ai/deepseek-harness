@@ -119,7 +119,8 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
   await runtime.mount({ inject: [...injectMenus], apply: applyMenus }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.root.declare({
     'main': { kind: 'keyed', scope: 'root' },
-    'settings.general.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.interaction.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.display.item': { kind: 'list', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
   await runtime.mount({ inject: [...injectConversation], apply: applyConversation }, syncedConfig({ busyEnter: 'queue', maxConcurrentFileUploads: 2 }))
   const registerGroups = withProcessGroups ? undefined
@@ -151,7 +152,7 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       return inject(ROOT)
     },
     get linkPreference() {
-      const row = runtime.slots.entries('settings.general.item').find(entry => entry.options.id === 'link-opening')!
+      const row = runtime.slots.entries('settings.general.group.interaction.item').find(entry => entry.options.id === 'link-opening')!
       const preference: object = row.inject!()
       return preference as LinkOpeningRowInjected
     },
@@ -208,7 +209,7 @@ describe('Chat inject API', () => {
   it('projects independent Settings choices and saves timing to Host settings', async () => {
     const b = await bench()
     try {
-      const row = b.runtime.slots.entries('settings.general.item')
+      const row = b.runtime.slots.entries('settings.general.group.display.item')
         .find(entry => entry.options.id === 'transcript-view')!
       const preference = row.inject!()
       const setCollapseTiming = preference.setCollapseTiming as TranscriptViewRowInjected['setCollapseTiming']
@@ -415,7 +416,7 @@ describe('Chat inject API', () => {
       expect(open).toHaveBeenLastCalledWith('http://example.test/selected', '_blank', 'noopener,noreferrer')
 
       await b.chat.dispose()
-      expect(b.runtime.slots.entries('settings.general.item').some(row => row.options.id === 'link-opening')).toBe(false)
+      expect(b.runtime.slots.entries('settings.general.group.interaction.item').some(row => row.options.id === 'link-opening')).toBe(false)
       b.chatSettings.publish({ value: { ...settings, linkOpening: 'sidebar' } })
       expect(source.getSnapshot()).toBe('new-tab')
     } finally {
@@ -453,15 +454,15 @@ describe('Chat inject API', () => {
     const b = await bench(undefined, false)
     try {
       expect(b.runtime.slots.entries('conversation.view')).toHaveLength(1)
-      expect(b.runtime.slots.entries('settings.general.item').some(row => row.options.id === 'link-opening')).toBe(false)
+      expect(b.runtime.slots.entries('settings.general.group.interaction.item').some(row => row.options.id === 'link-opening')).toBe(false)
       const registry = await b.runtime.mount({
         apply(ctx) { ctx.provide('sidebarRightTabs', b.sidebarRightTabs as never) },
       })
       await vi.waitFor(() => {
-        expect(b.runtime.slots.entries('settings.general.item').some(row => row.options.id === 'link-opening')).toBe(true)
+        expect(b.runtime.slots.entries('settings.general.group.interaction.item').some(row => row.options.id === 'link-opening')).toBe(true)
       })
       await registry.dispose()
-      expect(b.runtime.slots.entries('settings.general.item').some(row => row.options.id === 'link-opening')).toBe(false)
+      expect(b.runtime.slots.entries('settings.general.group.interaction.item').some(row => row.options.id === 'link-opening')).toBe(false)
       expect(b.runtime.slots.entries('conversation.view')).toHaveLength(1)
     } finally {
       await b.runtime.dispose()

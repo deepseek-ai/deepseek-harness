@@ -14,7 +14,7 @@ Client 产物包含 `id` 和 `factory`，可选带有 `meta`，动态包内 chun
 
 Modules 拥有 JavaScript 导出、模块身份、owner id 和观察到的依赖边。它保存元信息函数而不求值，发布通用的模块记录变化。Renderer 拥有元信息／文本缓存、依赖有序的样式集合、路径去重与主文档节点。它在 React 挂载前显式安装已有资源，随模块变化更新，并在根卸载后释放样式。组件生命周期不拥有样式。
 
-静态库构建把 index 产物保持为普通 ESM，保留所有 import 与动态 import 交给最终外壳组装，并增加携带相同 manifest 的 `__$dsh_client_module_manifest` 导出。启动外壳本身保持普通 ESM。Modules 用内建 Main 环境包装原有载体加载 hook；可选 Realm 提供方不改变默认启动，也不选择插件放置。
+静态库构建把 index 产物保持为普通 ESM，保留所有 import 与动态 import 交给最终外壳组装，并增加携带相同 manifest 的 `__$dsh_client_module_manifest` 导出。启动外壳本身保持普通 ESM。Modules 用内建 Main 环境包装原有载体加载 hook；Realm 提供方不改变默认启动，只有 Loader entry 上的不稳定隔离开关会把包放入 Realm（[Client 模块](../../../../packages/client/modules/README.zh.md#script-isolated-packages)）。
 
 本决定细化[加载模型](2026-07-23-client-plugin-loading-model.zh.md)中的资源处理，以及[外壳分层](2026-08-15-client-shells-and-dynamic-packages.zh.md)中的产物描述。两份记录的模块身份、自举和依赖分离仍然有效，没有完全被取代。
 
@@ -26,7 +26,7 @@ Modules 拥有 JavaScript 导出、模块身份、owner id 和观察到的依赖
 
 **静态库复用动态插件的私有依赖打包。** 这会把第三方惰性拆包和字体交付移到包构建，改变既有外壳依赖策略。静态库因此保留原策略。
 
-**Document Scope 与提前 Realm 激活阶段。** 所有模块使用原 Main 载体、所有样式装到主文档时，不需要这两者。隔离请求、环境分配和多个呈现目的地属于独立工作。
+**Document Scope 与无条件提前激活 Realm。** 样式表元信息不需要这两者：即使包在 iframe Realm 中运行，renderer 也会把它的样式安装到主文档。
 
 ## Consequences
 

@@ -1,0 +1,3 @@
+- insert:
+    - id: fixture-document-hooks
+      name: '@fixture/document-hooks'

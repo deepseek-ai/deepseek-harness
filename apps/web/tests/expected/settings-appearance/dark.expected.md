@@ -12,6 +12,20 @@
     "fill": "rgb(53, 54, 56)",
     "height": 36
   },
+  "selectedChoice": {
+    "radius": "20px",
+    "border": "1px",
+    "stroke": "rgb(151, 157, 166)",
+    "fill": "rgb(67, 69, 74)",
+    "height": 84
+  },
+  "unselectedChoice": {
+    "radius": "20px",
+    "border": "1px",
+    "stroke": "rgba(0, 0, 0, 0)",
+    "fill": "rgb(53, 54, 56)",
+    "height": 84
+  },
   "usage": {
     "radius": "12px",
     "border": "1px",

@@ -18,6 +18,8 @@ root 作用域的 list `sidebar.panellist.actions`、`conversation.session.heade
 
 [ui-session-panel](../../packages/client/ui-session-panel/README.zh.md#contribute-a-section) 记录会话面板的分栏、标题控件、行与开关角标扩展位置。
 
+通用设置声明 root 作用域的列表 `settings.general.group`；每个分组条目拥有其设置行子列表的声明。设置底座声明六个内置分组设置行 key，并以 `SettingsGeneralGroupItemSlot` 导出它们的联合类型；自定义分组通过声明合并把确切的 `settings.general.group.<id>.item` key 加入 `SlotMap`。默认「常规」分组拥有兼容的 `settings.general.item` 名称。[ui-settings-general](../../packages/client/ui-settings-general/README.zh.md#the-general-section) 记录分组标题、排序、共享卡片及注册示例。
+
 ## 声明与生命周期
 
 `SlotMap` 是编译期注册表。包通过声明合并写入 key、cardinality（基数）、scope、owner props、keyed props 与可选的 slot 级 inject face。运行时声明则是拥有该渲染位置的组件在 `children` 中给出的对应条目。
@@ -70,13 +72,29 @@ Slot 声明固定两个相互独立的维度。
 
 对于 `single`、`list`、`keyed` 和 `hoc` cell，`priority` 是遮蔽优先级；对于 `chain`，它是选举顺序。数值越小越先运行或渲染。普通增量贡献应选用新的 list 或 hoc `id`，或 keyed `key`；复用已有 cell 表示有意替换其展示。
 
+<a id="slot-style-ownership"></a>
+
+### 当前位置渲染的内容由哪个包提供？
+
+`data-slot` 标记位置；`data-plugin` 标出内容由哪个包提供，与该包的 CSS 设置无关。对于[隔离样式](../../packages/client/ui-renderer/README.zh.md#package-style-isolation)，不同包名会截断外层包的作用域；里面再次出现同名包的根时，该包的样式可重新生效。提供方未知或框架显示错误时，使用 `data-plugin=""`。共享出口不带 `data-plugin`，不影响外层作用域。
+
+| 位置 | 哪个已有元素 | `data-plugin` 写谁的包名？ |
+|---|---|---|
+| `root`、`single`、`keyed` | `[data-slot]` | 胜出的注册项；`single` 或 `keyed` 渲染后备内容时写调用方。匹配项全部失败则显示框架错误。`root` 从未注册属于装配错误。 |
+| `chain` | `[data-slot]`；使用 `overlay` 时，后备内容另有 `[data-chain-overlay-fallback]` | 选中的注册项；无匹配或指定 `fallbackOnly` 时写调用方。后备元素始终标记其内容的提供方，即使暂时隐藏也一样。 |
+| `list`，包括指定 `only` 时 | 胜出项用 `[data-slot-item]`；后备内容用 `[data-slot]` | 每行写该行胜出注册项的包名。只要有行，出口就不写 `data-plugin`，即使只有一行。没有匹配的 `id` 时，出口标记调用方；某个 `id` 的注册全部失败时，在出口直属的错误元素上写 `data-plugin=""`。 |
+| `hoc` | `[data-slot]`；各层转发子内容处的 `[data-slot-children]` | 最外面的适用层；没有适用层则写调用方。每个 `children` 出口标记**里面这份内容**的提供方：有下一层就是下一层，到了最内层就是最初的调用方。 |
+| Component Factory | `[data-slot-factory]`；已挂载的局部替换用 `[data-slot-factory-children]` | 本体由定义方提供，局部替换由调用方提供。默认局部组件没有独立的根。缺少定义时直接返回调用方的后备内容，没有 Factory 根。 |
+
+这些属性不增加 DOM 元素，也不赋予额外的渲染权限。[样式作用域的设计说明](../../.agents/notes/implemented/architecture/2026-11-23-slot-module-boundaries-for-css-scope.zh.md)举例说明了按钮如何在另一包的 Factory 中保留调用方的样式，以及 HOC 层如何转发 `children`。
+
 <a id="list-item-roots"></a>
 
 ### list 行根
 
 `list` 出口（`[data-slot="key"]`）为每个选中 `id` 的胜出注册项渲染一个直接子元素 `[data-slot-item]`，用 `only` 只选一个 `id` 时也一样。该属性的值为空，不标识注册项或渲染实例。出口和行根默认都用 `div`；list 声明 `inline: true` 时都用 `span`。两者都使用 `display: contents`，自身没有布局盒。
 
-胜出组件返回 `null` 时会留下一个空行根。文本和 React Fragment 在本地渲染的所有节点都在同一个行根内；通过 Portal 渲染的内容仍在目标容器内。行根数量并不代表可见控件数。list 没有注册项或 `only` 未匹配任何 `id` 时，owner 的 `fallback` 直接渲染在出口内（省略时不渲染内容）。若匹配的 `id` 下所有注册项都已渲染失败，`[data-slot-error="key"]` 占位元素会取代行根，成为出口的直接子元素。
+胜出组件返回 `null` 时会留下一个空行根。文本和 React Fragment 在本地渲染的所有节点都在同一个行根内；通过 Portal 渲染的内容仍在目标容器内。行根数量并不代表可见控件数。list 没有注册项或 `only` 未匹配任何 `id` 时，owner 的 `fallback` 直接渲染在出口内（省略时不渲染内容）。若匹配的 `id` 下所有注册项都已渲染失败，`[data-slot-error="key"]` 占位元素会取代行根，成为出口的直接子元素。只要同一注册项仍被选中，重排兄弟行或切换 `only` 都不会重新挂载这一行及其控件，控件状态也会保留。
 
 <a id="hoc-layers"></a>
 
@@ -107,9 +125,9 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 - 错误：层自身崩溃时照常上报错误，出错处回退到同一份 `children`（含其出口），直到该处本次挂载结束，owner props 变化也不恢复。该层保持注册，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
 - 布局：两种出口都使用 `display: contents` 的 `div`（`inline: true` 时使用 `span`）。它们不产生布局盒，但仍参与子元素和兄弟元素选择器的匹配。应按属性识别出口，而非依赖嵌套深度。包裹 `children` 的层自身不得产生盒子，除非该 slot 另有说明。
 
-<a id="component-inputs"></a>
-
 [右键菜单插件](../../packages/client/ui-context-menu/README.zh.md) 通过 `provideRoot` 贡献 `useContextMenu`；每个作用域接收同一个由插件拥有的触发器工厂。提供方卸载时，注入属性与保留的处理器一并失效。其根作用域 keyed Slot `contextMenu.icon` 根据操作元数据渲染业务方提供的图标。
+
+<a id="component-inputs"></a>
 
 ## 组件输入
 
@@ -129,6 +147,8 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 
 组件绝不会收到 `ctx`。父组件在某次渲染时已经知道的值通过 `renderSlot` 的 owner 参数进入；共享视图状态使用声明的 store；service 与 model object 留在 `apply` closure 中，只向组件投影 callback 或 observable source。
 
+<a id="framework-provided-hooks"></a>
+
 ## 框架提供的 hooks
 
 当前组合中的 adapter 会添加以下标准 props。它们按目标 slot 的 scope 提供，与注册组件来自哪个包无关。
@@ -140,12 +160,17 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 | 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
 | 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
+| 所有已挂载的作用域 | `useDocumentPortal`、`useDocumentViewport` | [ui-renderer](../../packages/client/ui-renderer/README.zh.md#use-this-package) |
+| 所有 scope | `useMediaQuery` | `ui-responsive` |
+| 所有 scope | `useMobile` | `ui-responsive` |
 | `session` | `sessionId`、`useSession`、`useProjection`、`useAccess`（所绑定 Session 的答案） | `ui-session` |
 | `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection`、`useAccess` | `ui-session` |
 | `session` | `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session-maybe` | 结果可选的 `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
 | `session` | `useChat` | `ui-chat` |
 | `session` | `useTrajectory` | `ui-trajectory` |
+
+`useMediaQuery(query)` 回答 CSS 媒体查询当前是否在页面窗口中匹配，结果变化时组件重新渲染；当结果决定渲染结构或行为时使用它，纯样式差异仍写在 CSS `@media` 规则中。`useMobile()` 回答页面是否运行在手机或平板上，在页面生命周期内固定不变；它只用于自动聚焦和软键盘行为，布局按宽度媒体查询选择。组件读取其中任一 prop 的插件要 inject `uiResponsive` 服务，这样它会在两个 props 都存在之后启动，并随它们一起卸载。
 
 Renderer 还会根据声明的 store 创建 `useStore`，并根据声明的 locale namespace 创建 `t`。这些是由注册项推导的 props，不属于全局标准 props。
 

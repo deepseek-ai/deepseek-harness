@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 // InputBar behavior over the editor + submit-machine wiring: Enter-send
 // semantics (IME guard, Shift newline, busy Enter policy, Ctrl/Meta steering,
 // repeat suppression), running semantics (input stays free; continuable
@@ -118,6 +118,8 @@ interface BenchOptions {
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
+  /** The page's `useMobile` answer (absent = a desktop device). */
+  mobile?: boolean
 }
 
 /** One pending queue row (the runtime snapshot shape, as the dock tests build it). */
@@ -203,6 +205,7 @@ function bench(over?: BenchOptions) {
     })),
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
+    ...responsiveHooks({ mobile: over?.mobile ?? false }),
     useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
     useProjection: ((key: string, selector: (v: unknown) => unknown = v => v) =>
       selector(key === 'plan'
@@ -431,9 +434,7 @@ describe('composer focus handoff', () => {
     ['mobile acceptance', { kind: 'success' }, true],
     ['mobile failure', { kind: 'error', text: 'send failed' }, true],
   ])('returns focus within the composer after %s', async (_label, outcome, mobile) => {
-    const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockReturnValue(mobile)
-    onTestFinished(() => { device.mockRestore() })
-    const { view, shell, textarea, sink } = bench()
+    const { view, shell, textarea, sink } = bench({ mobile })
     writeDraft(shell, 'draft text')
     act(() => { shell.focus() })
     let settle!: (outcome: SubmitOutcome) => void
@@ -1727,6 +1728,7 @@ describe('running and lock semantics', () => {
     }
     vi.resetModules()
     const detection = await import('@deepseek-ai/dsh-client-ui-primitives/src/focus.ts')
+    // The bar reads the page's useMobile answer; the editor's submission binding still classifies the device itself.
     const device = vi.spyOn(uiPrimitives, 'isMobileDevice').mockImplementation(detection.isMobileDevice)
     onTestFinished(() => { device.mockRestore() })
     const outside = document.createElement('input')
@@ -1734,7 +1736,7 @@ describe('running and lock semantics', () => {
     onTestFinished(() => { outside.remove() })
     outside.focus()
 
-    const { view, textarea, props, shell, button, sink } = bench({ draft: 'draft' })
+    const { view, textarea, props, shell, button, sink } = bench({ draft: 'draft', mobile: detection.isMobileDevice() })
     expect(document.activeElement).toBe(automatic ? textarea : outside)
     act(() => { outside.focus() })
     act(() => { view.rerender(<InputBar {...props} sessionId={'s2' as SessionId} />) })

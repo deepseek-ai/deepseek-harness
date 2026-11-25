@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Responsives Verhalten",
+    "description": "Lässt Oberflächenkomponenten den Media Queries des Fensters folgen und Smartphones und Tablets von Desktop-Computern unterscheiden."
+  }
+}

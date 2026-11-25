@@ -339,7 +339,7 @@ export class CordisCatalogProjector {
     for (const declaration of this.sourceDeclarations) {
       if (declaration.face !== this.face.face
         || (!/^packages\/[^/]+\/[^/]+\/src\/.+\.tsx?$/.test(declaration.location.file)
-          && !(declaration.kind === 'enum' && /^vendor\/[^/]+\/src\/.+\.ts$/.test(declaration.location.file)))) continue
+          && !(declaration.kind === 'enum' && /^vendor\/(?:im\/)?[^/]+\/src\/.+\.ts$/.test(declaration.location.file)))) continue
       if (declarations.has(declaration.name)) {
         ambiguous.add(declaration.name)
         continue

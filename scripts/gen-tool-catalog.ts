@@ -56,7 +56,7 @@ import * as ToolPwshPersistent from '@deepseek-ai/dsh-tool-pwsh-persistent'
 import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolPresent from '@deepseek-ai/dsh-tool-present'
-import * as ToolOffice from '@deepseek-ai/dsh-tool-office'
+import * as ToolDocument from '@deepseek-ai/dsh-tool-document'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
@@ -360,16 +360,16 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'The bash tool is the model-facing consumer of the bash executor seam. With a job registry composed every call registers with the generic `ctx.jobs` runtime as it starts, collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; without one, or with `enableRunInBackground: false`, the tool registers a foreground-only schema without the `run_in_background` parameter.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-office',
-    dir: 'tool-office',
-    source: 'packages/document/tool-office/src/index.ts',
-    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.agents', 'ctx.officeKit', 'ctx.attachments and ctx.llm for office_render'],
+    pkg: '@deepseek-ai/dsh-tool-document',
+    dir: 'tool-document',
+    source: 'packages/document/tool-document/src/index.ts',
+    requires: ['ctx.workingDirectory', 'ctx.tools', 'ctx.fs', 'ctx.agents', 'ctx.officeKit', 'ctx.attachments and ctx.llm for document_render'],
     writes: ['tool/call', 'tool/result with rendered image attachments', 'temporary converted files in the Office kit output store'],
     async mount(ctx) {
       // Schema harvest never renders or converts a document.
       ctx.provide('officeKit', {} as OfficeKit)
       await ctx.plugin(AgentRegistry)
-      await ctx.plugin(ToolOffice)
+      await ctx.plugin(ToolDocument)
     },
     note: 'Declared to an Agent from the step after it successfully loads an Office skill, and kept while the previous request header declares an Office tool. Admitted calls fail with the Office service\'s unavailable error when LibreOffice Kit is not installed.',
   },

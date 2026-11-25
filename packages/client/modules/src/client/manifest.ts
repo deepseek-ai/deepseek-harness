@@ -34,7 +34,7 @@ import type {
   DshClientManifest, ClientModuleMetaFactory,
   DshClientModuleManifest,
 } from '@deepseek-ai/dsh-package-manifest'
-import type { ScriptRealm } from '@deepseek-ai/dsh-client-script-realm/client'
+import type { ScriptRealm, ScriptRealmRegistryHost } from '@deepseek-ai/dsh-client-script-realm/client'
 export type { ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientEntries } from './entries.ts'
 import type { ClientModuleSystem } from './system.ts'
@@ -44,6 +44,48 @@ declare module '@deepseek-ai/cordis' {
     /** The client module system the web shell builds at boot (provided by the `./client` wrapper plugin). */
     modules: ClientModuleLoader
   }
+}
+
+/** Unstable per-package test modes: a dedicated Script Realm, scoped stylesheets, or both. */
+export type ClientIsolation = 'script' | 'style' | 'scriptandstyle'
+
+/** Script placement and stylesheet scoping selected for a package. */
+export interface ClientIsolationFlags {
+  readonly script: boolean
+  readonly style: boolean
+}
+
+/** Isolation of modules supplied by the shell or registered without a graph row. */
+export const NO_ISOLATION = Object.freeze({ script: false, style: false })
+const ISOLATION_FLAGS: Record<ClientIsolation, ClientIsolationFlags> = {
+  script: Object.freeze({ script: true, style: false }),
+  style: Object.freeze({ script: false, style: true }),
+  scriptandstyle: Object.freeze({ script: true, style: true }),
+}
+
+/**
+ * Recognize an explicit mode in a Loader entry, boot graph or development overlay.
+ * @param value - Unvalidated mode.
+ * @returns Whether the value names a Client isolation mode.
+ */
+export function isClientIsolation(value: unknown): value is ClientIsolation {
+  return typeof value === 'string' && Object.hasOwn(ISOLATION_FLAGS, value)
+}
+
+/**
+ * Decode the isolation mode in a Loader entry or a boot graph row.
+ * @param subject - Diagnostic prefix naming the entry or wire row.
+ * @param field - Field name as it appears in the diagnostic.
+ * @param value - Raw field value; `undefined` and `null` mean no isolation.
+ * @returns Read-only script and style flags; both are false for an absent mode.
+ * @throws {Error} when the value is present but is not a {@link ClientIsolation}.
+ */
+export function parseClientIsolation(subject: string, field: string, value: unknown): ClientIsolationFlags {
+  if (value === undefined || value === null) return NO_ISOLATION
+  if (!isClientIsolation(value)) {
+    throw new Error(`client-modules: ${subject} ${field} must be "script", "style", or "scriptandstyle", received ${JSON.stringify(value)}`)
+  }
+  return ISOLATION_FLAGS[value]
 }
 
 /**
@@ -72,6 +114,8 @@ export interface WebBootEntry {
   external?: string[]
   /** Browser-synced values of the plugin's top-level volatile Config fields, secrets removed; omitted when it has none. */
   config?: SyncedConfigValues
+  /** Unstable isolation switch copied from the row's Loader entry; omitted when the package is not isolated. */
+  isolation?: ClientIsolation
 }
 
 /** Initial scheduling phase for one revisioned combo script. */
@@ -109,7 +153,10 @@ export interface WebBootGraph {
    * unrelated and remains owned by fiber service waiting.
    */
   entries: WebBootEntry[]
-  /** Initial combo descriptors; every entry belongs to exactly one descriptor. */
+  /**
+   * Initial combo descriptors. Every entry whose isolation excludes `script` belongs to exactly one
+   * descriptor; a script-isolated entry belongs to none and loads from its own {@link WebBootEntry.url}.
+   */
   batches: WebBootBatch[]
 }
 
@@ -127,6 +174,8 @@ export interface BootModuleRow {
   inject: string[]
   /** Module specifiers this row requests from the module table ([] when the wire omits them). */
   external: string[]
+  /** Script and style isolation requested for this package; both false when the wire omits the mode. */
+  isolation: ClientIsolationFlags
 }
 
 /** The cordis-plugin view of one boot row: what entry composition needs (optional wire fields normalized). */
@@ -273,12 +322,17 @@ export function parseBootManifest(wire: unknown): BootManifest {
     if (row.immediately !== undefined && typeof row.immediately !== 'boolean') {
       throw new Error(`client-modules: boot manifest entry ${where} immediately must be a boolean`)
     }
+    const isolation = parseClientIsolation(subject, 'isolation', row.isolation)
+    if (row.immediately === true && isolation.script) {
+      throw new Error(`client-modules: boot manifest entry ${where} cannot isolate scripts of a stage-one row`)
+    }
     moduleFields.push({
       id: row.id,
       url: row.url,
       rev: row.rev,
       inject: inject === undefined ? [] : [...inject],
       external: external === undefined ? [] : [...external],
+      isolation,
     })
     if (row.config !== undefined && (typeof row.config !== 'object' || row.config === null || Array.isArray(row.config))) {
       throw new Error(`client-modules: boot manifest entry ${where} config must be an object`)
@@ -292,6 +346,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
   }
 
   const entryIds = new Set(moduleFields.map(row => row.id))
+  const scriptIsolated = new Set(moduleFields.filter(row => row.isolation.script).map(row => row.id))
   const initialUrls = new Map<string, string>()
   const batchUrls = new Set<string>()
   for (const value of graph.batches as unknown[]) {
@@ -318,6 +373,9 @@ export function parseBootManifest(wire: unknown): BootManifest {
       if (!entryIds.has(id)) {
         throw new Error(`client-modules: boot manifest ${phase} batch names unknown entry "${id}"`)
       }
+      if (scriptIsolated.has(id)) {
+        throw new Error(`client-modules: boot manifest ${phase} batch names script-isolated entry "${id}"`)
+      }
       if (initialUrls.has(id)) {
         throw new Error(`client-modules: boot manifest entry "${id}" belongs to more than one batch`)
       }
@@ -325,6 +383,7 @@ export function parseBootManifest(wire: unknown): BootManifest {
     }
   }
   const modules = moduleFields.map((row): BootModuleRow => {
+    if (row.isolation.script) return { ...row, initialUrl: row.url }
     const initialUrl = initialUrls.get(row.id)
     if (initialUrl === undefined) {
       throw new Error(`client-modules: boot manifest entry "${row.id}" belongs to no initial-load batch`)
@@ -407,6 +466,8 @@ export interface ClientModuleRecord {
   id: string
   /** Package identity shared by its entry and package-local chunks. */
   readonly ownerId: string
+  /** Isolation of the owning package when its factory was loaded. */
+  readonly isolation: ClientIsolationFlags
   /** Materialized exports (`module.exports` from a factory or bootstrap registration). */
   exports: unknown
   /** Deferred metadata producer; JavaScript materialization does not evaluate it. */
@@ -420,7 +481,7 @@ export interface ClientModuleRecord {
  * consume. Mounted on `ctx.loader.internal` by the shell boot and provided
  * as `ctx.modules`.
  */
-export interface ClientModuleLoader {
+export interface ClientModuleLoader extends ScriptRealmRegistryHost {
   /**
    * Observe changes to {@link activeRecords} and to their cross-package dependency edges.
    * @param listener - Called after a record materializes, records are released, or a record requests another package.
@@ -450,7 +511,7 @@ export interface ClientModuleLoader {
   loadCache: Map<string, ClientModuleRecord>
   /** Initial execution environment, fixed when the module system is constructed. */
   readonly mainRealm: Pick<ScriptRealm, 'id' | 'execute' | 'dispose'>
-  /** Stop accepting scripts and await pending carrier operations. */
+  /** Stop accepting scripts, dispose isolated Realms, and await pending carrier operations. */
   dispose(): Promise<void>
   /**
    * Internal contract consumed by the vendored Loader's `tree.import`. Resolves

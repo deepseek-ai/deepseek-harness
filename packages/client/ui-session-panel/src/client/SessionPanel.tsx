@@ -3,6 +3,8 @@ import {
   useCallback, useEffect, useId, useMemo, useRef, useState, type AnimationEvent, type DragEvent, type FocusEvent, type ReactNode,
 } from 'react'
 import { IconDragHandleOutlineRegular, isBehindModal, observeComposition, useRowDragPreview } from '@deepseek-ai/dsh-client-ui-primitives'
+// Type-only: the `useMediaQuery` standard prop merge.
+import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import { ENVIRONMENT_SECTION_ID } from './sections.ts'
 import type { SessionPanelPresentation, SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
@@ -129,12 +131,15 @@ interface PanelMotion {
  * @param motion - what the panel showed at its last render.
  * @param presentation - how the panel shows now.
  * @param fits - whether the panel has room to dock now.
+ * @param reducedMotion - whether the reader asks for reduced motion now.
  * @returns the state for this render.
  */
-function motionAfter(motion: PanelMotion, presentation: SessionPanelPresentation | 'hidden', fits: boolean): PanelMotion {
+function motionAfter(
+  motion: PanelMotion, presentation: SessionPanelPresentation | 'hidden', fits: boolean, reducedMotion: boolean,
+): PanelMotion {
   const before = motion.presentation
   if ((before === 'hidden') === (presentation === 'hidden')) return { ...motion, presentation, fits }
-  if (motion.fits !== fits || matchMedia('(prefers-reduced-motion: reduce)').matches) return { presentation, fits }
+  if (motion.fits !== fits || reducedMotion) return { presentation, fits }
   return before === 'hidden' ? { presentation, fits, phase: 'enter' } : { presentation, fits, phase: 'exit', leaving: before }
 }
 
@@ -227,7 +232,7 @@ function useSectionReorder(moveSection: (id: string, target: string, placement: 
  * @returns the dock probe and, unless hidden, the panel.
  */
 export function SessionPanel({
-  sessionId, useVisibility, useSections, useProbes, createProbeRef, closeOverlay, moveSection, renderSlot, t,
+  sessionId, useVisibility, useSections, useProbes, createProbeRef, closeOverlay, moveSection, renderSlot, useMediaQuery, t,
 }: SessionPanelProps): ReactNode {
   const probe = useId()
   // One ref lifecycle for this mounted panel: the entry remounts with its Session, so the Session is fixed.
@@ -236,10 +241,11 @@ export function SessionPanel({
   const presentation = useVisibility(visibility => presentationOf(fits, visibility, sessionId))
   const docks = useVisibility(visibility => visibility.pinned)
   const sections = useSections(entries => entries)
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const panel = useRef<HTMLElement>(null)
   const dismissOverlay = useCallback(() => { closeOverlay(sessionId) }, [closeOverlay, sessionId])
   const [motion, setMotion] = useState<PanelMotion>({ presentation, fits })
-  if (motion.presentation !== presentation || motion.fits !== fits) setMotion(motionAfter(motion, presentation, fits))
+  if (motion.presentation !== presentation || motion.fits !== fits) setMotion(motionAfter(motion, presentation, fits, reducedMotion))
   const rendered = presentation === 'hidden' && motion.leaving !== undefined ? motion.leaving : presentation
   const owner = useMemo((): SessionPanelSectionOwnerProps | undefined => rendered === 'hidden'
     ? undefined

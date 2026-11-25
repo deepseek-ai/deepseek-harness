@@ -25,7 +25,7 @@ import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to-v4'
 import { sessionDir } from './paths.ts'
-import { FRAME_CODEC_UTF8, decodeFrame, decodeFrameSync, encodeFrame } from './frame.ts'
+import { decodeFrame, encodeFrame } from './frame.ts'
 import type { EncodedFrame, FrameCompression } from './frame.ts'
 
 /** Private Segment storage database schema version; incompatible versions are refused, never reset. */
@@ -38,18 +38,6 @@ const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
  * concurrently on the thread pool between two event-loop yields of a read.
  */
 const READ_DECODE_GROUP_FRAMES = 8
-/**
- * Internal scheduling constant, not deployment configuration: the decoded bytes one merge of
- * short frames may rewrite inside the write transaction. Decoding and compressing run at roughly
- * 5–9 ms per MiB, so this bounds how long a merge holds the event loop and the write lock; a run
- * above it stays as stored short frames.
- */
-const MERGE_MAX_DECODED_BYTES = 4 * 1024 * 1024
-/**
- * Internal storage constant, not deployment configuration: the largest short frame stored as text, before the
- * per-store limit that keeps a merge run of text frames within {@link MERGE_MAX_DECODED_BYTES}.
- */
-const SHORT_FRAME_TEXT_MAX_BYTES = 64 * 1024
 /** SQLite busy handler wait for a locked database before an operation fails; a protocol constant shared by every opener. */
 const BUSY_TIMEOUT_MS = 5000
 /** Maximum intentional wait before a routed live session batch starts writing; matches the JSONL backend. */
@@ -75,8 +63,6 @@ interface PendingAppend {
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
   tail_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
 const traceIdentity = z.object({ trace_uuid: z.string().transform(sessionIdentity) })
-const frameRange = z.object({ start_seq: z.number().int().nonnegative(), end_seq: z.number().int().positive(),
-  bytes: z.number().int().nonnegative() })
 const frameRow = z.object({ start_seq: z.number().int().nonnegative(), end_seq: z.number().int().positive(),
   codec: z.number().int(), payload: z.instanceof(Uint8Array) })
 const TRACE_METADATA_SQL = `SELECT t.trace_uuid, header, tail_segment_uuid, inherited_count, base_seq,
@@ -123,7 +109,7 @@ export interface SqliteStoreOptions {
   readonly legacyRoot: string
   /** Physical frame encoding for new writes; stored frames decode by their own codec regardless. */
   readonly compression: FrameCompression
-  /** Maximum events per new frame, and the size at which trailing short frames are merged. */
+  /** Maximum events per new frame; stored frames keep their written size. */
   readonly frameEvents: number
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
@@ -140,11 +126,6 @@ export class SqliteStore {
   private readonly legacyRoot: string
   private readonly compression: FrameCompression
   private readonly frameEvents: number
-  /**
-   * Largest short frame, in bytes of JSON text, stored as text. A merge run holds fewer than `2 * frameEvents`
-   * events, so a run of text frames below this size stays within {@link MERGE_MAX_DECODED_BYTES}.
-   */
-  private readonly shortFrameTextBytes: number
   private readonly published: (id: SessionId) => Promise<void>
   private readonly acquireCreationLease: SqliteStoreOptions['acquireCreationLease']
   private readonly report: (id: SessionId, error: unknown) => void
@@ -170,7 +151,6 @@ export class SqliteStore {
     this.legacyRoot = options.legacyRoot
     this.compression = options.compression
     this.frameEvents = options.frameEvents
-    this.shortFrameTextBytes = Math.min(SHORT_FRAME_TEXT_MAX_BYTES, Math.floor(MERGE_MAX_DECODED_BYTES / (2 * options.frameEvents)))
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -260,9 +240,6 @@ export class SqliteStore {
           this.createSchema(opened)
         } else if (current.version !== SCHEMA_VERSION || current.application !== APPLICATION_ID) {
           throw new HarnessError('Unsupported SQLite persistence schema; database left intact', 'SESSION_STORAGE_FORMAT')
-        } else {
-          // Databases created before short-frame merging carry a trigger that rejects the merge's delete.
-          opened.exec('DROP TRIGGER IF EXISTS frames_no_delete')
         }
       })
       return opened
@@ -325,7 +302,8 @@ export class SqliteStore {
       start_seq INTEGER NOT NULL CHECK(start_seq >= 0), end_seq INTEGER NOT NULL CHECK(end_seq > start_seq),
       codec INTEGER NOT NULL CHECK(codec IN (0, 1)), payload BLOB NOT NULL, PRIMARY KEY(segment_uuid, start_seq)
     ) STRICT;
-    CREATE TRIGGER frames_no_update BEFORE UPDATE ON frames BEGIN SELECT RAISE(ABORT, 'frames are immutable'); END;
+    CREATE TRIGGER frames_no_update BEFORE UPDATE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
+    CREATE TRIGGER frames_no_delete BEFORE DELETE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
     CREATE TRIGGER segments_no_reparent BEFORE UPDATE OF parent_segment_uuid, parent_end_seq, base_seq ON segments
       BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
     PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${SCHEMA_VERSION};`)
@@ -446,143 +424,14 @@ export class SqliteStore {
     }
   }
 
-  /**
-   * Rewrite the Segment's trailing frames that each hold fewer than `frameEvents` events into
-   * frames of `frameEvents` events once together they hold at least that many. Live batches are
-   * a few events per durable write; compressing them together restores the ratio of a full frame.
-   * Runs inside the batch's savepoint of the commit transaction, so readers observe either the short frames or
-   * the merged ones, and a merge failure rejects only that batch.
-   * @param db - open database inside the caller's transaction.
-   * @param id - Session owning the Segment, for corruption reports.
-   * @param segment - the written tail Segment.
-   */
-  private mergeShortFrames(db: DatabaseSync, id: SessionId, segment: SegmentId): void {
-    let count = 0, start = 0, stored = 0
-    // An append leaves fewer than `frameEvents` events in short frames, so the run normally ends before
-    // `2 * frameEvents`; the cap bounds one merge over short frames written with a smaller frame size.
-    for (const row of this.statement(db, `SELECT start_seq, end_seq, length(payload) AS bytes FROM frames
-      WHERE segment_uuid = ? ORDER BY start_seq DESC`).iterate(segment)) {
-      const range = frameRange.safeParse(row)
-      if (!range.success) throw this.corruption(`session "${id}": stored SQLite frame is invalid`, range.error)
-      if (range.data.end_seq - range.data.start_seq >= this.frameEvents) break
-      start = range.data.start_seq
-      count += range.data.end_seq - range.data.start_seq
-      stored += range.data.bytes
-      if (count >= 2 * this.frameEvents) break
-    }
-    // Stored bytes never exceed decoded bytes, so an oversized run is skipped before any decoding.
-    if (count < this.frameEvents || stored > MERGE_MAX_DECODED_BYTES) return
-    this.rewriteFrames(db, id, segment, start, start + count, chunk => this.frameCompression(chunk))
-  }
-
-  /**
-   * Replace the frames holding events `[start, end)` of a Segment with frames of up to `frameEvents` events.
-   * Runs inside the caller's transaction or savepoint, so readers observe either the old frames or their
-   * replacement. A range whose decoded text exceeds {@link MERGE_MAX_DECODED_BYTES} stays as stored.
-   * @param db - open database inside the caller's transaction.
-   * @param id - Session owning the Segment, for corruption reports.
-   * @param segment - Segment holding the range.
-   * @param start - first event of the range; a stored frame starts here.
-   * @param end - event after the range; a stored frame ends here.
-   * @param compression - encoding of each replacement frame.
-   */
-  private rewriteFrames(db: DatabaseSync, id: SessionId, segment: SegmentId, start: number, end: number,
-    compression: (lines: readonly string[]) => FrameCompression): void {
-    const lines: string[] = []
-    let decoded = 0
-    for (const row of this.statement(db, `SELECT start_seq, end_seq, codec, payload FROM frames
-      WHERE segment_uuid = ? AND start_seq >= ? AND start_seq < ? ORDER BY start_seq`).all(segment, start, end)) {
-      const frame = frameRow.safeParse(row)
-      /* v8 ignore next -- the range scan validated these rows in this transaction; STRICT columns type codec and payload. */
-      if (!frame.success) throw this.corruption(`session "${id}": stored SQLite frame is invalid`, frame.error)
-      if (frame.data.start_seq !== start + lines.length) throw new HarnessError('SQLite segment is incomplete', 'SESSION_STORAGE_CORRUPT')
-      let texts: string[]
-      try { texts = decodeFrameSync(frame.data.codec, frame.data.payload) }
-      catch (error: unknown) { throw this.corruption(`session "${id}": stored frame holding event ${frame.data.start_seq} cannot be decoded`, error) }
-      if (texts.length !== frame.data.end_seq - frame.data.start_seq) throw new HarnessError('SQLite frame does not match its recorded range', 'SESSION_STORAGE_CORRUPT')
-      for (const text of texts) { lines.push(text); decoded += Buffer.byteLength(text) }
-      if (decoded > MERGE_MAX_DECODED_BYTES) return
-    }
-    /* v8 ignore next -- callers pass frame-aligned ranges from a scan of the Segment its writer still owns. */
-    if (start + lines.length !== end) throw new HarnessError('SQLite segment is incomplete', 'SESSION_STORAGE_CORRUPT')
-    this.statement(db, 'DELETE FROM frames WHERE segment_uuid = ? AND start_seq >= ? AND start_seq < ?').run(segment, start, end)
-    const frames: EncodedFrame[] = []
-    for (let offset = 0; offset < lines.length; offset += this.frameEvents) {
-      const chunk = lines.slice(offset, offset + this.frameEvents)
-      frames.push(encodeFrame(chunk, compression(chunk)))
-    }
-    this.insertFrames(db, segment, start, frames)
-  }
-
-  /**
-   * Compress the short frames a closing writer leaves in its tail Segment. A Session that never gathers
-   * `frameEvents` events in its newest short frames, and short frames that a full batch follows, are never
-   * merged by an append; each run of adjacent short frames is rewritten into frames of up to `frameEvents`
-   * events under the configured compression. Each run commits in its own transaction after a yield, so a
-   * failure or crash leaves the earlier runs rewritten and the rest as stored.
-   * @param header - metadata of the closing writer's Session.
-   */
-  async seal(header: SessionHeader): Promise<void> {
-    if (this.ready === undefined || this.pendingCreates.has(header.id)) return
-    const db = await this.database()
-    const runs = this.transaction(db, () => {
-      const row = this.row(db, header.id)
-      /* v8 ignore next -- a write handle's committed Session keeps its row; the store has no deletion. */
-      return row === undefined ? [] : this.shortRuns(db, header.id, row.tail_segment_uuid)
-    }, 'DEFERRED')
-    for (const run of runs) {
-      await setImmediate()
-      this.transaction(db, () => { this.rewriteFrames(db, header.id, run.segment, run.start, run.end, () => this.compression) })
-    }
-  }
-
-  /** Runs of adjacent short frames in a Segment that a seal would shrink: several frames, or one text frame under `zstd`. */
-  private shortRuns(db: DatabaseSync, id: SessionId, segment: SegmentId): { segment: SegmentId; start: number; end: number }[] {
-    const runs: { segment: SegmentId; start: number; end: number }[] = []
-    let run: { start: number; end: number; frames: number; text: boolean; stored: number } | undefined
-    const finish = (): void => {
-      if (run !== undefined && (run.frames > 1 || (run.text && this.compression === 'zstd'))) runs.push({ segment, start: run.start, end: run.end })
-      run = undefined
-    }
-    for (const row of this.statement(db, `SELECT start_seq, end_seq, codec, length(payload) AS bytes FROM frames
-      WHERE segment_uuid = ? ORDER BY start_seq`).iterate(segment)) {
-      const range = frameRange.extend({ codec: z.number().int() }).safeParse(row)
-      if (!range.success) throw this.corruption(`session "${id}": stored SQLite frame is invalid`, range.error)
-      const { start_seq: start, end_seq: end, codec, bytes } = range.data
-      if (end - start >= this.frameEvents) { finish(); continue }
-      // Stored bytes never exceed decoded bytes, so a run is split before its stored text alone exceeds the merge limit.
-      if (run === undefined || run.end !== start || run.stored + bytes > MERGE_MAX_DECODED_BYTES) {
-        finish()
-        run = { start, end, frames: 1, text: codec === FRAME_CODEC_UTF8, stored: bytes }
-      } else {
-        run.end = end; run.frames++; run.text ||= codec === FRAME_CODEC_UTF8; run.stored += bytes
-      }
-    }
-    finish()
-    return runs
-  }
-
   /** Serialize and compress a batch before its transaction: one frame per chunk, yielding between chunks of a long batch. */
-  private async encodeBatch(batch: readonly SessionEvent[],
-    compression: (lines: readonly string[]) => FrameCompression = lines => this.frameCompression(lines)): Promise<EncodedFrame[]> {
+  private async encodeBatch(batch: readonly SessionEvent[]): Promise<EncodedFrame[]> {
     const frames: EncodedFrame[] = []
     for (let start = 0; start < batch.length; start += this.frameEvents) {
       if (start > 0) await setImmediate()
-      const lines = batch.slice(start, start + this.frameEvents).map(event => JSON.stringify(event))
-      frames.push(encodeFrame(lines, compression(lines)))
+      frames.push(encodeFrame(batch.slice(start, start + this.frameEvents).map(event => JSON.stringify(event)), this.compression))
     }
     return frames
-  }
-
-  /**
-   * A short frame below {@link shortFrameTextBytes} of JSON text skips compression that a merge would redo and is
-   * stored as text; full and larger short frames use the configured compression.
-   */
-  private frameCompression(lines: readonly string[]): FrameCompression {
-    if (lines.length >= this.frameEvents) return this.compression
-    let bytes = 0
-    for (const line of lines) bytes += Buffer.byteLength(line)
-    return bytes < this.shortFrameTextBytes ? 'none' : this.compression
   }
 
   /**
@@ -745,8 +594,7 @@ export class SqliteStore {
     const storedHeader = materializeHeader(header, inheritedCount)
     const batch = materializeAppendBatch(events)
     assertContiguous(header.id, batch, 0)
-    // An imported history receives no later append that would merge its short final frame.
-    const frames = await this.encodeBatch(batch, () => this.compression)
+    const frames = await this.encodeBatch(batch)
     const db = await this.database()
     this.check(); signal?.throwIfAborted()
     this.transaction(db, () => {
@@ -974,7 +822,6 @@ export class SqliteStore {
               const row = this.ensureRow(db, entry.header)
               assertContiguous(entry.header.id, entry.batch, row.event_count)
               this.insertFrames(db, row.tail_segment_uuid, row.event_count - row.base_seq, entry.frames)
-              this.mergeShortFrames(db, entry.header.id, row.tail_segment_uuid)
               db.exec('RELEASE batch')
             } catch (error: unknown) {
               if (!db.isTransaction) throw error
@@ -1340,11 +1187,6 @@ export class SqliteSessionHandle implements SessionHandle {
         failures.push(asError(error))
       }
       await this.pending
-      // A failed seal leaves short frames as stored; the Session's history is already durable.
-      if (failures.length === 0 && this.access === 'write') {
-        try { await this.store.seal(this.header) }
-        catch (error: unknown) { this.store.reportFailure(this.id, error) }
-      }
       this.closed = true
       try { await this.release() }
       catch (error: unknown) { failures.push(asError(error)) }

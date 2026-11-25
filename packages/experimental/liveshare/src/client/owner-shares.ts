@@ -116,8 +116,8 @@ export interface OwnerShares {
   testRelay(): Promise<RemoteResult<RelayConnectivityView>>
 
   /**
-   * Register one throwaway share to check whether this host may publish.
-   * @param request - Session the throwaway registration names.
+   * Ask the Liveshare server whether this host may publish one Session's share.
+   * @param request - Session the check names.
    * @returns The Relay's decision about this host's credential.
    */
   testPublish(request: TestPublishRequest): Promise<RemoteResult<RelayPublishView>>

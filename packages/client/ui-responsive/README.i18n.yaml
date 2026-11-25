@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-responsive/README.md
+/:
+  en: b0ce6e2102b60c4c
+  zh: 6185c53c2bcbaf41
+/deepseek-ai-dsh-client-ui-responsive:
+  en: 5e71a13282145488
+  zh: b39039736e1c2dc4
+/deepseek-ai-dsh-client-ui-responsive/summary:
+  en: aadf9145813d3041
+  zh: 5eeb425fba06f5bb
+/deepseek-ai-dsh-client-ui-responsive/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 43ad67236ccda19a
+/deepseek-ai-dsh-client-ui-responsive/use-this-package:
+  en: 62cb3ac719bbcdd6
+  zh: 8b8b9e038d68442a
+/deepseek-ai-dsh-client-ui-responsive/use-this-package/choose-a-prop-or-css:
+  en: 1110c9d5daabe94f
+  zh: 0f6e9bf62fc25bc8
+/deepseek-ai-dsh-client-ui-responsive/use-this-package/compose-and-test:
+  en: ddbb1979c56ba3af
+  zh: 37a724522e306408
+/deepseek-ai-dsh-client-ui-responsive/understand-the-implementation:
+  en: a906d13d903250c9
+  zh: 47d672c2ca35df42
+/deepseek-ai-dsh-client-ui-responsive/further-exploration:
+  en: 5bb9c00d23aa6452
+  zh: e7869e91e732aa94
+/deepseek-ai-dsh-client-ui-responsive/model-experience:
+  en: ed2a7cc4da8d4d8b
+  zh: 670687cec00ab833
+/deepseek-ai-dsh-client-ui-responsive/model-experience/kv-cache-effect:
+  en: 29582eae0450927d
+  zh: ef7b79203d823c13
+/deepseek-ai-dsh-client-ui-responsive/known-limitations-and-deferred-work:
+  en: 35ad84073a4d3249
+  zh: d08e872c5f9f4d10
+/deepseek-ai-dsh-client-ui-responsive/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

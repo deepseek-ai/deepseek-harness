@@ -75,7 +75,11 @@ The hook participates only when the importer is under `$DSH_HOME/profiles/**` or
 
 The ESM and CommonJS adapters call the same routing function, and the main thread and Harness-owned Workers install the same runtime resolution. The implementation lives in `packages/boot/app-boot/src/profile-resolution/resolver.ts`; runtime resolution construction lives in `packages/boot/app-boot/src/profile.ts`.
 
-#### 6. Package directories and module files
+#### 6. Rows the config tree requests
+
+The root config tree requests its rows from the profile directory URL, and bundles insert most of those rows, including the rows of their agent presets. For each plugin package name that a bundle inserts as a row and declares as its own dependency, the runtime resolution records the first such bundle. A bare request for that name whose importer is the active profile directory resolves again as an import of that bundle does, before ① and ②. Every other importer, including a file in the profile and a package in its `node_modules`, follows the chain above. [Bundle plugin rows](2026-11-23-bundle-plugin-rows-load-bundle-selected-packages.md) owns the binding rules.
+
+#### 7. Package directories and module files
 
 `packageDir('pkg', parentURL)` and `packageDir('pkg/sub', parentURL)` locate the package directory without loading code or validating the subpath. Ordinary entry and file requests still ask Node to apply `exports`, `main`, conditions, and file existence. A package-directory query can therefore succeed while importing a missing or unexported file fails. `import.meta.resolve` can return a URL for an exported file that does not exist; importing that URL still fails, as in native Node.
 
@@ -129,7 +133,7 @@ The profile links `<profile>/node_modules/my-plugin` to the plugin's real direct
 
 `dsh plugin --profile <name> add <package | git spec | file:../local-checkout>` forwards its argument to pnpm, which installs inside the profile directory with a hoisted layout. The profile's `pnpm-workspace.yaml` sets `autoInstallPeers: false`, so dsh packages a plugin declares as peers are not installed into the profile; the interception layer supplies the copy from the running installation, and the plugin and dsh share one module instance.
 
-The plugin's own third-party dependencies are hoisted to `$DSH_HOME/profiles/<name>/node_modules` and found at ② on the ancestor chain. When a name collides with the installation closure, the nearest wins and the plugin uses the version it declared. The `file:` form copies the local checkout into the profile; resolution afterwards is identical to a registry installation.
+The plugin's own third-party dependencies are hoisted to `$DSH_HOME/profiles/<name>/node_modules` and found at ② on the ancestor chain. When a name collides with the installation closure, the nearest wins and the plugin uses the version it declared; a row that a bundle inserts and declares still resolves from that bundle (Part 1 §6). The `file:` form copies the local checkout into the profile; resolution afterwards is identical to a registry installation.
 
 #### 2. Development mode: the plugin repository is outside the profile tree
 

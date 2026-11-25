@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * The shipped Session row actions rendered directly with hand-built props:
  * the menu rows, hover buttons, dialogs, and global notices. Every action
@@ -79,7 +79,7 @@ const standard: GlobalStandardProps = {
   useSessionStatus: hook(noStatus),
   useSessionRetainInfo: () => undefined,
   usePanelInfo,
-  useContextMenu: contextMenuHook(), useResource,
+  useContextMenu: contextMenuHook(), ...responsiveHooks(), useResource,
   useWorkspaces: hook(workspaces),
   ...allowAllAccess,
 }

@@ -786,20 +786,6 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
-   * Read a web URL as a change request, without binding it.
-   * @param url - web URL, which may name one page of a change request.
-   * @param signal - request cancellation.
-   * @returns the provider's canonical URL of the change request, which its Session binding and changes view use,
-   * or null when no registered provider serves the URL.
-   */
-  @Remote
-  async recognize(url: string, signal: AbortSignal): Promise<string | null> {
-    signal.throwIfAborted()
-    const ref = this.home.forge.changeRequestFromUrl(url)
-    return ref === undefined ? null : this.home.forge.changeRequestUrl(ref)
-  }
-
-  /**
    * Hide a visible binding of a Session; other URLs leave the Session unchanged.
    * @param session - Session that owns the binding.
    * @param url - web URL of the change request.
@@ -1748,7 +1734,7 @@ export class ForgePanelController extends TypertRemoteService {
     try {
       running = agent.runMaintenance(async (signal) => { await work(agent, signal) })
     } catch (error) {
-      throw new RemoteError('forgePanel/session-busy', 'The Session is busy', {}, { cause: error })
+      throw new RemoteError('forgePanel/session-busy', `The Session is busy: ${messageOf(error)}`, {}, { cause: error })
     }
     await running
   }

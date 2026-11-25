@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Synthèse vocale",
+    "description": "Transmet le texte à lire à un service de synthèse vocale."
+  }
+}

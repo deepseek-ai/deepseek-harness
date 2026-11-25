@@ -16,7 +16,7 @@ description: "内置的 office-docx、office-pptx 和 office-xlsx 技能已移�
 - 输入过 `/office-docx`、`/office-pptx` 或 `/office-xlsx` 的用户：这些命令已不存在；
 - 定义了名为 `office-docx`、`office-pptx` 或 `office-xlsx` 的技能（例如位于 `~/.dsh/skills/` 下）以覆盖内置指导的用户：内置 `office` 技能不再加载这些名字，因此这类定义成为普通的独立技能，不再替换任何内置内容；
 - 自定义的 `assetRoot` 目录：现在只需包含 `office/SKILL.md`；
-- 依赖 [`@deepseek-ai/dsh-tool-office`](../../../../packages/document/tool-office/README.zh.md) 默认 `activationSkills` 的组合：默认值由 `[office, office-docx, office-xlsx, office-pptx]` 改为 `[office]`，因此加载名为 `office-docx` 的技能不再激活 `office_render`、`office_convert` 和 `office_recalculate`。
+- 依赖 [`@deepseek-ai/dsh-tool-office`](../../../../packages/document/tool-document/README.zh.md) 默认 `activationSkills` 的组合：默认值由 `[office, office-docx, office-xlsx, office-pptx]` 改为 `[office]`，因此加载名为 `office-docx` 的技能不再激活 `office_render`、`office_convert` 和 `office_recalculate`。
 
 ## 迁移
 

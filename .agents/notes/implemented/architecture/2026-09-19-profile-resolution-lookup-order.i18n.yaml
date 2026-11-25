@@ -29,9 +29,12 @@
 /agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-1-resolution-rules/5-hook-coverage:
   en: 644f6f9a6ff8d6c8
   zh: 7a81f928551e9041
-/agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-1-resolution-rules/6-package-directories-and-module-files:
-  en: c85f82cb1c60360e
-  zh: c535f1c0ec58345e
+/agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-1-resolution-rules/6-rows-the-config-tree-requests:
+  en: c474b69fb9b029d5
+  zh: 033c7686f14bc587
+/agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-1-resolution-rules/7-package-directories-and-module-files:
+  en: ba52bd3dd63c641c
+  zh: ef7337e07e300eca
 /agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-2-walkthroughs:
   en: 906e0d58e3c2aff3
   zh: ccc3a709034865b9
@@ -48,8 +51,8 @@
   en: 35f27b53d995d59f
   zh: 58a47c7bfced79a0
 /agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-3-developer-integration-guide/1-normal-installation:
-  en: d0bed60317e6e3a8
-  zh: 5714160678adc049
+  en: a4e8f46669f79105
+  zh: a7590429589c12fb
 /agent-note-resolve-profile-modules-along-the-ancestor-chain-with-an-interception-layer/decision/part-3-developer-integration-guide/2-development-mode-the-plugin-repository-is-outside-the-profile-tree:
   en: 22259a568693c641
   zh: d81d15671398d033

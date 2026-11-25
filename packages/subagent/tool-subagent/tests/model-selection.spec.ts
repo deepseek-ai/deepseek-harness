@@ -1,7 +1,12 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import { TestSessionQuery } from '../../subagent/tests/test-session-query.ts'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
@@ -31,18 +36,141 @@ const REASONING = {
   defaultEffort: brandString<ReasoningEffortId>('high'),
 } as const
 
+const PARENT_MODEL = { provider: 'alpha', model: 'parent-model', reasoningEffort: brandString<ReasoningEffortId>('high') }
+
 function parentWithRoute(
-  options: Agent['options'] = {
-    provider: 'alpha',
-    model: 'parent-model',
-    reasoningEffort: brandString<ReasoningEffortId>('high'),
-  },
+  options: Agent['options'] = PARENT_MODEL,
 ): Agent {
   const id = brandString<SessionId>('parent-with-route')
-  return { id, options, session: Session.create(id) } as unknown as Agent
+  return {
+    id, options, session: Session.create(id),
+    model: {
+      current: () => options.provider === undefined || options.model === undefined
+        ? undefined
+        : {
+          provider: options.provider, model: options.model,
+          ...options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort },
+        },
+    },
+  } as Agent
 }
 
 describe('dsh-tool-subagent model selection', () => {
+  async function localTool(
+    agentOptions?: Agent['options'],
+    supportsOverrides = true,
+    agentRouteDefaults?: Readonly<{ provider: string; model: string }>,
+  ) {
+    const ctx = await setup({
+      provider: 'local', withModelSelection: supportsOverrides, parentAgentOptions: PARENT_MODEL,
+      ...agentOptions === undefined ? {} : { agentOptions },
+    })
+    const root = await mkdtemp(join(tmpdir(), 'dsh-child-model-'))
+    onTestFinished(async () => {
+      try { await ctx.fiber.dispose() } finally {
+        await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+      }
+    })
+    await ctx.plugin(JsonlSessionPersistence, { root })
+    await ctx.plugin(TestSessionQuery)
+    const prepare = vi.fn(async () => ({}))
+    ctx.subagents.registerProvider({
+      name: 'local',
+      capabilities: { agentOptions: supportsOverrides, agentPreset: false, outputSchema: true, depthLimit: true },
+      inheritsParentContext: false,
+      ...agentRouteDefaults === undefined ? {} : { agentRouteDefaults },
+      prepareContinuable: prepare,
+    })
+    const adapter = new MockAdapter(['hang'], REASONING)
+    ctx.llm.registerAdapter(['alpha'], adapter)
+    return { ctx, parent: modelSelectionSetupAgent(ctx), prepare, adapter }
+  }
+
+  async function childFromResult(ctx: Context, result: Awaited<ReturnType<typeof callSubagent>>): Promise<Agent> {
+    expect(result.isError, text(result)).toBe(false)
+    const match = /^started subagent (\S+)$/.exec(text(result))
+    expect(match).not.toBeNull()
+    const childId = await ctx.subagents.resolveName(modelSelectionSetupAgent(ctx), match![1]!, new AbortController().signal)
+    const child = ctx.agents.get(childId)
+    expect(child).toBeDefined()
+    return child!
+  }
+
+  it('inherits the current model and retains configured output controls', async () => {
+    const { ctx, parent } = await localTool({ maxTokens: 321 })
+    parent.model.select({ provider: 'alpha', model: 'selected-model' })
+    const child = await childFromResult(ctx, await callSubagent(ctx, { description: 'local route', prompt: 'work' }))
+    expect(child.model.current()).toEqual({ provider: 'alpha', model: 'selected-model' })
+    expect(child.options.maxTokens).toBe(321)
+    expect(child.session.snapshotEvents().find(event => event.type === 'model/selection')?.data)
+      .toEqual({ provider: 'alpha', model: 'selected-model' })
+  })
+
+  it('keeps the local choice fixed when the parent changes during route preflight', async () => {
+    const { ctx, parent, prepare, adapter } = await localTool()
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
+      entered.resolve(undefined)
+      await release.promise
+      return { provider, id: model, name: model, reasoning: REASONING }
+    })
+    const calling = callSubagent(ctx, {
+      description: 'selected child', prompt: 'work', provider: 'alpha', model: 'selected-model',
+    })
+    try {
+      await entered.promise
+      expect(prepare).not.toHaveBeenCalled()
+      parent.model.select({ provider: 'alpha', model: 'selected-model', reasoningEffort: brandString<ReasoningEffortId>('high') })
+      release.resolve(undefined)
+      const child = await childFromResult(ctx, await calling)
+      expect(child.model.current()).toEqual({ provider: 'alpha', model: 'selected-model' })
+      expect(child.session.snapshotEvents().find(event => event.type === 'model/selection')?.data)
+        .toEqual({ provider: 'alpha', model: 'selected-model' })
+    } finally {
+      release.resolve(undefined)
+      await calling
+    }
+  })
+
+  it('allows inherited models when the local provider does not support overrides', async () => {
+    const { ctx, prepare } = await localTool(undefined, false)
+    const child = await childFromResult(ctx, await callSubagent(ctx, { description: 'inherited child', prompt: 'work' }))
+    expect(child.model.current()).toEqual(PARENT_MODEL)
+    expect(prepare).toHaveBeenCalledOnce()
+  })
+
+  it('applies configured overrides over backend defaults without retaining the parent route effort', async () => {
+    const { ctx } = await localTool(
+      { model: 'configured-model', maxTokens: 321 }, true, { provider: 'alpha', model: 'child-model' },
+    )
+    const child = await childFromResult(ctx, await callSubagent(ctx, { description: 'configured child', prompt: 'work' }))
+    expect(child.model.current()).toEqual({ provider: 'alpha', model: 'configured-model' })
+    expect(child.options.maxTokens).toBe(321)
+  })
+
+  it('validates direct local overrides before provider preparation', async () => {
+    const { ctx, parent, prepare } = await localTool()
+    await expect(ctx.subagents.startActivation({
+      provider: 'local', parent, label: 'invalid model', prompt: [], delivery: 'caller',
+      agentOptions: { provider: 'missing', model: 'unavailable' }, signal: new AbortController().signal,
+    })).rejects.toMatchObject({ name: 'LlmError', code: 'NO_ADAPTER' })
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('reports an unsupported local effort as the tool preflight reports it for other providers', async () => {
+    const args = { description: 'invalid effort', prompt: 'work', provider: 'alpha', model: 'selected-model', reasoning_effort: 'xhigh' }
+    const { ctx: localCtx, prepare } = await localTool()
+    const local = await callSubagent(localCtx, args)
+    const otherCtx = await setup({ provider: 'mock', withModelSelection: true, parentAgentOptions: PARENT_MODEL })
+    otherCtx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
+    const other = await callSubagent(otherCtx, args)
+    expect(local.error?.info).toEqual({ name: 'LlmError', code: 'UNSUPPORTED_REASONING_EFFORT' })
+    expect(text(local)).toBe('Error: provider "alpha" model "selected-model" does not support reasoning effort "xhigh"')
+    expect({ info: local.error?.info, text: text(local) }).toEqual({ info: other.error?.info, text: text(other) })
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
   it.each([
     { routes: [{ provider: '', model: 'model' }] },
     { routes: [{ provider: 'provider', model: '' }] },
@@ -151,10 +279,7 @@ describe('dsh-tool-subagent model selection', () => {
       { onStart: () => { starts += 1 } },
     )
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as { options: Agent['options'] }).options = {
-      provider: 'deployment-provider',
-      model: 'deployment-model',
-    }
+    parent.model.select({ provider: 'deployment-provider', model: 'deployment-model' })
 
     const result = await callSubagent(ctx, { description: 'default route', prompt: 'do it' })
 
@@ -305,7 +430,7 @@ describe('dsh-tool-subagent model selection', () => {
       provider: 'mock',
       withModelSelection: true,
       hostSelectionEnabled: false,
-      parentAgentOptions: parentWithRoute().options,
+      parentAgentOptions: PARENT_MODEL,
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['alpha', 'other-provider'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
@@ -358,7 +483,7 @@ describe('dsh-tool-subagent model selection', () => {
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as { options: Agent['options'] }).options = parentWithRoute().options
+    parent.model.select(PARENT_MODEL)
 
     const selected = await callSubagent(ctx, {
       description: 'route work',
@@ -396,7 +521,7 @@ describe('dsh-tool-subagent model selection', () => {
   ])('rejects reasoning effort without a complete explicit route: %j', async (route) => {
     const start = vi.fn()
     const ctx = await setup({
-      provider: 'mock', withModelSelection: true, parentAgentOptions: parentWithRoute().options,
+      provider: 'mock', withModelSelection: true, parentAgentOptions: PARENT_MODEL,
     }, { onStart: start })
     const lookup = vi.spyOn(ctx.llm, 'resolveCallConfig')
     const result = await callSubagent(ctx, {
@@ -414,7 +539,7 @@ describe('dsh-tool-subagent model selection', () => {
       const ctx = await setup({
         provider: 'mock',
         withModelSelection: true,
-        parentAgentOptions: parentWithRoute().options,
+        parentAgentOptions: PARENT_MODEL,
         ...source === 'parent' ? {} : {
           agentOptions: {
             provider: 'alpha',
@@ -449,7 +574,7 @@ describe('dsh-tool-subagent model selection', () => {
       const requests: SubagentStartRequest[] = []
       const ctx = await setup({
         provider: 'mock', withModelSelection: true,
-        parentAgentOptions: parentWithRoute().options,
+        parentAgentOptions: PARENT_MODEL,
         ...model === undefined ? {} : { agentOptions: { provider: 'alpha', model } },
       }, { onStart: (request) => { requests.push(request) } })
       ctx.llm.registerAdapter(['alpha'], new MockAdapter([], REASONING))
@@ -461,7 +586,7 @@ describe('dsh-tool-subagent model selection', () => {
     },
   )
 
-  it('compares explicit routes with the latest logged parent selection', async () => {
+  it('compares explicit routes with the parent choice before request use', async () => {
     const requests: SubagentStartRequest[] = []
     const ctx = await setup({
       provider: 'mock',
@@ -470,13 +595,14 @@ describe('dsh-tool-subagent model selection', () => {
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['current-provider'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
-    ;(parent as { options: Agent['options'] }).options = {
+    parent.model.select({
       provider: 'created-provider', model: 'created-model',
-    }
+    })
     parent.session.append('request/header', {
-      header: { config: { provider: 'current-provider', model: 'current-model' } },
+      header: { config: { provider: 'created-provider', model: 'created-model' } },
       reason: 'initial',
     })
+    parent.model.select({ provider: 'current-provider', model: 'current-model' })
 
     const result = await callSubagent(ctx, {
       description: 'same current route',
@@ -502,6 +628,16 @@ describe('dsh-tool-subagent model selection', () => {
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('`reasoning_effort` requires both `provider` and `model`')
     expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  })
+
+  it('rejects a configured partial route when the parent supplies no provider', async () => {
+    const started = vi.fn()
+    const ctx = await setup({ provider: 'mock', agentOptions: { model: 'configured-model' } }, { onStart: started })
+    const result = await callSubagent(ctx, { description: 'incomplete route', prompt: 'work' })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    expect(text(result)).toContain('without an effective provider and model')
+    expect(started).not.toHaveBeenCalled()
   })
 
   it('rejects preflight without an effective provider and model', async () => {

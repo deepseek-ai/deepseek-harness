@@ -10,6 +10,7 @@
   },
   "workspaces": [
     "vendor/*",
+    "vendor/im/*",
     "packages/*/*",
     "native/system",
     "native/system/packages/*",

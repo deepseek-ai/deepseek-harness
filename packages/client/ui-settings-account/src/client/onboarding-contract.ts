@@ -33,5 +33,7 @@ export interface DesktopOnboardingProps {
   retry(this: void): Promise<boolean>
   /** Active interface language selects the matching illustration artwork. */
   locale: string
+  /** Whether the page asks for reduced motion; step changes then skip the fade-out. */
+  reducedMotion: boolean
   t: (key: AccountKey) => string
 }

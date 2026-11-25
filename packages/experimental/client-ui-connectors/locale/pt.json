@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Conectores",
+    "description": "Adiciona aos Plug-ins uma aba Conectores para ver, instalar e abrir os conectores oficiais.",
+    "detail": "docs/DETAIL.md"
+  }
+}

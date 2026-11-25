@@ -190,6 +190,11 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'officeKit/generation': 'owner-only', // owner document export
   'officeKit/render': 'owner-only', // owner document export
   'speech/configure': 'owner-only', // owner voice input
+  'readAloud/configure': 'owner-only', // owner preference
+  'readAloud/follow': 'owner-only', // owner read-aloud; synthesis is billed to the owner
+  'readAloud/plan': 'owner-only', // owner read-aloud
+  'readAloud/sample': 'owner-only', // owner read-aloud; billed to the owner
+  'readAloud/synthesize': 'owner-only', // owner read-aloud
   'claudeCodeMods/pressBand': 'owner-only', // owner Claude Code mods UI
   'claudeCodeMods/watchBand': 'owner-only', // owner Claude Code mods UI
   'cotTranslation/limits': 'owner-only', // owner chain-of-thought translation UI
@@ -242,6 +247,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'schedule/view': 'owner-only', // owner schedules
   'subagents/interruptByUser': 'owner-only', // owner subagents
   'subagents/prompt': 'owner-only', // owner subagents
+  'subagents/selectModelByUser': 'owner-only', // owner selects a subagent model
 
   // Owner share management stays on the owner's own page; a `share-viewer` Peer is refused first.
   'liveshareShares/audit': 'owner-only',

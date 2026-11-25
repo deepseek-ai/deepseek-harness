@@ -7,8 +7,7 @@
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/tunnel-supervision
  */
 
-import { randomBytes } from 'node:crypto'
-import { base64Url } from './base64-url.ts'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -23,7 +22,6 @@ import type {
   OwnerIdentityStatus,
 } from '../owner-identity.ts'
 import { identitySubjectLabel } from '../owner-identity.ts'
-import { relayRefusalStatus } from '../owner-gateway/relay-refusal.ts'
 import type { RelayConnectivityView, RelayPublishView } from '../share-api-types.ts'
 import { parseViewerRequest } from '../viewer-channel.ts'
 import type { ViewerSessionMode } from './fork-policy.ts'
@@ -52,6 +50,45 @@ const PENDING_REMOVAL_RETRY_MS = 30_000
 
 /** Longest wait between two attempts, so a Relay that never returns is asked less and less often. */
 const PENDING_REMOVAL_MAX_WAIT_MS = 30 * 60_000
+
+/** Longest wait for the Relay's answer to one registration check; the Relay reads two ledgers. */
+const REGISTRATION_CHECK_TIMEOUT_MS = 5_000
+
+/**
+ * Answer one registration check carries.
+ *
+ * `refused` is a verdict the Relay reached about this host's credential or the share's gateway token,
+ * and `failed` is the Relay not reaching one: the two differ in what the owner does next.
+ */
+type RegistrationCheckAnswer =
+  | { readonly kind: 'accepted' }
+  | { readonly kind: 'refused'; readonly code: string }
+  | { readonly kind: 'failed'; readonly detail: string }
+
+/** The check's stable code for a missing or unacceptable owner credential. */
+const CREDENTIAL_REFUSAL_CODES: readonly string[] = ['owner credential required', 'owner credential invalid']
+
+/** The check's stable code for a gateway token that does not match the share the Relay holds. */
+const GATEWAY_REFUSAL_CODE = 'gateway authentication required'
+
+/**
+ * What a refused registration check tells the owner in the dialog.
+ *
+ * The two refusals ask for different actions: an owner credential the address does not accept is
+ * verified again there, while a gateway token the Relay does not match belongs to the share the owner
+ * is publishing, so the dialog names the mismatch instead of the credential.
+ * @param code - The check's stable refusal code.
+ * @returns The sentence the dialog prints after the Relay address.
+ */
+function refusalText(code: string): string {
+  if (CREDENTIAL_REFUSAL_CODES.includes(code)) {
+    return `this address did not accept this host's owner credential (relay refused registration code=${code})`
+  }
+  if (code === GATEWAY_REFUSAL_CODE) {
+    return `this share's registration token does not match the one the Relay holds (relay refused registration code=${code})`
+  }
+  return `the Relay refused this registration (relay refused registration code=${code})`
+}
 
 /** One registration this host is waiting to settle. */
 interface PendingShare {
@@ -157,7 +194,7 @@ export interface TunnelSupervision {
   waitForShare(shareId: string, timeoutMs: number): Promise<{ ok: boolean; error?: string }>
   /**
    * Build the worker's registration for one owner share.
-   * @param share - Share or throwaway registration to publish.
+   * @param share - Share or probe registration to build.
    * @param credential - Credential captured by the operation.
    * @returns The registration payload.
    */
@@ -234,10 +271,10 @@ export interface TunnelSupervision {
    */
   probeRelayConnectivity(relay: string): Promise<RelayConnectivityView>
   /**
-   * Register one throwaway share to check whether this host may publish.
+   * Ask the Relay whether this host may publish one share, before registering it.
    * @param relay - Relay address to probe.
-   * @param share - Throwaway registration to carry.
-   * @returns The Relay's decision about this host's credential.
+   * @param share - Registration this host would publish.
+   * @returns The Relay's decision about this host's credential and the share's gateway token.
    */
   probeRelayPublish(relay: string, share: Omit<TunnelShareSpec, 'shareId'>): Promise<RelayPublishView>
   /**
@@ -893,54 +930,79 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
   }
 
   /**
-   * Register one throwaway share with the Relay and report what it answered.
+   * Ask the Relay whether this host may publish one registration, without publishing it.
    *
-   * The probe carries the same credential, identity row, and management token a real share would, so
-   * the Relay decides it the same way. The share is removed as soon as it settles either way.
+   * The check carries this host's owner credential, the share's Session, its access mode, and the
+   * digest of its gateway token, so the Relay decides the same owner credential and gateway token as
+   * its gateway handshake would. The digest is standard base64, the form the Relay stores.
    */
-  const probeRegistration = async (
+  const registrationCheck = async (
+    relay: string,
     share: Omit<TunnelShareSpec, 'shareId'>,
-  ): Promise<{ ok: boolean; error?: string }> => {
-    const shareId = `test-${base64Url(randomBytes(6))}`
-    const result = waitForShare(shareId, 12_000)
-    send({ type: 'add-share', share: { ...share, shareId } })
-    const settled = await result
-    send({ type: 'remove-share', shareId })
-    return settled
+  ): Promise<RegistrationCheckAnswer> => {
+    const digest = createHash('sha256').update(share.gatewayToken).digest('base64')
+    const response = await fetchRelay(new URL(`${relay}/__liveshare/owner-registration-check`), {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/json',
+        ...(share.ownerCredential === undefined || share.ownerCredential === ''
+          ? {}
+          : { 'x-liveshare-owner-credential': share.ownerCredential }),
+      },
+      body: JSON.stringify({
+        sessionId: share.sessionId,
+        gatewayTokenDigest: digest,
+        accessMode: share.accessMode,
+      }),
+      signal: AbortSignal.timeout(REGISTRATION_CHECK_TIMEOUT_MS),
+    })
+    if (response.status !== 200) {
+      // The Relay could not judge this registration, which is an availability problem: the failure
+      // names the status the way the worker names a handshake the Relay answered without deciding.
+      await response.body?.cancel()
+      return { kind: 'failed', detail: `relay answered registration-check status=${String(response.status)}` }
+    }
+    // Only an explicit refusal is the Relay's decision about this credential or this share's gateway
+    // token. An answer this build cannot read states nothing an owner can act on, so it is reported
+    // as a failed check with the ordinary retry instead of blocking a share that may be creatable.
+    const body: unknown = await response.json()
+    if (!isRecord(body)) {
+      return { kind: 'failed', detail: 'unrecognized registration-check response' }
+    }
+    if (body.ok === true) return { kind: 'accepted' }
+    if (body.ok === false && typeof body.code === 'string') return { kind: 'refused', code: body.code }
+    return { kind: 'failed', detail: 'unrecognized registration-check response' }
   }
 
   /**
    * What one publish-permission check reports back to the owner dialog.
    *
-   * `blocking` is the Host's own severity decision, because only the Host sees what the Relay answered:
-   * a refusal is the Relay's decision about this credential and reaches the same answer on every
-   * attempt, so it blocks until the owner verifies again; a transient failure keeps the ordinary retry.
-   * The dialog picks its visual state from this flag and prints `error` unchanged.
+   * `blocking` is the Host's own severity decision, because only the Host sees which code the Relay
+   * answered with: a refusal is the Relay's decision about this credential or this share's gateway
+   * token and reaches the same answer on every attempt, so it blocks until the owner acts at this
+   * address; a failed check keeps the ordinary retry. The dialog picks its visual state from this flag
+   * and prints `error` unchanged.
    */
   const probeRelayPublish = async (
     relay: string,
     share: Omit<TunnelShareSpec, 'shareId'>,
   ): Promise<RelayPublishView> => {
-    const settled = await probeRegistration(share)
-    if (settled.ok) return { ok: true, blocking: false }
-    const refusal = settled.error === undefined ? undefined : relayRefusalStatus(settled.error)
-    if (refusal === undefined) {
-      // The Relay did not decide this registration: the gateway keeps its reconnect schedule, so the
-      // share stays creatable and the diagnosis only reports what happened.
-      return {
-        ok: false,
-        blocking: false,
-        ...(settled.error === undefined ? {} : { error: `${relay}: ${settled.error}` }),
-      }
+    let answer: RegistrationCheckAnswer
+    try {
+      answer = await registrationCheck(relay, share)
+    } catch (error) {
+      // The Relay did not answer, or answered something other than JSON: nothing was decided about
+      // this credential or this share, so the share stays creatable and the diagnosis reports why.
+      return { ok: false, blocking: false, error: `${relay}: ${describeTransportFailure(error)}` }
     }
-    // A refusal is a decision about the credential this host presented, and the owner acts on it by
-    // verifying again at this address rather than by waiting.
-    return {
-      ok: false,
-      blocking: true,
-      error: refusal === 401 || refusal === 403
-        ? `${relay}: this address did not accept this host's owner credential (relay refused registration status=${String(refusal)})`
-        : `${relay}: the Relay refused this registration (relay refused registration status=${String(refusal)})`,
+    switch (answer.kind) {
+      case 'accepted':
+        return { ok: true, blocking: false }
+      case 'refused':
+        return { ok: false, blocking: true, error: `${relay}: ${refusalText(answer.code)}` }
+      case 'failed':
+        return { ok: false, blocking: false, error: `${relay}: ${answer.detail}` }
     }
   }
 

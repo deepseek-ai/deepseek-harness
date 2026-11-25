@@ -101,7 +101,7 @@ kind: "package-reference"
 
 服务器的工具会在 harness 开始首个轮次之前出现。设置 `startupTimeoutMs` 可约束每次连接尝试，包括模板解析与初次工具发现；省略时不添加覆盖整次尝试的截止时间。工具列表通知会刷新已注册工具；发现失败保留上一组工具，注册冲突则关闭连接并按重连策略处理。
 
-服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
+服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。远程服务器不再接受该连接的会话时（例如服务器重启之后），插件按同样方式重连：被服务器拒绝的调用没有执行，重连后会重发一次；重连开始时仍在等待应答的调用失败且不会重发，之后的调用使用新会话。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
 
 <a id="on-demand-tool-loading"></a>
 ### 按需加载工具
@@ -180,7 +180,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 ### 工具执行内部细节
 
-工具调用向 SDK 提供原始名称、完整工具定义、JSON 参数、取消信号及配置的超时。SDK 负责协议校验和现代协议请求 header。结构化内容是否符合已声明的输出 schema 由桥接器自己用 SDK 在 Node 上的 Ajv 校验器检查，因为 SDK 把自己的检查结果报告为 `ProtocolError`，与服务端的 JSON-RPC 错误无法区分。成功结果规范值为 `{ content: JsonValue[], structuredContent? }`，为编程调用方及 PTC 模式保留有效的 MCP JSON 块；每个进入持久模型上下文的图片块还携带其 `attachment` 引用，PTC 模式会将其转为 `Image`。MCP `isError` 结果会在图片持久化前抛出带 `MCP_TOOL_ERROR` 的 `McpToolError`。其他工具与资源请求失败抛出 `McpToolError`：`MCP_CONNECTION_CLOSED` 或 `MCP_TIMEOUT` 之后请求结果未知，`MCP_SERVER_UNAVAILABLE` 表示请求未发送，`MCP_INVALID_RESULT` 拒绝违反 MCP 结果 schema 或已声明输出 schema 的结果，以及无法编译的输出 schema，`MCP_UNSUPPORTED_TASK_EXECUTION` 拒绝该工具，`MCP_REQUEST_FAILED` 在 message 中携带 JSON-RPC 或 SDK code。连接代关闭表现为带 `MCP_CONNECTION_CLOSED` 的 `McpLocalError`，调用方取消表现为工具注册表的 `ABORTED`。`McpLocalError` 的 code 也报告本地连接失败：`MCP_TIMEOUT`、`MCP_CREDENTIALS_UNAVAILABLE`、`MCP_CREDENTIAL_NOT_FOUND`、`MCP_INSTRUCTIONS_TOO_LARGE` 与 `MCP_TOOL_REGISTRATION_FAILED`。桥接器在保存前校验整批图片；拒绝时将每张图片投影为诊断文本。对未声明 `resources` 能力的服务器，资源列表与模板列表直接返回空页而不调用 SDK，因为 SDK 的兜底逻辑会把诊断写到 stdout，而 ACP 配置档在 stdout 上传输 JSON-RPC。
+工具调用向 SDK 提供原始名称、完整工具定义、JSON 参数、取消信号及配置的超时。SDK 负责协议校验和现代协议请求 header。结构化内容是否符合已声明的输出 schema 由桥接器自己用 SDK 在 Node 上的 Ajv 校验器检查，因为 SDK 把自己的检查结果报告为 `ProtocolError`，与服务端的 JSON-RPC 错误无法区分。成功结果规范值为 `{ content: JsonValue[], structuredContent? }`，为编程调用方及 PTC 模式保留有效的 MCP JSON 块；每个进入持久模型上下文的图片块还携带其 `attachment` 引用，PTC 模式会将其转为 `Image`。MCP `isError` 结果会在图片持久化前抛出带 `MCP_TOOL_ERROR` 的 `McpToolError`。其他工具与资源请求失败抛出 `McpToolError`：`MCP_CONNECTION_CLOSED` 或 `MCP_TIMEOUT` 之后请求结果未知，`MCP_SERVER_UNAVAILABLE` 表示请求没有执行，原因是请求未发送，或服务器因会话过期拒绝了它，`MCP_INVALID_RESULT` 拒绝违反 MCP 结果 schema 或已声明输出 schema 的结果，以及无法编译的输出 schema，`MCP_UNSUPPORTED_TASK_EXECUTION` 拒绝该工具，`MCP_REQUEST_FAILED` 在 message 中携带 JSON-RPC 或 SDK code。连接代关闭表现为带 `MCP_CONNECTION_CLOSED` 的 `McpLocalError`，调用方取消表现为工具注册表的 `ABORTED`。`McpLocalError` 的 code 也报告本地连接失败：`MCP_TIMEOUT`、`MCP_CREDENTIALS_UNAVAILABLE`、`MCP_CREDENTIAL_NOT_FOUND`、`MCP_INSTRUCTIONS_TOO_LARGE` 与 `MCP_TOOL_REGISTRATION_FAILED`。桥接器在保存前校验整批图片；拒绝时将每张图片投影为诊断文本。对未声明 `resources` 能力的服务器，资源列表与模板列表直接返回空页而不调用 SDK，因为 SDK 的兜底逻辑会把诊断写到 stdout，而 ACP 配置档在 stdout 上传输 JSON-RPC。
 
 ### 环境清洗（stdio）
 
@@ -271,7 +271,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 - **资源按需读取**——随附 profile 提供[共享资源服务](../mcp-resources/README.zh.md)；资源订阅与 MCP 提示词模板不受支持。
 - **整次启动尝试的预算需主动配置**——设置 `startupTimeoutMs` 后，它覆盖模板解析、协商、连接与初次工具同步。通知驱动的重同步发出的 `tools/list` 请求使用 MCP SDK 的 60 秒请求默认值及其页数上限。插件卸载先关闭传输以中断待处理的启动请求，再等待清理。
-- **重连处理协商失败与传输关闭**——初始连接失败或 stdio 子进程崩溃都会使用配置的重连预算。普通 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
+- **重连处理协商失败、传输关闭与 Streamable HTTP 会话过期**——初始连接失败、stdio 子进程崩溃，或服务器因会话而拒绝请求（HTTP 404，或响应体提到会话或服务器未初始化的 HTTP 400），都会使用配置的重连预算。自身请求被服务器拒绝的工具调用没有执行，会在新连接上重发一次；它在新会话中执行，结果不带“服务器为旧会话保存的状态可能已丢失”的提示。重连被禁用、下一次连接尝试失败或耗时超过 `toolCallTimeoutMs`、该工具不再列出，或新会话同样被拒绝时，这次调用改为以 `MCP_SERVER_UNAVAILABLE` 失败。收到第一个拒绝后，连接在重连延迟内保持打开，因此每个并行调用都会收到自己的应答；延迟结束时仍未收到应答的请求以 `MCP_CONNECTION_CLOSED` 失败一次且不会重发。被拒绝的资源请求以 `MCP_SERVER_UNAVAILABLE` 失败，不会重发。服务器以 HTTP 200 加 JSON-RPC 错误报告会话过期时无法识别。其他 HTTP 请求失败使用 SDK 传输的恢复机制；凭据变化则替换连接。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
 - **OAuth 授权需要浏览器能直接访问 Host Web 服务器**——回调地址是该服务器自身的源地址：监听地址加端口，启用 TLS 时使用 HTTPS。只能通过代理或 Web 应用的 `publicUrl` 访问 DSH 的浏览器无法完成授权。动态客户端注册以该回调地址区分，监听地址或端口改变、或端口随机分配时，下一次显式授权会注册新的客户端；退出登录会保留之前的注册记录。

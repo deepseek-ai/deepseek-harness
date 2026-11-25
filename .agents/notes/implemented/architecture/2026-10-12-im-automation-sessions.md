@@ -14,7 +14,7 @@ IM hosts persistent sessions through the existing agent factory, inbox, presets,
 
 Source admission, write grants, delivery mode, model route, working directory, and preset are explicit deployment choices: a `sources` rule decides which chats may reach the host and how their messages are stored, and `defaultDispatch` composes the single session every unhandled addressed message reaches. Every chat shares that session's history, so a deployment that needs per-chat history or background workers mounts its own plugin on the `im/message` waterfall.
 
-The transport layer uses the vendored Satori packages (`plugin-im-core`, `satori-element`, `plugin-im-adapter-lark`, and `plugin-im-adapter-qq`). The [vendor manifest](../../../../vendor/README.md) documents exact upstream pins and local modifications. Generated Feishu declarations stay outside Git and are regenerated from hash-checked pinned sources during installation.
+The transport layer uses the vendored Satori packages (`plugin-im-core`, `satori-element`, `plugin-im-adapter-lark`, and `plugin-im-adapter-qq`). The [vendor manifest](../../../../vendor/im/README.md) documents exact upstream pins and local modifications. Generated Feishu declarations stay outside Git and are regenerated from hash-checked pinned sources during installation.
 
 ## Durability and ownership
 

@@ -3,8 +3,7 @@
 // styles. One fixture turn produces:
 // - prose: Markdown link, reference-style link, mailto link, inline-code URL,
 //   produced-file mention, a known-site link carrying that site's own leading
-//   mark, pull and merge request URLs drawn as references beside one whose
-//   text the author wrote, plus inert contrasts (ambiguous basename, unwritten
+//   mark, plus inert contrasts (ambiguous basename, unwritten
 //   file, command code, URL-with-flags code, javascript: destination,
 //   footnote superscript, remote image, fenced code block with its copy chrome)
 // - artifacts: seven produced files (chips overflow into the "+N" remainder
@@ -62,9 +61,6 @@ const FETCH_URL = 'https://docs.example.test/tokens'
 // A mapped host, so the prose pins that the leading glyph is the site's mark
 // rather than the globe the unmapped docs host keeps.
 const REPO_URL = 'https://github.com/example/link-gallery'
-/** Change request overview URLs written as themselves, which draw as references. */
-const PULL_URL = `${REPO_URL}/pull/12`
-const MERGE_URL = 'https://gitlab.com/example/link-gallery/-/merge_requests/3'
 
 /** One-part text content for a built message. */
 function text(value: string): { type: 'text'; text: string }[] {
@@ -282,8 +278,6 @@ function galleryFixture(imageUrl: string): string {
         '',
         `Upstream: [the repository](${REPO_URL}).`,
         '',
-        `Change requests: ${PULL_URL}, ${MERGE_URL}, and [the same pull request](${PULL_URL}).`,
-        '',
         `Inert contrasts: \`curl ${API_URL}\`, \`javascript:alert(1)\`, and \`pnpm run build\`.`,
         '',
         'Wrote `report.html` plus two `style.css` copies; `notes.md` untouched.',
@@ -337,7 +331,7 @@ describe('web e2e: clickable links gallery', () => {
     await seedSession(scaffold, galleryFixture(imageUrl), SEED_ID, undefined, { createdAt: GALLERY_TIME })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
-    await page.context().route(/https?:\/\/(docs\.example\.test|github\.com\/example\/link-gallery)\/.*/u, async route => route.fulfill({
+    await page.context().route(/https?:\/\/docs\.example\.test\/.*/u, async route => route.fulfill({
       contentType: 'text/html',
       body: `<h1>${new URL(route.request().url()).pathname}</h1>`,
     }))
@@ -527,14 +521,6 @@ describe('web e2e: clickable links gallery', () => {
     const repoMark = await repoLink.locator('svg path').first().getAttribute('d')
     const globeMark = await guideLink.locator('svg path').first().getAttribute('d')
     expect(repoMark).not.toBe(globeMark)
-    // Pull and merge request URLs written as themselves read as references titled with the URL, under the site's mark;
-    // a link whose text the author wrote keeps it.
-    const pullLinks = markdown.locator(`a[href="${PULL_URL}"]`)
-    expect(await pullLinks.evaluateAll(links => links.map(link => [link.textContent, link.getAttribute('title')])))
-      .toEqual([['example/link-gallery#12', PULL_URL], ['the same pull request', null]])
-    const mergeLink = markdown.locator(`a[href="${MERGE_URL}"]`)
-    expect([await mergeLink.textContent(), await mergeLink.getAttribute('title')]).toEqual(['example/link-gallery!3', MERGE_URL])
-    expect(await pullLinks.first().locator('svg path').first().getAttribute('d')).toBe(repoMark)
     await guideLink.hover()
     expect(await styleOf(guideLink, 'text-decoration-line')).toBe('underline')
     expect(await styleOf(guideLink, 'text-decoration-style')).toBe('dotted')
@@ -548,8 +534,6 @@ describe('web e2e: clickable links gallery', () => {
     await guideLink.click()
     const browserAddress = page.locator('[data-rightbar-col]').getByRole('textbox', { name: 'Enter an HTTP(S) address' })
     await expect.poll(() => browserAddress.inputValue()).toBe(GUIDE_URL)
-    await pullLinks.first().click()
-    await expect.poll(() => browserAddress.inputValue()).toBe(PULL_URL)
     await markdown.locator(`a[href="${HTTP_URL}"]`).click()
     await expect.poll(() => browserAddress.inputValue()).toBe(HTTP_URL)
 

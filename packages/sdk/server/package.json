@@ -33,7 +33,8 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "@deepseek-ai/schemastery": "workspace:~"
+    "@deepseek-ai/schemastery": "workspace:~",
+    "@deepseek-ai/dsh-timeout": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -53,7 +54,13 @@
     "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@deepseek-ai/dsh-util-time": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*",
+    "@deepseek-ai/dsh-mcp-manager": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-mcp-manager": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -89,6 +96,7 @@
     "@deepseek-ai/dsh-user-questions": "workspace:*",
     "@deepseek-ai/dsh-util-time": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-deepseek-auth": "workspace:*"
+    "@deepseek-ai/dsh-deepseek-auth": "workspace:*",
+    "@deepseek-ai/dsh-mcp-manager": "workspace:*"
   }
 }

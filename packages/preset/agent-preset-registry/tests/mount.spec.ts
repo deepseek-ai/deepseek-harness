@@ -1,11 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { getDshRuntimeVersion, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import {
+  createRuntimeResolution, getDshRuntimeVersion, loadProfileDirectory, PluginPackages, type ProfileContext, type RuntimeResolution,
+} from '@deepseek-ai/dsh-app-boot'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { expect, it, onTestFinished } from 'vitest'
 import { harness, declare } from './harness.ts'
@@ -151,4 +153,79 @@ it('mounts a profile-denied row disabled and the same row active once exempted',
   expect(loadedWhileDenied).toEqual([false])
   expect(mountedCompositionRows(mounts[1]!.tree)[0]!.enabled).toBe(true)
   expect(existsSync(loaded)).toBe(true)
+})
+
+it('mounts a row that a bundle lists in its preset from the package that bundle selects', async () => {
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-preset-bundle-row-')))
+  onTestFinished(() => { rmSync(home, { recursive: true, force: true }) })
+  const write = (path: string, text: string): void => {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, text)
+  }
+  const effects = join(home, 'effects')
+  /** A copy of the `schedule` plugin whose row records the copy that started. */
+  const copy = (dir: string, label: string, peerDependencies: Record<string, string> = {}): void => {
+    write(join(dir, 'package.json'), JSON.stringify({
+      name: 'schedule', version: '1.0.0', type: 'module', exports: './index.mjs', peerDependencies,
+    }))
+    write(join(dir, 'index.mjs'), [
+      "import { appendFileSync } from 'node:fs'",
+      `export function apply() { appendFileSync(${JSON.stringify(effects)}, '${label}\\n') }`,
+      '',
+    ].join('\n'))
+  }
+  // The installation's bundle lists `schedule` in a preset. A plugin installed in the profile pins another copy of
+  // `schedule`, one that the running release does not admit.
+  const install = join(home, 'install')
+  const preset = { id: 'standard', plugins: [{ id: 'schedule', name: 'schedule' }] }
+  write(join(install, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.0.0', dependencies: { base: '*' } }))
+  write(join(install, 'node_modules', 'base', 'package.json'), JSON.stringify({
+    name: 'base', version: '1.0.0', dependencies: { schedule: '*' }, dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }))
+  write(join(install, 'node_modules', 'base', 'cordis.patch.yml'), JSON.stringify([
+    { insert: [{ id: 'preset-standard', name: '@deepseek-ai/dsh-agent-preset', config: preset }] },
+  ]))
+  copy(join(install, 'node_modules', 'schedule'), 'installed')
+  const profileDir = join(home, 'profiles', 'web')
+  write(join(profileDir, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-web', private: true, dependencies: { third: '*' }, dsh: { profile: { bundles: ['base'] } },
+  }))
+  write(join(profileDir, 'compatibility.json'), '{}\n')
+  write(join(profileDir, 'node_modules', 'third', 'package.json'), JSON.stringify({
+    name: 'third', version: '1.0.0', dependencies: { schedule: '1.0.0' },
+  }))
+  copy(join(profileDir, 'node_modules', 'schedule'), 'pinned', { '@deepseek-ai/dsh': '<0.0.0' })
+  const installAnchor = join(install, 'package.json')
+  const profile = loadProfileDirectory('dsh', profileDir, installAnchor)
+  const computed = await createRuntimeResolution({ installAnchor, profile, home })
+  const { profilesDir, profileDir: dir, localPackageNames, entries, linkedRoots } = computed
+
+  /** Declare the preset from the profile directory, as its row of the root config tree does, and read its rows. */
+  const mounted = async (resolution: RuntimeResolution) => {
+    rmSync(effects, { force: true })
+    const ctx = await harness()
+    try {
+      ctx.provide('profileContext', {
+        name: 'web', dir: profileDir, patchPath: join(profileDir, 'cordis.patch.yml'), home, cwd: home, installAnchor,
+        startedBundles: ['base'], overlayPaths: [], telemetryDisabledEnv: undefined,
+      } satisfies ProfileContext)
+      await ctx.plugin(PluginPackages, { resolution })
+      await declare(ctx.extend({ baseUrl: pathToFileURL(profileDir).href + '/' }), preset)
+      const compositions = await ctx.agentPresets.compositionInventory()
+      return {
+        rows: compositions.find(composition => composition.id === 'standard')?.rows,
+        started: existsSync(effects) ? readFileSync(effects, 'utf8') : '',
+      }
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  }
+
+  expect(computed.bundlePlugins.find(plugin => plugin.name === 'schedule')?.bundleDir).toBe(join(install, 'node_modules', 'base'))
+  // Without the selection, the row loads the pinned copy, which the compatibility admission disables.
+  expect(await mounted({ profilesDir, profileDir: dir, localPackageNames, entries, linkedRoots }))
+    .toEqual({ rows: [{ entryId: 'schedule', moduleName: 'schedule', enabled: false }], started: '' })
+  expect(await mounted(computed)).toEqual({
+    rows: [{ entryId: 'schedule', moduleName: 'schedule', enabled: true, fiberState: FiberState.ACTIVE }], started: 'installed\n',
+  })
 })

@@ -56,7 +56,8 @@ export class McpLocalError extends HarnessError {
  *   schema, or that output schema cannot be compiled.
  * - `MCP_CONNECTION_CLOSED`: the connection closed while the request was in flight; its outcome is unknown.
  * - `MCP_TIMEOUT`: the request exceeded its deadline; its outcome is unknown.
- * - `MCP_SERVER_UNAVAILABLE`: the server was not connected, so the request was not sent.
+ * - `MCP_SERVER_UNAVAILABLE`: the server was not connected, or refused the request because it no longer knows the
+ *   session; the tool did not run.
  * - `MCP_REQUEST_FAILED`: any other protocol or SDK failure; `message` carries the JSON-RPC or SDK code.
  */
 export const MCP_TOOL_ERROR_CODES = [
@@ -150,6 +151,33 @@ export function oauthFailure(error: unknown): McpAuthorizationRequired | undefin
 }
 
 const reauthorizationCodes = new Set<string>([OAuthErrorCode.InvalidGrant, OAuthErrorCode.InvalidClient, OAuthErrorCode.UnauthorizedClient])
+
+/** Wording servers put in an HTTP 400 body when they no longer know the session. */
+const SESSION_REJECTION = /session|not initialized/i
+
+/**
+ * Whether the server rejected a POST because it no longer knows the Streamable HTTP session. HTTP 404 is the
+ * specified answer; HTTP 400 counts only when its body names the session, because servers also answer malformed
+ * requests with 400.
+ * @param error - SDK error from a connection that holds a session id.
+ * @returns true when later requests can succeed only after a new `initialize`.
+ */
+export function sessionRejected(error: unknown): boolean {
+  if (!(error instanceof SdkHttpError) || error.code !== SdkErrorCode.ClientHttpNotImplemented) return false
+  if (error.status === 404) return true
+  const body = error.data.text
+  return error.status === 400 && typeof body === 'string' && SESSION_REJECTION.test(body)
+}
+
+/**
+ * Whether the server refused the event-stream GET. The refusal does not say whether the session is alive: servers
+ * without an event stream answer the GET of a live session with 404 or 400.
+ * @param error - SDK error from a connection that holds a session id.
+ * @returns true for a refused event-stream GET.
+ */
+export function eventStreamRefused(error: unknown): boolean {
+  return error instanceof SdkHttpError && error.code === SdkErrorCode.ClientHttpFailedToOpenStream
+}
 
 /** Placeholder written in place of a known secret value. */
 const REDACTED = '[redacted]'

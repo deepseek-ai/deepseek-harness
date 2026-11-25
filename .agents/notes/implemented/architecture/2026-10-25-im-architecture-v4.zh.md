@@ -32,7 +32,7 @@ IM 集成需要解决三个相互独立的问题：平台投递了什么以及�
 
 ### Platform layer
 
-`ctx.im` 之下是内置的 Satori 包：[`plugin-im-core`](../../../../vendor/plugin-im-core/src/index.ts)（协议、按模式的元素注册表、转换与回退表、能力评估、降级计分、流式调度器与一致性测试套件）、[`satori-element`](../../../../vendor/satori-element/src/index.ts)（元素类型与 GFM Markdown 转换），以及 [`plugin-im-adapter-lark`](../../../../vendor/plugin-im-adapter-lark/src/bot.ts) 和 [`plugin-im-adapter-qq`](../../../../vendor/plugin-im-adapter-qq/src/bot.ts) 平台适配器。
+`ctx.im` 之下是内置的 Satori 包：[`plugin-im-core`](../../../../vendor/im/core/src/index.ts)（协议、按模式的元素注册表、转换与回退表、能力评估、降级计分、流式调度器与一致性测试套件）、[`satori-element`](../../../../vendor/im/element/src/index.ts)（元素类型与 GFM Markdown 转换），以及 [`plugin-im-adapter-lark`](../../../../vendor/im/adapter-lark/src/bot.ts) 和 [`plugin-im-adapter-qq`](../../../../vendor/im/adapter-qq/src/bot.ts) 平台适配器。
 
 ## Alternatives considered
 

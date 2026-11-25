@@ -1914,7 +1914,7 @@ describe('forgePanel leaving a worktree', () => {
     await expect(opened.ctx.forgePanel.continueInProject(unloaded, signal))
       .rejects.toMatchObject({ code: 'forgePanel/session-busy', message: 'The Session is not loaded' })
     await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal))
-      .rejects.toMatchObject({ code: 'forgePanel/session-busy', message: 'The Session is busy' })
+      .rejects.toMatchObject({ code: 'forgePanel/session-busy', message: expect.stringMatching(/^The Session is busy: agent ".+" /) as string })
     await release()
 
     expect(opened.ctx.workingDirectory.get(unloaded)).toBe(created.path)
@@ -1957,17 +1957,6 @@ describe('forgePanel actions', () => {
     await opened.ctx.forgePanel.dismiss(opened.session, pullUrl(9), signal)
 
     await expect(follower.next(state => state.changeRequests.length === 0)).resolves.toBeDefined()
-  })
-
-  it('reads a served URL as its canonical change request URL without binding it, and any other URL as none', async () => {
-    const { repo } = await project()
-    const opened = await open(repo)
-    const follower = reader(opened)
-    await follower.until(ready)
-
-    expect(await opened.ctx.forgePanel.recognize(pullUrl(9), signal)).toBe(pullUrl(9))
-    expect(await opened.ctx.forgePanel.recognize('https://elsewhere.test/a/b/pull/1', signal)).toBeNull()
-    expect(opened.ctx.forgeSession.changeRequests(opened.session)).toEqual([])
   })
 
   it('refreshes the checkout, sign-in state, and change requests of a followed Session only', async () => {
@@ -2337,7 +2326,6 @@ describe('forgePanel actions', () => {
     controller.abort(new Error('closed'))
 
     await expect(opened.ctx.forgePanel.track(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
-    await expect(opened.ctx.forgePanel.recognize(pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.dismiss(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.refresh(opened.session.id, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, controller.signal)).rejects.toThrow('closed')

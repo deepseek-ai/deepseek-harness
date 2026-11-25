@@ -41,7 +41,7 @@ async function compileRuntime(dependencies: Readonly<Record<string, string>>): P
   await pnpm('exec', 'tsx', 'native/system/scripts/build.ts')
   await pnpm('exec', 'tsc', '-b', closureDirectory, 'native/system/packages/entry')
   const names = new Set([closureName, ...Object.keys(dependencies)])
-  for (const path of globSync(['packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root }).sort()) {
+  for (const path of globSync(['packages/*/*/package.json', 'vendor/*/package.json', 'vendor/im/*/package.json'], { cwd: root }).sort()) {
     if (!names.has((await manifest(join(root, path))).name)) continue
     const cwd = dirname(join(root, path))
     const config = join(cwd, 'tsdown.config.ts')

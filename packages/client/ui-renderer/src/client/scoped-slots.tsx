@@ -84,7 +84,7 @@ function boundRenderSlot(host: SlotRendererHost, entry: StoredEntry): RenderSlot
       if (declared.kind === 'chain') {
         throw new SlotOwnershipError(`slot '${key}' is declared 'chain' — use renderSlotChain`)
       }
-      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
+      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} moduleName={entry.module ?? ''} />
     }
     renderSlotCache.set(entry, binding)
   }
@@ -113,48 +113,70 @@ function boundRenderSlotChain(host: SlotRendererHost, entry: StoredEntry): Rende
       if (declared.kind !== 'chain') {
         throw new SlotOwnershipError(`slot '${key}' is declared '${declared.kind}', not 'chain' — use renderSlot`)
       }
-      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
+      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} moduleName={entry.module ?? ''} />
     }
     renderSlotChainCache.set(entry, binding)
   }
   return binding
 }
 
-const factoryRenderSlotCache = new WeakMap<StoredFactory, RenderSlotBinding>()
-const factoryRenderSlotChainCache = new WeakMap<StoredFactory, RenderSlotChainBinding>()
-
-function boundFactoryRenderSlot(host: SlotRendererHost, definition: StoredFactory): RenderSlotBinding {
-  let binding = factoryRenderSlotCache.get(definition)
-  if (binding !== undefined) return binding
-  binding = (key, owner, opts) => {
-    if (!host.isFactoryLive(definition)) {
-      throw new StaleAuthorizationError(`renderSlot('${key}') from a disposed Factory`)
-    }
-    const declared = definition.children?.[key]
-    if (declared === undefined) throw new SlotOwnershipError(`slot '${key}' is not declared by this Factory`)
-    if (declared.kind === 'chain') throw new SlotOwnershipError(`slot '${key}' is declared 'chain' — use renderSlotChain`)
-    return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
-  }
-  factoryRenderSlotCache.set(definition, binding)
-  return binding
+/** A Factory's child-slot methods: `renderSlot`, and `renderSlotChain` when it declares a chain child. */
+interface FactoryChildKit {
+  renderSlot: RenderSlotBinding
+  renderSlotChain?: RenderSlotBinding
 }
 
-function boundFactoryRenderSlotChain(host: SlotRendererHost, definition: StoredFactory): RenderSlotChainBinding {
-  let binding = factoryRenderSlotChainCache.get(definition)
-  if (binding !== undefined) return binding
-  binding = (key, owner, opts) => {
-    if (!host.isFactoryLive(definition)) {
-      throw new StaleAuthorizationError(`renderSlotChain('${key}') from a disposed Factory`)
-    }
-    const declared = definition.children?.[key]
-    if (declared === undefined) throw new SlotOwnershipError(`slot '${key}' is not declared by this Factory`)
-    if (declared.kind !== 'chain') {
-      throw new SlotOwnershipError(`slot '${key}' is declared '${declared.kind}', not 'chain' — use renderSlot`)
-    }
-    return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} />
+/**
+ * By Factory, then by the Factory or caller registration that supplies the Components calling the methods.
+ * `chain` records once per Factory whether it declares a chain child.
+ */
+const factoryChildKits = new WeakMap<StoredFactory, {
+  chain: boolean
+  bySupplier: WeakMap<FactoryRenderOwner, FactoryChildKit>
+}>()
+
+/**
+ * Child-slot methods for the Components `supplier` provides to a Factory: the Factory for its own Component
+ * and fallback locals, an occurrence's caller for a local it selected. The Factory's declarations authorize
+ * each call; the fallback and children a call passes belong to `supplier` wherever the outlet renders.
+ */
+function factoryChildKit(host: SlotRendererHost, definition: StoredFactory, supplier: FactoryRenderOwner): FactoryChildKit | undefined {
+  const children = definition.children
+  if (children === undefined) return undefined
+  let cached = factoryChildKits.get(definition)
+  if (cached === undefined) {
+    cached = { chain: Object.values(children).some(spec => spec.kind === 'chain'), bySupplier: new WeakMap() }
+    factoryChildKits.set(definition, cached)
   }
-  factoryRenderSlotChainCache.set(definition, binding)
-  return binding
+  let kit = cached.bySupplier.get(supplier)
+  if (kit !== undefined) return kit
+  const moduleName = supplier.module ?? ''
+  kit = {
+    renderSlot: (key, owner, opts) => {
+      if (!host.isFactoryLive(definition)) {
+        throw new StaleAuthorizationError(`renderSlot('${key}') from a disposed Factory`)
+      }
+      const declared = children[key]
+      if (declared === undefined) throw new SlotOwnershipError(`slot '${key}' is not declared by this Factory`)
+      if (declared.kind === 'chain') throw new SlotOwnershipError(`slot '${key}' is declared 'chain' — use renderSlotChain`)
+      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} moduleName={moduleName} />
+    },
+  }
+  if (cached.chain) {
+    kit.renderSlotChain = (key, owner, opts) => {
+      if (!host.isFactoryLive(definition)) {
+        throw new StaleAuthorizationError(`renderSlotChain('${key}') from a disposed Factory`)
+      }
+      const declared = children[key]
+      if (declared === undefined) throw new SlotOwnershipError(`slot '${key}' is not declared by this Factory`)
+      if (declared.kind !== 'chain') {
+        throw new SlotOwnershipError(`slot '${key}' is declared '${declared.kind}', not 'chain' — use renderSlot`)
+      }
+      return <SlotOutlet slotKey={key} ownerProps={owner} opts={opts} declaredInline={declared.inline === true} moduleName={moduleName} />
+    }
+  }
+  cached.bySupplier.set(supplier, kit)
+  return kit
 }
 
 /**
@@ -462,7 +484,7 @@ class SlotErrorBoundary extends Component<
   override render(): ReactNode {
     const Anchor = this.props.anchor ?? 'div'
     if (this.state.failed) {
-      return this.props.crashed === undefined ? <Anchor data-slot-error={this.props.slotKey} /> : this.props.crashed
+      return this.props.crashed === undefined ? <Anchor data-plugin="" data-slot-error={this.props.slotKey} /> : this.props.crashed
     }
     return this.props.children
   }
@@ -484,7 +506,7 @@ class FactoryErrorBoundary extends Component<
   }
   override render(): ReactNode {
     const { anchor: Anchor, name, children } = this.props
-    return this.state.failed ? <Anchor data-factory-error={name} /> : children
+    return this.state.failed ? <Anchor data-plugin="" data-factory-error={name} /> : children
   }
 }
 /* jscpd:ignore-end */
@@ -872,6 +894,8 @@ function useFactorySlotRuntime(name: string, fallback: FC<InjectedProps>): FC<In
       const localStandard = standardProps(declared.scope, current.rootBinding, localScopeBinding)
       const localRegistrationKit = {
         ...current.registrationKit,
+        // The Factory authorizes its child slots; whoever supplied this local wrote what it passes to them.
+        ...factoryChildKit(host, definition, localOwner),
         renderFactorySlot: boundRenderFactorySlot(localOwner),
       }
       assertNoPropOverlap(`factory '${definition.name}' local slot '${name}'`, localRegistrationKit, localStandard)
@@ -888,7 +912,7 @@ function useFactorySlotRuntime(name: string, fallback: FC<InjectedProps>): FC<In
         </FactoryErrorBoundary>
       )
       if (usesFallback) return content
-      return <Anchor data-slot-factory-children={localSlotKey} style={ANCHOR_STYLE}>{content}</Anchor>
+      return <Anchor data-plugin={localOwner.module ?? ''} data-slot-factory-children={localSlotKey} style={ANCHOR_STYLE}>{content}</Anchor>
     }
   }, [Anchor, Selected, declared.scope, definition, host, name, usesFallback])
 }
@@ -924,11 +948,12 @@ function factoryKit(
     registrationKit['useStore'] = observableHook(store)
     registrationKit['actions'] = store.actions
   }
+  const childKit = factoryChildKit(host, definition, definition)
+  if (childKit !== undefined) {
+    registrationKit['renderSlot'] = childKit.renderSlot
+    if (childKit.renderSlotChain !== undefined) registrationKit['renderSlotChain'] = childKit.renderSlotChain
+  }
   if (definition.children !== undefined) {
-    registrationKit['renderSlot'] = boundFactoryRenderSlot(host, definition)
-    if (Object.values(definition.children).some(spec => spec.kind === 'chain')) {
-      registrationKit['renderSlotChain'] = boundFactoryRenderSlotChain(host, definition)
-    }
     if (Object.values(definition.children).some(spec => spec.scope !== 'root')) {
       const sessionAdapter = host.scope('session')
       if (sessionAdapter === undefined) {
@@ -1052,7 +1077,7 @@ function FactoryOutlet({ name, inputProps, slots: selected = EMPTY_FACTORY_SELEC
       : `session-maybe:${maybeEpoch}`
   const Anchor = definition.inline ? 'span' : 'div'
   return (
-    <Anchor data-slot-factory={name} style={ANCHOR_STYLE}>
+    <Anchor data-plugin={definition.module ?? ''} data-slot-factory={name} style={ANCHOR_STYLE}>
       <FactoryErrorBoundary
         key={`${name}:${version}:${scopeIdentity}`}
         name={name}
@@ -1144,11 +1169,8 @@ function hocLayer(
 ): FC<HocLayerProps> {
   const Anchor: SlotAnchorTag = spec.inline === true ? 'span' : 'div'
   const slotInjected = cachedSlotInject(spec.inject)
-  // This slot supplies these children even if the layer forwards them through another slot.
   const forwardChildren: RenderHocInner = (owner, children) => (
-    <HocContentBoundary>
-      <Anchor data-slot-children={slotKey} style={ANCHOR_STYLE}>{renderInner(owner, children)}</Anchor>
-    </HocContentBoundary>
+    <HocContentBoundary>{renderInner(owner, children)}</HocContentBoundary>
   )
   // A layer's failure belongs to the occurrence it rendered; retiring it would strip every other occurrence too.
   const onEntryError = (error: unknown): void => {
@@ -1236,9 +1258,13 @@ function composeHocLayers(
   spec: SlotSpec<SlotEntryDef>,
   layers: readonly StoredEntry[],
 ): RenderHocInner {
-  return layers.reduceRight<RenderHocInner>((renderInner, entry) => {
+  const Anchor = spec.inline ? 'span' : 'div'
+  return layers.reduceRight<RenderHocInner>((renderInner, entry, index) => {
     const Layer = hocLayer(host, slotKey, spec, entry, renderInner)
-    return (owner, children) => <Layer owner={owner}>{children}</Layer>
+    return (owner, children) => {
+      const body = <Layer owner={owner}>{children}</Layer>
+      return index === 0 ? body : <Anchor data-plugin={entry.module ?? ''} data-slot-children={slotKey} style={ANCHOR_STYLE}>{body}</Anchor>
+    }
   }, renderHocContent)
 }
 
@@ -1276,14 +1302,14 @@ function sameLayers(a: readonly StoredEntry[], b: readonly StoredEntry[]): boole
  * @param slotKey - the hoc slot.
  * @param spec - its live declaration.
  * @param entryKey - the dispatch key, or undefined for wildcard-only dispatch.
- * @returns the chain's render function.
+ * @returns the ordered layers and their shared render function.
  */
 function hocChainFor(
   host: SlotRendererHost,
   slotKey: string,
   spec: SlotSpec<SlotEntryDef>,
   entryKey: string | undefined,
-): RenderHocInner {
+): CompiledHoc {
   let bySpec = hocChains.get(host)
   if (bySpec === undefined) {
     bySpec = new WeakMap()
@@ -1301,27 +1327,23 @@ function hocChainFor(
   }
   const version = host.getVersion(slotKey)
   const cached = chains.get(entryKey)
-  if (cached !== undefined && cached.version === version) return cached.render
+  if (cached !== undefined && cached.version === version) return cached
   const layers = hocLayersFor(host.entriesOfSlot(slotKey), entryKey)
   if (cached !== undefined && sameLayers(cached.layers, layers)) {
     cached.version = version
-    return cached.render
+    return cached
   }
-  const render = layers.length === 0 ? renderHocContent : composeHocLayers(host, slotKey, spec, layers)
-  chains.set(entryKey, { version, layers, render })
-  return render
+  const chain = { version, layers, render: layers.length === 0 ? renderHocContent : composeHocLayers(host, slotKey, spec, layers) }
+  chains.set(entryKey, chain)
+  return chain
 }
 
 /** Hoc dispatch over the shared per-key chain; the enclosing outlet re-renders on every ledger version. */
-function HocOutlet({ slotKey, spec, ownerProps, entryKey, children }: {
-  slotKey: string
-  spec: SlotSpec<SlotEntryDef>
+function HocOutlet({ ownerProps, renderLayers, children }: {
   ownerProps: object
-  entryKey: string | undefined
+  renderLayers: RenderHocInner
   children: ReactNode
 }) {
-  const host = useHost()
-  const renderLayers = hocChainFor(host, slotKey, spec, entryKey)
   if (renderLayers === renderHocContent) return children
   return <HocOutletBoundary>{renderLayers(ownerProps, children)}</HocOutletBoundary>
 }
@@ -1334,11 +1356,12 @@ function HocOutlet({ slotKey, spec, ownerProps, entryKey, children }: {
  */
 const ANCHOR_STYLE = { display: 'contents' } as const
 
-function SlotOutlet({ slotKey, ownerProps, opts, declaredInline }: {
+function SlotOutlet({ slotKey, ownerProps, opts, declaredInline, moduleName }: {
   slotKey: string
   ownerProps: object
   opts?: OutletOpts | undefined
   declaredInline: boolean
+  moduleName: string
 }) {
   const host = useHost()
   // Version tick drives entries() re-read; the host batches per microtask.
@@ -1353,18 +1376,17 @@ function SlotOutlet({ slotKey, ownerProps, opts, declaredInline }: {
   const spec = host.specOf(slotKey)
   // Retained elements keep their declaration's anchor after unload, but never
   // use that declaration to dispatch entries while the live spec is absent.
-  const Anchor = (spec === undefined ? declaredInline : spec.inline === true) ? 'span' : 'div'
   // Anchor contract: every slot render site exposes a stable
   // `[data-slot="<key>"]` wrapper — the addressable seam dynamic styles
   // target — and `display:contents` keeps it layout-neutral. The wrapper
   // rides the outlet, not the dispatch outcome: fallback, crash-face, and
   // undeclared-empty states all render inside it, so the anchor's presence
   // never flickers with registration churn.
-  return (
-    <Anchor data-slot={slotKey} style={ANCHOR_STYLE}>
-      {spec === undefined ? null : renderOutletContent(host, slotKey, ownerProps, opts, scopeBinding, spec)}
-    </Anchor>
-  )
+  if (spec === undefined) {
+    const Anchor = declaredInline ? 'span' : 'div'
+    return <Anchor data-slot={slotKey} style={ANCHOR_STYLE} />
+  }
+  return renderOutletContent(host, slotKey, ownerProps, opts, scopeBinding, spec, moduleName)
 }
 
 /** Kind dispatch behind the outlet anchor (single/keyed/list/chain/hoc, fallbacks, crash faces). */
@@ -1375,19 +1397,26 @@ function renderOutletContent(
   opts: OutletOpts | undefined,
   scopeBinding: StandardSourceBinding,
   spec: SlotSpec<SlotEntryDef>,
+  moduleName: string,
 ): ReactNode {
   const Anchor = spec.inline === true ? 'span' : 'div'
+  const outlet = (content: ReactNode, rootModule?: string) => (
+    <Anchor data-plugin={rootModule} data-slot={slotKey} style={ANCHOR_STYLE}>{content}</Anchor>
+  )
   if (spec.kind === 'chain' && opts?.fallbackOnly === true) {
-    return renderChainResult(slotKey, null, opts, Anchor)
+    return outlet(renderChainResult(slotKey, null, opts, Anchor, moduleName), moduleName)
   }
   if (spec.scope === 'session' && scopeBinding.key === undefined) {
     throw new SlotAssemblyError(`strict session slot '${slotKey}' rendered without a scope binding`)
   }
   if (spec.kind === 'hoc') {
-    return (
-      <HocOutlet slotKey={slotKey} spec={spec} ownerProps={ownerProps} entryKey={opts?.entryKey}>
-        {opts?.children ?? null}
-      </HocOutlet>
+    const { render, layers } = hocChainFor(host, slotKey, spec, opts?.entryKey)
+    const outer = layers[0]
+    const children = outer === undefined ? opts?.children
+      : <Anchor data-plugin={moduleName} data-slot-children={slotKey} style={ANCHOR_STYLE}>{opts?.children}</Anchor>
+    return outlet(
+      <HocOutlet ownerProps={ownerProps} renderLayers={render}>{children}</HocOutlet>,
+      outer === undefined ? moduleName : outer.module ?? '',
     )
   }
   const entries = host.entriesOf(slotKey)
@@ -1449,20 +1478,20 @@ function renderOutletContent(
   // A cell whose every registration abdicated keeps the crash face: the
   // shadowing collapse ran out of survivors, which is a failure state, not
   // the owner's natural-empty fallback.
-  const deadCell = () => <Anchor data-slot-error={slotKey} />
+  const deadCell = () => outlet(<Anchor data-plugin="" data-slot-error={slotKey} />)
 
   if (spec.kind === 'single') {
     const entry = host.entriesOfSlot(slotKey)[0]
-    if (!entry) return entries.length > 0 ? deadCell() : <>{opts?.fallback ?? null}</>
-    return guarded(entry, entryKeyOf(entry))
+    if (!entry) return entries.length > 0 ? deadCell() : outlet(opts?.fallback, moduleName)
+    return outlet(guarded(entry, entryKeyOf(entry)), entry.module ?? '')
   }
   if (spec.kind === 'keyed') {
     const entry = host.entriesOfSlot(slotKey).find(e => e.options.key === opts?.entryKey)
     if (!entry) {
       const occupied = entries.some(e => e.options.key === opts?.entryKey)
-      return occupied ? deadCell() : <>{opts?.fallback ?? null}</>
+      return occupied ? deadCell() : outlet(opts?.fallback, moduleName)
     }
-    return guarded(entry, entryKeyOf(entry))
+    return outlet(guarded(entry, entryKeyOf(entry)), entry.module ?? '')
   }
   if (spec.kind === 'chain') {
     // Entries arrive priority-sorted from the ledger (the core orders at
@@ -1471,6 +1500,7 @@ function renderOutletContent(
     // pass runs per render with zero mount side effects: the first non-null
     // election renders, decliners never mount.
     let elected: ReactNode = null
+    let electedModule = moduleName
     for (const entry of entries) {
       let matched: unknown
       try {
@@ -1488,11 +1518,12 @@ function renderOutletContent(
         continue
       }
       if (matched !== null) {
+        electedModule = entry.module ?? ''
         elected = guarded(entry, entryKeyOf(entry), { ...ownerProps, matched })
         break
       }
     }
-    return renderChainResult(slotKey, elected, opts, Anchor)
+    return outlet(renderChainResult(slotKey, elected, opts, Anchor, moduleName), electedModule)
   }
   // list: one row per id cell — the cell's shadowing winner, or the crash
   // face once every entry of the cell abdicated (a dry cell must not
@@ -1513,19 +1544,19 @@ function renderOutletContent(
   }
   let list = [...rows].sort((a, b) => a.order - b.order)
   if (opts?.only !== undefined) list = list.filter(item => item.id === opts.only)
-  if (list.length === 0) return <>{opts?.fallback ?? null}</>
+  if (list.length === 0) return outlet(opts?.fallback, moduleName)
   // Winner rows key by entry identity (see entryKeyOf); dry-cell rows key by
   // id — the disjoint prefixes keep the two namespaces from colliding.
-  return (
+  return outlet(
     <>
       {list.map((item, i) => item.entry !== undefined
         ? (
-          <Anchor data-slot-item="" style={ANCHOR_STYLE} key={`e${entryKeyOf(item.entry)}`}>
+          <Anchor data-plugin={item.entry.module ?? ''} data-slot-item="" style={ANCHOR_STYLE} key={`e${entryKeyOf(item.entry)}`}>
             {guarded(item.entry)}
           </Anchor>
         )
-        : <Anchor data-slot-error={slotKey} key={`x${item.id ?? i}`} />)}
-    </>
+        : <Anchor data-plugin="" data-slot-error={slotKey} key={`x${item.id ?? i}`} />)}
+    </>,
   )
 }
 
@@ -1535,11 +1566,13 @@ function renderChainResult(
   elected: ReactNode,
   opts: (RenderOpts & ChainRenderOpts) | undefined,
   Anchor: SlotAnchorTag,
+  moduleName: string,
 ): ReactNode {
   if (!opts?.overlay) return elected ?? <>{opts?.fallback ?? null}</>
   return (
     <>
       <Anchor
+        data-plugin={moduleName}
         data-chain-overlay-fallback={slotKey}
         style={{ display: elected === null ? 'contents' : 'none' }}
       >
@@ -1563,13 +1596,13 @@ function RootOutlet({ ownerProps }: { ownerProps: object }) {
     // Registrations exist but every one abdicated: the shadowing collapse ran
     // dry, so the crash face replaces the tree (registered-but-broken is a
     // crash, not the boot-order assembly failure below).
-    if (host.entriesOf('root').length > 0) return <div data-slot-error="root" />
+    if (host.entriesOf('root').length > 0) return <div data-plugin="" data-slot-error="root" />
     throw new SlotAssemblyError("renderSlot('root') before any 'root' registration (boot order)")
   }
   // Same anchor contract as SlotOutlet: 'root' is a slot like any other, and
   // display:contents keeps the wrapper out of the shell's layout.
   return (
-    <div data-slot="root" style={ANCHOR_STYLE}>
+    <div data-plugin={entry.module ?? ''} data-slot="root" style={ANCHOR_STYLE}>
       <SlotErrorBoundary
         slotKey="root"
         key={entryKeyOf(entry)}

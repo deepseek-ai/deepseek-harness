@@ -52,8 +52,10 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Services required by account settings. */
-export const inject = ['slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms', 'remoteAccess']
+/** Services required by account settings; `uiResponsive` owns the desktop introduction's `useMediaQuery` prop. */
+export const inject = [
+  'slots', 'locale', 'remote', 'remote.account', 'remote.session', 'theme', 'configForms', 'remoteAccess', 'uiResponsive',
+]
 /** Register account UI in Desktop and plain Web clients. @param ctx - client plugin context. */
 export function apply(ctx: Context): void {
   const desktop = 'dshDesktop' in globalThis

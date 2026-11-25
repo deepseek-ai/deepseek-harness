@@ -320,7 +320,7 @@ const SERVICE_ROLES: ServiceRole[] = [
   },
   {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
-    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
+    mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-document'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
   },
   {
@@ -367,6 +367,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance.',
   },
   {
+    key: 'piAiProviders',
+    pkg: 'llm-pi-ai',
+    title: 'Pi-ai provider route registry',
+    mode: 'core',
+    note: 'Each provider row of the package registers one route; the adapter serves those routes beside its own dict, and for each route the declaration that comes last in the composed entry list.',
+  },
+  {
     key: 'tokenMeter',
     pkg: 'token-meter',
     title: 'Replay token measurement',
@@ -396,6 +403,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Experimental transcription Remote',
     mode: 'core',
     note: 'Validates bounded browser audio before provider dispatch.',
+  },
+  {
+    key: 'readAloud',
+    pkg: 'read-aloud',
+    title: 'Experimental read-aloud Remote',
+    mode: 'core',
+    note: 'Plans a stored reply as segments and synthesizes one segment per call, so the browser paces what is submitted.',
   },
   {
     key: 'sessionStatus',
@@ -938,6 +952,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     implementations: ['experimental-speech-to-text-sensevoice'],
     consumers: ['experimental-api-speech-to-text'],
     note: 'Routes explicit recognizers; the browser uses the authenticated Remote and keeps transcripts in the draft until submission.',
+  },
+  {
+    key: 'textToSpeech',
+    pkg: 'text-to-speech',
+    title: 'Experimental speech synthesis providers',
+    mode: 'seam',
+    implementations: ['text-to-speech-deepseek'],
+    consumers: ['read-aloud'],
+    note: 'Routes text to the configured synthesizer and streams its PCM; the read-aloud Remote is the consumer.',
   },
   {
     key: 'agentTeams',

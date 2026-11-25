@@ -1,0 +1,5 @@
+# Each selected package runs in its own iframe; the Forge bundle supplies forge-panel.
+- id: forge-panel
+  __unstable_enable_client_isolation: script
+- id: ui-schedule
+  __unstable_enable_client_isolation: script

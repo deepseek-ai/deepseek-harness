@@ -1,13 +1,12 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * Mobile devices preserve the header control's identity; desktops release
  * its header space while open.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useSyncExternalStore } from 'react'
-import * as uiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -17,10 +16,7 @@ import type { ExpandButtonProps } from '../src/client/shell/ExpandButton.tsx'
 import { createSidebarRightStore } from '../src/client/stores.ts'
 
 const SESSION = 's-test' as SessionId
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+afterEach(cleanup)
 const unused = (): never => { throw new Error('This isolated component does not consume framework hooks') }
 const standard: GlobalStandardProps & SessionStandardProps = {
   sessionId: SESSION, useSession: unused, useProjection: unused, useConversation: unused,
@@ -29,6 +25,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
   ...allowAllAccess,
   useContextMenu: contextMenuHook(),
+  ...responsiveHooks(),
   inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
@@ -42,10 +39,10 @@ function hookOf<T>(inst: { subscribe: (fn: () => void) => () => void; getSnapsho
 
 /** Mount the button over its real store and an empty shortcut catalog. */
 function mountButton(shortcuts: readonly ShortcutCatalogEntry[] = [], mobile = false) {
-  vi.spyOn(uiPrimitives, 'isMobileDevice').mockReturnValue(mobile)
   const instance = createSidebarRightStore(() => ({ kind: 'guide', title: 'Start' })).create()
   const props: ExpandButtonProps = {
     ...standard,
+    ...responsiveHooks({ mobile }),
     useShortcuts: <T,>(selector: (entries: readonly ShortcutCatalogEntry[]) => T): T => selector(shortcuts),
     sessionId: SESSION,
     useStore: hookOf(instance),

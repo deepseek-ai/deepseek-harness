@@ -4,6 +4,9 @@
  * kernel after the complete client roster settles.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { FC } from 'react'
+import type { DocumentPortalProps } from './document-portal.tsx'
+import type { DocumentViewport } from './document-viewport.ts'
 import { createSlotRenderer } from './scoped-slots.tsx'
 import { SlotRegistry } from './registry.ts'
 import { UiRenderer } from './renderer.ts'
@@ -25,6 +28,15 @@ export interface UiRendererService {
    * @returns Disposer that unmounts the React root.
    */
   mount: (container: HTMLElement) => () => void
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface GlobalStandardProps {
+    /** @returns A stable portal component for this application mount. Its native keydown handlers listen on the document. */
+    useDocumentPortal: () => FC<DocumentPortalProps>
+    /** @returns The mount document's layout viewport in CSS pixels; updates when its dimensions change. */
+    useDocumentViewport: () => DocumentViewport
+  }
 }
 
 declare module '@deepseek-ai/cordis' {

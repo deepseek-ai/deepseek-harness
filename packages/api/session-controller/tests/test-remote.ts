@@ -278,6 +278,10 @@ async function installControllers(
         const selection = defaults.defaultModelSelection()
         return [{ id: selection.provider, name: selection.provider }]
       },
+      isModelInCatalog: async (provider: string, model: string) => {
+        const selection = defaults.defaultModelSelection()
+        return provider === selection.provider && model === selection.model
+      },
     } as never)
   }
   if (ctx.get('attachments') === undefined) {

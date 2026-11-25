@@ -1,10 +1,10 @@
-import { bindSubagentActivation } from './manager-internals.ts'
+import { bindSubagentActivation, dropActivation } from './manager-internals.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { AgentModel, modelSelectionProjectionDefinition, type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { mountAgentLoopTestDependencies, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -137,7 +137,9 @@ describe('SubagentRuntime', () => {
       name: 'changing', inheritsParentContext: false, capabilities: ALL_CAPS, prepareContinuable: prepare,
     }
     const unregister = subagents.registerProvider(provider)
-    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('provider-owner') })
+    const parent = await ctx.agents.create({
+      sessionId: brandString<SessionId>('provider-owner'), agentOptions: { provider: 'mock', model: 'mock' },
+    })
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     const ensure = ctx.workingDirectory.ensure.bind(ctx.workingDirectory)
@@ -285,6 +287,39 @@ describe('SubagentRuntime', () => {
       [{ type: 'text', text: 'hello' }],
       { signal: new AbortController().signal },
     )).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
+  })
+
+  it('keeps a local child selection unchanged when its runtime has no LLM service', async () => {
+    const { ctx, subagents } = await service(false)
+    await ctx.plugin(AgentRegistry)
+    const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+    const unused = (): never => { throw new Error('selection fixture does not drive the Agent') }
+    const idleAgent = (id: string): Agent => {
+      const session = Session.create(brandString<SessionId>(id))
+      const options = { provider: 'mock', model: 'initial' }
+      return {
+        id: session.id, session, ctx, options, status: 'idle',
+        model: new AgentModel(() => projection.stateOf(session), session, options),
+        inbox: unsupportedInbox(),
+        cancel() {}, whenIdle: async () => {}, runMaintenance: unused,
+        send: unused, followup: unused, steer: unused, inject: unused,
+      }
+    }
+    const root = idleAgent('no-llm-root')
+    const child = idleAgent('no-llm-child')
+    await ctx.agents.register(root)
+    await ctx.agents.register(child)
+    bindSubagentActivation(ctx, child, root)
+    try {
+      expect(ctx.get('llm')).toBeUndefined()
+      await expect(subagents.selectModel(child.id, { provider: 'mock', model: 'chosen' }, {
+        kind: 'user',
+      }, new AbortController().signal)).rejects.toMatchObject({ code: 'MODEL_UNAVAILABLE' })
+      expect(child.model.current()).toEqual({ provider: 'mock', model: 'initial' })
+      expect(child.session.snapshotEvents()).toEqual([])
+    } finally {
+      dropActivation(ctx, child.id)
+    }
   })
 
   it('reports an unavailable runtime before checking the parent of a registered provider', async () => {
@@ -540,55 +575,29 @@ describe('subagent descriptors', () => {
     expect(snapshotSubagentDescriptor({
       mode: 'continuable', provider: 'spawn', label: 'child',
     })).toEqual({ version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 'child' })
-    const complete = {
+    expect(foldSubagentDescriptor([event({ version: SUBAGENT_DESCRIPTOR_VERSION + 1, provider: 'spawn' })]))
+      .toBeUndefined()
+  })
+
+  it('preserves historical composition fields and the first descriptor', () => {
+    const historical = {
       version: SUBAGENT_DESCRIPTOR_VERSION,
-      mode: 'continuable' as const,
-      provider: 'spawn',
-      label: 'complete child',
+      mode: 'continuable',
+      provider: 'fork',
+      label: 'historical child',
       agentProvider: 'deepseek',
       agentModel: 'chat',
       agentReasoningEffort: brandString<ReasoningEffortId>('high'),
       persona: 'reviewer',
-      toolFilter: { allow: ['read'], deny: ['bash'] },
+      toolFilter: { allow: ['read'] },
     }
-    expect(snapshotSubagentDescriptor({
-      mode: 'continuable',
-      provider: complete.provider,
-      label: complete.label,
-      agentProvider: complete.agentProvider,
-      agentModel: complete.agentModel,
-      agentReasoningEffort: complete.agentReasoningEffort,
-      persona: complete.persona,
-      toolFilter: complete.toolFilter,
-    })).toEqual(complete)
-    expect(foldSubagentDescriptor([event(complete)])).toEqual(complete)
-    expect(foldSubagentDescriptor([
-      event({
-        version: SUBAGENT_DESCRIPTOR_VERSION,
-        mode: 'continuable',
-        provider: 'spawn',
-        label: 'l',
-        toolFilter: { allow: ['read'] },
-      }),
-    ])).toMatchObject({ toolFilter: { allow: ['read'] } })
-    expect(foldSubagentDescriptor([
-      event({
-        version: SUBAGENT_DESCRIPTOR_VERSION,
-        mode: 'continuable',
-        provider: 'spawn',
-        label: 'l',
-        toolFilter: { deny: ['bash'] },
-      }),
-    ])).toMatchObject({ toolFilter: { deny: ['bash'] } })
-    expect(foldSubagentDescriptor([
-      event({ version: SUBAGENT_DESCRIPTOR_VERSION + 1, provider: 'spawn' }),
-    ])).toBeUndefined()
-    expect(() => snapshotSubagentDescriptor({
-      mode: 'continuable',
-      provider: 'spawn',
-      label: 'bad',
-      toolFilter: { deny: [Symbol('not-json')] as unknown as string[] },
-    })).toThrow('not losslessly JSON-serializable')
+    const current = snapshotSubagentDescriptor({ mode: 'continuable', provider: 'spawn', label: 'current child' })
+    expect(foldSubagentDescriptor([event(historical), event(current)])).toEqual(historical)
+    expect(foldSubagentDescriptor([event(current), event(historical)])).toEqual(current)
+    expect(foldSubagentDescriptor([event({ ...historical, toolFilter: { deny: ['bash'] } })]))
+      .toMatchObject({ toolFilter: { deny: ['bash'] } })
+    expect(foldSubagentDescriptor([event({ ...current, version: SUBAGENT_DESCRIPTOR_VERSION + 1 }), event(historical)]))
+      .toBeUndefined()
   })
 
   it.each([

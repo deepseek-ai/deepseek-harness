@@ -382,6 +382,21 @@ describe('package payload constraints', () => {
     } })).toContainEqual(expect.stringContaining('exports["./run-code"] must expose'))
   })
 
+  it('publishes the pi-ai provider row plugin and its locale resources under the package\'s provider subpath', () => {
+    const dir = 'packages/llm/llm-pi-ai'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    const errorsWith = (change: Partial<WorkspaceManifest['manifest']>): string[] =>
+      checkWorkspaceManifest({ dir, manifest: { ...manifest, ...change } })
+    const without = (file: string): string[] => manifest.files!.filter(listed => listed !== file)
+    expect(errorsWith({})).toEqual([])
+    expect(errorsWith({ files: without('lib/provider-row.js') })).toContainEqual(expect.stringContaining('package.json files must be'))
+    expect(errorsWith({ files: without('locale/provider/*.json') })).toContainEqual(expect.stringContaining('package.json files must be'))
+    expect(errorsWith({ exports: { ...manifest.exports, './provider': { types: './lib/types/provider-row.d.ts', default: './lib/index.js' } } }))
+      .toContainEqual(expect.stringContaining('exports["./provider"] must expose'))
+    expect(errorsWith({ exports: { ...manifest.exports, './provider/locale/*.json': './locale/*.json' } }))
+      .toContainEqual(expect.stringContaining('exports["./provider/locale/*.json"] must be'))
+  })
+
   it('publishes the directory of each locale detail document after the locale resources', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
     onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })

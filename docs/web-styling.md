@@ -10,6 +10,8 @@ This reference defines styling ownership and component rules for browser client 
 
 Global style sheets belong in `ui-theme/src/styles/`. Component styles live beside their component as CSS Modules. A component may define a local custom property when its value is part of that component's layout or presentation contract; shared colors, typography, elevation, and motion belong to the theme package.
 
+[Package style isolation](../packages/client/ui-renderer/README.md#package-style-isolation) is opt-in: it limits the selected package's selectors, not the global theme or its dependencies’ styles. Only a package being enabled needs to adapt rules that depend on ancestors outside its slot roots.
+
 <a id="component-rules"></a>
 ## Component rules
 

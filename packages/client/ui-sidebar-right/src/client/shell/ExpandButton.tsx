@@ -18,9 +18,11 @@ import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/cli
 import type { InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { Button, IconPanelLeftOutlineRegular, isMobileDevice, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: the `useMobile` standard prop merge.
+import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import type { createSidebarRightStore } from '../stores.ts'
 import css from './ExpandButton.module.css'
 
@@ -32,12 +34,13 @@ export type ExpandButtonProps =
   & InjectFace<{ hooks: { shortcuts: HostObservable<readonly ShortcutCatalogEntry[]> } }>
 
 /** Opens a collapsed panel; when expanded, hides and disables on mobile devices and renders nothing on desktop devices. */
-export function ExpandButton({ sessionId, useStore, actions, t, useShortcuts }: ExpandButtonProps): ReactNode {
+export function ExpandButton({ sessionId, useStore, actions, t, useShortcuts, useMobile }: ExpandButtonProps): ReactNode {
   // A session with no surface yet is collapsed: the panel seat materializes the
   // surface on its own mount, and until then there is nothing expanded.
   const shortcut = useShortcuts(entries => entries.find(entry => entry.id === 'sidebar.right.toggle'))
   const expanded = useStore(state => state.bySession[sessionId]?.layout.expanded ?? false)
-  if (expanded && !isMobileDevice()) return null
+  const mobile = useMobile()
+  if (expanded && !mobile) return null
   return (
     <Tooltip label={t('chrome.expand')} shortcutKeys={shortcut?.keys} side="bottom" delayMs={500} disabled={expanded}>
       <Button

@@ -1136,6 +1136,48 @@ describe('mcp-manager', () => {
     await managerFiber.dispose()
     await expect(waiting).resolves.toEqual({ done: true, value: undefined })
   })
+
+  it('settles at once when no server is listed, without waiting for the signal', async () => {
+    const { manager } = await mountWorld({ withSettings: false })
+    await expect(manager.whenSettled(new AbortController().signal)).resolves.toEqual([])
+  })
+
+  it('settles when a server in its first connection attempt connects', async () => {
+    const connecting = Promise.withResolvers<undefined>()
+    mockConnect.mockImplementationOnce(() => connecting.promise)
+    const { ctx, manager } = await mountWorld({ withSettings: false, managerConfig: { servers: { slow: stdioEntry() } } })
+    let pending: string[] | undefined
+    const settled = manager.whenSettled(new AbortController().signal).then((names) => { pending = names })
+    await vi.waitFor(() => { expect(mockConnect).toHaveBeenCalledOnce() })
+    expect(pending).toBeUndefined()
+    connecting.resolve(undefined)
+    await settled
+    expect(pending).toEqual([])
+    expect(ctx.tools.get('mcp__slow__remote')).toBeDefined()
+  })
+
+  it('counts a failed first attempt and a disabled entry as settled', async () => {
+    mockConnect.mockRejectedValue(new Error('connection refused'))
+    const { manager } = await mountWorld({ withSettings: false, managerConfig: { servers: {
+      down: stdioEntry(),
+      off: stdioEntry({ enabled: false }),
+    } } })
+    await expect(manager.whenSettled(new AbortController().signal)).resolves.toEqual([])
+    expect(manager.list().map(({ name, status }) => [name, status.state])).toEqual([['down', 'reconnecting'], ['off', 'disabled']])
+  })
+
+  it('returns the servers still in their first attempt when the signal aborts', async () => {
+    const connecting = Promise.withResolvers<undefined>()
+    onTestFinished(() => { connecting.resolve(undefined) })
+    mockConnect.mockImplementationOnce(() => connecting.promise)
+    const { manager } = await mountWorld({ withSettings: false, managerConfig: { servers: { slow: stdioEntry() } } })
+    await expect(manager.whenSettled(AbortSignal.abort())).resolves.toEqual(['slow'])
+    const caller = new AbortController()
+    const waiting = manager.whenSettled(caller.signal)
+    await vi.waitFor(() => { expect(mockConnect).toHaveBeenCalledOnce() })
+    caller.abort()
+    await expect(waiting).resolves.toEqual(['slow'])
+  })
 })
 
 describe('entry schema bounds', () => {

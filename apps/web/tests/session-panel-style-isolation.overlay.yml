@@ -1,0 +1,8 @@
+# Loader overlay for the Session panel indicator scenario: style isolation declared before the Host starts,
+# for the panel and for the two packages that draw on its toggle.
+- id: ui-session-panel
+  __unstable_enable_client_isolation: style
+- id: ui-subagent
+  __unstable_enable_client_isolation: style
+- id: ui-jobs
+  __unstable_enable_client_isolation: style

@@ -246,6 +246,25 @@ describe('Factory definition ledger', () => {
 })
 
 describe('registering package', () => {
+  it('assigns Factory definitions to the Loader package, not the nested plugin name', async () => {
+    const b = await boot()
+    const host = captureHost(b)
+    let parent!: Context, nested!: Context
+    const owner = b.ctx.plugin({ inject: ['slots'], apply(ctx: Context) {
+      parent = ctx
+      ctx.plugin({ name: 'local-factory-helper', inject: ['slots'], apply(child: Context) { nested = child } })
+    } })
+    await owner.await()
+    Object.assign(parent.fiber, { entry: { options: { name: '@acme/tree' } } })
+    const childSlots: ErasedService = nested.slots
+    childSlots.registerFactory({ name: 't.tree', scope: 'root' }, C)
+    b.erased.registerFactory({ name: 't.anonymous', scope: 'root' }, C)
+    expect(host.factoryOf('t.tree')?.module).toBe('@acme/tree')
+    expect(host.factoryOf('t.anonymous')?.module).toBeUndefined()
+    await owner.dispose()
+    expect(host.factoryOf('t.tree')).toBeUndefined()
+  })
+
   it('stamps the nearest Loader entry name, walking up through nested plugins, and nothing outside an entry', async () => {
     const b = await boot()
     b.erased.register({ name: 'root', children: { 't.rows': { kind: 'list', scope: 'root' } } }, C)

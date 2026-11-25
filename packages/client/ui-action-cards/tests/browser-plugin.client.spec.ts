@@ -95,7 +95,7 @@ it('adds the card switch to General settings while the Host serves action-cards,
   slots.register({ name: 'root', children: {
     'conversation.chat.turnTail': { kind: 'list', scope: 'session' },
     'conversation.chat.markdown.fence': { kind: 'hoc', scope: 'session' },
-    'settings.general.item': { kind: 'list', scope: 'root' },
+    'settings.general.group.display.item': { kind: 'list', scope: 'root' },
   } }, (_props: { renderSlot?: unknown }) => null)
   ctx.provide('remote', { actionCards: { act: vi.fn() } })
   ctx.provide('remote.actionCards', { act: vi.fn() })
@@ -105,13 +105,13 @@ it('adds the card switch to General settings while the Host serves action-cards,
   const fiber = await ctx.plugin({ inject, apply })
   expect(configForms.get).toHaveBeenCalledWith('action-cards')
   expect(configForms.whileServed).toHaveBeenCalledWith(['action-cards'], expect.any(Function))
-  const entry = slots.entries('settings.general.item')[0]!
-  expect(entry.options).toMatchObject({ id: 'action-cards', order: 40 })
+  const entry = slots.entries('settings.general.group.display.item')[0]!
+  expect(entry.options).toMatchObject({ id: 'action-cards', order: 13 })
   const resolve = entry.inject as (() => SettingsRowInjected) & NonNullable<typeof entry.inject>
   const injected = resolve()
   expect(injected.hooks.cardSettings).toBe(form)
   expect(await injected.setEnabled(false)).toBe(true)
   expect(form.set).toHaveBeenCalledWith('enabled', false)
   await fiber.dispose()
-  expect(slots.entries('settings.general.item')).toHaveLength(0)
+  expect(slots.entries('settings.general.group.display.item')).toHaveLength(0)
 })

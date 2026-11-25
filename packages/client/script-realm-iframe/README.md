@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this provider when framework code explicitly needs a separate browser global environment with direct object references. Loading the plugin registers the `iframe` factory without allocating a frame. It does not move application plugins or change their default execution environment.
+Use this provider when framework code explicitly needs a separate browser global environment with direct object references. Loading the plugin registers the `iframe` factory without allocating a frame. Application plugins keep the Main environment unless their Loader entry requests script isolation; [Client modules](../modules/README.md) then creates one frame per such package through this factory.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Use this provider when framework code explicitly needs a separate browser global
 <a id="use-this-package"></a>
 ## Use this package
 
-The normal Client plugin injects `scriptRealms` and registers its factory. A composition must supply the [registry](../script-realm/README.md); neither package is a default application entry. The provider accepts no configuration.
+The normal Client plugin injects `scriptRealms` and registers its factory. A composition must supply the [registry](../script-realm/README.md); the default Web roster includes both packages as ordinary, non-stage-one entries. The provider accepts no configuration.
 
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
@@ -50,7 +50,7 @@ None; this package neither assembles nor sends a provider request.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Same-origin access is not hostile-code isolation. Native `window`, `document`, viewport, timers, and DOM constructors belong to the iframe; no transparent main-page emulation is provided. Module placement, pooling, and Shadow DOM are deferred.
+- Same-origin access is not hostile-code isolation. Native `window`, `document`, viewport, timers, and DOM constructors belong to the iframe; no transparent main-page emulation is provided. Pooling, grouping several packages in one frame, and Shadow DOM are deferred.
 
 <a id="dev-note"></a>
 ### Dev Note

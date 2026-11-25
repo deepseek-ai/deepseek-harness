@@ -8,7 +8,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, responsiveHooks, type ResponsiveHookOptions } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionRetainInfo } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -55,6 +55,7 @@ function renderSeat(
   select: () => Promise<string | undefined> = () => Promise.resolve(undefined),
   session?: { id: string; retainInfo: SessionRetainInfo | undefined },
   enabled = true,
+  responsive: ResponsiveHookOptions = {},
 ) {
   const store = createSnapshotStore<AgentPresetSeatState>({ ...SEAT_READY, ...state })
   const developerTools = createSnapshotStore(enabled)
@@ -68,6 +69,7 @@ function renderSeat(
   }
   const props = {
     ...actions,
+    ...responsiveHooks(responsive),
     sessionId: session === undefined ? undefined : brandString<SessionId>(session.id),
     useDeveloperTools: bindSnapshotSelector(developerTools),
     useAgentPresetSeat: bindSnapshotSelector(store),
@@ -297,7 +299,6 @@ describe('a refused switch', () => {
 describe('the chip introduce cue', () => {
   afterEach(() => {
     vi.useRealTimers()
-    vi.unstubAllGlobals()
   })
 
   /** Character spans carry inline animation delays; nothing else does. */
@@ -306,7 +307,6 @@ describe('the chip introduce cue', () => {
   }
 
   it('reveals a long Latin name inside the shared window, then acknowledges', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
     vi.useFakeTimers()
     const actions = renderSeat({
       current: 'creator',
@@ -332,7 +332,6 @@ describe('the chip introduce cue', () => {
   })
 
   it('keeps the per-tick cap for a short CJK name', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
     vi.useFakeTimers()
     renderSeat({
       current: 'creator',
@@ -348,7 +347,6 @@ describe('the chip introduce cue', () => {
   })
 
   it('starts a one-character name with no stagger at all', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
     vi.useFakeTimers()
     const actions = renderSeat({
       current: 'creator',
@@ -362,15 +360,14 @@ describe('the chip introduce cue', () => {
   })
 
   it('skips the run under reduced motion and acknowledges at once', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
-    const actions = renderSeat({ introduce: true })
+    const actions = renderSeat({ introduce: true }, undefined, undefined, true,
+      { matches: query => query === '(prefers-reduced-motion: reduce)' })
 
     expect(actions.introduced).toHaveBeenCalledTimes(1)
     expect(delayedChars()).toHaveLength(0)
   })
 
   it('acknowledges an empty staged name without arming a run', () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
     const actions = renderSeat({
       current: 'creator',
       options: [{ id: 'creator', name: '' }],

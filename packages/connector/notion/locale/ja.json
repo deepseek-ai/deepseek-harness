@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Notion プラグイン",
+    "title": "Notion",
     "description": "会話の中で Notion のページ、データベース、その他の承認済みコンテンツを使用します。",
     "detail": "docs/DETAIL.md"
   }

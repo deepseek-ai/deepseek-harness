@@ -216,6 +216,26 @@ Each switch belongs to the protocols that declare it, so a switch valid on one `
 
 Every switch, its accepted values, and the protocols that take it are listed under `PiAiCompatProfile` in the [generated `dsh-llm-pi-ai` configuration reference](../../config-catalog.md#deepseek-aidsh-llm-pi-ai) — which is derived from the source, so it cannot fall behind what the adapter accepts.
 
+### Providers supplied by a deployment
+
+A deployment can supply providers to every profile on a machine by writing provider rows into the home patch, `$DSH_HOME/cordis.patch.yml`. Each row holds one provider: its ID in `provider`, and beside it the same fields a provider takes in the profile's own file.
+
+```yaml
+- insert:
+    - id: llm-pi-ai-team-gateway
+      name: '@deepseek-ai/dsh-llm-pi-ai/provider'
+      config:
+        provider: team-gateway
+        displayName: Team Gateway
+        apiKeyEnv: TEAM_GATEWAY_API_KEY
+        api: openai-completions
+        baseURL: https://gateway.example/v1
+        models:
+          - id: team-model
+```
+
+The Models page lists such a provider beside your own and opens it with the settings the deployment gave it. It cannot be deleted there. You can enter your own API key for it; a change to any other field is refused when you save, because the deployment's file holds that provider. Your own providers stay in your profile's file and are not affected when the deployment replaces its file. A provider ID selects one configuration, so when both files use the same ID the deployment's row is in effect, your provider of that ID is not shown, and it serves again once the deployment removes its row. A deployment that offers a vendor you may also configure yourself gives its row an ID of its own and a display name. Only an ID that names a built-in provider takes that provider's address and models; any other ID declares `api`, `baseURL`, and `models`, as in the example.
+
 ## Troubleshooting
 
 - **`MISSING_CREDENTIAL`** — Store the provider key through the Models page or supply the referenced environment variable.

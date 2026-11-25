@@ -82,11 +82,30 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### 惰性 CJS 模型
 
-执行插件 bundle 只登记其 factory 和可选的 `meta`，不调用它们。首次 import 或同步 require 会物化 JavaScript 并缓存导出；递归 require 环会被拒绝。模块记录保留 `ownerId`、观察到的依赖边和传入的 `meta`，不会为缺失的生产函数补值。Modules 不求值样式元信息，只向消费者提供 `activeRecords()`、`subscribeModules()` 和载体资源解析器。`activeRecords()` 列出所有已物化记录，以及正在实时替换的包的旧记录；旧记录保留到其旧运行时完成卸载。[Renderer](../ui-renderer/README.zh.md) 负责元信息求值与样式安装。包内 `require.async()` 保持惰性到达及所属模块身份。
+执行插件 bundle 只登记其 factory 和可选的 `meta`，不调用它们。首次 import 或同步 require 会物化 JavaScript 并缓存导出；递归 require 环会被拒绝。模块记录保留 `ownerId`、所属包的隔离标志、观察到的依赖边和传入的 `meta`，不会为缺失的生产函数补值。Modules 不求值样式元信息，只向消费者提供 `activeRecords()`、`subscribeModules()` 和载体资源解析器。`activeRecords()` 列出所有已物化记录，以及正在实时替换的包的旧记录；旧记录保留到其旧运行时完成卸载。[Renderer](../ui-renderer/README.zh.md) 负责元信息求值与样式安装。包内 `require.async()` 保持惰性到达及所属模块身份。
 
 ### Main 执行环境
 
-模块系统围绕 `loadBundle` 构造自身的 Main Realm；未提供载体 hook 时使用原有页面脚本传输。默认启动仍先预取 immediate 层级，再创建 Loader entries，不要求 Realm 注册表或隔离配置。`dispose()` 停止接受新脚本并等待进行中的载体操作，不取消这些操作。可选的 [Realm 注册表](../script-realm/README.zh.md)和 [iframe 提供方](../script-realm-iframe/README.zh.md)不参与默认路径。
+模块系统无需 Cordis 上下文即可构造自己的 Main Realm 并在其中运行脚本。它使用载体的 `loadBundle` 钩子；载体未提供该钩子时，使用页面的脚本传输。默认启动先预取 immediate 层级，再创建 Loader 条目，不要求 Realm 注册表或隔离配置。`dispose()` 停止接受新脚本、释放各包的 iframe，并等待进行中的操作结束；它不会取消 Main Realm 中的脚本请求。
+
+默认 Web 名册把 [Realm 注册表](../script-realm/README.zh.md)和 [iframe 提供方](../script-realm-iframe/README.zh.md)作为普通条目加载。只有启动图包含脚本隔离的包时，页面才会在冷启动时先等待这两个条目，再创建其余条目。安装注册表和注册 `iframe` 工厂都不会创建 iframe。
+
+<a id="script-isolated-packages"></a>
+### 测试包隔离
+
+在 Client 包的 Loader 条目上设置 `__unstable_enable_client_isolation`，或使用[开发覆盖配置](../../../docs/development.zh.md)。`script` 让包在独立 Script Realm 中执行，`style` 将其编译后的样式限定在该包提供的内容中，`scriptandstyle` 同时启用两者。省略此项或设为 `null` 均不启用隔离。不支持的值或对第一阶段（`immediately`）行请求脚本隔离，都会导致组合失败。这些测试开关不构成安全边界。
+
+浏览器首次加载一个包的脚本时，按本次加载使用的图行选择该包的 Script Realm。入口与后续懒加载的分片沿用这个选择。
+
+只要页面还保留启用脚本隔离的包，它的入口脚本和懒加载分片就在同一个专属 iframe 中执行。脚本加载失败不会移除这个 iframe。即使撤下注册表或注销 `iframe` 提供方，代码重建和重试仍复用同一个 `window`；HMR 不清除插件写入的全局变量。只有模块系统回收这个包或关闭时，才会移除 iframe。脚本通过页面的 `__ModuleLoader__` 注册，因此 `require` 返回同一份 React、Cordis 和库实例。
+
+注册表插件激活时会把自己的注册表安装到模块系统上。新建 iframe 需要已安装的注册表，并且其中已注册 `iframe` 提供方。缺少其中任一项，加载就会失败，不会回退到 Main。如果在已打开的页面上同时添加这两个条目和隔离包后，隔离包加载失败，请刷新页面。
+
+包注册 factory 时读取当前图行的隔离标志。它的模块记录和懒加载分片都保留这份声明。单独更新图不会改变已加载代码的样式；当重建或重新安装的包注册新 factory 时，它会采用当时的声明。
+
+渲染器用模块记录的 `ownerId` 和 `isolation.style` 安装样式表。分片属于提供它的包，而不是请求它的模块。引导模块和页面壳预置模块的样式保持全局生效。
+
+要让整个页面采用新设置，等 Host 重新组合条目、发布新图后再刷新页面。仅修改条目元数据不保证会发布新图。
 
 ### 增量组合
 
@@ -114,6 +133,7 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 | [`src/assets.ts`](src/assets.ts) | 包资源的媒体类型、导出、内容 revision、带 revision 的文件名与浏览器引用，由构建预设、资源路由和门禁共用 |
 | [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：bootstrap 导出、`ctx.modules` 登记 |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`：加载／物化／失效机制 |
+| [`src/client/isolated-realms.ts`](src/client/isolated-realms.ts) | 每个脚本隔离包一个 Script Realm，及其创建与销毁 |
 | [`src/client/entries.ts`](src/client/entries.ts) | 页面条目对账、重试、代码替换与同步 Config 交付 |
 | [`src/client/synced-config.ts`](src/client/synced-config.ts) | `SyncedConfigRef` 的实现与每个包的同步 Config 对象 |
 | [`src/config-projection.ts`](src/config-projection.ts) | Host 侧投影 volatile Config 字段并剔除密钥 |
@@ -162,6 +182,7 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 - **惰性提供会保留已请求的 body**——Host 在内存中保留每个 bundle 与惰性响应计划；脚本或 map body 在首次 `GET` 后保留缓存，HMR 还会保留上一代启动响应。内存仅随客户端实际请求的响应 body 增长，同时保留一代竞态容忍。
 - **从未请求的上一代 map 会读取当前 map 文件**——combo revision 跟踪可执行 bundle，而不跟踪调试产物。若 HMR 在保留的旧 URL 首次收到 map `GET` 前重建 map，该响应会把当前 authored map 与旧 bundle offset 组合；在重建前请求 map 会固定该 URL 的响应。
 - **仅编辑 manifest 不会被察觉**——Host 在包的 Loader 条目启动或重启时读取包 manifest；只编辑 `package.json` 要到下一次条目重启或 Host 重启时才生效。资源路由经 Node 的包配置缓存解析，因此原地修改的 `./assets/*` 导出要等 boot HMR 让该包的缓存失效、或 Host 重启后才生效。
+- **脚本隔离是不稳定的测试开关**——Realm 是同源 iframe，不是安全边界：隔离 bundle 中的裸 `window`、`document`、计时器与事件目标属于 iframe 自身，因此页面级监听、选区以及针对页面构造器的 `instanceof` 检查观察不到主文档。
 - **Desktop 每次显示都重新读取包资源**——Desktop 转发器把每个 `/plugins/` 缓存头改写为 `no-store`，因此不可变的资源响应头到达不了其浏览器缓存。
 
 <a id="dev-note"></a>

@@ -1565,6 +1565,16 @@
     },
     {
       "doc": "docs/subsystems/subagent.md",
+      "symbol": "SubagentSelectModelRequest",
+      "source": "packages/subagent/subagent/src/control-types.ts"
+    },
+    {
+      "doc": "docs/subsystems/subagent.md",
+      "symbol": "SubagentSelectModelReceipt",
+      "source": "packages/subagent/subagent/src/control-types.ts"
+    },
+    {
+      "doc": "docs/subsystems/subagent.md",
       "symbol": "ContinuableCreateRequest",
       "source": "packages/subagent/subagent/src/types.ts"
     },

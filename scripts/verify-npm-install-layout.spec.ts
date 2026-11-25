@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { NpmPackageLock, RegistryIndex } from './benchmark-npm-resolution.ts'
+import { resolveNpmPackageLock, type NpmPackageLock, type RegistryIndex } from './benchmark-npm-resolution.ts'
 import {
   assertDualDshInstallLayout,
+  assertRequiredPeerDeclared,
   assertResolutionWorkBudget,
+  assertSingleExternalInstallation,
   buildDualDshRegistry,
   MAX_RESOLUTION_WORK_UNITS,
+  withNewerExternalRelease,
 } from './verify-npm-install-layout.ts'
 
 function validLayout(): NpmPackageLock {
@@ -113,6 +116,139 @@ describe('npm install layout verifier', () => {
     expect(() => assertDualDshInstallLayout({ ...layout, packages })).toThrow(
       'expected one shared @deepseek-ai/cordis',
     )
+  })
+})
+
+/**
+ * One DSH release in which `dsh-first` depends on a package that requires zod as a peer and `dsh-second`
+ * pins zod. npm processes `dsh-first` before `dsh-second`.
+ */
+function sharedZodRegistry(firstDeclaresZod: boolean): RegistryIndex {
+  const manifest = (name: string, fields: object = {}) =>
+    [name, new Map([['1.0.0', { name, version: '1.0.0', ...fields }]])] as const
+  return new Map([
+    manifest('@deepseek-ai/dsh', {
+      dependencies: { '@deepseek-ai/dsh-first': '1.0.0', '@deepseek-ai/dsh-second': '1.0.0' },
+    }),
+    manifest('@deepseek-ai/dsh-first', {
+      dependencies: { 'zod-peer-host': '1.0.0', ...(firstDeclaresZod ? { zod: '4.6.6' } : {}) },
+    }),
+    manifest('@deepseek-ai/dsh-second', { dependencies: { zod: '4.6.6' } }),
+    manifest('zod-peer-host', { peerDependencies: { zod: '^4.0.0' } }),
+    ['zod', new Map([['4.6.6', { name: 'zod', version: '4.6.6' }]])],
+  ])
+}
+
+describe('shared external package installation', () => {
+  it('adds one release a minor above the newest indexed version', () => {
+    const index: RegistryIndex = new Map([
+      ['zod', new Map([
+        ['4.6.6', { name: 'zod', version: '4.6.6', engines: { node: '>=20' } }],
+        ['4.4.3', { name: 'zod', version: '4.4.3' }],
+      ])],
+      ['other', new Map([['1.0.0', { name: 'other', version: '1.0.0' }]])],
+    ])
+
+    const newer = withNewerExternalRelease(index, 'zod')
+
+    expect([...newer.get('zod')?.keys() ?? []]).toEqual(['4.6.6', '4.4.3', '4.7.0'])
+    expect(newer.get('zod')?.get('4.7.0')).toEqual({ name: 'zod', version: '4.7.0', engines: { node: '>=20' } })
+    expect(newer.get('other')).toBe(index.get('other'))
+    expect([...index.get('zod')?.keys() ?? []]).toEqual(['4.6.6', '4.4.3'])
+  })
+
+  it('rejects an index without the external package', () => {
+    expect(() => withNewerExternalRelease(new Map(), 'zod')).toThrow('registry contains no release of zod')
+  })
+
+  it('rejects a DSH package that leaves a required peer of its dependency undeclared', () => {
+    expect(() => { assertRequiredPeerDeclared(sharedZodRegistry(false), 'zod') }).toThrow(
+      'DSH package(s) depend on a package that requires zod as a peer without declaring zod:\n'
+      + '  - @deepseek-ai/dsh-first: zod-peer-host@1.0.0 requires zod@^4.0.0\n',
+    )
+  })
+
+  it('accepts a declared peer, an optional peer, and a dependency range no indexed version satisfies', () => {
+    expect(() => { assertRequiredPeerDeclared(sharedZodRegistry(true), 'zod') }).not.toThrow()
+
+    const index = new Map(sharedZodRegistry(false))
+    index.set('zod-peer-host', new Map([['1.0.0', {
+      name: 'zod-peer-host',
+      version: '1.0.0',
+      peerDependencies: { zod: '^4.0.0' },
+      peerDependenciesMeta: { zod: { optional: true } },
+    }]]))
+    expect(() => { assertRequiredPeerDeclared(index, 'zod') }).not.toThrow()
+
+    index.set('zod-peer-host', new Map([['2.0.0', {
+      name: 'zod-peer-host',
+      version: '2.0.0',
+      peerDependencies: { zod: '^4.0.0' },
+    }]]))
+    expect(() => { assertRequiredPeerDeclared(index, 'zod') }).not.toThrow()
+  })
+
+  it('accepts one top-level installation', () => {
+    expect(() => {
+      assertSingleExternalInstallation({
+        lockfileVersion: 3,
+        packages: {
+          '': { dependencies: { '@deepseek-ai/dsh': '1.0.0' } },
+          'node_modules/@deepseek-ai/dsh': { version: '1.0.0', dependencies: { zod: '4.6.6' } },
+          'node_modules/zod': { version: '4.6.6' },
+        },
+      }, 'zod')
+    }).not.toThrow()
+  })
+
+  it('rejects private copies and names the hoisted release and their paths', () => {
+    expect(() => {
+      assertSingleExternalInstallation({
+        lockfileVersion: 3,
+        packages: {
+          'node_modules/@deepseek-ai/dsh-a': { version: '1.0.0' },
+          'node_modules/@deepseek-ai/dsh-a/node_modules/zod': { version: '4.6.6' },
+          'node_modules/@deepseek-ai/dsh-b/node_modules/zod': { version: '4.6.6' },
+          'node_modules/zod': { version: '4.7.0' },
+        },
+      }, 'zod')
+    }).toThrow(
+      'expected one zod installation at node_modules/zod, got 3: node_modules/zod@4.7.0 and 2 other(s) such as '
+      + 'node_modules/@deepseek-ai/dsh-a/node_modules/zod, node_modules/@deepseek-ai/dsh-b/node_modules/zod',
+    )
+  })
+
+  it('rejects a layout whose only installation is a private copy', () => {
+    expect(() => {
+      assertSingleExternalInstallation({
+        lockfileVersion: 3,
+        packages: { 'node_modules/@deepseek-ai/dsh-a/node_modules/zod': { version: '4.6.6' } },
+      }, 'zod')
+    }).toThrow('got 1: no node_modules/zod and 1 other(s)')
+  })
+
+  it('rejects the layout npm computes when a peer places the newer release first', async () => {
+    const result = await resolveNpmPackageLock(
+      withNewerExternalRelease(sharedZodRegistry(false), 'zod'),
+      { '@deepseek-ai/dsh': '1.0.0' },
+      10_000,
+    )
+
+    expect(result.packageLock.packages['node_modules/zod']?.version).toBe('4.7.0')
+    expect(() => { assertSingleExternalInstallation(result.packageLock, 'zod') }).toThrow(
+      'node_modules/zod@4.7.0 and 1 other(s) such as node_modules/@deepseek-ai/dsh-second/node_modules/zod',
+    )
+  })
+
+  it('accepts the layout npm computes once the package with the peer pins the same version', async () => {
+    const result = await resolveNpmPackageLock(
+      withNewerExternalRelease(sharedZodRegistry(true), 'zod'),
+      { '@deepseek-ai/dsh': '1.0.0' },
+      10_000,
+    )
+
+    expect(result.packageLock.packages['node_modules/zod']?.version).toBe('4.6.6')
+    expect(() => { assertSingleExternalInstallation(result.packageLock, 'zod') }).not.toThrow()
   })
 })
 

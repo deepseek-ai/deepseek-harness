@@ -734,8 +734,9 @@
   max-height: min(800px, 100%);
 }
 
-/* The spec screen's content scrolls inside the card when the guide is open on a short viewport; the footer stays put. */
-.installContent {
+/* The spec screen's content, and an update's outcome, scroll inside the card on a short viewport; the footer stays put. */
+.installContent,
+.updateContent {
   min-height: 0;
   overflow-y: auto;
 }
@@ -1860,11 +1861,16 @@ label.registryOption {
   gap: 24px;
 }
 
-/* The list toolbar's sentence about the last update check. */
+/* The list toolbar's sentence about a manual refresh or the last update check; its count keeps a fixed digit width. */
 .updatesNote {
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+/* The Refresh button's check count keeps its width while the digits change. */
+.refreshCount {
+  font-variant-numeric: tabular-nums;
 }
 
 .updatesNote[data-tone='info'] {
@@ -2129,6 +2135,7 @@ button.versionSummary:focus-visible {
 /* The update dialog: the versions it moves between, then the Host's steps and the outcome. */
 .updateDialog {
   width: min(460px, 100%);
+  max-height: min(800px, 100%);
 }
 
 .updateBody {

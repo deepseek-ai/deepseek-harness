@@ -12,6 +12,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Readable, Writable } from 'node:stream'
 import Schema from '@deepseek-ai/schemastery'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import { observeRuntime, type RuntimeProcessEvents } from './process-events.ts'
 import { HarnessSdkJsonRpcServer } from './server.ts'
@@ -25,6 +26,8 @@ export const inject = ['agents', 'workingDirectory']
 export interface JsonRpcConfig {
   /** Report max-token turn/subagent termination as a successful SDK result. */
   maxTokensAsSuccess?: boolean
+  /** Longest `initialize` wait, in milliseconds, for startup work that finishes after Loader settlement; `0` skips it. */
+  startupWaitMs?: number
   /** Transport input override; production uses `process.stdin`. */
   input?: Readable
   /** Transport output override; production uses `process.stdout`. */
@@ -37,6 +40,7 @@ export interface JsonRpcConfig {
 
 export const Config: Schema<JsonRpcConfig> = Schema.object({
   maxTokensAsSuccess: Schema.boolean().default(false),
+  startupWaitMs: Schema.natural().max(MAX_TIMER_DELAY_MS).default(0),
 })
 
 /**
@@ -47,7 +51,7 @@ export const Config: Schema<JsonRpcConfig> = Schema.object({
  */
 export function apply(ctx: Context, config: JsonRpcConfig): void {
   // Cordis applies the schema default before invoking the plugin.
-  const resolvedConfig = config as JsonRpcConfig & { maxTokensAsSuccess: boolean }
+  const resolvedConfig = config as JsonRpcConfig & { maxTokensAsSuccess: boolean; startupWaitMs: number }
   // Protocol shutdown owns the complete runtime process, so it must await the
   // root lifecycle (including persistence) before exiting.
   const rootFiber = ctx[Context.root].fiber
@@ -63,6 +67,7 @@ export function apply(ctx: Context, config: JsonRpcConfig): void {
   const transport = new JsonRpcLineTransport(input, output)
   const server = new HarnessSdkJsonRpcServer(ctx, transport, {
     maxTokensAsSuccess: resolvedConfig.maxTokensAsSuccess,
+    startupWaitMs: resolvedConfig.startupWaitMs,
     runtime: observeRuntime(ctx, rootFiber, processEvents, input),
   })
   // Compositions can order Schedule after its activation handler is installed.

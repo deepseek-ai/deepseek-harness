@@ -11,7 +11,7 @@ Desktop product events use the optional [product analytics service](../product-a
 
 ## Summary
 
-The Web GUI lets users switch the model and reasoning effort for an existing session through either the `/model` popup or the composer's model control. Both surfaces present the same provider-grouped choices, and the selected model determines the available effort names and default. A complete selection applies to the next request; a running step keeps the model and effort it started with.
+The Web GUI lets users switch the model and reasoning effort for an existing session through either the `/model` popup or the composer's model control. Both surfaces present the same provider-grouped choices, and the selected model determines the available effort names and default. Local continuable subagents offer both controls without changing the parent or user default. A complete selection applies to the next request; a running step keeps the model and effort it started with.
 
 ## Table of Contents
 
@@ -75,7 +75,9 @@ Menus use the shared `MenuSurface` material, including the macOS backing for bac
 
 The composer `ModelSelect` and `/model` option builder share [provider ordering](src/client/provider-order.ts), while both searches use the shared [text search](../../util/text-search/README.md) within each provider. The command supplies optional groups through the [popupSelect API](../ui-commands/README.md#use-this-package); both entries use `MenuGroup` and rebuild its sticky observer when the rendered groups change. The command popup fills the composer overlay, while the button retains its compact menu.
 
-Two entries over ONE per-session directory owned by `ModelDirectoryResolver` (`ctx.modelDirectories`): the `/model` popupSelect contribution (registered through `ctx.commandUi`) and the composer's named `conversation.input.model` seat both load the session's available directory through `session.models` and submit through `session.selectModel` via the same `ModelDirectory` instance, so a switch made in either entry is what the other shows next. Directory loads and selections share a generation counter so an older response never overwrites a newer one. The directory publishes the latest submitted selection as `pending` until it settles or a connection reset invalidates it; a connection reset drops every resident projection and repulls the Host-restored selection before display. Directories are per-session, resolved lazily, and disposed with the session scope; addressed subagent sessions expose neither entry. Every resident directory refetches directly on forwarded `llm/adapters-updated`, `llm/models-updated`, `settings/document-updated`, and credential update events.
+Two entries over ONE per-session directory owned by `ModelDirectoryResolver` (`ctx.modelDirectories`): the `/model` popupSelect contribution (registered through `ctx.commandUi`) and the composer's named `conversation.input.model` seat both load the session's available directory through `session.modelCatalog` and submit through the same `ModelDirectory` instance, so a switch made in either entry is what the other shows next. Directory loads and selections share a generation counter so an older response never overwrites a newer one. The directory publishes the latest submitted selection as `pending` until it settles or a connection reset invalidates it; a connection reset drops every resident projection and repulls the Host-restored selection before display. Directories are per-session, resolved lazily, and disposed with the session scope; ordinary Sessions call `session.selectModel`, while local continuable subagents call `subagents.selectModelByUser` with the child Session id and read the child’s own `modelSelection` projection. Every resident directory refetches directly on forwarded `llm/adapters-updated`, `llm/models-updated`, `settings/document-updated`, and credential update events.
+
+Both entries subscribe to `modelSelection` updates on the Session control stream. A cold child's choice is recorded through a briefly restored child Agent, so every open Client receives it without another projection request. Disposal or reconnection invalidates pending selections.
 
 </details>
 
@@ -96,7 +98,7 @@ Read these pages when the model surface is not enough. They move from the browse
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the `session.selectModel` selection both entries submit: the Host snapshots the complete `ModelSelection` at the next prompt-assembly boundary and owns the model-visible effect, while a running step keeps its assembled selection.
+Indirectly, through the model choice both entries submit: the Host snapshots the complete `ModelSelection` at the next prompt-assembly boundary and owns the model-visible effect, while a running step keeps its assembled selection.
 
 #### KV Cache effect
 
@@ -108,7 +110,7 @@ Switching the route can reduce or invalidate provider-side cache reuse for subse
 
 These limits define the current model surface. They are current package constraints, not a general model-router comparison or a task backlog.
 
-- **No create-time or addressed-subagent selection** — both entries require an existing ordinary session's Agent; there is no draft-phase model choice to fold into session creation, and subagent continuation deliberately exposes no independent model-selection contract.
+- **Selection requires an existing conversation** — ordinary Sessions and local continuable children support it; one-shot, unknown-mode, and external subagents remain read-only. A child choice requires access to a resumable local child Session.
 - **Directory names are presentation-only** — selection and persistence use provider/model/effort ids; a provider whose catalog or exact-model metadata lookup fails lists as an unselectable failure row until reload.
 - **No arbitrary effort input** — the composer offers only the exact model's adapter-advertised levels; an adapter without reasoning metadata leaves the Effort row absent.
 - **Badges label the composer seat only** — `/model` popup rows, the trigger's accessible name, and its tooltip keep the plain catalog name.

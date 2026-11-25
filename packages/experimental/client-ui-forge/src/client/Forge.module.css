@@ -481,9 +481,13 @@
   }
 }
 
-/* Attention mark over the Session panel toggle; the toggle sizes and places it. */
 .attention {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-state-warn-primary);
+  box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-base);
 }
 
 /* The unresolved review thread count at the end of the changes row. */

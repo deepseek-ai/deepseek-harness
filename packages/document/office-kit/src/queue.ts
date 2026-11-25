@@ -4,7 +4,7 @@ import { OfficeKitError } from './errors.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { OfficeKitKey, OfficeKitGeneration } from './identity.ts'
 import type {
-  OfficeConversionFormat, OfficeImage, OfficeKitPriority, OfficeKitSource, OfficeRecalculationFormat,
+  OfficeConversionFormat, OfficeImage, OfficeKitPriority, OfficeKitSource, OfficeRecalculationFormat, DocumentRenderer,
 } from './types.ts'
 import type { Config } from './index.ts'
 
@@ -13,6 +13,8 @@ export type OfficeOperation =
   | { readonly kind: 'pdf' }
   | {
     readonly kind: 'images'
+    /** Backend resolved before admission, so cached renderings never cross backends. */
+    readonly renderer: DocumentRenderer
     readonly pages?: readonly number[]
     readonly sheet?: string
     readonly range?: string

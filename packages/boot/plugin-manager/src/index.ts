@@ -36,6 +36,7 @@ import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan }
 import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
 import { PluginManagerError, readProfileState } from './error.ts'
+import { installPluginReference } from './plugin-reference.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure } from './github-connection.ts'
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
@@ -395,6 +396,15 @@ export class PluginManager extends TypertRemoteService {
       this.abort.abort()
       await Promise.allSettled([...this.packageOperations])
     }, 'plugin-manager: package cancellation')
+    ctx.effect(() => installPluginReference(
+      ctx,
+      {
+        listBundles: names => Promise.resolve().then(() => this.listing(new Set(names))),
+        readInventory: () => readPluginInventory(ctx),
+        bundleDir: name => resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir),
+        profile: this.profile,
+      },
+    ), 'plugin-manager: plugin references')
     ctx.inject(['connection'], (scope) => {
       scope.effect(() => scope.connection.fetch.register({
         path: DETAIL_FILE_PATH, methods: ['GET'], requestBody: 'buffered', fetch: request => this.serveDetailFile(request),
@@ -504,14 +514,20 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   listBundles(): Promise<BundleInfo[]> {
-    return Promise.resolve(this.readBundles().map((bundle) => {
-      const target = updateRefusal(bundle, bundle.name)
-      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
-    }))
+    // The profile reads throw synchronously; starting from a resolved promise reports that as a rejection.
+    return Promise.resolve().then(() => this.listing())
   }
 
-  /** The bundle inventory before update eligibility, which is derived from each listed bundle. */
-  private readBundles(): Omit<BundleInfo, 'update'>[] {
+  /** The `listBundles()` records, limited to `only` when given; each named record equals its full-listing record. */
+  private listing(only?: ReadonlySet<string>): BundleInfo[] {
+    return this.readBundles(only).map((bundle) => {
+      const target = updateRefusal(bundle, bundle.name)
+      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
+    })
+  }
+
+  /** The bundle inventory before update eligibility; each name is read independently of the others. */
+  private readBundles(only?: ReadonlySet<string>): Omit<BundleInfo, 'update'>[] {
     const { manifest, exemptions, installation } = readProfileState(() => ({
       manifest: readProfileManifest('dsh', this.profile.dir),
       exemptions: readProfileVersionExemptions(this.profile.dir),
@@ -522,6 +538,7 @@ export class PluginManager extends TypertRemoteService {
     const dependencies = Object.keys(recorded)
     const catalog = new Map(OFFICIAL_ON_DEMAND_CATALOG.map(entry => [entry.packageName, entry]))
     const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {}), ...catalog.keys()])]
+      .filter(name => only?.has(name) ?? true)
     const bundles: Omit<BundleInfo, 'update'>[] = []
     const runtimeVersion = getDshRuntimeVersion()
     for (const name of names) {
@@ -686,7 +703,7 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   async listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList> {
-    const target = updateRefusal((await this.listBundles()).find(bundle => bundle.name === name), name)
+    const target = updateRefusal(this.listing(new Set([name])).find(bundle => bundle.name === name), name)
     if (typeof target === 'string') return { status: 'refused', problem: 'not-updatable', reason: target, attempts: [] }
     if (target.kind === 'git') return { status: 'refused', problem: 'not-updatable', reason: `${name} is installed from Git, which lists no versions`, attempts: [] }
     const plan = registryPlan(this.registryFor(name, options?.registry), await this.registries())
@@ -738,8 +755,8 @@ export class PluginManager extends TypertRemoteService {
    * @param name Installed profile dependency name.
    * @param version Exact version newer than the installed one.
    * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
-   * only by a bundle `listBundles` lists with `update: 'git'`; and the request id naming the progress and the target
-   * installation's logs and cancellation.
+   * only by a bundle `listBundles` lists with `update: 'git'`; the request id naming the progress and the target
+   * installation's logs and cancellation; and the pending build scripts to allow, saved before anything is removed.
    * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
    */
   @Remote
@@ -749,7 +766,7 @@ export class PluginManager extends TypertRemoteService {
       if (requestId !== undefined) this.ownerContext.emit('plugin-manager/update-state', { requestId, step })
     }
     announce('checking')
-    const target = updateRefusal((await this.listBundles()).find(item => item.name === name), name)
+    const target = updateRefusal(this.listing(new Set([name])).find(item => item.name === name), name)
     const from = typeof target === 'string' ? '' : target.installed
     const refusedBefore = (error: ManagementError): PluginUpdateResult => ({
       from, to: version, step: 'check',
@@ -766,14 +783,33 @@ export class PluginManager extends TypertRemoteService {
     if ('code' in planned) return refusedBefore(planned)
     const { spec, registry, saveExact } = planned
     const { enabled } = bundle
+    const approved = options?.approvedBuilds
+    // The approval is saved before anything is removed: `pnpm remove` drops the undecided entries it would decide.
+    const approve = async (): Promise<ManagementError | undefined> => {
+      if (approved === undefined) return undefined
+      try {
+        await withFileLock(join(this.profile.dir, 'package.json'), async () => {
+          // A manager disposed while the update was checked writes nothing.
+          this.abort.signal.throwIfAborted()
+          await approveBuilds(this.profile.dir, approved)
+        }, { waitMs: this.lockWaitMs })
+      }
+      catch (error) { return managementError(error) }
+      return undefined
+    }
     // A lock timeout or disposal rejects instead of reporting; it reads as the failed step it is.
     const settled = (stage: ChangeResult['stage'], target: string, operation: Promise<ChangeResult>): Promise<ChangeResult> =>
       operation.catch((error: unknown) => ({ changed: false, application: 'failed', stage, target, error: managementError(error) }))
-    const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
-      saveExact, enabled, expected: { name, version },
-      ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
-    }))
+    const installTarget = async (): Promise<ChangeResult> => {
+      const result = await settled('install', spec, this.installBundle(spec, {
+        saveExact, enabled, expected: { name, version },
+        ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
+      }))
+      return approved === undefined ? result : { ...result, approvedBuilds: approved }
+    }
     if (this.ownerContext.get('hmr') === undefined) {
+      const refusal = await approve()
+      if (refusal !== undefined) return refusedBefore(refusal)
       announce('installing')
       return { from, to: version, step: 'install', result: await installTarget() }
     }
@@ -788,6 +824,8 @@ export class PluginManager extends TypertRemoteService {
         },
       }
     }
+    const refusal = await approve()
+    if (refusal !== undefined) return refusedBefore(refusal)
     // The removed version is installed again where it came from, else over the configured plan, as its removal asks.
     const previousRegistry = this.installedFrom.get(name)
     announce('removing')
@@ -1156,7 +1194,7 @@ export class PluginManager extends TypertRemoteService {
   removeBundle(name: string): Promise<ChangeResult> {
     return this.change(async (result) => {
       const installed = await this.configure(async () => {
-        const bundle = (await this.listBundles()).find(item => item.name === name)
+        const bundle = this.listing(new Set([name])).find(item => item.name === name)
         if (bundle === undefined || !bundle.removable) throw new ManagementFailure('not-removable')
         if (this.ownerContext.get('hmr') === undefined && (this.profile.startedBundles.includes(name)
           || (bundle.error === undefined && this.bundleRows(name).some(row => [...this.ctx.loader.entries()]

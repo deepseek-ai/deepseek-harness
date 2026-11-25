@@ -17,8 +17,10 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react'
 import clsx from 'clsx'
 import {
-  focusWithoutRing, IconPlusOutlineMedium, IconTriangleRightFillRegular, IconWarningOutlineRegular, isMobileDevice, Toast, Tooltip,
+  focusWithoutRing, IconPlusOutlineMedium, IconTriangleRightFillRegular, IconWarningOutlineRegular, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+// Type-only: the `useMobile` standard prop merge.
+import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
 import type {} from '@deepseek-ai/dsh-plan-mode/client'
@@ -48,7 +50,7 @@ export const InputBar = memo(function InputBar({
   retryFileUpload, registerFileIntake,
   toggleCommandMenu, stop, retry, t,
   renderSlot, renderSlotChain, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
-  useAccess,
+  useAccess, useMobile,
   useProjection, sessionId, variant, occurrence, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
@@ -57,6 +59,7 @@ export const InputBar = memo(function InputBar({
   const notice = useNotices(s => s)
   const busyEnter = useBusyEnter(s => s)
   const stopKeys = useStopShortcut(keys => keys)
+  const mobile = useMobile()
   // A page whose access snapshot excludes prompting, stopping, or uploading to this Session is offered
   // no Send, no Stop, or no file intake rather than a disabled control. `useAccess` is undefined only
   // without a Session, where the bar is an inert placeholder with no keyboard, stop, or file intake.
@@ -193,9 +196,9 @@ export const InputBar = memo(function InputBar({
   // scrolling the conversation.
   useEffect(() => {
     if (locked || editor === null) return
-    if (isMobileDevice()) return
+    if (mobile) return
     focusDraftEditor(editor, revealSelection)
-  }, [locked, sessionId, editor])
+  }, [locked, sessionId, editor, mobile])
 
   // A read-only phase can move focus to the body. Restore the composer's
   // keyboard position without reopening the mobile keyboard or taking focus
@@ -210,7 +213,7 @@ export const InputBar = memo(function InputBar({
     busyPhaseSeen.current = false
     if (locked || editor === null) return
     if (document.activeElement !== null && document.activeElement !== document.body) return
-    if (isMobileDevice()) {
+    if (mobile) {
       if (cardRef.current !== null) focusWithoutRing(cardRef.current, { preventScroll: true })
     } else {
       focusDraftEditor(editor, revealSelection)

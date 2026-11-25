@@ -25,7 +25,7 @@ Users see an optional action card below a completed answer: its title, a brief t
 <a id="use-this-package"></a>
 ## Use this package
 
-The Web composition ([`dsh-web-app`](../../bundle/web-app/README.md)) mounts this package beside its [Host service](../../interaction/action-cards/README.md). This browser contribution has no configuration fields. It adds the Personalized recommendations switch to Settings → General, which writes the Host service's `enabled` field.
+The Web composition ([`dsh-web-app`](../../bundle/web-app/README.md)) mounts this package beside its [Host service](../../interaction/action-cards/README.md). This browser contribution has no configuration fields. It adds the Personalized recommendations switch to Settings → General → Chat experience, after the work-details preferences (Work details, When to collapse work details, and Replies after collapse) and before Show coding view. The switch writes the Host service's `enabled` field.
 
 ### Register a card body
 

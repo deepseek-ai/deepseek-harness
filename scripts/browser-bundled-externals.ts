@@ -170,7 +170,7 @@ export async function browserBundledExternals(root: string): Promise<Set<string>
   // Vite resolves HTML through native realpath, including Windows 8.3 alias expansion.
   root = realpathSync.native(root)
   const manifests = new Map<string, Manifest>()
-  for (const glob of ['packages/*/*/package.json', 'vendor/*/package.json']) {
+  for (const glob of ['packages/*/*/package.json', 'vendor/*/package.json', 'vendor/im/*/package.json']) {
     for (const path of globSync(glob, { cwd: root }).sort()) {
       const absolute = resolve(root, path)
       manifests.set(absolute, readManifest(absolute))

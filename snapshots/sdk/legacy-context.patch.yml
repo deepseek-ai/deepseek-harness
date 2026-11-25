@@ -22,7 +22,7 @@
 - id: tool-plugin-manager
   disabled: true
 
-- id: tool-office
+- id: tool-document
   disabled: true
 
 - id: tool-cordis

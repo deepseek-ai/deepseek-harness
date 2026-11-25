@@ -106,6 +106,7 @@
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-agent-preset": "workspace:*",
     "@deepseek-ai/dsh-experimental-voice-input-bundle": "workspace:*",
+    "@deepseek-ai/dsh-read-aloud-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-auto-review": "workspace:*",
     "@deepseek-ai/dsh-experimental-cot-translation-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-badge-skill-bundle": "workspace:*",
@@ -120,7 +121,8 @@
     "@deepseek-ai/dsh-timeline": "workspace:*",
     "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-forge-bundle": "workspace:*",
-    "@deepseek-ai/dsh-deepseek-chat-import": "workspace:*"
+    "@deepseek-ai/dsh-deepseek-chat-import": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-connectors": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",

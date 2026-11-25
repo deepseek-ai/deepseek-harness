@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { Profiler } from 'react'
@@ -123,7 +123,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
   const props: WorkspaceBrowserProps = {
     useWorkspaceActionRequest: bindSnapshotSelector(request),
     settleWorkspaceAction: () => { request.set(null) },
-    useContextMenuTarget: selector => selector(null),
+    useContextMenuOpener: selector => selector(null),
     useShortcuts: select => select([]),
     useWorkspaceShortcuts: bindSnapshotSelector(controls.state),
     requestSearch: controls.search,
@@ -138,6 +138,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useSessionRetainInfo: () => undefined,
     usePanelInfo,
     useContextMenu: contextMenuHook(),
+    ...responsiveHooks(),
     useResource,
     useWorkspaces: hook(workspaceState([])),
     ...allowAllAccess,
@@ -187,12 +188,12 @@ describe('WorkspaceBrowser', () => {
     })
     expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', {
       target: { kind: 'session', value: { sessionId: sid('session-one'), displayTitle: 'session-one' } },
-      label: '会话“session-one”的操作', className: rowCss.iconButton,
+      label: '会话“session-one”的操作', className: rowCss.iconButton, opener: expect.any(String) as string,
     })
     if (mode === 'workspace') {
       expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', {
         target: { kind: 'workspace', value: { workspaceId: wid('alpha'), path: '/projects/alpha', displayTitle: 'alpha' } },
-        label: '工作区“alpha”的操作', className: rowCss.iconButton,
+        label: '工作区“alpha”的操作', className: rowCss.iconButton, opener: expect.any(String) as string,
       })
     }
   })

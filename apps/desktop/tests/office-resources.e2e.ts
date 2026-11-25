@@ -35,7 +35,7 @@ export function apply(ctx) {
       const office = await ctx.skills.get('office')
       const content = { office: office?.content ?? null }
       const resources = office?.resourceBase?.kind === 'directory' ? await readdir(office.resourceBase.path) : null
-      response.end(JSON.stringify({ names, content, resources, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('office_')) }))
+      response.end(JSON.stringify({ names, content, resources, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('document_')) }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))
@@ -94,7 +94,7 @@ describe.skipIf(!existsSync(builtHost))('built Desktop Host Office resources', (
       // The advertised resource directory holds only the skill file.
       expect(skills.resources).toEqual(['SKILL.md'])
       expect(skills.content.office).toContain('# Office tasks')
-      expect(skills.content.office).toContain('`office_render`')
+      expect(skills.content.office).toContain('`document_render`')
       expect(failures).toEqual([])
     } finally {
       await host?.stop()

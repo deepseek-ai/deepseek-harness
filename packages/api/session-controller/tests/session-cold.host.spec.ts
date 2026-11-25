@@ -1011,7 +1011,7 @@ describe('sessions.prompt synchronous rejection', () => {
       expect(response.ok).toBe(false)
       if (!response.ok) {
         expect(response.error.code).toBe('session/agent-busy')
-        expect(response.error.message).toBe('prompt rejected')
+        expect(response.error.message).toBe('prompt rejected: Error: agent "session-throwing" lifecycle disposed')
         expect(response.error.details).toEqual({
           reason: 'Error: agent "session-throwing" lifecycle disposed',
         })

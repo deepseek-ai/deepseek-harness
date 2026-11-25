@@ -31,6 +31,7 @@ import type {
   SettingsOnboardingStep, SettingsRootInjected, SettingsSectionRow,
 } from './shell-contract.ts'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
+import { compareGroupOrder } from './group-order.ts'
 import { createSettingsShellStore } from './shell-store.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
@@ -39,8 +40,9 @@ import { DesktopChannelSource } from './desktop-channel-source.ts'
 import { DesktopChannelRow, DesktopChannelToast } from './DesktopChannelRow.tsx'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
-import { GeneralSection } from './GeneralSection.tsx'
+import { GeneralSection, type GeneralSectionInjected } from './GeneralSection.tsx'
 import { SettingsSectionView } from './SettingsSectionView.tsx'
+import { GeneralGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup } from './GeneralGroup.tsx'
 import { CurrentVersionRow } from './CurrentVersionRow.tsx'
 import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperToolsRow.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
@@ -83,8 +85,8 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settin
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item', id: 'developer-tools', order: 15, locale: NS,
+  ctx.slots.inject('settings.general.group.display.item', () => ctx.slots.register({
+    name: 'settings.general.group.display.item', id: 'developer-tools', order: 15, locale: NS,
     inject: (): DeveloperToolsRowInjected => ({
       hooks: { developerTools: ctx.configForms.developerTools.enabled },
       setEnabled: async (enabled) => {
@@ -99,8 +101,8 @@ export function apply(ctx: ClientContext): void {
     }),
   }, DeveloperToolsRow))
   // Version information follows the core preferences.
-  ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-    name: 'settings.general.item', id: 'current-version', order: 100, locale: NS,
+  ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
+    name: 'settings.general.group.updates.item', id: 'current-version', order: 101, locale: NS,
   }, CurrentVersionRow))
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-settings-general: dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
@@ -111,8 +113,8 @@ export function apply(ctx: ClientContext): void {
   if (channelBridge !== undefined) {
     const channel = new DesktopChannelSource(channelBridge)
     ctx.effect(() => () => { channel.dispose() }, 'ui-settings-general: desktop channel')
-    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
-      name: 'settings.general.item', id: 'desktop-update-channel', order: 95, locale: NS,
+    ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
+      name: 'settings.general.group.updates.item', id: 'desktop-update-channel', order: 100, locale: NS,
       inject: () => ({ hooks: { channel: channel.store }, select: (value: 'nightly' | 'stable') => channel.select(value) }),
     }, DesktopChannelRow))
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
@@ -131,6 +133,36 @@ export function apply(ctx: ClientContext): void {
   // seat, and the nav label is a thunk the owner resolves per render — no
   // locale/change re-registration wiring.
   const t = ctx.locale.bind(NS)
+  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+    name: 'settings.general.group', id: 'general', order: 10,
+    label: () => t('general.group.general'),
+    children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
+  }, GeneralGroup))
+  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+    name: 'settings.general.group', id: 'display', order: 20,
+    label: () => t('general.group.display'),
+    children: { 'settings.general.group.display.item': { kind: 'list', scope: 'root' } },
+  }, DisplayGroup))
+  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+    name: 'settings.general.group', id: 'interaction', order: 30,
+    label: () => t('general.group.interaction'),
+    children: { 'settings.general.group.interaction.item': { kind: 'list', scope: 'root' } },
+  }, InteractionGroup))
+  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+    name: 'settings.general.group', id: 'notifications', order: 40,
+    label: () => t('general.group.notifications'),
+    children: { 'settings.general.group.notifications.item': { kind: 'list', scope: 'root' } },
+  }, NotificationsGroup))
+  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+    name: 'settings.general.group', id: 'data', order: 50,
+    label: () => t('general.group.data'),
+    children: { 'settings.general.group.data.item': { kind: 'list', scope: 'root' } },
+  }, DataGroup))
+  ctx.slots.inject('settings.general.group', () => ctx.slots.register({
+    name: 'settings.general.group', id: 'updates', order: 60,
+    label: () => t('general.group.updates'),
+    children: { 'settings.general.group.updates.item': { kind: 'list', scope: 'root' } },
+  }, UpdatesGroup))
   // The shared ConfigForm mirror updates after document commits and reconnects.
   const documentController = ctx.remote.$host.isLoopback
     ? new SettingsDocumentStore(ctx, ctx.configForms.describe())
@@ -275,7 +307,37 @@ export function apply(ctx: ClientContext): void {
     order: 0,
     label: () => t('general.nav'),
     locale: NS,
-    children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
+    children: { 'settings.general.group': { kind: 'list', scope: 'root' } },
+    inject: (): GeneralSectionInjected => {
+      const slots = ctx.slots
+      const locale = ctx.locale
+      let version = -1
+      let revision = -1
+      let groups: readonly { id: string; label: string }[] = []
+      return { hooks: { groups: {
+        getSnapshot: () => {
+          const nextVersion = slots.getVersion('settings.general.group')
+          const nextRevision = locale.getSnapshot().revision
+          if (version !== nextVersion || revision !== nextRevision) {
+            version = nextVersion
+            revision = nextRevision
+            groups = slots.entriesOfSlot('settings.general.group')
+              .toSorted(compareGroupOrder)
+              .map(entry => ({
+                /* v8 ignore next -- list registrations require an id */
+                id: entry.options.id ?? '',
+                label: resolveSlotLabel(entry.options.label) ?? '',
+              }))
+          }
+          return groups
+        },
+        subscribe: (listener) => {
+          const offGroups = slots.subscribe('settings.general.group', listener)
+          const offLocale = locale.subscribe(listener)
+          return () => { offGroups(); offLocale() }
+        },
+      } } }
+    },
   }, GeneralSection))
   // The page's module system applies no plugin update from another Host release; this dialog offers the reload.
   const releasePromptInjected = (): HostReleasePromptInjected => ({

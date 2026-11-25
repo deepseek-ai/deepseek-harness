@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-11-23-slot-module-boundaries-for-css-scope.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-23-slot-module-boundaries-for-css-scope.md
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content:
+  en: a90edf44e865f0a8
+  zh: fee8d177d27ce29d
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/problem:
+  en: 909111ca0a739526
+  zh: 07c9aec88afbe073
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/decision:
+  en: ff06c8315fc1d58e
+  zh: c79f2fa8b8f2b63c
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/decision/a-b-a-in-a-factory:
+  en: 0ec4637995399265
+  zh: de6874ebf25ab05d
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/decision/two-ways-to-forward-hoc-children:
+  en: c81443b49efa6374
+  zh: 1958d40f367f9510
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/decision/a-list-with-mixed-suppliers:
+  en: 2c6e2ecec519adb7
+  zh: 6849e1d80c4144dc
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/alternatives-considered:
+  en: 20c6224333fd5d55
+  zh: bb20a90216aa8127
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/consequences:
+  en: 7b9a1a6be57aefcb
+  zh: 75c01b943e5f2a7e
+/agent-note-scope-slot-styles-to-the-package-that-supplied-the-content/verification:
+  en: 08515be1bd481225
+  zh: b7a83c49eeeadfa2

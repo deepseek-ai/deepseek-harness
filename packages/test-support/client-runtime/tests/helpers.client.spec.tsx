@@ -14,6 +14,7 @@ import {
   bindSnapshotSelector,
   chatSnapshot,
   conversationSnapshot,
+  responsiveHooks,
   SlotTestRuntime,
   usePinnedBrowserLanguages,
 } from '../src/index.ts'
@@ -71,22 +72,32 @@ describe('fixture helpers', () => {
   it('retracts default root sources without removing their live replacements', async () => {
     const runtime = await SlotTestRuntime.create()
     const hooks = { workspaces: runtime.workspaces.list, panelInfo: runtime.panelInfo }
+    const props = responsiveHooks()
     let releaseReplacement: (() => void) | undefined
     try {
+      expect(runtime.ctx.get('uiResponsive')).toBeDefined()
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
-      releaseReplacement = runtime.slots.provideRoot({ hooks })
+      await runtime.releaseResponsiveSource()
+      expect(runtime.ctx.get('uiResponsive')).toBeUndefined()
+      releaseReplacement = runtime.slots.provideRoot({ hooks, props: { useMediaQuery: props.useMediaQuery, useMobile: props.useMobile } })
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
+      await runtime.releaseResponsiveSource()
       for (const key of ['workspaces', 'panelInfo'] as const) {
         expect(() => runtime.slots.provideRoot({ hooks: { [key]: hooks[key] } }))
           .toThrow(`duplicate root standard hook '${key}'`)
+      }
+      for (const key of ['useMediaQuery', 'useMobile', 'useDocumentPortal', 'useDocumentViewport'] as const) {
+        expect(() => runtime.slots.provideRoot({ props: { [key]: props[key] } }))
+          .toThrow(`duplicate root standard prop '${key}'`)
       }
     } finally {
       try {
         releaseReplacement?.()
         runtime.releaseWorkspaceSource()
         runtime.releasePanelInfoSource()
+        await runtime.releaseResponsiveSource()
       } finally {
         await runtime.dispose()
       }
@@ -116,6 +127,40 @@ describe('fixture helpers', () => {
         })
       })
       expect(view.container.textContent).toBe('next:conversation')
+    } finally {
+      await runtime.dispose()
+    }
+  })
+
+  it('supplies fixed, replaceable answers for hand-built responsive props', () => {
+    const defaults = responsiveHooks()
+    expect(defaults.useMediaQuery('(max-width: 640px)')).toBe(false)
+    expect(defaults.useMobile()).toBe(false)
+    expect(defaults.useDocumentPortal()).toBe(defaults.useDocumentPortal())
+    expect(defaults.useDocumentViewport()).toBe(defaults.useDocumentViewport())
+    const portal = () => <aside />
+    const viewport = { width: 390, height: 844 }
+    const fixed = responsiveHooks({ mobile: true, matches: query => query === '(hover: none)', portal, viewport })
+    expect(fixed.useMobile()).toBe(true)
+    expect(fixed.useMediaQuery('(hover: none)')).toBe(true)
+    expect(fixed.useMediaQuery('(max-width: 640px)')).toBe(false)
+    expect(fixed.useDocumentPortal()).toBe(portal)
+    expect(fixed.useDocumentViewport()).toBe(viewport)
+  })
+
+  it('keeps the document props available without the responsive service', async () => {
+    const runtime = await SlotTestRuntime.create()
+    try {
+      await runtime.releaseResponsiveSource()
+      await runtime.declare({ 'trt.panel-info': { kind: 'keyed', scope: 'root' } })
+      runtime.slots.register({ name: 'trt.panel-info', key: 'document' },
+        ({ useDocumentPortal, useDocumentViewport }: PropsRuntime<'trt.panel-info'>) => {
+          const Portal = useDocumentPortal()
+          const { width, height } = useDocumentViewport()
+          return <Portal><span>{width}×{height}</span></Portal>
+        })
+      const view = runtime.renderSlot('trt.panel-info', { label: 'document' }, { entryKey: 'document' })
+      expect(view.container.textContent).toBe('1024×768')
     } finally {
       await runtime.dispose()
     }

@@ -295,7 +295,7 @@ export function apply(ctx: Context, config: Config): void {
           parentOptions,
           ctx.tools.get('list_subagent_models', parent, exec.toolSet) !== undefined,
         )
-        if (requiresRoutePreflight) {
+        if (subagentProvider.prepareContinuable === undefined && requiresRoutePreflight) {
           const llm = ctx.get('llm')
           if (llm === undefined) {
             throw new ToolContextUnavailableError('cannot resolve the selected child LLM route because the `llm` service is unavailable')

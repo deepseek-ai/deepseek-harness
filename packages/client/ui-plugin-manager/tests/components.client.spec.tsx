@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ConfigPageForm } from '../src/client/slot-contract.ts'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -78,6 +78,7 @@ const IDLE_INSTALL: InstallState = {
 const READY: PluginManagerState = {
   status: 'ready',
   refreshStatus: 'idle',
+  refreshProgress: null,
   packages: [],
   busy: [],
   notice: null,
@@ -147,6 +148,7 @@ function renderTab(
     openUpdate: vi.fn(),
     openGitUpdate: vi.fn(),
     runUpdate: vi.fn(),
+    approveUpdateBuildsAndRetry: vi.fn(),
     closeUpdate: vi.fn(),
     toggleUpdateOutput: vi.fn(),
     loadDetail: vi.fn(),
@@ -164,6 +166,7 @@ function renderTab(
     useResource: unusedStandardHook,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
+    ...responsiveHooks(),
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {
@@ -1221,7 +1224,7 @@ describe('PluginManagerPage', () => {
     expect(within(detail).getByText('sidebar', { selector: 'code' })).toBeTruthy()
   })
 
-  it('translates row text, searches current copy and technical identities, and keeps configuration keys unchanged', () => {
+  it('translates row text, searches every declared language and technical identities, and keeps configuration keys unchanged', () => {
     const error = 'locale/zh.json: invalid description'
     const localized = row({
       moduleName: '@acme/dsh-sidebar-widget',
@@ -1233,6 +1236,7 @@ describe('PluginManagerPage', () => {
     })
     const rows = [localized, ...Array.from({ length: 10 }, (_, index) => row({
       rowId: `extra-${String(index)}`, entryId: `include:extra-${String(index)}` as PluginEntryId, moduleName: '@acme/other',
+      ...index === 0 ? { meta: { title: 'Plain extra row' } } : {},
     }))]
     const { actions, setLanguage } = renderTab(
       { packages: [pkg({ meta: { title: { en: 'Personal tools', zh: '个人工具' } }, rows })] },
@@ -1247,6 +1251,11 @@ describe('PluginManagerPage', () => {
       expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
       expect(screen.getByRole('button', { name: zh.configureRow.replace('{name}', '导航组件') })).toBeTruthy()
     }
+    // A literal title remains matchable alongside the translated ones.
+    fireEvent.change(search, { target: { value: 'Plain extra row' } })
+    expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+    expect(document.querySelector('[data-plugin-row="include:extra-0"]')).toBeTruthy()
+    fireEvent.change(search, { target: { value: '' } })
     expect(screen.getByText('sidebar')).toBeTruthy()
     expect(screen.getByText('@acme/dsh-sidebar-widget')).toBeTruthy()
     expect(screen.getByText('侧边导航')).toBeTruthy()
@@ -1263,6 +1272,12 @@ describe('PluginManagerPage', () => {
     expect(screen.getByText(zh.partsFilterEmpty)).toBeTruthy()
     fireEvent.change(search, { target: { value: 'Sidebar component' } })
     setLanguage(en)
+    for (const query of ['导航组件', '侧边导航']) {
+      fireEvent.change(search, { target: { value: query } })
+      expect(document.querySelectorAll('[data-plugin-row]')).toHaveLength(1)
+      expect(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') })).toBeTruthy()
+    }
+    fireEvent.change(search, { target: { value: 'Sidebar component' } })
     expect(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: en.configureRow.replace('{name}', 'Sidebar component') }))
     expect(document.querySelector('[data-plugin-row-detail]')?.getAttribute('data-plugin-row-detail')).toBe('dsh-better-sidebar#sidebar')
@@ -2999,7 +3014,7 @@ it('keeps bundle configuration mounted while its operation is pending', () => {
 
 describe('registry versions and updates', () => {
   const MIRROR = 'https://registry.npmmirror.com/'
-  const updatable = (): PackageView => pkg({ update: 'registry', version: '0.16.0', source: 'dsh-better-sidebar@0.16.0' })
+  const updatable = (more: Partial<PackageView> = {}): PackageView => pkg({ update: 'registry', version: '0.16.0', source: 'dsh-better-sidebar@0.16.0', ...more })
   const runtime = '0.8.3'
   const listed = (versions: PluginVersion[], attempts: RegistryAttempt[] = [{ registry: null }]): VersionCheck => ({
     phase: 'done', checkedAt: 0,
@@ -3134,6 +3149,23 @@ describe('registry versions and updates', () => {
     expect(screen.getByText(en.updatesFailed)).toBeTruthy()
   })
 
+  it('counts a manual refresh\'s checks on the Refresh button and announces its progress', () => {
+    const second = updatable({ name: 'dsh-second' })
+    const { set } = renderTab({ packages: [updatable(), second], refreshStatus: 'refreshing', refreshProgress: { phase: 'loading' } })
+    const toolbar = (): HTMLElement => document.querySelector<HTMLElement>('[data-plugin-toolbar]')!
+    const note = (): HTMLElement => within(toolbar()).getByRole('status')
+    const refresh = (): HTMLElement => within(toolbar()).getByRole('button', { name: en.refresh })
+    expect(note().textContent).toBe(en.loading)
+    expect(refresh().textContent).toBe(en.refresh)
+    set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': { phase: 'checking' } }, refreshProgress: { phase: 'checking', current: 2, total: 2 } })
+    expect(note().textContent).toBe(en.refreshChecking.replace('{current}', '2').replace('{total}', '2'))
+    expect(refresh().textContent).toBe(en.refreshCount.replace('{current}', '2').replace('{total}', '2'))
+    // The spinner's minimum hold already shows what the checks found.
+    set({ versions: { 'dsh-better-sidebar': listed([]), 'dsh-second': listed([]) }, refreshProgress: null })
+    expect(note().textContent).toBe(en.updatesNone)
+    expect(refresh().textContent).toBe(en.refresh)
+  })
+
   const base: UpdateState = {
     packageName: 'dsh-better-sidebar', from: '1.3.0', to: '1.4.0', source: { kind: 'registry', registry: MIRROR }, phase: 'confirm', steps: [], result: null, outputOpen: false,
   }
@@ -3223,6 +3255,26 @@ describe('registry versions and updates', () => {
       result: { from: '1.3.0', to: '1.4.0', step: 'install', result: change('failed'), restore: change('applied') },
     } })
     expect([...dialog().querySelectorAll('li')].map(item => item.getAttribute('data-state'))).toEqual(['done', 'done', 'failed', 'done'])
+  })
+
+  it('offers to allow the scripts pnpm blocked for the target and names them once the update succeeds', () => {
+    const blocked = change('failed', { pendingBuilds: ['native', '@scope/other'], packageResult: { exitCode: 1, output: 'ERR_PNPM_IGNORED_BUILDS', truncated: false, logPath: '/l', kind: 'build-blocked' } })
+    const { actions, set } = renderTab({ packages: [updatable()], update: {
+      ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'install', result: blocked, restore: change('applied') },
+    } })
+    const approval = within(dialog()).getByRole('group', { name: en.installApprovalTitle })
+    expect([...approval.querySelectorAll('code')].map(item => item.textContent)).toEqual(['native', '@scope/other'])
+    fireEvent.click(within(approval).getByRole('button', { name: en.installApproveAndRetry }))
+    expect(actions.approveUpdateBuildsAndRetry).toHaveBeenCalledOnce()
+    // A package the reinstallation left uninstalled is not updated again.
+    set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'install', result: blocked, restore: change('failed') } } })
+    expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()
+    // A failure the reinstallation reports offers nothing: only the target's installation is retried with approval.
+    set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'check', result: { ...blocked, changed: false } } } })
+    expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()
+    set({ update: { ...base, phase: 'done', result: { from: '1.3.0', to: '1.4.0', step: 'install', result: change('applied', { approvedBuilds: ['native'] }) } } })
+    expect(within(dialog()).getByText(en.installDoneApproved.replace('{names}', 'native'))).toBeTruthy()
+    expect(within(dialog()).queryByRole('group', { name: en.installApprovalTitle })).toBeNull()
   })
 
   it('shows a failed run\'s output once unfolded and an unknown outcome after a lost answer', () => {

@@ -8,8 +8,8 @@ import { parseEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-in
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
-  PROFILE_COMPATIBILITY_FILENAME, PluginPackages, boot, getDshRuntimeVersion,
-  prepareProfileEntries, prepareProfilePatches, type ProfileContext,
+  PROFILE_COMPATIBILITY_FILENAME, PluginPackages, boot, createRuntimeResolution, getDshRuntimeVersion,
+  loadProfileDirectory, prepareProfileEntries, prepareProfilePatches, recomposeProfile, type ProfileContext,
 } from '../src/index.ts'
 
 const runtime = getDshRuntimeVersion()
@@ -361,4 +361,314 @@ it('reuses the documented literal Include dialect when reading included entries'
   // The launcher mounts an Include with a file URL, which a Windows path cannot stand in for: `C:` reads as a scheme.
   expect(await f.run([{ insert: [{ id: 'outer', name: 'cordis:include', config: { path: pathToFileURL(list).href } }] }]))
     .toEqual(['import:allowed-plugin', 'apply:allowed-plugin'])
+})
+
+describe('bundle rows of a profile whose node_modules holds another copy of their package', () => {
+  /**
+   * An installation whose base bundle inserts a `storage-domain` row, and a `web` profile selecting that bundle.
+   * `plugin` writes one copy of a package; a copy with `peer` requires a dsh this runtime does not provide.
+   */
+  function installation() {
+    const f = fixture()
+    const install = join(f.dir, 'install')
+    const profileDir = join(f.dir, 'profiles', 'web')
+    const effects = pathToFileURL(join(f.dir, 'effects')).href
+    const write = (path: string, text: string): void => {
+      mkdirSync(join(path, '..'), { recursive: true })
+      writeFileSync(path, text)
+    }
+    const plugin = (dir: string, name: string, label: string, options: { peer?: string; imports?: string } = {}): void => {
+      write(join(dir, 'package.json'), JSON.stringify({
+        name, version: '1.0.0', type: 'module', exports: './index.mjs',
+        ...options.peer === undefined ? {} : { peerDependencies: { '@deepseek-ai/dsh-test': options.peer } },
+      }))
+      // Each started plugin records its own copy, and the copy of the package it imports.
+      write(join(dir, 'index.mjs'), `import { appendFileSync } from 'node:fs'
+${options.imports === undefined ? '' : `import { copy as imported } from '${options.imports}'`}
+export const copy = '${label}'
+export function apply() {
+  appendFileSync(new URL('${effects}'), '${name}=${label}${options.imports === undefined ? '' : ' imports \' + imported + \''}\\n')
+}
+`)
+    }
+    const bundle = (
+      dir: string, name: string, rows: string[], dependencies: Record<string, string>, manifest: Record<string, unknown> = {},
+    ): void => {
+      write(join(dir, 'package.json'), JSON.stringify({
+        name, version: '1.0.0', dependencies, ...manifest, dsh: { bundle: { patch: './cordis.patch.yml' } },
+      }))
+      write(join(dir, 'cordis.patch.yml'), JSON.stringify([{ insert: rows.map(row => ({ id: `${name}:${row}`, name: row })) }]))
+    }
+    // The installation ships `tool` as well; no bundle of the installation inserts a row for it.
+    write(join(install, 'package.json'), JSON.stringify({
+      name: '@deepseek-ai/dsh', version: '1.0.0', dependencies: { '@deepseek-ai/dsh-base': '*', tool: '*' },
+    }))
+    bundle(join(install, 'node_modules', '@deepseek-ai', 'dsh-base'), '@deepseek-ai/dsh-base', ['storage-domain'], { 'storage-domain': '*' })
+    plugin(join(install, 'node_modules', 'storage-domain'), 'storage-domain', 'installed')
+    plugin(join(install, 'node_modules', 'tool'), 'tool', 'installed')
+    write(join(profileDir, 'cordis.yml'), '[]\n')
+    const select = (bundles: string[], dependencies: Record<string, string> = {}): void => {
+      write(join(profileDir, 'package.json'), JSON.stringify({
+        name: 'dsh-profile-web', private: true, dependencies, dsh: { profile: { bundles } },
+      }))
+    }
+    select(['@deepseek-ai/dsh-base'])
+
+    const installAnchor = join(install, 'package.json')
+    /** Every patch layer of the profile: its bundles in order, then its own patch file. */
+    const patches = () => {
+      const profile = loadProfileDirectory('dsh', profileDir, installAnchor)
+      return [...profile.layers.flatMap(layer => layer.patches), ...profile.patches]
+    }
+    const userPatch = (text: string): void => { write(join(profileDir, 'cordis.patch.yml'), text) }
+    /** The plugins that started, and the rows the compatibility admission disabled, since the last launch. */
+    const observe = () => ({
+      ran: existsSync(join(f.dir, 'effects')) ? readFileSync(join(f.dir, 'effects'), 'utf8').trim().split('\n').sort() : [],
+      disabled: f.warnings.flatMap(warning => /disabling profile plugin row "([^"]+)"/u.exec(warning)?.[1] ?? []),
+    })
+
+    /** Boot the profile through the Loader; `selection: false` removes the bundle plugins from the computed resolution. */
+    async function launch(selection: boolean) {
+      rmSync(join(f.dir, 'effects'), { force: true })
+      f.warnings.length = 0
+      const profile = loadProfileDirectory('dsh', profileDir, installAnchor)
+      const computed = await createRuntimeResolution({ installAnchor, profile, home: f.dir })
+      const { profilesDir, profileDir: dir, localPackageNames, entries, linkedRoots } = computed
+      const resolution = selection ? computed : { profilesDir, profileDir: dir, localPackageNames, entries, linkedRoots }
+      const context: ProfileContext = { ...f.profile, name: 'web', dir: profileDir, installAnchor }
+      const ctx = await boot('dsh', join(profileDir, 'cordis.yml'), patches(), async (host) => {
+        host.provide('profileContext', context)
+        await host.plugin(PluginPackages, { resolution })
+      })
+      return { ctx, computed }
+    }
+
+    /** Launch, observe, and stop the application, so that the next launch installs its own resolution. */
+    async function start(selection: boolean) {
+      const { ctx } = await launch(selection)
+      try {
+        return observe()
+      } finally {
+        await ctx.fiber.dispose()
+      }
+    }
+    return { dir: f.dir, install, profileDir, plugin, bundle, select, userPatch, start, launch, observe, patches }
+  }
+
+  type Installation = ReturnType<typeof installation>
+  const hoisted = (f: Installation, name: string) => join(f.profileDir, 'node_modules', name)
+  const baseRow = '@deepseek-ai/dsh-base:storage-domain'
+  /**
+   * A development bundle `hello` in a checkout outside the profiles tree, linked into the profile. The bundle is a
+   * plugin that inserts itself and a `tool` row. With `installs`, it also imports `tool` and holds its own copy.
+   */
+  const linkCheckout = (f: Installation, declared: Record<string, unknown>, installs = true): void => {
+    // The link target is spelled as the native real path spells it, which on Windows expands 8.3 short names.
+    const checkout = join(realpathSync.native(f.dir), 'work', 'hello')
+    f.plugin(checkout, 'hello', 'hello', installs ? { imports: 'tool' } : {})
+    f.bundle(checkout, 'hello', ['hello', 'tool'], {}, { type: 'module', exports: './index.mjs', ...declared })
+    if (installs) f.plugin(join(checkout, 'node_modules', 'tool'), 'tool', 'checkout')
+    mkdirSync(join(f.profileDir, 'node_modules'), { recursive: true })
+    symlinkSync(checkout, hoisted(f, 'hello'), process.platform === 'win32' ? 'junction' : 'dir')
+    f.select(['@deepseek-ai/dsh-base', 'hello'], { hello: `link:${checkout}` })
+  }
+
+  it.each<[string, (f: Installation) => void, { ran: string[]; disabled: string[] }, { ran: string[]; disabled: string[] }]>([
+    [
+      'no other copy in the profile',
+      () => {},
+      { ran: ['storage-domain=installed'], disabled: [] },
+      { ran: ['storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'an incompatible copy hoisted by a third-party plugin that pins it as a dependency',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned', { peer: '^9.0.0' })
+        f.plugin(hoisted(f, 'third-plugin'), 'third-plugin', 'third')
+        f.select(['@deepseek-ai/dsh-base'], { 'third-plugin': '*' })
+      },
+      { ran: [], disabled: [baseRow] },
+      { ran: ['storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'an incompatible copy the profile lists as its own dependency',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned', { peer: '^9.0.0' })
+        f.select(['@deepseek-ai/dsh-base'], { 'storage-domain': '1.0.0' })
+      },
+      { ran: [], disabled: [baseRow] },
+      { ran: ['storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'a compatible copy hoisted into the profile',
+      (f) => { f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned') },
+      { ran: ['storage-domain=pinned'], disabled: [] },
+      { ran: ['storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'a third-party bundle whose own plugin imports the copy it pins',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned')
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['third-plugin'], { 'third-plugin': '*', 'storage-domain': '1.0.0' })
+        f.plugin(hoisted(f, 'third-plugin'), 'third-plugin', 'third', { imports: 'storage-domain' })
+        f.select(['@deepseek-ai/dsh-base', 'third-bundle'], { 'third-bundle': '*' })
+      },
+      { ran: ['storage-domain=pinned', 'third-plugin=third imports pinned'], disabled: [] },
+      { ran: ['storage-domain=installed', 'third-plugin=third imports pinned'], disabled: [] },
+    ],
+    [
+      'a third-party bundle that inserts a row of the same package, listed after the base bundle',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned', { peer: '^9.0.0' })
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['storage-domain'], { 'storage-domain': '1.0.0' })
+        f.select(['@deepseek-ai/dsh-base', 'third-bundle'], { 'third-bundle': '*' })
+      },
+      { ran: [], disabled: [baseRow, 'third-bundle:storage-domain'] },
+      { ran: ['storage-domain=installed', 'storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'a third-party bundle that inserts a row of the same package, listed before the base bundle',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned', { peer: '^9.0.0' })
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['storage-domain'], { 'storage-domain': '1.0.0' })
+        f.select(['third-bundle', '@deepseek-ai/dsh-base'], { 'third-bundle': '*' })
+      },
+      { ran: [], disabled: ['third-bundle:storage-domain', baseRow] },
+      { ran: [], disabled: ['third-bundle:storage-domain', baseRow] },
+    ],
+    [
+      'a row of the same package in the profile patch file',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned')
+        f.userPatch('- insert:\n    - id: mine\n      name: storage-domain\n')
+      },
+      { ran: ['storage-domain=pinned', 'storage-domain=pinned'], disabled: [] },
+      { ran: ['storage-domain=installed', 'storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'a profile patch file that disables the base row and names the hoisted copy by path',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned')
+        f.userPatch(`- id: '${baseRow}'\n  disabled: true\n- insert:\n    - id: mine\n      name: ./node_modules/storage-domain/index.mjs\n`)
+      },
+      { ran: ['storage-domain=pinned'], disabled: [] },
+      { ran: ['storage-domain=pinned'], disabled: [] },
+    ],
+    // The remaining rows name `tool`, which the installation ships and only the third-party bundle inserts.
+    [
+      'a third-party bundle that pins and inserts a package no earlier bundle inserts',
+      (f) => {
+        f.plugin(hoisted(f, 'tool'), 'tool', 'pinned')
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['tool'], { tool: '1.0.0' })
+        f.select(['@deepseek-ai/dsh-base', 'third-bundle'], { 'third-bundle': '*' })
+      },
+      { ran: ['storage-domain=installed', 'tool=pinned'], disabled: [] },
+      { ran: ['storage-domain=installed', 'tool=pinned'], disabled: [] },
+    ],
+    [
+      'a third-party bundle that keeps the package it inserts in its own node_modules',
+      (f) => {
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['tool'], { tool: '1.0.0' })
+        f.plugin(join(hoisted(f, 'third-bundle'), 'node_modules', 'tool'), 'tool', 'nested')
+        f.select(['@deepseek-ai/dsh-base', 'third-bundle'], { 'third-bundle': '*' })
+      },
+      { ran: ['storage-domain=installed', 'tool=installed'], disabled: [] },
+      { ran: ['storage-domain=installed', 'tool=nested'], disabled: [] },
+    ],
+    [
+      'a third-party bundle that inserts a package it does not declare, pinned by another plugin',
+      (f) => {
+        f.plugin(hoisted(f, 'tool'), 'tool', 'pinned', { peer: '^9.0.0' })
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['tool'], {})
+        f.plugin(hoisted(f, 'other-plugin'), 'other-plugin', 'other')
+        f.select(['@deepseek-ai/dsh-base', 'third-bundle'], { 'third-bundle': '*', 'other-plugin': '*' })
+      },
+      { ran: ['storage-domain=installed'], disabled: ['third-bundle:tool'] },
+      { ran: ['storage-domain=installed'], disabled: ['third-bundle:tool'] },
+    ],
+    [
+      'a third-party bundle that declares the package it inserts as a peer, pinned by another plugin',
+      (f) => {
+        f.plugin(hoisted(f, 'tool'), 'tool', 'pinned', { peer: '^9.0.0' })
+        f.bundle(hoisted(f, 'third-bundle'), 'third-bundle', ['tool'], {}, { peerDependencies: { tool: '*' } })
+        f.plugin(hoisted(f, 'other-plugin'), 'other-plugin', 'other')
+        f.select(['@deepseek-ai/dsh-base', 'third-bundle'], { 'third-bundle': '*', 'other-plugin': '*' })
+      },
+      { ran: ['storage-domain=installed'], disabled: ['third-bundle:tool'] },
+      { ran: ['storage-domain=installed'], disabled: ['third-bundle:tool'] },
+    ],
+    [
+      'a row in the profile patch file for a package no bundle inserts, pinned by a third-party plugin',
+      (f) => {
+        f.plugin(hoisted(f, 'tool'), 'tool', 'pinned')
+        f.plugin(hoisted(f, 'third-plugin'), 'third-plugin', 'third')
+        f.select(['@deepseek-ai/dsh-base'], { 'third-plugin': '*' })
+        f.userPatch('- insert:\n    - id: mine\n      name: tool\n')
+      },
+      { ran: ['storage-domain=installed', 'tool=pinned'], disabled: [] },
+      { ran: ['storage-domain=installed', 'tool=pinned'], disabled: [] },
+    ],
+    [
+      'a linked development bundle that declares the package it inserts as a peer and a development dependency',
+      (f) => { linkCheckout(f, { peerDependencies: { tool: '*' }, devDependencies: { tool: '*' } }) },
+      { ran: ['hello=hello imports installed', 'storage-domain=installed', 'tool=installed'], disabled: [] },
+      { ran: ['hello=hello imports installed', 'storage-domain=installed', 'tool=installed'], disabled: [] },
+    ],
+    [
+      'a linked development bundle that lists the package it inserts as a dependency',
+      (f) => { linkCheckout(f, { dependencies: { tool: '*' } }) },
+      { ran: ['hello=hello imports checkout', 'storage-domain=installed', 'tool=installed'], disabled: [] },
+      { ran: ['hello=hello imports checkout', 'storage-domain=installed', 'tool=checkout'], disabled: [] },
+    ],
+    [
+      'a linked development bundle that inserts a package it neither declares nor installs',
+      (f) => { linkCheckout(f, {}, false) },
+      { ran: ['hello=hello', 'storage-domain=installed', 'tool=installed'], disabled: [] },
+      { ran: ['hello=hello', 'storage-domain=installed', 'tool=installed'], disabled: [] },
+    ],
+    // The row resolves from the bundle that declares the package, and the Loader reports the import failure.
+    [
+      'a linked development bundle that declares a dependency it has not installed',
+      (f) => { linkCheckout(f, { dependencies: { tool: '*' } }, false) },
+      { ran: ['hello=hello', 'storage-domain=installed', 'tool=installed'], disabled: [] },
+      { ran: ['hello=hello', 'storage-domain=installed'], disabled: [] },
+    ],
+    [
+      'the base row inside a group that is named without the group marker, beside an incompatible hoisted copy',
+      (f) => {
+        f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned', { peer: '^9.0.0' })
+        writeFileSync(join(f.install, 'node_modules', '@deepseek-ai', 'dsh-base', 'cordis.patch.yml'), JSON.stringify([
+          { insert: [{ id: 'grouped', name: 'cordis:group', config: [{ id: 'inner-row', name: 'storage-domain' }] }] },
+        ]))
+      },
+      { ran: [], disabled: ['inner-row'] },
+      { ran: ['storage-domain=installed'], disabled: [] },
+    ],
+  ])('starts the rows of a profile with %s', async (_title, arrange, before, after) => {
+    const f = installation()
+    arrange(f)
+    const without = await f.start(false)
+    expect({ ran: without.ran, disabled: without.disabled }).toEqual(before)
+    const selected = await f.start(true)
+    expect({ ran: selected.ran, disabled: selected.disabled }).toEqual(after)
+  })
+
+  it('starts the row of a bundle enabled while the application runs from that bundle', async () => {
+    const f = installation()
+    f.plugin(hoisted(f, 'storage-domain'), 'storage-domain', 'pinned')
+    f.select([])
+    const { ctx, computed } = await f.launch(true)
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    expect(f.observe().ran).toEqual([])
+    expect(computed.bundlePlugins).toEqual([])
+
+    f.select(['@deepseek-ai/dsh-base'])
+    await expect(recomposeProfile(ctx, f.patches(), 'dsh')).resolves.toEqual({ warnings: [] })
+    // The installation already supplies the bundle and its dependencies, so only the bundle plugins differ.
+    const published = ctx.get('pluginPackages')?.resolution
+    expect(published?.bundlePlugins?.map(plugin => plugin.name)).toEqual(['storage-domain'])
+    expect([published?.entries, published?.localPackageNames, published?.linkedRoots])
+      .toEqual([computed.entries, computed.localPackageNames, computed.linkedRoots])
+    expect(f.observe()).toEqual({ ran: ['storage-domain=installed'], disabled: [] })
+  })
 })

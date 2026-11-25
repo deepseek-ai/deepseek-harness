@@ -14,7 +14,7 @@ Client artifacts contain `id` and `factory`, with optional `meta` and a `chunk` 
 
 Modules owns JavaScript exports, module identity, owner ids, and observed dependency edges. It retains metadata functions without evaluating them and publishes generic module-record changes. Renderer owns metadata/text caches, dependency-ordered stylesheet collection, path deduplication, and main-document nodes. It explicitly installs existing resources before React mounting, updates them on module changes, and releases styles after the root unmounts. Component lifetimes do not own styles.
 
-Static library builds keep their index artifact as ordinary ESM with all imports and dynamic imports for final shell assembly, and add the `__$dsh_client_module_manifest` export carrying the same manifest. The boot shell itself remains ordinary ESM. Modules wraps the existing carrier loading hook in its built-in Main environment; optional Realm providers do not change default startup or select plugin placement.
+Static library builds keep their index artifact as ordinary ESM with all imports and dynamic imports for final shell assembly, and add the `__$dsh_client_module_manifest` export carrying the same manifest. The boot shell itself remains ordinary ESM. Modules wraps the existing carrier loading hook in its built-in Main environment; Realm providers do not change default startup, and only a Loader entry's unstable isolation switch moves a package into a Realm ([Client modules](../../../../packages/client/modules/README.md#script-isolated-packages)).
 
 This decision refines the resource handling in the [loading model](2026-07-23-client-plugin-loading-model.md) and the artifact description in [shell layering](2026-08-15-client-shells-and-dynamic-packages.md). Their module identity, bootstrap, and dependency separation remain active; neither note is fully superseded.
 
@@ -26,7 +26,7 @@ This decision refines the resource handling in the [loading model](2026-07-23-cl
 
 **Reuse the dynamic plugin's private-dependency bundling for static libraries.** It moves third-party lazy chunking and font delivery into package builds, changing the established shell dependency policy. Static libraries retain that policy instead.
 
-**Document Scope and an early Realm activation phase.** Neither is required when all modules use the existing Main carrier and all styles target the main document. Isolation requests, environment allocation, and multiple presentation destinations remain separate work.
+**Document Scope and an unconditional Realm activation phase.** Neither is required for stylesheet metadata: even when a package runs in an iframe Realm, the renderer installs its styles in the main document.
 
 ## Consequences
 

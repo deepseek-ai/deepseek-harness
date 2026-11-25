@@ -174,11 +174,14 @@ export function enterBrowser(locales: typeof loginLocales): void {
   const open = document.getElementById('open') as HTMLAnchorElement
   notice.hidden = false
   open.textContent = t.open
-  const showError = (message: string, checkApp = false): void => {
-    status.textContent = message
-    status.setAttribute('role', 'alert')
-    notice.dataset.state = 'error'
-    open.hidden = !checkApp
+  // Object methods keep Host-side name helpers out of the serialized browser script.
+  const { showError } = {
+    showError(this: void, message: string, checkApp = false): void {
+      status.textContent = message
+      status.setAttribute('role', 'alert')
+      notice.dataset.state = 'error'
+      open.hidden = !checkApp
+    },
   }
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
     showError(t.invalid)

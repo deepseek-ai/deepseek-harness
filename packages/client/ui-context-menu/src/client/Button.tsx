@@ -9,7 +9,7 @@ import type { ContextMenus, ContextMenuTarget, MenuPoint } from './types.ts'
 /** Menu facts and the per-button toggle, bound by the factory registration. */
 export interface ContextMenuButtonInjected {
   hooks: {
-    /** Instance id of the shared button that opened the current popup; null for gestures and after dismissal. */
+    /** Instance id of the element that opened the current popup; null when opened without one and after dismissal. */
     opener: ObservableSnapshot<string | null>
     registeredKinds: ContextMenus['registeredKinds']
   }
@@ -27,8 +27,9 @@ export interface ContextMenuButtonInjected {
  * @param props - Localized owner data and framework-bound menu facts.
  * @returns An available target's menu trigger.
  */
-export function ContextMenuButton({ target, label, className, size, useOpener, useRegisteredKinds, toggle }: FactoryComponentPropsOf<'contextMenu.button'>) {
-  const id = useId()
+export function ContextMenuButton({ target, label, className, size, opener, useOpener, useRegisteredKinds, toggle }: FactoryComponentPropsOf<'contextMenu.button'>) {
+  const ownId = useId()
+  const id = opener ?? ownId
   const expanded = useOpener(opener => opener === id)
   const available = useRegisteredKinds(kinds => kinds.includes(target.kind))
   if (!available) return null

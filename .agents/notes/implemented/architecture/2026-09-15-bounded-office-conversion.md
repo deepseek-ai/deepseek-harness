@@ -28,7 +28,7 @@ Foreground preview and explicit QA requests precede background work. Disabling b
 
 **Build a second prewarm or QA converter.** Independent queues duplicate resource ownership and cannot prioritize shared foreground work.
 
-**Separate service-definition and provider packages for the sole LibreOffice implementation.** They evolve together and have no independent alternative implementation. One `office-kit` package supplies the mountable service without duplicated package, dependency, and release configuration. Native and WASM engine selection remains inside the kit; a second independent implementation can justify extracting an interface from actual consumer needs.
+**Separate service-definition and provider packages.** The service has one implementation; its LibreOffice Kit converter and the [Poppler PDF renderer](2026-11-23-poppler-pdf-renderer.md) are backends inside that provider and share its queue, cache, and admission, so they evolve together with the service. One `office-kit` package supplies the mountable service without duplicated package, dependency, and release configuration. Native and WASM engine selection remains inside the kit; a second independent implementation of the service can justify extracting an interface from actual consumer needs.
 
 ## Consequences
 
@@ -40,4 +40,4 @@ Controlled source and engine completions verify pre-read admission, content join
 
 ## Related
 
-The [background scheduling proposal](../../proposed/simplification/2026-09-17-defer-office-background-scheduling.md) questions the need for speculative priority without a production caller; this note remains the authority for the implemented behavior.
+The [background scheduling proposal](../../proposed/simplification/2026-09-17-defer-office-background-scheduling.md) questions the need for speculative priority without a production caller; this note remains the authority for the implemented behavior. The [Poppler PDF renderer note](2026-11-23-poppler-pdf-renderer.md) records how image rendering selects a backend inside this queue.

@@ -74,6 +74,7 @@ export {
   PROFILES_DIR,
   readProfileManifest,
   reportSkippedBundles,
+  reportBundlePluginWarnings,
   resolveBundleDir,
   resolveProfileDir,
   writeProfileManifest,
@@ -83,6 +84,7 @@ export {
   type ProfileManifest,
   type LinkedRoot,
   type RuntimeResolutionOptions,
+  type BundlePlugin,
   type RuntimeResolutionEntry,
   type RuntimeResolution,
 } from './profile.ts'
@@ -489,8 +491,8 @@ function rowIds(patches: readonly PatchOptions[]): Set<string> {
 
 /** Publish a generation unless it maps exactly what is published, which would only drop the package caches. */
 function publish(ctx: Context, next: RuntimeResolution): void {
-  const table = ({ localPackageNames, entries, linkedRoots }: RuntimeResolution): string =>
-    JSON.stringify([localPackageNames, entries, linkedRoots])
+  const table = ({ localPackageNames, entries, linkedRoots, bundlePlugins }: RuntimeResolution): string =>
+    JSON.stringify([localPackageNames, entries, linkedRoots, bundlePlugins])
   const packages = ctx.pluginPackages
   if (table(packages.resolution as RuntimeResolution) !== table(next)) packages.replace(next)
 }

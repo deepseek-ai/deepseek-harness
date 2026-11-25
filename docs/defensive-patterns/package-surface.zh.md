@@ -80,6 +80,7 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 - 集合之外的键（`./brand` 5 个包、`./worker` 4 个、`./startup`、`./runner`、`./protocol` 各 2 个，另有大量一次性键）没有文档含义，属待核项，不是可照抄的先例。
 - `dsh-tools` 另行提供 `./pipeline`，用于复用调用阶段与批量调度。主入口与 pipeline bundle 共享运行时 chunk，以保持错误类的身份一致；工作区检查验证导出目标与发布文件。
 - `dsh-tool-executor-ptc` 提供 `./run-code`，用于共享程序工具工厂、显式指定运行时及调用上限，并传入私有可调用工具定义。工作区检查验证其导出目标与发布文件。
+- `dsh-llm-pi-ai` 提供 `./provider`，用于它的提供方条目插件：这是第二个 Loader 入口，配置层以 `@deepseek-ai/dsh-llm-pi-ai/provider` 指名；另提供 `./provider/locale/*.json`，用于该插件的 locale 资源。条目插件向适配器入口的注册表注册，因此两个入口位于同一个包。工作区检查验证其导出目标与发布文件。
 - 判定条件：改动是否新增了标准集合以外的 export 键？
 - 例外：无默认例外；新增键须先改正家文档与检查，并取得对应领域专家确认。
 - 复算分布：
@@ -158,7 +159,7 @@ Restating a required-devDependency package list or the field rules on this page 
 - 复算：
 
 ```sh
-python3 -c "import json,glob,collections; c=collections.Counter(); [c.update([r]) for p in glob.glob('apps/*/package.json')+glob.glob('packages/*/*/package.json')+glob.glob('vendor/*/package.json') for s in ('dependencies','devDependencies','optionalDependencies','peerDependencies') for n,r in (json.load(open(p)).get(s) or {}).items() if n.startswith('@deepseek-ai/')]; print(c.most_common())"
+python3 -c "import json,glob,collections; c=collections.Counter(); [c.update([r]) for p in glob.glob('apps/*/package.json')+glob.glob('packages/*/*/package.json')+glob.glob('vendor/*/package.json')+glob.glob('vendor/im/*/package.json') for s in ('dependencies','devDependencies','optionalDependencies','peerDependencies') for n,r in (json.load(open(p)).get(s) or {}).items() if n.startswith('@deepseek-ai/')]; print(c.most_common())"
 ```
 
 每个包族各用其写法，非成员的例外保持普通版本范围。

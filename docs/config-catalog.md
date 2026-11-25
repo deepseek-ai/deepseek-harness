@@ -2505,7 +2505,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:257`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:259`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -3140,7 +3140,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-office-kit`
 
-- `source`: [`packages/document/office-kit/src/index.ts:38`](../packages/document/office-kit/src/index.ts)
+- `source`: [`packages/document/office-kit/src/index.ts:43`](../packages/document/office-kit/src/index.ts)
 
 ```ts config-catalog
 /** Provider concurrency and kit rendering/font configuration. */
@@ -3167,7 +3167,7 @@ export interface Config {
   outputRetentionMs: number
   /** Maximum bytes across retained converted and recalculated files; the oldest leave first. */
   maxOutputStoreBytes: number
-  /** Conversion deadline in milliseconds; excludes the DSH queue. */
+  /** Deadline in milliseconds of one conversion, or of all Poppler processes of one rendering; excludes the DSH queue. */
   timeoutMs: number
   /** Maximum authorized source bytes. */
   maxInputBytes: number
@@ -3189,7 +3189,30 @@ export interface Config {
   maxFontFileBytes: number
   /** Maximum original font bytes loaded for a conversion. */
   maxLoadedFontBytes: number
+  /**
+   * Image rendering backends tried in order for requests without `renderer`, per input type. Each list is nonempty
+   * and duplicate-free.
+   */
+  renderers: {
+    /** Order for every input except PDF; excludes `poppler`, which renders only PDF. */
+    office: DocumentRenderer[]
+    /** Order for PDF input. */
+    pdf: DocumentRenderer[]
+  }
+  /** Poppler executables used by the `poppler` renderer. */
+  poppler: {
+    /** `pdftoppm` executable: a bare name looked up on the subprocess provider's PATH, or an absolute path there. */
+    pdftoppm: string
+    /** `pdfinfo` executable: a bare name looked up on the subprocess provider's PATH, or an absolute path there. */
+    pdfinfo: string
+  }
 }
+
+/**
+ * Image rendering backend: `libreoffice` renders every image input in the provider's LibreOffice Kit converter;
+ * `poppler` renders PDF only, through short-lived `pdfinfo` and `pdftoppm` subprocesses.
+ */
+export type DocumentRenderer = 'libreoffice' | 'poppler'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-office-kit -->
 
@@ -3287,7 +3310,7 @@ export interface PlanModeConfig {
 
 - `inject`: `loader` · `profileContext`
 - `refs`: [`NpmFileSource`](subsystems/boot.md)
-- `source`: [`packages/boot/plugin-manager/src/index.ts:56`](../packages/boot/plugin-manager/src/index.ts)
+- `source`: [`packages/boot/plugin-manager/src/index.ts:57`](../packages/boot/plugin-manager/src/index.ts)
 
 ```ts config-catalog
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -3501,6 +3524,25 @@ export type Config = LocalConfig
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-pwsh-sandbox -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-read-aloud -->
+<a id="deepseek-aidsh-read-aloud"></a>
+
+## `@deepseek-ai/dsh-read-aloud`
+
+- `inject`: `textToSpeech` · `typert` · `sessions` · `sessionPersistence`
+- `source`: [`packages/experimental/read-aloud/src/index.ts:31`](../packages/experimental/read-aloud/src/index.ts)
+
+```ts config-catalog
+/** Pacing of one reading; both values trade cost after an early stop against the number of requests. */
+export interface Config {
+  /** Estimated spoken length, in seconds, of the text one synthesis request carries. */
+  segmentSeconds: number
+  /** The Client requests the next segment once this many seconds of received audio, or fewer, remain unplayed. */
+  dispatchBelowSeconds: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-read-aloud -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-repeat-tool-reminder -->
 <a id="deepseek-aidsh-repeat-tool-reminder"></a>
 
@@ -3664,13 +3706,15 @@ export interface Config {
 
 - `inject`: `agents` · `workingDirectory`
 - `refs`: `Readable` (`node:stream`) · `Writable` (`node:stream`)
-- `source`: [`packages/sdk/server/src/index.ts:25`](../packages/sdk/server/src/index.ts)
+- `source`: [`packages/sdk/server/src/index.ts:26`](../packages/sdk/server/src/index.ts)
 
 ```ts config-catalog
 /** JSON-RPC deployment config plus runtime-only test hooks. */
 export interface JsonRpcConfig {
   /** Report max-token turn/subagent termination as a successful SDK result. */
   maxTokensAsSuccess?: boolean
+  /** Longest `initialize` wait, in milliseconds, for startup work that finishes after Loader settlement; `0` skips it. */
+  startupWaitMs?: number
   /** Transport input override; production uses `process.stdin`. */
   input?: Readable
   /** Transport output override; production uses `process.stdout`. */
@@ -3781,9 +3825,7 @@ export interface Config extends JsonlConfigOptions {
   /**
    * Maximum events stored per frame. One frame is the unit of compression and
    * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice. When the Segment's newest frames that each hold fewer
-   * events reach this many together, an append re-encodes them as frames of up
-   * to this many events.
+   * reading a slice; stored frames keep the size they were written with.
    */
   frameEvents?: number
 }
@@ -4326,7 +4368,7 @@ export type JournalMode = 'wal' | 'delete' | 'truncate' | 'persist'
 
 - `inject`: `workingDirectory` · `sessionProjections`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/subagent/subagent/src/index.ts:188`](../packages/subagent/subagent/src/index.ts)
+- `source`: [`packages/subagent/subagent/src/index.ts:190`](../packages/subagent/subagent/src/index.ts)
 
 ```ts config-catalog
 /** Host configuration for continuable subagent capacity. */
@@ -4711,6 +4753,44 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-terminal-panel -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech -->
+<a id="deepseek-aidsh-text-to-speech"></a>
+
+## `@deepseek-ai/dsh-text-to-speech`
+
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/experimental/text-to-speech/src/index.ts:24`](../packages/experimental/text-to-speech/src/index.ts)
+
+```ts config-catalog
+/** Composition choice and the live voice preference, both read when a synthesis is resolved. */
+export interface Config {
+  /** Id of the registered provider that speaks every request. */
+  defaultProvider: string
+  /** Saved voice id, written by `configure()`; absent, or a voice the provider does not offer, selects the provider's default. */
+  voice: Volatile<string | undefined>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech-deepseek -->
+<a id="deepseek-aidsh-text-to-speech-deepseek"></a>
+
+## `@deepseek-ai/dsh-text-to-speech-deepseek`
+
+- `inject`: `textToSpeech` · `deepseekAuth`
+- `source`: [`packages/experimental/text-to-speech-deepseek/src/config.ts:8`](../packages/experimental/text-to-speech-deepseek/src/config.ts)
+
+```ts config-catalog
+/** Registration id and the wait bound of one synthesis request; `ctx.deepseekAuth` supplies the endpoint and credential. */
+export interface Config {
+  /** Unique registration id; `text-to-speech` selects this exact id. */
+  providerId: string
+  /** Longest wait, in milliseconds, for the next audio bytes while a consumer is asking, the first bytes included. */
+  idleTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-text-to-speech-deepseek -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-time-context -->
 <a id="deepseek-aidsh-time-context"></a>
 
@@ -4940,6 +5020,31 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-document -->
+<a id="deepseek-aidsh-tool-document"></a>
+
+## `@deepseek-ai/dsh-tool-document`
+
+- `inject`: `tools` · `fs` · `workingDirectory` · `agents`
+- `source`: [`packages/document/tool-document/src/index.ts:43`](../packages/document/tool-document/src/index.ts)
+
+```ts config-catalog
+/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
+export interface Config {
+  /** Skill names whose successful loading admits all three tools from the following step. */
+  activationSkills: string[]
+  /** Maximum images one render returns, including worksheet fragments. */
+  maxImages: number
+  /** Maximum pixels of each image. */
+  maxImagePixels: number
+  /** Maximum width and height of each image in pixels. */
+  maxImageDimension: number
+  /** Maximum PNG bytes across all images of one render. */
+  maxImageBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-document -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
 <a id="deepseek-aidsh-tool-executor-ptc"></a>
 
@@ -5109,31 +5214,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-lsp -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
-<a id="deepseek-aidsh-tool-office"></a>
-
-## `@deepseek-ai/dsh-tool-office`
-
-- `inject`: `tools` · `fs` · `workingDirectory` · `agents`
-- `source`: [`packages/document/tool-office/src/index.ts:43`](../packages/document/tool-office/src/index.ts)
-
-```ts config-catalog
-/** Activation skills and render bounds; lower deployment attachment limits take precedence. */
-export interface Config {
-  /** Skill names whose successful loading admits all three tools from the following step. */
-  activationSkills: string[]
-  /** Maximum images one render returns, including worksheet fragments. */
-  maxImages: number
-  /** Maximum pixels of each image. */
-  maxImagePixels: number
-  /** Maximum width and height of each image in pixels. */
-  maxImageDimension: number
-  /** Maximum PNG bytes across all images of one render. */
-  maxImageBytes: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-office -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-present -->
 <a id="deepseek-aidsh-tool-present"></a>
@@ -5863,6 +5943,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-chat` | — | [`packages/client/ui-chat/src/index.ts`](../packages/client/ui-chat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-commands` | — | [`packages/client/ui-commands/src/index.ts`](../packages/client/ui-commands/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-connector-account` | — | [`packages/client/ui-connector-account/src/index.ts`](../packages/client/ui-connector-account/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-connectors` | — | [`packages/experimental/client-ui-connectors/src/index.ts`](../packages/experimental/client-ui-connectors/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-conversation` | — | [`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-cordis` | — | [`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-creation-recommendations` | — | [`packages/client/ui-creation-recommendations/src/index.ts`](../packages/client/ui-creation-recommendations/src/index.ts) |
@@ -5883,8 +5964,10 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-recommendations` | — | [`packages/client/ui-plugin-recommendations/src/index.ts`](../packages/client/ui-plugin-recommendations/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-read-aloud` | — | [`packages/experimental/client-ui-read-aloud/src/index.ts`](../packages/experimental/client-ui-read-aloud/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-reference` | — | [`packages/client/ui-reference/src/index.ts`](../packages/client/ui-reference/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-renderer` | — | [`packages/client/ui-renderer/src/index.ts`](../packages/client/ui-renderer/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-responsive` | — | [`packages/client/ui-responsive/src/index.ts`](../packages/client/ui-responsive/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-secret-mask` | — | [`packages/client/ui-secret-mask/src/index.ts`](../packages/client/ui-secret-mask/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session` | — | [`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts) |
@@ -6047,6 +6130,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-package-manifest` | — | [`packages/util/package-manifest/src/index.ts`](../packages/util/package-manifest/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-detail` | — | [`packages/util/plugin-detail/src/index.ts`](../packages/util/plugin-detail/src/index.ts) |
 | `@deepseek-ai/dsh-plugin-market-index` | — | [`packages/util/plugin-market-index/src/index.ts`](../packages/util/plugin-market-index/src/index.ts) |
+| `@deepseek-ai/dsh-read-aloud-bundle` | — | [`packages/experimental/read-aloud-bundle/src/index.ts`](../packages/experimental/read-aloud-bundle/src/index.ts) |
 | `@deepseek-ai/dsh-remote-mock` | — | [`packages/test-support/remote-mock/src/index.ts`](../packages/test-support/remote-mock/src/index.ts) |
 | `@deepseek-ai/dsh-sandbox-windows-acl` | — | [`packages/sandbox/sandbox-windows-acl/src/index.ts`](../packages/sandbox/sandbox-windows-acl/src/index.ts) |
 | `@deepseek-ai/dsh-scope` | — | [`packages/core/scope/src/index.ts`](../packages/core/scope/src/index.ts) |

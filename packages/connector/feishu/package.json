@@ -48,7 +48,7 @@
     "@deepseek-ai/schemastery": "workspace:~",
     "@larksuite/cli": "1.0.97",
     "yaml": "^2.4.2",
-    "zod": "^4.4.3"
+    "zod": "4.6.6"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

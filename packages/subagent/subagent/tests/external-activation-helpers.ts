@@ -41,7 +41,7 @@ export async function externalTestParent(ctx: Context, cwd?: string): Promise<Ag
     ctx,
     options: {},
     status: 'idle',
-    model: unsupportedModel(),
+    model: { ...unsupportedModel(), current: () => undefined },
     inbox,
     send: (message, target) => { inbox.append(target, message) },
     followup: (message) => { inbox.append('next-turn', message) },

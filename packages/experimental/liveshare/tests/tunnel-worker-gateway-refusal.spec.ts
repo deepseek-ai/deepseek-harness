@@ -17,7 +17,7 @@ import {
   type TunnelWorkerCommand,
   type TunnelWorkerEvent,
 } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
-import { relayRefusal, relayRefusalStatus } from '../src/owner-gateway/relay-refusal.ts'
+import { relayRefusal } from '../src/owner-gateway/relay-refusal.ts'
 
 const workerEntry = fileURLToPath(new URL('../src/owner-gateway/cli.ts', import.meta.url))
 
@@ -104,16 +104,6 @@ describe('Relay handshake refusals', () => {
     expect(relayRefusal(500)).toBeUndefined()
     expect(relayRefusal(429)).toBeUndefined()
     expect(relayRefusal(undefined)).toBeUndefined()
-  })
-
-  it('reads back the refusing status only from the message this build composes', () => {
-    expect(relayRefusalStatus('relay refused registration status=401')).toBe(401)
-    expect(relayRefusalStatus('relay refused registration status=410')).toBe(410)
-    // A failure the gateway reported any other way keeps the ordinary reconnect schedule.
-    expect(relayRefusalStatus('tunnel worker exited code=1 signal=null')).toBeUndefined()
-    expect(relayRefusalStatus('relay answered registration status=200')).toBeUndefined()
-    // The message carries a status, but not one this build treats as final.
-    expect(relayRefusalStatus('relay refused registration status=500')).toBeUndefined()
   })
 
   it.each([403, 426])('stops registering a share refused with %s and keeps the status', async (status) => {

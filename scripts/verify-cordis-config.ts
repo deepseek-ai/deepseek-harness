@@ -489,7 +489,7 @@ function readManifest(path: string, repoRoot: string = root): PackageManifest {
 }
 
 function localPackageDirectories(): Map<string, string> {
-  const manifests = globSync(['packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
+  const manifests = globSync(['packages/*/*/package.json', 'vendor/*/package.json', 'vendor/im/*/package.json'], { cwd: root })
   const packages = new Map<string, string>()
   for (const manifestPath of manifests) {
     const manifest = readManifest(manifestPath)

@@ -190,12 +190,9 @@ export function registerContextMenus(
   ctx.effect(() => ctx.contextMenus.register({
     id: 'open-in-app.url', target: 'url', order: 100,
     resolve: ({ sessionId, url }) => [
-      // Without the Browser tab type, as in Web profiles that leave it disabled, the sidebar has nowhere to open a URL.
-      ...ctx.sidebarRightTabs.get('browser') === undefined ? [] : [{
-        id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.openInSidebar'),
-        run: () => { ctx.sidebarRight.openTabIn(sessionId, 'browser', { params: { url } }) },
-      }],
-      { id: 'external', icon: { key: 'open-in-app.external' }, label: t('menu.external'),
+      { id: 'sidebar', icon: { key: 'open-in-app.sidebar' }, label: t('menu.openInSidebar'), disabled: ctx.sidebarRightTabs.get('browser') === undefined,
+        run: () => { ctx.sidebarRight.openTabIn(sessionId, 'browser', { params: { url } }) } },
+      { id: 'external', label: t('menu.external'),
         run: () => { window.open(url, '_blank', 'noopener,noreferrer') } },
       { id: 'copy', icon: { key: 'open-in-app.copy' }, failureLabel: t('menu.copyFailed'), label: t('menu.copyLink'), run: async () => {
         await navigator.clipboard.writeText(url); ctx.contextMenus.notify(t('menu.copied'), true)

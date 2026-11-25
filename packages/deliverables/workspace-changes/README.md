@@ -35,7 +35,7 @@ The shipped Web bundle mounts this plugin. Mount it in any composition with the 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `timeoutMs` | `30000` | Milliseconds one git command may run before the turn's record is abandoned |
+| `timeoutMs` | `3000` | Milliseconds one git command may run before the turn's record is abandoned |
 | `outputMaxBytes` | `8388608` | Bytes of git output retained per command; a larger diff listing abandons the record |
 | `maxFiles` | `500` | Maximum files carried by one summary; `total` still reports the complete count |
 | `maxFileBytes` | `2097152` | Bytes a file may hold to be captured around a file-tool edit or read from a snapshot for its comparison; a larger file gets no comparison, and one captured around a file-tool edit is also listed without counts |

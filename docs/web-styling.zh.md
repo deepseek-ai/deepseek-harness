@@ -10,6 +10,8 @@
 
 全局样式表归 `ui-theme/src/styles/` 所有。组件样式以 CSS Modules 形式放在组件旁。当某个值属于该组件的布局或呈现约定时，组件可以定义局部自定义属性；共享颜色、排版、层级和动效属于主题包。
 
+[包级样式隔离](../packages/client/ui-renderer/README.zh.md#package-style-isolation)按需开启：它限制所选包的选择器，不限制全局主题或其依赖包的样式。只有准备开启的包，才需要适配依赖 slot 根以外祖先的规则。
+
 <a id="component-rules"></a>
 ## 组件规则
 

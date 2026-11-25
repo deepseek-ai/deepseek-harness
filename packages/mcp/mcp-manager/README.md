@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the manager once per Host. It creates its own MCP client host, the only way it validates, mounts, probes, and authorizes servers. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
+Mount the manager once per Host. It creates its own MCP client host, the only way it validates, mounts, probes, and authorizes servers. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md), and the SDK profile mounts the same row through [`dsh-sdk-app`](../../bundle/sdk-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
 
 ### When to choose it
 
@@ -106,6 +106,8 @@ export function apply(ctx: Context): void {
 ### Observing and recovering
 
 `ctx.mcpManager.list()` returns each server's `name`, `configured` flag, and live `status`, listing configured entries before registered ones. The list includes removed entries whose cleanup is still pending or failed, with `configured: false`; a cleanup failure retains the row until the Host restarts. Cleanup status retains the first diagnostic and reports `closeConfirmed: false` if any instance or probe could not confirm closure. Published status changes emit `mcp-manager/status` while the manager is live, including cleanup failures after an entry's removal. Lifecycle operations do not wait for listeners; synchronous throws and returned promise rejections are logged without skipping other listeners.
+
+`whenSettled(signal)` resolves once `list()` reports no server as `connecting` with `attempt: 0`, the first attempt of a connection. Every later state counts, including a failed attempt, a reconnect attempt, and waiting for credentials or authorization; servers that join during the wait are included. It returns the names still in their first attempt when the signal aborts or the manager is disposed, and an empty list once settled. The [SDK server](../../sdk/server/README.md) uses it to hold `initialize` for at most its `startupWaitMs`. It is a Host method; Remote clients observe the same states through `watch`.
 
 Reconnection stays inside mcp-client. `restart(name)` replaces an instance and resets its reconnect budget, including after that budget runs out. Unconfirmed transport closure or a local cleanup error blocks replacement and further probes for that server; restart the Host to recover. `probe(name, options)` resolves templates, connects, reads server identity and tool names, and closes without registering tools or reserving a namespace. Disabled entries can be probed. On an OAuth entry, a probe may refresh an expired grant and save the new tokens. The probe has its own deadline and cancellation signal, and reports connection/listing success separately from closure and cleanup results.
 
