@@ -2,7 +2,7 @@
   - note:
     - paragraph: Experimental feature
     - paragraph: Computer use is experimental and results are not guaranteed. The agent may click the wrong button or type in the wrong window. Use caution in important or production environments.
-  - paragraph: We recommend using PTC mode so the agent can operate apps and call other tools in the same program.
+  - paragraph: We recommend using PTC mode so the agent can operate apps and call other tools in the same program. You can set it as the default in Settings → Agent presets.
   - heading "System permissions" [level=3]
   - paragraph: "Computer use requires the following system permissions to run:"
   - group "Accessibility":

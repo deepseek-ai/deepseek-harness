@@ -4,7 +4,7 @@ export const NS = 'cuaPermissions'
 export const en = {
   previewNoticeTitle: 'Experimental feature',
   previewNotice: 'Computer use is experimental and results are not guaranteed. The agent may click the wrong button or type in the wrong window. Use caution in important or production environments.',
-  ptcRecommendation: 'We recommend using PTC mode so the agent can operate apps and call other tools in the same program.',
+  ptcRecommendation: 'We recommend using PTC mode so the agent can operate apps and call other tools in the same program. You can set it as the default in Settings → Agent presets.',
   providerLookupFailed: 'Could not identify the computer use provider: {message}',
   approvalRisks: 'Risks',
   approvalRiskTitle: 'Computer use risks',
@@ -50,7 +50,7 @@ export type CuaPermissionLocaleKey = keyof typeof en
 export const zh: Record<CuaPermissionLocaleKey, string> = {
   previewNoticeTitle: '实验性功能提示',
   previewNotice: '自动电脑操作仍处于实验阶段，不保证操作结果。智能体可能误点按钮或在错误的窗口中输入内容，请谨慎在重要或生产环境中使用。',
-  ptcRecommendation: '建议配合 PTC 模式使用，让智能体在同一段代码中完成应用操作并调用其他工具。',
+  ptcRecommendation: '建议配合 PTC 模式使用，让智能体在同一段代码中完成应用操作并调用其他工具。可在“设置 → Agent 预设”中将其设为默认。',
   providerLookupFailed: '无法识别自动电脑操作后端：{message}',
   approvalRisks: '风险提示',
   approvalRiskTitle: '自动电脑操作风险提示',
@@ -94,7 +94,7 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 export const ja = {
   previewNoticeTitle: '実験的機能について',
   previewNotice: 'Computer Use は実験的な機能であり、操作結果は保証されません。エージェントが誤ったボタンをクリックしたり、別のウィンドウに入力したりする可能性があります。重要な環境や本番環境では慎重に使用してください。',
-  ptcRecommendation: '同じプログラム内でアプリの操作と他のツールの呼び出しを行えるよう、PTC モードの使用をおすすめします。',
+  ptcRecommendation: '同じプログラム内でアプリの操作と他のツールの呼び出しを行えるよう、PTC モードの使用をおすすめします。「設定 → エージェントプリセット」でデフォルトに設定できます。',
   providerLookupFailed: 'Computer Use のプロバイダーを特定できませんでした：{message}',
   windowsSetupTitle: 'デスクトップ実行環境を確認',
   windowsSetupBody: 'デスクトップがロックされています。ロックを解除して再試行してください。',
@@ -153,7 +153,7 @@ export const ja = {
 export const es = {
   previewNoticeTitle: 'Función experimental',
   previewNotice: 'Computer Use es experimental y sus resultados no están garantizados. El agente puede pulsar el botón equivocado o escribir en la ventana incorrecta. Úsala con precaución en entornos importantes o de producción.',
-  ptcRecommendation: 'Recomendamos usar el modo PTC para que el agente pueda controlar aplicaciones y llamar a otras herramientas en el mismo programa.',
+  ptcRecommendation: 'Recomendamos usar el modo PTC para que el agente pueda controlar aplicaciones y llamar a otras herramientas en el mismo programa. Puedes establecerlo como predeterminado en Configuración → Ajustes preestablecidos del agente.',
   providerLookupFailed: 'No se pudo identificar el proveedor de Computer Use: {message}',
   windowsSetupTitle: 'Comprobar el entorno del escritorio',
   windowsSetupBody: 'El escritorio está bloqueado. Desbloquéalo e inténtalo de nuevo.',
@@ -198,7 +198,7 @@ export const es = {
 export const fr = {
   previewNoticeTitle: 'Fonctionnalité expérimentale',
   previewNotice: 'Computer Use est une fonctionnalité expérimentale dont les résultats ne sont pas garantis. L’agent peut cliquer sur le mauvais bouton ou saisir du texte dans la mauvaise fenêtre. Soyez prudent dans les environnements importants ou de production.',
-  ptcRecommendation: 'Nous recommandons d’utiliser le mode PTC afin que l’agent puisse piloter des applications et appeler d’autres outils dans le même programme.',
+  ptcRecommendation: 'Nous recommandons d’utiliser le mode PTC afin que l’agent puisse piloter des applications et appeler d’autres outils dans le même programme. Vous pouvez le définir par défaut dans Paramètres → Préréglages d\'agent.',
   providerLookupFailed: 'Impossible d’identifier le fournisseur de Computer Use : {message}',
   windowsSetupTitle: 'Vérifier l’environnement de bureau',
   windowsSetupBody: 'Le bureau est verrouillé. Déverrouillez-le puis réessayez.',
@@ -243,7 +243,7 @@ export const fr = {
 export const de = {
   previewNoticeTitle: 'Experimentelle Funktion',
   previewNotice: 'Computer Use ist experimentell und Ergebnisse werden nicht garantiert. Der Agent kann auf die falsche Schaltfläche klicken oder im falschen Fenster tippen. Seien Sie in wichtigen oder produktiven Umgebungen vorsichtig.',
-  ptcRecommendation: 'Wir empfehlen den PTC-Modus, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann.',
+  ptcRecommendation: 'Wir empfehlen den PTC-Modus, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann. Sie können ihn unter Einstellungen → Agentenvoreinstellungen als Standard festlegen.',
   providerLookupFailed: 'Der Computer-Use-Anbieter konnte nicht ermittelt werden: {message}',
   windowsSetupTitle: 'Desktopumgebung prüfen',
   windowsSetupBody: 'Der Desktop ist gesperrt. Entsperren Sie ihn und versuchen Sie es erneut.',
@@ -288,7 +288,7 @@ export const de = {
 export const ru = {
   previewNoticeTitle: 'Экспериментальная функция',
   previewNotice: 'Управление компьютером находится на экспериментальной стадии, и результат не гарантируется. Агент может нажать не ту кнопку или ввести текст не в то окно. Будьте осторожны в важных и рабочих средах.',
-  ptcRecommendation: 'Рекомендуем использовать режим PTC, чтобы агент мог управлять приложениями и вызывать другие инструменты в одной программе.',
+  ptcRecommendation: 'Рекомендуем использовать режим PTC, чтобы агент мог управлять приложениями и вызывать другие инструменты в одной программе. Его можно сделать режимом по умолчанию в разделе «Настройки → Настройки агента».',
   providerLookupFailed: 'Не удалось определить поставщика Computer Use: {message}',
   windowsSetupTitle: 'Проверить среду рабочего стола',
   windowsSetupBody: 'Рабочий стол заблокирован. Разблокируйте его и повторите попытку.',
@@ -333,7 +333,7 @@ export const ru = {
 export const pt = {
   previewNoticeTitle: 'Recurso experimental',
   previewNotice: 'Computer Use é experimental e os resultados não são garantidos. O agente pode clicar no botão errado ou digitar na janela errada. Use com cautela em ambientes importantes ou de produção.',
-  ptcRecommendation: 'Recomendamos usar o modo PTC para que o agente possa operar aplicativos e chamar outras ferramentas no mesmo programa.',
+  ptcRecommendation: 'Recomendamos usar o modo PTC para que o agente possa operar aplicativos e chamar outras ferramentas no mesmo programa. Você pode defini-lo como padrão em Configurações → Predefinições de agente.',
   providerLookupFailed: 'Não foi possível identificar o provedor do Computer Use: {message}',
   windowsSetupTitle: 'Verificar ambiente da área de trabalho',
   windowsSetupBody: 'A área de trabalho está bloqueada. Desbloqueie-a e tente novamente.',
