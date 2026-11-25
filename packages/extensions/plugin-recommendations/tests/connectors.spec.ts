@@ -306,6 +306,22 @@ describe('official connector cards', () => {
     expect(f.manager.installBundle).not.toHaveBeenCalled()
   })
 
+  it('refuses the action without installing when its conversation closes while the Connectors tab switches on', async () => {
+    const f = await connectorCard([tab])
+    const entered = Promise.withResolvers<undefined>()
+    const gate = Promise.withResolvers<ChangeResult>()
+    onTestFinished(() => { gate.resolve(applied) })
+    f.manager.setBundleEnabled.mockImplementationOnce(() => { entered.resolve(undefined); return gate.promise })
+    const action = f.act('enable')
+    await entered.promise
+    await f.handle.dispose()
+    gate.resolve({ ...applied, target: CONNECTORS_TAB_BUNDLE })
+    expect(await action).toEqual({ status: 'refused', reason: 'not-live-root' })
+    expect(f.card()).toBeUndefined()
+    expect(f.manager.setBundleEnabled).toHaveBeenCalledExactlyOnceWith(CONNECTORS_TAB_BUNDLE, true)
+    expect(f.manager.installBundle).not.toHaveBeenCalled()
+  })
+
   it('records an installation an unload cut off as unconfirmed, then as enabled once the connector is on', async () => {
     const f = await connectorCard()
     const entered = Promise.withResolvers<undefined>()

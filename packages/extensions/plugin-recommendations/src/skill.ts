@@ -56,9 +56,9 @@ function offerable(target: Target | undefined): boolean {
 }
 
 /**
- * The skill's catalog entry for one plugin manager listing. It names, in the Connectors tab's order, only the apps
- * whose connector a card could offer now, so a task that needs the app of an enabled or unusable connector does not
- * load the skill; without such a connector the entry names no app.
+ * The skill's catalog entry for one plugin manager listing. It names, in the order `CONNECTORS` lists them, only the
+ * apps whose connector a card could offer now, so a task that needs the app of an enabled or unusable connector does
+ * not load the skill; without such a connector the entry names no app.
  */
 function skillDescription(bundles: readonly BundleInfo[]): string {
   const apps = CONNECTORS.filter(({ name }) => offerable(targetOf(bundles, name))).map(connector => connector.title.en)

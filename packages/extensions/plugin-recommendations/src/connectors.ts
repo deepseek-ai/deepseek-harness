@@ -14,9 +14,9 @@ export interface Connector {
 }
 
 /**
- * Every official connector, in the Connectors tab's order. The installation does not ship them, so the catalog carries
- * their English text and the card of an uninstalled one their English and Chinese text; a test compares each entry
- * with its package's own name and locale files.
+ * Every official connector; the skill's catalog entry names their apps in this list's order. The installation does not
+ * ship them, so the catalog carries their English text and the card of an uninstalled one their English and Chinese
+ * text; a test compares each entry with its package's own name and locale files.
  */
 export const CONNECTORS: readonly Connector[] = [
   { name: '@deepseek-ai/dsh-feishu', title: { en: 'Feishu', zh: '飞书' }, description: {

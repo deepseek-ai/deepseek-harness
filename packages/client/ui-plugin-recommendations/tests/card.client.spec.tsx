@@ -167,13 +167,14 @@ it.each([
   const details = screen.getByRole('button', { name: '查看详情：搜索旧会话' })
   expect(description(details)).toBeUndefined()
   expect(screen.queryByRole('button', { name: '启用' })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
-  await waitFor(() => { expect(value.act).toHaveBeenCalledExactlyOnceWith('dismiss') })
+  expect(screen.getByRole('button', { name: '暂不需要' }).hasAttribute('disabled')).toBe(false)
   fireEvent.click(screen.getByRole('button', { name: '重试' }))
   await waitFor(() => { expect(screen.getByRole('button', { name: '启用' }).hasAttribute('disabled')).toBe(false) })
   expect(value.describe).toHaveBeenCalledTimes(2)
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '暂不需要' }))
+  await waitFor(() => { expect(value.act).toHaveBeenCalledExactlyOnceWith('dismiss') })
 })
 
 it('keeps the recorded outcome of an enabled card whose plugin has left the catalog', async () => {
@@ -330,6 +331,27 @@ it.each([
   fireEvent.click(connect)
   expect(value.openDetails).toHaveBeenCalledExactlyOnceWith('official-search')
   expect(value.act).not.toHaveBeenCalled()
+})
+
+it('looks the plugin up again after an action whose recorded decision stays failed', async () => {
+  const value = props({ phase: 'failed', data: { errorCode: 'operation-error', pendingBuilds: BUILDS } }, installable)
+  await shown(value)
+  expect(screen.getByText('在对话中使用飞书文档、消息及其他已授权的功能。')).toBeTruthy()
+  // The allowed scripts let the installation land, but the connector failed to start, so the decision is failed again.
+  value.describe.mockResolvedValue(connector)
+  value.act.mockResolvedValue({ status: 'settled', decision: { cardId, action: ACTION, phase: 'failed', data: { errorCode: 'operation-error' } } })
+  fireEvent.click(screen.getByRole('button', { name: '允许这些脚本并重试' }))
+  await waitFor(() => { expect(screen.getByRole('button', { name: '查看详情：飞书' })).toBeTruthy() })
+  expect(value.describe).toHaveBeenCalledTimes(2)
+  expect(screen.queryByText('在对话中使用飞书文档、消息及其他已授权的功能。')).toBeNull()
+})
+
+it('keeps the failure of an enabled connector whose last decision failed, without the account connection', async () => {
+  await shown(props({ phase: 'failed', data: { errorCode: 'operation-error' } }, connector))
+  expect(screen.getByRole('status').textContent).toBe(zh.failed)
+  expect(screen.getByRole('alert').textContent).toBe(zh['management-error'])
+  expect(screen.queryByRole('button', { name: '连接账号' })).toBeNull()
+  expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['飞书使用飞书文档'])
 })
 
 it('offers the account connection without a status for a phase it has no copy for', async () => {

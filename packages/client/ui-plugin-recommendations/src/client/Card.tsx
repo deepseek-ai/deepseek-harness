@@ -83,12 +83,14 @@ function primaryKey(installable: boolean, approving: boolean, pending: boolean, 
 
 /**
  * Display one plugin card: its current catalog title and description, the user's choice and its outcome.
- * Until the plugin's first catalog lookup returns, a placeholder line and the disabled actions hold the final layout.
+ * Until the plugin's first catalog lookup returns, a placeholder line and the disabled actions hold the final layout;
+ * after each action the card looks the plugin up again and keeps its current text until the answer arrives.
  * A refused or lost lookup leaves Not now and a retry of the lookup, but not Enable. A card that names no plugin shows
  * the frame's fallback. An official connector the profile does not hold shows the title and description the Host
  * copies from its package as plain text, since it has no details page before installation, and installs and enables
  * it; a failed installation that reported blocked install scripts lists them and offers to allow them. An enabled
- * official connector offers its account connection beside the card's status, unless the card was dismissed.
+ * official connector offers its account connection beside the card's status, unless the card was dismissed or its
+ * last decision failed.
  * @param props - card, state, actions and plugin-lifetime services.
  * @returns the card body.
  */
@@ -139,8 +141,9 @@ export function PluginCardBody({
   // The Host allows only the scripts this card's failed installation recorded.
   const builds = installable && phase === 'failed' ? data.pendingBuilds : undefined
   const primary: CardVerb = builds === undefined ? 'enable' : 'approve'
-  // A dismissed card stays closed even when its connector was enabled elsewhere afterwards.
-  const connect = available?.connector === true && available.enabled && phase !== 'dismissed'
+  // A dismissed card stays closed even when its connector was enabled elsewhere afterwards, and a failed one keeps its
+  // failure, since the account belongs to a running connector and this one did not start.
+  const connect = available?.connector === true && available.enabled && phase !== 'dismissed' && phase !== 'failed'
   const lookupProblem = settled ? undefined : current === null ? 'lookup-failed' : current?.status === 'refused' ? current.reason : undefined
   const failure = phase === 'failed' ? failureKey(data, installable) : undefined
   const title = available === undefined ? proposal.title : resolveText(available.title)
@@ -154,7 +157,11 @@ export function PluginCardBody({
     } catch {
       // The Host operation may have committed before a connection loss; retry is idempotent.
       setError('transport')
-    } finally { setPending(undefined) }
+    } finally {
+      setPending(undefined)
+      // The recorded phase can stay the same while the plugin changed, as after a second failure of an installation that landed.
+      setAttempt(value => value + 1)
+    }
   }
   const busy = pending !== undefined
   return <>

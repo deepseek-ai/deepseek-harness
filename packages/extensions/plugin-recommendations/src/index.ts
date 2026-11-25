@@ -184,12 +184,12 @@ export class PluginRecommendations extends TypertRemoteService {
     const bundles = await this.ctx.pluginManager.listBundles()
     const target = targetOf(bundles, proposal.details.name)
     if (target === undefined) return refused('unavailable')
-    if (this.isStopping()) return refused('closing')
-    if (this.ctx.agents.get(agent.id) !== agent || agent.session.header.origin === 'subagent') return refused('not-live-root')
-    if (target.connector !== undefined) {
+    let refusal = this.changeRefusal(agent)
+    if (refusal === undefined && target.connector !== undefined) {
       await this.showConnectorsTab(bundles)
-      if (this.isStopping()) return refused('closing')
+      refusal = this.changeRefusal(agent)
     }
+    if (refusal !== undefined) return refusal
     if (target.kind === 'enable') {
       const { bundle } = target
       // An unconfirmed card's plugin that reconciliation still found off and is on now was turned on by its own enable.
@@ -209,12 +209,19 @@ export class PluginRecommendations extends TypertRemoteService {
     })
   }
 
+  /** The refusal of a profile change this plugin may not make now: it is unloading, or the conversation is no longer a live root. */
+  private changeRefusal(agent: Agent): ActionCardResult | undefined {
+    if (this.isStopping()) return refused('closing')
+    if (this.ctx.agents.get(agent.id) !== agent || agent.session.header.origin === 'subagent') return refused('not-live-root')
+    return undefined
+  }
+
   /** Switch on the Connectors tab before a connector action; a failure is logged and the action continues. */
   private async showConnectorsTab(bundles: readonly BundleInfo[]): Promise<void> {
     const tab = bundles.find(item => item.name === CONNECTORS_TAB_BUNDLE)
     if (tab === undefined || !eligible(tab) || tab.enabled) return
     try {
-      // Like the card's own change, an unload ends only this wait; the caller then refuses the action as closing.
+      // Like the card's own change, an unload ends only this wait; the caller then checks again that it may change the profile.
       const result = await Promise.race([this.ctx.pluginManager.setBundleEnabled(tab.name, true), this.stopped.promise])
       if (result?.application === 'failed') this.ctx.logger.warn('Switching on %s failed: %s', tab.name, result.error?.code)
     } catch (error) {
