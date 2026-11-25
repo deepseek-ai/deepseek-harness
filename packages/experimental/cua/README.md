@@ -76,7 +76,7 @@ The page refreshes on entry, window focus, and completed actions. System-permiss
 
 System-permission operations affect the computer running DSH. When accessing DSH remotely, complete authorization on that computer.
 
-Enabling from the plugin list shows setup guidance when system permissions need attention, with **Later** and **Open settings** actions; enabling from the bundle's own detail page stays on the page without opening the dialog. Choose the default for new sessions in **Settings → Agent presets**.
+Enabling from the plugin list or detail page shows setup guidance when system permissions need attention, with **Later** and **Open settings** actions. Choose the default for new sessions in **Settings → Agent presets**.
 
 The page lists always-allowed applications and refusals from any session. A refusal in one session does not cancel another session’s grant or prevent a new session from asking. Session-only grants remain effective within their sessions and are omitted from this page. **Revoke** removes the selected application's access and cancels affected work. Input already delivered to an application cannot be undone; observe the application before any further action. **Allow asking again** clears that application’s refusal records across all sessions; the next application selection still requires a new decision.
 

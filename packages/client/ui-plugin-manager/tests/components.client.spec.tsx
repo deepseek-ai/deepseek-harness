@@ -2988,7 +2988,7 @@ describe('on-demand Official bundles', () => {
   })
 })
 
-it('skips activation guidance when enabling from the bundle detail switch', () => {
+it('uses the same activation guidance from a package detail switch', () => {
   const name = 'dsh-better-sidebar'
   const { set, actions } = renderTab({ packages: [pkg({ enabled: false })] }, { bundles: new Set([name]) }, {
     [`plugins.bundle.activation:${name}`]: (_view, owner) => <button onClick={(owner as PluginActivationOwnerProps).onDismiss}>Finish setup</button>,
@@ -3001,6 +3001,7 @@ it('skips activation guidance when enabling from the bundle detail switch', () =
   set({ packages: [pkg()], busy: [name] })
   expect(screen.queryByText('Finish setup')).toBeNull()
   set({ busy: [] })
+  fireEvent.click(screen.getByText('Finish setup'))
   expect(screen.queryByText('Finish setup')).toBeNull()
   expect(screen.getByText('Bundle setup')).toBeTruthy()
   fireEvent.click(screen.getByRole('switch'))
