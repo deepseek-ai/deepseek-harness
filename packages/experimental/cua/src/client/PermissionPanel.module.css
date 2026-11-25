@@ -3,21 +3,23 @@
 .guidance { display: grid; gap: 12px; overflow-wrap: anywhere; }
 .panelGuidance { margin-bottom: 12px; }
 .guidance p, .panel p { margin: 0; color: var(--dsw-alias-label-secondary); line-height: 1.6; }
-.caution {
+.caution, .dangerNotice {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   padding: 10px 12px;
   border-radius: var(--dsw-radius-md);
-  background: var(--dsw-alias-state-warn-tertiary);
 }
-.dangerNotice {
+.caution { background: var(--dsw-alias-state-warn-tertiary); }
+.dangerNotice { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent); }
+.noticeMain {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--dsw-radius-md);
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
+  flex: 1;
+  min-width: 180px;
 }
 .cautionIcon {
   display: inline-flex;
@@ -36,30 +38,11 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .cautionBody .cautionTitle {
   color: var(--dsw-alias-label-primary);
   font-weight: 500;
-}
-.cautionBody .dangerTitle {
-  color: var(--dsw-alias-state-error-primary);
-  font-weight: 500;
-}
-.systemError {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--dsw-radius-md);
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 8%, transparent);
-}
-.systemErrorBody {
-  display: grid;
-  gap: 4px;
-  flex: 1;
-  min-width: 180px;
 }
 .card { min-width: 0; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); }
 .card > * + * { border-top: 0.5px solid var(--dsw-alias-border-l3); }

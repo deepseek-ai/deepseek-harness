@@ -1,5 +1,5 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -85,19 +85,23 @@ function UnknownStatus({ loading, t }: Pick<PermissionProps, 't'> & { loading: b
   })
 }
 
-function NoticeBox({ tone, role, title, body }: {
+function NoticeBox({ tone, role, title, body, action }: {
   tone: 'warn' | 'danger'
   role: 'note' | 'alert'
   title: string
   body: string
+  action?: ReactNode
 }) {
   const danger = tone === 'danger'
   return <div className={danger ? css.dangerNotice : css.caution} role={role}>
-    <span className={danger ? css.dangerIcon : css.cautionIcon} aria-hidden="true"><IconWarningOutlineRegular size={14} /></span>
-    <div className={css.cautionBody}>
-      <p className={danger ? css.dangerTitle : css.cautionTitle}>{title}</p>
-      <p>{body}</p>
+    <div className={css.noticeMain}>
+      <span className={danger ? css.dangerIcon : css.cautionIcon} aria-hidden="true"><IconWarningOutlineRegular size={14} /></span>
+      <div className={css.cautionBody}>
+        <p className={css.cautionTitle}>{title}</p>
+        <p>{body}</p>
+      </div>
     </div>
+    {action}
   </div>
 }
 
@@ -107,13 +111,9 @@ function WindowsGuidance({ system, error, busy, refresh, t }: Pick<PermissionPro
   busy: boolean
 }) {
   return <div className={css.guidance} data-cua-guidance>
-    {error !== null && <div className={css.systemError} role="alert">
-      <div className={css.systemErrorBody}>
-        <p className={css.error}>{t('windowsHelperFailed', { message: error })}</p>
-        <p>{t('queryFailedHint')}</p>
-      </div>
-      <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
-    </div>}
+    {error !== null && <NoticeBox tone="danger" role="alert"
+      title={t('windowsHelperFailed', { message: error })} body={t('queryFailedHint')}
+      action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
     {error === null && system !== null && <>
       {system.sessionLocked === true && <NoticeBox tone="danger" role="alert"
         title={t('windowsLockedTitle')} body={t('windowsLockedBody')} />}
@@ -167,13 +167,9 @@ export function PermissionPanel(props: PermissionProps) {
           <p>{t('ptcRecommendation')}</p>
         </div>
         <h3>{t('title')}</h3>
-        {state.system.error !== null && <div className={css.systemError} role="alert">
-          <div className={css.systemErrorBody}>
-            <p className={css.error}>{t('queryFailed', { message: state.system.error })}</p>
-            <p>{t('queryFailedHint')}</p>
-          </div>
-          <Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>
-        </div>}
+        {state.system.error !== null && <NoticeBox tone="danger" role="alert"
+          title={t('queryFailed', { message: state.system.error })} body={t('queryFailedHint')}
+          action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
         {(observed !== null || state.system.error === null) && <p
           className={observed === null ? css.pendingHint : undefined}
           aria-hidden={observed === null || undefined}
