@@ -110,14 +110,15 @@ export function indexWorkspacePackages(repoRoot: string): Map<string, string> {
 export interface ProfileRoster {
   /** The profile template's bundles, then the installation's optional bundles. */
   readonly bundles: readonly string[]
-  /** Those bundle packages plus every package their patch rows name, deduplicated. */
+  /** Those bundle packages, every package their patch rows name, and the preview's mock model package, deduplicated. */
   readonly roster: readonly string[]
 }
 
 /**
  * Read what one shipped profile offers from the installation the launcher boots:
  * the template's bundles and every optional bundle, each resolved from the CLI
- * manifest as the launcher resolves them, and the packages their patch files name.
+ * manifest as the launcher resolves them, the packages their patch files name, and
+ * the mock model package the preview profile patch inserts.
  * Machine state never contributes, so the same tree always packs the same roster.
  * @param repoRoot - Absolute repository root.
  * @param profile - Shipped profile template name.
@@ -143,11 +144,7 @@ export function profileRoster(repoRoot: string, profile: string): ProfileRoster 
  * @throws When the profile has no shipped template, or a bundle does not resolve or declares no patch.
  */
 export function platformHomePatch(repoRoot: string, profile: string): PatchOptions[] {
-  const composed = composedRows(repoRoot, profile)
-  return Object.entries(PLATFORM_ENTRY_CONFIG).flatMap(([id, fields]) => {
-    const row = findRow(composed, id)
-    return row === undefined ? [] : [{ id, config: { ...configOf(row), ...fields } }]
-  })
+  return overrideRows(composedRows(repoRoot, profile), PLATFORM_ENTRY_CONFIG)
 }
 
 /**
@@ -160,14 +157,18 @@ export function platformHomePatch(repoRoot: string, profile: string): PatchOptio
  * @throws When the profile has no shipped template, or a bundle does not resolve or declares no patch.
  */
 export function previewProfilePatch(repoRoot: string, profile: string): PatchOptions[] {
-  const composed = composedRows(repoRoot, profile)
-  return [
-    { insert: [PREVIEW_MOCK_ROW] },
-    ...Object.entries(PREVIEW_ENTRY_CONFIG).flatMap(([id, fields]) => {
-      const row = findRow(composed, id)
-      return row === undefined ? [] : [{ id, config: { ...configOf(row), ...fields } }]
-    }),
-  ]
+  return [{ insert: [PREVIEW_MOCK_ROW] }, ...overrideRows(composedRows(repoRoot, profile), PREVIEW_ENTRY_CONFIG)]
+}
+
+/**
+ * Patch rows that set `fields` over each named row's composed config. A patch replaces a row's whole config, so the
+ * composed fields are copied first; a row the composition lacks contributes none.
+ */
+function overrideRows(composed: unknown, fieldsById: Readonly<Record<string, Readonly<Record<string, unknown>>>>): PatchOptions[] {
+  return Object.entries(fieldsById).flatMap(([id, fields]) => {
+    const row = findRow(composed, id)
+    return row === undefined ? [] : [{ id, config: { ...configOf(row), ...fields } }]
+  })
 }
 
 /** The rows the template's bundle layers compose for one profile. */
