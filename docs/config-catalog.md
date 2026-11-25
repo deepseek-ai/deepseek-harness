@@ -3825,9 +3825,7 @@ export interface Config extends JsonlConfigOptions {
   /**
    * Maximum events stored per frame. One frame is the unit of compression and
    * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice. When the Segment's newest frames that each hold fewer
-   * events reach this many together, an append re-encodes them as frames of up
-   * to this many events.
+   * reading a slice; stored frames keep the size they were written with.
    */
   frameEvents?: number
 }
