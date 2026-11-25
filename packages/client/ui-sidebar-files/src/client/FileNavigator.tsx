@@ -44,8 +44,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotFactoryMap {
     /**
      * One pane's workspace tree with its width and show/hide state. The host renders it as a direct child of
-     * the content row it shares with the body, and that row carries `data-files-navigator-row`, which the
-     * filled layout needs to hide the covered body.
+     * the content row it shares with the body and hides that row's other children while the root it renders
+     * reports `data-files-navigator-mode="fill"`, or any mode in a viewport narrower than 768px.
      */
     'sidebar.files.navigator': {
       scope: 'session'

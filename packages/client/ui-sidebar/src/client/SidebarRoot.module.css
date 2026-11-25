@@ -25,10 +25,6 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-:global([data-animating]:not([data-dragging])) .root {
-  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
-}
-
 /* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
    opaque fill here would sit on top of it and block the window vibrancy. */
 :global([data-platform='darwin']) .root {
@@ -136,13 +132,18 @@
    most of its change in a few frames and reads as a cut. Only the quiet state
    carries the transition, so a reveal is immediate and a pointer that returns
    during the delay sees no change. The collapse rule's `transition: width`
-   outranks this one, so a leave during collapse or expand hides at once. */
+   below replaces this one, so a leave during collapse or expand hides at once. */
 .root.quietBars {
   --dsh-scrollbar-thumb: transparent;
   --dsh-scrollbar-thumb-hover: transparent;
   transition:
     --dsh-scrollbar-thumb 200ms linear 500ms,
     --dsh-scrollbar-thumb-hover 200ms linear 500ms;
+}
+
+/* The width follows the frame's track easing, which its owner props report. */
+.root[data-sidebar-animating] {
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* Collapse phase 1: the whole frozen-width content fades out in place over
@@ -890,7 +891,7 @@
 @media (prefers-reduced-motion: reduce) {
   :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession,
   :global([data-platform='darwin']) .scrollFade,
-  :global([data-animating]:not([data-dragging])) .root,
+  .root[data-sidebar-animating],
   .wide,
   .fading > *,
   .railIn .iconButton,

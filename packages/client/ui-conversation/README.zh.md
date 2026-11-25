@@ -126,6 +126,10 @@ Session 首次绑定或缓存的 Session 成为 current 时，shell 会在渲染
 
 宽度拖拽条的指示线只在已捕获指针的拖拽期间跟随指针，普通悬停不改变其位置。
 
+<a id="scrollport-marks"></a>
+
+View 在自己的某个元素上标记 `data-conversation-overscroll="none"` 可关闭滚动区域的纵向过度滚动，标记 `data-conversation-scroll-anchor="none"` 可关闭浏览器的滚动锚定。标记只在被标元素位于滚动区域内时生效，因此 View 在自己的内容上声明这些需要，不给滚动区域写样式。
+
 <a id="end-reserve"></a>
 
 主 Conversation body 可以在行向末端空出一段位置，留给停在 transcript 旁边的内容，例如停靠的[会话面板](../ui-session-panel/README.zh.md#docking)。样式表在 `[data-conversation-content]` 元素上设置长度 `--dsh-chat-end-reserve` 来提出申请。滚动容器随即给末端加上 `--dsh-chat-end-inset` 的内边距，大小是所缺留白的两倍，居中的 transcript 列和输入框保持各自宽度向起始边缘移动，直到列后的空间等于预留值。`--dsh-chat-end-reserve-max` 是在列保持宽度和两侧内边距的前提下，起始留白能让出的最大预留；超出它的申请得不到任何内边距，因此申请方要先读取这个最大值，再依赖这段位置。这个最大值随每次缩放变化且不继承：样式表在 `[data-conversation-content]` 元素本身上读取它，并在那里把后代需要的值推导为已注册的长度，只有推导结果变化时该长度才变化。主体的其他变化输入同样不继承，传给后代的 `--dsh-chat-content-width` 与 `--dsh-chat-end-inset` 是计算后的长度，因此缩放只有在它们变化时才重新计算正文样式。主体从滚动容器的宽度推出这些长度，并把该宽度发布为 `--dsh-conversation-viewport-width`，因此它们在滚动容器、宽度拖拽条和 Chat 侧边层中的值相同。宽度拖拽条随列移动。内边距大于零时，预留固定了列的末端边缘，因此拖动任一拖拽条都只移动起始边缘，宽度的变化等于指针移动的距离而不是它的两倍；列被拖到超过起始留白能让出的宽度时不再有内边距，重新居中。内边距立即生效。样式表如果希望某次变化带动画，就在这次变化期间在同一个元素上再设置 `--dsh-chat-end-reserve-transition`（一个时长和一条缓动曲线），滚动容器的内边距和 Chat 侧边层的外边距随之一起过渡。嵌入式 occurrence 不让位：它的最大预留和内边距都是 0。

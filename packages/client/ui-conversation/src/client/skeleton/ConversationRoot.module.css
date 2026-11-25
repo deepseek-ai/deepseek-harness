@@ -581,6 +581,16 @@
   scrollbar-gutter: stable;
 }
 
+/* A View turns off the scrollport's overscroll or its scroll anchoring by
+   marking one of its own elements inside it. */
+.scrollBody:has([data-conversation-overscroll='none']) {
+  overscroll-behavior-y: none;
+}
+
+.scrollBody:has([data-conversation-scroll-anchor='none']) {
+  overflow-anchor: none;
+}
+
 /* The bar also stops 2px short of the scroller's ends, matching its 2px edge
    offset. WebKit-only: the Firefox path has no track to inset. */
 .scrollBody::-webkit-scrollbar-track {

@@ -1,4 +1,5 @@
 import { queryObjects } from 'node:v8'
+import { runInNewContext } from 'node:vm'
 import { RemoteError, typertOwnedValue } from '@deepseek-ai/dsh-typert-protocol'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Fiber } from '@deepseek-ai/cordis'
@@ -1684,6 +1685,38 @@ describe('Client Typert API', () => {
               message: 'Remote event listener result is not lossless JSON data',
             },
           },
+        },
+      },
+      expect.any(AbortSignal),
+    )
+    await client.dispose()
+  })
+
+  it('accepts frames and listener results built by another realm', async () => {
+    const { ctx, client, carrier, call } = await eventBench()
+    const target = ctx.extend()
+    ctx.typert.contexts.registerClient('agent', {
+      identity: candidate => candidate === target ? agentId('agent-realm') : undefined,
+      resolve: id => id === 'agent-realm' ? target : undefined,
+    })
+    const seen: string[] = []
+    ctx.remote.$on('fixture/changed', (namespace) => { seen.push(namespace) })
+    // An isolated Client plugin's iframe builds its records with that realm's Object and Array.
+    target.remote.$on('fixture/approval', async () => runInNewContext('({ choices: ["ship"], note: { text: "ok" } })') as FixtureApprovalOutcome)
+
+    carrier.emit(runInNewContext('({ type: "emit", event: "fixture/changed", args: ["other realm"] })'))
+    carrier.emit(approvalFrame('event-realm', 'agent-realm', 'realm'))
+
+    await vi.waitFor(() => { expect(call).toHaveBeenCalledTimes(1) })
+    expect(seen).toEqual(['other realm'])
+    expect(call).toHaveBeenCalledWith(
+      '/api',
+      '$events/result',
+      {
+        args: {
+          clientId: 'event-client-1',
+          eventId: 'event-realm',
+          outcome: { kind: 'result', value: { choices: ['ship'], note: { text: 'ok' } } },
         },
       },
       expect.any(AbortSignal),

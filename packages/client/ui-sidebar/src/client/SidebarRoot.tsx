@@ -148,6 +148,7 @@ export function SidebarRoot({
   collapsed,
   width,
   drawer,
+  animating,
   startSession,
   toggleSidebar,
   selectPanel,
@@ -289,6 +290,7 @@ export function SidebarRoot({
         !drawer && collapsed && wide && css.fading, !pointerInside && css.quietBars,
       )}
       style={wide ? { width: !drawer && collapsed ? lastWideWidth.current : width } : undefined}
+      data-sidebar-animating={animating || undefined}
       onPointerEnter={trackPointer}
       onPointerMove={trackPointer}
       onPointerLeave={() => { setPointerInside(false) }}

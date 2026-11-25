@@ -37,6 +37,8 @@ if (!isJsonValue(input)) throw new TypeError('expected lossless JSON')
 const snapshot = snapshotJsonValue(input) as JsonValue
 ```
 
+调用方只校验容器本身、自行读取字段时，使用 `hasPlainPrototype(value)`。它接受继承某个 realm 内建 `Array.prototype` 与 `Object.prototype` 的数组，或原型为 `null` 或某个 realm 内建 `Object.prototype` 的非数组对象；不检查元素与属性值。这三个函数都接受在另一个 JavaScript realm（例如 iframe）中构造的值，并拒绝继承其他任何原型的对象或数组，因为该原型可能提供 `toJSON`。
+
 ### 读取流式参数
 
 `PartialArguments` 懒读取 JSON 对象的顶层字段。`append()` 分别保留分片，不扫描也不拼接。读器为新的键值范围建立索引，跳过未请求的内容；仅在请求时解码或计数字符串，仅在请求时解析已完整的非字符串值。`complete()` 表示结束分隔符已到达，不代表内容已校验；`invalid` 报告索引或内容读取已经发现的错误。它不能替代工具入参校验。
@@ -61,13 +63,13 @@ const snapshot = snapshotJsonValue(input) as JsonValue
 <details>
 <summary>实现细节——点击展开</summary>
 
-JSON 校验器为每个正在遍历的容器保留一个位置，每次读取一个子项，并只跟踪当前祖先链，因此深层嵌套值不会消耗 JavaScript 调用栈，重复但无循环的引用仍然有效。内建数组与普通对象通过当前引擎的原生构造器文本表示进行跨 JavaScript realm 识别。快照写入使用自有数据属性，包括 `__proto__` 等名称。值操作的结果只取决于传入参数；`WeakMapWithValues` 仅保存实例自有的关联。
+JSON 校验器为每个正在遍历的容器保留一个位置，每次读取一个子项，并只跟踪当前祖先链，因此深层嵌套值不会消耗 JavaScript 调用栈，重复但无循环的引用仍然有效。继承本 realm 内建原型的容器按身份识别；继承其他 JavaScript realm 内建原型的容器通过当前引擎的原生构造器文本表示识别。快照写入使用自有数据属性，包括 `__proto__` 等名称。值操作的结果只取决于传入参数；`WeakMapWithValues` 仅保存实例自有的关联。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | JSON 值类型、校验与快照遍历、结构相等、深度冻结、弱键/强值关联和穷尽联合类型失败 |
+| [`src/index.ts`](src/index.ts) | JSON 值类型、普通原型识别、校验与快照遍历、结构相等、深度冻结、弱键/强值关联和穷尽联合类型失败 |
 | [`src/partial-json.ts`](src/partial-json.ts) | 懒扫描顶层参数，并检测已读取答案的变化 |
 
 </details>

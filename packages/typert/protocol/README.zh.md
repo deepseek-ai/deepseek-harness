@@ -124,7 +124,7 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 | [`src/index.ts`](src/index.ts) | 装饰器、Gateway 绑定、`remoteMethods`、段校验 |
 | [`src/principal.ts`](src/principal.ts) | `principalOf`：Remote 调用生产者记录的调用方 principal |
 | [`src/remote-access.ts`](src/remote-access.ts) | 基于 `TypertResourceMap` 的 `RemoteAccessResource`、`RemoteAccessResourceKind` 与 `RemoteAccessResourceOf` |
-| [`src/json-value.ts`](src/json-value.ts) | 各载体共享的无损 JSON 校验 `isRemoteJsonValue` 与 `isRemoteUplinkItem` |
+| [`src/json-value.ts`](src/json-value.ts) | 各载体共享的无损 JSON 校验 `isRemoteJsonValue` 与 `isRemoteUplinkItem`；任一 JavaScript realm 的普通数组与记录都能通过 |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` 与结构式识别函数 `remoteErrorOf` |
 | [`src/remote-info.ts`](src/remote-info.ts) | 纯惰性 info factory 与直接方法类型守卫 |
 | [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`RemoteStream`、`RemoteStreamHandle`、`PrincipalMap`、`Principal`、`PeerScope`、`RemoteInvocation`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |

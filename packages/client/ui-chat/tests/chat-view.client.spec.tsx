@@ -4373,6 +4373,9 @@ describe('ChatView', () => {
     const backButton = view.getByLabelText('回到底部')
     expect(backButton).toBeTruthy()
     expect(view.container.querySelector('[data-chat-following-tail]')).toBeNull()
+    // A host scrollport keeps its scroll anchoring while the reader is away from the tail.
+    expect(view.container.querySelector('[data-conversation-scroll-anchor]')).toBeNull()
+    expect(view.container.querySelector('[data-conversation-overscroll="none"]')).not.toBeNull()
     // Streaming growth must NOT drag a scrolled-away reader down.
     act(() => {
       h.setChat({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: 'grow' }] } })
@@ -4381,6 +4384,7 @@ describe('ChatView', () => {
     fireEvent.click(backButton)
     expect(scroller.scrollTop).toBe(700)
     expect(view.container.querySelector('[data-chat-following-tail]')).not.toBeNull()
+    expect(view.container.querySelector('[data-conversation-scroll-anchor="none"]')).not.toBeNull()
     // At the bottom again: follow re-arms and the button unmounts.
     expect(view.queryByLabelText('回到底部')).toBeNull()
   })

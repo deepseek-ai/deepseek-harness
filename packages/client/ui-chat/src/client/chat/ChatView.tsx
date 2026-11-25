@@ -244,7 +244,8 @@ export function ChatView({
         />
       )}
       <ChatAside renderSlot={renderSlot} />
-      <div className={css.root} data-chat-following-tail={scroll.followingTail ? '' : undefined}>
+      <div className={css.root} data-chat-following-tail={scroll.followingTail ? '' : undefined}
+        data-conversation-overscroll="none" data-conversation-scroll-anchor={scroll.followingTail ? 'none' : undefined}>
         <div ref={scroll.listRef} className={css.scroll}>
           <div ref={scroll.columnRef} className={css.column} data-chat-flow=""
             data-chat-motion={deferCompletedTurns && scroll.initialized

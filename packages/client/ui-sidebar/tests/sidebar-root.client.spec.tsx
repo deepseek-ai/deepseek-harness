@@ -71,10 +71,10 @@ function mountShell({ collapsed = false, width = 300, drawer = false, shortcuts 
   let sessionActionChildren: ReactNode
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
-  let current = { collapsed, width, drawer }
+  let current = { collapsed, width, drawer, animating: false }
   const root = () => (
     <SidebarRoot
-      drawer={current.drawer}
+      drawer={current.drawer} animating={current.animating}
       collapsed={current.collapsed} width={current.width}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector(panels)} useEntryPins={selector => selector([])}
@@ -158,6 +158,17 @@ describe('SidebarRoot shell', () => {
     expect(viewport.contains(screen.getByTestId('footer-action-seat'))).toBe(false)
   })
 
+  it('marks its column while the frame reports that its tracks ease', () => {
+    const shell = mountShell()
+    expect(document.querySelector('[data-sidebar-animating]')).toBeNull()
+    shell.rerender({ animating: true })
+    const marked = document.querySelector('[data-sidebar-animating]')
+    expect(marked?.contains(document.querySelector('[data-sidebar-scrollport]'))).toBe(true)
+    expect(marked?.parentElement?.closest('[data-sidebar-animating]')).toBeNull()
+    shell.rerender({ animating: false })
+    expect(document.querySelector('[data-sidebar-animating]')).toBeNull()
+  })
+
   it('hands the section a stable scroller hook bound to this sidebar viewport', () => {
     const shell = mountShell()
     const scroller = shell.regionContext().useSectionScroller()
@@ -233,7 +244,7 @@ describe('SidebarRoot shell', () => {
     const startSession = vi.fn()
     const useRemoteAccess = vi.fn((action: string) => action !== 'session/create')
     render(<SidebarRoot
-      collapsed={false} width={300} drawer={false}
+      collapsed={false} width={300} drawer={false} animating={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
@@ -265,7 +276,7 @@ describe('SidebarRoot shell', () => {
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
@@ -290,7 +301,7 @@ describe('SidebarRoot shell', () => {
   ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
     render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
@@ -320,7 +331,7 @@ describe('SidebarRoot shell', () => {
     const startSession = vi.fn()
     const trackEntryClick = vi.fn<SidebarRootComponentProps['trackEntryClick']>()
     render(<SidebarRoot
-      collapsed={false} width={300} drawer={false}
+      collapsed={false} width={300} drawer={false} animating={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
@@ -371,7 +382,7 @@ describe('SidebarRoot shell', () => {
 
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
@@ -443,7 +454,7 @@ describe('SidebarRoot shell', () => {
   it('shows only the badge bubble while the rail badge is hovered inside the toggle', () => {
     vi.useFakeTimers()
     render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed width={56}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}

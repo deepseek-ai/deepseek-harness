@@ -37,6 +37,8 @@ if (!isJsonValue(input)) throw new TypeError('expected lossless JSON')
 const snapshot = snapshotJsonValue(input) as JsonValue
 ```
 
+Use `hasPlainPrototype(value)` when a caller checks only the container and reads its fields itself. It accepts an array that inherits a realm's intrinsic `Array.prototype` and `Object.prototype`, or a non-array object whose prototype is `null` or a realm's intrinsic `Object.prototype`; elements and property values are not inspected. All three functions accept values built in another JavaScript realm, such as an iframe, and reject an object or array that inherits any other prototype, because that prototype could supply `toJSON`.
+
 ### Read streamed arguments
 
 `PartialArguments` reads a JSON object's top-level fields lazily. `append()` retains separate fragments without scanning or concatenating them. Readers index new key/value ranges, skipping unrequested contents; only requested strings are decoded or counted, and only requested complete non-string values are parsed. `complete()` reports a closing delimiter, not validated contents; `invalid` reports errors already discovered by indexing or content reads. It is not a substitute for tool-input validation.
@@ -61,13 +63,13 @@ Use `assertNever(value, context?)` in the default branch of a closed discriminat
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The JSON validator keeps one cursor per active container, reads one child at a time, and tracks only the active ancestor chain, so deeply nested values do not consume the JavaScript call stack and repeated non-cyclic references remain valid. Intrinsic arrays and plain objects are recognized across JavaScript realms using native constructor representations from the running engine. Snapshot writes use own data properties, including for names such as `__proto__`. Value operations derive their result only from their arguments; `WeakMapWithValues` stores only instance-owned associations.
+The JSON validator keeps one cursor per active container, reads one child at a time, and tracks only the active ancestor chain, so deeply nested values do not consume the JavaScript call stack and repeated non-cyclic references remain valid. Containers that inherit this realm's intrinsics are recognized by identity; those of another JavaScript realm are recognized by native constructor representations from the running engine. Snapshot writes use own data properties, including for names such as `__proto__`. Value operations derive their result only from their arguments; `WeakMapWithValues` stores only instance-owned associations.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | JSON value type, validation and snapshot traversal, structural equality, deep freezing, weak-key/strong-value associations, and exhaustive-union failure |
+| [`src/index.ts`](src/index.ts) | JSON value type, plain-prototype recognition, validation and snapshot traversal, structural equality, deep freezing, weak-key/strong-value associations, and exhaustive-union failure |
 | [`src/partial-json.ts`](src/partial-json.ts) | Lazy top-level argument scanning and observed-answer change detection |
 
 </details>

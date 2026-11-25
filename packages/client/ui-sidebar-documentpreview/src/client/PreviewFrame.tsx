@@ -73,7 +73,7 @@ export function PreviewFrame({
         <div className={css.externalActions}>{handoff}</div>
         <NavigatorToggleSeat useTabInfo={useTabInfo} renderFactorySlot={renderFactorySlot} />
       </div>
-      <div className={css.content} data-textpreview-content data-files-navigator-row>
+      <div className={css.content} data-textpreview-content>
         {children}
         <NavigatorSeat useTabInfo={useTabInfo} renderFactorySlot={renderFactorySlot} />
       </div>
