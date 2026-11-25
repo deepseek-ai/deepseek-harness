@@ -32,6 +32,9 @@ it('selects packages manually and gates production secrets with the production E
   expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
   expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: {
     package_run_id: { type: 'string', required: true },
+    publish_stable: { type: 'boolean', required: true, default: false },
+    publish_nightly: { type: 'boolean', required: true, default: false },
+    upload_website: { type: 'boolean', required: true, default: false },
     package_run_attempt: { type: 'string', required: false, default: '' },
   } })
   expect(workflow.permissions).toEqual({ contents: 'read', actions: 'read' })
@@ -39,7 +42,7 @@ it('selects packages manually and gates production secrets with the production E
   const publish = workflow.jobs.publish!
   expect(publish.defaults).toBeUndefined()
   expect(publish.steps.find(step => step.id === 'key')?.run).toBe('node apps/desktop/scripts/read-desktop-app-key.mjs')
-  expect(publish.if).toBeUndefined()
+  expect(publish.if).toBe("needs.prepare.outputs.channels-requested == 'true'")
   expect(publish['runs-on']).toEqual(['self-hosted', '${{ needs.route.outputs.runner }}'])
   expect(publish.environment).toBe("${{ needs.prepare.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}")
   const ids = publish.steps.map(step => step.id)
@@ -80,17 +83,27 @@ it('rejects non-master dispatch before scheduling a self-hosted job', () => {
   }
 })
 
-it('defaults to production website upload and separates cache-only recovery', () => {
-  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: { upload_website: { type: 'boolean', default: true } } })
+it('keeps publication checkboxes off by default and separates website cache-only recovery', () => {
+  expect(workflow.on.workflow_dispatch).toMatchObject({ inputs: {
+    publish_stable: { type: 'boolean', default: false },
+    publish_nightly: { type: 'boolean', default: false },
+    upload_website: { type: 'boolean', default: false },
+  } })
+  expect(workflow.jobs.prepare!.env?.DESKTOP_PUBLISH_STABLE).toBe('${{ inputs.publish_stable }}')
+  expect(workflow.jobs.prepare!.env?.DESKTOP_PUBLISH_NIGHTLY).toBe('${{ inputs.publish_nightly }}')
   expect(workflow.jobs.prepare!.env?.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
+  expect(workflow.jobs.publish!.env?.DESKTOP_PUBLISH_STABLE).toBe('${{ inputs.publish_stable }}')
+  expect(workflow.jobs.publish!.env?.DESKTOP_PUBLISH_NIGHTLY).toBe('${{ inputs.publish_nightly }}')
+  expect(workflow.jobs.publish!.env?.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
   expect(JSON.stringify(workflow)).not.toContain('DOWNLOAD_PROD_EO_ZONE_ID')
   const upload = workflow.jobs['upload-website-installer']!
   const purge = workflow.jobs['purge-website-installer']!
   expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
   expect(upload.concurrency).toEqual({ group: 'desktop-website-upload-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
   expect(purge.concurrency).toEqual({ group: 'desktop-website-purge-${{ needs.prepare.outputs.website-destination }}', 'cancel-in-progress': false })
+  expect(upload.if).toBe("${{ !cancelled() && inputs.upload_website && needs.prepare.result == 'success' && needs.prepare.outputs.preset != 'test' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.prepare.outputs.channels-requested == 'false')) }}")
+  expect(purge.if).toBe("${{ !cancelled() && inputs.upload_website && needs.prepare.outputs.preset != 'test' && needs.upload-website-installer.result == 'success' }}")
   for (const job of [upload, purge]) {
-    expect(job.if).toBe("inputs.upload_website && needs.prepare.outputs.preset != 'test'")
     expect(job.environment).toBe('desktop-production')
     const preflight = job.steps.findIndex(step => step.run === 'node apps/desktop-publisher/src/preflight-desktop-publish-local.mjs')
     expect(preflight).toBeGreaterThan(-1)
