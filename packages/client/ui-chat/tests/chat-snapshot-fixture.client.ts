@@ -294,7 +294,7 @@ function settledNode(
     case 'tool-result':
       return { ...base, key: `fixture:tool:${node.callId}`, kind: 'tool-call', data: { root: node } }
     case 'model-retry':
-      return { ...base, key: 'fixture:model-retry', kind: 'model-retry', data: { attempts: [node], current: node } }
+      return { ...base, key: 'fixture:model-retry', kind: 'model-retry', data: { attempts: [node], current: node, inFlight: false, failed: false } }
     default:
       return { ...base, kind: node.kind, data: node }
   }

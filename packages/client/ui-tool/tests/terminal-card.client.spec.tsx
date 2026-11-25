@@ -641,6 +641,7 @@ describe('BashRow terminal card', () => {
     expect(view.queryByRole('button', { name: '复制' })).toBeNull()
     expect(result.call?.argsRaw).toBe(argsRaw)
     expect(result.content).toEqual([{ type: 'text', text: acknowledgement }])
+    expect(view.getByRole('button', { name: t('row.inspect') }).closest('[data-inspect-scope]')).not.toBeNull()
     fireEvent.click(view.getByRole('button', { name: t('row.inspect') }))
     expect(inspect).toHaveBeenCalledOnce()
 

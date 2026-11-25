@@ -663,6 +663,18 @@ export const IconSaveOutlineRegular = productIcon('save-outline', 'regular')
 /** Medium floppy-disk save action. */
 export const IconSaveOutlineMedium = productIcon('save-outline', 'medium')
 
+/** Regular one-pixel IconWifiOutline artwork. */
+export const IconWifiOutlineRegular = productIcon('wifi-outline', 'regular')
+
+/** Medium IconWifiOutline artwork with a 1.3px stroke. */
+export const IconWifiOutlineMedium = productIcon('wifi-outline', 'medium')
+
+/** Regular one-pixel IconWifiOffOutline artwork: Wi-Fi arcs crossed by a slash. */
+export const IconWifiOffOutlineRegular = productIcon('wifi-off-outline', 'regular')
+
+/** Medium IconWifiOffOutline artwork with a 1.3px stroke. */
+export const IconWifiOffOutlineMedium = productIcon('wifi-off-outline', 'medium')
+
 /** Regular remote connection phone artwork; both weights preserve its filled contours. */
 export const IconRemoteConnectionOutlineRegular = productIcon('remote-connection-outline', 'regular')
 

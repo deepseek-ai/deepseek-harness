@@ -14,7 +14,7 @@ import { turnProcessOpen } from '../stores.ts'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { hiddenOrCollapsing } from './flow-motion.ts'
 import { chatRenderKey } from './render-entry.ts'
-import { processTitle, thinkingTitle } from './step-process.ts'
+import { processTitle, stepRunsGrouped, thinkingTitle } from './step-process.ts'
 import { useDisclosure } from './use-disclosure.ts'
 import { useProcessScroll } from './use-process-scroll.ts'
 import css from './ChatGroupSeat.module.css'
@@ -149,8 +149,8 @@ export const ChatGroupSeat = memo(function ChatGroupSeat({ groupKey, useChatGrou
     return location?.kind === 'turn' || location?.kind === 'step' ? location.turn : undefined
   })
   // Detailed keeps the latest completed Turn flat, like a running one, until the next input.
-  const grouped = props.usePresentation(policy => policy.stepGrouping === 'collapsed'
-    || (policy.stepGrouping === 'history' && turnLocation?.status !== 'open' && !deferCollapse))
+  const grouped = props.usePresentation(policy =>
+    stepRunsGrouped(policy.stepGrouping, turnLocation?.status === 'open', deferCollapse))
   const reason = turnLocation?.end?.data.reason.kind
   const alwaysOpen = presentation?.turnClosed === false || presentation?.hasInterleavedInput === true
     || reason === 'aborted' || reason === 'interrupted' || reason === 'error'

@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/conversation-focus-kinds/guide.md
+/:
+  en: a494375b64869b56
+  zh: 1f2c9c9f9fa334d2
+/conversation-view-focus-values:
+  en: 75c8ab19bb0d3a3e
+  zh: a8c14be545543193
+/conversation-view-focus-values/change:
+  en: c0801f7eef286d5e
+  zh: f7183cdd413d0f97
+/conversation-view-focus-values/migration:
+  en: 77c6d0a76a2c71a2
+  zh: eac68cc5760b6d3e

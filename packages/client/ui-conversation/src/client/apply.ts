@@ -20,7 +20,7 @@ import { UiConversation } from './conversation/assembly.ts'
 import { UserText, PlainUserText, SessionReference } from './user-text/UserText.tsx'
 import { sessionReferenceRule } from './user-text/session-reference-rule.ts'
 import { collapseWhitespaceRule, trimWhitespaceRule } from './user-text/whitespace-rules.ts'
-import type { ViewTab } from './contract/views.ts'
+import type { ConversationFocus, ConversationFocusKind, ViewTab } from './contract/views.ts'
 import { inputBarChildren } from './contract/slots.ts'
 import type {
   ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected, ConversationShellInjected,
@@ -403,29 +403,38 @@ export function apply(ctx: Context, config: SyncedConfig<ConversationConfig>): v
     },
     store: conversationStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionInjected => {
-      const openView = (view: string, focus: string): void => {
+      const openView = (view: string, focus: ConversationFocus): void => {
         if (!viewTabs().some(tab => tab.id === view)) return
+        const definition = uiConversation.views.entries().find(entry => entry.target === view)
+        if (definition?.accepts?.includes(focus.kind) !== true) return
         activateView(sessionId, view)
         actions.openView(view, focus)
       }
-      const inspectionTarget = () => uiConversation.views.entries().find(definition =>
-        definition.toolCallFocus !== undefined
+      const inspectionTarget = (kind: ConversationFocusKind) => uiConversation.views.entries().find(definition =>
+        definition.accepts?.includes(kind) === true
         && conversationViews.getSnapshot().some(view => view.id === definition.target),
       )
-      const inspectCall = (callId: string): void => {
-        const target = inspectionTarget()
-        if (target?.toolCallFocus !== undefined) openView(target.target, target.toolCallFocus(callId))
+      const inspect = (focus: ConversationFocus): void => {
+        const target = inspectionTarget(focus.kind)
+        if (target !== undefined) openView(target.target, focus)
+      }
+      const inspectCall = (callId: string): void => { inspect({ kind: 'tool-call', callId }) }
+      const inspectRequest = (turn: number, step: number): void => { inspect({ kind: 'request', turn, step }) }
+      const subscribeInspection = (listener: () => void): () => void => {
+        const disposeViews = conversationViews.subscribe(listener)
+        const disposeDefinitions = uiConversation.views.subscribe(listener)
+        return () => { disposeViews(); disposeDefinitions() }
       }
       return {
         hooks: {
           conversationViews,
           inspectCall: {
-            getSnapshot: () => inspectionTarget() === undefined ? undefined : inspectCall,
-            subscribe: (listener) => {
-              const disposeViews = conversationViews.subscribe(listener)
-              const disposeDefinitions = uiConversation.views.subscribe(listener)
-              return () => { disposeViews(); disposeDefinitions() }
-            },
+            getSnapshot: () => inspectionTarget('tool-call') === undefined ? undefined : inspectCall,
+            subscribe: subscribeInspection,
+          },
+          inspectRequest: {
+            getSnapshot: () => inspectionTarget('request') === undefined ? undefined : inspectRequest,
+            subscribe: subscribeInspection,
           },
         },
         bindDraftPersistence: write => inputHub.shell(sessionId).bindDraftPersistence(write),

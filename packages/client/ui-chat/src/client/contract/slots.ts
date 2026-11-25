@@ -241,11 +241,19 @@ export interface ChatNodeOwnerProps {
   cwd?: string | undefined
   openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: ((callId: ToolCallId) => void) | undefined
+  /** Open one model request's inspector record; absent without an inspection target. */
+  inspectRequest: ((turn: number, step: number) => void) | undefined
   forkAt: (seq: number) => void
   /** Session-authorized image loader supplied by the Chat view. */
   loadImage: MessageImageLoader
   /** Turn-process state when this Node belongs to a projected Turn. */
   turnProcess?: TurnProcessOwnerProps | undefined
+  /**
+   * Whether this Node's Turn shows its step runs behind group headers.
+   * Process-level rows beside them match the header type size when true and the step-row size otherwise.
+   * The Chat Node seat supplies it; other owners of this type omit it.
+   */
+  stepRunsGrouped?: boolean | undefined
 }
 
 /** One attachment in the original user-message display order. */
@@ -371,7 +379,7 @@ export type ChatFlowDataInjected = Pick<ChatViewInjected, 'keyedHooks'> & {
 
 /** Ordered rows and reconciled local echoes rendered inside one Chat viewport. */
 export interface ChatFlowOwnerProps extends Pick<ChatNodeOwnerProps,
-  'cwd' | 'openFile' | 'inspectCall' | 'forkAt' | 'loadImage'> {
+  'cwd' | 'openFile' | 'inspectCall' | 'inspectRequest' | 'forkAt' | 'loadImage'> {
   readonly entries: readonly RenderEntry[]
   readonly pendingInputs: readonly (PendingSubmission | InboxState['next-step'][number])[]
   readonly lastInputTurn: number | undefined

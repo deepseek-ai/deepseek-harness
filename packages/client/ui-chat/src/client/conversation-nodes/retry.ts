@@ -37,6 +37,18 @@ function isClosed(location: ConversationLocation): boolean {
     || ((location.kind === 'step' || location.kind === 'turn') && location.turn.status === 'closed')
 }
 
+/**
+ * The last started retry failed when its Step is the last of a Turn that ended with an error.
+ * A retry chain can continue into a later Turn, so the current attempt's own location decides.
+ * The rule reads the Turn outcome, not the retried request's own result: a retry that
+ * succeeded and whose Step then failed for another reason also reads as failed.
+ */
+function finallyFailed(location: ConversationLocation, current: ModelRetryNode): boolean {
+  if (current.retryState !== 'started' || location.kind !== 'step') return false
+  const turn = location.turn
+  return turn.end?.data.reason.kind === 'error' && turn.steps.at(-1)?.step === current.step
+}
+
 /** Producer-correlated model retry chain Definition. */
 export const retryDefinition: ConversationNodeDefinition<RetryState> = {
   kind: 'model-retry',
@@ -83,7 +95,13 @@ export const retryDefinition: ConversationNodeDefinition<RetryState> = {
         : attempt)
     const current = attempts.at(-1)
     if (current === undefined) return null
-    const data: RetryChatData = { attempts, current }
+    const currentLocation = context.matches.findLast(match => match.event.seq === current.seq)?.location ?? location
+    const data: RetryChatData = {
+      attempts,
+      current,
+      inFlight: current.retryState === 'started' && !isClosed(currentLocation),
+      failed: finallyFailed(currentLocation, current),
+    }
     return chatNode(context, 'model-retry', attempts[0]?.seq ?? current.seq, data, { groupTree: 'process' })
   },
 }

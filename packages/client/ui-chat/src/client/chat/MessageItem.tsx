@@ -1,9 +1,12 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { InjectFace, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { IconBranchOutlineRegular, JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  DisclosureRow, IconBranchOutlineRegular, IconWarningOutlineRegular, IconWifiOffOutlineRegular, IconWifiOutlineRegular,
+  InspectButton, JsonBlock, StateDot,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
 } from '../contract/slots.ts'
@@ -12,6 +15,7 @@ import { CommandStatusRow } from './CommandStatusRow.tsx'
 import { CompactionItem, type CompactionRowInjected } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
+import a11yCss from './accessibility.module.css'
 import css from './MessageItem.module.css'
 
 const EMPTY_TEXT_FACTS: Readonly<Partial<UserTextFacts>> = {}
@@ -61,11 +65,26 @@ function failureMessage(
   return code === 'AUTH' ? t('message.failure.auth') : message
 }
 
-function ModelRetryItem({ node, active, t }: {
+/** The retry glyph: an empty model answer is a warning; other failures read as connection trouble. */
+function retryIcon(node: ModelRetryNode, failed: boolean): ReactNode {
+  if (node.failure.code === 'EMPTY_RESPONSE') return <IconWarningOutlineRegular />
+  return failed ? <IconWifiOffOutlineRegular /> : <IconWifiOutlineRegular />
+}
+
+function ModelRetryItem({ node, active, inFlight, failed, grouped, inspect, t }: {
   node: ModelRetryNode
+  /** The retry is waiting out its delay; the countdown runs. */
   active: boolean
+  /** The retried request is in flight; the row still reads as retrying, without a countdown. */
+  inFlight: boolean
+  failed: boolean
+  /** Whether the row sits beside step-group headers and uses their type size. */
+  grouped: boolean
+  inspect: (() => void) | undefined
   t: ChatViewSlotProps['t']
 }) {
+  const [open, setOpen] = useState(false)
+  const toggle = useCallback(() => { setOpen(value => !value) }, [])
   // Anchor the host-scheduled delay to this browser's first render of the
   // retry node. Host event time and Date.now() may belong to different clocks.
   const deadline = useMemo(() => Date.now() + node.delayMs, [node.delayMs, node.seq])
@@ -97,7 +116,10 @@ function ModelRetryItem({ node, active, t }: {
     return () => { window.clearInterval(timer) }
   }, [active, deadline])
 
-  const label = active
+  // The row keeps one retrying state from the delay through the in-flight request, so the label and
+  // shimmer do not flip to the settled text for the frames between two attempts.
+  const retrying = active || inFlight
+  const label = retrying
     ? t('message.retry.active')
     : node.retryState === 'cancelled'
       ? t('message.retry.cancelled')
@@ -106,26 +128,33 @@ function ModelRetryItem({ node, active, t }: {
         : t('message.retry.scheduled')
   const seconds = active ? remainingSeconds : scheduledSeconds
 
+  const status = t('message.retry.status', { label, retry: node.retry, maximum, seconds })
+  const title = t('message.retry.title', { label, retry: node.retry, maximum })
+  const remaining = t('message.retry.countdown', { seconds })
   return (
-    <details className={css.retryRow} data-active={active || undefined}>
-      <summary className={css.retrySummary}>
-        <span className={css.retryText} role="status">
-          <TextShimmer active={active}>
-            {t('message.retry.status', { label, retry: node.retry, maximum, seconds })}
-          </TextShimmer>
-        </span>
-      </summary>
-      <div className={css.retryDetails}>
-        <div>
-          <span className={css.retryDetailLabel}>{t('message.retry.delay')}</span>
-          {t('duration.milliseconds', { milliseconds: Math.round(node.delayMs) })}
+    <div className={grouped ? css.retryBesideGroups : undefined} data-retry-row data-inspect-scope
+      data-active={retrying || undefined} data-failed={failed || undefined}>
+      <span className={a11yCss.visuallyHidden} role="status" aria-atomic="true">{status}</span>
+      <DisclosureRow icon={retryIcon(node, failed)} title={title}
+        rowClassName={css.retryRow} leadingClassName={css.retryLeading} titleClassName={css.retryTitle}
+        running={retrying} open={open} expandable expandOnRowClick keepContentWhenOpen onToggle={toggle}
+        collapsedContent={<>
+          <span className={css.retrySeparator} data-shimmer-decoration aria-hidden />
+          <span className={css.retryProgress}>{remaining}</span>
+        </>}>
+        <div className={css.retryDetails}>
+          <div>
+            <span className={css.retryDetailLabel}>{t('message.retry.delay')}</span>
+            {t('duration.milliseconds', { milliseconds: Math.round(node.delayMs) })}
+          </div>
+          <div>
+            <span className={css.retryDetailLabel}>{t('message.retry.failure')}</span>
+            {failureMessage(node.failure.message, node.failure.code, t)}
+          </div>
         </div>
-        <div>
-          <span className={css.retryDetailLabel}>{t('message.retry.failure')}</span>
-          {failureMessage(node.failure.message, node.failure.code, t)}
-        </div>
-      </div>
-    </details>
+        {inspect !== undefined && <InspectButton label={t('message.retry.inspect')} onClick={inspect} />}
+      </DisclosureRow>
+    </div>
   )
 }
 
@@ -406,9 +435,12 @@ export const InheritedHistoryNodeView = memo(function InheritedHistoryNodeView({
 })
 
 /** Correlated retry-chain keyed Chat renderer. */
-export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeViewProps<'model-retry'>) {
-  const data = node.data
-  return <ModelRetryItem node={data.current} active={data.current.retryState === 'scheduled'} t={t} />
+export const RetryNodeView = memo(function RetryNodeView({ node, inspectRequest, stepRunsGrouped, t }: ChatNodeViewProps<'model-retry'>) {
+  const { current, failed, inFlight } = node.data
+  const inspect = useMemo(() => inspectRequest === undefined
+    ? undefined
+    : () => { inspectRequest(current.turn, current.step) }, [inspectRequest, current.turn, current.step])
+  return <ModelRetryItem node={current} active={current.retryState === 'scheduled'} inFlight={inFlight} failed={failed} grouped={stepRunsGrouped === true} inspect={inspect} t={t} />
 })
 
 /** Terminal turn-error keyed Chat renderer. */

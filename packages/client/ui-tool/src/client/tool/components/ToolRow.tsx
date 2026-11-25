@@ -1,7 +1,7 @@
 import { Fragment, memo, useCallback, useMemo, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  CodeBlock, DiffBlock, DisclosureRow, IconInspectOutlineRegular, ReadBlock, SearchBlock,
+  CodeBlock, DiffBlock, DisclosureRow, InspectButton, ReadBlock, SearchBlock,
   TerminalBlock, TextShimmer, WebBlock,
   diffTotals,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -441,14 +441,8 @@ export const ToolRow = memo(function ToolRow({
                         </>
                       )}
       {inspect !== undefined && (
-        <button
-          type="button"
-          className={css.inspectButton}
-          onClick={inspect}
-        >
-          <IconInspectOutlineRegular />
-          {t('row.inspect')}
-        </button>
+        <InspectButton label={t('row.inspect')} onClick={inspect}
+          className={detailsBody !== null ? css.detailsInspect : undefined} />
       )}
     </div>
   ) : undefined, [
@@ -457,7 +451,7 @@ export const ToolRow = memo(function ToolRow({
     variant, bodyText, cardBody, outputText, state,
   ])
   return (
-    <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
+    <div className={css.root} data-inspect-scope data-variant={variant} data-tool={toolName} data-state={state}>
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
       <DisclosureRow
         rowClassName={css.row}

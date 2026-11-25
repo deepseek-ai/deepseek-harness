@@ -28,7 +28,7 @@ kind: "package-reference"
 <a id="conversation-assembly"></a>
 ## Conversation 组装
 
-`UiConversation.events` 是 event Definition 的唯一 registry，`UiConversation.views` 是 target snapshot builder 的唯一 registry。两者都拒绝重复 key、保持注册顺序、返回幂等 disposer，并在 contribution roster 变化时重建现有 binding。`UiConversation.binding(bindingOrSessionId)` 为当前 Session Controller binding 返回 identity 稳定的 Conversation binding，不会另开事件源。 View Definition 可以声明 `toolCallFocus`，将工具调用 id 转换为自身的焦点标识。仅当此目标拥有可见的 View 条目时，Conversation 才提供 Inspect 回调；Chat 直接使用回调，不选择目标。
+`UiConversation.events` 是 event Definition 的唯一 registry，`UiConversation.views` 是 target snapshot builder 的唯一 registry。两者都拒绝重复 key、保持注册顺序、返回幂等 disposer，并在 contribution roster 变化时重建现有 binding。`UiConversation.binding(bindingOrSessionId)` 为当前 Session Controller binding 返回 identity 稳定的 Conversation binding，不会另开事件源。View Definition 可以在 `accepts` 中列出自己接受的焦点类型；焦点是以 `kind` 区分的 `ConversationFocus` 值，例如 `{ kind: 'tool-call', callId }` 或 `{ kind: 'request', turn, step }`。仅当接受该类型的目标拥有可见的 View 条目时，Conversation 才提供对应的 Inspect 回调；Chat 直接使用这些回调，不选择目标。
 
 `ConversationBinding.openTurn` 是对象标识稳定的只读来源：最新轮次的开始事件已加载且尚未结束时提供其编号，否则为 `undefined`。在 `conversation` retain 子要素被保留期间，观察到的轮次变化同步发布，即使没有活动视图也是如此。固定停止输入同时读取这个来源、会话运行状态和待处理交互状态。卸载会话绑定会解除其事件源订阅。
 

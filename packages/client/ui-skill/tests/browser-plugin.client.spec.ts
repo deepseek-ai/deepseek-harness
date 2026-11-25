@@ -170,7 +170,7 @@ describe('apply', () => {
           'row.failed': 'スキルの読み込みに失敗しました',
           'row.stopped': 'スキルの読み込みが停止しました',
           'row.instructions': '手順',
-          'row.inspect': '詳細を確認',
+          'row.inspect': '検査',
           'menu.userOnly': 'ユーザー専用',
         },
       },
