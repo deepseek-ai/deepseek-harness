@@ -502,6 +502,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeLocalCommits: 'forge.md',
   ForgeLocalDiff: 'forge.md',
   ForgeLocalScope: 'forge.md',
+  ForgeLocalWrite: 'forge.md',
+  ForgeLocalWriteResult: 'forge.md',
   ForgePanelState: 'forge.md',
   ForgeProvider: 'forge.md',
   ForgeReadiness: 'forge.md',

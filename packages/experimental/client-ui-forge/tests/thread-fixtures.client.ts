@@ -55,6 +55,6 @@ export function reviewThread(overrides: Partial<ForgeReviewThread> = {}): ForgeR
  * @returns the diff file.
  */
 export function diffFile(path: string, hunks: readonly ForgeDiffHunk[]): ForgeDiffFile {
-  return { path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, additions: 1, deletions: 1,
+  return { path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, additions: 1, deletions: 1,
     digest: 'digest', layer: 'implementation', hunks }
 }

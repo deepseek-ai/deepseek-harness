@@ -7,7 +7,7 @@ import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
-import type { Config, ForgeLocalDiff, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
+import type { Config, ForgeLocalDiff, ForgeLocalWriteFile, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
 import { GitOutputTooLarge } from '../src/git.ts'
 import { WORKTREE_RECORD } from '../src/worktree.ts'
 import { missingWorktree } from '../src/panel.ts'
@@ -543,6 +543,49 @@ describe('forgePanel local changes', () => {
     expect(diff.files.map(file => [file.path, file.status, file.untracked])).toEqual([['tracked.txt', 'modified', false], ['notes.md', 'added', true]])
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'staged' }, signal)).resolves.toEqual({ base: null, files: [], omitted: 0 })
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', signal)).resolves.toBe('initial\nmore\n')
+  })
+
+  it('writes the checkout of a read-only Session, reports a stale write by code, and measures the branch scope again', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    await writeFile(join(repo, 'tracked.txt'), 'initial\nmore\n')
+    await writeFile(join(repo, 'notes.md'), 'hello\n')
+    const opened = await open(repo)
+    // The access mode bounds the Agent; the write is the caller's own.
+    setSandboxMode(opened.session, 'read-only')
+    const follower = reader(opened)
+    await follower.until(state => state.local?.files.length === 2)
+    const { files } = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal)
+    const [tracked] = files.map(file => ({ path: file.path, digest: file.digest })) as [ForgeLocalWriteFile]
+
+    await expect(opened.ctx.forgePanel.localWrite(opened.session, { kind: 'stage', files: [{ ...tracked, digest: 'other' }] }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/local-stale', message: 'tracked.txt changed since it was read' })
+    await expect(opened.ctx.forgePanel.localWrite(opened.session, { kind: 'unstage', paths: ['../outside'] }, signal))
+      .rejects.toThrow('is not a path inside the checkout')
+
+    const { undo } = await opened.ctx.forgePanel.localWrite(opened.session, { kind: 'stage', files: [tracked] }, signal)
+    expect(undo).toMatch(/^[0-9a-f]{40}$/)
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'staged' }, signal)).resolves.toMatchObject({ files: [{ path: 'tracked.txt' }] })
+    await opened.ctx.forgePanel.localWrite(opened.session, { kind: 'unstage', paths: ['tracked.txt'] }, signal)
+
+    // The write is the only cause of the inspection that measures the restored file away.
+    await expect(opened.ctx.forgePanel.localWrite(opened.session, { kind: 'restore', files: [tracked] }, signal)).resolves.toEqual({ undo: null })
+    await expect(follower.until(state => state.local?.files.length === 1)).resolves.toMatchObject({ local: { files: [{ path: 'notes.md' }] } })
+  })
+
+  it('reports a deleted file whose path holds a directory by code', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    await rm(join(repo, 'tracked.txt'))
+    await mkdir(join(repo, 'tracked.txt'))
+    await writeFile(join(repo, 'tracked.txt', 'inner.md'), 'inner\n')
+    const opened = await open(repo)
+    const { files } = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal)
+    const deleted = files.filter(file => file.path === 'tracked.txt').map(file => ({ path: file.path, digest: file.digest }))
+
+    await expect(opened.ctx.forgePanel.localWrite(opened.session, { kind: 'restore', files: deleted }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/local-path-replaced', message: 'tracked.txt is a directory now; stage or restore the files in it instead' })
+    await expect(access(join(repo, 'tracked.txt', 'inner.md'))).resolves.toBeUndefined()
   })
 
   it('compares the branch scope with a chosen base branch and lists the branches it can choose', async () => {

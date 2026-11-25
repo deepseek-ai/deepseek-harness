@@ -32,6 +32,7 @@ import {
   localCommits, localDiff, localOldText, localText, NoForkPoint,
 } from './local-diff.ts'
 import type { ForkPoint } from './local-diff.ts'
+import { LocalChangesStale, LocalPathReplaced, localWrite } from './local-write.ts'
 import { LensCache, LensFailed, lensFrames, LensRegistry, LensWithdrawn, runLens } from './lenses.ts'
 import type { LensSubject } from './lenses.ts'
 import { lensVersion } from './lens-version.ts'
@@ -47,7 +48,8 @@ import type { KeptPanel, PanelConfig } from './panel.ts'
 import type {
   Config, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
   ForgeReviewChangeRequest, ForgeReviewCountFrame, ForgeReviewFrame, ForgeReviewRepository,
-  ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
+  ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeLocalWrite,
+  ForgeLocalWriteResult,
   ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeBases, ForgeWorktreeState,
 } from './types.ts'
 import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
@@ -890,6 +892,37 @@ export class ForgePanelController extends TypertRemoteService {
     signal.throwIfAborted()
     const inspection = await this.checkoutOf(session, signal)
     return await diffing(localText(this.home, this.config, session, inspection.checkout.root, scope, path, signal))
+  }
+
+  /**
+   * Stage, unstage, or restore whole files in the checkout of the Session's current directory, or return index
+   * entries to the tree an earlier write reported. The caller's press authorizes the write, so Git runs without the
+   * Session's sandbox policy and under any access mode. The Session's panel inspects the checkout again afterwards,
+   * whether or not the write succeeded.
+   * @param session - Session whose checkout is written.
+   * @param write - the write; `stage` and `restore` name each file with the digest of the change the reader saw.
+   * @param signal - request cancellation.
+   * @returns the index before a `stage` or `unstage` as a tree, for undoing it.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/local-stale` before anything is written when a
+   * file's unstaged change is not the one the reader saw; `forgePanel/local-path-replaced` before anything is written
+   * when a deleted file's path holds a directory; the errors of {@link ForgePanelController.localDiff} for the
+   * `unstaged` scope; an error for a path outside the checkout, a tree that is not a full object name, a restore of a
+   * submodule or of a file without index content, or a Git failure.
+   */
+  @Remote
+  async localWrite(session: Session, write: ForgeLocalWrite, signal: AbortSignal): Promise<ForgeLocalWriteResult> {
+    signal.throwIfAborted()
+    const inspection = await this.checkoutOf(session, signal)
+    try {
+      return await diffing(localWrite(this.home, this.config, session, inspection.checkout.root, write, this.layers, signal))
+    } catch (error) {
+      if (error instanceof LocalChangesStale) throw new RemoteError('forgePanel/local-stale', error.message, {}, { cause: error })
+      if (error instanceof LocalPathReplaced) throw new RemoteError('forgePanel/local-path-replaced', error.message, {}, { cause: error })
+      throw error
+    } finally {
+      // A failed write can have changed the paths of its earlier commands.
+      this.panels.get(session)?.reinspect()
+    }
   }
 
   /**

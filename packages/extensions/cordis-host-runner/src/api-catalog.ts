@@ -1854,6 +1854,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`; `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside the checkout, binary content, or a failed read.'],
       },
       {
+        signature: '@Remote async localWrite(session: Session, write: ForgeLocalWrite, signal: AbortSignal): Promise<ForgeLocalWriteResult>',
+        description: 'Stage, unstage, or restore whole files in the checkout of the Session\'s current directory, or return index entries to the tree an earlier write reported. The caller\'s press authorizes the write, so Git runs without the Session\'s sandbox policy and under any access mode. The Session\'s panel inspects the checkout again afterwards, whether or not the write succeeded.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is written.' }, { name: 'write', description: 'the write; `stage` and `restore` name each file with the digest of the change the reader saw.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the index before a `stage` or `unstage` as a tree, for undoing it.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/local-stale` before anything is written when a file\'s unstaged change is not the one the reader saw; `forgePanel/local-path-replaced` before anything is written when a deleted file\'s path holds a directory; the errors of {@link ForgePanelController.localDiff} for the `unstaged` scope; an error for a path outside the checkout, a tree that is not a full object name, a restore of a submodule or of a file without index content, or a Git failure.'],
+      },
+      {
         signature: '@Remote async changeRequestChecks(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>',
         description: 'Load complete checks for the change request whose list the user opened.',
         parameters: [{ name: 'session', description: 'Session retaining the visible binding.' }, { name: 'url', description: 'binding URL.' }, { name: 'headSha', description: 'commit displayed by the card; a different head rejects the result.' }, { name: 'signal', description: 'cancellation when the list closes.' }],
@@ -8062,7 +8069,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeDiffFile',
-    declaration: 'export interface ForgeDiffFile {\n    readonly path: string;\n    readonly previousPath: string | null;\n    readonly status: ForgeDiffStatus;\n    readonly binary: boolean;\n    readonly oversized: boolean;\n    readonly untracked: boolean;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly hunks: readonly ForgeDiffHunk[];\n    readonly layer: ForgeFileLayer;\n    readonly digest: string;\n}',
+    declaration: 'export interface ForgeDiffFile {\n    readonly path: string;\n    readonly previousPath: string | null;\n    readonly status: ForgeDiffStatus;\n    readonly binary: boolean;\n    readonly oversized: boolean;\n    readonly untracked: boolean;\n    readonly submodule: boolean;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly hunks: readonly ForgeDiffHunk[];\n    readonly layer: ForgeFileLayer;\n    readonly digest: string;\n}',
   },
   {
     name: 'ForgeDiffHunk',
@@ -8143,6 +8150,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeLocalScope',
     declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n    readonly base: string | null;\n    readonly commits: ForgeCommitRange | null;\n} | {\n    readonly kind: \'uncommitted\';\n} | {\n    readonly kind: \'unstaged\';\n} | {\n    readonly kind: \'staged\';\n};',
+  },
+  {
+    name: 'ForgeLocalWrite',
+    declaration: 'export type ForgeLocalWrite = {\n    readonly kind: \'stage\';\n    readonly files: readonly ForgeLocalWriteFile[];\n} | {\n    readonly kind: \'unstage\';\n    readonly paths: readonly string[];\n} | {\n    readonly kind: \'restore\';\n    readonly files: readonly ForgeLocalWriteFile[];\n} | {\n    readonly kind: \'reindex\';\n    readonly tree: string;\n    readonly paths: readonly string[];\n};',
+  },
+  {
+    name: 'ForgeLocalWriteFile',
+    declaration: 'export interface ForgeLocalWriteFile {\n    readonly path: string;\n    readonly digest: string;\n}',
+  },
+  {
+    name: 'ForgeLocalWriteResult',
+    declaration: 'export interface ForgeLocalWriteResult {\n    readonly undo: string | null;\n}',
   },
   {
     name: 'ForgeMissingWorktree',

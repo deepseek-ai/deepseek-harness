@@ -19,7 +19,7 @@ import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
   IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
-  Menu, Tooltip,
+  Menu, Modal, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -29,8 +29,9 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeExtensionState, ForgeLensFrame,
-  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
+  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeLocalWrite, ForgeLocalWriteResult,
 } from '../types.ts'
+import { restorable } from '../restore.ts'
 import { lensVersion } from '../lens-version.ts'
 import type {
   ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
@@ -56,6 +57,7 @@ import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from
 import { ChangesLoading } from './ChangesLoading.tsx'
 import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
 import { ChangeRequestGlyph, ForgeGlyph } from './glyphs.tsx'
+import { useLocalWrites } from './local-writes.ts'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { useForgeCopy } from './forge-copy.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
@@ -112,6 +114,8 @@ export interface ChangesTabInjected {
   readonly reconnect: () => void
   /** Read the local changes of one scope; `signal` aborts the read. */
   readonly localDiff: (scope: ForgeLocalScope, signal: AbortSignal) => Promise<RemoteResult<ForgeLocalDiff>>
+  /** Stage, unstage, or restore files of the local changes, or return index entries to an earlier tree; never retried. */
+  readonly localWrite: (write: ForgeLocalWrite) => Promise<RemoteResult<ForgeLocalWriteResult>>
   /** Read the branches the `branch` scope can compare with, whose names contain `query`; `signal` aborts the read. */
   readonly diffBases: (query: string, signal: AbortSignal) => Promise<RemoteResult<ForgeBaseBranches>>
   /** Read the new side of one file in a local scope. */
@@ -328,6 +332,11 @@ async function readChanges(
   return { ok: true, value: { kind: 'change', files, url: source.url, headSha, commits, localAhead, fileUrls, viewed } }
 }
 
+/** The sentence that says what restoring a file of the `unstaged` scope does to it. */
+function restoreCopyOf(file: ForgeDiffFile): ForgePanelKey {
+  return file.untracked ? 'diff.restore.untracked' : file.status === 'deleted' ? 'diff.restore.deleted' : 'diff.restore.modified'
+}
+
 /** The ref that identifies a comparison: the chosen base branch, or null for the automatic fork point and other scopes. */
 function baseRefOf(scope: ForgeLocalScope): string | null {
   return scope.kind === 'branch' ? scope.base : null
@@ -441,10 +450,12 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
  * The local view's header: for the `branch` scope, the checked-out branch, the base branch picker, and a note
  * that uncommitted changes count; for another scope, what it compares.
  */
-function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, commitMenu, createChangeRequest, t }: {
+function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, commitMenu, bulk, createChangeRequest, t }: {
   readonly state: ChangesPanelState | null
   /** Commit picker of the `branch` scope, left of the create button. */
   readonly commitMenu: ReactNode
+  /** The write of every shown file that the scope offers, or null for a scope or Session without writes. */
+  readonly bulk: { readonly label: string; readonly disabled: boolean; readonly run: () => void } | null
   readonly scope: ScopeKind
   readonly base: ForgeBaseBranch | null
   /** Whether the chosen base branch no longer exists. */
@@ -473,8 +484,11 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
         <span className={css.headerIcon}><IconFilesDiffOutlineRegular size={15} /></span>
         <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>
       </>}
-      {(scope === 'branch' || creatable) && <span className={css.headerEnd}>
+      {(scope === 'branch' || creatable || bulk !== null) && <span className={css.headerEnd} data-forge-header-buttons={scope === 'branch' ? undefined : ''}>
         {scope === 'branch' && commitMenu}
+        {bulk !== null && (
+          <Button size="sm" variant="outline" className={css.headerAction} disabled={bulk.disabled} data-forge-write-all="" onClick={bulk.run}>{bulk.label}</Button>
+        )}
         {creatable && <Button size="sm" variant="outline" className={css.headerAction} onClick={createChangeRequest}>{t('changes.local.create')}</Button>}
       </span>}
     </div>
@@ -567,8 +581,8 @@ export function ChangesTab({ useTabInfo, sessionId, usePanel, useAnnotations, ..
  * @returns the view body.
  */
 export function ChangesView({
-  tab, source, target, snapshot, annotations: viewAnnotations, openFile, quoteCopy, useStore, actions, reconnect, localDiff, diffBases,
-  localText,
+  tab, source, target, snapshot, annotations: viewAnnotations, openFile, quoteCopy, useStore, actions, reconnect, localDiff, localWrite,
+  diffBases, localText,
   localCommits, changeRequestDiff, changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles,
   changeRequestViewed, setFileViewed, openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue,
   submitReview, report, useLenses, useExtensions, changesLens, renderSlot, t: translate,
@@ -919,6 +933,10 @@ export function ChangesView({
     setWanted(null)
   }, [tab.visible, wanted, data, allFiles, lens, hideTests, kept, actions, tab.id])
   const refresh = (): void => { setAttempt(value => value + 1) }
+  const writes = useLocalWrites({ localWrite, report, reread: refresh, rereading })
+  // Staging and restoring act on the `unstaged` scope and unstaging on `staged`; in the other scopes a write could leave
+  // the shown diff unchanged.
+  const writeSide = data?.kind === 'local' && (data.scope.kind === 'unstaged' || data.scope.kind === 'staged') ? data.scope.kind : undefined
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
   const baseFailure = baseFailureOf(failed, source.kind === 'local' && scope === 'branch' ? base : null, t)
@@ -979,14 +997,22 @@ export function ChangesView({
   }
   const fileActions = (owner: ChangesData, file: ForgeDiffFile): DiffFileAction[] => {
     const list: DiffFileAction[] = [{ label: 'diff.copyPath', run: () => { copyPath(file.path) } }]
-    if (file.status === 'deleted') return list
-    if (owner.kind === 'local') {
-      if (root !== null && openFile !== undefined) {
-        list.push({ label: 'diff.openFileInSidebar', run: () => { openFile(`${root}/${file.path}`) } })
+    if (file.status !== 'deleted') {
+      if (owner.kind === 'local') {
+        if (root !== null && openFile !== undefined) {
+          list.push({ label: 'diff.openFileInSidebar', run: () => { openFile(`${root}/${file.path}`) } })
+        }
+      } else {
+        const url = owner.fileUrls[file.path]
+        if (url !== undefined) list.push({ label: 'diff.openFileInBrowser', run: () => { openLink(url) } })
       }
-    } else {
-      const url = owner.fileUrls[file.path]
-      if (url !== undefined) list.push({ label: 'diff.openFileInBrowser', run: () => { openLink(url) } })
+    }
+    // The header's writes again, for a narrow pane on a device without hover, where the header hides them.
+    if (writeSide === 'unstaged') {
+      list.push({ label: 'diff.stageFile', separated: true, disabled: writes.writing, run: () => { writes.write('stage', [file]) } })
+      if (restorable(file)) list.push({ label: 'diff.restoreFileMenu', disabled: writes.writing, run: () => { writes.write('restore', [file]) } })
+    } else if (writeSide === 'staged') {
+      list.push({ label: 'diff.unstageFile', separated: true, disabled: writes.writing, run: () => { writes.write('unstage', [file]) } })
     }
     return list
   }
@@ -1200,7 +1226,7 @@ export function ChangesView({
   // props and state, which the retried render assigns again.
   const callbacks = {
     data, expandedByDefault, expand, readContext, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread,
-    lensTitle, renderSlot, kept, reportRemoved, t,
+    lensTitle, renderSlot, kept, reportRemoved, t, write: writes.write,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1225,6 +1251,7 @@ export function ChangesView({
       /* v8 ignore next -- sections render only while changes are loaded */
       if (owner !== null) mark(owner, file, viewed)
     },
+    write: (file, kind) => { live.current.write(kind, [file]) },
     actions: (file) => {
       const { data: owner, fileActions: list } = live.current
       /* v8 ignore next -- sections render only while changes are loaded */
@@ -1334,6 +1361,8 @@ export function ChangesView({
               viewedNote={host === null ? t('viewed.hint') : host.unavailable ? t('viewed.unavailable')
                 : host.saving(path) ? t('viewed.saving') : t('viewed.hintHost')}
               viewedDisabled={host !== null && (host.unavailable || host.saving(path))}
+              writes={writeSide}
+              writing={writes.writing}
               handlers={handlers}
               t={t}
             />
@@ -1377,6 +1406,11 @@ export function ChangesView({
       {source.kind === 'local'
         ? <LocalHeader state={state} scope={scope} base={base} missing={failed === 'forgePanel/base-missing'} visible={tab.visible}
           diffBases={diffBases} choose={(next) => { actions.based(tab.id, next) }} commitMenu={commitMenu}
+          bulk={writeSide === undefined ? null : {
+            label: t(writeSide === 'unstaged' ? 'diff.stageAll' : 'diff.unstageAll'),
+            disabled: writes.writing || files.length === 0,
+            run: () => { writes.write(writeSide === 'unstaged' ? 'stage' : 'unstage', files) },
+          }}
           createChangeRequest={createChangeRequest} t={t} />
         : <ChangeHeader url={source.url} entry={entry} openLink={openLink} commitMenu={commitMenu}
           reviewCount={(pendingReview?.comments ?? 0) + reviewState.comments.length}
@@ -1516,6 +1550,17 @@ export function ChangesView({
             openLink={openLink} forge={family} close={closeThreadList} t={t} />
         )}
       </div>
+      {writes.restoring !== null && (
+        <Modal open tone="warning" title={t('diff.restore.title')} closeLabel={t('review.close')} onClose={writes.restoring.cancel}
+          footer={(
+            <>
+              <Button variant="outline" data-modal-autofocus onClick={writes.restoring.cancel}>{t('review.cancel')}</Button>
+              <Button variant="primary" onClick={writes.restoring.confirm}>{t('diff.restore.confirm')}</Button>
+            </>
+          )}>
+          <p className={css.restoreText}>{t(restoreCopyOf(writes.restoring.file), { path: writes.restoring.file.path })}</p>
+        </Modal>
+      )}
     </div>
   )
 }

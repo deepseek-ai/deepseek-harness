@@ -1,6 +1,6 @@
 /**
  * One file of the changes view: a sticky header with the path, badges, line
- * counts, and file actions, then its hunks unified or side by side with the
+ * counts, the writes of a local scope, the viewed mark, and file actions, then its hunks unified or side by side with the
  * unchanged lines between them collapsed into rows that expand them. A section
  * draws and highlights its lines once it comes within reach of the scrollport;
  * it redraws only when its own props change.
@@ -10,12 +10,13 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import clsx from 'clsx'
 import { flushSync } from 'react-dom'
 import {
-  FileTypeIcon, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconChevronUpOutlineRegular, IconEllipsisOutlineRegular,
-  IconPlusOutlineRegular,
+  FileTypeIcon, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconChevronUpOutlineRegular,
+  IconEllipsisOutlineRegular, IconPlusOutlineRegular,
   Tag, Tooltip,
   languageForPath, Menu, MenuItemButton, useCodeHighlighter, type CodeHighlighter, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { restorable } from '../restore.ts'
 import type { ForgeDiffFile } from '../types.ts'
 import {
   drawnLines, EXPAND_STEP, hidesLine, segmentsOf, splitRows,
@@ -29,6 +30,8 @@ import type { FileReviewState } from './review-queue.ts'
 import { ReviewComposer, type ReviewActions } from './ReviewComposer.tsx'
 import reviewCss from './ReviewComposer.module.css'
 import { FileLabel } from './FileLabel.tsx'
+import { FileMarkGlyph } from './glyphs.tsx'
+import type { LocalWriteKind } from './local-writes.ts'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ViewedState } from './viewed-files.ts'
 import type { SectionReach } from './section-reach.ts'
@@ -44,6 +47,10 @@ export interface DiffFileAction {
   readonly label: ForgePanelKey
   /** Runs the action. */
   readonly run: () => void
+  /** Whether the row starts a new group of the menu. */
+  readonly separated?: boolean | undefined
+  /** Whether the row cannot be activated now. */
+  readonly disabled?: boolean | undefined
 }
 
 /** New side of a file: its lines once read, `loading` while a read runs, or undefined before any. */
@@ -64,6 +71,8 @@ export interface DiffFileHandlers {
   readonly readContext: (file: ForgeDiffFile) => void
   /** Mark a file viewed, which also collapses it, or clear the mark. */
   readonly view: (file: ForgeDiffFile, viewed: boolean) => void
+  /** Stage or unstage the file, or ask to restore it. */
+  readonly write: (file: ForgeDiffFile, kind: LocalWriteKind) => void
   /** Rows of a file's menu, read whenever the menu draws. */
   readonly actions: (file: ForgeDiffFile) => readonly DiffFileAction[]
   /** Receive a file's section element, which scrolling to the file targets, or null once it unmounts. */
@@ -112,6 +121,13 @@ export interface DiffFileProps {
   readonly viewedNote: string
   /** Whether the mark cannot change now, while its write is in flight or the host's marks could not be read. */
   readonly viewedDisabled: boolean
+  /**
+   * The local scope whose writes the header offers: staging and restoring for `unstaged`, unstaging for `staged`;
+   * undefined offers none.
+   */
+  readonly writes?: 'unstaged' | 'staged' | undefined
+  /** Whether the header's writes wait for a write in flight or a reread of the scope. */
+  readonly writing?: boolean | undefined
   /** Review threads of the file from the code host, or undefined while none are read; the view keeps their identity. */
   readonly threads?: FileThreads | undefined
   /** Whether the section draws its lines at once, as the target of a thread jump, whose card must exist to be centered. */
@@ -728,6 +744,8 @@ function FileMenu({ name, file, handlers, t }: {
       {handlers.actions(file).map(action => (
         <MenuItemButton
           key={action.label}
+          separatorBefore={action.separated === true}
+          disabled={action.disabled === true}
           onSelect={() => {
             setMenuOpen(false)
             action.run()
@@ -741,6 +759,31 @@ function FileMenu({ name, file, handlers, t }: {
   )
 }
 
+const WRITE_COPY: Record<LocalWriteKind, { readonly tip: ForgePanelKey; readonly name: ForgePanelKey }> = {
+  stage: { tip: 'diff.stageFile', name: 'diff.stageFileAria' },
+  unstage: { tip: 'diff.unstageFile', name: 'diff.unstageFileAria' },
+  restore: { tip: 'diff.restoreFile', name: 'diff.restoreFileAria' },
+}
+
+/** One write of a file as an icon button, named by its tooltip. */
+function WriteTool({ kind, name, file, disabled, handlers, t }: {
+  readonly kind: LocalWriteKind
+  readonly name: string
+  readonly file: ForgeDiffFile
+  readonly disabled: boolean
+  readonly handlers: DiffFileHandlers
+  readonly t: Translate
+}): ReactNode {
+  return (
+    <Tooltip label={t(WRITE_COPY[kind].tip)} side="bottom" portal delayMs={500}>
+      <button type="button" className={css.tool} aria-label={t(WRITE_COPY[kind].name, { name })} disabled={disabled} data-forge-write={kind}
+        onClick={() => { handlers.write(file, kind) }}>
+        {kind === 'stage' ? <IconPlusOutlineRegular /> : <FileMarkGlyph mark={kind} />}
+      </button>
+    </Tooltip>
+  )
+}
+
 /**
  * Render one file of a diff. Until the section first comes within reach of the scrollport or a thread jump targets it,
  * an expanded file that draws lines shows a box of about their height instead.
@@ -748,7 +791,9 @@ function FileMenu({ name, file, handlers, t }: {
  * @returns the file section.
  */
 function DiffFileSection(props: DiffFileProps): ReactNode {
-  const { file, expanded, large, revealed, badge, tooltip, viewed, viewedNote, viewedDisabled, threads, handlers, t } = props
+  const {
+    file, expanded, large, revealed, badge, tooltip, viewed, viewedNote, viewedDisabled, writes, writing = false, threads, handlers, t,
+  } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   const element = useRef<HTMLElement | null>(null)
   const [reached, setReached] = useState(false)
@@ -768,7 +813,7 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
   return (
     <section ref={sectionRef} className={css.file} data-forge-diff-file={file.path} data-expanded={expanded ? '' : undefined}
       data-viewed={viewed}>
-      <div className={css.fileHeader}>
+      <div className={css.fileHeader} data-forge-file-writes={writes}>
         <button
           type="button"
           className={css.fileToggle}
@@ -799,10 +844,21 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
           {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
         {!file.binary && <Counts file={file} t={t} />}
+        {writes !== undefined && (
+          <span className={css.fileActions} data-forge-file-actions="">
+            {writes === 'unstaged' && restorable(file) && (
+              <WriteTool kind="restore" name={name} file={file} disabled={writing} handlers={handlers} t={t} />
+            )}
+            <WriteTool kind={writes === 'unstaged' ? 'stage' : 'unstage'} name={name} file={file} disabled={writing} handlers={handlers} t={t} />
+          </span>
+        )}
         <Tooltip label={viewedNote} side="bottom" align="end" portal delayMs={500}>
-          <label className={css.viewed} data-disabled={viewedDisabled ? '' : undefined}>
+          <label className={css.viewed} data-checked={viewed === 'viewed' ? '' : undefined} data-disabled={viewedDisabled ? '' : undefined}>
             <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })} disabled={viewedDisabled}
               onChange={(event) => { handlers.view(file, event.target.checked) }} />
+            <span className={css.viewedMark} aria-hidden="true">
+              {viewed === 'viewed' ? <IconCheckCircleOutlineRegular /> : <FileMarkGlyph mark="unviewed" />}
+            </span>
             <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
           </label>
         </Tooltip>

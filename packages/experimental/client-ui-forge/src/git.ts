@@ -56,6 +56,20 @@ export class GitOutputTooLarge extends Error {
   override name = 'GitOutputTooLarge'
 }
 
+/** Thrown when a Git command ends with an exit code its caller does not allow, or by a signal. */
+export class GitFailed extends Error {
+  override name = 'GitFailed'
+
+  /**
+   * @param command - the caller's name of the command.
+   * @param outcome - the exit code, or the signal that ended the process.
+   * @param diagnostic - first non-blank line Git printed on standard error, or `no diagnostic`.
+   */
+  constructor(command: string, outcome: number | string | null, readonly diagnostic: string) {
+    super(`git ${command} failed (${String(outcome)}): ${diagnostic}`)
+  }
+}
+
 /**
  * Clear inherited repository, configuration, and replacement-ref selectors;
  * disable prompts, optional index writes, and lazy fetches of missing objects.
@@ -190,6 +204,22 @@ export function gitIn(ctx: Context, config: GitConfig, session: Session, directo
 }
 
 /**
+ * Bind a Git runner that no Session's sandbox policy confines, for a write a person asked for in the interface: the
+ * press is that person's authorization, as archiving is for the worktree service's removal of a checkout. Commands
+ * keep the mounted subprocess provider, the scrubbed environment, the fixed command prefix, and `config`'s limits.
+ * @param ctx - context that provides `subprocess`.
+ * @param config - executable and process limits.
+ * @param directory - working directory of every command.
+ * @param signal - cancellation of every command.
+ * @returns the runner.
+ */
+export function gitUnconfined(ctx: Context, config: GitConfig, directory: string, signal: AbortSignal): Git {
+  const policy: SandboxExecutionPolicy = { mode: 'danger-full-access', workspaceRoot: directory }
+  return (name, args, allowedExitCodes = [0], configOverrides = {}) =>
+    runGit(ctx, config, policy, directory, name, args, signal, allowedExitCodes, configOverrides)
+}
+
+/**
  * Read the checked-out local branch, including an unborn one; null when HEAD is detached or names a ref outside
  * `refs/heads/`. The full ref is read because the short form turns `main` into `heads/main` while a tag shares the name.
  */
@@ -255,7 +285,7 @@ async function runGit(
     const stdout = captured.stdout.readFrom(0)
     const stderr = captured.stderr.readFrom(0)
     if (outcome.exitCode === null || !allowedExitCodes.includes(outcome.exitCode)) {
-      throw new Error(`git ${name} failed (${outcome.signal ?? outcome.exitCode}): ${firstLine(stderr.text)}`)
+      throw new GitFailed(name, outcome.signal ?? outcome.exitCode, firstLine(stderr.text))
     }
     if (stdout.lossy) throw new GitOutputTooLarge(`git ${name} output exceeds maxOutputBytes`)
     return { stdout: stdout.text, stderr: stderr.text, exitCode: outcome.exitCode }

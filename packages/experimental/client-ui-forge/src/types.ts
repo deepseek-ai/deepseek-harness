@@ -432,6 +432,8 @@ export interface ForgeDiffFile {
   readonly oversized: boolean
   /** Whether Git does not track the file yet; only local diffs list such files. */
   readonly untracked: boolean
+  /** Whether the path is a submodule, whose change is the commit recorded for it and whose hunks hold no file content. */
+  readonly submodule: boolean
   /** Lines added. */
   readonly additions: number
   /** Lines deleted. */
@@ -455,6 +457,41 @@ export interface ForgeLocalDiff {
   readonly files: readonly ForgeDiffFile[]
   /** Untracked files left out beyond `maxUntrackedFiles`. */
   readonly omitted: number
+}
+
+/** One file of a local write, as the `unstaged` scope listed it for the reader. */
+export interface ForgeLocalWriteFile {
+  /** Path relative to the repository root, as the diff names it. */
+  readonly path: string
+  /** Digest of the change the reader saw. */
+  readonly digest: string
+}
+
+/**
+ * A write a person makes from the changes view to the index or the working tree of the Session's checkout, on whole
+ * files. The person's press authorizes it, so the Session's access mode does not bound it.
+ */
+export type ForgeLocalWrite =
+  /** Copy the working-tree state of the files into the index, adding untracked files and recording deletions. */
+  | { readonly kind: 'stage'; readonly files: readonly ForgeLocalWriteFile[] }
+  /** Return the index entries of the paths to HEAD; a staged rename names both of its paths. */
+  | { readonly kind: 'unstage'; readonly paths: readonly string[] }
+  /**
+   * Return the working-tree files to their index entries and delete untracked files. A file Git tracks without
+   * content yet, as `git add --intent-to-add` leaves it, is refused, because its index entry is empty; so is a
+   * submodule, whose checkout a restore leaves as it is.
+   */
+  | { readonly kind: 'restore'; readonly files: readonly ForgeLocalWriteFile[] }
+  /** Return the index entries of the paths to `tree`, the {@link ForgeLocalWriteResult.undo} of an earlier write. */
+  | { readonly kind: 'reindex'; readonly tree: string; readonly paths: readonly string[] }
+
+/** What a local write left for undoing it. */
+export interface ForgeLocalWriteResult {
+  /**
+   * Object name of the index as a tree before a `stage` or `unstage`, which a `reindex` of the same paths returns to;
+   * null for other writes and while the index holds unmerged entries.
+   */
+  readonly undo: string | null
 }
 
 /** Changes of a change request, or of consecutive commits of it, as its code host computes them. */
@@ -728,6 +765,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/commits-missing': Record<string, never>
     /** A chosen commit after the first lacks the commit listed before it as its first parent, so two ends cannot name the run. */
     'forgePanel/commits-not-linear': Record<string, never>
+    /** A file's unstaged change is not the one the reader saw; nothing was written. */
+    'forgePanel/local-stale': Record<string, never>
+    /** A file listed as deleted has a directory at its path, which a write of that path would reach into; nothing was written. */
+    'forgePanel/local-path-replaced': Record<string, never>
     /** The code host did not provide the signed-in user's viewed marks on the change request's files; the message says why. */
     'forgePanel/viewed-failed': Record<string, never>
     /** The code host did not list the accounts a review can be requested from; the message says why. */

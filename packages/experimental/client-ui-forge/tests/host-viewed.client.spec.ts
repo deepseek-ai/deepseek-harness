@@ -5,7 +5,7 @@ import { hostMarksOf } from '../src/client/host-viewed.ts'
 import type { ForgeDiffFile } from '../src/types.ts'
 
 function file(path: string): ForgeDiffFile {
-  return { path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation',
+  return { path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation',
     digest: `digest-${path}`, additions: 1, deletions: 0, hunks: [] }
 }
 

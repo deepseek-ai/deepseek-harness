@@ -56,7 +56,8 @@ import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/typ
 import type {
   ForgeBaseBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgeLensFrame,
   ForgeLensRequest,
-  ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState, ForgeReviewChangeRequest, ForgeReviewCountFrame,
+  ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeLocalWrite, ForgeLocalWriteResult,
+  ForgePanelState, ForgeReviewChangeRequest, ForgeReviewCountFrame,
   ForgeReviewFrame, ForgeWorktreeBases,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
@@ -252,6 +253,8 @@ async function base() {
     localDiff: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _signal?: AbortSignal): Read<ForgeLocalDiff> =>
       ({ ok: true, value: LOCAL })),
     localText: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _path: string): Read<string> => ({ ok: true, value: 'a\n' })),
+    localWrite: vi.fn(async (_sessionId: SessionId, _write: ForgeLocalWrite): Read<ForgeLocalWriteResult> =>
+      ({ ok: true, value: { undo: null } })),
     diffBases: vi.fn(async (_sessionId: SessionId, _query: string, _signal?: AbortSignal): Read<ForgeBaseBranches> =>
       ({ ok: true, value: { automatic: null, remote: [], local: [] } })),
     changeRequestChecks: vi.fn(async (
@@ -1295,6 +1298,8 @@ describe('mountForgePanel changes view', () => {
     expect(await view.changeRequestText('https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')).toEqual({ ok: true, value: 'b\n' })
     expect(f.forgePanel.localDiff).toHaveBeenCalledWith(S1, { kind: 'staged' }, signal)
     expect(f.forgePanel.localText).toHaveBeenCalledWith(S1, { kind: 'staged' }, 'src/a.ts')
+    expect(await view.localWrite({ kind: 'unstage', paths: ['src/a.ts'] })).toEqual({ ok: true, value: { undo: null } })
+    expect(f.forgePanel.localWrite).toHaveBeenCalledWith(S1, { kind: 'unstage', paths: ['src/a.ts'] })
     expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', null, signal)
     expect(f.forgePanel.changeRequestText).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')
     expect(await view.localCommits('refs/heads/topic', signal)).toEqual({ ok: true, value: COMMITS })
@@ -1878,6 +1883,7 @@ describe('mountForgePanel review page changes view', () => {
     const signal = new AbortController().signal
     const refusal = 'forge-panel: the review page shows no local changes'
     await expect(f.view.localDiff({ kind: 'staged' }, signal)).rejects.toThrow(refusal)
+    await expect(f.view.localWrite({ kind: 'unstage', paths: ['a.ts'] })).rejects.toThrow(refusal)
     await expect(f.view.diffBases('', signal)).rejects.toThrow(refusal)
     await expect(f.view.localText({ kind: 'staged' }, 'a.ts')).rejects.toThrow(refusal)
     await expect(f.view.localCommits(null, signal)).rejects.toThrow(refusal)

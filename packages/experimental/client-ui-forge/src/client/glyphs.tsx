@@ -1,4 +1,4 @@
-/** Lifecycle glyphs of change requests, outcome glyphs of their checks, and the marks of their code hosts. */
+/** Lifecycle glyphs of change requests, outcome glyphs of their checks, the marks of their code hosts, and the marks of file headers. */
 
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
@@ -162,4 +162,34 @@ const FORGE_SITE: Readonly<Record<string, string>> = { github: 'https://github.c
 export function ForgeGlyph({ forge, size = 14 }: { readonly forge: string | null; readonly size?: number | undefined }): ReactNode {
   const site = forge === null ? undefined : FORGE_SITE[forge]
   return site === undefined ? <IconRightUpOutlineRegular size={size} /> : <LinkIconRegular kind="url" href={site} size={size} />
+}
+
+/** A file header mark the shared icons have no drawing of. */
+export type FileMark = 'unstage' | 'restore' | 'unviewed'
+
+const FILE_MARKS: Record<FileMark, ReactNode> = {
+  // The horizontal stroke of the shared plus, which stages.
+  unstage: <path vectorEffect="non-scaling-stroke" d="M2 8H14" />,
+  restore: (
+    <g strokeLinecap="round" strokeLinejoin="round">
+      <path vectorEffect="non-scaling-stroke" d="M5.5 2.5L2.5 5.5L5.5 8.5" />
+      <path vectorEffect="non-scaling-stroke" d="M2.5 5.5H9.5A4 4 0 0 1 9.5 13.5H6" />
+    </g>
+  ),
+  // The ring of the shared check circle, which marks a viewed file.
+  unviewed: <circle vectorEffect="non-scaling-stroke" cx="8" cy="8" r="6.5" />,
+}
+
+/**
+ * Draw a decorative mark of a file header at the weight of the shared Regular icons: a minus for unstaging, an arrow
+ * turning back for restoring, and the empty ring of a file that is not viewed.
+ * @param props.mark - which mark to draw.
+ * @returns the glyph, 16 pixels wide unless its control sizes it.
+ */
+export function FileMarkGlyph({ mark }: { readonly mark: FileMark }): ReactNode {
+  return (
+    <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1} aria-hidden="true" data-forge-file-mark={mark}>
+      {FILE_MARKS[mark]}
+    </svg>
+  )
 }
