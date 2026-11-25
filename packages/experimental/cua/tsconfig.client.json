@@ -60,6 +60,9 @@
     },
     {
       "path": "../../client/ui-settings-general/tsconfig.client.json"
+    },
+    {
+      "path": "../../client/ui-agent-preset/tsconfig.json"
     }
   ]
 }

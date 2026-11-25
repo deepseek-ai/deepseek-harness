@@ -134,12 +134,13 @@ function WindowsGuidance({ system, error, busy, refresh, canOpenPresets, openPre
     {error !== null && <NoticeBox tone="danger" role="alert"
       title={t('windowsHelperFailed', { message: error })} body={t('queryFailedHint')}
       action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
+    {/* Standing desktop conditions are notes so that opening the page does not interrupt assistive technology. */}
     {error === null && system !== null && <>
-      {system.sessionLocked === true && <NoticeBox tone="danger" role="alert"
+      {system.sessionLocked === true && <NoticeBox tone="danger" role="note"
         title={t('windowsLockedTitle')} body={t('windowsLockedBody')} />}
-      {system.sessionLocked === null && <NoticeBox tone="danger" role="alert"
+      {system.sessionLocked === null && <NoticeBox tone="danger" role="note"
         title={t('windowsSessionUnknownTitle')} body={t('windowsSessionUnknown')} />}
-      {system.elevated && <NoticeBox tone="danger" role="alert"
+      {system.elevated && <NoticeBox tone="danger" role="note"
         title={t('windowsElevatedTitle')} body={t('windowsElevatedWarning')} />}
       {system.sessionLocked === false && !system.captureAvailable && <NoticeBox tone="warn" role="note"
         title={t('windowsCaptureUnavailableTitle')} body={t('windowsCaptureUnavailableNotice')} />}
@@ -175,6 +176,8 @@ export function PermissionPanel(props: PermissionPanelProps) {
   const mac = observed?.platform === 'darwin' ? observed : null
   const win = observed?.platform === 'windows' ? observed : null
   const application = state.system.error !== null ? undefined : mac?.launchApplication
+  // An unidentified platform outranks the native query failure because the page cannot tell which guidance applies.
+  const providerError = observed === null ? state.windowsProvider.error : null
   useEffect(() => {
     refresh()
     window.addEventListener('focus', refresh)
@@ -190,7 +193,10 @@ export function PermissionPanel(props: PermissionPanelProps) {
         </div>
         <h3>{t('title')}</h3>
         {state.system.error !== null && <NoticeBox tone="danger" role="alert"
-          title={t('queryFailed', { message: state.system.error })} body={t('queryFailedHint')}
+          title={providerError === null
+            ? t('queryFailed', { message: state.system.error })
+            : t('providerLookupFailed', { message: providerError })}
+          body={t('queryFailedHint')}
           action={<Button size="sm" variant="outline" disabled={busy} onClick={refresh}>{t('retry')}</Button>} />}
         {(observed !== null || state.system.error === null) && <p
           className={observed === null ? css.pendingHint : undefined}

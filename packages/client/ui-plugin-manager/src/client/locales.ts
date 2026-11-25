@@ -296,6 +296,7 @@ export const zh = {
   reasonIncompatibleVersionUnnamed: '这个插件与当前 DSH 版本不兼容，运行它可能导致崩溃或数据丢失。',
   reasonUnsupportedPlatform: '此插件不支持当前操作系统',
   reasonUnsupportedPlatformList: '此插件仅支持 {platforms}',
+  platformListSeparator: '、',
   platformListLastSeparator: ' 和 ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',
@@ -609,6 +610,7 @@ export const en = {
   reasonIncompatibleVersionUnnamed: 'This plugin is incompatible with the running DSH version; running it may cause crashes or data loss.',
   reasonUnsupportedPlatform: 'This plugin does not support this operating system.',
   reasonUnsupportedPlatformList: 'This plugin only supports {platforms}.',
+  platformListSeparator: ', ',
   platformListLastSeparator: ' and ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',
@@ -632,6 +634,7 @@ export const en = {
 export const ja = {
   'reasonUnsupportedPlatform': 'このプラグインは現在の OS に対応していません。',
   'reasonUnsupportedPlatformList': 'このプラグインは {platforms} にのみ対応しています。',
+  'platformListSeparator': '、',
   'platformListLastSeparator': ' と ',
   'platformDarwin': 'macOS',
   'platformWin32': 'Windows',
@@ -942,6 +945,7 @@ export const ja = {
 export const es = {
   reasonUnsupportedPlatform: 'Este complemento no es compatible con este sistema operativo.',
   reasonUnsupportedPlatformList: 'Este complemento solo es compatible con {platforms}.',
+  platformListSeparator: ', ',
   platformListLastSeparator: ' y ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',
@@ -1252,6 +1256,7 @@ export const es = {
 export const fr = {
   reasonUnsupportedPlatform: 'Ce plugin n’est pas compatible avec ce système d’exploitation.',
   reasonUnsupportedPlatformList: 'Ce plugin est uniquement compatible avec {platforms}.',
+  platformListSeparator: ', ',
   platformListLastSeparator: ' et ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',
@@ -1562,6 +1567,7 @@ export const fr = {
 export const de = {
   reasonUnsupportedPlatform: 'Dieses Plugin unterstützt dieses Betriebssystem nicht.',
   reasonUnsupportedPlatformList: 'Dieses Plugin unterstützt nur {platforms}.',
+  platformListSeparator: ', ',
   platformListLastSeparator: ' und ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',
@@ -1872,6 +1878,7 @@ export const de = {
 export const ru = {
   reasonUnsupportedPlatform: 'Этот плагин не поддерживает текущую операционную систему.',
   reasonUnsupportedPlatformList: 'Этот плагин поддерживает только {platforms}.',
+  platformListSeparator: ', ',
   platformListLastSeparator: ' и ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',
@@ -2182,6 +2189,7 @@ export const ru = {
 export const pt = {
   reasonUnsupportedPlatform: 'Este plugin não é compatível com este sistema operacional.',
   reasonUnsupportedPlatformList: 'Este plugin é compatível apenas com {platforms}.',
+  platformListSeparator: ', ',
   platformListLastSeparator: ' e ',
   platformDarwin: 'macOS',
   platformWin32: 'Windows',

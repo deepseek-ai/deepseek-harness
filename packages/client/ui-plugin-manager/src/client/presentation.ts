@@ -45,7 +45,7 @@ function registryHost(registry: string): string {
   }
 }
 
-/** The sentence each of the Host's refusal codes reads as. */
+/** Display names for the Node platform ids and `wsl` that bundle metadata declares; other ids render verbatim. */
 const PLATFORM_KEYS = new Map<string, PluginManagerLocaleKey>([
   ['darwin', 'platformDarwin'],
   ['win32', 'platformWin32'],
@@ -59,9 +59,10 @@ function platformList(platforms: readonly string[], t: Translate): string {
     return key === undefined ? name : t(key)
   })
   if (labels.length === 1) return labels.join('')
-  return `${labels.slice(0, -1).join(t('registryListSeparator'))}${t('platformListLastSeparator')}${labels.at(-1)}`
+  return `${labels.slice(0, -1).join(t('platformListSeparator'))}${t('platformListLastSeparator')}${labels.at(-1)}`
 }
 
+/** The sentence each of the Host's refusal codes reads as. */
 const CODE_KEYS = {
   'management-required': 'reasonManagementRequired',
   'unaddressable': 'reasonUnaddressable',

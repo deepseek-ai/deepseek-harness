@@ -433,24 +433,22 @@ it.each([true, false, null] as const)('omits system permissions on Windows and p
   expect(instructions.compareDocumentPosition(privileges) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(privileges.compareDocumentPosition(ptc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   if (sessionLocked === true) {
-    const alert = screen.getByRole('alert')
-    expect(within(alert).getByText(en.windowsLockedTitle)).toBeTruthy()
-    expect(within(alert).getByText(en.windowsLockedBody)).toBeTruthy()
-    expect(alert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const note = screen.getByText(en.windowsLockedTitle).closest('[role="note"]')!
+    expect(within(note as HTMLElement).getByText(en.windowsLockedBody)).toBeTruthy()
+    expect(note.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   } else if (sessionLocked === null) {
-    const alert = screen.getByRole('alert')
-    expect(within(alert).getByText(en.windowsSessionUnknownTitle)).toBeTruthy()
-    expect(within(alert).getByText(en.windowsSessionUnknown)).toBeTruthy()
-    expect(alert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  } else {
-    expect(screen.queryByRole('alert')).toBeNull()
+    const note = screen.getByText(en.windowsSessionUnknownTitle).closest('[role="note"]')!
+    expect(within(note as HTMLElement).getByText(en.windowsSessionUnknown)).toBeTruthy()
+    expect(note.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   }
+  // Standing desktop conditions never interrupt assistive technology.
+  expect(screen.queryByRole('alert')).toBeNull()
   f.publish({ system: { value: { platform: 'windows', sessionLocked: false, captureAvailable: false,
     elevated: true, helper: {} }, error: null, busy: false } })
-  const adminAlert = screen.getByRole('alert')
-  expect(within(adminAlert).getByText(en.windowsElevatedTitle)).toBeTruthy()
-  expect(within(adminAlert).getByText(en.windowsElevatedWarning)).toBeTruthy()
-  expect(adminAlert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.queryByRole('alert')).toBeNull()
+  const adminNote = screen.getByText(en.windowsElevatedTitle).closest('[role="note"]')!
+  expect(within(adminNote as HTMLElement).getByText(en.windowsElevatedWarning)).toBeTruthy()
+  expect(adminNote.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   const captureNotice = screen.getByText(en.windowsCaptureUnavailableTitle)
   expect(screen.getByText(en.windowsCaptureUnavailableNotice)).toBeTruthy()
   expect(captureNotice.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -478,6 +476,22 @@ it('shows the Windows helper warning above the experimental notice when startup 
   expect(within(alert).getByText(en.queryFailedHint)).toBeTruthy()
   const experimental = screen.getByText(en.previewNoticeTitle)
   expect(alert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+it('reports a failed provider lookup instead of the native error until the platform is known', () => {
+  const f = fixture()
+  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: null, error: 'offline', busy: false } })
+  render(<PermissionPanel {...f.props} />)
+  const alert = screen.getByRole('alert')
+  expect(within(alert).getByText(en.providerLookupFailed.replace('{message}', 'offline'))).toBeTruthy()
+  expect(within(alert).getByText(en.queryFailedHint)).toBeTruthy()
+  expect(screen.queryByText(en.queryFailed.replace('{message}', 'helper missing'))).toBeNull()
+  fireEvent.click(within(alert).getByRole('button', { name: en.retry }))
+  expect(f.props.refresh).toHaveBeenCalledTimes(2)
+  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: false, error: null, busy: false } })
+  expect(within(screen.getByRole('alert')).getByText(en.queryFailed.replace('{message}', 'helper missing'))).toBeTruthy()
+  f.publish({ system: { value: value.system, error: null, busy: false } })
+  expect(screen.queryByRole('alert')).toBeNull()
 })
 
 it.each([[true, true], [false, true], [false, false], [null, true]] as const)('offers Windows setup for lock=%s and capture=%s', (sessionLocked, captureAvailable) => {

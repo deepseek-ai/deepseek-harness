@@ -9,8 +9,6 @@ const NODE_PLATFORMS: readonly string[] = Object.freeze([
 export class UnsupportedBundlePlatformError extends Error {
   /** Node platform names or `wsl` supported by the bundle. */
   readonly platforms: readonly string[]
-  /** Operating system of the DSH Host. */
-  readonly platform: string
   /**
    * @param platforms Node platform names or `wsl` supported by the bundle.
    * @param platform Operating system of the DSH Host.
@@ -19,7 +17,6 @@ export class UnsupportedBundlePlatformError extends Error {
     super(`Bundle supports Host platforms ${platforms.join(', ')}; the DSH Host is running ${platform}`)
     this.name = 'UnsupportedBundlePlatformError'
     this.platforms = [...platforms]
-    this.platform = platform
   }
 }
 
