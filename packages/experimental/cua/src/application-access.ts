@@ -15,7 +15,6 @@ export const ApplicationAuthorizationResult = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId),
   name: z.string(), executablePath: z.string().min(1).optional(), persistable: z.boolean(),
   iconPath: z.string().min(1).optional(),
-  supersedes: z.array(z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId)).optional(),
 })
 /** Application consent uses one profile store, including conversation-scoped decisions. */
 export interface AccessOptions { store: CuaPermissionStore }
@@ -88,10 +87,6 @@ export class ApplicationAccess {
    * @returns Completion after persistence and cancellation, including other processes' admitted operations.
    */
   async revoke(id: CuaApplicationId): Promise<void> {
-    await this.remove(id, true)
-  }
-
-  private async remove(id: CuaApplicationId, blockSessions: boolean): Promise<void> {
     this.lifetime.signal.throwIfAborted()
     id = ApplicationAuthorizationResult.shape.id.parse(id)
     const clients = this.invalidate(id)
@@ -99,9 +94,9 @@ export class ApplicationAccess {
       this.options.store.withState(this.lifetime.signal, async (transaction) => {
         const app = transaction.state.applications[id] ?? this.empty()
         if (app.always && !this.options.store.persistent) throw new Error('Application permissions cannot be saved in this composition')
-        await this.save(transaction, id, { revoked: app.revoked + 1, sessions: blockSessions ? Object.fromEntries(
+        await this.save(transaction, id, { revoked: app.revoked + 1, sessions: Object.fromEntries(
           Object.entries(app.sessions).map(([sessionId, session]) => [sessionId, { ...session, decision: 'deny' as const, revision: session.revision + 1 }]),
-        ) : {} })
+        ) })
       }),
     )
     const results = await Promise.allSettled([
@@ -133,20 +128,13 @@ export class ApplicationAccess {
    * @param agent Live agent whose session owns the decision.
    * @param client Helper that issued the handle.
    * @param handle Helper handle for a running instance or an approved pending launch.
-   * @param authorization Native identity and presentation, with obsolete grant IDs to retire without transferring consent.
+   * @param identity Native application identity and presentation.
    * @param signal Calling tool lifetime.
    * @param icon Native application icon for the permission card; never saved as an identity.
    * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.
    */
   async select(agent: Agent, client: NativeClient, handle: CuaAppHandle,
-    authorization: z.infer<typeof ApplicationAuthorizationResult>, signal: AbortSignal, icon?: string): Promise<void> {
-    const { supersedes = [], ...identity } = authorization
-    // Legacy identities are retired, never transferred to the narrower native identity.
-    for (const id of new Set(supersedes)) {
-      if (id === identity.id) continue
-      const old = await this.read(id, signal)
-      if (old.always || Object.keys(old.sessions).length) await this.remove(id, false)
-    }
+    identity: z.infer<typeof ApplicationAuthorizationResult>, signal: AbortSignal, icon?: string): Promise<void> {
     await this.withOperation(agent, client, identity, signal, signal => this.selectInOrder(agent, identity.id, async () => {
       signal.throwIfAborted()
       const observed = await this.read(identity.id, signal)

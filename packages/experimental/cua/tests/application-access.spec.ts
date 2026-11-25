@@ -67,38 +67,23 @@ it('refuses raw handle dispatch until getApp obtains consent', async () => {
   expect(dispatch).not.toHaveBeenCalled()
 })
 
-it('retires legacy grants without transferring consent and keeps one refreshed application entry', async () => {
-  const legacy = { ...identity, id: ApplicationAuthorizationResult.shape.id.parse('b'.repeat(64)), name: 'legacy path' }
-  const f = await setup('Always allow', { initial: [legacy] })
-  const current = { ...identity, iconPath: 'shell:AppsFolder\\Fixture', supersedes: [legacy.id] }
-  await f.access.select(f.agent, f.client, handle, current, signal)
+it('reuses saved application consent across versions and copies and revokes every handle', async () => {
+  const f = await setup('Always allow')
+  const first = { ...identity, iconPath: 'C:\\versions\\one\\App.exe' }
+  await f.access.select(f.agent, f.client, handle, first, signal)
+  const other = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cua-second-version') })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  const nextHandle = 'other-copy' as CuaAppHandle
+  const updated = { ...first, name: 'Updated name', executablePath: 'C:\\versions\\two\\App.exe' }
+  await f.access.select(other.agent, client, nextHandle, updated, signal)
   expect(f.answer).toHaveBeenCalledOnce()
-  expect(f.answer.mock.calls[0]![0].questions[0]!.intent).toHaveProperty('subject', { name: identity.name })
-  expect((await f.access.status()).blockedApps).toEqual([])
-  expect(f.grants()).toEqual([expect.objectContaining({ id: identity.id, name: identity.name, iconPath: current.iconPath })])
-  expect(f.grants()[0]).not.toHaveProperty('supersedes')
-  const updated = { ...current, name: 'Updated name', executablePath: 'C:\\new-version\\App.exe' }
-  await f.access.select(f.agent, f.client, 'updated-handle' as CuaAppHandle, updated, signal)
-  expect(f.answer).toHaveBeenCalledOnce()
-  expect(f.grants()).toEqual([expect.objectContaining({ name: 'Updated name', executablePath: updated.executablePath })])
-})
-
-it('does not retain a broad legacy grant when the replacement application is denied', async () => {
-  const legacy = { id: ApplicationAuthorizationResult.shape.id.parse('b'.repeat(64)), name: 'Legacy app' }
-  const f = await setup('Deny', { initial: [legacy] })
-  await expect(f.access.select(f.agent, f.client, handle, { ...identity, supersedes: [legacy.id] }, signal))
-    .rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.grants()).toEqual([expect.objectContaining({ id: identity.id, executablePath: updated.executablePath })])
+  await expect(f.access.run(f.client, handle, signal, async () => 'first')).resolves.toBe('first')
+  await expect(f.access.run(client, nextHandle, signal, async () => 'second')).resolves.toBe('second')
+  await f.access.revoke(identity.id)
   expect(f.grants()).toEqual([])
-  expect((await f.access.status()).blockedApps).toEqual([expect.objectContaining({ id: identity.id })])
-})
-
-it('preserves existing consent when native retirement IDs include the current identity', async () => {
-  const f = await setup('Always allow', { initial: [identity] })
-  const authorization = ApplicationAuthorizationResult.parse({ ...identity, supersedes: [identity.id, identity.id] })
-  await f.access.select(f.agent, f.client, handle, authorization, signal)
-  expect(f.answer).not.toHaveBeenCalled()
-  expect(f.grants()).toEqual([expect.objectContaining({ id: identity.id })])
-  await expect(f.access.run(f.client, handle, signal, async () => 'read')).resolves.toBe('read')
+  await expect(f.access.run(f.client, handle, signal, async () => 'first')).rejects.toThrow('APP_ACCESS_REVOKED')
+  await expect(f.access.run(client, nextHandle, signal, async () => 'second')).rejects.toThrow('APP_ACCESS_REVOKED')
 })
 
 it('reads cached activity outside the desktop lock and discards it if another writer revokes consent', async () => {

@@ -33,7 +33,7 @@ kind: "package-reference"
 
 `cua.listApps()` 从当前 Windows 会话中符合条件的可见顶层窗口聚合应用。名称搜索和空查询的 `cua.findApps` 返回通过 AppsFolder 枚举的 StartApps 目录中的已安装应用。窗口观察用于补充这些目录条目的运行状态和已知可执行文件路径。目录可能不完整；找不到应用时，可以询问用户其位置。
 
-每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是不透明的选择标识；将返回值原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。应用展示使用 Shell 名称和图标；未注册程序使用文件说明或文件名。同名或声明相同 AUMID 的不同应用仍然分开。
+每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是不透明的选择标识；将返回值原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。应用展示使用 Shell 名称和图标；未注册程序使用文件说明或文件名。相同 AUMID 的应用共用一个条目；不会仅因同名合并应用。
 
 `listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
 
@@ -43,11 +43,11 @@ kind: "package-reference"
 
 在当前会话中首次选择尚未授权的应用时，审批窗口提供“拒绝”和“本会话允许”。如果当前 profile 可以保存授权，窗口还会显示“始终允许”，并将它作为主按钮高亮。选择“始终允许”后，同一 profile 的其他会话可以访问该应用，直到用户在自动电脑操作插件页撤销授权。在审批详情区按 Enter 只允许当前会话访问。
 
-打包应用的授权依据 Windows 提供的进程 AUMID，包含包系列及包内的具体应用。包版本更新沿用授权，同包的其他应用不共享授权。桌面程序的授权依据规范化的可执行文件路径，以及窗口声明的 AUMID（如果存在）。其他可执行文件不能通过声明相同 AUMID 继承权限。在同一规范路径替换桌面程序且应用身份不变时沿用授权，移到其他路径则需重新授权。搜索与路径选择解析为同一身份时复用决定。一个路径承载多个已标识应用时返回 `AMBIGUOUS_APP`，不会一次授权所有应用。
+应用授权依据 AUMID，与 macOS 按 bundle identifier 授权的取舍一致。同一 AUMID 的不同版本和副本共享授权，不区分可执行文件位置或签名。窗口属性与打包应用的进程元数据提供显式 AUMID；Windows Shell 补充解析未在这些位置暴露标识的桌面应用。Shell 将启动器与其窗口关联到同一 AUMID 时，两者共用授权。没有应用标识时，授权依据规范化的可执行文件路径。搜索与已知路径选择复用同一决定；一个路径承载多个应用 ID 时返回 `AMBIGUOUS_APP`。
 
-审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。应用名称和图标查询目标在选择应用时保存。旧版 Windows 决定需要重新确认，并在选择应用时撤销，不会自动转移。启动器的权限不会扩展到另一个可执行文件；启动后若应用身份不同，需要重新发现并选择该应用。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
+审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。应用名称和图标查询目标在选择应用时保存。只有明确选择“始终允许”才保存跨会话授权，已有会话授权不会升级。选择可执行文件路径时保留该启动目标，即使它的应用 ID 与其他副本相同。
 
-身份区分遵循 Windows 的[包身份](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/package-identity-overview)与 [Shell AUMID 语义](https://learn.microsoft.com/en-us/windows/win32/shell/appids)。[PowerToys 程序启动器](https://github.com/microsoft/PowerToys/blob/main/src/modules/launcher/Plugins/Microsoft.Plugin.Program/Programs/Win32Program.cs)区分快捷方式展示和实际可执行目标；[simplewall](https://github.com/henrypp/simplewall/blob/master/src/wfp.c)使用可执行文件或包身份进行访问决策。
+桌面应用解析使用 Windows 8+ Shell 的 `IApplicationResolver` 接口，[System Informer](https://github.com/winsiderss/systeminformer/blob/master/phlib/appresolver.c) 也使用此接口。该接口未公开文档；解析器不可用时，应用发现会明确失败。未注册且无法发现 AUMID 的可执行文件使用路径，因此移动它，或选择 Shell 未关联的启动器，可能需要再次授权。AUMID 是应用标识，不是发布者或签名验证。参见[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
 
 - `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。尚未运行的应用在授权后通过 Explorer 启动。
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口。已接纳的 HWND 在有效期间保留在列表中，包括隐藏窗口。

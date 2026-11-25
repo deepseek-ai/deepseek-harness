@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.md
 /:
-  en: 474d9772357f8a73
-  zh: 2f6c1962b862fbb0
+  en: c9a78bb22e0768b1
+  zh: 74c626f3a85394ca
 /windows-application-permissions:
   en: 0d44058ae85ecf8c
   zh: 60d0b933a87f862b
 /windows-application-permissions/change:
-  en: dc75a14e0b254985
-  zh: 59bf2d6577321778
+  en: 81fe4d02f8947a1d
+  zh: d2c5a344b8acea96
 /windows-application-permissions/migration:
-  en: e6f959f6e9ce20d0
-  zh: a639a41aea6ce5be
+  en: d8c15edd80480141
+  zh: c823ecf70e026c35

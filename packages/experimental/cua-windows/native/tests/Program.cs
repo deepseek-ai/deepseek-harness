@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeepSeek.Cua.Protocol;
 using DeepSeek.Cua.Windows;
-using ApplicationIdentity = DeepSeek.Cua.Windows.ApplicationIdentity;
 using Json.Schema;
 
 var checks = 0;
@@ -23,22 +22,19 @@ void Refuses(Action action, string code)
 var editorId = "Fixture.Editor!App";
 var originalPath = Path.GetFullPath("Editor.exe");
 var movedPath = Path.GetFullPath(Path.Combine("moved", "Editor.exe"));
-var editor = ApplicationIdentity.Package(editorId, originalPath);
-var desktop = ApplicationIdentity.Desktop(originalPath, editorId);
-var fileGrant = ApplicationAuthorization.Create(desktop, editorId, "Editor", originalPath);
-Check(fileGrant.Persistable, "Desktop application consent can be saved");
-Check(editor.Matches(ApplicationIdentity.Package(editorId, movedPath)), "Package updates preserve the application grant");
-Check(!editor.Matches(ApplicationIdentity.Package("Fixture.Editor!Other", originalPath)), "Sibling package apps require separate consent");
-Check(!editor.Matches(desktop), "A desktop window cannot impersonate an OS package AUMID");
-Check(!desktop.Matches(ApplicationIdentity.Desktop(movedPath, editorId)), "A different executable cannot inherit a declared AUMID grant");
-Check(!desktop.Matches(ApplicationIdentity.Desktop(originalPath, "Fixture.Other")), "Hosted applications sharing an executable remain separate");
-Check(!desktop.Matches(ApplicationIdentity.Desktop(originalPath, null)), "An unscoped executable grant cannot include an explicitly identified window");
-Check(fileGrant.Id == ApplicationAuthorization.Create(desktop, "search-alias", "Renamed editor", "new-icon").Id,
-    "Selectors and presentation metadata do not change authorization");
-Check(fileGrant.Supersedes.Contains(ApplicationIdentity.Digest("windows-aumid\0" + editorId))
-    && !fileGrant.Supersedes.Contains(fileGrant.Id), "Legacy AUMID decisions are retired separately from new permission decisions");
+var original = ApplicationAuthorization.Create(editorId, "Editor", originalPath, originalPath);
+var updated = ApplicationAuthorization.Create(editorId, "Updated Editor", movedPath, movedPath);
+Check(original.Persistable, "Application consent can be saved");
+Check(original.Id == updated.Id, "Versions and copies declaring the same AUMID share consent");
+Check(original.Id != ApplicationAuthorization.Create("Fixture.Editor!Other", "Other", originalPath, originalPath).Id,
+    "Distinct application identifiers do not share consent even at the same executable path");
+Check(original.Id == Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+    System.Text.Encoding.UTF8.GetBytes("windows-aumid\0" + editorId))), "Existing AUMID authorization keys remain stable");
+Check(ApplicationAuthorization.Create(originalPath, "Editor", originalPath, originalPath).Id
+    != ApplicationAuthorization.Create(movedPath, "Editor", movedPath, movedPath).Id,
+    "Unidentified applications use separate canonical paths");
 Check(ApplicationAuthorization.AsAumid(originalPath) is null && ApplicationAuthorization.AsAumid(editorId) == editorId,
-    "Window and process AUMIDs cannot claim executable-path grants");
+    "Shell path fallbacks are not declared application identifiers");
 
 var handshakeConfig = new JsonObject
 {

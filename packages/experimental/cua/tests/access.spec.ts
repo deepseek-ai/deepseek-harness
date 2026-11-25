@@ -416,9 +416,9 @@ it('keeps refused applications visible without an icon target', async () => {
 
 it('publishes new Windows grants and revocations while icons are pending', async () => {
   const f = await setup('Always allow')
-  const legacy = { id: identity.id, name: 'Legacy', executablePath }
-  const current = { ...identity, id: 'b'.repeat(64) as typeof identity.id, iconPath: executablePath, supersedes: [legacy.id] }
-  await f.save([legacy])
+  const previous = { id: identity.id, name: 'Previous label', executablePath }
+  const current = { ...identity, iconPath: executablePath }
+  await f.save([previous])
   await f.ctx.cuaAccess.systemStatus()
   const control = native.instances.at(-1)!
   const pending = Promise.withResolvers<Record<string, string>>()

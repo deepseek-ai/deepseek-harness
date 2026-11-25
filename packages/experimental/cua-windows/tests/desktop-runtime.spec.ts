@@ -6,6 +6,9 @@ import { AppResult, AppsResult, NativeAppsResult, StateResult } from '@deepseek-
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { once } from 'node:events'
+import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { expect, it, onTestFinished } from 'vitest'
 import { Config } from '../src/index.ts'
@@ -168,9 +171,66 @@ it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
     const named = authorization.parse(await client.request('getApp', { selector: fixturePath! }, signal)).authorization
     expect(named.id).not.toBe(original.id)
     const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
-    const discovered = listed.find(app => app.id === `windows-app:${named.id}`)
+    const discovered = listed.find(app => app.id === 'DSH.Fixture.A')
     if (discovered?.id === undefined) throw new Error('The selected application was not returned by discovery')
     expect(authorization.parse(await client.request('getApp', { selector: discovered.id }, signal)).authorization.id).toBe(named.id)
     const iconResult = z.record(z.string(), z.string()).parse(await client.request('applicationIcons', { paths: [named.iconPath] }, signal))
     expect(iconResult[named.iconPath]).toMatch(/^data:image\/png;base64,/)
+  }, 60_000)
+
+
+it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
+  'shares one application across executable copies and separates a changed window AUMID',
+  async ({ signal }) => {
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-copies-'))
+    const processes: Array<() => Promise<void>> = []
+    onTestFinished(async () => {
+      await Promise.all(processes.map(close => close()))
+      await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    })
+    const originalDirectory = join(directory, 'original')
+    const copyDirectory = join(directory, 'copy')
+    await cp(dirname(fixturePath!), originalDirectory, { recursive: true })
+    await cp(dirname(fixturePath!), copyDirectory, { recursive: true })
+    const originalPath = join(originalDirectory, basename(fixturePath!))
+    const copyPath = join(copyDirectory, basename(fixturePath!))
+    const start = async (path: string) => {
+      const fixture = spawn(path, [], { windowsHide: true })
+      const exited = once(fixture, 'exit')
+      const reader = createInterface({ input: fixture.stdout })
+      processes.push(async () => {
+        const deadline = setTimeout(() => fixture.kill(), 5000)
+        try { fixture.stdin.end('close\n'); await exited }
+        finally { clearTimeout(deadline); reader.close() }
+      })
+      const first = await reader[Symbol.asyncIterator]().next()
+      if (first.done) throw new Error('The desktop fixture exited before reporting its window')
+      const { state: { window } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
+      const identify = async (identity: 'a' | 'b') => {
+        const changed = once(reader, 'line')
+        fixture.stdin.write('identity-' + identity + '\n')
+        await changed
+      }
+      await identify('a')
+      return { window, identify }
+    }
+    const first = await start(originalPath)
+    const second = await start(copyPath)
+    const { client } = await connect()
+    const selection = AppResult.extend({ authorization: z.object({ id: z.string() }) })
+    const original = selection.parse(await client.request('getApp', { selector: originalPath }, signal))
+    const copy = selection.parse(await client.request('getApp', { selector: copyPath }, signal))
+    expect(copy.authorization.id).toBe(original.authorization.id)
+    const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
+    expect(listed.filter(app => app.id === 'DSH.Fixture.A')).toHaveLength(1)
+    const windows = z.array(z.object({ windowId: z.string() }))
+    const owned = async () => windows.parse(await client.request('listWindows', { appHandle: original.appHandle }, signal))
+    expect((await owned()).map(window => window.windowId)).toEqual(expect.arrayContaining([first.window, second.window]))
+    await second.identify('b')
+    expect((await owned()).map(window => window.windowId)).not.toContain(second.window)
+    await expect(client.request('getState', {
+      appHandle: original.appHandle, windowId: second.window, maxElements: 20, maxDepth: 5,
+    }, signal)).rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
+    const distinct = selection.parse(await client.request('getApp', { selector: copyPath }, signal))
+    expect(distinct.authorization.id).not.toBe(original.authorization.id)
   }, 60_000)

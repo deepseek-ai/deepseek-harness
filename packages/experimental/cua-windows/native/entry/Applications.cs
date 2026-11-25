@@ -10,14 +10,14 @@ namespace DeepSeek.Cua.Windows;
 internal sealed record RunningApplication(int Pid, long Started, string Path, string Name);
 
 internal sealed class AppState(string handle, string appId, string name, ApplicationAuthorization authorization,
-    bool isRunning, ApplicationIdentity identity) : IDisposable
+    bool isRunning, string launchTarget) : IDisposable
 {
     internal string Handle { get; } = handle;
     internal string AppId { get; } = appId;
+    internal string LaunchTarget { get; } = launchTarget;
     internal string Name { get; } = name;
     internal bool IsRunning { get; } = isRunning;
     internal ApplicationAuthorization Authorization { get; } = authorization;
-    internal ApplicationIdentity Identity { get; } = identity;
     internal Dictionary<nint, WindowState> Windows { get; } = [];
     internal Dictionary<nint, Snapshot> Snapshots { get; } = [];
 
