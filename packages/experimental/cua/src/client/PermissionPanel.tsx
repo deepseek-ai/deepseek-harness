@@ -120,8 +120,6 @@ function WindowsGuidance({ system, error, busy, refresh, t }: Pick<PermissionPro
         title={t('windowsLockedTitle')} body={t('windowsLockedBody')} />}
       {system.sessionLocked === null && <NoticeBox tone="danger" role="note"
         title={t('windowsSessionUnknownTitle')} body={t('windowsSessionUnknown')} />}
-      {system.elevated && <NoticeBox tone="danger" role="note"
-        title={t('windowsElevatedTitle')} body={t('windowsElevatedWarning')} />}
       {system.sessionLocked === false && !system.captureAvailable && <NoticeBox tone="warn" role="note"
         title={t('windowsCaptureUnavailableTitle')} body={t('windowsCaptureUnavailableNotice')} />}
     </>}

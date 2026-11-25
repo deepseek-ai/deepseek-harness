@@ -443,9 +443,8 @@ it.each([true, false, null] as const)('omits system permissions on Windows and p
   f.publish({ system: { value: { platform: 'windows', sessionLocked: false, captureAvailable: false,
     elevated: true, helper: {} }, error: null, busy: false } })
   expect(screen.queryByRole('alert')).toBeNull()
-  const adminNote = screen.getByText(en.windowsElevatedTitle).closest('[role="note"]')!
-  expect(within(adminNote as HTMLElement).getByText(en.windowsElevatedWarning)).toBeTruthy()
-  expect(adminNote.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  // Administrator privileges add no warning; they only withhold the standard-privilege limitation.
+  expect(screen.queryAllByRole('note').filter(note => note.textContent?.includes('administrator'))).toEqual([])
   const captureNotice = screen.getByText(en.windowsCaptureUnavailableTitle)
   expect(screen.getByText(en.windowsCaptureUnavailableNotice)).toBeTruthy()
   expect(captureNotice.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -455,7 +454,6 @@ it.each([true, false, null] as const)('omits system permissions on Windows and p
   expect(within(helperAlert).getByText(en.windowsHelperFailed.replace('{message}', 'offline'))).toBeTruthy()
   expect(within(helperAlert).getByText(en.queryFailedHint)).toBeTruthy()
   expect(helperAlert.compareDocumentPosition(experimental) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  expect(screen.queryByText(en.windowsElevatedTitle)).toBeNull()
   expect(screen.queryByText(en.windowsCaptureUnavailableTitle)).toBeNull()
   fireEvent.click(within(helperAlert).getByRole('button', { name: en.retry }))
   expect(f.props.refresh).toHaveBeenCalledTimes(2)
