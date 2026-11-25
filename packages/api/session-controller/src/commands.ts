@@ -239,6 +239,14 @@ export class SessionCommandController {
     if (origin !== undefined && origin !== 'side') {
       throw new RemoteError('gateway/bad-request', 'origin must be "side"', {})
     }
+    if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === undefined) {
+      const stored = await this.ctx.get('sessionPersistence')?.stat(request.sessionId)
+      if (stored?.formatStatus === 'migration-required' && this.ctx.sessions.get(request.sessionId) === undefined) {
+        throw new RemoteError('session/migration-required', 'Open the source Session to complete migration before forking', {
+          sessionId: request.sessionId,
+        })
+      }
+    }
     let observed: SessionObservation
     try {
       observed = await this.ctx.sessionQuery.observeSession(request.sessionId)
@@ -256,6 +264,10 @@ export class SessionCommandController {
       )
     }
     using source = observed
+    // A side child of a subagent would inherit the delegated approval policy and preset without the delegation.
+    if (request.origin === 'side' && source.header.origin === 'subagent') {
+      throw new RemoteError('gateway/bad-request', 'a subagent Session cannot be the source of a side conversation', {})
+    }
     const boundary = atSeq ?? latestCompletedPrefixBoundary(source.events)
     if (boundary === undefined || source.events[boundary]?.seq !== boundary) {
       throw new RemoteError(

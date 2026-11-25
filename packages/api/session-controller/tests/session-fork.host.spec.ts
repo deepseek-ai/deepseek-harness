@@ -536,6 +536,37 @@ describe('sessions.fork', () => {
     }
   })
 
+  it('refuses a side conversation of a subagent Session without creating a child', async () => {
+    const ctx = await composed()
+    try {
+      const source = await liveAgent(ctx, 'session-subagent-source', 1, 'none', { parentSession: sid('session-parent'), origin: 'subagent' })
+      const before = ctx.sessions.list().length
+
+      const response = await (await remote(ctx)).fork(request({ sessionId: source.id, origin: 'side' }))
+
+      expect(response).toMatchObject({ ok: false, error: { code: 'gateway/bad-request' } })
+      expect(ctx.sessions.list()).toHaveLength(before)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('validates the request before the migration preflight reads storage', async () => {
+    const ctx = await composed()
+    try {
+      const stat = vi.fn(() => Promise.resolve({ formatStatus: 'migration-required' }))
+      ctx.provide('sessionPersistence', testSessionPersistence(ctx, { stat }) as never)
+      // @ts-expect-error -- a forged wire request can name an origin outside the typed request.
+      await expect((await remote(ctx)).fork(request({ sessionId: sid('cold'), allowMigration: false, origin: 'subagent' })))
+        .resolves.toMatchObject({ ok: false, error: { code: 'gateway/bad-request' } })
+      await expect((await remote(ctx)).fork(request({ sessionId: sid('cold'), allowMigration: false, atSeq: -1 })))
+        .resolves.toMatchObject({ ok: false, error: { code: 'gateway/bad-request' } })
+      expect(stat).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('rejects invalid fork anchors before reading or creating a Session', async () => {
     const ctx = await composed()
     const proxy = await remote(ctx)
