@@ -43,7 +43,7 @@ it('adds a remote server with a bearer token as a server row, switches the row o
   const section = panel.locator('[data-custom-servers]')
   await section.getByText('还没有自定义服务器。').waitFor()
 
-  await section.getByRole('button', { name: '添加 MCP 服务器', exact: true }).click()
+  await panel.getByRole('button', { name: '添加 MCP 服务器', exact: true }).click()
   const serverPage = panel.locator('[data-custom-server-page]')
   await serverPage.getByRole('heading', { name: '添加 MCP 服务器' }).waitFor()
   await serverPage.getByRole('textbox', { name: '名称', exact: true }).fill('fixture')

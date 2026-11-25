@@ -1,6 +1,6 @@
 /**
- * The Connectors tab: the official connectors with their brand icons, each with an Install action or its enable switch,
- * above the custom servers section.
+ * The Connectors tab: its actions beside the first heading, and the official connectors with their brand icons, each
+ * with an Install action or its enable switch, above the custom servers section.
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { Button, IconChevronLeftOutlineMedium, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -25,15 +25,24 @@ const ICONS: Readonly<Record<ConnectorId, string>> = {
   'tencent-docs': tencentDocs, 'linear': linear,
 }
 
-/** Tab props: the Plugins page's install and open callbacks, the custom servers section, the dictionary, and the injected face. */
-export type ConnectorsTabProps = PropsRuntime<'plugins.tab'> & PropsRenderSlots<'connectors.custom'> & PropsLocale<'connectors'>
-  & InjectFace<ConnectorsFace>
+/** What the Connectors tab passes to each of its actions: the change of the view it shows. */
+export interface ConnectorsActionOwnerProps {
+  readonly setView: (view: CustomServersView) => void
+}
 
 /**
- * List every official connector above the custom servers section; a missing one installs at the running release through
- * the page's install dialog, and an installed one carries its enable switch and opens its page from anywhere else on its
- * row. While the section shows a server's page, the tab shows only that page below a Back button.
- * @param props - the owner's callbacks, the section's slot, the dictionary, and the connectors' states.
+ * Tab props: the Plugins page's install and open callbacks, the tab's actions and custom servers section, the
+ * dictionary, and the injected face.
+ */
+export type ConnectorsTabProps = PropsRuntime<'plugins.tab'> & PropsRenderSlots<'connectors.actions' | 'connectors.custom'>
+  & PropsLocale<'connectors'> & InjectFace<ConnectorsFace>
+
+/**
+ * List every official connector above the custom servers section, with the tab's actions at the end of the first
+ * heading's row; a missing connector installs at the running release through the page's install dialog, and an
+ * installed one carries its enable switch and opens its page from anywhere else on its row. While the view is a
+ * server's page, the tab shows only that page below a Back button.
+ * @param props - the owner's callbacks, the actions' and the section's slots, the dictionary, and the connectors' states.
  * @returns the tab's content.
  */
 export function ConnectorsTab(props: ConnectorsTabProps): ReactNode {
@@ -58,7 +67,10 @@ export function ConnectorsTab(props: ConnectorsTabProps): ReactNode {
   const failed = CONNECTORS.find(connector => connector.packageName === state.failed)
   return (
     <section className={css.section} data-connectors>
-      <h3 className={css.heading}>{t('official')}</h3>
+      <div className={css.headingRow}>
+        <h3 className={css.heading}>{t('official')}</h3>
+        <div className={css.actions}>{props.renderSlot('connectors.actions', { setView: setCustomView })}</div>
+      </div>
       {state.status === 'error'
         ? (
           <p className={css.notice} role="alert">

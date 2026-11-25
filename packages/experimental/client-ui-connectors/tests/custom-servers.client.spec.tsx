@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
-/** The custom servers section lists the MCP server rows, and its page edits, tests, and removes one server. */
+/**
+ * The custom servers section lists the MCP server rows, its page edits, tests, and removes one server, and its add
+ * action asks for a new server's form.
+ */
 import { useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { AddServerAction, type AddServerActionProps } from '../src/client/AddServerAction.tsx'
 import { CustomServersSection, type CustomServersSectionProps, type CustomServersView } from '../src/client/CustomServersSection.tsx'
 import type { CustomServer, CustomServersState, ProbeState } from '../src/client/custom-servers-store.ts'
 import { en, type ConnectorsLocaleKey } from '../src/client/locales.ts'
@@ -140,10 +144,8 @@ describe('CustomServersSection', () => {
     expect(actions.dismissFailure).toHaveBeenCalledOnce()
   })
 
-  it('adds a server on the page its list button opens, which stays open until the save succeeds and offers no test or removal', async () => {
-    const { actions } = renderSection({ servers: [server('docs', DOCS)] })
-    expect(page()).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: en['custom.add'] }))
+  it('adds a server on the page of a new server, which stays open until the save succeeds and offers no test or removal', async () => {
+    const { actions } = renderSection({ servers: [server('docs', DOCS)] }, { kind: 'new' })
     const added = page()!
     expect(within(added).getByRole('heading', { name: en['form.addTitle'] })).toBeTruthy()
     expect(document.querySelector('[data-custom-server]')).toBeNull()
@@ -251,6 +253,32 @@ describe('CustomServersSection', () => {
     set({ status: 'error' })
     expect(within(screen.getByRole('alert')).getByRole('button', { name: en.retry })).toBeTruthy()
     expect(screen.queryByText(en['custom.gone'])).toBeNull()
+  })
+})
+
+function renderAction(status: CustomServersState['status']) {
+  const store = createSnapshotStore<CustomServersState>({ ...READY, status })
+  const setView = vi.fn()
+  const props = { t, setView, useCustomServers: bindSnapshotSelector(store) } as AddServerActionProps
+  const view = render(<AddServerAction {...props} />)
+  const set = (next: CustomServersState['status']): void => { act(() => { store.set({ ...READY, status: next }) }) }
+  return { setView, view, set }
+}
+
+describe('AddServerAction', () => {
+  it('asks the tab for the form of a new server, before the servers are read as well', () => {
+    const { setView, set } = renderAction('idle')
+    fireEvent.click(screen.getByRole('button', { name: en['custom.add'] }))
+    expect(setView).toHaveBeenCalledExactlyOnceWith({ kind: 'new' })
+    set('ready')
+    expect(screen.getByRole('button', { name: en['custom.add'] })).toBeTruthy()
+  })
+
+  it('shows nothing while the profile cannot hold custom servers', () => {
+    const { view, set } = renderAction('unavailable')
+    expect(view.container.innerHTML).toBe('')
+    set('ready')
+    expect(screen.getByRole('button', { name: en['custom.add'] })).toBeTruthy()
   })
 })
 

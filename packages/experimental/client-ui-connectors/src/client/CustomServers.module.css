@@ -5,13 +5,6 @@
   margin-top: 24px;
 }
 
-.headingRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .heading {
   margin: 0;
   font-size: 14px;

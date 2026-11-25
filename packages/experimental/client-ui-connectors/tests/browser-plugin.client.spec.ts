@@ -7,6 +7,7 @@ import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { inject, mountConnectors } from '../src/client/mount.ts'
+import { AddServerAction } from '../src/client/AddServerAction.tsx'
 import type { ConnectorsFace } from '../src/client/connectors-store.ts'
 import type { CustomServersFace } from '../src/client/custom-servers-store.ts'
 import { CustomServersSection } from '../src/client/CustomServersSection.tsx'
@@ -63,9 +64,10 @@ it('contributes the Connectors tab, follows Host changes, and withdraws the tab 
   expect(remote.unmounted).toHaveBeenCalledOnce()
 })
 
-it('adds the custom servers section once its Remote and the manager\'s exist, follows the server rows once the section asks, and closes their stream before its Remote goes', async () => {
+it('adds the custom servers section and its add action once its Remote and the manager\'s exist, follows the server rows once the section asks, and closes their stream before its Remote goes', async () => {
   const { remote, slots, fiber } = await bench()
   expect(slots.entries('connectors.custom')).toEqual([])
+  expect(slots.entries('connectors.actions')).toEqual([])
 
   const steps: string[] = []
   remote.unmounted.mockImplementation(async () => { steps.push('remote unmounted') })
@@ -89,6 +91,11 @@ it('adds the custom servers section once its Remote and the manager\'s exist, fo
   expect(entry).toMatchObject({ locale: 'connectors', component: CustomServersSection })
   const injected: object = entry!.inject!()
   const face = injected as CustomServersFace
+  // The add action reads the state the section reads.
+  const [action] = slots.entries('connectors.actions')
+  expect(action).toMatchObject({ locale: 'connectors', component: AddServerAction })
+  expect(action?.options.id).toBe('add-server')
+  expect(action!.inject!()).toBe(injected)
   expect(steps).toEqual([])
   face.ensure()
   await vi.waitFor(() => { expect(face.hooks.customServers.getSnapshot()).toMatchObject({ status: 'ready', revision: 'r1' }) })
@@ -96,6 +103,7 @@ it('adds the custom servers section once its Remote and the manager\'s exist, fo
 
   await fiber.dispose()
   expect(slots.entries('connectors.custom')).toEqual([])
+  expect(slots.entries('connectors.actions')).toEqual([])
   expect(steps).toEqual(['stream opened', 'stream closed', 'remote unmounted'])
 })
 

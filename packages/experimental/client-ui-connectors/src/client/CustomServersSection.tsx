@@ -1,6 +1,6 @@
 /** The custom servers section: the MCP server rows in a list, and one server's page with its form. */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, IconPlusOutlineRegular, RiskConfirmation, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, RiskConfirmation, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-connector-account/client'
 import type { CustomServer, CustomServersFace } from './custom-servers-store.ts'
@@ -34,9 +34,8 @@ function summary(server: CustomServer, t: T): string {
 
 /**
  * List the servers with their target, the reason a server did not start, the account status of an OAuth server that
- * is on, settings, and switch, below the button that opens a new server's form; or show the page the tab's view names.
- * Once a list holds no row the form can read for the named server, a notice takes the page's place. Switching a local
- * command on asks for the risk confirmation first.
+ * is on, settings, and switch; or show the page the tab's view names. Once a list holds no row the form can read for
+ * the named server, a notice takes the page's place. Switching a local command on asks for the risk confirmation first.
  * @param props - the view, the face, the dictionary, and the Factory renderer.
  * @returns the section, or null while the profile cannot keep custom servers.
  */
@@ -112,12 +111,7 @@ export function CustomServersSection(props: CustomServersSectionProps): ReactNod
   }
   return (
     <section className={css.section} data-custom-servers>
-      <div className={css.headingRow}>
-        <h3 className={css.heading}>{t('custom.title')}</h3>
-        <Button variant="outline" size="sm" icon={<IconPlusOutlineRegular size={13} />} onClick={() => { setView({ kind: 'new' }) }}>
-          {t('custom.add')}
-        </Button>
-      </div>
+      <h3 className={css.heading}>{t('custom.title')}</h3>
       {notices}
       {state.status === 'ready' && state.servers.length === 0 ? <p className={css.empty}>{t('custom.empty')}</p> : null}
       <ul className={css.list}>

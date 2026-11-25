@@ -1,10 +1,11 @@
 /**
  * Connectors, browser half: the Plugins page tab that lists the official connectors, installs a missing one through
- * the page's install dialog, and opens an installed one's page, with the section that edits the custom MCP servers
- * through the Host's `connectors` Remote.
+ * the page's install dialog, and opens an installed one's page, with the section and the add action that edit the
+ * custom MCP servers through the Host's `connectors` Remote.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import remote from '@deepseek-ai/dsh-client-ui-connectors/remote'
+import type { ConnectorsActionOwnerProps } from './ConnectorsTab.tsx'
 import type { CustomServersOwnerProps } from './CustomServersSection.tsx'
 import type { ConnectorsLocaleKey } from './locales.ts'
 import { mountConnectors } from './mount.ts'
@@ -18,6 +19,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
   interface SlotMap {
     /**
+     * The Connectors tab's actions at the end of its first heading's row, shown while the tab shows its lists; this
+     * plugin registers the button that opens a new custom MCP server's form there once the manager's Remote exists.
+     * The tab passes the change of its view.
+     */
+    'connectors.actions': { kind: 'list'; scope: 'root'; owner: ConnectorsActionOwnerProps }
+    /**
      * The Connectors tab's section below the official connectors; this plugin registers the custom MCP servers
      * section there once the manager's Remote exists. The tab passes the section's view and shows only the section,
      * below a Back button, while the view is a server's page; without an entry the tab shows only the official connectors.
@@ -27,9 +34,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /**
- * Contribute the Connectors tab and its custom servers section for this plugin's lifetime.
+ * Contribute the Connectors tab, its custom servers section, and the section's add action for this plugin's lifetime.
  * @param ctx - the browser plugin context.
- * @returns the disposer that withdraws the section before the generated Remote.
+ * @returns the disposer that withdraws the section and its add action before the generated Remote.
  */
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   return await mountConnectors(ctx, remote)
