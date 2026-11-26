@@ -1,6 +1,7 @@
 # Agent Note: Isolate installed-update materials from releases and user data
 
 Status: implemented
+Archived: 2026-11-26
 
 English | [中文](2026-09-14-desktop-installed-update-materials.zh.md)
 

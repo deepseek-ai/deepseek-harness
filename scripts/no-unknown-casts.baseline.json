@@ -20,9 +20,6 @@
   "apps/cli/tests/web-auth.e2e.ts": {
     "a2b9a35fdf6552ba148d15436c9b3f98ed5763a2b91a95f579b951fd6613e75c": 1
   },
-  "apps/desktop/scripts/installed-update-qualification.ts": {
-    "5a8270cf9b1e554ae0cff6eaf7086e44c22f61a08e5f91dc7e1397eccaa726a5": 2
-  },
   "apps/desktop/scripts/macos-cache-policy.ts": {
     "00e53c563f3bdaa56ac8a598ca2f46622277dd1f37af9c02a7c92abf475ddc3d": 1
   },

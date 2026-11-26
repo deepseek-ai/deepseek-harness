@@ -1,6 +1,7 @@
 # Agent Note: 将安装版更新物料与发布及用户数据隔离
 
 Status: implemented
+Archived: 2026-11-26
 
 [English](2026-09-14-desktop-installed-update-materials.md) | 中文
 
