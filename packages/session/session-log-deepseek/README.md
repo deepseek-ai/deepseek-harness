@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Incremental canonical session-log upload for official DeepSeek LLM API requests. This function plugin injects `ctx.sessions` and `ctx.deepseekLlmApiExtensions`, then owns the `dsh_session_log` request field and the durable `session-log-deepseek/delivery-accepted` event from which it derives the acceptance watermark. Disable it only when the official API must not receive a Session-log suffix.
+Incremental canonical session-log upload for official DeepSeek LLM API requests. This function plugin injects `ctx.sessions` and `ctx.deepseekLlmApiExtensions`, then owns the `dsh_session_log` request field, the subagent request headers, and the durable `session-log-deepseek/delivery-accepted` event from which it derives the acceptance watermark. Set `enabled: false` when the official API must not receive a Session-log suffix; removing the plugin also stops the subagent headers.
 
 ## Table of Contents
 
@@ -17,6 +17,7 @@ Incremental canonical session-log upload for official DeepSeek LLM API requests.
 - [Request field](#request-field)
 - [Upload exclusions](#upload-exclusions)
 - [Acceptance and retry](#acceptance-and-retry)
+- [Subagent headers](#subagent-headers)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -69,6 +70,11 @@ A crash after server acceptance but before the watermark reaches persistence can
 
 Direct requests without a live Session omit `dsh_session_log`. Normal agent, compaction, session-title, and Auto review calls carry their live Session id and use the same upload eligibility.
 
+<a id="subagent-headers"></a>
+## Subagent headers
+
+The plugin registers `x-deepseek-harness-session-type` and `x-deepseek-harness-subagent-parent-session-id` through `ctx.deepseekLlmApiExtensions.registerHeader()`. When the request's live Session has `origin: subagent`, the first header is `subagent` and the second is the recorded `parentSession`, the subagent's direct creator, which need not be live. Root, forked, and side Sessions, direct requests, and stale Session ids send neither header. The registry omits a parent id that HTTP cannot carry verbatim and keeps the type header. `enabled` controls only the log field, so both headers are sent while upload is disabled. The [DeepSeek wire reference](../../../docs/deepseek-llm-api-wire-extensions.md) lists them with the other request headers.
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -86,6 +92,20 @@ Zero model-input tokens; the field only increases HTTP request bytes, bounded by
 
 None; the model-visible request prefix remains unchanged.
 
+### Subagent headers
+
+#### What the model sees
+
+Nothing. The headers are HTTP request metadata outside the request body.
+
+#### Token effect
+
+Zero model-input tokens.
+
+#### KV Cache effect
+
+None; the model-visible request prefix remains unchanged.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -94,6 +114,7 @@ None; the model-visible request prefix remains unchanged.
 - **No live Session means no field** — direct or stale-session calls have no canonical log to snapshot; explicit absence semantics remain deferred.
 - **An oversized event stalls upload** — an event whose field alone exceeds `maxBytes` is not sent, and later events wait behind it until the limit increases; an event too large to serialize at all stays blocked.
 - **Provider rejection fails the request** — a provider that rejects the request because of this field fails the model request and leaves the cursor unchanged instead of truncating the log.
+- **Out-of-process subagents carry no subagent headers** — a `dsh-subagent-dsh-sdk` child runs a fresh Session in its own process without `origin: subagent`, so its requests omit both headers.
 
 <a id="dev-note"></a>
 ### Dev Note

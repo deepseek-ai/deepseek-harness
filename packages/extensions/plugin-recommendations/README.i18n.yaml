@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/plugin-recommendations/README.md
 /:
-  en: c34591bc4458dc55
-  zh: 7672f17a222f287e
+  en: 4afb0a8ae73c91cc
+  zh: 91fcce1c95ff04fd
 /deepseek-ai-dsh-plugin-recommendations:
   en: be5d25a9293babda
   zh: 237b629f2543f9bc
 /deepseek-ai-dsh-plugin-recommendations/summary:
-  en: 9bf4699d4f05f511
-  zh: 33f63aeb459401b3
+  en: 520aaf6217d609a2
+  zh: f19f2dcad940a091
 /deepseek-ai-dsh-plugin-recommendations/table-of-contents:
   en: d152484eb41ac6b4
   zh: 59094206ec49ad20
@@ -18,11 +18,11 @@
   en: 68046104fda265ed
   zh: 826dbff62b98d080
 /deepseek-ai-dsh-plugin-recommendations/use-this-package/outcomes-and-recovery:
-  en: a48561e361fe4f01
-  zh: 28e714ce66543418
+  en: 6df9bdbdfddf5f50
+  zh: 97a39838811548be
 /deepseek-ai-dsh-plugin-recommendations/understand-the-implementation:
-  en: d5801586173ca55e
-  zh: 25ed0e0974726ae1
+  en: a300b44f2ddc60df
+  zh: be380e672b99f098
 /deepseek-ai-dsh-plugin-recommendations/further-exploration:
   en: f57d3dc1da179deb
   zh: c788eeecd8acaf60
@@ -33,17 +33,17 @@
   en: 79e932b35e50619a
   zh: 821b4d95d6ce1d22
 /deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/what-the-model-sees:
-  en: 225fc2995ba8e33e
-  zh: 2fe4cb11e75a349b
+  en: d2fc396cab3dc9b8
+  zh: 608d06ee19bd7d3b
 /deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/token-effect:
-  en: fdf00ce3dd804af4
-  zh: 7c15382ab4808672
+  en: 3deeb1c795dbd38c
+  zh: 7a33f2ef283edd73
 /deepseek-ai-dsh-plugin-recommendations/model-experience/official-plugin-recommendations/kv-cache-effect:
-  en: b86dcb0e996e32ac
-  zh: 03e8bc06a13b64d0
+  en: 1ec45a21d19d6d3f
+  zh: 68dce7e6f445b1bd
 /deepseek-ai-dsh-plugin-recommendations/known-limitations-and-deferred-work:
-  en: 41515fb0359f8b28
-  zh: 1459209f6cbb7055
+  en: 64d85c3209588bd5
+  zh: 6d3f1b8dde087e15
 /deepseek-ai-dsh-plugin-recommendations/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

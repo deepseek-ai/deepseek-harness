@@ -24,6 +24,12 @@ export const zh = {
   'not-live-root': '请在原会话中操作这条推荐。',
   closing: '服务正在重载，请稍后重试。',
   transport: '无法确认操作结果，请刷新后重试。',
+  install: '安装并启用',
+  installing: '正在安装…',
+  connect: '连接账号',
+  'builds-blocked': '以下包声明了安装脚本，pnpm 默认不运行。允许后，脚本会以你的权限在本机运行，授权保存在当前 profile，之后不再询问。只在信任这些包时允许。',
+  approveBuilds: '允许这些脚本并重试',
+  'install-failed': '安装失败。可重试，或在「插件」页的「连接器」里安装。',
 } satisfies Record<string, string>
 
 /** Keys shared by every card dictionary. */
@@ -55,6 +61,12 @@ export const en = {
   'not-live-root': 'Use this recommendation in its original conversation.',
   closing: 'The service is reloading. Try again shortly.',
   transport: 'Could not confirm the result. Refresh and try again.',
+  install: 'Install and enable',
+  installing: 'Installing…',
+  connect: 'Connect account',
+  'builds-blocked': 'These packages have install scripts that pnpm did not run. Once allowed, the scripts run here with your permissions, and the permission is saved in this profile. Allow only packages you trust.',
+  approveBuilds: 'Allow these scripts and retry',
+  'install-failed': 'Could not install. Retry, or install it from Connectors in Plugins.',
 } satisfies Record<RecommendationKey, string>
 
 /** Japanese card copy. */
@@ -83,6 +95,12 @@ export const ja = {
   'not-live-root': '元の会話でこの推薦を操作してください。',
   closing: 'サービスを再読み込み中です。しばらくしてから再試行してください。',
   transport: '結果を確認できませんでした。更新してから再試行してください。',
+  install: 'インストールして有効にする',
+  installing: 'インストール中…',
+  connect: 'アカウントを接続',
+  'builds-blocked': 'これらのパッケージには pnpm が実行しなかったインストールスクリプトがあります。許可すると、スクリプトはここであなたの権限で実行され、許可はこのプロファイルに保存されます。信頼できるパッケージのみ許可してください。',
+  approveBuilds: 'これらのスクリプトを許可して再試行',
+  'install-failed': 'インストールできませんでした。再試行するか、プラグイン画面の「コネクタ」からインストールしてください。',
 } satisfies Record<RecommendationKey, string>
 
 /** Spanish card copy. */
@@ -111,6 +129,12 @@ export const es = {
   'not-live-root': 'Usa esta recomendación en su conversación original.',
   closing: 'El servicio se está recargando. Inténtalo de nuevo en breve.',
   transport: 'No se pudo confirmar el resultado. Actualiza e inténtalo de nuevo.',
+  install: 'Instalar y habilitar',
+  installing: 'Instalando…',
+  connect: 'Conectar cuenta',
+  'builds-blocked': 'Estos paquetes tienen scripts de instalación que pnpm no ejecutó. Una vez permitidos, los scripts se ejecutan aquí con sus permisos y el permiso se guarda en este perfil. Permita solo paquetes en los que confíe.',
+  approveBuilds: 'Permita estos scripts y vuelva a intentarlo',
+  'install-failed': 'No se pudo instalar. Reintenta o instálalo desde la pestaña Conectores de Complementos.',
 } satisfies Record<RecommendationKey, string>
 
 /** French card copy. */
@@ -139,6 +163,12 @@ export const fr = {
   'not-live-root': 'Utilisez cette recommandation dans sa conversation d’origine.',
   closing: 'Le service se recharge. Réessayez dans un instant.',
   transport: 'Impossible de confirmer le résultat. Actualisez et réessayez.',
+  install: 'Installer et activer',
+  installing: 'Installation…',
+  connect: 'Connecter le compte',
+  'builds-blocked': "Ces packages contiennent des scripts d'installation que pnpm n'a pas exécutés. Une fois autorisés, les scripts s'exécutent ici avec vos autorisations et l'autorisation est enregistrée dans ce profil. Autorisez uniquement les packages auxquels vous faites confiance.",
+  approveBuilds: 'Autoriser ces scripts et réessayer',
+  'install-failed': 'Impossible d’installer. Réessayez ou installez-le depuis l’onglet Connecteurs de Plugins.',
 } satisfies Record<RecommendationKey, string>
 
 /** German card copy. */
@@ -167,6 +197,12 @@ export const de = {
   'not-live-root': 'Verwenden Sie diese Empfehlung in ihrem ursprünglichen Gespräch.',
   closing: 'Der Dienst wird neu geladen. Versuchen Sie es gleich erneut.',
   transport: 'Das Ergebnis konnte nicht bestätigt werden. Aktualisieren Sie die Seite und versuchen Sie es erneut.',
+  install: 'Installieren und aktivieren',
+  installing: 'Wird installiert…',
+  connect: 'Konto verbinden',
+  'builds-blocked': 'Diese Pakete verfügen über Installationsskripte, die pnpm nicht ausgeführt hat. Sobald sie zugelassen sind, werden die Skripte hier mit Ihren Berechtigungen ausgeführt und die Berechtigung wird in diesem Profil gespeichert. Lassen Sie nur Pakete zu, denen Sie vertrauen.',
+  approveBuilds: 'Lassen Sie diese Skripte zu und versuchen Sie es erneut',
+  'install-failed': 'Installation fehlgeschlagen. Versuchen Sie es erneut oder installieren Sie es über den Tab Konnektoren unter Plugins.',
 } satisfies Record<RecommendationKey, string>
 
 /** Russian card copy. */
@@ -195,6 +231,12 @@ export const ru = {
   'not-live-root': 'Используйте эту рекомендацию в исходном разговоре.',
   closing: 'Сервис перезагружается. Повторите попытку чуть позже.',
   transport: 'Не удалось подтвердить результат. Обновите страницу и повторите попытку.',
+  install: 'Установить и включить',
+  installing: 'Установка…',
+  connect: 'Подключить аккаунт',
+  'builds-blocked': 'Эти пакеты содержат сценарии установки, которые pnpm не запускал. После разрешения сценарии запускаются здесь с вашими разрешениями, а разрешение сохраняется в этом профиле. Разрешите только те пакеты, которым вы доверяете.',
+  approveBuilds: 'Разрешите эти сценарии и повторите попытку',
+  'install-failed': 'Не удалось установить. Повторите попытку или установите его на вкладке «Коннекторы» в разделе «Плагины».',
 } satisfies Record<RecommendationKey, string>
 
 /** Portuguese card copy. */
@@ -223,4 +265,10 @@ export const pt = {
   'not-live-root': 'Use esta recomendação na conversa original.',
   closing: 'O serviço está sendo recarregado. Tente novamente em instantes.',
   transport: 'Não foi possível confirmar o resultado. Atualize e tente novamente.',
+  install: 'Instalar e ativar',
+  installing: 'Instalando…',
+  connect: 'Conectar conta',
+  'builds-blocked': 'Esses pacotes possuem scripts de instalação que o pnpm não executou. Uma vez permitido, os scripts são executados aqui com suas permissões, e a permissão é salva neste perfil. Permita apenas pacotes em que você confia.',
+  approveBuilds: 'Permita esses scripts e tente novamente',
+  'install-failed': 'Não foi possível instalar. Tente novamente ou instale-o pela guia Conectores de Plug-ins.',
 } satisfies Record<RecommendationKey, string>

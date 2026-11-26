@@ -4,7 +4,9 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { ScheduleRuntime, MAX_TIMER_DELAY_MS } from '../src/runtime.ts'
+import { ScheduleRuntime } from '../src/runtime.ts'
+import { MAX_TIMER_DELAY_MS } from '../src/time-source.ts'
+import { SourceError } from '../src/source-error.ts'
 import {
   createAfterScheduleRecord,
   createAtScheduleRecord,
@@ -18,13 +20,19 @@ import { agentFor, boundTask, harness } from './harness.ts'
 
 const tests: Awaited<ReturnType<typeof harness>>[] = []
 const runtimes: ScheduleRuntime[] = []
+const beforeDispose: Array<() => Promise<void>> = []
 const ORIGINAL = brandString<SessionId>('original')
 const LIMITS = { retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000 }
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-16T00:00:00Z')) })
 afterEach(async () => {
-  await Promise.all(runtimes.splice(0).map(runtime => runtime.dispose()))
-  await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
-  vi.useRealTimers()
+  try {
+    for (const cleanup of beforeDispose.splice(0)) await cleanup()
+    await Promise.all(runtimes.splice(0).map(runtime => runtime.dispose()))
+    await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
+  } finally {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  }
 })
 async function setup(tasks: ScheduleTask[], options: Parameters<typeof harness>[0] = {}) {
   const test = await harness(options); tests.push(test)
@@ -35,7 +43,7 @@ async function setup(tasks: ScheduleTask[], options: Parameters<typeof harness>[
     tasks[index] = task
   })
   const changed = vi.fn<() => void>()
-  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, changed, LIMITS, test.resolveAgent)
+  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, changed, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
   runtimes.push(runtime)
   return { ...test, agent, followup: agent.followup, runtime, commit, changed }
 }
@@ -55,6 +63,64 @@ function delivered(rule: ScheduleRecord, status: ScheduleTask['status'], deliver
     },
   })
 }
+
+it.each(['closed', 'other-code', 'foreign'] as const)('contains only typed time-admission shutdown (%s)', async (kind) => {
+  const test = await setup([])
+  await vi.advanceTimersByTimeAsync(0)
+  const failure = kind === 'closed' ? new SourceError('Schedule has stopped', 'SOURCE_CLOSED')
+    : kind === 'other-code' ? new SourceError('Task is busy', 'SOURCE_TASK_BUSY')
+      : new Error('Foreign transaction failure')
+  const transaction = vi.fn(async (): Promise<never> => { throw failure })
+  const scan = vi.fn(() => [])
+  const runtime = new ScheduleRuntime(test.ctx, scan, transaction, async () => {}, () => {}, LIMITS,
+    test.resolveAgent, () => test.ctx.get('sessionController'))
+  runtimes.push(runtime)
+  const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementation(() => {})
+  runtime.requestDrive()
+  await vi.advanceTimersByTimeAsync(0)
+  runtime.requestDrive()
+  await vi.advanceTimersByTimeAsync(0)
+  await runtime.dispose()
+  expect(scan).not.toHaveBeenCalled()
+  expect(transaction).toHaveBeenCalledTimes(2)
+  if (kind === 'closed') {
+    expect(warning).not.toHaveBeenCalled()
+  } else {
+    expect(warning).toHaveBeenCalledTimes(2)
+    expect(warning).toHaveBeenNthCalledWith(1, expect.stringContaining(failure.message))
+    expect(warning).toHaveBeenNthCalledWith(2, expect.stringContaining(failure.message))
+  }
+})
+
+it('returns typed closure when runtime shutdown interrupts target resolution', async () => {
+  const record = createAfterScheduleRecord(brandString<ScheduleId>('closing-target'), 'Target', 3600, Date.now(), 'Target')
+  const test = await setup([task(record)])
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const pending: Promise<void>[] = []
+  beforeDispose.push(async () => {
+    release.resolve(undefined)
+    await Promise.allSettled(pending)
+  })
+  test.resolve.mockImplementationOnce(async () => {
+    entered.resolve(undefined)
+    await release.promise
+    return { agent: test.agent }
+  })
+  const sending = test.runtime.deliverSource(record.id, { text: 'Accepted before target resolution finished' })
+  pending.push(sending)
+  const rejected = expect(sending).rejects.toMatchObject({ name: 'SourceError', code: 'SOURCE_CLOSED' })
+  await entered.promise
+  const closing = test.runtime.dispose()
+  pending.push(closing)
+  release.resolve(undefined)
+  await rejected
+  await closing
+  await expect(test.runtime.deliverSource(record.id, { text: 'After runtime close' })).rejects.toMatchObject({ code: 'SOURCE_CLOSED' })
+  expect(test.resolve).toHaveBeenCalledOnce()
+  expect(test.followup).not.toHaveBeenCalled()
+  expect(test.commit).not.toHaveBeenCalled()
+})
 
 it('appends after stored history in arrival order and keeps the change time monotonic through wall-clock rollback', async () => {
   const previous = {
@@ -593,6 +659,50 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     expect(test.followup).toHaveBeenCalledTimes(1)
   })
 
+  it.each(['flush', 'receipt'] as const)('keeps its time callback pending until %s completes', async (stage) => {
+    const record = createAfterScheduleRecord(brandString<ScheduleId>('source-time'), 'Time input', 1, Date.now() - 2000, 'Time input')
+    const records = [task(record)]
+    const test = await setup(records)
+    await vi.advanceTimersByTimeAsync(0)
+    const entered = Promise.withResolvers<undefined>()
+    const released = Promise.withResolvers<undefined>()
+    beforeDispose.push(async () => { released.resolve(undefined) })
+    const admission = vi.spyOn(test.ctx.agents, 'withoutInitiator')
+    if (stage === 'flush') {
+      test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await released.promise })
+    } else {
+      test.commit.mockImplementationOnce(async (value) => {
+        entered.resolve(undefined)
+        await released.promise
+        records[0] = value
+      })
+    }
+    test.runtime.requestDrive()
+    await entered.promise
+    const result = admission.mock.results[0]
+    if (result?.type !== 'return') throw new Error('The time callback did not enter its transaction')
+    let settled = false
+    const accepted = Promise.resolve(result.value).then(() => { settled = true })
+    test.runtime.requestDrive()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+    expect(admission).toHaveBeenCalledOnce()
+    expect(records[0]?.lastDelivery).toBeUndefined()
+    released.resolve(undefined)
+    await accepted
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(true)
+    expect(admission).toHaveBeenCalledTimes(2)
+    expect(test.followup).toHaveBeenCalledOnce()
+    expect(test.commit).toHaveBeenCalledOnce()
+    expect(records[0]).toMatchObject({ status: 'ended', lastDelivery: { targetSessionId: ORIGINAL } })
+    await test.runtime.dispose()
+    test.runtime.requestDrive()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(admission).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   describe.each(['every', 'daily'] as const)('%s timer ownership', (kind) => {
     it.each(['resolution', 'flush'] as const)('keeps one timer after wakes during %s and none after disposal', async (stage) => {
       const record = kind === 'every'
@@ -662,7 +772,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     const failed = Promise.withResolvers<never>()
     const serial = { transact: <T>(work: () => Promise<T>) => work() }
     const transaction = vi.spyOn(serial, 'transact').mockReturnValueOnce(failed.promise)
-    const runtime = new ScheduleRuntime(test.ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent)
+    const runtime = new ScheduleRuntime(test.ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
     runtimes.push(runtime)
     const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementationOnce(() => { runtime.requestDrive() })
     runtime.requestDrive()
@@ -672,66 +782,68 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     expect(transaction).toHaveBeenCalledTimes(2)
   })
 
-  it('contains recomputation admission refusal between ancestor unloading and runtime cleanup', async () => {
+  it('reports a queued time callback refused when root shutdown closes AgentRegistry admission', async () => {
     const test = await setup([])
     await vi.advanceTimersByTimeAsync(0)
     const entered = Promise.withResolvers<undefined>()
-    const released = Promise.withResolvers<undefined>()
-    const records = [task(createEveryScheduleRecord(brandString<ScheduleId>('retiring'), 'Future occurrence', 300, Date.now(), 'Future occurrence'))]
+    const release = Promise.withResolvers<undefined>()
+    const unloadingEntered = Promise.withResolvers<undefined>()
+    const allowStop = Promise.withResolvers<undefined>()
+    const reported = Promise.withResolvers<undefined>()
     const serial = {
       transact: async <T>(work: () => Promise<T>) => {
         const result = await work()
         entered.resolve(undefined)
-        await released.promise
+        await release.promise
         return result
       },
     }
     const transaction = vi.spyOn(serial, 'transact')
-    const runtime = new ScheduleRuntime(test.ctx, () => records, serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent)
+    const owner = await test.ctx.plugin({ name: 'schedule-time-owner', inject: ['agents'], apply() {} })
+    const ctx = owner.ctx
+    const runtime = new ScheduleRuntime(ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS,
+      test.resolveAgent, () => ctx.get('sessionController'))
     runtimes.push(runtime)
-    test.ctx.effect(() => () => runtime.dispose())
-    const stop = vi.spyOn(runtime, 'dispose')
-    const admission = vi.spyOn(test.ctx.agents, 'withoutInitiator')
-    const warning = vi.spyOn(test.ctx.logger, 'warn')
+    ctx.effect(function* () {
+      yield () => runtime.dispose()
+      yield async () => { unloadingEntered.resolve(undefined); await allowStop.promise }
+    })
+    const admission = vi.spyOn(ctx.agents, 'withoutInitiator')
+    const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => { reported.resolve(undefined) })
     let unloading: Promise<void> | undefined
+    const cleanup = async () => {
+      release.resolve(undefined)
+      allowStop.resolve(undefined)
+      await Promise.allSettled([unloading, test.ctx.fiber.dispose(), owner.dispose(), runtime.dispose()])
+    }
+    beforeDispose.push(cleanup)
     try {
       runtime.requestDrive()
-      const result = admission.mock.results[0]
-      if (result?.type !== 'return') throw new Error('Drive was not admitted')
-      // The loop has retired; its catch has queued finally before this observer queues cleanup.
-      const retired = (result.value as Promise<void>).then(() => {
-        runtime.requestDrive()
-        unloading = test.ctx.fiber.dispose()
-        expect(stop).not.toHaveBeenCalled()
-      })
       await entered.promise
-      expect(vi.getTimerCount()).toBe(1)
-      released.resolve(undefined)
-      await retired
-      await unloading
-      await vi.advanceTimersByTimeAsync(0)
+      runtime.requestDrive()
+      // Root shutdown closes provider admission while the child retains its committed agents binding.
+      unloading = test.ctx.fiber.dispose()
+      await unloadingEntered.promise
+      release.resolve(undefined)
+      await reported.promise
       expect(admission).toHaveBeenCalledTimes(2)
       expect(admission.mock.results[1]).toMatchObject({ type: 'throw' })
       expect(warning).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('agent initiator scope is disposed'))
-      expect(transaction).toHaveBeenCalledTimes(1)
-      expect(stop).toHaveBeenCalledTimes(1)
+      expect(transaction).toHaveBeenCalledOnce()
+      allowStop.resolve(undefined)
+      await unloading
       expect(vi.getTimerCount()).toBe(0)
       await vi.advanceTimersByTimeAsync(86_400_000)
       expect(admission).toHaveBeenCalledTimes(2)
-      expect(transaction).toHaveBeenCalledTimes(1)
     } finally {
-      released.resolve(undefined)
-      await unloading
-      stop.mockRestore()
-      admission.mockRestore()
-      warning.mockRestore()
+      await cleanup()
     }
   })
 
   it('drains a rejected serialization promise during disposal', async () => {
     const test = await setup([])
     const transaction = Promise.withResolvers<never>()
-    const runtime = new ScheduleRuntime(test.ctx, () => [], () => transaction.promise, async () => {}, () => {}, LIMITS, test.resolveAgent)
+    const runtime = new ScheduleRuntime(test.ctx, () => [], () => transaction.promise, async () => {}, () => {}, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
     runtimes.push(runtime)
     runtime.requestDrive()
     const stopped = runtime.dispose()

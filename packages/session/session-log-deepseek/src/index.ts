@@ -2,6 +2,7 @@
  * Incremental session-log contribution for official DeepSeek LLM API requests.
  * Accepted sequence watermarks live in the canonical log, so restart recovery
  * can conservatively resend uncertain tails without maintaining another store.
+ * Subagent attribution headers are registered independently of log upload.
  * @module @deepseek-ai/dsh-session-log-deepseek
  */
 
@@ -9,11 +10,12 @@ import { Buffer } from 'node:buffer'
 import { Service, type Context, type Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
+import type { DeepSeekLlmApiHeaderRequest } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { KNOWN_SESSION_EVENT_TYPES, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type {
   Session,
   SessionEvent,
+  SessionHeader,
   SessionId,
   SessionLogOffset as SessionLogOffsetType,
   SessionSeq as SessionSeqType,
@@ -193,6 +195,18 @@ export class SessionLogDeepSeekService extends Service {
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sessionLogDeepSeek')
     const { maxBytes } = config
+    // Header attribution reads Session metadata only, so `enabled` does not gate it.
+    const subagent = (request: DeepSeekLlmApiHeaderRequest): SessionHeader | undefined => {
+      if (request.sessionId === undefined) return undefined
+      const header = ctx.sessions.get(brandString<SessionId>(request.sessionId))?.header
+      return header?.origin === 'subagent' ? header : undefined
+    }
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-session-type', {
+      value: request => subagent(request) === undefined ? undefined : 'subagent',
+    })
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-subagent-parent-session-id', {
+      value: request => subagent(request)?.parentSession,
+    })
     ctx.deepseekLlmApiExtensions.register('dsh_session_log', {
       prepare: (request) => {
         if (!config.enabled.get()) return undefined

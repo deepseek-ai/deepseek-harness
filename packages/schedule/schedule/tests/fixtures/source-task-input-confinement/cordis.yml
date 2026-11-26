@@ -1,0 +1,37 @@
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE
+    workspaceRoot: !!js process.cwd()
+- id: fs-sandbox
+  config:
+    cwd: !!js process.cwd()
+- id: session-persistence-jsonl
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+- id: session-title-llm
+  disabled: true
+- id: typert-loader
+  disabled: true
+- id: llm-deepseek
+  disabled: true
+- id: plugin-package-inventory-deepseek
+  disabled: true
+- id: tool-web
+  config:
+    search: false
+- id: storage-json
+  config:
+    root: !!js dshHomePath('source-confinement-storage')
+- id: storage-domain
+  config:
+    backend: json
+- id: agent-default-model
+  config:
+    provider: source-fixture
+    model: deterministic
+- insert:
+    - id: source-confinement-model-adapter
+      name: './model-adapter.ts'
+    - id: source-task-input
+      name: '../../../../../../snapshots/session/source-task-input/source-task-input.ts'

@@ -296,7 +296,8 @@ describe.each(modes)('Node program process in $executionMode with scoped REPL $r
     'const fs = await import("node:fs"); fs.writeSync(7,JSON.stringify({t:"q",i:"forged",m:"invoke",a:[1,"tools","undeclared",[]]})+"\\n"); await new Promise(()=>{});',
   ])('refuses hostile program control traffic', async (program) => {
     const { run } = await setup({ maxMessageBytes: 1024 })
-    expect((await run({ program, bindings: [] })).error?.kind).toBe('protocol')
+    const { error } = await run({ program, bindings: [] })
+    expect(error, error?.message).toMatchObject({ kind: 'protocol' })
   })
 
   it.skipIf(!sandboxUsable)('applies read-only confinement to direct Node filesystem writes', async () => {

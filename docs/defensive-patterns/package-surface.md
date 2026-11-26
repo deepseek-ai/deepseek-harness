@@ -11,7 +11,7 @@ A plugin package's entry point takes one of two forms, and they are not mixed. A
 - The Loader four and its exact form are defined in [cordis-primer.md](../cordis-primer.md#loader-configuration).
 - Judged condition: a function plugin's entry (`src/index.ts`) exports an entity beyond the four; a default export is added beside the four, or the two forms are mixed; a `/client` entry exports an implementation value or lets another feature plugin import one; a fixture reaches another package by relative path.
 - Boundary: only Loader plugin entry points are constrained. Internal modules, helper functions, and hooks keep exporting values; a Host entry's Service Definition classes and error types are expected exports; and a test fixture stays inside its own package — a relative path into another package's `src` bypasses the `exports` map and the package-boundary checks.
-- Exception: none by default; an exception that is genuinely needed requires the domain owner's confirmation.
+- Exception: requires the domain owner's confirmation.
 
 The compliant entry — the four exports, with the same-package test path recorded as a comment rather than as a fifth export.
 

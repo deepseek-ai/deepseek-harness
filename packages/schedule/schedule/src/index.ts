@@ -1,9 +1,13 @@
 /** Host-wide durable reminders and shared human/model management. */
+import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { SourceError } from './source-error.ts'
+import { rethrowAfterCleanup } from './cleanup-failure.ts'
+import type { AutomationCandidate } from './source-types.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -26,6 +30,8 @@ import type {
   ScheduleTarget, ScheduleTargetRequest, ScheduleViewRequest, ScheduleViewResult,
 } from './types.ts'
 export type * from './client.ts'
+export { SourceError } from './source-error.ts'
+export type * from './source-types.ts'
 export { scheduleDomain } from './storage.ts'
 export type { ScheduleTask } from './storage.ts'
 export type { RecurringOccurrence } from './domain.ts'
@@ -238,7 +244,12 @@ export class ScheduleService extends TypertRemoteService {
   private chain: Promise<unknown> = Promise.resolve()
   private notifications: Promise<void> = Promise.resolve()
   private runtime: ScheduleRuntime | undefined
-  private resolveWebAgent: ((sessionId: SessionId) => Promise<Agent>) | undefined
+  private webController: Context['sessionController'] | undefined
+  private readonly controllerChild: ReturnType<Context['inject']>
+  private operation: {
+    readonly settled: Promise<void>
+    controller: Context['sessionController'] | undefined
+  } | undefined
   private stopping = false
 
   /**
@@ -247,16 +258,17 @@ export class ScheduleService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'schedule')
-    ctx.inject(['sessionController'], (webCtx) => {
+    const controllerChild = this.controllerChild = ctx.inject(['sessionController'], (webCtx) => {
       webCtx.effect(() => {
-        this.resolveWebAgent = async (sessionId) => {
-          const resolved = await webCtx.sessionController.resolveAgent(sessionId)
-          if ('error' in resolved) throw resolved.error
-          return resolved.agent
-        }
+        const controller = webCtx.sessionController
+        this.webController = controller
         // Resume overdue tasks when the Web activation provider becomes ready.
         this.runtime?.requestDrive()
-        return () => { this.resolveWebAgent = undefined }
+        return async () => {
+          this.webController = undefined
+          const operation = this.operation
+          if (operation?.controller === controller) await operation.settled
+        }
       })
     })
     this.limits = {
@@ -286,22 +298,29 @@ export class ScheduleService extends TypertRemoteService {
     })
     this.initialized = ctx.effect(async () => {
       const domain = await this.ready
-      let cleanup: () => Promise<void>
-      try {
-        cleanup = ctx.effect(() => async () => {
-          this.stopping = true
-          await this.runtime?.dispose()
-          await this.chain // The chain contains failures after returning them to their callers.
-          await this.notifications // Each notice contains its own delivery failure.
-          await domain.close()
-        })
-      } catch (error) {
+      const cleanup = async () => {
         this.stopping = true
-        await domain.close()
-        throw error
+        await this.chain // Finish accepted deliveries before stopping their runtime and closing storage.
+        await this.runtime?.dispose()
+        await this.notifications // Each notice contains its own delivery failure.
+        try {
+          await domain.close()
+        } catch (error: unknown) {
+          // A rejected close must not skip the transferred child after its consumers have drained.
+          await rethrowAfterCleanup(error, () => controllerChild.dispose())
+        }
+      }
+      try {
+        ctx.effect(function* () {
+          yield controllerChild.dispose
+          yield cleanup
+        })
+      } catch (error: unknown) {
+        this.stopping = true
+        await rethrowAfterCleanup(error, () => domain.close())
       }
       const tasks = domain.table('tasks')
-      this.runtime = new ScheduleRuntime(ctx,
+      const runtime = this.runtime = new ScheduleRuntime(ctx,
         () => [...tasks.entries()].map(([, task]) => task),
         work => this.serialize(work),
         async (task) => {
@@ -310,12 +329,17 @@ export class ScheduleService extends TypertRemoteService {
         },
         () => { this.emitChanged() },
         this.limits,
-        (sessionId) => {
-          if (this.resolveWebAgent === undefined) throw new Error('schedule: no Session activation provider')
-          return this.resolveWebAgent(sessionId)
-        })
-      this.runtime.requestDrive()
-      return cleanup
+        async (sessionId) => {
+          const controller = await this.borrowSessionController()
+          if (controller === undefined) throw new Error('schedule: no Session activation provider')
+          const resolved = await controller.resolveAgent(sessionId)
+          if ('error' in resolved) throw resolved.error
+          return resolved.agent
+        },
+        () => this.borrowSessionController())
+      runtime.requestDrive()
+      // The composite effect owns resource teardown; this effect only joins initialization.
+      return () => undefined
     })
     // Host tasks outlive their Session's Agent, so archive admission reads the
     // stored rows rather than a live runtime: an idle Session that an active task
@@ -344,6 +368,24 @@ export class ScheduleService extends TypertRemoteService {
 
   async [Service.init](): Promise<void> {
     await this.initialized
+  }
+
+  /**
+   * Deliver an observation to an existing task without consuming its scheduled occurrence.
+   * @param id - Task to deliver to.
+   * @param candidate - Observed text to send alongside the stored instruction; its JSON string must fit in 10 MiB of UTF-8.
+   * @returns Resolves when the Session inbox and task receipt are both persisted, not when the model responds.
+   * @throws SOURCE_INPUT_TOO_LARGE before delivery if the encoded text exceeds the limit.
+   * Submission also rejects if the caller is disposed, the runtime or task is unavailable, or delivery fails.
+   * A receipt write can fail after the inbox is persisted; submission does not retry.
+   */
+  async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void> {
+    this.ctx.fiber.assertActive()
+    const runtime = this.runtime
+    if (this.stopping || runtime === undefined) {
+      throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
+    }
+    await runtime.deliverSource(id, candidate)
   }
 
   /** Read effective delivery limits without loading or activating a task.
@@ -793,9 +835,28 @@ export class ScheduleService extends TypertRemoteService {
     return removed
   }
 
+  /** Join current dependency lifecycle before borrowing; retain that provider through the operation's persistence. */
+  private async borrowSessionController(): Promise<Context['sessionController'] | undefined> {
+    const operation = this.operation
+    assert(operation, 'Session controller access requires a serialized Schedule operation')
+    // A borrowed provider's cleanup can already be waiting for this operation to settle.
+    if (operation.controller !== undefined) return operation.controller
+    await this.controllerChild.await()
+    return operation.controller = this.webController
+  }
+
   private serialize<T>(work: () => Promise<T>): Promise<T> {
-    if (this.stopping) return Promise.reject(new Error('Schedule service is stopping'))
-    const pending = this.chain.then(work)
+    if (this.stopping) return Promise.reject(new SourceError('The Schedule service is stopping.', 'SOURCE_CLOSED'))
+    const pending = this.chain.then(async () => {
+      const settled = Promise.withResolvers<void>()
+      this.operation = { settled: settled.promise, controller: undefined }
+      try {
+        return await work()
+      } finally {
+        this.operation = undefined
+        settled.resolve()
+      }
+    })
     this.chain = pending.catch(() => undefined) // Preserve FIFO progress after the caller receives the failure.
     return pending
   }

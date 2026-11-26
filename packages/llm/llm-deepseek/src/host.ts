@@ -79,6 +79,7 @@ export function registerDeepSeekProvider<C extends DeepSeekConnectionOptions>(
     ),
     prepareExtensions: request => ctx.get('deepseekLlmApiExtensions')?.prepare(request)
       ?? Promise.resolve({ fields: {}, accept: () => Promise.resolve() }),
+    resolveHeaders: request => ctx.get('deepseekLlmApiExtensions')?.headers(request) ?? {},
   })
   const registration = ctx.llm.registerAdapter([provider], adapter)
   let registeredPolicy = dependencies.options().retryPolicy

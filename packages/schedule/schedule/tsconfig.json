@@ -45,6 +45,9 @@
       "path": "../../api/session-controller/tsconfig.host.json"
     },
     {
+      "path": "../../util/error"
+    },
+    {
       "path": "../../storage/storage-domain"
     },
     {

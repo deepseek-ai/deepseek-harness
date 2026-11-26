@@ -38,12 +38,76 @@
     - img "Outside workspace image"
 - paragraph: Image preview unavailable · Missing image
 - paragraph: Image preview unavailable · {{cwd}}/corrupt.png
+- paragraph:
+  - 'button "View full image: Stacked page 1"':
+    - img "Stacked page 1"
+  - 'button "View full image: Stacked page 2"':
+    - img "Stacked page 2"
+- paragraph:
+  - 'button "View full image: Stacked page 3"':
+    - img "Stacked page 3"
+  - 'button "View full image: Stacked page 4"':
+    - img "Stacked page 4"
+- list:
+  - listitem:
+    - paragraph: Listed step
+    - paragraph:
+      - 'button "View full image: Listed page 1"':
+        - img "Listed page 1"
+      - 'button "View full image: Listed page 2"':
+        - img "Listed page 2"
+    - table:
+      - rowgroup:
+        - row "Page State":
+          - columnheader "Page"
+          - columnheader "State"
+      - rowgroup:
+        - row "Settings Changed":
+          - cell "Settings"
+          - cell "Changed"
+- paragraph: Quote lead paragraph.
+- blockquote:
+  - heading "Quoted comparison" [level=3]
+  - paragraph:
+    - 'button "View full image: Quoted page 1"':
+      - img "Quoted page 1"
+    - 'button "View full image: Quoted page 2"':
+      - img "Quoted page 2"
+- paragraph: Quote middle paragraph.
+- blockquote:
+  - paragraph:
+    - 'button "View full image: Quoted page 3"':
+      - img "Quoted page 3"
+    - 'button "View full image: Quoted page 4"':
+      - img "Quoted page 4"
+  - list:
+    - listitem: Quoted note
+- paragraph:
+  - 'button "View full image: Follow page 1"':
+    - img "Follow page 1"
+  - 'button "View full image: Follow page 2"':
+    - img "Follow page 2"
+- paragraph: Item lead paragraph.
+- list:
+  - listitem:
+    - paragraph:
+      - 'button "View full image: Item page 1"':
+        - img "Item page 1"
+      - 'button "View full image: Item page 2"':
+        - img "Item page 2"
+  - listitem:
+    - paragraph:
+      - 'button "View full image: Item page 3"':
+        - img "Item page 3"
+      - 'button "View full image: Item page 4"':
+        - img "Item page 4"
 - paragraph: REMOTE_IMAGE_DONE
 - button "Copy"
 - button "Good response"
 - button "Bad response"
 - button "Branch into a new conversation"
 - text: {{clock}}
+- button "Back to bottom"
 - textbox "Message or run a task, / commands, @ files or sessions"
 - button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write

@@ -4,6 +4,15 @@ English | [中文](schedule.zh.md)
 
 Schedule stores Host tasks independently of Session activation. One management API addresses tasks by id, and one evaluator handles seven authoritative timing kinds: `after`, `at`, `every`, `daily`, `weekly`, `cron`, and `rrule`. Targets reuse an existing Session, create one Session and reuse it, or create a Session for each delivery. The [package README](../../packages/schedule/schedule/README.md) owns composition and reminder framing; [`types.ts`](../../packages/schedule/schedule/src/types.ts) owns the complete value and request types.
 
+<a id="source-instances"></a>
+## Source instances
+
+A Source is an ordinary class that owns observation and condition state and receives a submission callback. Multiple independent instances submit final `AutomationCandidate` values with `ctx.schedule.submit(id, candidate): Promise<void>`. No common base class, Source-to-Source input, connection, or registration protocol is required. Intermediate observations remain process-local, not model input.
+
+Schedule checks admission inside its mutation FIFO and acknowledges Session inbox flush plus the durable task receipt, not model completion. It preserves stored timing and status. Accepted submissions drain on shutdown; captured callbacks do not rebind to a replacement service. Producers use their existing Cordis effects to stop observation and drain calls. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns the example, errors, admission limits, and message framing.
+
+The internal `TimeSource` passes actual wall-clock milliseconds to one asynchronous callback that awaits the serialized due scan. It owns a segmented timer and coalesced requests; runtime policy owns deadlines, recurrence evaluation, batching, floors, and persistence. It is not root-exported.
+
 <a id="durable-tasks"></a>
 ## Durable tasks
 
@@ -115,9 +124,9 @@ The `timing` discriminant selects exactly its matching payload, for example `{ k
 <a id="saved-delivery-records"></a>
 ## Saved delivery records
 
-A receipt records `scheduledAt`, `deliveredAt`, `messageId`, and `targetSessionId`; it acknowledges a durable Session inbox write, not model completion. A saved record may also have its immutable sent `prompt`. Old receipts without a target id use their resolved reusable destination before any retargeting edit, so a later target cannot rewrite their history. A receipt without either an explicit destination or a known reusable target rejects decoding; a new default reservation cannot establish a historical destination.
+A receipt records `scheduledAt`, `deliveredAt`, `messageId`, and `targetSessionId`; it acknowledges a durable Session inbox write, not model completion. For timed delivery, receipt `scheduledAt` is the delivered occurrence's target time. For manual and source delivery, it is the time sampled after target resolution and before enqueue, not the task's stored occurrence. `deliveredAt` is sampled after Session persistence acknowledgment. A saved record may also carry the task's stored instruction snapshot in its `prompt` field; it is `task.record.prompt` at delivery time, not the complete sent message, and excludes delivery-added framing and source data. Old receipts without a target id use their resolved reusable destination before any retargeting edit, so a later target cannot rewrite their history. A receipt without either an explicit destination or a known reusable target rejects decoding; a new default reservation cannot establish a historical destination.
 
-New tasks start with known empty history. An old row without `deliveryHistory` exposes its latest receipt, if present, and sets `earlierRecordsUnavailable: true`; it does not invent lost history or prompt snapshots. An omitted `earlierRecordsPruned` reads as false. Duplicate message ids or disagreement between the latest saved record and `lastDelivery` reject decoding.
+New tasks start with known empty history. An old row without `deliveryHistory` exposes its latest receipt, if present, and sets `earlierRecordsUnavailable: true`; it does not invent lost history or instruction snapshots. An omitted `earlierRecordsPruned` reads as false. Duplicate message ids or disagreement between the latest saved record and `lastDelivery` reject decoding.
 
 History follows append order despite clock rollback. Acknowledgment appends and prunes in the same task commit, keeping at most 200 records and 30 days by default while retaining the latest receipt. Query pages are newest first and use an exclusive message-id cursor. Hard deletion removes the task and its history without removing already queued Session messages.
 
@@ -126,7 +135,7 @@ History follows append order despite clock rollback. Acknowledgment appends and 
 
 One Host timer drives active tasks. Runtime and management writes share one FIFO. Existing and reserved Sessions resolve through `schedule/resolve-agent`, so the embedding owns activation and the injected Web controller is the fallback. Reused-Session tasks hold their execution slot until the target Agent becomes idle; intervening occurrences coalesce. A `new` target permits executions beside one another. Due recurring records targeting the same existing Session share one message; `after` and `at` deliver separately.
 
-Timed and manual deliveries obey a per-task minimum interval of 60 seconds. `newSessionIntervalSeconds` can raise it for `new` targets, up to one week. The floor uses the last occurrence when the saved successor preserves the interval, otherwise the last acknowledgment, so delivery latency does not move the rule's anchor. Reads expose `executionActive` and `deliveryFloorEndsAt` only while applicable.
+Timed, manual, and source deliveries share a per-task minimum interval of 60 seconds. `newSessionIntervalSeconds` can raise it for `new` targets, up to one week. The floor uses the last receipt's `scheduledAt` when the task's stored occurrence preserves the interval, otherwise the last acknowledgment, so delivery latency does not shift the recurrence schedule. A manual or source delivery can delay the next timed delivery without changing its stored occurrence. Reads expose `executionActive` and `deliveryFloorEndsAt` only while applicable.
 
 Session inbox persistence precedes the task receipt write, so a crash between stores can repeat a delivery. The Host must be running. An active task targeting a Session contributes archive-admission activity; an archive stop deletes those active tasks.
 
@@ -154,6 +163,17 @@ Shared management service; reads and management writes never activate a Session,
 `sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.
 
 ```ts cordis-catalog
+/**
+ * Deliver an observation to an existing task without consuming its scheduled occurrence.
+ * @param id - Task to deliver to.
+ * @param candidate - Observed text to send alongside the stored instruction; its JSON string must fit in 10 MiB of UTF-8.
+ * @returns Resolves when the Session inbox and task receipt are both persisted, not when the model responds.
+ * @throws SOURCE_INPUT_TOO_LARGE before delivery if the encoded text exceeds the limit.
+ * Submission also rejects if the caller is disposed, the runtime or task is unavailable, or delivery fails.
+ * A receipt write can fail after the inbox is persisted; submission does not retry.
+ */
+async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>
+
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.
  */

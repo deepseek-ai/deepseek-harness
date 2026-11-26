@@ -36,6 +36,20 @@ it('reports the card outcome with the plugin guidance on the next request withou
   expect(steer).not.toHaveBeenCalled()
 })
 
+it('reports a blocked connector installation without the package names awaiting approval', async () => {
+  const f = await fixture()
+  f.manager.listBundles.mockResolvedValue([])
+  f.propose(undefined, { title: 'Feishu', brief: 'Read the shared Feishu document.', details: { name: '@deepseek-ai/dsh-feishu' } })
+  f.manager.installBundle.mockResolvedValueOnce({ application: 'failed', changed: false, stage: 'install', target: '@deepseek-ai/dsh-feishu',
+    error: { code: 'operation-error' }, pendingBuilds: ['@larksuite/cli@1.0.97'],
+    packageResult: { exitCode: 1, output: '', truncated: false, logPath: '/profile/logs/install.log', kind: 'build-blocked' } })
+  await f.ctx.actionCards.act(f.agent, cardId, 'enable')
+  expect(f.card()?.data).toEqual({ errorCode: 'operation-error', pendingBuilds: ['@larksuite/cli@1.0.97'] })
+  const notice = text(await prepare(f))
+  expect(notice).toContain('[{"action":"enable_official_plugin","title":"Feishu","phase":"failed","data":{"errorCode":"operation-error"}}]')
+  expect(notice).not.toContain('@larksuite/cli')
+})
+
 it('reports a recorded decision after this plugin reloads', async () => {
   const f = await fixture()
   f.propose()

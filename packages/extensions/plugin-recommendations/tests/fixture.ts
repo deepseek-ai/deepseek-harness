@@ -10,7 +10,7 @@ import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
 import RemoteAccess from '@deepseek-ai/dsh-api-remote-access'
 import ActionCards, { type ActionCardId } from '@deepseek-ai/dsh-action-cards'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
+import type { BundleInfo, ChangeResult, InstallBundleOptions } from '@deepseek-ai/dsh-plugin-manager/types'
 import * as PluginRecommendations from '../src/index.ts'
 
 export const ACTION = 'enable_official_plugin'
@@ -57,10 +57,12 @@ export async function fixture() {
   await ctx.plugin(RemoteAccess)
   await ctx.plugin(Skills)
   await ctx.plugin(SkillTool)
-  await ctx.plugin(ActionCards)
+  const cards = await ctx.plugin(ActionCards)
   const manager = {
     listBundles: vi.fn(async (): Promise<BundleInfo[]> => [bundle]),
     setBundleEnabled: vi.fn(async (): Promise<ChangeResult> => ({ application: 'applied', changed: true, stage: 'enable', target: bundle.name, enabled: true })),
+    installBundle: vi.fn(async (spec: string, _options?: InstallBundleOptions): Promise<ChangeResult> => (
+      { application: 'applied', changed: true, stage: 'enable', target: spec, enabled: true })),
   }
   ctx.provide('pluginManager', manager)
   const fiber = await ctx.plugin(PluginRecommendations)
@@ -73,5 +75,5 @@ export async function fixture() {
     return Object.hasOwn(decisions, id) ? decisions[id] : undefined
   }
   const propose = (id?: string, args?: object, caller: Agent = agent) => logProposal(ctx, caller, id, args)
-  return { ctx, agent, handle, manager, fiber, events, card, propose }
+  return { ctx, agent, handle, manager, cards, fiber, events, card, propose }
 }

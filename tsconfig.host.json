@@ -21,6 +21,7 @@
     "apps/web/tests/creation-recommendations.e2e.ts",
     "apps/web/tests/cordis-inspect-subagent.e2e.ts",
     "apps/web/tests/plugin-recommendations.e2e.ts",
+    "apps/web/tests/connector-recommendations.e2e.ts",
     "apps/web/tests/deepseek-chat-import.e2e.ts",
     "apps/web/tests/japanese-plugin-metadata.e2e.ts",
     "apps/web/tests/additional-locales.e2e.ts",

@@ -431,7 +431,7 @@
     {"digest":"8a9c990773f798eac10ca8878e6bcc531ee080bc589cac956730e462cc6a09ad","names":[],"sources":["packages/interaction/permission-presets/src/index.ts:61"]},
     {"digest":"8ad45ad053b4d89f8865c17cc9ff3b8748e86045f3f0fb816269a34af2619141","names":[],"sources":["packages/experimental/hook-protocol/src/types.ts:31"]},
     {"digest":"8af841fc9b265ade3441caf9fe40dd24db24226befba48150e6d0eeccc1389c3","names":[],"sources":[]},
-    {"digest":"8bb8c3751a6ce64b61aba1ec7ae798c00a5803c4d868a0430873216c6569ed52","names":[],"sources":["packages/session/session-log-deepseek/src/types.ts:96"]},
+    {"digest":"8bb8c3751a6ce64b61aba1ec7ae798c00a5803c4d868a0430873216c6569ed52","names":[],"sources":["packages/session/session-log-deepseek/src/types.ts:103"]},
     {"digest":"8c1c4f72755a78ea163523a46565316e36e9b644382eb48e6635c71a6f412dd2","names":[],"sources":[]},
     {"digest":"8c627d7a45fa406cea879a3922105e27ed4c3c7966e264afaf11ea7a330f2dd1","names":[],"sources":[]},
     {"digest":"8cdd3fdd295cee53035de16a1b23411716f75e9f994fe9510cac5d7fef605c76","names":[],"sources":[]},
