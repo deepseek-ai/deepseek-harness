@@ -16,6 +16,8 @@ Rules for writing DeepSeek Harness code, in the style of the [C++ Core Guideline
   - [B.1: Drive plugin work from lifecycle events, not loops that poll Agent state](backend.md#b1)
   - [B.2: Register independent entries through a registry instead of listing them in one plugin's config](backend.md#b2)
 - [D: Data exchange](data-exchange.md)
+- [P: Prompt](prompt.md)
+  - [P.1: Describe a tool in its schema description, not in a system prompt section](prompt.md#p1)
 
 ## Status and scope
 
