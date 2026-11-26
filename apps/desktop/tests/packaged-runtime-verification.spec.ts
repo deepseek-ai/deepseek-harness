@@ -27,10 +27,10 @@ const CONTEXT = { appOutDir: 'out', packager: { getResourcesDir: () => 'out/reso
  * Run the packaging hook that verifies the bundled runtime.
  * @returns The version that hook required the runtime to declare.
  */
-async function requiredRuntimeVersion(preparedRuntime?: string, preparedRuntimeVersion?: string): Promise<unknown> {
+async function requiredRuntimeVersion(): Promise<unknown> {
   verifyDesktopRuntime.mockClear()
   const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
-  const config = createElectronBuilderConfig(ENVIRONMENT, 'win32', 'x64', preparedRuntime, preparedRuntimeVersion)
+  const config = createElectronBuilderConfig(ENVIRONMENT, 'win32', 'x64')
   await config.afterPack(CONTEXT as never)
   return verifyDesktopRuntime.mock.calls[0]?.[1]
 }
@@ -41,11 +41,6 @@ describe('packaged runtime verification', () => {
       await import('node:fs/promises').then(async fs => fs.readFile(new URL('../package.json', import.meta.url), 'utf8')),
     ) as { version: string }).version
     expect(await requiredRuntimeVersion()).toBe(productVersion)
-  })
-
-  it('requires the version installed-update qualification wrote into its private runtime', async () => {
-    // Qualification rewrites the runtime's own version, so comparing against the product version would always fail.
-    expect(await requiredRuntimeVersion('/qualification/dsh', '0.1.6-alpha.2.20260921.1')).toBe('0.1.6-alpha.2.20260921.1')
   })
 
   it('does not let a build version change what the bundled runtime must declare', async () => {

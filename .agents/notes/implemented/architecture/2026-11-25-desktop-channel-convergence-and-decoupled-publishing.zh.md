@@ -16,7 +16,7 @@ Status: implemented
 
 `userData/desktop/settings.json` 引入 `"version": "1"`。启动初始化在文件缺失时创建 `"version": "1"`，并将有效的无版本文件原地迁移为 `"version": "1"`，同时移除无版本的 `updates.channelUnlocked` 字段并将无版本的 `"nightly"` 渠道重置为 `"stable"`，绝不覆盖损坏的 JSON、无效结构、不支持的 `version` 值或无效字段。只要未同时具备 `"version": "1"` 与 `updates.channelUnlocked: true`，客户端即隐藏**更新渠道**（除非存在需恢复的配置错误），并将运行时有效渠道强制锁定为 `stable`，忽略包内 `dshDesktopUpdateChannel` 或未解锁字段。在桌面版**设置 → 通用设置**中连续点击五次**当前版本**会弹出风险确认对话框（初始焦点位于**取消**）；确认后写入 `"version": "1"`、`updates.channel: "nightly"` 与 `updates.channelUnlocked: true`，立即切换至 `nightly`，并在后续切回 `stable` 后继续显示**更新渠道**。
 
-`DesktopUpdateProvider` 继承 `electron-updater` 的 `GenericProvider`，仅在 `.yml` 更新清单请求上附带非机密来源请求头（`x-dsh-config-version`、`x-client-update-channel`、`x-client-channel-source`、`x-client-version`、`x-client-platform`、`x-client-arch`，以及复用 `<userData>/.updaterId` 的 `x-client-device-id`），而 `.zip`、`.exe` 与 `.blockmap` 二进制下载不携带这些请求头。
+`DesktopUpdateProvider` 继承 `electron-updater` 的 `GenericProvider`，仅在 `.yml` 更新清单请求上附带非机密来源请求头（`x-dsh-config-version`、`x-client-update-channel`、`x-client-channel-source`、`x-client-version`、`x-client-bundled-dsh-version`、`x-client-platform`、`x-client-arch`，以及复用 `<userData>/.updaterId` 的 `x-client-device-id`），而 `.zip`、`.exe` 与 `.blockmap` 二进制下载不携带这些请求头。
 
 ## 渠道术语与清单路由
 

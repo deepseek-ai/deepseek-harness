@@ -39,7 +39,6 @@ import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import type { DesktopMessages } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
-import { desktopUpdateChannel } from './update-channel.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { prepareDesktopUpdateWindow } from './update-window.ts'
 import { DesktopCommandManager } from './command-management.ts'
@@ -701,7 +700,6 @@ async function main(): Promise<void> {
   }
 
   const manifest: unknown = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'))
-  desktopUpdateChannel(manifest)
   const channelSettings = new DesktopUpdateSettings(app.getPath('userData'))
   const initialChannel = await channelSettings.load()
   let configVersion: DesktopUpdateConfigVersion = initialChannel.kind === 'ready' ? initialChannel.configVersion : '0'
@@ -712,6 +710,9 @@ async function main(): Promise<void> {
     ...(initialChannel.kind === 'error' ? { error: configurationFailure(initialChannel.error) } : {}),
   }
   const updateChannel = initialChannel.kind === 'ready' ? initialChannel.channel : 'stable'
+  let cachedBundledDshVersion: string | undefined
+  const readBundledDshVersion = (): string =>
+    cachedBundledDshVersion ??= app.isPackaged ? readDesktopRuntime(resources.dsh).release.version : app.getVersion()
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
     async () => {
@@ -771,7 +772,7 @@ async function main(): Promise<void> {
     (success, reason) => { void track('desktop_upgrade_download_result', { is_success: success, ...reason === undefined ? {} : { error_reason: reason } }) },
     updateChannel,
     undefined,
-    () => ({ configVersion, unlocked: channelState?.unlocked ?? false }),
+    () => ({ configVersion, unlocked: channelState?.unlocked ?? false, bundledDshVersion: readBundledDshVersion() }),
   )
 
   if (initialChannel.kind === 'error') updates.suspendConfiguration(initialChannel.error.path)
@@ -1604,7 +1605,7 @@ async function main(): Promise<void> {
     mandatoryPolicy = new DesktopMandatoryUpdatePolicy(policyConfig, {
       platform: process.platform as 'win32' | 'darwin', arch: process.arch as 'x64' | 'arm64',
       get channel() { return updates.selectedChannel },
-      bundledDshVersion: app.isPackaged ? readDesktopRuntime(resources.dsh).release.version : app.getVersion(),
+      bundledDshVersion: readBundledDshVersion(),
     }, (state) => {
       if (state.error !== 'authentication-required') policyAuthenticationQueued = false
       if (state.blocking) {

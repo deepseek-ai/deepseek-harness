@@ -49,7 +49,7 @@ async function fixture(target: 'mac-arm64' | 'mac-x64' | 'win-x64' = 'mac-arm64'
     await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest))
     const environment = { DSH_DESKTOP_AUTO_UPDATE_ENV: preset, DOWNLOAD_PROD_COS_BUCKET: 'bucket-123',
       DOWNLOAD_TEST_ORIGIN: 'https://test.example.com', DOWNLOAD_TEST_COS_BUCKET: 'test-123', DOWNLOAD_TEST_RELEASE_ID: 'a'.repeat(32) }
-    const plan = await prepareDesktopRollout(directory, manifest, environment)
+    const plan = await prepareDesktopRollout(directory, manifest, environment, channel)
     return { root, directory, manifest, plan, filename, environment }
   } catch (error) { await rm(root, { recursive: true, force: true }); throw error }
 }
@@ -132,7 +132,8 @@ it('rejects changed retained YAML before reading remote metadata', async () => {
   const f = await fixture()
   try {
     await writeFile(join(f.directory, f.filename), 'version: 9.0.0')
-    await expect(prepareDesktopRollout(f.directory, f.manifest, f.environment)).rejects.toThrow(/differs from manifest/u)
+    await expect(prepareDesktopRollout(f.directory, f.manifest, f.environment, f.manifest.source.channel))
+      .rejects.toThrow(/differs from manifest/u)
   } finally { await rm(f.root, { recursive: true, force: true }) }
 })
 

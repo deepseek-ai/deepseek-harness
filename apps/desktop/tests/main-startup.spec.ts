@@ -52,7 +52,11 @@ const harness = await vi.hoisted(async () => {
   let pluginsEnabled = false
   let prepareUpdate: (() => Promise<boolean>) | undefined
   let publishUpdate: ((state: DesktopUpdateState) => DesktopUpdateState) | undefined
-  let feedStateOnSwitch: { readonly configVersion: string; readonly unlocked: boolean } | undefined
+  let feedStateOnSwitch: {
+    readonly configVersion: string
+    readonly unlocked: boolean
+    readonly bundledDshVersion?: string
+  } | undefined
   let preparing = deferred()
   let prepared = deferred()
   let hostStarted = deferred()
@@ -253,7 +257,11 @@ const harness = await vi.hoisted(async () => {
     get publishUpdate() { return publishUpdate! },
     set publishUpdate(value: (state: DesktopUpdateState) => DesktopUpdateState) { publishUpdate = value },
     get feedStateOnSwitch() { return feedStateOnSwitch },
-    set feedStateOnSwitch(value: { readonly configVersion: string; readonly unlocked: boolean } | undefined) { feedStateOnSwitch = value },
+    set feedStateOnSwitch(value: {
+      readonly configVersion: string
+      readonly unlocked: boolean
+      readonly bundledDshVersion?: string
+    } | undefined) { feedStateOnSwitch = value },
     dialog: { showOpenDialog: vi.fn(), showErrorBox: vi.fn(), showMessageBox: vi.fn() },
     openExternal: vi.fn(async () => {}),
     showItemInFolder: vi.fn(),
@@ -389,10 +397,18 @@ vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class
   selectedChannel: 'nightly' | 'stable' = 'nightly'
   revision = 0
   configurationFailure: 'startup' | 'cleanup' | undefined
-  feedState: (() => { readonly configVersion: string; readonly unlocked: boolean }) | undefined
+  feedState: (() => {
+    readonly configVersion: string
+    readonly unlocked: boolean
+    readonly bundledDshVersion?: string
+  }) | undefined
   constructor(publish: (state: DesktopUpdateState) => DesktopUpdateState, beforeRestart: () => Promise<boolean>,
     _updater: unknown, _enabled: unknown, _version: unknown, _downloadResult: unknown, channel: 'nightly' | 'stable',
-    _discard?: unknown, feedState?: () => { readonly configVersion: string; readonly unlocked: boolean }) {
+    _discard?: unknown, feedState?: () => {
+      readonly configVersion: string
+      readonly unlocked: boolean
+      readonly bundledDshVersion?: string
+    }) {
     this.selectedChannel = channel
     this.feedState = feedState
     harness.prepareUpdate = beforeRestart
@@ -617,7 +633,7 @@ describe('desktop main startup', () => {
         return { response: 0 }
       })
       await invoke(DESKTOP_IPC.updatesOpen, 'app')
-      expect(harness.feedStateOnSwitch).toEqual({ configVersion: '1', unlocked: true })
+      expect(harness.feedStateOnSwitch).toEqual({ configVersion: '1', unlocked: true, bundledDshVersion: '1.0.0' })
       const recovered = await invoke(DESKTOP_IPC.updatesChannelGet, 'app')
       expect(recovered).toMatchObject({ channel: 'nightly', unlocked: true, changing: false })
       expect(recovered).not.toHaveProperty('error')

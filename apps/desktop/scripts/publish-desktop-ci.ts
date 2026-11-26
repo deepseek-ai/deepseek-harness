@@ -129,64 +129,60 @@ export async function executeDesktopChannelPublications(
   const setPhase = dependencies.onPhase ?? (() => {})
   const recordsRoot = join(dirname(root), 'upload-records')
   const directories: string[] = []
-  try {
-    for (const { channel, plan } of plans) {
-      const destination = `${plan.bucket}/${plan.publicUrl}${channel}`
-      let phase = `channel lock and publication journal acquisition (${channel})`
-      setPhase(phase)
-      await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
-        const published = await wasDesktopAttemptPublished(recordsRoot,
-          { repository: manifest.source.repository, runId: route.runId, attempt: route.attempt, destination, stagingPercentage })
-        const journal = await createDesktopPublicationRecord(recordsRoot, {
-          repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
-          actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown',
-          destination, stagingPercentage, operation: 'publish', reason: `Actions publication (${channel})`,
-        })
-        directories.push(journal.directory)
-        let status: 'complete' | 'failed' | 'published-tag-pending' = 'failed'
-        try {
-          phase = `remote object reconciliation and publication (${channel})`
-          setPhase(phase)
-          const tag = async () => {
-            await createTag(manifest.source.repository, plan.version, route.commit, env.DESKTOP_TAG_TOKEN || '')
-          }
-          const result = published
-            ? await (async () => {
-              await journal.record({ type: 'feeds-complete' })
-              if (plan.environment === 'production') {
-                try { await tag() } catch (cause) {
-                  await journal.record({ type: 'tag-pending' })
-                  return { status: 'published-tag-pending' as const, cause }
-                }
-              }
-              await journal.record({ type: 'complete' })
-              return { status: 'complete' as const }
-            })()
-            : await publishDesktopRelease(plan, {
-              transport: dependencies.createTransport(plan), record: event => journal.record(event),
-              tag,
-            })
-          status = result.status
-          if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-            `\nDesktop publication (${channel}): **${status}**\n\n${plan.target} ${plan.version}\n\nSource: ${route.runId}, attempt ${route.attempt}\n`)
-          if (result.status === 'published-tag-pending') {
-            const failure = desktopPublicationFailure(result.cause, 'release tag creation')
-            await journal.record({ type: 'failed', failure })
-            process.stderr.write(`${JSON.stringify(failure)}\n`)
-            process.exitCode = 1
-          }
-        } catch (error) {
-          await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, phase) })
-          throw error
-        } finally { await journal.finish(status) }
+  for (const { channel, plan } of plans) {
+    const destination = `${plan.bucket}/${plan.publicUrl}${channel}`
+    let phase = `channel lock and publication journal acquisition (${channel})`
+    setPhase(phase)
+    await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
+      const published = await wasDesktopAttemptPublished(recordsRoot,
+        { repository: manifest.source.repository, runId: route.runId, attempt: route.attempt, destination, stagingPercentage })
+      const journal = await createDesktopPublicationRecord(recordsRoot, {
+        repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
+        actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown',
+        destination, stagingPercentage, operation: 'publish', reason: `Actions publication (${channel})`,
       })
-    }
-  } finally {
-    const last = directories.at(-1)
-    if (env.GITHUB_OUTPUT && last !== undefined) {
-      await appendFile(env.GITHUB_OUTPUT,
-        `record=${last}\nrecords<<EOF\n${directories.map(dir => `${dir}/`).join('\n')}\nEOF\n`)
-    }
+      directories.push(journal.directory)
+      if (env.GITHUB_OUTPUT) {
+        await appendFile(env.GITHUB_OUTPUT,
+          `record=${journal.directory}\nrecords<<EOF\n${directories.map(dir => `${dir}/`).join('\n')}\nEOF\n`)
+      }
+      let status: 'complete' | 'failed' | 'published-tag-pending' = 'failed'
+      try {
+        phase = `remote object reconciliation and publication (${channel})`
+        setPhase(phase)
+        const tag = async () => {
+          await createTag(manifest.source.repository, plan.version, route.commit, env.DESKTOP_TAG_TOKEN || '')
+        }
+        const result = published
+          ? await (async () => {
+            await journal.record({ type: 'feeds-complete' })
+            if (plan.environment === 'production') {
+              try { await tag() } catch (cause) {
+                await journal.record({ type: 'tag-pending' })
+                return { status: 'published-tag-pending' as const, cause }
+              }
+            }
+            await journal.record({ type: 'complete' })
+            return { status: 'complete' as const }
+          })()
+          : await publishDesktopRelease(plan, {
+            transport: dependencies.createTransport(plan), record: event => journal.record(event),
+            tag,
+          })
+        status = result.status
+        if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
+          `\nDesktop publication (${channel}): **${status}**\n\n${plan.target} ${plan.version}\n\nSource: ${route.runId}, attempt ${route.attempt}\n`)
+        if (result.status === 'published-tag-pending') {
+          const failure = desktopPublicationFailure(result.cause, 'release tag creation')
+          await journal.record({ type: 'failed', failure })
+          process.stderr.write(`${JSON.stringify(failure)}\n`)
+          process.exitCode = 1
+        }
+      } catch (error) {
+        await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, phase) })
+        throw error
+      } finally { await journal.finish(status) }
+    })
   }
 }
 

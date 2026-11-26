@@ -175,36 +175,32 @@ export async function publishDesktopRolloutCi(mode: 'check' | 'apply' | 'website
   if (plans.length === 0) throw new Error('desktop rollout: no rollout channel was selected')
   const credentials = await readDesktopUploadCredentials(config)
   const directories: string[] = []
-  try {
-    for (const { channel, plan, destination } of plans) {
-      await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
-        const journal = await createDesktopPublicationRecord(recordsRoot, {
-          repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
-          actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown', destination,
-          operation: 'rollout', reason: `${mode} (${channel})`, stagingPercentage: target,
-        })
-        directories.push(journal.directory)
-        try {
-          const result = await rolloutDesktopRelease(plan, target,
-            { transport: desktopPublishCos(plan.upload, credentials), record: event => journal.record(event) })
-          await journal.record({ type: 'complete' })
-          await journal.finish('complete')
-          const summary = `Desktop rollout: ${manifest.source.version} / ${channel} / ${route.target}: ${result.before}% → ${result.after}%\n`
-          process.stdout.write(summary)
-          if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY, summary)
-        } catch (error) {
-          await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, 'desktop rollout') })
-          await journal.finish('failed')
-          throw error
-        }
+  for (const { channel, plan, destination } of plans) {
+    await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
+      const journal = await createDesktopPublicationRecord(recordsRoot, {
+        repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
+        actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown', destination,
+        operation: 'rollout', reason: `${mode} (${channel})`, stagingPercentage: target,
       })
-    }
-  } finally {
-    const last = directories.at(-1)
-    if (env.GITHUB_OUTPUT && last !== undefined) {
-      await appendFile(env.GITHUB_OUTPUT,
-        `record=${last}\nrecords<<EOF\n${directories.map(dir => `${dir}/`).join('\n')}\nEOF\n`)
-    }
+      directories.push(journal.directory)
+      if (env.GITHUB_OUTPUT) {
+        await appendFile(env.GITHUB_OUTPUT,
+          `record=${journal.directory}\nrecords<<EOF\n${directories.map(dir => `${dir}/`).join('\n')}\nEOF\n`)
+      }
+      try {
+        const result = await rolloutDesktopRelease(plan, target,
+          { transport: desktopPublishCos(plan.upload, credentials), record: event => journal.record(event) })
+        await journal.record({ type: 'complete' })
+        await journal.finish('complete')
+        const summary = `Desktop rollout: ${manifest.source.version} / ${channel} / ${route.target}: ${result.before}% → ${result.after}%\n`
+        process.stdout.write(summary)
+        if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY, summary)
+      } catch (error) {
+        await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, 'desktop rollout') })
+        await journal.finish('failed')
+        throw error
+      }
+    })
   }
 }
 

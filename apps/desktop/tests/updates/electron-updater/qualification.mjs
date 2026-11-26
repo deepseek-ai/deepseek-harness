@@ -21,6 +21,7 @@ const FEED_HEADER_NAMES = [
   'x-client-update-channel',
   'x-client-channel-source',
   'x-client-version',
+  'x-client-bundled-dsh-version',
   'x-client-platform',
   'x-client-arch',
   'x-client-device-id',
@@ -73,6 +74,7 @@ async function main() {
       channel,
       channelSource,
       clientVersion: adapter.version,
+      bundledDshVersion: '0.2.3-alpha.2',
     }))
     target.quitAndInstall = forbidden
     target.on('error', () => {}) // Awaited check/download promises report failures.
@@ -87,6 +89,7 @@ async function main() {
     assert.equal(firstFeedRequest.headers['x-client-update-channel'], 'stable')
     assert.equal(firstFeedRequest.headers['x-client-channel-source'], 'default')
     assert.equal(firstFeedRequest.headers['x-client-version'], '1.0.0')
+    assert.equal(firstFeedRequest.headers['x-client-bundled-dsh-version'], '0.2.3-alpha.2')
     assert.equal(firstFeedRequest.headers['x-client-platform'], resolveDesktopFeedPlatform())
     assert.equal(firstFeedRequest.headers['x-client-arch'], resolveDesktopFeedArch())
     assert.equal(firstFeedRequest.headers['x-client-device-id'], updaterId)
@@ -175,6 +178,7 @@ async function main() {
       channel: 'stable',
       channelSource: 'default',
       clientVersion: adapter.version,
+      bundledDshVersion: '0.2.3-alpha.2',
     }))
     recovered.quitAndInstall = forbidden
     recovered.on('error', () => {})

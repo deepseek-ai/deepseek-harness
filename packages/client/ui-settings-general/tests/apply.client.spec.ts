@@ -114,7 +114,9 @@ describe('ui-settings-general apply', () => {
     // The shared developer-tool control belongs to General; onboarding remains feature-owned.
     expect(c.ctx.slots.spec('settings.general.group')).toEqual({ kind: 'list', scope: 'root' })
     expect(c.ctx.slots.entries('settings.general.group.display.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['developer-tools'])
-    expect(c.ctx.slots.entries('settings.general.group.updates.item').filter(row => row.locale === NS).map(row => row.options.id)).toEqual(['current-version'])
+    const updatesRows = c.ctx.slots.entries('settings.general.group.updates.item').filter(row => row.locale === NS)
+    expect(updatesRows.map(row => row.options.id)).toEqual(['current-version'])
+    expect(updatesRows[0]!.inject!().unlock).toBeUndefined()
     expect(c.ctx.slots.entries('settings.onboarding').filter(row => row.locale === NS)).toEqual([])
     const developer = developerToolsRowOf(c)
     expect(developer.hooks.developerTools).toBe(c.ctx.configForms.developerTools.enabled)
@@ -236,7 +238,8 @@ describe('ui-settings-general apply', () => {
     const versionHooks = versionInjected.hooks as CurrentVersionRowInjected['hooks']
     const unlock = versionInjected.unlock as CurrentVersionRowInjected['unlock']
     expect(versionHooks.channel).toBeDefined()
-    await unlock()
+    expect(unlock).toBeDefined()
+    await unlock!()
     expect(save).toHaveBeenCalledWith('nightly')
     const row = c.ctx.slots.entries('settings.general.group.updates.item').find(row => row.options.id === 'desktop-update-channel')!
     expect(row.options.order).toBe(100)

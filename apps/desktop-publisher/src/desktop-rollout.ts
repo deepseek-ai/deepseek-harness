@@ -35,11 +35,11 @@ export interface DesktopRolloutPlan {
  * @param directory Original attempt's retained directory.
  * @param manifest Inventory verified against GitHub identity.
  * @param environment Deployment settings loaded from the original machine.
- * @param targetChannel Target update channel to roll out; defaults to the packaged channel marker.
+ * @param targetChannel Target update channel to roll out.
  * @returns A plan permitting only the target channel metadata object.
  */
 export async function prepareDesktopRollout(directory: string, manifest: DesktopRetainedManifest,
-  environment: NodeJS.ProcessEnv, targetChannel: 'nightly' | 'stable' = manifest.source.channel): Promise<DesktopRolloutPlan> {
+  environment: NodeJS.ProcessEnv, targetChannel: 'nightly' | 'stable'): Promise<DesktopRolloutPlan> {
   const source = manifest.source
   const windows = source.target === 'win-x64'
   const platform = windows ? 'win32' : 'darwin'

@@ -58,7 +58,7 @@ export class DesktopUpdateCoordinator {
    * @param downloadResult - Once per completed download attempt, including platform preparation failures.
    * @param channel - Initial runtime channel; omitted test/local callers retain nightly.
    * @param discard - Clears settled library targets and platform resources before another channel is used.
-   * @param feedState - Samples current settings config generation and unlock status for feed headers.
+   * @param feedState - Samples current settings config generation, unlock status, and bundled dsh version for feed headers.
    */
   constructor(
     private readonly publish: (state: DesktopUpdateState) => DesktopUpdateState,
@@ -69,7 +69,11 @@ export class DesktopUpdateCoordinator {
     private readonly downloadResult?: (success: boolean, reason?: string) => void,
     private channel: DesktopUpdateChannel = 'nightly',
     private readonly discard: (updater: AppUpdater) => Promise<void> = discardDesktopUpdate,
-    private readonly feedState?: () => { readonly configVersion: DesktopUpdateConfigVersion; readonly unlocked: boolean },
+    private readonly feedState?: () => {
+      readonly configVersion: DesktopUpdateConfigVersion
+      readonly unlocked: boolean
+      readonly bundledDshVersion?: string
+    },
   ) {
     if (updater === autoUpdater) {
       // electron-updater omits this internal transport property from its public declarations.
@@ -81,11 +85,13 @@ export class DesktopUpdateCoordinator {
       )
       installDesktopUpdateProvider(updater, () => {
         const state = this.feedState?.()
+        const clientVersion = this.currentVersion()
         return {
           configVersion: state?.configVersion ?? '0',
           channel: this.channel,
           channelSource: state?.unlocked === true ? 'explicit' : 'default',
-          clientVersion: this.currentVersion(),
+          clientVersion,
+          bundledDshVersion: state?.bundledDshVersion ?? clientVersion,
         }
       })
     }

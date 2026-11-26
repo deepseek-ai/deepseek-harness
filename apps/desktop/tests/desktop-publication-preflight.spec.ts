@@ -1,6 +1,6 @@
 import { load } from 'js-yaml'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
@@ -165,11 +165,16 @@ it('verifies signatures once when publishing a stable-marked build to both chann
       }],
     ])
     const tagCalls: string[] = []
+    const publishOutput = join(root, 'publish-output')
+    let outputDuringUpload = ''
     await expect(executeDesktopChannelPublications(dual, {
-      ...env, DESKTOP_TAG_TOKEN: 'fixture-app-token',
+      ...env, DESKTOP_TAG_TOKEN: 'fixture-app-token', GITHUB_OUTPUT: publishOutput,
     }, {
       createTransport: () => ({
-        async read(key) { return objects.get(key) ?? null },
+        async read(key) {
+          outputDuringUpload = await readFile(publishOutput, 'utf8')
+          return objects.get(key) ?? null
+        },
         async put(artifact, digest) {
           const text = artifact.contents ?? 'uploaded'
           objects.set(artifact.key, { contents: text, ...digest })
@@ -180,6 +185,8 @@ it('verifies signatures once when publishing a stable-marked build to both chann
         return tagCalls.length === 1 ? 'created' : 'present'
       },
     })).rejects.toThrow(/newer version/u)
+    expect(outputDuringUpload).toContain('record=')
+    expect((await readFile(publishOutput, 'utf8')).match(/^record=/gmu)).toHaveLength(2)
     expect(tagCalls).toEqual([`owner/repo@1.0.0#${commit}:fixture-app-token`])
     expect(objects.get('dsh-desk/feeds/mac-arm64/stable-mac.yml')?.contents).toContain('version: 1.0.0')
   } finally { await rm(root, { recursive: true, force: true }) }

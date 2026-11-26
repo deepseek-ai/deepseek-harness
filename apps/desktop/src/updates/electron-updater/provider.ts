@@ -22,6 +22,7 @@ export interface DesktopFeedMetadata {
   readonly channel: DesktopUpdateChannel
   readonly channelSource: DesktopChannelSource
   readonly clientVersion: string
+  readonly bundledDshVersion: string
   readonly platform?: NodeJS.Platform
   readonly arch?: string
 }
@@ -73,6 +74,7 @@ export function buildDesktopFeedHeaders(
     'x-client-update-channel': metadata.channel,
     'x-client-channel-source': metadata.channelSource,
     'x-client-version': metadata.clientVersion,
+    'x-client-bundled-dsh-version': metadata.bundledDshVersion,
     'x-client-platform': resolveDesktopFeedPlatform(metadata.platform),
     'x-client-arch': resolveDesktopFeedArch(metadata.arch),
     'x-client-device-id': deviceId,
@@ -113,12 +115,10 @@ export class DesktopUpdateProvider extends GenericProvider {
  * Install DesktopUpdateProvider on an AppUpdater without reading app-update.yml until an active check runs.
  * @param updater - Target AppUpdater whose httpExecutor is already configured.
  * @param readMetadata - Samples current channel, unlock source, and config generation per check.
- * @param feedOptions - Optional explicit generic server options; omitted reads app-update.yml lazily.
  */
 export function installDesktopUpdateProvider(
   updater: AppUpdater,
   readMetadata: () => DesktopFeedMetadata,
-  feedOptions?: GenericProviderConfiguration,
 ): void {
   // electron-updater declares clientPromise and runtime option construction private on AppUpdater.
   const owner = updater as object as DesktopProviderUpdater
@@ -133,10 +133,6 @@ export function installDesktopUpdateProvider(
       readMetadata,
       () => owner.stagingUserIdPromise.value,
     )
-  }
-  if (feedOptions !== undefined) {
-    owner.clientPromise = Promise.resolve(create(feedOptions))
-    return
   }
   const baseGetUpdateInfoAndProvider = owner.getUpdateInfoAndProvider.bind(owner)
   owner.getUpdateInfoAndProvider = async () => {

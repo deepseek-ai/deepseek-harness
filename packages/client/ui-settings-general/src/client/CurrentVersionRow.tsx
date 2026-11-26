@@ -1,18 +1,21 @@
 /** Installed release version in General Settings, with hidden 5-click unlock in Desktop. */
 import { useState } from 'react'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DesktopChannelSnapshot, DesktopChannelSource } from './desktop-channel-source.ts'
 import css from './CurrentVersionRow.module.css'
 
 const UNLOCK_CLICKS_REQUIRED = 5
-const INACTIVE_CHANNEL: DesktopChannelSnapshot = { failed: false }
-const fallbackUseChannel = <R,>(selector: (snapshot: DesktopChannelSnapshot) => R): R => selector(INACTIVE_CHANNEL)
+/** Inert channel store supplied outside Electron so the version slot stays unconditionally registered. */
+export const INACTIVE_CHANNEL_STORE = createSnapshotStore<DesktopChannelSnapshot>({ failed: false })
+const fallbackUseChannel = <R,>(selector: (snapshot: DesktopChannelSnapshot) => R): R =>
+  selector(INACTIVE_CHANNEL_STORE.getSnapshot())
 
-/** Optional Desktop channel observation and unlock action injected only in Electron. */
+/** Channel observation and optional Desktop unlock action injected into CurrentVersionRow. */
 export interface CurrentVersionRowInjected {
   hooks: { channel: DesktopChannelSource['store'] }
-  unlock(): Promise<void>
+  unlock?: () => Promise<void>
 }
 
 /** Props for CurrentVersionRow in Web (no channel injection) and Desktop (channel injection). */

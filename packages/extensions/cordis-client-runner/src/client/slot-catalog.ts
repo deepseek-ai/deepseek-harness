@@ -4754,9 +4754,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'settings.general.group\' (client-ui-settings-general), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-settings-general CurrentVersionRow id \'current-version\'',
       'client-ui-settings-general DesktopChannelRow id \'desktop-update-channel\'',
-      'client-ui-settings-general CurrentVersionRow id \'current-version\'',
-      'client-ui-settings-general CurrentVersionRow id \'current-version\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.general.group.updates.item\', () => ctx.slots.register(\n      { name: \'settings.general.group.updates.item\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
