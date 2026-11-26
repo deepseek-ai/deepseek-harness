@@ -285,7 +285,7 @@ export class EnvironmentRegistry extends Service {
    * exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers' types
    * determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only
    * parameters from the function, so host state that belongs to one call, such as a tool call's background job,
-   * needs a definition made for that call. Defining neither contacts an environment nor requires a registration; each run names its handle.
+   * needs a definition made for that call. Defining neither contacts an environment nor requires a registration.
    * @param fn - daemon-side code receiving each call's arguments and the daemon environment.
    * @param options - result validation and host handlers.
    * @returns a function that runs `fn` at most once per call.
