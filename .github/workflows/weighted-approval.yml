@@ -112,6 +112,7 @@ jobs:
     if: always() && needs.publish-status.outputs.dismissed == 'true'
     permissions:
       contents: read
+      issues: write
       pull-requests: read
     uses: ./.github/workflows/weighted-approval-machine.yml
     # Forward only this name. The called job receives the value from its protected environment.
