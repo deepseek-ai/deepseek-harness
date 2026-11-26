@@ -159,6 +159,16 @@ describe('ImSessions records', () => {
     expect(harness.host.of(child.agent.session.id)).toBe(harness.host.get(record.key))
     expect(harness.host.of(SessionId('unknown'))).toBeUndefined()
 
+    // A side conversation of a hosted session, and its own subagents, take no chat from the source.
+    const side = await harness.ctx.agents.create({
+      sessionId: SessionId('side-1'), meta: { parentSession: record.sessionId, origin: 'side' },
+    })
+    const sideChild = await harness.ctx.agents.create({
+      sessionId: SessionId('side-child-1'), meta: { parentSession: side.agent.session.id, origin: 'subagent' },
+    })
+    expect(harness.host.of(side.agent.session.id)).toBeUndefined()
+    expect(harness.host.of(sideChild.agent.session.id)).toBeUndefined()
+
     // A parent cycle terminates instead of looping forever.
     await harness.ctx.agents.create({ sessionId: SessionId('loop-a'), meta: { parentSession: SessionId('loop-b') } })
     await harness.ctx.agents.create({ sessionId: SessionId('loop-b'), meta: { parentSession: SessionId('loop-a') } })

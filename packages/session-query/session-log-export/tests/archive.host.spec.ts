@@ -389,6 +389,22 @@ describe('session.export download endpoint', () => {
       .toBe(logText(child))
   })
 
+  it('leaves side conversations and their descendants out of the descendant logs', async () => {
+    const side: SessionLineageNode = {
+      session: { header: { ...header('side-a', sid('session-root')), origin: 'side' }, live: false, persisted: true },
+      descendants: [node('side-subagent')],
+    }
+    const api = await buildApi({
+      'session-root': log('session-root'),
+      'child-a': log('child-a', sid('session-root')),
+    }, [node('child-a'), side])
+    const response = await toFetchHandler(api).fetch(
+      new Request('http://host/api/session.export?sessionId=session-root&includeDescendants=true'),
+    )
+    expect(response.status).toBe(200)
+    expect(Object.keys(unzipSync(await responseBytes(response))).sort()).toEqual([exportLogName, subagentLogName('child-a')])
+  })
+
   it('flushes each live root and descendant immediately before reading its log', async () => {
     const staleMarker = { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } } as SessionEvent
     const durableMarker = { type: 'turn/start', seq: SessionSeq(0), time: 2, data: { turn: 1 } } as SessionEvent

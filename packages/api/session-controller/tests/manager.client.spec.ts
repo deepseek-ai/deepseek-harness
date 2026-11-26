@@ -1261,7 +1261,7 @@ describe('remaining branches', () => {
     await expect(manager.fork({ sessionId: S1, origin: 'side' })).resolves.toEqual(ok({ sessionId: S2 }))
 
     expect(remote.session.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: S1, origin: 'side' })
-    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2, origin: 'side', blank: true })
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ sessionId: S2, origin: 'side', parentSessionId: S1, blank: true })
   })
 
   it('reconciles a fork child published before workspace attachment fails', async ({ mock, remote }) => {

@@ -370,14 +370,13 @@ describe('sessions.fork', () => {
     await ctx.fiber.dispose()
   })
 
-  it('records a requested side origin on the child header', async () => {
+  it('records a requested side origin and its source on the child header', async () => {
     const ctx = await composed()
     const source = await liveAgent(ctx, 'session-source', 2)
     const response = await (await remote(ctx)).fork(request({ sessionId: source.id, atSeq: 2, origin: 'side' }))
     expect(response.ok ? null : response.error).toBeNull()
     if (!response.ok) return
-    expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({ origin: 'side', isSeeded: true })
-    expect(ctx.sessions.get(response.value.sessionId)?.header.parentSession).toBeUndefined()
+    expect(ctx.sessions.get(response.value.sessionId)?.header).toMatchObject({ origin: 'side', parentSession: source.id, isSeeded: true })
     await ctx.fiber.dispose()
   })
 

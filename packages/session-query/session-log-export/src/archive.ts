@@ -368,7 +368,8 @@ export async function* sessionLogZipEntries(
       for (const node of nodes) {
         signal?.throwIfAborted()
         const id = node.session.header.id
-        if (seen.has(id)) continue
+        // A side conversation is a separate conversation forked from this one, not delegated work.
+        if (node.session.header.origin === 'side' || seen.has(id)) continue
         seen.add(id)
         await flushLiveSessionLog(deps, id, signal)
         const content = await readSessionLogText(deps.sessionPersistence, id, signal)

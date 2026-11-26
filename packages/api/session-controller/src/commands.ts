@@ -223,7 +223,8 @@ export class SessionCommandController {
   /**
    * Create a new ordinary Session from an exact event prefix. An explicit
    * `atSeq` is the inclusive cut; an omitted value selects the latest
-   * completed-turn prefix. An open cut receives synthetic fork closers.
+   * completed-turn prefix. An open cut receives synthetic fork closers. A
+   * `side` child records the source Session as its `parentSession`.
    * @param request - source Session, optional exact event boundary, and optional child origin.
    * @returns the new Session identity.
    */
@@ -302,7 +303,8 @@ export class SessionCommandController {
         meta: {
           ...(source.header.cwd === undefined ? {} : { cwd: source.header.cwd }),
           isSeeded: true,
-          ...(request.origin === undefined ? {} : { origin: request.origin }),
+          // A side conversation records its source so the source can list its side conversations.
+          ...(request.origin === 'side' ? { origin: request.origin, parentSession: request.sessionId } : {}),
           ...(composition.agentPreset === undefined
             ? {}
             : { agentPreset: composition.agentPreset }),

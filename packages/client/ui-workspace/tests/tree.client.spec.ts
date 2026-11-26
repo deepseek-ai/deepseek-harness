@@ -127,6 +127,12 @@ describe('currentRowSessionId', () => {
     expect(currentRowSessionId(withMain(sessions, sid('grandchild')))).toBe('root')
   })
 
+  it('resolves a viewed side conversation through side and subagent sources to the main conversation', () => {
+    const side = (id: string, parentId: string): SessionSummary => ({ ...summary(id, 0), origin: 'side', parentId: sid(parentId) })
+    const sessions = list(summary('root', 1), side('side', 'root'), sub('agent', 'side'), side('nested', 'agent'))
+    expect(currentRowSessionId(withMain(sessions, sid('nested')))).toBe('root')
+  })
+
   it('stops at an absent parent or a lineage cycle', () => {
     expect(currentRowSessionId(withMain(list(sub('orphan', 'missing')), sid('orphan')))).toBe('orphan')
     expect(currentRowSessionId(withMain(list(sub('a', 'b'), sub('b', 'a')), sid('a')))).toBe('a')
