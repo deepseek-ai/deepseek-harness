@@ -16,7 +16,7 @@ import type { Migration } from './types.ts'
 
 /** `events.type` of a row that stands in for stored data this step could not read. */
 const UNREADABLE_TYPE = 'storage/unreadable'
-/** Version 1 `frames.codec` for one Zstandard frame; every other stored value was UTF-8 text. */
+/** Version 1 `frames.codec` for one Zstandard frame; version 1 allowed only this and text (`0`). */
 const FRAME_CODEC_ZSTD = 1
 const FRAME_TABLES = ['frames', 'traces', 'segments', 'segment_ancestors']
 const segmentV1 = z.object({ segment_uuid: z.string(), parent_segment_uuid: z.string().nullable(),
@@ -85,7 +85,9 @@ export const frames: Migration = {
     const damaged: number[] = []
     /**
      * Record one unreadable sequence; a row no reader decodes keeps the Segment's event count. The `time` repeats the
-     * nearest readable event, so a Session's last event time stays a real instant instead of the epoch.
+     * nearest readable event of the same Segment, so a Session's last event time stays a real instant instead of the epoch
+     * whenever that Segment has a readable event before the damaged one. The time resets to 0 at each Segment because no
+     * earlier event of a new Segment has been read yet, so a damaged first frame keeps 0 and reports the epoch.
      */
     const standIn = (segment: number, seq: number, time: number): void => {
       insert.run(segment, seq, UNREADABLE_TYPE, time, null, null, null, EVENT_CODEC_UNREADABLE, new Uint8Array())
@@ -104,6 +106,7 @@ export const frames: Migration = {
       }
       let texts: string[]
       try {
+        // Version 1's `CHECK(codec IN (0, 1))` makes every other value impossible in a database it wrote.
         const bytes = codec === FRAME_CODEC_ZSTD ? zstdDecompressSync(payload) : payload
         texts = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf8').split('\n')
       } catch (error: unknown) {

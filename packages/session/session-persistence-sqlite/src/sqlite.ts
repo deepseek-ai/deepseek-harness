@@ -270,8 +270,11 @@ export class SqliteStore {
     // Another initializer may have created the database while routing records were read.
     if (await this.databaseFileExists()) return
     if (this.recovery === 'replace') {
+      // The records stay in place: a database an operator restores from a backup finds them again. They are ignored here
+      // only because no database exists to hold their Sessions, and a later run with a restored file reads them normally.
       this.reportRecovery(`SQLite Session database "${this.path}" is missing while ${orphaned.length} routing record(s) remain; `
-        + 'a new empty database replaces it. The Sessions those records name are recoverable only from a backup')
+        + 'a new empty database replaces it. The Sessions those records name stay recoverable from a backup, because the '
+        + 'records are kept and a restored database is read through them')
       return
     }
     throw new HarnessError('The Segment database is missing but routing records remain; restore the database before using Sessions', 'SESSION_STORAGE_MISSING')
@@ -281,10 +284,10 @@ export class SqliteStore {
    * Prepare the database, which may be absent, locked by another process, or unreadable.
    *
    * An absent file becomes a new empty database with the current schema. A lock waits for the busy timeout, because the
-   * writer that holds it may commit meanwhile. A file the open still cannot use is then moved aside to
-   * `<name>.<reason>-<timestamp>` beside it, and a new empty database takes its place: the store keeps working and every
-   * stored byte stays available, so nothing is deleted. `report` refuses instead, which leaves the storage root exactly
-   * as it was for an operator to repair.
+   * writer that holds it may commit meanwhile, and then reports the lock instead of replacing a live writer's file. A
+   * damaged file is moved aside to `<name>.unreadable-<timestamp>` beside it, with the routing records that name its
+   * Sessions, and a new empty database takes its place: the store keeps working and every stored byte stays available,
+   * so nothing is deleted. `report` refuses instead, which leaves the storage root exactly as it was for an operator.
    * @returns the open database.
    * @throws {HarnessError} `SESSION_STORAGE_LOCKED` or `SESSION_STORAGE_MISSING` under `report`. A refused schema and a
    * failed upgrade propagate under either mode, because their file is readable and must not be replaced.
@@ -302,13 +305,15 @@ export class SqliteStore {
   }
 
   /**
-   * Move a damaged database and its journal aside so the next open creates a new one, keeping every stored byte.
-   * @returns whether the file was moved. A file that cannot be moved is left where it is: replacing it would discard the
+   * Move a damaged database, its journal, and the routing records that name it aside, so the next open creates a new
+   * database and lists Sessions again. Every stored byte and every record stays readable under its new name.
+   * @returns whether the files were moved. A file that cannot be moved is left where it is: replacing it would discard the
    * only copy of the damaged bytes, so the caller reports the storage fault instead.
    */
   private async setAside(): Promise<boolean> {
     // The suffix keeps the database name first, so a later recovery never overwrites an earlier one.
-    const aside = `${this.path}.unreadable-${new Date().toISOString().replace(/[:.]/gu, '-')}`
+    const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+    const aside = `${this.path}.unreadable-${stamp}`
     // The journal belongs to the bytes being moved, so a new database must not adopt it. A journal is usually absent, and
     // a move that fails for any other reason means the damaged bytes cannot be preserved.
     for (const [from, to] of [[this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`]] as const) {
@@ -317,8 +322,23 @@ export class SqliteStore {
          storage fault no test can stage without changing the process's own filesystem permissions. */
       catch (error: unknown) { if (!isAbsent(error)) return false }
     }
-    this.reportRecovery(`SQLite Session database "${this.path}" cannot be read; it was moved to "${basename(aside)}" and a `
-      + 'new empty database replaces it. The stored Sessions are in the moved file')
+    // A routing record names a Session whose history was in the moved database. Left under its `.json` name it would make
+    // `list()` refuse every call as a missing Session, so the records move with the bytes they name.
+    const records = join(this.legacyRoot, '.segments')
+    try {
+      for (const name of await readdir(records)) {
+        if (!name.endsWith('.json')) continue
+        try { await rename(join(records, name), join(records, `${name}.unreadable-${stamp}`)) }
+        /* v8 ignore next -- a record vanishes only when another process removes it, which the lease prevents here. */
+        catch (error: unknown) { if (!isAbsent(error)) throw error }
+      }
+    } catch (error: unknown) {
+      /* v8 ignore next -- the routing directory is created before the first commit, so it is absent only on a new root. */
+      if (!isAbsent(error)) throw error
+    }
+    this.reportRecovery(`SQLite Session database "${this.path}" cannot be read; it and the routing records naming its `
+      + `Sessions were moved to "${basename(aside)}". A new empty database replaces it, and the moved files hold every `
+      + 'stored Session')
     return true
   }
 

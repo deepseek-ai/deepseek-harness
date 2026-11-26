@@ -72,7 +72,7 @@ SELECT sum(input_tokens), sum(output_tokens) FROM session_llm_calls WHERE sessio
 SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type = 'model/selection' AND codec = 0;
 ```
 
-时间为 Unix 毫秒。`codec` 为 `0` 时 `data` 是 JSON 文本，SQLite 的 JSON 运算符可以直接读取；`codec` 为 `1` 时是 Zstandard 字节。存值达到 1,024 个字符且压缩后更小时会被压缩，所以最大的事件正是 JSON 运算符读不了的：从已筛选的查询里 `SELECT` 一个 `data ->> ...` 表达式，因为结果中只要有一行被压缩，整条语句就会以 `malformed JSON` 失败。加 `AND codec = 0` 跳过这些行，或改用派生表。`llm_calls`、`tool_calls`、`tool_results` 和 `compactions` 表中每个已存事件只出现一次，统计整个存储的总量时请使用这些表；对 `session_*` 视图跨所有 Session 求和，会把共享事件按继承它的 Session 各计一次。token 列是每次调用报告的用量；DSH 显示的数字仍以 `tokenUsage` projection 为准。
+时间为 Unix 毫秒。`codec` 为 `0` 时 `data` 是 JSON 文本，SQLite 的 JSON 运算符可以直接读取；`codec` 为 `1` 时是 Zstandard 字节。由损坏的帧布局升级而来的数据库还会有 `codec` 为 `255` 的行：`type` 是 `storage/unreadable`，`data` 是空 blob，每个无法解码的序号一行。这些行保持 Segment 的事件计数，出现在 `session_events` 中，也计入 `session_summary.event_count`；读取含这类行的 Session 会以存储损坏失败。存值达到 1,024 个字符且压缩后更小时会被压缩，所以最大的事件正是 JSON 运算符读不了的：从已筛选的查询里 `SELECT` 一个 `data ->> ...` 表达式，因为结果中只要有一行被压缩，整条语句就会以 `malformed JSON` 失败。加 `AND codec = 0` 跳过这些行，或改用派生表。`llm_calls`、`tool_calls`、`tool_results` 和 `compactions` 表中每个已存事件只出现一次，统计整个存储的总量时请使用这些表；对 `session_*` 视图跨所有 Session 求和，会把共享事件按继承它的 Session 各计一次。token 列是每次调用报告的用量；DSH 显示的数字仍以 `tokenUsage` projection 为准。
 
 新建或升级后的数据库在首次打开时会被分析一次，此后每次关闭都会刷新已变更表的统计信息。缺少这些信息时，SQLite 会为每个工具调用读取整个 Segment 的全部结果，而不是查找派生索引：在含 84,000 次工具调用的存储上，`session_tools` 在分析前需要 2.3 秒，分析后为 22 毫秒。
 
@@ -98,7 +98,7 @@ SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type =
 
 插件提供原有持久化服务，并在隔离的服务上下文中使用 JSONL 提供者读取旧历史。导入取得 Session 的文件租约，在数据库事务中提交元数据和事件，然后记录 SQLite 路由。write open 在交接过程中保持租约。
 
-SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`sessions` 以 JSON 保存每个 header，其字段作为生成列；header 损坏时这些列为 NULL。`segments` 记录每个 Segment 的父 Segment 和 `base_seq`，即其第一个事件的 Session 序号，也就是它在父 Segment 中的切点。`segment_paths` 为每个 Segment 列出它自身和每个祖先，以及一个不含端点的序号上界，该成员中序号小于它的事件属于此 Segment 的历史；插入 Segment 时由触发器填充，因此读取和视图都不需要递归。`events` 每个事件一行，以 `(segment_id, seq)` 为键，其中 `seq` 是 Session 序号。Segment 的事件数等于其最后一行的序号加一。读取按该键选出每个 Segment 的范围，在 JavaScript 线程上解码各行，每处理一组事件让出一次；缺失的行、未知的 codec、无法解码的字节或无效的事件都会以存储损坏拒绝读取。触发器拒绝更新和删除事件，也拒绝改动 Segment 的祖先关系。视图 `segment_extents` 和 `session_heads` 属于提供者内部：它的语句通过这两个视图读取每个 Segment 的事件数，以及每个 Session 的 `head_segment_id` 所指的 Segment。
+SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`sessions` 以 JSON 保存每个 header，其字段作为生成列；header 损坏时这些列为 NULL。`segments` 记录每个 Segment 的父 Segment 和 `base_seq`，即其第一个事件的 Session 序号，也就是它在父 Segment 中的切点。`segment_paths` 为每个 Segment 列出它自身和每个祖先，以及一个不含端点的序号上界，该成员中序号小于它的事件属于此 Segment 的历史；插入 Segment 时由触发器填充，因此读取和视图都不需要递归。`events` 每个事件一行，以 `(segment_id, seq)` 为键，其中 `seq` 是 Session 序号。Segment 的事件数等于其最后一行的序号加一。读取按该键选出每个 Segment 的范围，在 JavaScript 线程上解码各行，每处理一组事件让出一次；缺失的行、未知的 codec、无法解码的字节或无效的事件都会以存储损坏拒绝读取。触发器拒绝更新和删除事件，也拒绝改动 Segment 的祖先关系。视图 `segment_extents`、`session_heads` 和 `session_segments` 属于提供者内部：前两个供它的语句读取每个 Segment 的事件数，以及每个 Session 的 `head_segment_id` 所指的 Segment；每个 `session_*` 视图出于同样的原因连接 `session_segments`。
 
 派生表由事件填充，提供者自身从不读取。每个 `Derivation` 声明一张以 `(segment_id, seq)` 为键的表、它读取的事件类型，以及一个把事件映射为一行的纯函数；存储会添加 `session_<name>` 视图。`derivations` 记录每张表的版本，以及表落后时已处理到的 `event_no`。表缺失、表的已存版本与其 derivation 不同，或表被加入已有事件的存储（例如升级后的存储）时，会在打开后以有界事务删除并从事件重新填充。已存的表若在当前构建中没有对应的 derivation，会被保留并标记为从该处起落后，待其 derivation 恢复后补齐。derivation 抛出异常，或其表拒绝某一行时，会跳过该行，绝不会导致追加失败；每张表首次出现这类失败时记录一条指明该事件的警告。导致事务终止的失败则会使该次追加连同其事件一起失败。
 

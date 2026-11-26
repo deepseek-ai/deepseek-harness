@@ -1,7 +1,7 @@
 /** Initialization retries, automatic rollbacks, and durable parent writes. @module */
 import { randomBytes } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -10,6 +10,7 @@ import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
 import { sqliteLogs, forkSession } from './fixtures/store.ts'
+import { persistenceFixture } from './fixtures/persistence.ts'
 
 async function fixture(recovery?: 'replace' | 'report') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-recovery-'))
@@ -203,4 +204,22 @@ it.each([
   try {
     await expect(logs.start()).rejects.toMatchObject({ code: 'SESSION_STORAGE_LOCKED', cause: busy })
   } finally { execSpy.mockRestore(); prepareSpy.mockRestore() }
+})
+it('moves the routing records with a damaged database, so listing Sessions works after recovery', async () => {
+  const { root, mount } = await persistenceFixture()
+  const first = await mount('sqlite')
+  // `create` on the provider commits the Session and publishes its routing record under `.segments`.
+  const writer = await first.persistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('routed'), createdAt: 0, isSeeded: false })
+  await writer.append([{ type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }])
+  await writer.close()
+  const segmentDirectory = join(root, '.segments')
+  expect((await readdir(segmentDirectory)).some(name => name.endsWith('.json'))).toBe(true)
+  await first.context.fiber.dispose()
+  // Damage the database file, as an interrupted write or a failing disk does.
+  await writeFile(join(segmentDirectory, 'sessions.sqlite'), 'not a SQLite database')
+  const second = await mount('sqlite')
+  // A record left behind names a Session no row holds, and every later `list()` would refuse. The record moves aside with
+  // the bytes it names, so the recovered store lists again and the moved files still hold its Sessions.
+  await expect(second.persistence.list()).resolves.toEqual([])
+  expect((await readdir(segmentDirectory)).some(name => name.endsWith('.json'))).toBe(false)
 })

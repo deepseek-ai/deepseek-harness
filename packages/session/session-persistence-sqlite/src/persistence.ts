@@ -226,6 +226,12 @@ export class SqliteSessionPersistence extends SessionPersistence {
     const known = new Set([...segmented.map(entry => entry.header.id), ...omitted])
     // Routing records are named by their Session hash, so membership needs no record reads.
     const routed = new Set([...known].map(id => basename(this.markerPath(id))))
+    // The scan above may have recovered an unreadable database and moved the records aside with its bytes, so the
+    // directory is read again: a record no longer under its own name is not lost state, and a recovered store lists.
+    // The directory was readable a moment ago, so a vanished one means no record is left to report. The abort check
+    // repeats because recovery may have run since the first read.
+    options?.signal?.throwIfAborted()
+    try { names = await readdir(this.directory) } catch { names = [] }
     for (const name of names) {
       if (name.endsWith('.json') && !routed.has(name)) {
         throw new HarnessError('Recorded Segment Session is missing; restore its database before listing Sessions', 'SESSION_STORAGE_MISSING')

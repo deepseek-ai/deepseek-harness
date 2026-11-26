@@ -111,8 +111,6 @@ async function fixture(overrides: Partial<SqliteStoreOptions> = {}) {
   // SQLite's own objects are excluded: `sqlite_stat1` holds the planner statistics, not a Session object.
   const objects = (type: 'table' | 'view' | 'trigger') => rows(`SELECT name FROM sqlite_schema WHERE type = '${type}'
     AND name NOT LIKE 'sqlite_%' ORDER BY name`).map(row => row.name)
-  /** The query plan of one statement, as SQLite describes it. */
-  const plan = (sql: string) => rows(`EXPLAIN QUERY PLAN ${sql}`).map(row => String(row['detail']))
   /** Everything a refused open must leave as it found it. */
   const contents = () => ({
     schema: rows('SELECT type, name, sql FROM sqlite_schema ORDER BY name'),
@@ -120,7 +118,7 @@ async function fixture(overrides: Partial<SqliteStoreOptions> = {}) {
     application: inspect.prepare('PRAGMA application_id').get(),
     data: objects('table').map(name => rows(`SELECT * FROM "${String(name)}"`)),
   })
-  return { root, path, logs, inspect, rows, objects, contents, plan }
+  return { root, path, logs, inspect, rows, objects, contents }
 }
 
 /** The whole message of a refusal to open the database at `path`. */
