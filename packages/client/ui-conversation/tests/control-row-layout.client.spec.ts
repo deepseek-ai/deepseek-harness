@@ -29,26 +29,48 @@ function fixture() {
     observe = observe
     disconnect = disconnect
   })
+  const frames: FrameRequestCallback[] = []
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback))
+  const cancelFrame = vi.fn()
+  vi.stubGlobal('cancelAnimationFrame', cancelFrame)
   const dispose = observeControlRow(row)
   onTestFinished(dispose)
-  return { row, tools, label, sizes, observe, disconnect, dispose, resize: () => { resized() } }
+  const frame = (): void => { for (const callback of frames.splice(0)) callback(0) }
+  return {
+    row, tools, label, sizes, observe, disconnect, dispose, frames, cancelFrame, frame,
+    resize: () => { resized() },
+  }
 }
 
 describe('composer control row measurement', () => {
   it('collapses on expanded demand and remains stable across resize deliveries', () => {
-    const { row, sizes, observe, resize } = fixture()
+    const { row, sizes, observe, resize, frame } = fixture()
     expect(observe).toHaveBeenCalledTimes(3)
     expect(row.hasAttribute('data-model-compact')).toBe(true)
     for (let i = 0; i < 3; i++) {
       resize()
+      frame()
       expect(row.hasAttribute('data-model-compact')).toBe(true)
     }
     sizes.row = 428
     resize()
+    frame()
     expect(row.hasAttribute('data-model-compact')).toBe(false)
     sizes.row -= 0.25
     resize()
+    frame()
     expect(row.hasAttribute('data-model-compact')).toBe(true)
+  })
+
+  it('leaves the observed row unchanged inside a size notification and measures once in the next frame', () => {
+    const { row, sizes, resize, frames, frame } = fixture()
+    sizes.row = 428
+    resize()
+    resize()
+    expect(row.hasAttribute('data-model-compact')).toBe(true)
+    expect(frames).toHaveLength(1)
+    frame()
+    expect(row.hasAttribute('data-model-compact')).toBe(false)
   })
 
   it('remeasures changed text while collapsed without a row resize', async () => {
@@ -78,11 +100,13 @@ describe('composer control row measurement', () => {
   })
 
   it('remeasures after font loading and disconnects all notifications', async () => {
-    const { row, label, sizes, disconnect, dispose } = fixture()
+    const { row, label, sizes, disconnect, dispose, resize, cancelFrame } = fixture()
     sizes.trailing = 100
     document.fonts.dispatchEvent(new Event('loadingdone'))
     expect(row.hasAttribute('data-model-compact')).toBe(false)
+    resize()
     dispose()
+    expect(cancelFrame).toHaveBeenCalledWith(1)
     expect(disconnect).toHaveBeenCalledOnce()
     sizes.trailing = 300
     label.replaceChildren('Unobserved model')

@@ -3,7 +3,10 @@
 /**
  * Collapse the model text only when the expanded controls cannot share a line.
  * The model seat consumes the row's inherited display variables; wrapping remains
- * available when even the icon cannot fit. Each notification is measured synchronously.
+ * available when even the icon cannot fit. Mutations and font loads are measured
+ * synchronously; a size notification is measured in the next animation frame, because
+ * the toggle resizes the observed row and the browser reports a loop when that happens
+ * inside the notification.
  * @param row - Composer control row with its leading and trailing groups.
  * @returns Disconnect the layout observers and font listener.
  */
@@ -20,7 +23,13 @@ export function observeControlRow(row: HTMLElement): () => void {
       + Math.max(0, widths.length - 1) * parseFloat(style.columnGap)
     row.toggleAttribute('data-model-compact', needed > available)
   }
-  const resize = new ResizeObserver(measure)
+  let frame: number | undefined
+  const resize = new ResizeObserver(() => {
+    frame ??= requestAnimationFrame(() => {
+      frame = undefined
+      measure()
+    })
+  })
   resize.observe(row)
   for (const child of row.children) resize.observe(child)
   const mutation = new MutationObserver(measure)
@@ -32,6 +41,7 @@ export function observeControlRow(row: HTMLElement): () => void {
   fonts.addEventListener('loadingdone', measure)
   measure()
   return () => {
+    if (frame !== undefined) cancelAnimationFrame(frame)
     resize.disconnect()
     mutation.disconnect()
     fonts.removeEventListener('loadingdone', measure)
