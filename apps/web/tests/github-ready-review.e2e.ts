@@ -110,7 +110,12 @@ describe.skipIf(MODE === 'record')('web e2e: GitHub ready-for-review', () => {
     await startWithSessionPanelHidden(page)
     await page.addInitScript(() => { localStorage.setItem('dsh.locale', 'en') })
     tripwire = watchConsole(page)
+    // Startup restoration opens a blank Session in the most recent Workspace it
+    // lists. It asks the Host for a default Workspace only after listing none,
+    // so the webhook Workspace must not be registered before that response.
+    const restored = page.waitForResponse(response => response.url().includes('/api/workspace/initializeDefault'))
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    expect((await restored).ok()).toBe(true)
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 60_000)
 
