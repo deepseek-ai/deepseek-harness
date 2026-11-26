@@ -165,7 +165,8 @@ SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`
 - 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时，随后在所有平台上都以 `SESSION_STORAGE_LOCKED` 失败。SQLite 在进程退出时释放锁，所以超出超时的锁属于仍在运行的写者；替换它的文件会让该写者继续写入没有任何 Session 读取的字节。请关闭另一个进程后重新打开。
 - 恢复是把损坏的数据库移到一旁而不是删除，所以每次恢复都会在存储根留下一份完整副本。不再需要其 Session 后，请删除 `*.unreadable-*` 文件。
 - Session 无法删除，因此 fork 之间共享的存储永远不会回收。
-- `data` 较大的事件会让其最后一个溢出页留有未用空间；实测体积见[决策记录](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md)。
+- `data` 较大的事件会让其最后一页留有未用空间：4 KiB 页时为存储的 12.8%，16 KiB 页降到 12.2%。
+- 因为逐个压缩事件，存储比帧布局大。在 24.3 万事件的语料上实测为 294.3 MB，帧布局为 186.7 MB；把同样的事件按 64 个一组重新压缩得到 183.8 MB。共享压缩上下文因此能补回全部差额，但一次单事件读取需要解码整个分组：对活跃 Session 的点读慢 19 倍。行布局保留了这些读取的速度，具体数字见[决策记录](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md)。
 
 <a id="dev-note"></a>
 ### 开发备注

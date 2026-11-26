@@ -141,6 +141,20 @@ describe('schema creation', () => {
     expect(objects('view')).toEqual(expect.arrayContaining(['session_events', 'session_segments', 'session_summary']))
   })
 
+  it('creates a new database with the page size that limits padding around large values', async () => {
+    // The fixture's inspection handle opens the file first, which would fix the page size before the store sees it, so
+    // read the database the store itself created.
+    const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-page-')), path = join(root, 'sessions.sqlite')
+    const logs = sqliteLogs(path, root)
+    onTestFinished(async () => { try { await logs.close() } finally { await rm(root, { recursive: true, force: true }) } })
+    await logs.start()
+    const created = new DatabaseSync(path)
+    onTestFinished(() => { created.close() })
+    // 16 KiB pages hold more of a large `data` value before its tail pads a page, and WAL keeps that setting.
+    expect(created.prepare('PRAGMA page_size').get()).toEqual({ page_size: 16384 })
+    expect(created.prepare('PRAGMA journal_mode').get()).toEqual({ journal_mode: 'wal' })
+  })
+
   it('keeps planner statistics that match the stored rows after a Session is written', async () => {
     const { logs, path, rows } = await fixture()
     await logs.start()

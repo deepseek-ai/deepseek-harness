@@ -165,7 +165,8 @@ These constraints apply when selecting this provider.
 - An open that meets another process's write lock, such as a running upgrade, blocks its process for the five-second busy timeout and then fails with `SESSION_STORAGE_LOCKED`, on every platform. SQLite releases its locks when a process exits, so a lock that outlives the timeout belongs to a live writer; replacing its file would leave that writer appending to bytes no Session reads. Close the other process and reopen.
 - Recovery moves a damaged database aside instead of deleting it, so a storage root keeps one full copy per recovery. Remove an `*.unreadable-*` file once its Sessions are no longer needed.
 - Sessions cannot be deleted, so storage shared between forks is never reclaimed.
-- Each event with a large `data` leaves part of its last overflow page unused; the [decision record](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md) holds the measured sizes.
+- Each event with a large `data` leaves part of its last page unused: 12.8% of the store at 4 KiB pages, which a 16 KiB page reduces to 12.2%.
+- The store is larger than the frame layout because each event is compressed on its own. Measured on a 242,523-event corpus, 294.3 MB stored against 186.7 MB for frames; recompressing the same events in groups of 64 gives 183.8 MB. Sharing a compression context therefore recovers the whole difference, but it makes a single-event read decode its whole group: 19× slower for the point reads a live Session makes. The row layout keeps those reads fast, and the [decision record](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md) holds the numbers.
 
 <a id="dev-note"></a>
 ### Dev Note
