@@ -395,6 +395,18 @@ it('reports reconciliation before startup and missing service activation without
   expect(b.modules.entries.state.getSnapshot().failures).toEqual([])
 })
 
+it('publishes a plain Error by its message and keeps the class name of a specific error', async () => {
+  const b = await bench(graph(), {
+    plain: () => ({ apply() { throw new Error('apply unavailable') } }),
+    typed: () => ({ apply() { throw new TypeError('value is not a function') } }),
+  })
+  await b.modules.entries.sync(graph(row('plain'), row('typed')))
+  expect(b.modules.entries.state.getSnapshot().failures).toEqual([
+    { id: 'plain', message: 'apply unavailable' },
+    { id: 'typed', message: 'TypeError: value is not a function' },
+  ])
+})
+
 it('retries a materialization failure without publishing a partial module record', async () => {
   let broken = true
   const meta = vi.fn(stylesheet('a.css', '.a {}'))
@@ -758,7 +770,7 @@ it.each(['graph', 'rebuilt'])('preserves bootstrap and dependent fibers when a %
   for (let retry = 0; retry < 2; retry++) {
     await b.modules.entries.retry()
     expect(b.modules.entries.state.getSnapshot().failures).toEqual([
-      { id: 'bootstrap', message: 'Error: client-modules: replacing bootstrap module bootstrap requires a page reload' },
+      { id: 'bootstrap', message: 'client-modules: replacing bootstrap module bootstrap requires a page reload' },
     ])
   }
   expect([...b.ctx.loader.entries()].map(entry => entry.fiber)).toEqual(fibers)

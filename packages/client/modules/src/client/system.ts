@@ -29,6 +29,32 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Leads this module's messages; a failure quoted inside another message drops it. */
+const MESSAGE_PREFIX = 'client-modules: '
+
+/**
+ * One failed transport attempt as it reads inside the import failure.
+ * @param url - the bundle URL the attempt requested.
+ * @param error - what the transport rejected with.
+ * @returns the rejection's message, led by the URL unless the message already names it.
+ */
+function describeAttempt(url: string, error: unknown): string {
+  const message = describeError(error)
+  const reason = message.startsWith(MESSAGE_PREFIX) ? message.slice(MESSAGE_PREFIX.length) : message
+  return reason.includes(url) ? reason : `${url}: ${reason}`
+}
+
+/**
+ * Join the failed attempts of one import in the order they first occurred.
+ * @param failures - one description per attempt.
+ * @returns the descriptions separated by `; `, a repeated one written once with its count.
+ */
+function describeAttempts(failures: readonly string[]): string {
+  const counts = new Map<string, number>()
+  for (const failure of failures) counts.set(failure, (counts.get(failure) ?? 0) + 1)
+  return [...counts].map(([failure, count]) => count === 1 ? failure : `${failure} (${count} attempts)`).join('; ')
+}
+
 /** Internal module-table key for one package-local chunk. */
 function chunkId(ownerId: string, fileName: string): string {
   return `${ownerId}/${fileName}`
@@ -238,7 +264,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
       try {
         await this.loadShared(url, row)
       } catch (error) {
-        failures.push(`${url}: ${describeError(error)}`)
+        failures.push(describeAttempt(url, error))
         return 'transport-failed'
       }
       if (this.factories.has(id)) return 'registered'
@@ -264,7 +290,7 @@ export class ClientModuleSystem implements ClientModuleLoader {
     }
     if (outcome !== 'registered' && fallback !== undefined) outcome = await attempt(fallback)
     if (outcome !== 'registered') {
-      throw new Error(`client-modules: could not load "${id}": ${failures.join('; ')}`)
+      throw new Error(`client-modules: could not load "${id}": ${describeAttempts(failures)}`)
     }
     if (reload !== undefined && this.reloadTargets.get(id) === reload) {
       this.reloadTargets.delete(id)
