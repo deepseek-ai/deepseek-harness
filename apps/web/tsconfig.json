@@ -35,6 +35,7 @@
     "tests/creation-recommendations.e2e.ts",
     "tests/cordis-inspect-subagent.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
+    "tests/connector-recommendations.e2e.ts",
     "tests/deepseek-chat-import.e2e.ts",
     "tests/japanese-plugin-metadata.e2e.ts",
     "tests/context-menus.e2e.ts",

@@ -40,11 +40,6 @@
     "expected": "Look up the catalog, offer exactly one matching tool-worktree card, explain its actual scope, and do not enable or edit files before the user acts."
   },
   {
-    "id": "team",
-    "prompt": "我希望多个智能体能分工、互相沟通，还能在一个共享任务看板上协调进度。",
-    "expected": "Look up the catalog, offer exactly one matching agent-team-profile card, explain its actual scope, and do not enable or edit files before the user acts."
-  },
-  {
     "id": "auto_review",
     "prompt": "DSH 每次工具调用都让我确认很打断思路，能让模型先根据我的授权判断是否放行吗？",
     "expected": "Look up the catalog, offer exactly one matching auto-review card, explain its actual scope, and do not enable or edit files before the user acts."
@@ -70,6 +65,26 @@
     "expected": "Look up the catalog, offer exactly one matching cua-bundle card, explain its actual scope, and do not enable or edit files before the user acts."
   },
   {
+    "id": "connector_question",
+    "prompt": "DSH 能连飞书吗？我想让你直接读我飞书里的文档和消息。",
+    "expected": "Look up the catalog, offer exactly one matching @deepseek-ai/dsh-feishu card, say in one sentence that reading Feishu documents and messages works once the account is connected, and do not enable, install or edit files before the user acts."
+  },
+  {
+    "id": "connector_feishu_link",
+    "prompt": "帮我总结一下这篇飞书文档的要点：https://example.feishu.cn/docx/Q3kFj8wLm2vXyZ",
+    "expected": "Look up the catalog, offer exactly one matching @deepseek-ai/dsh-feishu card, say in one sentence that the summary can continue once the account is connected, and do not enable, install or edit files before the user acts. Do not claim to have read the document."
+  },
+  {
+    "id": "connector_notion_task",
+    "prompt": "帮我在 Notion 的「读书清单」数据库里加一条：《置身事内》，状态是在读。",
+    "expected": "Look up the catalog, offer exactly one matching @deepseek-ai/dsh-notion card, say in one sentence that the entry can be added once the account is connected, and do not enable, install or edit files before the user acts."
+  },
+  {
+    "id": "connector_linear_task",
+    "prompt": "把 Linear 上 ENG-142 这个 issue 改成 In Progress，并留言说我今天开始处理。",
+    "expected": "Look up the catalog, offer exactly one matching @deepseek-ai/dsh-linear card, say in one sentence that the issue can be updated once the account is connected, and do not enable, install or edit files before the user acts."
+  },
+  {
     "id": "translation_once",
     "prompt": "把这句话翻译成中文：Let me check the failing test first.",
     "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
@@ -92,6 +107,16 @@
   {
     "id": "decline",
     "prompt": "我想让思考内容显示中文，但先只讨论，不要推荐插件或修改配置。",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "connector_quoted",
+    "prompt": "把这段话翻译成英文：「下周起我们改用飞书文档协作，请大家提前登录飞书。」",
+    "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
+  },
+  {
+    "id": "connector_topic",
+    "prompt": "帮我写一份内部公告，通知大家下个月起团队沟通改用钉钉。",
     "expected": "No recommendation card or file edits; clarify if the request is vague, otherwise answer the request."
   },
   {

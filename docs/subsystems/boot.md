@@ -492,14 +492,16 @@ Source: [`packages/boot/plugin-market/src/index.ts`](../../packages/boot/plugin-
 
 ### `ctx.pluginRecommendations` — `PluginRecommendations`
 
-Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.
+Catalog lookups for card text and the enabling and connector installation behind the `enable_official_plugin` card.
 
 ```ts cordis-catalog
 /**
  * Read the current catalog text for a logged card.
  * @param agent - Exact live root resolved by the Gateway from the Session id.
  * @param cardId - The card's id, never a package supplied by the browser.
- * @returns the plugin's title, description and selection, or a refusal when the card names no available official plugin.
+ * @returns the plugin's title, description and selection, `connector` for an installed official connector,
+ * `installable` with the connector catalog's title and description, in every shipped language, of an official
+ * connector the profile does not hold, or a refusal when the card names no available official plugin.
  */
 @Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>
 ```

@@ -88,6 +88,13 @@ declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions/types' {
   interface DeepSeekLlmApiExtensionMap {
     dsh_session_log: DeepSeekSessionLogExtension
   }
+
+  interface DeepSeekLlmApiHeaderMap {
+    /** Sent when the requesting Session has `origin: subagent`. */
+    'x-deepseek-harness-session-type': 'subagent'
+    /** Direct creator recorded by the requesting subagent Session, including for nested subagents. */
+    'x-deepseek-harness-subagent-parent-session-id': string
+  }
 }
 
 declare module '@deepseek-ai/dsh-session/types' {

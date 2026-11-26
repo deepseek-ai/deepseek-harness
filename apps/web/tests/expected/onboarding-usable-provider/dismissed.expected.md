@@ -12,8 +12,7 @@
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: DeepSeek API
-      - img "API 密钥缺失"
+      - text: DeepSeek API 未配置 API 密钥
       - button "编辑 DeepSeek API (deepseek-official)": 编辑
   - tablist "添加方式":
     - tab "第三方模型提供商" [selected]
@@ -68,6 +67,12 @@
     - textbox "API 密钥":
       - /placeholder: 留空使用环境认证（MINIMAX_CN_API_KEY）
     - paragraph: 未检测到环境变量。请填写 API 密钥，或设置环境变量 MINIMAX_CN_API_KEY。
-    - group: 自定义设置
+    - region "模型":
+      - button "模型" [expanded]
+      - button "获取可用模型"
+      - paragraph: 正在使用内置目录的全部模型；挑选或添加模型后，只提供列表中的模型
+      - button "添加模型"
+    - region "高级设置":
+      - button "高级设置"
     - button "取消"
     - button "保存"

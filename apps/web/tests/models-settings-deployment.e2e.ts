@@ -62,7 +62,8 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
   const teamGateway = () => {
     const dialog = page.getByRole('dialog', { name: '设置' })
     const edit = page.getByRole('button', { name: '编辑 Team Gateway (team-gateway)', exact: true })
-    return { dialog, edit, card: dialog.locator('li', { has: edit }) }
+    // Found by the row's name: a row whose editor is open shows no Edit button.
+    return { dialog, edit, card: dialog.locator('li').filter({ has: page.getByText('Team Gateway', { exact: true }) }) }
   }
 
   beforeAll(async () => {
@@ -111,7 +112,8 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     // The row's form is a pi-ai profile, so its card is the pi-ai card, filled from the home patch.
     await edit.click()
     await card.getByText('已检测到环境变量（HUB_TEAM_GATEWAY_API_KEY）', { exact: true }).waitFor()
-    await card.getByText('自定义设置', { exact: true }).click()
+    await card.getByRole('button', { name: '高级设置', exact: true }).click()
+    await card.getByRole('button', { name: '模型选项 1', exact: true }).click()
     expect(await card.getByLabel('显示名称', { exact: true }).first().getAttribute('placeholder')).toBe('Team Gateway')
     expect(await card.getByLabel('API 地址', { exact: true }).getAttribute('placeholder')).toBe('https://hub.example/v1')
     expect(await card.getByLabel('API 协议', { exact: true }).inputValue()).toBe('openai-completions')
@@ -136,7 +138,7 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
     const { edit, card } = teamGateway()
     const profilePatch = await readFile(profilePatchPath(), 'utf8')
     await edit.click()
-    await card.getByText('自定义设置', { exact: true }).click()
+    await card.getByRole('button', { name: '高级设置', exact: true }).click()
     await card.getByLabel('API 地址', { exact: true }).fill('https://hub.example/v2')
     await card.getByRole('button', { name: '保存', exact: true }).click()
     await card.getByText('Configuration for "llm-pi-ai-dsh-hub-team-gateway" is overridden by a home patch or command-line overlay', { exact: true }).waitFor()
@@ -160,7 +162,7 @@ describe('web e2e: Models settings page beside a deployment\'s provider rows', (
   it('edits the person\'s own provider in the dict of the profile patch and leaves the home patch as it is', async () => {
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 My Proxy (my-proxy)', exact: true }).click()
-    await dialog.getByText('自定义设置', { exact: true }).click()
+    await dialog.getByRole('button', { name: '高级设置', exact: true }).click()
     await dialog.getByLabel('API 地址', { exact: true }).fill('https://my-proxy.example/v2')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await dialog.getByText('已保存 My Proxy (my-proxy)。', { exact: true }).waitFor()

@@ -10,6 +10,11 @@
  * Cancel refuses input only while a commit is in flight, never because the card
  * is disabled: a card the deployment cannot write to must still be dismissable.
  *
+ * The card's notes — what blocks the commit, or what the last one was refused
+ * for — render inside the row, before the actions. A sticky row stays at the
+ * scroll edge of the page while its card is taller than the page, so the notes
+ * and the actions are read together wherever the card is scrolled to.
+ *
  * @module dsh-client-ui-settings-models/client/EditorFooter
  */
 
@@ -35,33 +40,40 @@ export interface EditorFooterProps {
   onCancel: () => void
   /** Run the card's commit. */
   onSubmit: () => void
+  /** Keep the row at the scroll edge of the page while the card is taller than the page. */
+  sticky?: boolean
+  /** Notes shown before the actions: what blocks the commit or refused the last one. */
+  children?: ReactNode
 }
 
 /**
- * Render one provider card's action row.
- * @param props - the labels, commit gating, and handlers the owning card supplies.
- * @returns the cancel/commit row.
+ * Render the notes and the action row.
+ * @param props - labels, commit state, the two actions, and the card's notes as children.
+ * @returns the footer.
  */
 export function EditorFooter(props: EditorFooterProps): ReactNode {
   const { t } = props
   return (
-    <div className={styles['editorActions']}>
-      <button
-        type="button"
-        className={styles['secondaryButton']}
-        disabled={props.busy}
-        onClick={props.onCancel}
-      >
-        {t(props.cancelLabelKey ?? 'cancel')}
-      </button>
-      <button
-        type="button"
-        className={styles['primaryButton']}
-        disabled={props.submitDisabled}
-        onClick={props.onSubmit}
-      >
-        {props.busy ? t(props.submitBusyLabelKey) : t(props.submitLabelKey)}
-      </button>
+    <div className={`${styles['editorFooter']} ${props.sticky === true ? styles['editorFooterSticky'] : ''}`}>
+      <div className={styles['editorNotes']}>{props.children}</div>
+      <div className={styles['editorActions']}>
+        <button
+          type="button"
+          className={styles['secondaryButton']}
+          disabled={props.busy}
+          onClick={props.onCancel}
+        >
+          {t(props.cancelLabelKey ?? 'cancel')}
+        </button>
+        <button
+          type="button"
+          className={styles['primaryButton']}
+          disabled={props.submitDisabled}
+          onClick={props.onSubmit}
+        >
+          {props.busy ? t(props.submitBusyLabelKey) : t(props.submitLabelKey)}
+        </button>
+      </div>
     </div>
   )
 }

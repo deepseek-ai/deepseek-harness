@@ -82,3 +82,18 @@ export const ON_DEMAND_BUNDLES: readonly string[] = [
   '@deepseek-ai/dsh-subagent-claude-code',
   '@deepseek-ai/dsh-subagent-codex',
 ]
+
+/**
+ * The official connector bundles: public DSH release members published at the DSH version and installed separately.
+ * The installation does not ship them, and the plugin manager does not list one until a profile installs it.
+ * `OFFICIAL_CONNECTOR_CATALOG` embeds their metadata in this order.
+ */
+export const CONNECTOR_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-feishu',
+  '@deepseek-ai/dsh-wecom',
+  '@deepseek-ai/dsh-dingtalk',
+  '@deepseek-ai/dsh-tencent-meeting',
+  '@deepseek-ai/dsh-notion',
+  '@deepseek-ai/dsh-tencent-docs',
+  '@deepseek-ai/dsh-linear',
+]
