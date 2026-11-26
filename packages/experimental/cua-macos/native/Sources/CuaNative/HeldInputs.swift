@@ -122,7 +122,7 @@ final class HeldInputs: @unchecked Sendable {
                      down: CGEvent, up: CGEvent, post: @escaping (CGEvent) -> Void,
                      prepareRelease: ((CGEvent) throws -> Void)? = nil) throws {
         try lock.withLock {
-            try checkPointerAvailable(route: route, button: button, system: system)
+            try checkPointerAvailable(route: route, button: button, system: system, owner: owner)
             pressed.append(Press(owner: owner, recipient: route.owner,
                 mode: system ? .systemPointer(button, route.windowID) : .windowPointer(button, route.windowID), up: up, post: post, prepareRelease: prepareRelease))
             post(down)
@@ -134,11 +134,13 @@ final class HeldInputs: @unchecked Sendable {
         try lock.withLock { try checkPointerAvailable(route: route, button: button, system: system) }
     }
 
-    private func checkPointerAvailable(route: WindowRoute, button: CGMouseButton, system: Bool) throws {
+    private func checkPointerAvailable(route: WindowRoute, button: CGMouseButton, system: Bool, owner: Owner? = nil) throws {
         if pressed.contains(where: { press in
             switch press.mode {
             case .keyboard: return false
-            case .systemPointer: return true
+            case .systemPointer(let held, let window):
+                // Only explicit system downs for the same owner and window can share a hold.
+                return !system || press.owner != owner || press.recipient != route.owner || window != route.windowID || held == button
             case .windowPointer(let held, _): return system || (held == button && press.recipient == route.owner)
             }
         }) { throw Self.pointerBusy }

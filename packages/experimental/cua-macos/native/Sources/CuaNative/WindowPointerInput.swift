@@ -237,10 +237,10 @@ final class WindowPointerInput {
         try checkCancellation()
     }
 
-    static func requireReleasedButtons(isPressed: (CGMouseButton) -> Bool = {
+    static func requireReleasedButtons(_ buttons: [CGMouseButton] = [.left, .right, .center], isPressed: (CGMouseButton) -> Bool = {
         CGEventSource.buttonState(.combinedSessionState, button: $0)
     }) throws {
-        if [CGMouseButton.left, .right, .center].contains(where: isPressed) {
+        if buttons.contains(where: isPressed) {
             throw NativeFailure(code: "INPUT_BUSY", message: "Wait for the held mouse button to be released before requesting system mouse input")
         }
     }
