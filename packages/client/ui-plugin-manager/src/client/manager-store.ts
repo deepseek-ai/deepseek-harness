@@ -1559,7 +1559,8 @@ export class PluginManagerController {
 
   /**
    * Run one action under a busy key, turn its failure into the notice, and
-   * re-read the Host afterwards whatever happened.
+   * re-read the Host afterwards whatever happened. The key stays busy until
+   * that read publishes, so a control never shows the pre-action state as settled.
    */
   private async run(
     key: string,
@@ -1573,10 +1574,12 @@ export class PluginManagerController {
     } catch (error) {
       // `patch` drops the notice after disposal.
       this.patch({ notice: failedNotice(error, subject, ++this.noticeSeq) })
+    }
+    try {
+      await this.load()
     } finally {
       this.patch({ busy: this.getSnapshot().busy.filter(entry => entry !== key) })
     }
-    await this.load()
   }
 
   /**
