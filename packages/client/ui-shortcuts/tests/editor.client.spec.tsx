@@ -110,7 +110,8 @@ async function mount(options: {
     describeBinding={options.describe ?? describeBinding}
     recording={recording} t={makeTranslate(en)}
     onClose={onClose} onSaved={onSaved} onError={onError} />)
-  if (options.recording === undefined) await waitFor(() => { expect((screen.getByRole('button', { name: 'Press a shortcut' })).hasAttribute('disabled')).toBe(false) })
+  // The enabled recorder focuses itself in a passive effect, which can run after the commit that enables it.
+  if (options.recording === undefined) await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Press a shortcut' })) })
   return { registry, persistence, storage, onClose, onSaved, onError, recording, view }
 }
 const press = (code: string, extra: KeyboardEventInit = {}) => {

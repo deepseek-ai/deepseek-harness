@@ -862,9 +862,16 @@ describe('ModelsSection', () => {
       { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: true },
       { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
     ].map(({ active: _active, ...entry }) => entry)
-    face.llm.listConfigurableProviders.mockImplementation(() => Promise.resolve(remoteOk(directory)))
+    const answer = Promise.withResolvers<ReturnType<typeof remoteOk<typeof directory>>>()
+    face.llm.listConfigurableProviders.mockImplementation(() => answer.promise)
+    // The refresh first renders its loading frame over the previous directory, which still has the row.
+    let refresh: Promise<void> | undefined
+    await act(async () => { refresh = controller.load() })
     renderSlot.mockClear()
-    await act(async () => { await controller.load() })
+    await act(async () => {
+      answer.resolve(remoteOk(directory))
+      await refresh
+    })
     // The draft card is still open while its row is gone from the directory.
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
     expect(cardSeatCalls(renderSlot).some(([provider]) => provider === 'anthropic')).toBe(false)

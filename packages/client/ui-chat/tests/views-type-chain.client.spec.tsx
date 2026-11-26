@@ -16,9 +16,9 @@ describe('Chat View type chain', () => {
       // @ts-expect-error openFile accepts a path.
       void chat.openFile({ turnSeq: 1, callId: 'c' })
       // @ts-expect-error ChatView renders only its flow child.
-      chat.renderSlot('conversation.chat.node', {}, { hookContext: nodeContext })
+      void chat.renderSlot('conversation.chat.node', {}, { hookContext: nodeContext })
       // @ts-expect-error Output images belong to the Assistant node entry.
-      chat.renderSlot('conversation.chat.message.images', {})
+      void chat.renderSlot('conversation.chat.message.images', {})
       // @ts-expect-error Flow owner data cannot override the flow's render authority.
       void flowOwner.renderSlot
       // @ts-expect-error Node renderers receive the bound hook, not the viewport controller.

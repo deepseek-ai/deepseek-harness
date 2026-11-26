@@ -13,7 +13,7 @@
  * in THIS compilation unit (so the intersection reads as `never`), but every
  * consumer merges keys in and the intersection is what keeps them string-typed.
  * The rule fires on the empty-map view, not on real redundancy. */
-import type { ReactNode } from 'react'
+import type { FunctionComponent, ReactNode } from 'react'
 import type {
   BoundActions, HandleOf, PropsStore, SnapshotSelectorHook, StoreDecl,
 } from '@deepseek-ai/dsh-client-store'
@@ -436,9 +436,10 @@ export type PropsRenderSlots<S extends keyof SlotMap & string> = {
 /**
  * Registration-position component shape: the bare call signature, so composed
  * constraints check through clean parameter contravariance (FC statics add
- * covariant noise rejecting legitimate narrowings).
+ * covariant noise rejecting legitimate narrowings). The return type is React's
+ * function-component return type, so `FC`-annotated components are accepted.
  */
-export type SlotComponent<P> = (props: P) => ReactNode
+export type SlotComponent<P> = (props: P) => ReturnType<FunctionComponent>
 
 type FactoryDefOf<F extends keyof SlotFactoryMap & string> = SlotFactoryMap[F] & SlotFactoryDef
 type FactoryInputPropsOf<F extends keyof SlotFactoryMap & string> =
@@ -859,7 +860,7 @@ export type KindOptions<
  */
 type RendersCheck<C, D> =
   [keyof D & keyof SlotMap & string] extends [never] ? unknown
-    : C extends (props: infer P) => ReactNode
+    : C extends SlotComponent<infer P>
       ? ('renderSlot' extends keyof P ? unknown
         : 'renderSlotChain' extends keyof P ? unknown
           : { 'children declared but the component consumes no renderSlot': keyof D & keyof SlotMap & string })

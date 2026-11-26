@@ -1021,7 +1021,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SlotComponent',
-    declaration: 'export type SlotComponent<P> = (props: P) => ReactNode;',
+    declaration: 'export type SlotComponent<P> = (props: P) => ReturnType<FunctionComponent>;',
   },
   {
     name: 'SlotCore',

@@ -329,7 +329,7 @@ describe('UI renderer plugin', () => {
       useLayoutEffect(() => () => { throw failure }, [])
       return <div />
     })
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const renderer = ctx.get('uiRenderer')!
     let unmount!: () => void
     act(() => { unmount = renderer.mount(container()) })
@@ -342,7 +342,6 @@ describe('UI renderer plugin', () => {
     } finally {
       window.removeEventListener('error', expectedError)
     }
-    expect(error).toHaveBeenCalled()
     expect(subscriptions).toBe(0)
     expect(document.head.querySelector('style[data-path="cleanup"]')).toBeNull()
     expect(() => { act(() => { unmount() }) }).not.toThrow()

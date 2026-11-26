@@ -222,7 +222,8 @@ describe('Sidebar chat components', () => {
     snapshot = { status: 'live', value: { address: ADDRESS, reference }, failure: undefined } as never
     view.rerender(<SidebarChatTab {...props} />)
     expect(view.getByText('child conversation')).toBeTruthy()
-    expect(SessionProvider).toHaveBeenCalledWith(expect.objectContaining({ session: reference }), {})
+    // React 18 passes a legacy context object as a second argument; React 19 passes none.
+    expect(SessionProvider.mock.lastCall?.[0]).toEqual(expect.objectContaining({ session: reference }))
     expect(renderSlot).toHaveBeenCalledWith('sidebar.chat.conversation', {})
   })
 

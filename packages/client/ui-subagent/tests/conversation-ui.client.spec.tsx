@@ -987,7 +987,7 @@ describe('SubagentsSection', () => {
     expect(screen.getByText('约2年3个月')).toBeTruthy()
     expect(screen.getByText('约1年')).toBeTruthy()
 
-    await vi.advanceTimersByTimeAsync(1_000)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
     expect(screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分11秒/ })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /finished.*已完成.*123 tok · 1小时02分03秒/ })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /interrupted.*当前未运行.*123M tok · 6秒/ })).toBeTruthy()

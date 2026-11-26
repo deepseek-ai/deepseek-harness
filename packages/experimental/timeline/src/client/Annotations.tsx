@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import type { SyntheticEvent, ReactNode } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Annotation, AnnotationTarget, TimelineView } from '../records.ts'
@@ -160,7 +160,7 @@ export function AnnotationEditor({
   useEffect(() => {
     if (open) input.current?.focus()
   }, [open])
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SyntheticEvent) => {
     event.preventDefault()
     if (sending.current || busy || !text.trim()) return
     sending.current = true

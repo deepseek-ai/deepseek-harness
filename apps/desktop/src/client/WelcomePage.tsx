@@ -1,6 +1,6 @@
 /** Desktop welcome presentation; account and credential operations stay in the preload. */
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { SyntheticEvent } from 'react'
 import { Toast } from '@deepseek-ai/dsh-client-ui-primitives/src/Toast.tsx'
 import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives/src/StateDot.tsx'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
@@ -85,7 +85,7 @@ export function Welcome({ api }: { api: WelcomeApi }) {
     return () => { clearTimeout(timer) }
   }, [copyFeedback])
 
-  async function saveKey(event: FormEvent) {
+  async function saveKey(event: SyntheticEvent) {
     event.preventDefault()
     if (busyRef.current) return
     void api.analytics?.('api_key_save_click', {})

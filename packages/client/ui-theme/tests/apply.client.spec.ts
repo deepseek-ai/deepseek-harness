@@ -141,7 +141,7 @@ describe('ui-theme apply', () => {
     declareItems(b.slots)
     let host: SlotRendererHost | undefined
     b.slots.install({ renderRoot: (value) => { host = value; return null } })
-    b.slots.renderSlot('root', {})
+    void b.slots.renderSlot('root', {})
     if (host === undefined) throw new Error('the root renderer did not receive its host')
     const root = host.root
     const fiber = b.ctx.plugin({ inject: [...inject], apply })

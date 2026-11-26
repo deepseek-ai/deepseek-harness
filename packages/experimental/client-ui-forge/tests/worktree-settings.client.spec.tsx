@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** The worktree row page: the summary names the switch, and the page stages it until one explicit save. */
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { bindSnapshotSelector, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { en } from '../src/client/locales.ts'
 import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from '../src/client/worktree-settings-form.ts'
@@ -45,7 +45,7 @@ it('stages each toggle as a boolean write until save, and rejects a draft that i
     expect(scope.mutate).not.toHaveBeenCalled()
     fireEvent.click(m.rendered.getByRole('button', { name: en['settings.save'] }))
     await vi.waitFor(() => { expect(scope.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['retainOnArchive'], value: false }], 2) })
-    m.actions.edit('retainOnArchive', 'bogus')
+    act(() => { m.actions.edit('retainOnArchive', 'bogus') })
     expect(m.hooks.worktreeForm.getSnapshot()).toMatchObject({ invalid: true, retainOnArchive: { text: 'bogus', invalid: true } })
     expect(m.rendered.getByRole('switch', { name: TITLE }).getAttribute('aria-checked')).toBe('false')
   } finally {

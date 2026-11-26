@@ -68,7 +68,7 @@ async function bench() {
   let host: SlotRendererHost | undefined
   slots.install({ renderRoot: (value) => { host = value; return null } })
   const rendererHost = (): SlotRendererHost => {
-    slots.renderSlot('root', {})
+    void slots.renderSlot('root', {})
     if (host === undefined) throw new Error('the root renderer did not receive its host')
     return host
   }

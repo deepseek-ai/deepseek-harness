@@ -101,7 +101,8 @@ describe('CodeBlock', () => {
     view.rerender(<CodeBlock code="updated text" contentRef={contentRef} />)
     expect(view.container.querySelector('[data-code-block-content]')).toBe(content)
     view.unmount()
-    expect(contentRef).toHaveBeenLastCalledWith(null)
+    // React 19's development build detaches a callback ref with extra undefined arguments after null.
+    expect(contentRef.mock.lastCall?.[0]).toBeNull()
   })
 
   it('renders the highlighted tree for TypeScript', () => {
@@ -186,7 +187,7 @@ describe('CodeBlock', () => {
     // While the ok label is showing, further clicks are no-ops.
     fireEvent.click(screen.getByRole('button', { name: '复制成功' }))
     expect(writeText).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1000)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
     expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
   })
 

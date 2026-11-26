@@ -179,7 +179,8 @@ describe('SessionPanel', () => {
     expect(next.createProbeRef).not.toHaveBeenCalled()
     expect(attached).toHaveBeenCalledTimes(1)
     view.unmount()
-    expect(attached.mock.calls.at(-1)).toEqual([null])
+    // React 19's development build detaches a callback ref with extra undefined arguments after null.
+    expect(attached.mock.calls.at(-1)?.[0]).toBeNull()
   })
 
   it('renders again only when its dock probe flips', () => {
