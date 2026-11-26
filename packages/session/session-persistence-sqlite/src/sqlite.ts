@@ -315,13 +315,13 @@ export class SqliteStore {
     // a move that fails for any other reason is a real storage fault the caller must see.
     for (const [from, to] of [[this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`]] as const) {
       try { await rename(from, to) }
-      /* v8 ignore start -- a rename of an absent journal succeeds, and POSIX moves a file another handle holds open, so
-         the only failure left is a storage fault or a Windows refusal under a live writer. */
+      /* v8 ignore start -- an absent journal moves without error and POSIX renames a file another handle holds open, so
+         only Windows under a live writer, or a storage fault, reaches this handler. */
       catch (error: unknown) {
         if (isAbsent(error)) continue
         // Windows refuses to move a file another handle holds open, so a live writer keeps the file in place: that is the
         // same condition as the lock, and the caller reports it rather than replacing a database it could not preserve.
-        if (reason === 'locked') throw this.lockOutcome(error)
+        if (reason === 'locked' && process.platform === 'win32') throw this.lockOutcome(error)
         throw error
       }
       /* v8 ignore stop */

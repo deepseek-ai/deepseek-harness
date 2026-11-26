@@ -49,20 +49,24 @@ it('moves a locked database aside under replace recovery and reports the writer 
   const logs = sqliteLogs(path, root, { reportRecovery })
   onTestFinished(async () => { await logs.close().catch(() => undefined) })
   const blocker = new DatabaseSync(path)
+  let lockFailure: unknown
   try {
     blocker.exec('BEGIN IMMEDIATE')
     const clock = vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(5000)
-    try { await logs.start() } finally { clock.mockRestore() }
+    // POSIX renames a file another handle holds open, so the database moves and the open succeeds. Windows refuses the
+    // move, so the open reports the lock and leaves the file in place.
+    try { await logs.start() } catch (error: unknown) { lockFailure = error } finally { clock.mockRestore() }
   } finally { blocker.close() }
-  expect(reportRecovery).toHaveBeenCalledOnce()
   const aside = (await readdir(root)).find(name => name.includes('.locked-'))
   if (process.platform === 'win32') {
-    // Windows refuses to move a file another handle holds open, so the database stays in place and the lock is
-    // reported instead. Replacing it would need the writer gone, which is exactly what `recovery: report` assumes.
+    // Replacing needs the writer gone; a file that cannot be moved is reported and kept, so nothing is lost.
     expect(aside).toBeUndefined()
-    expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/is locked by another process/u)
+    expect(lockFailure).toMatchObject({ code: 'SESSION_STORAGE_LOCKED' })
+    expect(reportRecovery).not.toHaveBeenCalled()
     return
   }
+  expect(lockFailure).toBeUndefined()
+  expect(reportRecovery).toHaveBeenCalledOnce()
   expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/stayed locked/u)
   expect(aside).toBeDefined()
   // The replacement is usable, so the Session service stays available.
