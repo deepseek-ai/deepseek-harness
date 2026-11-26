@@ -46,7 +46,7 @@ The database lives at `<root>/.segments/sessions.sqlite`. Application callers co
 | `root` | Required | Storage root containing the database and any existing JSONL histories. |
 | `compression` | `zstd` | Encoding of existing JSONL histories and of new event rows: `zstd` compresses a large event `data` when that is smaller, `none` stores JSON text. Stored rows decode by their own codec. |
 | `listConcurrency` | `3` | Concurrent filesystem reads for legacy metadata and routing records. |
-| `recovery` | `replace` | What an open does when the database cannot be used. `replace` moves the file aside and starts an empty database, so Sessions stay available; `report` refuses and leaves the storage root for repair. |
+| `recovery` | `replace` | What an open does when the database is damaged. `replace` moves the damaged file aside and starts an empty database, so Sessions stay available and the bytes remain readable; `report` refuses and leaves the storage root for repair. A lock is never damage and is always reported. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-persistence-sqlite) documents all accepted fields.
 
@@ -162,8 +162,8 @@ These constraints apply when selecting this provider.
 - Other SQL clients cannot read `data` stored with `codec` 1 without a Zstandard function; every other column, the derived tables and small events remain readable.
 - The derived tables are the built-in four: no setting turns them off, and no service registers a `Derivation` from another plugin.
 - Processes of different builds must not write one database at the same time. An earlier build fails once a later one upgrades the schema. A derived table is caught up when a build that holds its derivation opens the database; if a process of a build without that derivation is still running then and appends afterwards, the rows of those events are missing until the table's version changes.
-- An open that meets another process's write lock, such as a running upgrade, blocks its process for the five-second busy timeout. Under the default `recovery: replace` it then moves the locked file aside and starts an empty database, which leaves the locking writer's later commits in the moved file; set `recovery: report` for a storage root that another process may write.
-- Recovery moves a database aside instead of deleting it, so a storage root keeps one full copy per recovery. Remove an `*.unreadable-*`, `*.locked-*`, or `*.orphaned-*` file once its Sessions are no longer needed.
+- An open that meets another process's write lock, such as a running upgrade, blocks its process for the five-second busy timeout and then fails with `SESSION_STORAGE_LOCKED`, on every platform. SQLite releases its locks when a process exits, so a lock that outlives the timeout belongs to a live writer; replacing its file would leave that writer appending to bytes no Session reads. Close the other process and reopen.
+- Recovery moves a damaged database aside instead of deleting it, so a storage root keeps one full copy per recovery. Remove an `*.unreadable-*` file once its Sessions are no longer needed.
 - Sessions cannot be deleted, so storage shared between forks is never reclaimed.
 - Each event with a large `data` leaves part of its last overflow page unused; the [decision record](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md) holds the measured sizes.
 

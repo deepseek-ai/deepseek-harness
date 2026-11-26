@@ -64,19 +64,15 @@ function isUnreadable(error: unknown): boolean {
   const code = (error as { errcode?: unknown } | null)?.errcode
   return typeof code === 'number' && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(code & 0xff)
 }
-/**
- * Why a database file is replaced. Only these two states replace the file; a refused schema and a failed upgrade keep
- * theirs, because their bytes are readable and only a different build can interpret them.
- */
-type ReplaceReason = 'unreadable' | 'locked' | 'orphaned'
 /** How an open recovers a database it cannot use; see {@link SqliteStoreOptions.recovery}. */
 export type Recovery = 'replace' | 'report'
 /**
- * One open that must replace its file, so the recovery can tell a file to move aside from a failure that leaves a
- * usable file.
+ * One open that must replace its damaged file. Only damage is recoverable this way: a lock means a live writer, a
+ * refused schema means a file another build can read, and a failed upgrade means bytes to restore, so those keep their
+ * file and report the reason instead.
  */
 class ReplaceDatabase extends Error {
-  constructor(readonly reason: ReplaceReason, readonly wrapped: Error) {
+  constructor(readonly wrapped: Error) {
     super(wrapped.message, { cause: wrapped })
     this.name = 'ReplaceDatabase'
   }
@@ -298,58 +294,48 @@ export class SqliteStore {
     catch (error: unknown) {
       // Anything else is a file this build cannot interpret, which only an operator or another build can resolve.
       if (!(error instanceof ReplaceDatabase)) throw error
-      /* v8 ignore next 3 -- POSIX moves a locked file, so a refused move happens only on Windows under a live writer. */
-      try { await this.setAside(error.reason) }
-      // A file that cannot be moved aside must not replace itself: report why, never the internal tag.
-      catch (aside: unknown) { throw aside instanceof ReplaceDatabase ? aside.wrapped : aside }
+      // A file that cannot be moved aside is not replaced: its bytes are the only copy of the damaged history.
+      /* v8 ignore next -- reached only when the move of a damaged file fails, which needs an unwritable volume. */
+      if (!await this.setAside()) throw error.wrapped
       return await this.openDatabase()
     }
   }
 
   /**
-   * Move a database and its journal aside so the next open creates a new one, keeping every stored byte.
-   * @param reason - why the file is replaced; it names the new file's suffix and the report.
-   * @returns whether the file was moved; an already-absent file needs no move.
+   * Move a damaged database and its journal aside so the next open creates a new one, keeping every stored byte.
+   * @returns whether the file was moved. A file that cannot be moved is left where it is: replacing it would discard the
+   * only copy of the damaged bytes, so the caller reports the storage fault instead.
    */
-  private async setAside(reason: ReplaceReason): Promise<boolean> {
+  private async setAside(): Promise<boolean> {
     // The suffix keeps the database name first, so a later recovery never overwrites an earlier one.
-    const aside = `${this.path}.${reason}-${new Date().toISOString().replace(/[:.]/gu, '-')}`
+    const aside = `${this.path}.unreadable-${new Date().toISOString().replace(/[:.]/gu, '-')}`
     // The journal belongs to the bytes being moved, so a new database must not adopt it. A journal is usually absent, and
-    // a move that fails for any other reason is a real storage fault the caller must see.
+    // a move that fails for any other reason means the damaged bytes cannot be preserved.
     for (const [from, to] of [[this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`]] as const) {
       try { await rename(from, to) }
-      /* v8 ignore start -- an absent journal moves without error and POSIX renames a file another handle holds open, so
-         only Windows under a live writer, or a storage fault, reaches this handler. */
-      catch (error: unknown) {
-        if (isAbsent(error)) continue
-        // Windows refuses to move a file another handle holds open, so a live writer keeps the file in place: that is the
-        // same condition as the lock, and the caller reports it rather than replacing a database it could not preserve.
-        if (reason === 'locked' && process.platform === 'win32') throw this.lockOutcome(error)
-        throw error
-      }
-      /* v8 ignore stop */
+      /* v8 ignore next -- a journal is usually absent, and a volume that refuses the move of a readable file is a
+         storage fault no test can stage without changing the process's own filesystem permissions. */
+      catch (error: unknown) { if (!isAbsent(error)) return false }
     }
-    this.reportRecovery(reason === 'unreadable'
-      ? `SQLite Session database "${this.path}" cannot be read; it was moved to "${basename(aside)}" and a new empty `
-        + 'database replaces it. The stored Sessions are in the moved file'
-      : `SQLite Session database "${this.path}" stayed locked past the busy timeout and its file was moved to `
-        + `"${basename(aside)}" for a new empty database. A writer that still held it keeps writing to the moved file, `
-        + 'so its later commits are not in the new database')
+    this.reportRecovery(`SQLite Session database "${this.path}" cannot be read; it was moved to "${basename(aside)}" and a `
+      + 'new empty database replaces it. The stored Sessions are in the moved file')
     return true
   }
 
   /**
-   * Decide what one lock past the busy timeout means. SQLite holds its locks as operating-system locks, which a process
-   * releases when it exits, so a surviving lock belongs to a live writer. Under `replace` its file is moved aside,
-   * which leaves the writer's later commits in the moved file instead of the new database.
+   * Report one lock past the busy timeout.
+   *
+   * SQLite holds its locks as operating-system locks, which the kernel releases when a process exits, so a lock that
+   * outlasts the busy timeout belongs to a live writer. Replacing its file would not stop that writer: it would keep
+   * writing to the moved bytes while the new database started empty, splitting one history in two. Every platform
+   * therefore reports the lock rather than replacing, and only an operator decides that the writer is gone.
    * @param error - the busy failure.
    * @returns the error to throw.
    */
   private lockOutcome(error: unknown): Error {
-    const locked = new HarnessError(`SQLite Session database "${this.path}" is locked by another process, which may be `
-      + 'writing it; close every other DSH process that uses this storage root and open the Session again',
+    return new HarnessError(`SQLite Session database "${this.path}" is locked by another process, which may be writing it; `
+      + 'close every other DSH process that uses this storage root and open the Session again',
     'SESSION_STORAGE_LOCKED', { cause: asError(error) })
-    return this.recovery === 'replace' ? new ReplaceDatabase('locked', locked) : locked
   }
 
   /** Open, create, and validate the configured database. */
@@ -403,7 +389,7 @@ export class SqliteStore {
       // Tagged so the caller replaces exactly this file, and only this file.
       if (isUnreadable(error)) {
         const corruption = this.corruption(`SQLite persistence database "${this.path}" is unreadable`, error)
-        throw this.recovery === 'replace' ? new ReplaceDatabase('unreadable', corruption) : corruption
+        throw this.recovery === 'replace' ? new ReplaceDatabase(corruption) : corruption
       }
       throw error
     }

@@ -13,7 +13,7 @@ English | [中文](guide.zh.md)
 
 A database written by an earlier release has schema version 1. The first open upgrades it to version 2 in one transaction; a failed upgrade leaves the file unchanged. Earlier releases refuse a version 2 database. Only profiles that replaced the default JSONL provider with this package are affected.
 
-The provider also gains a `recovery` setting. It defaults to `replace`: an open that cannot use the database moves the file aside to `<name>.<reason>-<timestamp>` beside it and starts an empty one, so the Sessions stay available and no stored byte is deleted. Set `recovery: report` to keep the earlier refusal and repair the storage root by hand.
+The provider also gains a `recovery` setting. It defaults to `replace`: an open that finds a damaged database moves the file aside to `<name>.unreadable-<timestamp>` beside it and starts an empty one, so the Sessions stay available and no stored byte is deleted. Set `recovery: report` to keep the earlier refusal and repair the storage root by hand. A database another process holds locked is never replaced; it fails with the new `SESSION_STORAGE_LOCKED` after the busy timeout, and closing that process is the remedy.
 
 ## Migration
 

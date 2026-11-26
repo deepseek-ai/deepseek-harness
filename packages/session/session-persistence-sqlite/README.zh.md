@@ -46,7 +46,7 @@ fork 创建先排空本进程中的父写者，再在一个事务内引用已持
 | `root` | 必填 | 包含数据库和现有 JSONL 历史的存储根目录。 |
 | `compression` | `zstd` | 现有 JSONL 历史和新事件行的编码：`zstd` 在事件的 `data` 较大且压缩后更小时压缩它，`none` 存储 JSON 文本。已存的行按各自的 codec 解码。 |
 | `listConcurrency` | `3` | 旧历史元数据及路由记录的并发文件系统读取数。 |
-| `recovery` | `replace` | 数据库无法使用时的打开行为。`replace` 把文件移到一旁并开始一个空数据库，Session 仍然可用；`report` 拒绝打开，把存储根留给人工修复。 |
+| `recovery` | `replace` | 数据库已损坏时的打开行为。`replace` 把损坏的文件移到一旁并开始一个空数据库，Session 仍然可用，字节仍可读回；`report` 拒绝打开，把存储根留给人工修复。锁定永远不算损坏，始终直接报告。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-persistence-sqlite)记录了所有可用字段。
 
@@ -162,8 +162,8 @@ SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`
 - 其他 SQL 客户端没有 Zstandard 函数时无法读取以 `codec` 1 存储的 `data`；其余各列、派生表和小事件仍可读取。
 - 派生表即内置的四张：没有设置可以关闭它们，也没有服务可供其他插件注册 `Derivation`。
 - 不同构建的进程不得同时写入同一个数据库。较新的构建升级 schema 之后，较早的构建会失败。持有某个 derivation 的构建打开数据库时会补齐对应的派生表；如果此时缺少该 derivation 的构建仍有进程在运行并在此后继续追加，这些事件的派生行会一直缺失，直到该表的版本变化。
-- 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时。在默认的 `recovery: replace` 下，随后会把被锁住的文件移到一旁并开始一个空数据库，因此持锁写者之后的提交会留在被移走的文件里；如果存储根可能被其他进程写入，请设置 `recovery: report`。
-- 恢复是把数据库移到一旁而不是删除，所以每次恢复都会在存储根留下一份完整副本。不再需要其 Session 后，请删除 `*.unreadable-*`、`*.locked-*` 或 `*.orphaned-*` 文件。
+- 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时，随后在所有平台上都以 `SESSION_STORAGE_LOCKED` 失败。SQLite 在进程退出时释放锁，所以超出超时的锁属于仍在运行的写者；替换它的文件会让该写者继续写入没有任何 Session 读取的字节。请关闭另一个进程后重新打开。
+- 恢复是把损坏的数据库移到一旁而不是删除，所以每次恢复都会在存储根留下一份完整副本。不再需要其 Session 后，请删除 `*.unreadable-*` 文件。
 - Session 无法删除，因此 fork 之间共享的存储永远不会回收。
 - `data` 较大的事件会让其最后一个溢出页留有未用空间；实测体积见[决策记录](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md)。
 
