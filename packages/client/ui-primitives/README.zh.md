@@ -221,7 +221,7 @@ Markdown 链接图标保留完整图标框及内部留白。与前文的外间�
 
 -----
 
-`QuotePreview` 在 composer 与已发送消息之间共享紧凑 quote 摘录和仅截断时显示的行内 HoverCard。原文弹层按文本内容确定宽度，最大为 300px，并限制在视口内。两处均展示原文，除非所有者提供 `QuoteSummary`：此时行内摘录改为显示其 label 和 body，辅助技术以 title 和可选的 detail 代替 label 朗读，每次悬停时弹层显示其 title、可选的 detail 和 body。可编辑草稿可以提供本地化的整条 quote 删除操作。quote 加入最近的 `HoverCardGroup`，使原文弹层互斥显示。该 primitive 不负责识别或导航。
+`QuotePreview` 在 composer 与已发送消息之间共享紧凑 quote 摘录及其行内 HoverCard。单行摘录由 CSS 省略，无论是否被截断，每次悬停都会打开弹层，因此挂载 quote 时不读取布局。原文弹层按文本内容确定宽度，最大为 300px，并限制在视口内。两处均展示原文，除非所有者提供 `QuoteSummary`：此时行内摘录改为显示其 label 和 body，辅助技术以 title 和可选的 detail 代替 label 朗读，弹层显示其 title、可选的 detail 和 body。可编辑草稿可以提供本地化的整条 quote 删除操作。quote 加入最近的 `HoverCardGroup`，使原文弹层互斥显示。该 primitive 不负责识别或导航。
 
 `MarkdownDelegate.getTriggerProps` 接收明确的文件、链接或原图目标并返回手势 props。文件路径与行号通过回调传递。文件引用可提供 `contextMenuProps`；`ImageLightbox.contextMenuProps` 转发原图手势。图片菜单持有焦点时负责 Escape 与 Tab，先返回预览再关闭预览。
 

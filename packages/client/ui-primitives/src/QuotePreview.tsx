@@ -1,6 +1,5 @@
 /** Shared compact presentation for draft and sent text quotes. */
 
-import { useLayoutEffect, useRef, useState } from 'react'
 import type { JSX, MouseEvent as ReactMouseEvent } from 'react'
 import { IconCloseOutlineRegular } from './icons/index.tsx'
 import { HoverCard } from './HoverCard.tsx'
@@ -39,9 +38,9 @@ export interface QuoteSummary {
 
 /** Presentation inputs for one compact quote excerpt. */
 export interface QuotePreviewProps {
-  /** Exact selected text rendered inline and exposed in a popover while clipped, unless `summary` replaces it. */
+  /** Exact selected text rendered inline on one ellipsized line and in full in the popover, unless `summary` replaces it. */
   readonly text: string
-  /** Readable replacement for `text`: its label renders inline and its popover opens on every hover. */
+  /** Readable replacement for `text`: its label and body render inline and the popover shows its fields. */
   readonly summary?: QuoteSummary | undefined
   /** Composer-only removal action; omit for inert sent quotes. */
   readonly removal?: QuotePreviewRemoval | undefined
@@ -49,27 +48,12 @@ export interface QuotePreviewProps {
 
 /**
  * Render one width-capped quote preview shared by editable drafts and sent messages.
- * Clipped excerpts open a content-sized, scrollable popover that fits within the viewport.
+ * CSS ellipsizes the single inline line; hovering opens a content-sized, scrollable popover that fits within the viewport.
+ * The popover opens whether or not the line is clipped, so mounting a quote reads no layout.
  * @param props - selected text, optional summary, and optional localized removal action.
- * @returns a non-navigating quote preview with a full-text popover only while clipped, or a summary popover.
+ * @returns a non-navigating quote preview with a full-text or summary popover.
  */
 export function QuotePreview({ text, summary, removal }: QuotePreviewProps): JSX.Element {
-  const sourceRef = useRef<HTMLSpanElement | null>(null)
-  const [truncated, setTruncated] = useState(false)
-  useLayoutEffect(() => {
-    const source = sourceRef.current
-    /* v8 ignore next -- the ref is attached before layout effects run. */
-    if (source === null) return
-    const measure = () => {
-      const clipped = source.scrollWidth > source.clientWidth
-      setTruncated(clipped)
-    }
-    measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(source)
-    return () => { observer.disconnect() }
-  }, [text])
   const remove = (event: ReactMouseEvent<HTMLButtonElement>): void => {
     event.preventDefault()
     event.stopPropagation()
@@ -100,7 +84,7 @@ export function QuotePreview({ text, summary, removal }: QuotePreviewProps): JSX
             <IconCloseOutlineRegular size={12} className={css.closeMark} />
           </button>
         )}
-      <span ref={sourceRef} className={css.source} data-quote-preview-text="">
+      <span className={css.source} data-quote-preview-text="">
         {summary === undefined ? text : (
           <>
             <span aria-hidden="true">{summary.label}</span>
@@ -117,7 +101,6 @@ export function QuotePreview({ text, summary, removal }: QuotePreviewProps): JSX
       grouped
       fitContent
       openDelayMs={0}
-      disabled={summary === undefined && !truncated}
       anchor={preview}
       content={summary === undefined
         ? <span className={css.popoverText} data-quote-popover="" aria-hidden="true">{text}</span>

@@ -4,17 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { QuotePreview } from '@deepseek-ai/dsh-client-ui-primitives'
 import { POINTER_GRACE_MS } from '../src/pointer-grace.ts'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('QuotePreview', () => {
-  it('measures clipping without a ResizeObserver implementation', () => {
-    vi.stubGlobal('ResizeObserver', undefined)
-    try {
-      const view = render(<QuotePreview text="static excerpt" />)
-      expect(view.container.querySelector('[data-quote-preview-text]')?.textContent).toBe('static excerpt')
-    } finally { vi.unstubAllGlobals() }
-  })
-
   it('renders the 16-pixel quote mark with its inherited fill color', () => {
     const { container } = render(<QuotePreview text="icon text" />)
     const icon = container.querySelector('svg')
@@ -27,7 +19,7 @@ describe('QuotePreview', () => {
     expect(paths.map(path => path.getAttribute('fill'))).toEqual(['currentColor', 'currentColor'])
   })
 
-  it('renders the same inert preview without a removal action', () => {
+  it('renders the same non-interactive preview without a removal action', () => {
     render(<QuotePreview text="selected text" />)
     const quote = screen.getByText('selected text').closest<HTMLElement>('[data-quote-preview]')!
     expect(quote.getAttribute('data-quote-preview')).toBe('')
@@ -35,62 +27,23 @@ describe('QuotePreview', () => {
     expect(quote.getAttribute('tabindex')).toBeNull()
     expect(quote.getAttribute('title')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
-    fireEvent.pointerEnter(quote)
-    fireEvent.focus(quote)
-    expect(document.querySelector('[data-quote-popover]')).toBeNull()
   })
 
-  it('uses the shared hover card only while the excerpt is clipped', async () => {
-    const scrollWidth = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(200)
-    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
-    try {
-      render(<QuotePreview text="a complete clipped excerpt" />)
-      const quote = screen.getByText('a complete clipped excerpt').closest<HTMLElement>('[data-quote-preview]')!
-      fireEvent.pointerEnter(quote)
-      await waitFor(() => { expect(document.querySelector('[data-quote-popover]')?.textContent).toBe('a complete clipped excerpt') })
-    } finally {
-      scrollWidth.mockRestore()
-      clientWidth.mockRestore()
-    }
-  })
-
-  it('remeasures clipping and disconnects its resize observers', async () => {
-    let clipped = true
-    const observers: { callback: ResizeObserverCallback; observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = []
-    vi.stubGlobal('ResizeObserver', class {
-      observe = vi.fn()
-      disconnect = vi.fn()
-      constructor(callback: ResizeObserverCallback) { observers.push({ callback, observe: this.observe, disconnect: this.disconnect }) }
-    })
+  it('opens the full-text hover card on every hover without reading layout', async () => {
     const scrollWidth = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
-      .mockImplementation(() => clipped ? 200 : 100)
-    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
-    try {
-      const { unmount } = render(<QuotePreview text="resized excerpt" />)
-      const quote = screen.getByText('resized excerpt').closest<HTMLElement>('[data-quote-preview]')!
-      fireEvent.pointerEnter(quote)
-      await waitFor(() => { expect(document.querySelector('[data-quote-popover]')).not.toBeNull() })
-      const source = quote.querySelector('[data-quote-preview-text]')!
-      const measure = observers.find(observer => observer.observe.mock.calls.some(([target]) => target === source))!
-      clipped = false
-      act(() => { measure.callback([], {} as ResizeObserver) })
-      expect(document.querySelector('[data-quote-popover]')).toBeNull()
-      unmount()
-      expect(observers.every(observer => observer.disconnect.mock.calls.length > 0)).toBe(true)
-    } finally {
-      scrollWidth.mockRestore()
-      clientWidth.mockRestore()
-      vi.unstubAllGlobals()
-    }
+    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+    render(<QuotePreview text="a complete excerpt" />)
+    fireEvent.pointerEnter(screen.getByText('a complete excerpt').closest<HTMLElement>('[data-quote-preview]')!)
+    await waitFor(() => { expect(document.querySelector('[data-quote-popover]')?.textContent).toBe('a complete excerpt') })
+    expect(scrollWidth).not.toHaveBeenCalled()
+    expect(clientWidth).not.toHaveBeenCalled()
   })
 
-  it('keeps the clipped popover open while the pointer moves onto it', () => {
+  it('keeps the popover open while the pointer moves onto it', () => {
     vi.useFakeTimers()
-    const scrollWidth = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(200)
-    const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(100)
     try {
-      render(<QuotePreview text="a hoverable clipped excerpt" />)
-      const quote = screen.getByText('a hoverable clipped excerpt').closest<HTMLElement>('[data-quote-preview]')!
+      render(<QuotePreview text="a hoverable excerpt" />)
+      const quote = screen.getByText('a hoverable excerpt').closest<HTMLElement>('[data-quote-preview]')!
       fireEvent.pointerEnter(quote)
       act(() => { vi.advanceTimersByTime(0) })
       const popover = document.querySelector<HTMLElement>('[data-quote-popover]')!.parentElement!
@@ -106,13 +59,11 @@ describe('QuotePreview', () => {
       act(() => { vi.advanceTimersByTime(POINTER_GRACE_MS) })
       expect(document.querySelector('[data-quote-popover]')).toBeNull()
     } finally {
-      scrollWidth.mockRestore()
-      clientWidth.mockRestore()
       vi.useRealTimers()
     }
   })
 
-  it('shows an owner summary inline and in a popover that opens without clipping', async () => {
+  it('shows an owner summary inline and in its popover', async () => {
     const text = '## User Comment 1\nFile: src/index.ts\nComment:\nrename this'
     const view = render(<QuotePreview text={text} summary={{ label: 'index.ts L78', title: 'src/index.ts', detail: 'L78', body: 'rename this' }} />)
     const quote = view.container.querySelector<HTMLElement>('[data-quote-preview]')!

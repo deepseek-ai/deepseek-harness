@@ -1,6 +1,6 @@
 /** Strict per-session header/body content inserted into the resident conversation layout. */
 
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { Button, IconEllipsisOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -118,21 +118,18 @@ export function ConversationSessionHeader({
   const hasEntryActions = useEntryActions(registered => registered)
   const showTabs = !hideChrome && tabs.length > 1
   const tabRow = useRef<HTMLDivElement>(null)
-  const [visibleViewLimit, setVisibleViewLimit] = useState(1)
-  // Observe only the available row width; individual tabs are not measured.
-  useLayoutEffect(() => {
+  // Until the first delivery every preferred View stays outside, which is already final when they fit.
+  // A narrow row may show them for one frame before the delivery folds the rest into More.
+  const [visibleViewLimit, setVisibleViewLimit] = useState(Number.POSITIVE_INFINITY)
+  // Observe only the available row width. Nothing here reads layout synchronously: during a Session
+  // switch, that read would force layout of the whole newly mounted page inside this commit.
+  useEffect(() => {
     const row = tabRow.current
-    if (row === null || !hasEntryActions) return
-    const updateLimit = (width: number): void => {
-      setVisibleViewLimit(Math.max(1, Math.floor((width - 48) / 120)))
-    }
-    updateLimit(row.clientWidth)
-    if (typeof ResizeObserver === 'undefined') return
-    // The row has padding but no border or scrollbar. Its delivered border-box width,
-    // rounded like clientWidth, preserves the tab thresholds without forcing layout again.
+    if (row === null || !hasEntryActions || typeof ResizeObserver === 'undefined') return
+    // The row has padding but no border or scrollbar, so its rounded border-box width equals clientWidth.
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        for (const size of entry.borderBoxSize) updateLimit(Math.round(size.inlineSize))
+        for (const size of entry.borderBoxSize) setVisibleViewLimit(Math.max(1, Math.floor((Math.round(size.inlineSize) - 48) / 120)))
       }
     })
     observer.observe(row, { box: 'border-box' })
