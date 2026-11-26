@@ -62,7 +62,7 @@
     "@deepseek-ai/dsh-subprocess-local": "workspace:*"
   },
   "dependencies": {
-    "@deepseek-ai/libreoffice-kit": "0.2.3",
+    "@deepseek-ai/libreoffice-kit": "0.2.4",
     "@deepseek-ai/schemastery": "workspace:~",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",

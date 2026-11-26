@@ -1127,15 +1127,19 @@ def smoke_sdk_office(executable: Path) -> None:
         assert not (office.parent / "primary").exists(), "Office download unexpectedly prepared the authoring environment"
         adapter = office / "node_modules/@deepseek-ai/libreoffice-kit/package.json"
         native = stem.removeprefix("deepseek-harness-sdk-runtime-").replace("win-", "win32-").replace("macos-", "darwin-")
+        if native.startswith("linux-"):
+            native = f"{native}-glibc"
         declared = json.loads(adapter.read_text(encoding="utf-8")).get("optionalDependencies", {})
-        selected = native if f"@deepseek-ai/libreoffice-kit-{native}" in declared else "wasm"
-        expected_backend = "wasm" if selected == "wasm" else "native"
+        expected_package = f"@deepseek-ai/libreoffice-kit-{native}"
+        if expected_package not in declared:
+            raise AssertionError(f"Kit manifest must declare native engine {expected_package}: {sorted(declared)}")
+        expected_backend = "native"
         engines = [
-            json.loads(manifest.read_text())["engine"]["kind"]
+            (manifest.parent.name, json.loads(manifest.read_text())["engine"]["kind"])
             for manifest in (office / "node_modules/@deepseek-ai").glob("libreoffice-kit-*/prebuilds.json")
         ]
-        if engines != [expected_backend]:
-            raise AssertionError(f"Office sidecar must contain only {expected_backend}: {engines}")
+        if engines != [(f"libreoffice-kit-{native}", expected_backend)]:
+            raise AssertionError(f"Office sidecar must contain only {expected_package} ({expected_backend}): {engines}")
         plugin = root / "office.mjs"
         shutil.copy2(Path(__file__).resolve().parent / "fixtures/python-sdk-office.mjs", plugin)
         documents = checks["copy_documents"](root)
