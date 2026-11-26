@@ -1709,7 +1709,7 @@ describe('Weighted approval machine workflow', () => {
       pull_number: { description: 'Open pull request to re-evaluate', type: 'string', required: true },
     })
     expect(publisher.on.workflow_call).toEqual({
-      secrets: { DSH_APPROVAL_BOT_TOKEN: { description: expect.any(String), required: true } },
+      secrets: { DSH_APPROVAL_BOT_TOKEN: { description: "Approval credential supplied by the called job's protected environment", required: true } },
     })
     expect(job.environment).toBe('weighted-approval')
     expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
