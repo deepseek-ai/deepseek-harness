@@ -418,9 +418,10 @@ export class ImSessionHost implements ImSessions {
       const record = this.hosted(id)
       if (record) return record
       seen.add(id)
-      // Only a delegated subagent inherits its creator's chat; a side conversation was never delegated one.
+      // Only a delegated subagent inherits its creator's chat; a side conversation or an ordinary fork that
+      // retained its source id was never delegated one.
       const header: SessionHeader | undefined = this.ctx.agents.get(id)?.session.header
-      id = header?.origin === 'side' ? undefined : header?.parentSession
+      id = header?.origin === 'subagent' ? header.parentSession : undefined
     }
     return undefined
   }

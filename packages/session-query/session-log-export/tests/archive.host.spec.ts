@@ -63,7 +63,7 @@ function logText(stored: StoredLog): string {
 }
 
 function node(id: string, ...descendants: SessionLineageNode[]): SessionLineageNode {
-  return { session: { header: header(id, sid('session-root')), live: false, persisted: true }, descendants }
+  return { session: { header: { ...header(id, sid('session-root')), origin: 'subagent' }, live: false, persisted: true }, descendants }
 }
 
 /** One durable image object served by the fake attachment store. */
@@ -389,15 +389,20 @@ describe('session.export download endpoint', () => {
       .toBe(logText(child))
   })
 
-  it('leaves side conversations and their descendants out of the descendant logs', async () => {
+  it('leaves side conversations, ordinary forks and their descendants out of the descendant logs', async () => {
     const side: SessionLineageNode = {
       session: { header: { ...header('side-a', sid('session-root')), origin: 'side' }, live: false, persisted: true },
       descendants: [node('side-subagent')],
     }
+    // A fork created before ordinary forks stopped recording their source keeps the id without an origin.
+    const fork: SessionLineageNode = {
+      session: { header: header('fork-a', sid('session-root')), live: false, persisted: true },
+      descendants: [node('fork-subagent')],
+    }
     const api = await buildApi({
       'session-root': log('session-root'),
       'child-a': log('child-a', sid('session-root')),
-    }, [node('child-a'), side])
+    }, [node('child-a'), side, fork])
     const response = await toFetchHandler(api).fetch(
       new Request('http://host/api/session.export?sessionId=session-root&includeDescendants=true'),
     )

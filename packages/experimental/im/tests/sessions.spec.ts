@@ -154,10 +154,16 @@ describe('ImSessions records', () => {
     expect(harness.host.of(record.sessionId)).toBe(harness.host.get(record.key))
 
     const child = await harness.ctx.agents.create({
-      sessionId: SessionId('child-1'), meta: { parentSession: record.sessionId },
+      sessionId: SessionId('child-1'), meta: { parentSession: record.sessionId, origin: 'subagent' },
     })
     expect(harness.host.of(child.agent.session.id)).toBe(harness.host.get(record.key))
     expect(harness.host.of(SessionId('unknown'))).toBeUndefined()
+
+    // An ordinary fork that retained its source id was never delegated the source's chat.
+    const fork = await harness.ctx.agents.create({
+      sessionId: SessionId('fork-1'), meta: { parentSession: record.sessionId },
+    })
+    expect(harness.host.of(fork.agent.session.id)).toBeUndefined()
 
     // A side conversation of a hosted session, and its own subagents, take no chat from the source.
     const side = await harness.ctx.agents.create({
@@ -170,8 +176,8 @@ describe('ImSessions records', () => {
     expect(harness.host.of(sideChild.agent.session.id)).toBeUndefined()
 
     // A parent cycle terminates instead of looping forever.
-    await harness.ctx.agents.create({ sessionId: SessionId('loop-a'), meta: { parentSession: SessionId('loop-b') } })
-    await harness.ctx.agents.create({ sessionId: SessionId('loop-b'), meta: { parentSession: SessionId('loop-a') } })
+    await harness.ctx.agents.create({ sessionId: SessionId('loop-a'), meta: { parentSession: SessionId('loop-b'), origin: 'subagent' } })
+    await harness.ctx.agents.create({ sessionId: SessionId('loop-b'), meta: { parentSession: SessionId('loop-a'), origin: 'subagent' } })
     expect(harness.host.of(SessionId('loop-a'))).toBeUndefined()
   })
 })
