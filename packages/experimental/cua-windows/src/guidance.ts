@@ -20,7 +20,7 @@ const methodDetails = new Map<string, string>([
 export const GUIDANCE = `${PLATFORM_GUIDANCE}
 
 ${COMMON_GUIDANCE.replace(/^CuaAppInfo = .*$/m,
-  '$& Windows application IDs are AppUserModelIDs (AUMIDs), with full executable paths used as fallback IDs. Windows records have identity: null.')
+  '$& Windows application IDs are opaque selectors. Copy the returned id unchanged; do not construct an ID from an application name or executable. An executable hosting multiple applications requires a specific returned id. Windows records have identity: null.')
   .replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
     const detail = methodDetails.get(method)
     if (!detail) return entry

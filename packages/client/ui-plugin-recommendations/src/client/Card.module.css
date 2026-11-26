@@ -11,3 +11,5 @@
 .scope { font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-secondary); }
 .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .status { margin: 16px 0 0; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
+.builds { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.builds code { display: inline-block; padding: 2px 8px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-module-platform); font-family: var(--ds-font-family-code); font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }

@@ -90,7 +90,7 @@ claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","
     helperPath: 'C:\absolute\path\to\dsh-cua-windows.exe'
 ```
 
-该提供方不启动应用，也不提供 `Always allow` 授权：程序选中应用之前要先打开它，在 `elicit` 模式下每个连接都会重新询问授权。profile 不在 WSL 下挂载它。
+在 `elicit` 模式下，为 Windows 应用选择 `Always allow` 后，同一 profile 的后续连接可以沿用授权。选择 `Allow for this session` 只允许当前连接访问该应用。
 
 在其他 Host 上 profile 没有提供方也能启动：列表有 `cua_get_api_reference` 与 `cua_reset`，二者都返回指出缺少提供方的错误，调用 `cua_run_code` 以 `unknown tool` 失败。提供方行无法激活时（例如 Windows 行缺少 helper）列表相同，启动器会在 stderr 上指出失败原因。
 
@@ -169,7 +169,6 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该
 
 - 成功结束的程序跨调用保持键盘键和鼠标按钮，并通过 system reminder 报告。程序失败、执行中的 cua_run_code 请求收到取消、重置和断连会释放所属输入。如果一次调用发送 down 后返回，客户端随后在模型思考期间暂停，服务端收不到取消：该输入可能持续按住，直到显式 up 或后续清理。
 - macOS 与原生 Windows Host 有提供方。其他 Host（包括 WSL）列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
-- 在 Windows 上，[提供方的限制](../cua-windows/README.zh.md#known-limitations-and-deferred-work)经 MCP 同样适用：它不启动应用，不提供 `Always allow` 授权，npm 安装需要配置 `helperPath`。
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。
 - 不暴露程序沙箱提权和原始 `cua` 工具；`DSH_PERMISSION_MODE` 选择程序进程启动时的文件沙箱，工作区是它的 `workspace-write` 根。
 - `cua` API 参考只有在模型调用 `cua_get_api_reference` 时才到达模型。服务器观察不到既有连接上的新对话，也观察不到上下文压缩，因此由服务器说明和工具描述提出这一要求；不放行该工具的客户端，其模型只有执行规则可用。

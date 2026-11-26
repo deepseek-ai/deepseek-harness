@@ -11,7 +11,7 @@
 - Loader 四件套及其准确形态见 [cordis-primer.zh.md](../cordis-primer.zh.md#loader-configuration)。
 - 判定条件：函数插件的入口（`src/index.ts`）导出了四件套以外的实体；在四件套旁边加了默认导出，或两种形态被混用；`/client` 入口导出了实现值、或让另一个功能插件导入了实现值；fixture 用相对路径引用其他包。
 - 边界：只约束 Loader 插件入口。内部模块、工具函数与 hooks 照常导出值；Host 入口的 Service Definition 类与错误类型是应有的导出；测试 fixture 也留在本包内——用相对路径伸进别的包的 `src` 会绕过 `exports` 映射与包边界检查。
-- 例外：无默认例外；确需破例须经对应领域专家确认。
+- 例外：须经对应领域专家确认。
 
 合规的入口——四件套，同包测试路径以注释记录，而不是加出第五个导出。
 

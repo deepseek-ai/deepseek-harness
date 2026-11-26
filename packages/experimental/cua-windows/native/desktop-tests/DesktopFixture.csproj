@@ -9,4 +9,8 @@
     <AssemblyName>dsh-cua-desktop-fixture</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Include="../entry/Win32.cs" Link="Win32.cs" />
+  </ItemGroup>
+
 </Project>

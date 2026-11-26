@@ -6,6 +6,9 @@ import { AppResult, AppsResult, NativeAppsResult, StateResult } from '@deepseek-
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { once } from 'node:events'
+import { cp, copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { expect, it, onTestFinished } from 'vitest'
 import { Config } from '../src/index.ts'
@@ -17,9 +20,9 @@ async function connect() {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(LocalSubprocessRuntime)
-  const runtime = new WindowsNativeRuntime(ctx, 25, 1000, process.platform === 'win32' ? 'pipe' : 'stdio')
-  onTestFinished(() => runtime.dispose())
   const config = { ...Config({}), helperPath: helperPath!, cwd: process.cwd() }
+  const runtime = new WindowsNativeRuntime(ctx, 25, config.timeoutMs, process.platform === 'win32' ? 'pipe' : 'stdio')
+  onTestFinished(() => runtime.dispose())
   const channel = runtime.connect(config)
   const client = new NativeClient(ctx, config, () => channel)
   onTestFinished(() => client.dispose())
@@ -97,6 +100,63 @@ it.skipIf(!helperPath)('describes one action argument without an application or 
 }, 60_000)
 
 const fixturePath = process.env.DSH_CUA_DESKTOP_TEST_FIXTURE
+const fixtureTest = it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)
+fixtureTest('adds permission attributes without merging discovery IDs or changing an admitted HWND', { timeout: 60_000 }, async ({ signal }) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'dsh-cua-attributes-'))
+  onTestFinished(() => rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  const root = join(temporary, 'Example')
+  const runtimeDirectory = join(root, 'app-1.2.3')
+  await cp(dirname(fixturePath!), runtimeDirectory, { recursive: true })
+  const launcherPath = join(root, 'Example.exe')
+  const runtimePath = join(runtimeDirectory, 'Example.exe')
+  await copyFile(fixturePath!, launcherPath)
+  await copyFile(join(runtimeDirectory, basename(fixturePath!)), runtimePath)
+  const { client } = await connect()
+  const selection = AppResult.extend({ authorization: z.object({ id: z.string(), persistable: z.literal(true), iconPath: z.string(),
+    attributes: z.record(z.string(), z.array(z.string())),
+  }) })
+  const launcher = selection.parse(await client.request('getApp', { selector: launcherPath }, signal))
+  const runtime = selection.parse(await client.request('getApp', { selector: runtimePath }, signal))
+  expect(runtime.authorization.id).not.toBe(launcher.authorization.id)
+  expect(AppsResult.parse(await client.request('findApps', { query: runtimePath, maxAppMatches: 1 }, signal)))
+    .toEqual([expect.objectContaining({ id: runtimePath })])
+  const fixture = spawn(runtimePath, [], { windowsHide: true })
+  const exited = once(fixture, 'exit')
+  const reader = createInterface({ input: fixture.stdout })
+  onTestFinished(async () => {
+    const deadline = setTimeout(() => fixture.kill(), 5000)
+    try { fixture.stdin.end('close\n'); await exited }
+    finally { clearTimeout(deadline); reader.close() }
+  })
+  const first = await reader[Symbol.asyncIterator]().next()
+  if (first.done) throw new Error('The desktop fixture exited before reporting its window')
+  const { state: { window: windowId } } = z.object({ state: z.object({ window: z.string() }) }).parse(JSON.parse(first.value))
+  const params = { appHandle: runtime.appHandle, windowId, maxElements: 20, maxDepth: 5 }
+  await expect(client.request('getState', { ...params, appHandle: launcher.appHandle }, signal))
+    .rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
+  expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+  const listed = NativeAppsResult.parse(await client.request('listApps', {}, signal))
+  expect(listed.filter(app => app.id === runtimePath)).toHaveLength(1)
+  const byId = selection.parse(await client.request('getApp', { selector: runtimePath }, signal))
+  expect(byId.authorization.id).toBe(runtime.authorization.id)
+  const changed = once(reader, 'line')
+  fixture.stdin.write('identity\n')
+  await changed
+  expect(StateResult.parse(await client.request('getState', params, signal)).tree).toContain('DSH CUA owned test window')
+  expect(await client.request('listWindows', { appHandle: runtime.appHandle }, signal))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ windowId })]))
+  expect(NativeAppsResult.parse(await client.request('listApps', {}, signal)))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'DSH.Fixture.' + windowId })]))
+  const changedId = 'DSH.Fixture.' + windowId
+  const changedApp = selection.parse(await client.request('getApp', { selector: changedId }, signal))
+  expect(changedApp.authorization.id).not.toBe(runtime.authorization.id)
+  expect(changedApp.authorization.attributes['windows.aumid']).toContain(changedId)
+  expect(changedApp.authorization.attributes['windows.executablePath']).toContain(runtimePath.toUpperCase())
+  expect(changedApp.authorization.attributes['windows.executablePath']).toEqual(runtime.authorization.attributes['windows.executablePath'])
+  await expect(client.request('getState', { ...params, appHandle: byId.appHandle }, signal))
+    .rejects.toMatchObject({ code: 'WINDOW_CHANGED' })
+})
+
 it.skipIf(process.platform !== 'win32' || !helperPath || !fixturePath)(
   'reports a UIA change from a private editor and resolves its ID in the new snapshot',
   async ({ signal }) => {

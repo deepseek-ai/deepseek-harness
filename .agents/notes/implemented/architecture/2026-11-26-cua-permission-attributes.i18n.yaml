@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-26-cua-permission-attributes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-26-cua-permission-attributes.md
+/agent-note-computer-use-consent-by-permission-attributes:
+  en: 7a79127c89008323
+  zh: 9af4a1bfd9f71513
+/agent-note-computer-use-consent-by-permission-attributes/problem:
+  en: e47607e976692669
+  zh: fc416baf56a6c080
+/agent-note-computer-use-consent-by-permission-attributes/decision:
+  en: 9b3b739e3b4bd664
+  zh: 9dff7a6af68d8836
+/agent-note-computer-use-consent-by-permission-attributes/alternatives-considered:
+  en: 21b235a25fa04c4b
+  zh: 4e147b08d3156199
+/agent-note-computer-use-consent-by-permission-attributes/consequences:
+  en: 0c997a33be9e5e50
+  zh: a4dc09271c0d17f3

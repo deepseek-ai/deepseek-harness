@@ -51,4 +51,4 @@
 .buttonPlaceholder { height: 28px; }
 .appsPlaceholder { display: block; color: transparent; }
 
-.iconPlaceholder { display: inline-block; width: 32px; height: 32px; flex-shrink: 0; }
+.iconPlaceholder { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; color: var(--dsw-alias-label-secondary); }

@@ -3,8 +3,11 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/schedule.md
 /host-wide-schedule:
-  en: d977861519ae2e36
-  zh: 910ba93329cfe56b
+  en: 07217df1bab3124b
+  zh: 895c956fd4444f5e
+/host-wide-schedule/source-instances:
+  en: cfcb839553b3a6d9
+  zh: f96f1a897fba5eb9
 /host-wide-schedule/durable-tasks:
   en: 5ddc67179a897c74
   zh: 47024e886fa70abf
@@ -39,11 +42,11 @@
   en: 93c882d1c1924527
   zh: 750b73ab93c9517a
 /host-wide-schedule/saved-delivery-records:
-  en: 968ae643ca6533a9
-  zh: ec47298b370b2b05
+  en: ecbee78036164e31
+  zh: eaa39bce665c2505
 /host-wide-schedule/host-delivery:
-  en: 362e9b4c26f90b5a
-  zh: 37a9882fcf5bafc1
+  en: 8b1054fdd0809243
+  zh: 3170f90d3339cd8c
 /host-wide-schedule/historical-session-changes:
   en: 0df44daf6df88577
   zh: 178d9dc601ac2843

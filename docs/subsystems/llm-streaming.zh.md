@@ -870,6 +870,8 @@ interface LlmCallConfigAdapterDefaults {
 
 `ctx.deepseekLlmApiExtensions` 是用于向 `deepseek-official` 请求添加顶层字段的提供方特定注册表。贡献插件通过 `register(field, provider)` 认领一个字段；适配器在序列化基础正文后调用 `prepare(request)`，并在 HTTP 前合并返回字段。已准备的 `accept()` 事务会在 2xx 后运行，因此贡献方可以提交交付状态，而不会把传输失败或提供方拒绝当作接受。贡献方准备时抛错会被记录并在该次请求中省略，接受失败只记录告警而不使请求失败；与基础字段冲突时使用 `REQUEST_EXTENSION` 并使模型请求失败。合并后的正文无法序列化时，请求不带扩展字段发出，跳过接受，并由提供方插件记录被省略的字段名。
 
+贡献插件还通过 `registerHeader(name, provider)` 认领一个 `x-deepseek-harness-` 请求标头；适配器会为每条模型请求加入 `headers(request)` 返回的值。随附组合通过 [`session-log-deepseek`](../../packages/session/session-log-deepseek/README.zh.md#subagent-headers) 注册 subagent 归因标头。
+
 [协议参考](../deepseek-llm-api-wire-extensions.zh.md)定义确切的请求标头、扩展事务、字段版本和接收方义务。随附组合会将 [`dsh_session_log`](../../packages/session/session-log-deepseek/README.zh.md) 注册为无损增量权威日志后缀，并将 [`dsh_plugin_packages`](../../packages/llm/plugin-package-inventory-deepseek/README.zh.md) 注册为完整存活 Loader 包集合。这些字段仍位于模型消息之外，也不会进入 pi-ai 适配器路径。
 
 ## Pi-ai 请求头
@@ -1007,7 +1009,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.deepseekLlmApiExtensions` — `DeepSeekLlmApiExtensionRegistry`
 
-Registry of independently owned top-level fields for official DeepSeek requests.
+Registry of independently owned top-level fields and request headers for official DeepSeek requests.
 
 ```ts cordis-catalog
 /**
@@ -1027,6 +1029,25 @@ register<K extends keyof DeepSeekLlmApiExtensionMap>( field: K, provider: DeepSe
  * @returns detached fields and their idempotent joint acceptance transaction.
  */
 async prepare(request: DeepSeekLlmApiExtensionRequest): Promise<PreparedDeepSeekLlmApiExtensions>
+
+/**
+ * Register the sole provider of one request header for the calling fiber.
+ * The adapter reserves its user-id, session-id, and compact headers.
+ * @param name - declaration-merged lowercase `x-deepseek-harness-` header of hyphen-separated ASCII letters and digits.
+ * @param provider - synchronous request-time value computation.
+ * @returns disposer that releases the header.
+ */
+registerHeader<K extends keyof DeepSeekLlmApiHeaderMap>( name: K, provider: DeepSeekLlmApiHeaderProvider<DeepSeekLlmApiHeaderMap[K]>, ): () => Promise<void>
+
+/**
+ * Compute every currently registered header for one model request. A provider that
+ * returns `undefined` contributes nothing. A provider that throws, or returns a value
+ * other than non-empty printable ASCII without leading or trailing whitespace, is
+ * omitted from this request; the first such omission per header is logged.
+ * @param request - request identity and auxiliary purpose.
+ * @returns frozen header names and values to add to the HTTP request.
+ */
+headers(request: DeepSeekLlmApiHeaderRequest): Readonly<Record<string, string>>
 ```
 
 Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages/llm/deepseek-llm-api-extensions/src/index.ts)

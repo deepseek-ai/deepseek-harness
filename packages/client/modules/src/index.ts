@@ -41,6 +41,7 @@ import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type { IndexInjection } from '@deepseek-ai/dsh-host-webserver'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import { PACKAGE_ASSET_SEGMENT, packageAssetMediaType } from './assets.ts'
+import { CLIENT_CHUNK_FILE } from './chunks.ts'
 import { exactPackageSpecifier, parseClientIsolation, parseDshClient, stripClientSuffix } from './client/manifest.ts'
 import { SyncedConfigPublisher } from './config-sync.ts'
 import type {
@@ -216,8 +217,6 @@ const COMBO_REVISION_PLACEHOLDER = '0'.repeat(HASH_REVISION_LENGTH)
 const SOURCE_MAP_TRAILER = /(?:\r?\n)?\/\/# sourceMappingURL=[^\r\n]*(?:\r?\n)?$/
 /** Debugger source name appended to page bundles in the WebWorker image. */
 const SOURCE_URL_TRAILER = /(?:\r?\n)?\/\/# sourceURL=([^\r\n]+)(?:\r?\n)?$/
-/** Published package-local client chunk names accepted by the on-demand route. */
-const CLIENT_CHUNK = /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 
 /** Resolve `exports["./client"]` to a relative path, accepting the string and one-level conditional forms. */
 function clientExportOf(pkgName: string, exportsField: unknown): string | undefined {
@@ -1226,7 +1225,7 @@ export class ClientModuleRegistry extends Service {
       const fileName = sourceMap ? requested.slice(0, -'.map'.length) : requested
       // The Node Client entry and its split chunks share this directory but
       // must never be served as browser factory scripts.
-      if (!CLIENT_CHUNK.test(fileName) || fileName === 'client.node.js' || fileName.startsWith('client.node.')) return undefined
+      if (!CLIENT_CHUNK_FILE.test(fileName) || fileName === 'client.node.js' || fileName.startsWith('client.node.')) return undefined
       if (resourceUrl !== chunkUrl(record.entry.id, fileName, record.entry.rev, sourceMap)) return undefined
       return { record, fileName, sourceMap, resourceUrl }
     }

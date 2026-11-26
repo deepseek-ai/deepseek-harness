@@ -1,0 +1,7 @@
+- region "Feishu":
+  - text: Recommended plugin Official
+  - strong: Feishu
+  - paragraph: Use Feishu documents, messages, and other authorized features in conversations.
+  - text: Available in all conversations when enabled
+  - button "Not now"
+  - button "Install and enable"

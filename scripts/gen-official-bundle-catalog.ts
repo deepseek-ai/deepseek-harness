@@ -1,11 +1,11 @@
-/** Embed package-owned display metadata for Official bundles whose providers install on demand. */
+/** Embed package-owned display metadata for the Official on-demand bundles and the official connectors. */
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
 import type { DshBundleManifest, LocalizedText } from '../packages/util/package-manifest/src/types.ts'
-import { ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
+import { CONNECTOR_BUNDLES, ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/bundles.ts'
 import type { OfficialBundleCatalogEntry } from '../packages/util/official-bundles/src/index.ts'
 import { readPluginMeta, resolvePluginResource } from '../packages/boot/app-boot/src/package-meta.ts'
 import { assertBundlePlatform, UnsupportedBundlePlatformError } from '../packages/boot/app-boot/src/bundle-platform.ts'
@@ -17,11 +17,11 @@ const OUTPUT = 'packages/util/official-bundles/src/catalog.generated.ts'
 /**
  * Read complete metadata without importing or activating any provider code.
  * @param root - Repository root containing the catalog's public packages.
- * @param names - Catalog admission list; defaults to the installation-owned list.
+ * @param names - Catalog admission list; defaults to the on-demand list.
  * @returns Offline entries in admission order, with metadata from the owning packages.
  */
 export function generateOfficialBundleCatalog(root: string, names: readonly string[] = ON_DEMAND_BUNDLES): OfficialBundleCatalogEntry[] {
-  if (names.length === 0 || new Set(names).size !== names.length) throw new Error('Official on-demand catalog must contain distinct package names')
+  if (names.length === 0 || new Set(names).size !== names.length) throw new Error('An Official catalog must contain distinct package names')
   const manifests = new Map<string, { path: string; private: boolean; bundle: boolean; platforms?: DshBundleManifest['platforms']; runtime: string[] }>()
   for (const path of globSync(['packages/*/*/package.json', 'apps/*/package.json', 'vendor/*/package.json', 'vendor/im/*/package.json'], { cwd: root }).map(path => path.replaceAll('\\', '/')).sort()) {
     const manifest = JSON.parse(readFileSync(resolve(root, path), 'utf8')) as {
@@ -42,7 +42,7 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
   const checkInstallation = (name: string): void => {
     if (visited.has(name)) return
     visited.add(name)
-    if (names.includes(name)) throw new Error(`${name}: on-demand providers must not be installed by the DSH distribution`)
+    if (names.includes(name)) throw new Error(`${name}: Official catalog packages must not be installed by the DSH distribution`)
     for (const dependency of manifests.get(name)?.runtime ?? []) checkInstallation(dependency)
   }
   if (!manifests.has('@deepseek-ai/dsh')) throw new Error('Official catalog requires the DSH installation manifest')
@@ -83,15 +83,25 @@ export function generateOfficialBundleCatalog(root: string, names: readonly stri
 }
 
 /**
- * Render a source-plane catalog with no package imports or pinned runtime version.
- * @param entries - Validated metadata in catalog order.
+ * Render a source-plane catalog module with no package imports or pinned runtime version.
+ * @param onDemand - Validated on-demand metadata in catalog order.
+ * @param connectors - Validated connector metadata in catalog order.
  * @returns Deterministic TypeScript source for the official-bundles generated module.
  */
-export function renderOfficialBundleCatalog(entries: readonly OfficialBundleCatalogEntry[]): string {
+export function renderOfficialBundleCatalog(
+  onDemand: readonly OfficialBundleCatalogEntry[], connectors: readonly OfficialBundleCatalogEntry[],
+): string {
   return '/** Generated offline Official bundle metadata. Run pnpm gen-official-bundle-catalog; do not edit. */\n\n'
     + "import type { OfficialBundleCatalogEntry } from './index.ts'\n\n"
-    + '/** Official on-demand entries, independent of installed packages and registry availability. */\n'
-    + 'export const OFFICIAL_ON_DEMAND_CATALOG: readonly OfficialBundleCatalogEntry[] = [\n'
+    + catalogConstant('Official on-demand entries in `ON_DEMAND_BUNDLES` order', 'OFFICIAL_ON_DEMAND_CATALOG', onDemand)
+    + '\n'
+    + catalogConstant('Official connector entries in `CONNECTOR_BUNDLES` order', 'OFFICIAL_CONNECTOR_CATALOG', connectors)
+}
+
+/** Render one exported catalog constant whose JSDoc opens with `subject`; entries keep their given order. */
+function catalogConstant(subject: string, name: string, entries: readonly OfficialBundleCatalogEntry[]): string {
+  return `/** ${subject}, independent of installed packages and registry availability. */\n`
+    + `export const ${name}: readonly OfficialBundleCatalogEntry[] = [\n`
     + entries.map(entry => '  {\n'
       + `    packageName: ${quote(entry.packageName)},\n`
       + (entry.platforms === undefined ? '' : `    platforms: [${entry.platforms.map(quote).join(', ')}],\n`)
@@ -121,7 +131,7 @@ function localized(value: LocalizedText): string {
  * @param check - Reject drift without changing the generated file.
  */
 export function syncOfficialBundleCatalog(root: string, check: boolean): void {
-  const source = renderOfficialBundleCatalog(generateOfficialBundleCatalog(root))
+  const source = renderOfficialBundleCatalog(generateOfficialBundleCatalog(root), generateOfficialBundleCatalog(root, CONNECTOR_BUNDLES))
   const path = resolve(root, OUTPUT)
   let current: string | undefined
   try { current = readFileSync(path, 'utf8') }
@@ -133,5 +143,5 @@ export function syncOfficialBundleCatalog(root: string, check: boolean): void {
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   syncOfficialBundleCatalog(resolve(import.meta.dirname, '..'), process.argv.includes('--check'))
-  console.log('Official on-demand catalog matches package-owned metadata.')
+  console.log('Official on-demand and connector catalogs match package-owned metadata.')
 }

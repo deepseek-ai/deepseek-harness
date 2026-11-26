@@ -1,0 +1,7 @@
+- region "Feishu":
+  - text: Recommended plugin Official
+  - 'button "View details: Feishu"':
+    - strong: Feishu
+    - text: Use Feishu documents, messages, and other authorized features in conversations.
+  - status: Enabled
+  - button "Connect account"

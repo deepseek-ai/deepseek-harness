@@ -52,7 +52,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 
 ### 懒加载 chunk 独立归档
 
-- **分类**：client 构建预设只以 `require.async("./client.<name>.js")` 的形式产出包内 chunk 请求，`verify-client-packages` 禁止同步 require chunk。packer 的 `lazyChunksOf` 扫描清扫后镜像里的每个页面资源（各包的 `lib/client.js` 和 `lib/client.*.js`）中的这些字面量，因此 chunk 引用的 chunk 不必从 `./client` 入口沿请求追踪也能找到。在任一条件下被某个包的 `./client` 导出指向的目标（如 `client.browser.js`）会被立即加载，留在基础镜像；其余目标移出基础镜像。请求包未发布的 chunk 会让打包失败。
+- **分类**：client 构建预设只以 `require.async("./client.<name>.js")` 的形式产出异步的包内 chunk 请求，可选带上 `{ deps: [...] }` 预取提示，列出该请求需要的其他所有 chunk（[分片依赖](2026-11-26-package-local-chunk-dependencies.zh.md)）。packer 的 `lazyChunksOf` 扫描清扫后镜像里的每个页面资源（各包的 `lib/client.js` 和 `lib/client.*.js`）中的这些字面量，包括提示中的项，因此 chunk 引用的 chunk 不必从 `./client` 入口沿请求追踪也能找到。在任一条件下被某个包的 `./client` 导出指向的目标（如 `client.browser.js`）会被立即加载，留在基础镜像；其余目标移出基础镜像。请求包未发布的 chunk 会让打包失败。
 - **归档**：每个 chunk 一个确定性 tar.gz，按压缩后归档的 SHA-256 命名为 `lazy/<sha256>.tar.gz`。基础 manifest 的 `lazy` 列表把每个 archive 记录为 `{ archive, files: [{ path, size }] }`，不记录文件 mode。不设大小阈值。
 - **登记**：Worker 用 `MemoryVfs.deferArchive` 登记列出的每个文件，同时创建其父目录，并赋予 VFS 默认文件 mode；列出懒加载 archive 的镜像必须从 URL 拉取，archive 名相对这个 URL 解析。`exists`、`stat`、`readdir` 依据登记同步作答。
 - **拉取**：Worker 的 `node:fs` 和 `node:fs/promises` 中读取已登记文件的异步接口会等待其 archive：`fs.promises.readFile`、`fs.promises.open`（因此每个 FileHandle 都在到达后才打开）、`fs.promises.cp` 和 `fs.createReadStream`。其中第一个调用拉取 archive、解压，校验其中恰好是登记的路径和登记的大小，再物化文件；并发读取方共用一次拉取。archive 名里的摘要不做校验。拉取失败只让等待它的读取失败；文件保持登记，下一次异步读取再次拉取。

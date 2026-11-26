@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-26-package-local-chunk-dependencies.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-26-package-local-chunk-dependencies.md
+/agent-note-package-local-chunk-dependencies:
+  en: be8e63e6d765fd9b
+  zh: 2301e5754a32f288
+/agent-note-package-local-chunk-dependencies/problem:
+  en: 3a5fb76c845f5938
+  zh: 8da1557121ec5503
+/agent-note-package-local-chunk-dependencies/decision:
+  en: dd2c654e49bbc659
+  zh: 2a461be554571a86
+/agent-note-package-local-chunk-dependencies/alternatives-considered:
+  en: fa1b734a16a83dad
+  zh: c0f51477e123a8f9
+/agent-note-package-local-chunk-dependencies/consequences:
+  en: 90a70c4127a31e0a
+  zh: 7874aabdd89159b2
+/agent-note-package-local-chunk-dependencies/testing:
+  en: 5efdb48c7772afa9
+  zh: f81468f7d27cac8d

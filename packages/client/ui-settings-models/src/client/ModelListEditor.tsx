@@ -14,8 +14,9 @@
  * that would empty the list is refused.
  *
  * A provider that cannot be interrogated (an unreachable endpoint, a protocol
- * with no readable listing) is not a dead end: the failure is shown next to the
- * rows the user can still fill in by hand.
+ * with no readable listing) is not a dead end: the failure is shown under the
+ * section heading, beside the action that asked and whether or not the list is
+ * folded, above the rows the user can still fill in by hand.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -23,13 +24,15 @@ import type { ReactNode } from 'react'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
 import { AnimatedRows, Button, IconPlusOutlineRegular, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
-import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
+import { formatCapacity, modelRowFailures, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
-import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import type { DeepSeekModelDraft, ModelRowFailures } from './DeepSeekModelsEditor.tsx'
+import { FoldSection } from './FoldSection.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
-import { useModelRows } from './useModelRows.ts'
-import type { CapacityField } from './useModelRows.ts'
+import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
+import { shownFailures, useModelRows } from './useModelRows.ts'
+import type { CapacityField, ModelRowField } from './useModelRows.ts'
 import styles from './ModelsSection.module.css'
 
 /**
@@ -85,6 +88,12 @@ export interface ModelListEditorProps {
   defaultInput?: readonly string[] | undefined
   /** Whether the user layer currently owns the whole array; absent on a create. */
   overridden?: boolean
+  /** Whether the heading folds the list; a card that requires a model passes `false`. */
+  collapsible?: boolean
+  /** Count of the card's refused saves; each one marks the fields that fail on their rows. */
+  attempt: number
+  /** What the card's last save refused about the list as a whole, shown under the heading. */
+  listFailure?: string | undefined
   /** Replace the drafted rows. */
   onChange: (models: ModelDraft[]) => void
   /** Remove the user-owned array and return to inheritance; absent on a create. */
@@ -181,7 +190,16 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   // flight opens checked rather than being removed by a stale selection.
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set())
   const [candidateQuery, setCandidateQuery] = useState('')
-  const rowState = useModelRows(models, onChange, disabled)
+  const failures = modelRowFailures(models)
+  // A row whose reasoning levels the adapter refuses explains itself in its own
+  // control, so a refused save only has to unfold it.
+  const reasoningOnly = props.reasoningLevelsOnly === true ? props.reasoningLevels : undefined
+  const failing = failures.map((row, index): ReadonlySet<ModelRowField> => {
+    const reasoningFails = props.reasoningLevels !== undefined && props.reasoningLevels.length > 0
+      && validateReasoningEfforts([models[index]], reasoningOnly) !== undefined
+    return new Set<ModelRowField>([...row.keys(), ...reasoningFails ? ['reasoning' as const] : []])
+  })
+  const rowState = useModelRows(models, onChange, disabled, { attempt: props.attempt, failing })
 
   const editCapacity = (index: number, field: CapacityField, text: string): void => {
     rowState.edit(index, field, text)
@@ -309,33 +327,30 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   // draft with neither has nothing to ask about.
   const askable = probe.provider !== undefined || (probe.baseURL !== undefined && probe.baseURL.length > 0)
   return (
-    <section className={styles['modelCatalog']} aria-label={t('models')}>
-      <div className={styles['modelListHead']}>
-        <div className={styles['modelCatalogHeading']}>
-          <span className={styles['modelCatalogTitle']}>{t('models')}</span>
-          {props.overridden === undefined
-            ? null
-            : (
-              <span className={styles['modelCatalogMeta']}>
-                {props.overridden ? t('modelsCustomized') : t('modelsInherited')}
-              </span>
-            )}
-        </div>
-        {props.overridden === true && props.onReset !== undefined
-          ? (
+    <FoldSection
+      title={t('models')}
+      open={rowState.listOpen}
+      onToggle={rowState.setListOpen}
+      {...props.collapsible === false ? { collapsible: false } : {}}
+      status={props.overridden === true && props.onReset !== undefined
+        ? (
+          <>
+            <span className={styles['foldMeta']}>{t('modelsCustomized')}</span>
             <button
               type="button"
-              className={styles['linkButton']}
+              className={styles['textAction']}
               disabled={disabled}
               onClick={() => { rowState.reset(); props.onReset?.() }}
             >
               {t('resetModels')}
             </button>
-          )
-          : null}
-        <button
-          type="button"
-          className={styles['linkButton']}
+          </>
+        )
+        : undefined}
+      actions={(
+        <Button
+          variant="outline"
+          size="sm"
           disabled={disabled || busy || !askable || props.probeBlocked !== undefined}
           title={props.probeBlocked !== undefined
             ? t(props.probeBlocked)
@@ -343,11 +358,23 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           onClick={() => { void fetchModels() }}
         >
           {busy ? t('fetching') : t('fetchModels')}
-        </button>
-      </div>
-      {models.length === 0 ? <p className={styles['modelEmpty']}>{t('modelsEmpty')}</p> : null}
+        </Button>
+      )}
+      notice={(
+        <>
+          {props.listFailure === undefined ? null : <p className={styles['error']}>{props.listFailure}</p>}
+          {failure === undefined ? null : <p className={styles['error']}>{failure}</p>}
+        </>
+      )}
+    >
+      {/* An installed catalog route with no list of its own serves the whole
+          catalog; a route the adapter does not ship has nothing to inherit,
+          and its card names the missing model beside its actions. */}
+      {models.length === 0 && catalogProvider !== undefined
+        ? <p className={styles['modelEmpty']}>{t('modelsInherited')}</p>
+        : null}
       <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
-        {rowState.rows.map(({ model, key, expanded, order }, index) => (
+        {rowState.rows.map(({ model, key, expanded, order, marked }, index) => (
           <ModelRow
             key={key}
             rowKey={key}
@@ -360,6 +387,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             reasoningLevels={props.reasoningLevels}
             reasoningLevelsOnly={props.reasoningLevelsOnly}
             expanded={expanded}
+            failures={shownFailures(marked, failures[index] as ModelRowFailures)}
             disabled={disabled}
             t={t}
             contextWindow={{
@@ -391,7 +419,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         <IconPlusOutlineRegular size={14} />
         {t('addModel')}
       </button>
-      {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
       <Modal
         open={candidates !== undefined}
         onClose={closePicker}
@@ -452,6 +479,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             </ul>
           )}
       </Modal>
-    </section>
+    </FoldSection>
   )
 }

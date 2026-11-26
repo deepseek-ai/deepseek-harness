@@ -1,5 +1,5 @@
 ---
-description: "由安装方持有的官方 dsh 组合包列表（随附 profile 模板、默认列表，以及可选、按需和已退役的组合包），以及插件管理器保护和展示的包。"
+description: "由安装方持有的官方 dsh 组合包列表（随附 profile 模板、默认列表，以及可选、按需、连接器和已退役的组合包），以及插件管理器保护和展示的包。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`@deepseek-ai/dsh-official-bundles` 保存由 dsh 安装决定的组合包名称：每个随附 profile 以哪些组合包启动、随附但默认关闭哪些组合包、哪些官方组合包按请求安装，哪些组合包曾由早期版本随附、现在要从 profile 中移除，以及插件管理器保护、隐藏、排序或标记为实验性的包。[`dsh-app-boot`](../../boot/app-boot/README.zh.md) 在加载 profile 时应用这些列表；插件管理器、CLI、Desktop、镜像打包器和仓库检查直接读取它们。本包只含数据，因此修改列表不会改动 app-boot 和插件管理器。请把它作为直接的库依赖使用，而不是通过 `cordis.yml` 使用。
+`@deepseek-ai/dsh-official-bundles` 保存由 dsh 安装决定的组合包名称：每个随附 profile 以哪些组合包启动、随附但默认关闭哪些组合包、哪些官方组合包和连接器按请求安装，哪些组合包曾由早期版本随附、现在要从 profile 中移除，以及插件管理器保护、隐藏、排序或标记为实验性的包。[`dsh-app-boot`](../../boot/app-boot/README.zh.md) 在加载 profile 时应用这些列表；插件管理器、CLI、Desktop、镜像打包器和仓库检查直接读取它们。本包只含数据，因此修改列表不会改动 app-boot 和插件管理器。请把它作为直接的库依赖使用，而不是通过 `cordis.yml` 使用。
 
 ## 目录
 
@@ -43,6 +43,10 @@ kind: "package-library"
 
 `ON_DEMAND_BUNDLES` 列出只在请求时安装的官方公开包。`OFFICIAL_ON_DEMAND_CATALOG` 内嵌这些包自己持有的本地化元信息、图标和可选的 `dsh.bundle.platforms` 声明，用于离线发现与安装前的 Host 平台检查；`pnpm gen-official-bundle-catalog` 显式更新生成内容，`verify-official-bundle-catalog` 检查资源完整性与时效；构建使用已提交的目录，不导入提供方代码。目录不包含安装目标：插件管理器根据运行中的版本和安装推导目标，并使用普通的组合包安装器。[产品使用检查](../../../scripts/verify-product-use.ts)针对 Web 组合随附选择和按需选择，不执行提供方。
 
+### 连接器组合包
+
+`CONNECTOR_BUNDLES` 列出官方连接器包；安装不随附它们，每个连接器都按 DSH 版本单独安装。`OFFICIAL_CONNECTOR_CATALOG` 按列表的顺序内嵌这些包自己持有的本地化元信息和图标，由与按需目录相同的生成脚本和时效检查维护。插件管理器不读取这两者，所以未安装的连接器不会出现在插件页自己的列表里；[插件推荐](../../extensions/plugin-recommendations/README.zh.md)读取这个目录，在会话卡片里列出、介绍并安装连接器。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -57,9 +61,9 @@ kind: "package-library"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/bundles.ts`](src/bundles.ts) | Profile 模板，以及默认、安装持有、已退役、可选和按需组合包列表 |
+| [`src/bundles.ts`](src/bundles.ts) | Profile 模板，以及默认、安装持有、已退役、可选、按需和连接器组合包列表 |
 | [`src/plugin-manager.ts`](src/plugin-manager.ts) | 受保护的插件包，以及 Web 插件页的隐藏、排序和实验性组合包列表 |
-| [`src/catalog.generated.ts`](src/catalog.generated.ts) | 按需组合包的生成离线元信息 |
+| [`src/catalog.generated.ts`](src/catalog.generated.ts) | 按需组合包和连接器组合包的生成离线元信息 |
 | [`src/index.ts`](src/index.ts) | 公开导出与目录条目类型 |
 
 </details>
@@ -79,7 +83,7 @@ kind: "package-library"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **列表编译进安装**——修改列表需要发布新的 dsh 版本；profile 无法扩展可选或按需列表。
+- **列表编译进安装**——修改列表需要发布新的 dsh 版本；profile 无法扩展可选、按需或连接器列表。
 
 <a id="dev-note"></a>
 ### 开发备注

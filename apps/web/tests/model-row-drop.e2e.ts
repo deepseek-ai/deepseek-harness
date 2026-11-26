@@ -18,14 +18,18 @@ it('drops a model directly into the middle of an inactive row gap', async () => 
   await dialog.getByLabel('提供商', { exact: true }).selectOption('minimax-cn')
   await dialog.getByRole('button', { name: '保存', exact: true }).click()
   await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-  await dialog.getByText('自定义设置', { exact: true }).click()
   for (let position = 1; position <= 3; position++) {
     await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
     await dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).fill(`gap-model-${String(position)}`)
   }
-  const source = dialog.getByRole('button', { name: '调整模型顺序 1', exact: true })
+  // An added row starts unfolded, and only a folded row is dragged.
+  for (let position = 1; position <= 3; position++) {
+    await dialog.getByRole('button', { name: `模型选项 ${String(position)}`, exact: true }).click()
+  }
+  const rows = dialog.locator('[data-row-key]')
+  const source = rows.first().getByText('gap-model-1', { exact: true })
   await source.scrollIntoViewIfNeeded()
-  const point = await dialog.locator('[data-row-key]').evaluateAll((rows) => {
+  const point = await rows.evaluateAll((rows) => {
     const a = rows[1]!.getBoundingClientRect()
     const b = rows[2]!.getBoundingClientRect()
     const x = a.left + 20
@@ -37,11 +41,12 @@ it('drops a model directly into the middle of an inactive row gap', async () => 
   expect(point.hitsRow).toBe(true)
   await source.hover()
   const from = await source.boundingBox()
-  if (from === null) throw new Error('Model drag handle is not visible')
+  if (from === null) throw new Error('Folded model row is not visible')
   await page.mouse.down()
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 3 })
   await page.mouse.move(point.outside, point.y)
   await page.mouse.move(point.x, point.y)
   await page.mouse.up()
-  await expect.poll(() => dialog.getByLabel('模型 ID 2', { exact: true }).inputValue()).toBe('gap-model-1')
+  await expect.poll(() => rows.evaluateAll(rows => rows.map(row => row.textContent)))
+    .toEqual(['gap-model-2', 'gap-model-1', 'gap-model-3'])
 })

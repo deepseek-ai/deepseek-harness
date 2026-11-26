@@ -10,7 +10,7 @@ A script's execution environment need not be its presentation document. CSS inje
 
 ## Decision
 
-Client artifacts contain `id` and `factory`, with optional `meta` and a `chunk` name for dynamic package-local chunks. `meta()` returns resource descriptions; `stylesheets` is an optional path-keyed record whose values expose independently evaluated `text(context)` functions. Resource paths identify stylesheets, not components. There is no stylesheet dependency field.
+Client artifacts contain `id` and `factory`, with optional `meta`, a `chunk` name for dynamic package-local chunks, and [`deps`](2026-11-26-package-local-chunk-dependencies.md) naming the chunks a factory requires synchronously. `meta()` returns resource descriptions; `stylesheets` is an optional path-keyed record whose values expose independently evaluated `text(context)` functions. Resource paths identify stylesheets, not components. There is no stylesheet dependency field.
 
 Modules owns JavaScript exports, module identity, owner ids, and observed dependency edges. It retains metadata functions without evaluating them and publishes generic module-record changes. Renderer owns metadata/text caches, dependency-ordered stylesheet collection, path deduplication, and main-document nodes. It explicitly installs existing resources before React mounting, updates them on module changes, and releases styles after the root unmounts. Component lifetimes do not own styles.
 

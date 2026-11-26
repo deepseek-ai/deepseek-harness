@@ -5,7 +5,9 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { AnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
-import type { DeepSeekLlmApiExtensionRequest, PreparedDeepSeekLlmApiExtensions } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
+import type {
+  DeepSeekLlmApiExtensionRequest, DeepSeekLlmApiHeaderRequest, PreparedDeepSeekLlmApiExtensions,
+} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import type { DeepSeekFileStore, DeepSeekFilePolicy } from './file-store.ts'
 
 /** One optional model entry advertised by the direct-fetch adapter. */
@@ -147,6 +149,8 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
   resolveFiles?: () => DeepSeekFileStore
   /** Prepare the official API's plugin-contributed top-level fields for one exact wire request. */
   prepareExtensions: (request: DeepSeekLlmApiExtensionRequest) => Promise<PreparedDeepSeekLlmApiExtensions>
+  /** Resolve the plugin-registered `x-deepseek-harness-` headers for one model request; omission sends none. */
+  resolveHeaders?: (request: DeepSeekLlmApiHeaderRequest) => Readonly<Record<string, string>>
 }
 
 

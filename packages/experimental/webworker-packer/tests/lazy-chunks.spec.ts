@@ -1,8 +1,8 @@
 /**
- * Page chunks reached only through `require.async("./client.<name>.js")` leave
- * the base image: each one becomes its own deterministic, content-addressed
- * archive, and the manifest registers its path and size for the Worker's lazy
- * filesystem. Entries, eagerly loaded `./client` targets, and unreferenced
+ * Page chunks reached only through `require.async("./client.<name>.js")`, or
+ * named by its `{ deps }` prefetch hint, leave the base image: each one becomes
+ * its own deterministic, content-addressed archive, and the manifest registers
+ * its path and size for the Worker's lazy filesystem. Entries, eagerly loaded `./client` targets, and unreferenced
  * siblings stay in the base image.
  */
 import { createHash } from 'node:crypto'
@@ -87,6 +87,26 @@ it('packs the same chunks to the same archive names and bytes', (test) => {
 it('refuses a chunk request whose file the package does not publish', (test) => {
   const options = fixture(test, { 'client.browser.js': 'module.exports = () => require.async("./client.missing.js")' })
   expect(() => packVfsImage(options)).toThrow(/client\.browser\.js requests chunk "\.\/client\.missing\.js"/)
+})
+
+it('moves the chunks a prefetch hint names, in the forms the minifier prints', (test) => {
+  const result = packVfsImage(fixture(test, {
+    'client.browser.js': [
+      'module.exports = {',
+      '  view: () => require.async(`./client.view.js`,{deps:[`./client.shared.js`,\'./client.deep.js\']}),',
+      '  spaced: () => require.async("./client.spaced.js", { deps: ["./client.deep.js"] }),',
+      '}',
+    ].join('\n'),
+    'client.view.js': 'module.exports = "view"',
+    'client.spaced.js': 'module.exports = "spaced"',
+    'client.shared.js': 'module.exports = "shared"',
+    'client.deep.js': 'module.exports = "deep"',
+  }))
+  expect(result.lazyArchives.map(archive => archive.files)).toEqual(
+    ['deep', 'shared', 'spaced', 'view'].map(name => [`${PREFIX}/client.${name}.js`]),
+  )
+  const hinted = fixture(test, { 'client.browser.js': 'module.exports = () => require.async("./client.view.js", { deps: ["./client.gone.js"] })', 'client.view.js': '' })
+  expect(() => packVfsImage(hinted)).toThrow(/client\.browser\.js requests chunk "\.\/client\.gone\.js"/)
 })
 
 it('keeps a ./client export target in the base image even when a chunk requests it', (test) => {

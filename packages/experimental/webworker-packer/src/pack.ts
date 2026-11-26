@@ -30,6 +30,7 @@ import {
 import picomatch from 'picomatch'
 import { parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { PROFILE_PATCH_FILENAME, PROFILES_DIR } from '@deepseek-ai/dsh-app-boot'
+import { CLIENT_CHUNK_FILE } from '@deepseek-ai/dsh-client-modules/src/chunks.ts'
 import { WRAPPER_CONTRACT, type ImageFiles, type TransformOutcome } from './transform-image.ts'
 import { EXCLUDE, EXCLUDE_WORKSPACE, IMAGE_ENTRY_SEEDS, PAGE_ASSETS } from './rules.ts'
 
@@ -594,11 +595,19 @@ function materialize(
 }
 
 /**
- * Request form the dynamic Client build emits for a package-local chunk: a
- * literal `require.async("./client.<name>.js")`, served by the Host on demand.
- * The minifier may print the literal with any quote, including a template without substitutions.
+ * One relative string literal. The minifier may print it with any quote,
+ * including a template without substitutions.
  */
-const CHUNK_REQUEST = /\brequire\.async\(\s*(["'`])(\.\/client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js)\1\s*\)/g
+const RELATIVE_LITERAL = /(["'`])\.\/([^"'`]+)\1/g
+
+/**
+ * Request form the dynamic Client build emits for a package-local chunk: a
+ * literal `require.async("./client.<name>.js")`, served by the Host on demand,
+ * optionally followed by `{ deps: ["./client.<name>.js", …] }`, a prefetch hint
+ * naming the other chunks the request downloads in parallel. Only names that
+ * match `CLIENT_CHUNK_FILE` are chunk requests.
+ */
+const CHUNK_REQUEST = new RegExp(String.raw`\brequire\.async\(\s*${RELATIVE_LITERAL.source}\s*(?:,\s*\{\s*deps\s*:\s*\[([^\]]*)\]\s*\}\s*)?\)`, 'g')
 
 /**
  * Image paths every materialized package's `./client` export names, under any
@@ -624,7 +633,7 @@ function clientEntriesOf(files: ImageFiles, packages: Iterable<string>): Set<str
 }
 
 /**
- * Page chunks requested only through `require.async`, in path order.
+ * Page chunks requested only through `require.async` or its prefetch hints, in path order.
  * @param files - Image entries after the sweep.
  * @param eager - Eager Client entry paths, never lazy.
  * @returns Image paths to move into lazy archives.
@@ -637,12 +646,15 @@ function lazyChunksOf(files: ImageFiles, eager: ReadonlySet<string>): string[] {
     if (!pageAsset(name)) continue
     const directory = name.slice(0, name.lastIndexOf('/'))
     for (const match of decoder.decode(bytes).matchAll(CHUNK_REQUEST)) {
-      const request = match[2] as string
-      const target = `${directory}/${request.slice(2)}`
-      if (files[target] === undefined) {
-        throw new Error(`vfs image: ${name} requests chunk "${request}", which the package does not publish`)
+      const hinted = [...(match[3] ?? '').matchAll(RELATIVE_LITERAL)].map(literal => literal[2] as string)
+      for (const chunk of [match[2] as string, ...hinted]) {
+        if (!CLIENT_CHUNK_FILE.test(chunk)) continue
+        const target = `${directory}/${chunk}`
+        if (files[target] === undefined) {
+          throw new Error(`vfs image: ${name} requests chunk "./${chunk}", which the package does not publish`)
+        }
+        if (!eager.has(target)) lazy.add(target)
       }
-      if (!eager.has(target)) lazy.add(target)
     }
   }
   return [...lazy].sort()

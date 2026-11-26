@@ -1,6 +1,6 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect } from 'react'
-import { Button, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
@@ -26,14 +26,17 @@ function Applications({ title, apps, icons, onAction, label, disabled }: {
 }) {
   return <section className={css.group}>
     <h4>{title}</h4>
-    <ul className={css.apps}>{apps.map(app => <li key={app.id}>
-      <div className={css.application} title={app.executablePath}>
-        {app.executablePath !== undefined && icons?.[app.executablePath] !== undefined ? <img src={icons[app.executablePath]} alt="" width={32} height={32} draggable={false} />
-          : <span className={css.iconPlaceholder} aria-hidden />}
-        <strong>{app.name}</strong>
-      </div>
-      <Button size="sm" variant="outline" disabled={disabled} onClick={() => { onAction(app.id) }}>{label}</Button>
-    </li>)}</ul>
+    <ul className={css.apps}>{apps.map((app) => {
+      const iconPath = app.iconPath ?? app.executablePath
+      const icon = iconPath === undefined ? undefined : icons?.[iconPath]
+      return <li key={app.id}>
+        <div className={css.application} title={app.executablePath}>
+          {icon !== undefined ? <img src={icon} alt="" width={32} height={32} draggable={false} />
+            : <span className={css.iconPlaceholder} aria-hidden><IconLayersOutlineRegular size={24} /></span>}
+          <strong>{app.name}</strong>
+        </div>
+        <Button size="sm" variant="outline" disabled={disabled} onClick={() => { onAction(app.id) }}>{label}</Button>
+      </li>})}</ul>
   </section>
 }
 

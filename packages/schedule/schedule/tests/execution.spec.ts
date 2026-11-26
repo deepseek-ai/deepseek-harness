@@ -62,7 +62,7 @@ it('requeues a still-queued delivery after restart instead of enqueuing another 
         return releaseFlush.promise
       })
       const commit = vi.fn(async (task: ScheduleTask) => { tasks[0] = task })
-      const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent)
+      const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent, () => ctx.get('sessionController'))
       try {
         runtime.requestDrive()
         await flushStarted.promise
@@ -86,7 +86,7 @@ it('requeues a still-queued delivery after restart instead of enqueuing another 
         // instead of enqueuing a copy for either the due occurrence or a manual request.
         tasks[0] = { ...tasks[0]!, status: 'active' }
         vi.setSystemTime(Date.parse('2026-09-16T00:00:03.000Z') + MIN_DELIVERY_INTERVAL_MS)
-        const recovered = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent)
+        const recovered = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent, () => ctx.get('sessionController'))
         try {
           recovered.requestDrive()
           await vi.advanceTimersByTimeAsync(0)
@@ -98,7 +98,7 @@ it('requeues a still-queued delivery after restart instead of enqueuing another 
         }
 
         // A failed recovery flush releases the slot, so the next request requeues the same message again.
-        const failedRecovery = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent)
+        const failedRecovery = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent, () => ctx.get('sessionController'))
         const flush = vi.spyOn(ctx.sessions, 'flush').mockResolvedValueOnce(false)
         try {
           await expect(failedRecovery.runNow(record.id)).rejects.toThrow('did not acknowledge the recovered reminder')
@@ -158,7 +158,7 @@ it('holds every recovered batch member before the real driver claims their share
     const commit = vi.fn(async (task: ScheduleTask) => {
       tasks[tasks.findIndex(current => current.record.id === task.record.id)] = task
     })
-    const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent)
+    const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent, () => ctx.get('sessionController'))
     try {
       runtime.requestDrive()
       await vi.advanceTimersByTimeAsync(0)
@@ -209,13 +209,13 @@ it('consolidates manual executions while a real Goal round is in flight', async 
     )
     const tasks: ScheduleTask[] = [seededTask(record, { kind: 'session', sessionId: agent.session.id })]
     const commit = async (task: ScheduleTask): Promise<void> => { tasks[0] = task }
-    const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent)
+    const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent, () => ctx.get('sessionController'))
     try {
       const first = await runtime.runNow(record.id)
       const second = await runtime.runNow(record.id)
       // Past the admission floor, a restarted runtime finds the reminder still queued behind the running Goal round.
       vi.setSystemTime(Date.now() + MIN_DELIVERY_INTERVAL_MS)
-      const recovered = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent)
+      const recovered = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, LIMITS, async () => agent, () => ctx.get('sessionController'))
       const afterRestart = await recovered.runNow(record.id)
       expect(recovered.isExecutionActive(record.id)).toBe(true)
       await recovered.dispose()

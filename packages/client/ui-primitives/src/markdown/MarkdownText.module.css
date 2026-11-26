@@ -7,6 +7,10 @@
   overflow-wrap: anywhere;
   font: var(--dsw-font-markdown-base);
   color: var(--dsw-alias-label-primary);
+  /* Stacked rows of an image paragraph sit twice the half gap apart; the paragraph gap is the
+     distance between blocks that the image rules below preserve. */
+  --dsl-markdown-image-half-gap: 8px;
+  --dsl-markdown-paragraph-gap: 16px;
 }
 
 .markdown strong {
@@ -353,6 +357,8 @@
 
 .compact {
   max-width: 100%;
+  --dsl-markdown-image-half-gap: 2px;
+  --dsl-markdown-paragraph-gap: 4px;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   color: var(--dsw-alias-label-tertiary);
@@ -491,6 +497,90 @@
 }
 .imageButton .image { max-width: min(100%, 640px); max-height: 360px; }
 .imageButton:focus-visible { outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 3px; }
+/* An image paragraph holds two or more previewable images and no other element. Each image takes
+   the half gap above and below, so wrapped rows sit 16px apart (4px in compact Markdown); the
+   paragraph's negative margins remove that half again at its outer edges. The gap is split because
+   vertical-align: middle centers an image's margin box on the line: a one-sided gap would move an
+   image by half the gap against text and images on the same line. */
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))) {
+  --dsl-markdown-image-margin: var(--dsl-markdown-image-half-gap);
+  margin-block: calc(-1 * var(--dsl-markdown-image-half-gap));
+}
+.markdown p > .imageButton { margin-block: var(--dsl-markdown-image-margin, 0px); }
+/* Blocks in a list item sit 8px apart in the body variant, blocks in a blockquote 16px; the
+   compensation rules below read the gap of the element's own container. */
+.markdown:not(.compact) li > * { --dsl-markdown-paragraph-gap: 8px; }
+.markdown:not(.compact) blockquote > * { --dsl-markdown-paragraph-gap: 16px; }
+/* The base rules force a container's first and last paragraph margins to 0. */
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):first-child {
+  margin-top: calc(-1 * var(--dsl-markdown-image-half-gap)) !important;
+}
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):last-child {
+  margin-bottom: calc(-1 * var(--dsl-markdown-image-half-gap)) !important;
+}
+/* Selectors cannot see text, so these empty boxes restore the half gap when the first or last line
+   is text: they extend that line by the half gap away from the paragraph. A row of images is taller
+   than either box and contains it. */
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton)))::before,
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton)))::after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: calc(1lh + var(--dsl-markdown-image-half-gap));
+}
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton)))::before { vertical-align: bottom; }
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton)))::after { vertical-align: top; }
+/* The negative margin collapses with a neighbor's margin. These neighbors leave less than the
+   paragraph gap in the body variant: tables, a blockquote's bottom, a code block's 11px bottom, and
+   the 4px top of a list nested in a list item. Each margin below restores the paragraph gap. */
+.markdown:not(.compact) .tableScroll + p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))) {
+  margin-top: calc(var(--dsl-markdown-paragraph-gap) - var(--dsl-markdown-image-half-gap));
+}
+/* A blockquote has no bottom margin of its own, but its last child's margin collapses through it, so
+   the gap goes on the blockquote: it collapses with whatever comes through, and the following image
+   paragraph keeps its negative margin. */
+.markdown:not(.compact) blockquote:has(+ p > .imageButton ~ .imageButton):not(:has(+ p > :not(.imageButton))) {
+  margin-bottom: var(--dsl-markdown-paragraph-gap);
+}
+.markdown:not(.compact) p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):has(+ .tableScroll) {
+  margin-bottom: calc(var(--dsl-markdown-paragraph-gap) - var(--dsl-markdown-image-half-gap));
+}
+.markdown:not(.compact) :is(.fenceSeat, :global(.md-code-block)) + p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))) {
+  margin-top: max(calc(-1 * var(--dsl-markdown-image-half-gap)), calc(var(--dsl-markdown-paragraph-gap) - var(--dsl-markdown-image-half-gap) - 11px));
+}
+.markdown li > p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):has(+ :is(ul, ol)) {
+  margin-bottom: max(calc(-1 * var(--dsl-markdown-image-half-gap)), calc(var(--dsl-markdown-paragraph-gap) - var(--dsl-markdown-image-half-gap) - 4px));
+}
+/* Two adjacent negative margins collapse into one; the earlier image paragraph restores the gap instead. */
+.markdown p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):has(+ p > .imageButton ~ .imageButton):not(:has(+ p > :not(.imageButton))) {
+  margin-bottom: calc(var(--dsl-markdown-paragraph-gap) - var(--dsl-markdown-image-half-gap));
+}
+/* Blockquotes and list items have no padding, so an image paragraph's negative margin at their edge
+   would collapse with margins outside them: it would lengthen a blockquote's bar, and a second
+   negative margin across two list items would be lost. On the side where an image paragraph starts
+   or ends the container, 1px of padding keeps the margin inside, and the paragraph's margin grows by
+   that 1px, so the container edge meets the images; the other side keeps its ordinary collapsing.
+   Inline paragraphs of nested ordered lists have no block margins and need no padding. */
+.markdown blockquote:has(> p:first-child > .imageButton ~ .imageButton):not(:has(> p:first-child > :not(.imageButton))),
+.markdown li:not(:where(ul, ol) ol li):has(> p:first-child > .imageButton ~ .imageButton):not(:has(> p:first-child > :not(.imageButton))) {
+  padding-top: 1px;
+}
+.markdown blockquote:has(> p:last-child > .imageButton ~ .imageButton):not(:has(> p:last-child > :not(.imageButton))),
+.markdown li:not(:where(ul, ol) ol li):has(> p:last-child > .imageButton ~ .imageButton):not(:has(> p:last-child > :not(.imageButton))) {
+  padding-bottom: 1px;
+}
+.markdown :is(blockquote, li) > p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):first-child {
+  margin-top: calc(-1 * var(--dsl-markdown-image-half-gap) - 1px) !important;
+}
+.markdown :is(blockquote, li) > p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton))):last-child {
+  margin-bottom: calc(-1 * var(--dsl-markdown-image-half-gap) - 1px) !important;
+}
+/* Paragraphs inside nested ordered lists render inline, where block margins do not apply; they keep the plain inline layout. */
+.markdown :where(ul, ol) ol li p > .imageButton { margin-block: 0; }
+.markdown :where(ul, ol) ol li p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton)))::before,
+.markdown :where(ul, ol) ol li p:has(> .imageButton ~ .imageButton):not(:has(> :not(.imageButton)))::after {
+  content: none;
+}
 .previewName {
   display: block;
   margin-top: 8px;

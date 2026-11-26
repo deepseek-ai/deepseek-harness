@@ -217,12 +217,16 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     const deepSeek = settings.getByText('DeepSeek API', { exact: true }).first()
     await deepSeek.waitFor({ timeout: 10_000 })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    await settings.getByText('自定义设置').click()
-    expect(await settings.getByLabel('模型 ID 1').inputValue()).toBe('deepseek-flash')
-    expect(await settings.getByLabel('显示名称 1').inputValue()).toBe('DeepSeek-V4.1-Flash')
-    expect(await settings.getByLabel('模型 ID 2').inputValue()).toBe('deepseek-v4-pro')
+    // A folded row names its model as text; its fields exist once it is unfolded.
+    const rows = settings.locator('[data-row-key]')
+    await rows.nth(0).getByText('deepseek-flash', { exact: true }).waitFor({ timeout: 10_000 })
+    await rows.nth(0).getByText('DeepSeek-V4.1-Flash', { exact: true }).waitFor({ timeout: 10_000 })
+    await rows.nth(1).getByText('deepseek-v4-pro', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await settings.getByRole('textbox', { name: /^(模型 ID|显示名称) / }).count()).toBe(0)
     expect(await settings.getByRole('button', { name: /删除模型/ }).count()).toBe(2)
     await settings.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await settings.getByLabel('模型 ID 1').inputValue()).toBe('deepseek-flash')
+    expect(await settings.getByLabel('显示名称 1').inputValue()).toBe('DeepSeek-V4.1-Flash')
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(true)
     await assertModelInputLayout(page, settings)
     const defaultModels = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
@@ -245,7 +249,6 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       name: 'DeepSeek-V4-Pro', inputModalities: ['text'],
     })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    await settings.getByText('自定义设置').click()
     for (let index = 0; index < 2; index++) {
       await settings.getByRole('button', { name: /删除模型/ }).first().click()
     }
@@ -280,7 +283,6 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       inputModalities: ['text', 'image'],
     })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    await settings.getByText('自定义设置').click()
     await settings.getByRole('button', { name: '模型选项 1' }).click()
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(true)
     await settings.getByRole('button', { name: '取消', exact: true }).click()

@@ -465,18 +465,16 @@ function main(): void {
   const failures = scanFailures(result)
   if (failures.length === 0) {
     console.log(`${GATE}: ${String(result.checkedEntries.function)} function plugin and`
-      + ` ${String(result.checkedEntries.service)} service plugin entries export only what the Loader loads, types,`
-      + ` and Service or Error classes, apart from ${String(result.listedExports)} export(s) listed in`
-      + ` ${EXISTING_EXPORTS_FILE}.`)
+      + ` ${String(result.checkedEntries.service)} service plugin entries satisfy ${RULE};`
+      + ` ${String(result.listedExports)} historical value export(s) remain listed in ${EXISTING_EXPORTS_FILE}.`)
     return
   }
   console.error(`${GATE}: ${String(failures.length)} problem(s):`)
   for (const failure of failures) console.error(`  ${failure}`)
   if (result.violations.length > 0) {
     console.error('\nA function plugin entry exports name, inject, Config, and apply, and a service plugin entry'
-      + ' default-exports its plugin class; either may also export types and classes extending Cordis Service or'
-      + ` Error (${RULE}).`)
-    console.error('Keep any other value in an internal module: same-package tests import that module, and other'
+      + ` default-exports its plugin class. Additional exports must follow the entry export policy (${RULE}).`)
+    console.error('Keep values not admitted by that policy in an internal module: same-package tests import that module, and other'
       + ' packages reach the behavior through a ctx service.')
   }
   process.exitCode = 1

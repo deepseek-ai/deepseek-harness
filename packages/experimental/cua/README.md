@@ -22,7 +22,7 @@ Inspect and operate applications through retained objects: select an application
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
-Application consent supplies English, Chinese, and Japanese display text from `src/locales.ts`. It uses the fixed approval presentation of User Questions and remains independent of the session tool-approval policy. Native icons accompany the prompt and permission-page observations, but remain outside saved identities and model results. System checks, saved grants and refusals, and icons use separate queries so each result can appear without waiting for the others.
+Application consent supplies English, Chinese, and Japanese display text from `src/locales.ts`. It uses the fixed approval presentation of User Questions and remains independent of the session tool-approval policy. Native icons accompany the prompt and permission page; saved grants retain only icon lookup targets, never image data. System checks, saved decisions, and icons use separate queries. `applications()` reads current decisions and saved names without native work; `applicationIcons()` loads icons from saved lookup targets. The page refreshes on entry, focus, reconnection, and completed permission or plugin changes.
 
 -----
 
@@ -61,6 +61,7 @@ To hold a button across calls, use `win.toggleMouse('left', 'down')`, then expli
 
 `click(target, { holdMs: 800 })` holds the mouse button for 800 milliseconds before release. `holdMs` applies only to `click`; it accepts nonnegative integers and applies to each press of a double-click; zero releases without an additional hold. The provider config `maxClickHoldMs` limits explicit holds and defaults to 5000 ms. Explicit holds use pointer input; omission preserves ordinary click behavior. The operation deadline includes the hold, and cancellation or timeout releases the button. Received input cannot be undone; forced helper termination cannot guarantee release.
 
+<a id="permission-controls"></a>
 ### Permission controls
 
 The application approval card includes a **Risks** tag. Hover over it, focus it with the keyboard, or tap it to read a formatted card about background access to approved apps, each app’s automation rules and possible account restrictions, and stopping through DeepSeek Harness. Moving the pointer onto the card keeps it readable and selectable.
@@ -78,6 +79,8 @@ System-permission operations affect the computer running DSH. When accessing DSH
 Enabling from the plugin list or detail page shows setup guidance when system permissions need attention, with **Later** and **Open settings** actions. Choose the default for new sessions in **Settings → Agent presets**.
 
 The page lists always-allowed applications and refusals from any session. A refusal in one session does not cancel another session’s grant or prevent a new session from asking. Session-only grants remain effective within their sessions and are omitted from this page. **Revoke** removes the selected application's access and cancels affected work. Input already delivered to an application cannot be undone; observe the application before any further action. **Allow asking again** clears that application’s refusal records across all sessions; the next application selection still requires a new decision.
+
+Platform providers can report permission attributes with each selection. A selection matches a saved decision when an attribute of the same name shares a value; the match adds the selection's values to that decision, so later selections can match through values learned from intermediate ones. Providers without attributes, including macOS, match by authorization ID alone. Matching never turns a session grant into an always-allowed grant. Decisions connected by shared attributes appear as one entry, and **Revoke** and **Allow asking again** apply to all of them. Attributes are not displayed.
 
 The Host marker has no configurable fields; platform providers own native configuration.
 
@@ -101,7 +104,9 @@ The [permission store](src/permission-store.ts) uses `storageDomain` with the co
 
 Legacy `allowedApps` are imported on first store access and never reapplied after migration. The old configuration can be removed after checking the permission page. Grants, denials and the option to ask again are durable; the page still omits conversation-only grants. Standalone compositions without a profile retain only process-local decisions; a profile without domain storage refuses authorization operations.
 
-Grant executable paths are optional display metadata. Missing paths omit the tooltip and icon query while retaining the application name and revoke action. Existing stored records remain valid; new records without paths require a reader that supports the optional field. Storage failures still reject authorization and dispatch without substituting temporary permission.
+Grant executable paths are optional display metadata. Missing executable paths omit the tooltip; icon queries use `iconPath` when available, otherwise the executable path. Grants without either retain the application name and revoke action. Existing stored records remain valid; new records without paths require a reader that supports the optional field. Storage failures still reject authorization and dispatch without substituting temporary permission.
+
+Each record keeps its authorization key and may store `attributes`, a map from provider-qualified names to value lists that includes the reserved `cua.id` list of matched authorization IDs; native results cannot supply `cua.id`. [application-identity.ts](src/application-identity.ts) computes connected groups. A handle stays bound to the record chosen at selection, preferring a saved grant, then this conversation's refusal, then its grant. Revocation takes the application locks of every group member. One Agent's concurrent selections with overlapping attributes wait for the earlier decision. See the [permission attributes decision](../../../.agents/notes/implemented/architecture/2026-11-26-cua-permission-attributes.md).
 
 The permission Remote also exposes `ptcConfiguration()` and `enablePersistentPtc()` for shared PTC runtime configuration. Reads inspect the existing runtime and editable profile entry. Explicit writes obtain execution settings from the Node provider's `resolvePersistentExecution` helper and use `configEditor.edit()` to preserve other fields and apply normal Loader reload; an already-persistent runtime is left intact. CUA declares the Node provider as a peer so these settings follow the installed provider version. This setting is separate from system and application authorization.
 

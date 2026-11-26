@@ -618,6 +618,12 @@ export const IconDragHandleOutlineRegular = productIcon('drag-handle-outline', '
 /** Medium IconDragHandleOutline artwork with a 1.3px stroke. */
 export const IconDragHandleOutlineMedium = productIcon('drag-handle-outline', 'medium')
 
+/** Regular IconDragDotsFill artwork: six filled dots, the same in both weights. */
+export const IconDragDotsFillRegular = productIcon('drag-dots-fill', 'regular')
+
+/** Medium IconDragDotsFill artwork: six filled dots, the same in both weights. */
+export const IconDragDotsFillMedium = productIcon('drag-dots-fill', 'medium')
+
 /** Regular one-pixel IconArchiveOffOutline artwork. */
 export const IconArchiveOffOutlineRegular = productIcon('archive-off-outline', 'regular')
 

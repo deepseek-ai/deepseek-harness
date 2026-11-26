@@ -293,7 +293,7 @@ describe('reasoning levels in the model list', () => {
       return (
         <ModelListEditor
           models={models} onChange={(next) => { writes.push(next); setModels(next) }} reasoningLevels={LEVELS}
-          probe={{ settingsNs: 'llm-pi-ai' }} operations={operations} disabled={false} t={t} onBusyChange={() => {}}
+          probe={{ settingsNs: 'llm-pi-ai' }} operations={operations} disabled={false} attempt={0} t={t} onBusyChange={() => {}}
         />
       )
     }
@@ -330,7 +330,7 @@ describe('reasoning levels in the model list', () => {
     render(<ModelListEditor
       models={[{ id: 'gpt-5' }]} onChange={(next) => { writes.push(next) }} catalogProvider="openai" reasoningLevels={LEVELS}
       probe={{ settingsNs: 'llm-pi-ai', provider: 'openai' }}
-      operations={operations} disabled={false} t={t} onBusyChange={() => {}}
+      operations={operations} disabled={false} attempt={0} t={t} onBusyChange={() => {}}
     />)
     fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
     fireEvent.click(toggle())
@@ -344,7 +344,7 @@ describe('reasoning levels in the model list', () => {
     render(<ModelListEditor
       models={[{ id: 'gpt-5' }]} onChange={vi.fn()} catalogProvider="openai" reasoningLevels={reasoningLevels}
       probe={{ settingsNs: 'llm-pi-ai', provider: 'openai' }}
-      operations={operations} disabled={false} t={t} onBusyChange={() => {}}
+      operations={operations} disabled={false} attempt={0} t={t} onBusyChange={() => {}}
     />)
     fireEvent.click(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }))
     expect(screen.getByRole('group', { name: `${en.modelInputTypes} 1` })).toBeTruthy()

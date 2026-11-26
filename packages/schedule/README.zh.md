@@ -29,6 +29,8 @@ kind: "package-group"
 | [`schedule/`](schedule/README.zh.md) | Host 拥有的任务持久化、调度、投递目标、查询与显式删除 |
 | [`tool-schedule/`](tool-schedule/README.zh.md) | 基于宿主 `ctx.schedule` 服务的 preset 级 `schedule_create`、`schedule_list`、`schedule_view` 和 `schedule_edit` 工具 |
 
+插件可以通过 [Schedule 服务](schedule/README.zh.md#source-delivery)提交普通 Source 实例产生的观测。
+
 -----
 
 <a id="related-documentation"></a>
