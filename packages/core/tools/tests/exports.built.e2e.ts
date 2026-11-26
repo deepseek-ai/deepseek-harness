@@ -21,13 +21,17 @@ assert.equal(Object.hasOwn(tools, 'executeModelToolFixture'), false)
 await assert.rejects(import('@deepseek-ai/dsh-tools/testing'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' })
 const ctx = new Context()
 try {
-  const cause = new Error('registry lookup failed')
-  const pipeline = new ToolExecutionPipeline(ctx, { get() { throw cause } })
+  const cause = new Error('scheduler failed')
+  // A scheduler failure rejects the whole batch; a lookup failure would fail only its call.
+  class FailingPipeline extends ToolExecutionPipeline {
+    executionMode() { throw cause }
+  }
+  const pipeline = new FailingPipeline(ctx, { get: () => undefined })
   assert.equal(typeof pipeline.prepare, 'function')
   await assert.rejects(executeToolBatch({
     calls: [{ type: 'tool-call', id: 'probe', name: 'probe', arguments: '{}' }],
     signal: new AbortController().signal,
-  }, pipeline, () => 1), error => error instanceof tools.ToolBatchExecutionError && error.cause === cause)
+  }, pipeline), error => error instanceof tools.ToolBatchExecutionError && error.cause === cause)
   const definition = defineContentToolFixture({
     name: 'probe', description: 'probe', parameters: {},
     async execute() { return [{ type: 'text', text: 'ok' }] },

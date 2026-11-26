@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SessionLogOffset, SessionSeq, TOOL_OUTCOME_UNKNOWN, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createToolResultMessage, createUserMessage, type ToolCallId, type ToolSchema } from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
+import type {} from '@deepseek-ai/dsh-tool-registry-ptc/types'
 import {
   applyUserQuestionEvent, foldUserQuestions, isTimedAskUserQuestionSchema, questionsOf, TIMED_WAIT_PARAMETER,
   userQuestionProjectionDefinition,

@@ -1,6 +1,6 @@
 /** The `agent-loop` settings section layered over the composition entry. */
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
@@ -21,7 +21,7 @@ async function boot(maxParallelToolCalls?: number) {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   const live = await liveConfig(ctx, AgentLoop, { agents: [], ...maxParallelToolCalls === undefined ? {} : { maxParallelToolCalls } })
   return { ctx, live }
 

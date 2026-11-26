@@ -7,21 +7,45 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { assertNever, deepFreeze, snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
-import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolNotFoundError, ToolOutputError } from './contracts.ts'
+import { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, ToolCompositionError, ToolNotFoundError, ToolOutputError } from './contracts.ts'
 import { APPROVAL_CANCELLED, APPROVAL_ERROR_NAME, APPROVAL_REJECTED, APPROVAL_UNAVAILABLE, type ApprovalErrorCode } from './error-codes.ts'
 import { validateJsonSchemaValue } from './json-schema.ts'
 import type { ToolsService } from './index.ts'
-import type { ResolvedToolSet, ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
+import type { ToolStep } from './step.ts'
+import type { ToolDefinition, ToolExecutionInput, ToolExecutionMode, ToolExecution, ToolRunContext, ToolExecutionResult, ToolExecutionSuccess, ToolErrorInfo, ToolExecutionToken, PreToolDecision, PostToolDecision } from './contracts.ts'
 
-/** Executor-owned lookup and restrictions applied before extensible execution policy. */
+/** Registry-owned lookup and refusals for the calls one pipeline runs. */
 export interface ToolExecutionSource {
   /**
-   * Override registry lookup for executor-owned capabilities; omitted uses the
-   * retained registry's executable lookup, which applies the call's step admission.
+   * Resolve the definition one call may execute. Registries apply the call's
+   * model-step declarations here; undefined fails the call as `UNKNOWN_TOOL`.
+   * A throw fails only that call. During preparation it fails the call before
+   * policy: classification runs the call alone, and preparation settles it
+   * with the error. Dispatch repeats the lookup, so a throw first met there
+   * fails the call after `tools/pre-execute`, approval, guards, and
+   * `tools/execute` wrappers, and `tools/post-execute` sees the failure. A
+   * `ToolCompositionError` is logged with its message, and the call fails
+   * with a message that tells the model the tool is misconfigured.
+   * @param name - called tool name.
+   * @param scope - calling Agent, or undefined for a standalone call.
+   * @param toolStep - model step admitting the call, or undefined outside a step.
+   * @returns the definition to execute, or undefined.
    */
-  get?(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
-  /** Reject an otherwise visible invocation before policy; omitted permits it. */
-  reject?(name: string, nested: boolean): Error | undefined
+  get(name: string, scope: ScopeKey | undefined, toolStep: ToolStep | undefined): ToolDefinition | undefined
+  /**
+   * Refuse one call before extensible policy runs, for example a model-direct
+   * call to a tool the registry offers only inside programs. A refused call
+   * carries no definition and settles without `tools/pre-execute`, approval,
+   * guards, `tools/execute`, `tools/post-execute`, or definition callbacks;
+   * cancellation takes precedence over the refusal, and a throw refuses the
+   * call with the thrown error, a `ToolCompositionError` replaced as `get`
+   * describes. Omitted, or undefined, lets the call continue:
+   * a call whose name resolves to no definition then runs policy and fails at
+   * dispatch as `UNKNOWN_TOOL`.
+   * @param exec - the call as the caller supplied it.
+   * @returns the error the call settles with, or undefined.
+   */
+  reject?(exec: ToolExecutionInput): Error | undefined
 }
 
 /** Prepared invocation; immediate results carry their post-execute requirement. */
@@ -63,22 +87,60 @@ interface FusedToolSignal {
 export class ToolExecutionPipeline {
   private readonly tools: ToolsService
 
-  constructor(private readonly ctx: Context, private readonly source: ToolExecutionSource = {}) {
+  /**
+   * @param ctx - registry context owning policy events and approval lookup.
+   * @param source - registry lookup and refusals for every call this pipeline runs.
+   */
+  constructor(private readonly ctx: Context, private readonly source: ToolExecutionSource) {
     // Accepted calls retain their event subject while the service is withdrawn during shutdown.
     this.tools = ctx.tools
   }
 
-  private get(name: string, scope: ScopeKey | undefined, toolSet: ResolvedToolSet | undefined): ToolDefinition | undefined {
-    return this.source.get === undefined
-      ? this.tools.executable(name, scope, toolSet)
-      : this.source.get(name, scope, toolSet)
+  private resolveExecution(exec: ToolExecutionInput): ToolDefinition | undefined {
+    return this.source.get(exec.name, exec.agent, exec.toolStep)
   }
 
-  private resolveExecution(
-    name: string, scope: ScopeKey | undefined, nested: boolean, toolSet: ResolvedToolSet | undefined,
-  ): ToolDefinition | undefined {
-    const tool = this.get(name, scope, toolSet)
-    return tool !== undefined && this.source.reject?.(name, nested) === undefined ? tool : undefined
+  /**
+   * Run one source lookup or refusal for a call being prepared or dispatched.
+   * A composition failure, such as two definitions that appear under the
+   * call's name during a step, is logged once with its message, and the call
+   * fails with a message the model can act on.
+   * @param call - name, call id, and Agent of the call the lookup serves.
+   * @param lookup - source lookup or refusal.
+   * @returns the lookup result.
+   * @throws ToolCompositionError with the model-facing message when the lookup meets a composition failure.
+   */
+  private lookup<T>(call: Pick<ToolExecutionInput, 'name' | 'callId' | 'agent'>, lookup: () => T): T {
+    try {
+      return lookup()
+    } catch (error: unknown) {
+      if (!(error instanceof ToolCompositionError)) throw error
+      const caller = call.agent === undefined ? '' : ` from Agent ${call.agent.id}`
+      this.ctx.logger.warn(`tool "${call.name}" (call ${call.callId}${caller}) cannot run: ${error.message}`)
+      throw new ToolCompositionError(`tool "${call.name}" cannot run because it is misconfigured in this environment; do not retry it; use another tool or tell the user`)
+    }
+  }
+
+  /**
+   * The definition prepare captured for one call, while the source still offers exactly it; checked as dispatch starts.
+   * @throws ToolNotFoundError when prepare captured none or the source now resolves another definition or none.
+   * @throws ToolCompositionError when the lookup meets a composition failure.
+   */
+  private capturedDefinition(exec: ToolExecution): ToolDefinition {
+    const definition = this.dispatchedDefinition(exec)
+    if (this.lookup(exec, () => this.resolveExecution(exec)) !== definition) throw new ToolNotFoundError(exec.name)
+    return definition
+  }
+
+  /**
+   * The definition whose output contract a dispatched call's result follows. A
+   * call that started keeps it even if its source withdraws the tool meanwhile.
+   * @throws ToolNotFoundError when prepare captured no definition.
+   */
+  private dispatchedDefinition(exec: ToolExecution): ToolDefinition {
+    const definition = exec.definition
+    if (definition === undefined) throw new ToolNotFoundError(exec.name)
+    return definition
   }
 
   /** Context deferred by a running tool body, keyed by its scheduler-owned execution. */
@@ -99,17 +161,19 @@ export class ToolExecutionPipeline {
   /**
    * Classify a pending call through the caller's visible tool definition. Only
    * an exact `true` is parallel; unknown, hidden, undeclared, invalid, or
-   * throwing classifiers are exclusive.
+   * throwing classifiers are exclusive, and so is a call whose lookup throws,
+   * which preparation then fails alone.
    * @param exec - call name, parsed arguments, and optional agent scope.
    * @returns the fail-closed scheduling mode.
    */
   executionMode(exec: ToolExecutionInput): ToolExecutionMode {
-    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
-    if (!tool?.isConcurrencySafe) return { kind: 'exclusive' }
     try {
+      const tool = this.resolveExecution(exec)
+      if (!tool?.isConcurrencySafe) return { kind: 'exclusive' }
       const concurrencySafe: unknown = tool.isConcurrencySafe(exec.arguments)
       return concurrencySafe === true ? { kind: 'parallel' } : { kind: 'exclusive' }
     } catch {
+      // Preparation repeats the lookup and settles the call with its failure.
       return { kind: 'exclusive' }
     }
   }
@@ -123,10 +187,21 @@ export class ToolExecutionPipeline {
     const agent = exec.agent
     const parent = exec.parent
     const signal = exec.signal
-    // Executor refusals precede extensible policy; unknown tools retain dispatch-stage handling.
-    const visible = this.get(name, agent, exec.toolSet)
-    const rejection = visible === undefined ? undefined : this.source.reject?.(name, parent !== undefined)
-    const rejected = rejection !== undefined
+    // Refused calls settle before policy; other unknown tools run policy and fail at dispatch.
+    // A lookup that throws, such as on an ambiguity that appears during a step, fails only this call, before policy.
+    let visible: ToolDefinition | undefined
+    let refusal: { readonly error: unknown } | undefined
+    try {
+      // The snapshotted identity keeps the input's getters from running again.
+      const call = { name, callId, ...agent !== undefined ? { agent } : {} }
+      visible = this.lookup(call, () => this.source.get(name, agent, exec.toolStep))
+      const rejection = this.lookup(call, () => this.source.reject?.(exec))
+      if (rejection !== undefined) refusal = { error: rejection }
+    } catch (error: unknown) {
+      refusal = { error }
+    }
+    // A refused call carries no definition, so none of its callbacks run.
+    if (refusal !== undefined) visible = undefined
     const concludingExecutions = this.concludingExecutions
     const base = {
       token,
@@ -135,7 +210,8 @@ export class ToolExecutionPipeline {
       name,
       signal,
       ...agent !== undefined ? { agent } : {},
-      ...exec.toolSet !== undefined ? { toolSet: exec.toolSet } : {},
+      ...exec.toolStep !== undefined ? { toolStep: exec.toolStep } : {},
+      ...visible !== undefined ? { definition: visible } : {},
       ...parent !== undefined ? { parent } : {},
       ...exec.schema !== undefined ? { schema: exec.schema } : {},
       deferContext(context: UserMessage): void {
@@ -145,11 +221,9 @@ export class ToolExecutionPipeline {
         concludingExecutions.add(this)
       },
     }
-    // Capture callbacks before argument getters run; rejected calls retain finalization only when aborted.
+    // Capture callbacks before argument getters run.
     const capturedFinalizer = visible?.finalizeContent?.bind(visible)
     const capturedProjector = visible?.projectContent?.bind(visible)
-    const finalizerFor = (): ToolDefinition['finalizeContent'] | undefined =>
-      rejected && !signal.aborted ? undefined : capturedFinalizer
     try {
       const detached = snapshotJsonValue(exec.arguments)
       if (detached === undefined) {
@@ -157,34 +231,30 @@ export class ToolExecutionPipeline {
       }
       const execution: MutableToolRunContext = { ...base, arguments: deepFreeze(detached) }
       this.deferredContexts.set(execution, deferredContexts)
-      this.contentFinalizers.set(execution, finalizerFor())
-      if (!rejected) this.contentProjectors.set(execution, capturedProjector)
+      this.contentFinalizers.set(execution, capturedFinalizer)
       this.cancellationStates.set(execution, {
         callerSignal: signal,
         bodyInvoked: false,
       })
-      if (rejected) {
-        // Cancellation takes precedence over an executor refusal.
-        if (signal.aborted) {
-          return { kind: 'final-result', exec: execution, result: toolAbortedBeforeDispatchResult() }
-        }
-        return {
-          kind: 'final-result',
-          exec: execution,
-          result: toolErrorResult(rejection),
-        }
+      if (refusal !== undefined) {
+        const result = signal.aborted ? toolAbortedBeforeDispatchResult() : toolErrorResult(refusal.error)
+        return { kind: 'final-result', exec: execution, result }
       }
+      this.contentProjectors.set(execution, capturedProjector)
       return { kind: 'ready', exec: execution }
     } catch (error: unknown) {
       const execution: MutableToolRunContext = { ...base, arguments: undefined }
-      this.contentFinalizers.set(execution, finalizerFor())
+      this.contentFinalizers.set(execution, capturedFinalizer)
       return { kind: 'final-result', exec: execution, result: toolErrorResult(error) }
     }
   }
 
   /**
-   * Snapshot input, assign its correlation token, and run ordered pre-execute
-   * policy and guards. Cancellation skips a body that has not started.
+   * Snapshot input, assign its correlation token, settle a call the source
+   * refuses, and run ordered pre-execute policy and guards for the others.
+   * A refused call reaches no policy, approval, guard, or execution wrapper.
+   * Cancellation skips a body that has not started and takes precedence over
+   * a refusal.
    * @param input - the caller-supplied execution input.
    * @returns the prepared execution plus the next scheduler stage.
    */
@@ -274,8 +344,7 @@ export class ToolExecutionPipeline {
     }
     exec.signal = signal
     try {
-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
-      if (!tool) throw new ToolNotFoundError(exec.name)
+      const tool = this.capturedDefinition(exec)
       state.bodyInvoked = true
       const returned = await tool.execute(exec.arguments, exec)
       const result = this.createSuccessResult(exec, tool, returned)
@@ -530,9 +599,7 @@ export class ToolExecutionPipeline {
       if (result.isError) {
         throw new TypeError('tools/post-execute cannot replace the value of a failed result')
       }
-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
-      if (tool === undefined) throw new ToolNotFoundError(exec.name)
-      const replaced = this.createSuccessResult(exec, tool, decision.value)
+      const replaced = this.createSuccessResult(exec, this.dispatchedDefinition(exec), decision.value)
       return this.markCanonical(exec, {
         ...replaced,
         ...additionalContexts.length > 0 ? { additionalContexts } : {},
@@ -599,9 +666,7 @@ export class ToolExecutionPipeline {
         ...result.additionalContexts !== undefined ? { additionalContexts: result.additionalContexts } : {},
       })
     }
-    const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined, exec.toolSet)
-    if (tool === undefined) throw new ToolNotFoundError(exec.name)
-    const normalized = this.createSuccessResult(exec, tool, result.value)
+    const normalized = this.createSuccessResult(exec, this.dispatchedDefinition(exec), result.value)
     return this.markCanonical(exec, {
       ...normalized,
       ...result.additionalContexts !== undefined ? { additionalContexts: result.additionalContexts } : {},
@@ -804,4 +869,8 @@ function toolAbortedBeforeDispatchResult(prior?: ToolExecutionResult): ToolExecu
   }
 }
 
-export { executeToolBatch } from './batch.ts'
+export { DEFAULT_MAX_PARALLEL_TOOL_CALLS, executeToolBatch } from './batch.ts'
+export { ToolEntries } from './entries.ts'
+export { ToolStep } from './step.ts'
+export { NativeToolRegistry } from './native-registry.ts'
+export { AgentToolRegistry } from './agent-tools.ts'

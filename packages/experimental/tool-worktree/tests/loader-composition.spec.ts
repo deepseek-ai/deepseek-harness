@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -61,7 +61,7 @@ describe('worktree tool through real Loader composition', () => {
       ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
       ['@deepseek-ai/dsh-llm', LlmRuntime],
       ['@deepseek-ai/dsh-tools', ToolRuntime],
-      ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+      ['@deepseek-ai/dsh-tool-registry-native', NativeToolRegistry],
       ['@deepseek-ai/dsh-fs-local', LocalFileSystem],
       ['@deepseek-ai/dsh-subprocess-local', LocalSubprocessRuntime],
       ['@deepseek-ai/dsh-sandbox-local', LocalSandbox],
@@ -171,6 +171,6 @@ describe('worktree tool through real Loader composition', () => {
 
     const entry = [...context.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-tool-worktree')
     await entry!.fiber!.dispose()
-    expect(context.tools.schemas().some(tool => tool.name.endsWith('_worktree'))).toBe(false)
+    expect(context.tools.getAll().some(tool => tool.name.endsWith('_worktree'))).toBe(false)
   })
 })

@@ -1,0 +1,179 @@
+---
+description: "基于程序的工具执行、生成 SDK 与嵌套调用限制。"
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-tool-registry-ptc
+
+[English](README.md) | 中文
+
+## 概述
+
+当模型应通过 `run_code` 程序调用工具时，使用此根注册表；也可以引入一个具名程序工具，其程序只调用你绑定的工具。先挂载兼容的 PTC 运行时和工具注册表。作用域限制决定生成的 SDK；只有程序入口能被直接调用。可配置每个程序的工具调用总数上限，以及并行安全的子调用并发上限。
+
+## 目录
+
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [进一步探索](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用本包
+
+将此行加入已经挂载 `dsh-tools` 的组合。插件在挂载作用域中安装一个 PTC 根注册表：其唯一条目 `run_code` 运行的程序可以调用该作用域中 Agent 看到的每个工具，系统提示词则把这些工具声明为生成的 SDK。Agent 使用最近的根注册表，每个作用域只允许一个；根注册表的选择与不可用的根注册表由 [tools 包](../tools/README.zh.md#compose-registries)负责。
+
+```yaml
+- name: '@deepseek-ai/dsh-tool-registry-ptc'
+  config:
+    maxSubCallsPerMinute: 1024
+    maxParallelSubCalls: 10
+```
+
+根 `run_code` 调用是独占调用，按串行执行。`maxParallelSubCalls` 限制每个程序中并行安全的嵌套调用数，默认值为 `10`；值必须是正整数，`1` 表示串行执行。独占调用构成屏障。
+
+`maxSubCallsPerMinute` 默认值为 `1024`，必须是正整数。每次 `run_code` 的工具调用额度为 `floor(最终 timeoutMs / 60000 × maxSubCallsPerMinute)`：Node 默认超时为两分钟，因此允许 2048 次。计算前先应用运行时默认值和超时上限；没有截止时间时，调用额度也没有有限上限。这是总额度，不是滑动窗口，因此可以集中调用。所有工具绑定共用计数，排队调用、无效参数和失败调用也计入。达到上限后，下一次尝试会通过运行时取消路径终止整个程序，取消进行中的子调用，并放弃排队调用，然后返回 `CODE_RUN_FAILED`。与超时一样，捕获绑定错误也不能让程序继续运行；运行时保留的状态会被丢弃。已完成的工具操作仍然生效，新的程序重新计数。
+
+`PtcRuntime` 提供方必须报告 `language: 'typescript'`。PTC 注册表在提示词组装与执行时拒绝其他语言，不回落到 native 工具；以固定 `runtime` 构造的注册表在构造时即拒绝这种运行时。读取 schema 和执行时也会验证当前提供方。注册表生成 TypeScript SDK 与该条目的 schema；提供方负责执行。
+
+工具调用保留声明的 JSON 返回值。将未修改的对象或数组结果直接传给 `inspect`，会展示工具最终的纯文本输出。字段、拷贝、修改后的结果，以及嵌套在其他值中的结果，使用普通 Node 格式。可用 `inspect({ ...result })` 查看对象的原始结构，或用 `inspect(result.lines)` 展示选定字段。标量结果使用普通格式；Image 和混合文本与图片的输出遵循下文的图片规则。
+
+本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。插件在运行时可用后才安装其根注册表；运行时卸载后，根注册表选择保持不可用，在运行时恢复之前，新批次与提示词组装都以 `TOOL_REGISTRY_UNAVAILABLE` 失败。启用 PTC 根注册表但未提供运行时会阻止应用启动。不可用的 PTC 根注册表绝不会回退到原生执行。
+
+共享分派事件与 `ptc-mode` 消息来源声明位于 `@deepseek-ai/dsh-tool-registry-ptc/types`；Client 代码通过 `@deepseek-ai/dsh-tool-registry-ptc/client` 导入同一组声明。两个入口都不引入 Host 服务声明。Host 策略扩展通过包主入口的 `import type` 获取 `PtcDispatchLog` 与 `tools/ptc-dispatch-log`，无需挂载该插件。
+
+要在 Agent 直接调用的工具旁提供一个具名程序工具，构造 `new PtcToolRegistry(ctx, { name, description?, runtime?, config? })`，注册其程序调用的工具，再用 `ctx.tools.include()` 引入该注册表。它的唯一条目是名为 `name` 的程序工具。它的注册与引入就是其程序调用的绑定：即使 Agent 能调用其他工具，程序也只能调用这些绑定，而且这些绑定绝不会进入引入方作用域的工具。嵌套调用保留正常审批、guard、派发日志、截图、延后上下文和轮次结束行为。`config` 接受与本插件相同的调用额度与并发设置，由 `PtcToolRegistry.Config` 校验。
+
+调用方拥有固定的 `runtime`，必须使其可用至注册表的上下文完成销毁；未提供 `runtime` 时，每个程序使用该上下文的 `ptcRuntime` 服务。对于保留状态或实施沙箱的运行时，销毁该上下文会取消活动的 Agent 程序并等待嵌套调用；Agent 销毁时释放其保留环境。环境初始化由传入[运行时的注册 API](../../ptc-runtime/ptc-runtime/README.zh.md#choose-a-backend)负责；应在引入程序工具前完成注册。`description` 替换运行时默认的条目描述，注册表再把运行时语法和执行说明追加到其后；其绑定的说明由调用方提供。
+
+[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-registry-ptc)
+
+-----
+
+<a id="understand-the-implementation"></a>
+## 理解实现
+
+<details>
+<summary>实现细节——点击展开</summary>
+
+插件的 `apply` 调用 `new PtcToolRegistry(ctx, { name: RUN_CODE_NAME, config }).mountRoot()`。`mountRoot()` 通过 `ctx.tools.setRoot()` 选择该注册表，`setRoot()` 把该作用域中 Agent 的注册项作为绑定交给它；`mountRoot()` 还为声明该注册表条目的步骤注册 `tools:ptc-only` 与 `tools:sdk` 提示词段落。`ctx.tools.execute()` 运行原始调用批次，包括参数解析、调度、取消和可选的模型步骤日志，并把每个调用解析到该注册表的条目。每个程序的嵌套调用经由该注册表自有的共享调用流水线实例运行，以执行策略、工具主体和结果通知。销毁注册表的上下文（例如卸载插件）会中止 Agent 在支持沙箱或保留状态的运行时中执行的程序，并等待其嵌套调用结束。已接纳批次仍由该注册表结算，但可能返回取消错误。
+
+### PTC mode
+
+PTC 根注册表公开保留的 `run_code` 条目，以及确定性的 TypeScript SDK。每个 SDK 绑定捕获冻结的 ToolSchema，经由调度器传入该次执行上下文。存在模型步骤时，第一次绑定查询会固定该步骤声明的绑定，因此 SDK、该步骤的程序及其嵌套调用使用相同的定义；模型响应期间被替换或新增的绑定在下一个步骤之前以 `UNKNOWN_TOOL` 失败。已开始的调用在策略之前只记录配对 id、名称和规范化参数；其结算事件保留渲染结果、可选展示元数据与结构化错误；元数据由该次调用的规范值投影并冻结，不改变程序读取的值或模型内容。描述与参数 schema 仅临时存活，不进入 Session 事件或 SDK 输出。调用通过复用原生并发约定的每次运行独有池调度。模型直接调用某个绑定名称时，该调用会在 `tools/pre-execute`、审批、守卫和执行包装层之前以 `UNKNOWN_TOOL` 失败，其消息会列出该 Agent 可以直接调用的条目，例如 `run_code`；通告的工具与可调用的工具保持一致。中间绑定值只存在于执行局部；只有外层 `run_code` 结果有硬大小上限。
+
+文本展示复用已完成流水线中经过内容策略处理的 `output.render` 结果，不会再次执行工具或渲染。仅针对派发日志的替换不改变程序的展示文本。
+
+新子调用使用 `<parent>:ptc:<n>` 标识。消费方将这些标识视为不透明值，并通过精确相等关联事件；恢复的历史标识保留原始字节。[PTC mode 决策](../../../.agents/notes/implemented/feature/2026-06-15-ptc.zh.md) 负责持久化命名与恢复规则。
+
+TypeScript 中的 `read_image` 与 CUA 截图操作返回 `Image`，其中包含可读取的 `path`、`width` 和 `height`。其他工具的返回值按全有或全无的方式替换：当 `{ type: 'image', attachment }` 条目引用了最终结果中的每张图片且程序能读取每张图片时，这些条目会变为 `Image`，与已接受的 MCP 图片块相同，结果的文本与图片仅通过 `inspect` 进入模型；否则返回值保持原样，完整的结果内容作为额外上下文进入模型。将其传给 `inspect` 后，持久附件会按顺序与文本一起进入 `run_code` 结果。数组和对象内嵌的图片会随所在值一起展示。程序失败时，已 inspect 的输出随原始诊断一起呈现；外层替换的结果保持生效。输出策略移除截图或 read_image 图片时，绑定以 ToolCallError 拒绝，并包含保留的文本提示。额外上下文保留生成工具的归属。
+
+每个 PTC 注册表的程序入口（包括 `run_code`）在捕获输出或诊断文本被截断时报告 `outputTruncated: true`。使用 Node 运行时时，展示输出超限会丢弃后续输出，执行仍受原有超时和取消规则约束。正常结束的程序仍是成功工具结果，并提示输出已截断，应读取当前状态而不重复已完成的动作。后续失败保留实际错误类型和截断提示。已保留的图片与已结算的子调用记录仍然可用。
+
+调用方取消且运行时报告 `abort` 时，`run_code` 等待清理完成，并返回原生工具的取消结果：`AbortError` / `ABORTED`，内容为 `Error: tool call aborted`。保留状态的运行时会附加取消诊断，包括变量被保留还是清空。Agent 在 `turn/end` 中记录具体取消原因，包括 hook 的理由。运行时失败保留 `CODE_RUN_FAILED` 及其诊断，即使调用方同时取消。运行时拒绝保留 `PtcRuntimeError` 的 code，否则变为 `CODE_RUN_FAILED` 并以该拒绝为 `cause`。`description` 为空白、`timeoutMs` 无效，或运行时不支持却传入 `timeoutMs` 或 `sandbox_permissions` 时，以带 `INVALID_ARGS` 的 `ToolArgsError` 失败；注册表的上下文销毁后，调用以 `CODE_RUN_UNAVAILABLE` 失败；缺少运行时、`workingDirectory` 或 `sandboxPolicy` 时以 `ToolContextUnavailableError` 失败。取消可能丢弃保留的运行时状态，也不会撤销已完成的工具操作。
+
+当已挂载运行时支持覆盖时，`run_code` 接受 `timeoutMs`；其 schema 报告配置的默认值和上限以及运行时使用说明。Node 默认值为 120,000 ms，上限为 600,000 ms，包含嵌套工具和审批等待。更宽的 `sandbox_permissions` 模式要求非空 `justification`，并在程序启动前获得审批。schema 提示模型使用当前用户的语言撰写理由。授权仅用于该次完整执行；常驻 Session 策略与嵌套工具保留各自权限。程序不会自动重放：显式重试被拒程序前，应检查先前已发生的效果。 保留状态的 PTC 环境遵循会话文件策略。PTC 观察已提交的 Session 模式变化，并立即取消所有 Node 模式下受影响的调用。后续 PTC 调用等待这些调用的嵌套工具清理后，再解析最新策略。运行时负责进程失效和清理，权限设置保持同步。单次提权省略状态所有者，在临时环境中执行；普通调用仍可访问原环境的变量。
+
+通过 `mountRoot()` 挂载自有根注册表的自定义宿主集成保留该 `PtcToolRegistry` 实例，并调用 `reset(agent)` 清空该 Agent 的环境；重置不是模型工具或 SDK 绑定。该操作要求运行时保留状态，会取消活动调用、调用 `release(agent)`，并等待进程及已启动嵌套工具的清理，无需程序响应。接纳新程序前，它排入 `Program environment reset; retained variables cleared. Completed tool effects remain.` 上下文。通知消费时写入日志；取消或 Agent 销毁可能在状态已清空后丢弃通知。并发重置共享清理过程。运行时缺失或不受支持时，操作拒绝但不阻止后续准入。清理或通知入队失败会抛出 `CodeResetFailedError`；后续程序报告带宿主重置指引的 `CodeRunFailedError`，直到显式重试成功。重置不会撤销已完成的工具操作。
+
+- [`src/index.ts`](src/index.ts) — `PtcToolRegistry` 及其 `mountRoot()`、根注册表插件、按步骤固定的绑定与宿主环境重置。
+- [`src/ptc.ts`](src/ptc.ts) — 程序入口：schema 文本、运行时检查、嵌套绑定与结果投影。
+- [`src/ptc-calls.ts`](src/ptc-calls.ts) — 调用准入和取消；重置等待运行时释放及嵌套工具清理后，才接纳新调用。
+
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## 进一步探索
+
+- [工具注册表](../tools/README.zh.md)
+- [Agent 循环](../agent-loop/README.zh.md)
+- [原生工具注册表](../tool-registry-native/README.zh.md)
+- [可组合工具注册表决策](../../../.agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.zh.md)
+
+-----
+
+<a id="model-experience"></a>
+## 模型体验
+
+### PTC mode schema 与系统提示词
+
+#### 模型看到什么
+
+PTC mode 会公开生成的 [`run_code` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-registry-ptc)、下方 SDK 说明，以及生成的精确 TypeScript SDK 块。schema 将 `code` 列在 `description` 前；这是呈现顺序，不强制 JSON 成员顺序。REPL 与 Script 运行时共用通用工具描述和 SDK 说明；语法与状态规则由各自的 `executionInstructions` 提供。TypeScript SDK 声明 `inspect(...values)`，并在所有执行模式的 bash 示例中使用它。说明将生成声明明确标为只能在程序内使用的绑定。当当前 `bash` 参数 schema 接受示例参数时，说明还会给出以 `run_code` 包住 `tools.bash(...)` 的完整调用。`tools:sdk` 段使用 first-party 顺序 5000，并关闭提示词变量插值，使 TypeScript 程序原样保留工具描述和 schema 中的 `{{…}}` 文本。当某个步骤声明 PTC 根注册表的 `run_code` 条目时，提示词还会带上处于更早 first-party 顺序的 `tools:ptc-only` 规则，让模型先读到「可以调用哪些工具」再读「每个工具做什么」。 工具调用额度耗尽时，`run_code` 返回失败结果，说明额度、被拒绝的调用序号、程序已终止，以及可能存在死循环。运行时清理诊断和已捕获的输出仍然可见。 TypeScript 程序通过 `inspect(...values)` 展示选定的值。每个参数独立渲染。注册表省略函数返回值和末尾表达式的值。Node 提供方保留完整的原生 console，并捕获其 stdout 和 stderr 写入；模型指引要求程序使用 `inspect`。
+
+##### 带 bash 的 TypeScript PTC mode SDK 说明
+
+```markdown
+## Writing code for run_code
+
+`run_code` takes two required arguments: `code`, the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped), and `description`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
+
+`run_code({ code: "inspect(await tools.bash({ description: 'Show current directory', command: 'pwd' }))", description: "Show current directory" })`
+
+Inside the program:
+
+- Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to its declared value, which may be an Image. Tool arguments must be lossless JSON.
+- A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
+- Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
+- Show selected values and images with `inspect(...values)`; every other intermediate result stays out of the conversation, so extract just what you need.
+- Inspecting a tool result directly shows the text that tool call returns; for example, `inspect(await tools.read({ file_path: 'README.md' }))` prints its line-numbered content.
+
+Program-only SDK bindings:
+```
+
+##### 工具调用额度耗尽
+
+```markdown
+Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (1024 per minute of its timeout); call 2049 was not dispatched. The run_code program may contain an infinite loop. Check loop termination or split the work into smaller run_code calls.
+```
+
+#### Token 影响
+
+每次请求的固定成本与可见定义成正比。PTC mode 使用生成的 SDK 文本加一个传输 schema 取代最终工具 schema，但不承诺普遍减少成本。调用额度不增加 SDK 或 schema 文本；超限诊断通过该次运行的失败结果消耗 token。
+
+#### KV Cache 影响
+
+只要根注册表选择、生成的 SDK、传输 schema 与可见工具集合不变，前缀就保持稳定。根注册表或筛选器变更可能从第一个改变的提示词或 schema token 起使复用失效。修改 `maxSubCallsPerMinute` 不会改变提示词或 schema token。
+
+### 引入的程序工具
+
+#### 模型可见内容
+
+被引入的 PTC 注册表的条目显示调用方提供的名称和描述，并使用与 `run_code` 相同的程序参数、运行时说明和结果渲染。其绑定不生成直接工具 schema 或 SDK 提示词段落。绑定指引由消费方负责。
+
+#### Token 影响
+
+在原生根注册表下，Agent 的其他工具 schema 中加入一个程序工具 schema；在 PTC 根注册表下，该条目是多出的一个 SDK 绑定。调用方的绑定指引产生相应提示词成本；中间值只有在程序输出它们或嵌套工具提供延后上下文时才进入模型历史。
+
+#### KV Cache 影响
+
+只要调用方描述和运行时设置不变，schema 就保持稳定。初始化在运行时内部执行，不向模型请求添加程序源码。
+
+## 已知限制与延期工作
+
+<a id="known-limitations-and-deferred-work"></a>
+
+以下约束适用于宿主集成及已开始的调用。
+
+- **程序 Image 需要返回值引用**：read_image、CUA 截图以及其 `{ type: 'image', attachment }` 条目引用了每张结果图片的返回值会产生 `Image`；其他图片工具保留其声明的返回值，并将图片自动附加到模型的额外上下文。
+- **程序 Image 要求附件路径映射**：文件系统必须将宿主存储的附件映射为程序可读的路径。`fs-ssh` 没有这项映射，因此该组合中的 read_image 与 CUA 图片适配会拒绝，而返回值引用的图片保持原始 JSON，并作为额外上下文进入模型。
+- **没有内置重置控件**：自带的 Loader 插件不通过服务、GUI 控件或 SDK 端点暴露其注册表实例。需要重置的宿主必须构造 `PtcToolRegistry`、用 `mountRoot()` 挂载它，并在自己的组合中保留它，该集成负责失败后的重试。
+- **PTC mode 使用 TypeScript，且一个根注册表以同一种方式呈现所有工具**：PTC 执行要求 `ctx.ptcRuntime.language === 'typescript'`；根注册表要么直接提供 Agent 看到的每个工具，要么把它们全部作为 SDK 绑定提供，因此要在直接调用的工具旁提供仅供程序调用的工具，需要为它单独引入一个 PTC 注册表。
+- **PTC mode 中间值只存在于执行局部，且没有字节上限**：它们无法从会话回放重建，并可能耗尽进程或 worker 内存；只有外层 `run_code` 输出受 worker 可配置的硬上限约束。
+- **状态由运行时决定**：Node 的 `per-call` 执行每次重新开始；默认的 Node `persistent-in-memory` 执行和启用 `scriptPersistence: true` 的 Script 模式按存活 Agent 保留内存。Agent 销毁时等待环境释放。重启与执行失败可能清除内存；模型说明会指导重新创建缺失变量。程序与结果仍写入 Session 日志，不序列化运行中的对象。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者的工作上下文——点击展开</summary>
+
+无。
+
+</details>

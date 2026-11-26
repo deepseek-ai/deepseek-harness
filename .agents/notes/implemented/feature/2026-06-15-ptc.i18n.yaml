@@ -9,23 +9,23 @@
   en: 4b312be894531bee
   zh: d655648ea5843ef5
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision:
-  en: 920a552af96d95a9
-  zh: b619aa830dc29750
+  en: 9cae6eee03b02eb7
+  zh: 5b56ffa38f57fe94
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/per-program-execution-controls:
   en: da694641e1d009de
   zh: 9d7492d39039af66
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-registry-owns-the-mode:
-  en: 33acc5b7393514f8
-  zh: b58db10dc096e3bd
+  en: 1c9bcd5352f8521b
+  zh: d4ef6ead2b62345e
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-run-code-tool-and-the-dispatch-bridge:
-  en: 13fc9291d3d49020
-  zh: 62220faa32e6b412
+  en: 988864419a4b05d6
+  zh: 6018c14026dba038
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/observability-tool-ptc-dispatch:
   en: 5b49e09f358f6425
   zh: cc6a7e889ce6428c
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-ptc-runtime-seam:
-  en: f4684560af65cfbb
-  zh: 1b1d6222eec05a2e
+  en: 74c6e452354da983
+  zh: 11f09d524ca731a2
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/decision/the-node-process-runtime:
   en: b2a8d7d654d1832b
   zh: 5852a2a3660e5a2e
@@ -36,8 +36,8 @@
   en: e49585967dea8dcc
   zh: 6f8e4b6d1e00aa17
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/consequences:
-  en: 761eb6c1aeb7af18
-  zh: 5434456a3d0a1b65
+  en: 97f1f6594bf0d551
+  zh: 3fae7122bad02851
 /agent-note-ptc-mode-the-model-writes-typescript-against-the-tool-registry/testing:
   en: 6e637b0970682265
   zh: 7fed6e98f87b5f1a

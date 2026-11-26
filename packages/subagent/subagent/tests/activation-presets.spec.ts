@@ -155,7 +155,7 @@ describe('a child agent composed in-process', () => {
     await inherited.result
     expect(adapter.requests.map(request => request.tools?.map(tool => tool.name)))
       .toEqual([['new_preset_only'], ['preset_only']])
-    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).toEqual(['preset_only'])
     await selected.dispose()
     await inherited.dispose()
   })

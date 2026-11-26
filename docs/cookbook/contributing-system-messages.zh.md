@@ -87,7 +87,7 @@ export function registerInstructions(ctx: Context, initialText: string) {
 
 释放只移除对应注册。如果另一个可见注册具有同名，下一次组装会使用其文本和替换通知，而不是撤回来源。只有可见作用域链中的所有注册都被释放后才会撤回，且仅发送给观察过注册并此前提交过该名称的 Session。通知来自最后一个被释放且曾被观察到的注册。在准入前注册并立即清理，不会向从未接收该节的 Session 发送撤回消息。在下次准入前清理并重新注册同名节，若渲染文本未变，则不发送消息；若文本不同，则发送一次替换更新。
 
-若多项注册共享同一生命周期，在 Cordis 生成器副作用中 yield 各自的清理函数。[工具执行器注册](../../packages/core/tools/src/index.ts)使用了这一模式。如果后续注册抛出异常，Cordis 会清理之前的注册；这些注册仍遵循普通撤回规则。
+若多项注册共享同一生命周期，在 Cordis 生成器副作用中 yield 各自的清理函数。`PtcToolRegistry.mountRoot()` 中的 [PTC 根注册表的注册](../../packages/core/tool-registry-ptc/src/index.ts)使用了这一模式。如果后续注册抛出异常，Cordis 会清理之前的注册；这些注册仍遵循普通撤回规则。
 
 <a id="4-choose-scope-and-message-kind"></a>
 

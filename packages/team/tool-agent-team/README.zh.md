@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-仅当根 Session 开启 Team 模式时，各模型步骤才可使用 Team 工具。提示词提供方在求值时读取同一选择。普通 subagent 控制工具始终可用。
+仅当某个 Agent 的根 Session 开启 Team 模式时，才会向该 Agent 提供 Team 工具。提示词提供方在求值时读取同一选择。普通 subagent 控制工具始终可用。
 
 模型需要共享任务板时，将此包与 `@deepseek-ai/dsh-agent-team` 一起挂载。根和后代接收相同的任务 schema 和任务策略。
 
@@ -76,7 +76,7 @@ kind: "package-reference"
 
 适配器建立在四项承诺之上：
 
-- **按 Session 选择工具。** 共享工具注册项根据调用方根 Session 选择可用性；服务在调用时解析树权限。
+- **按 Session 选择工具。** 适配器为根 Session 已开启 Team 模式的每个 Agent 添加共享任务工具；服务在调用时解析树权限。
 - **一个工具族。** Team 不注册消息、列表或中断工具；标准 subagent 工具同样服务 Lead 与 teammate。
 - **声明式结果，紧凑 JSON。** 每个工具都声明完整结果 schema，并把该值渲染为紧凑 JSON，因此编译器会对照向模型承诺的结果检查 `execute`，任何结果都不会在缩进上消耗 token。
 - **领域掌握裁决权。** 工具委托给 `ctx.agentTeams`，后者强制执行 Lead 权限与 revision 校验；适配器不添加更弱的路径。
@@ -87,15 +87,15 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略，以及四个条件任务工具 |
+| [`src/index.ts`](src/index.ts) | 插件入口、已移除键拒绝、Team 策略，以及四个按 Agent 提供的任务工具 |
 
 ### 策略与工具
 
-一次插件注册提供动态的 `team:policy` 段落和四个条件任务工具。各提供方读取调用者根 Session 的选择，包括 fork 子级。根不可用时禁用 Team 工具与指导。树权限从 `ctx.subagents.rootOf(agent)` 派生；在 `ctx.agentTeams` 中任务负责人保留为 Session id。所有者参数通过 `ctx.subagents.resolveName()` 解析，解析不授予权限。结果以 `owner: ownerName ?? ownerId` 取代保存的 `ownerId` 和 `ownerName` 字段。展示任务或编辑其内容无需读取后代目录。身份、发现、通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)，切换 Team 模式时归属不变；开启 Team 模式只会去掉其中的结果汇报要求。subagent 运行时负责投递最终结果。
+一次插件注册提供动态的 `team:policy` 段落，以及 `ctx.tools` 所引入 `AgentToolRegistry` 中的四个任务工具。该段落和每个 Agent 的工具集合都跟随该 Agent 根 Session 的选择，包括 fork 子级。根不可用时禁用 Team 工具与指导。树权限从 `ctx.subagents.rootOf(agent)` 派生；在 `ctx.agentTeams` 中任务负责人保留为 Session id。所有者参数通过 `ctx.subagents.resolveName()` 解析，解析不授予权限。结果以 `owner: ownerName ?? ownerId` 取代保存的 `ownerId` 和 `ownerName` 字段。展示任务或编辑其内容无需读取后代目录。身份、发现、通信和等待属于 [subagent 控制工具](../../subagent/tool-subagent-control/README.zh.md)，切换 Team 模式时归属不变；开启 Team 模式只会去掉其中的结果汇报要求。subagent 运行时负责投递最终结果。
 
 ### 按作用域注册与拆除
 
-工具的 `when` 条件在步骤准备时求值，包括新建、分叉和恢复的 Agent 的首个步骤。策略文本在提示词组装时求值。策略已准入后，禁用 Team 模式会追加撤销通知；卸载此插件会在下一次被接受的组装中追加退出通知。已经准备好的步骤保留其工具选择，但任务操作在开始前检查当前模式。插件释放时由各注册所属的 effect 移除全部注册。
+插件在 Agent 创建、fork 或恢复时设置其任务工具；子级在 `subagent/start` 时加入其树时也会设置。除没有在线根的子级外，读取根的模式失败会使该 Agent 的创建失败。收到 `team/mode` Session 事件时以及 `agent/disposed` 之后，插件更新每个 Agent，因此根已消失的子级会失去这些工具；插件加载时也会更新已存在的 Agent。策略文本在提示词组装时求值。策略已准入后，禁用 Team 模式会追加撤销通知；卸载此插件会在下一次被接受的组装中追加退出通知。步骤运行期间被撤下的任务工具会使该步骤中尚未开始的调用以 `UNKNOWN_TOOL` 失败，任务操作在开始前还会检查当前模式。插件释放时由各注册所属的 effect 移除全部注册。
 
 </details>
 

@@ -49,7 +49,7 @@
       "path": "../../attachment/attachment"
     },
     {
-      "path": "../../core/tool-executor-ptc"
+      "path": "../../core/tool-registry-ptc"
     },
     {
       "path": "../../api/gateway/tsconfig.client.json"

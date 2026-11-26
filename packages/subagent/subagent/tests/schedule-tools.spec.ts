@@ -106,7 +106,7 @@ describe('a delegated child under a preset that mounts the Schedule tools', () =
     const child = ctx.agents.get(run.childId)
     if (child === undefined) throw new Error('the child run published no agent')
     expect(child.session.header.origin).toBe('subagent')
-    expect(ctx.tools.schemas(child).map(schema => schema.name)).toEqual(expect.arrayContaining([
+    expect(ctx.tools.getAll(child).map(schema => schema.name)).toEqual(expect.arrayContaining([
       'schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view',
     ]))
     await run.result

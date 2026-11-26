@@ -1,6 +1,6 @@
 /** Real upstream MCP browser checks against private loopback pages and disposable Chromium. */
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -61,7 +61,7 @@ export async function verifyMcpBrowser(
       browserConfig = { mode: 'attach', endpoint: `http://127.0.0.1:${port}` }
     }
     const modules = new Map<string, unknown>([
-      ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['toolExecutor', NativeToolExecutor], ['llm', Llm],
+      ['browserUse', BrowserUse], ['prompt', SystemPrompt], ['tools', Tools], ['toolRegistry', NativeToolRegistry], ['llm', Llm],
       ['sessions', Sessions], ['agents', Agents], ['loop', AgentLoop], ['projections', Projections], ['browser', provider],
       ['fs', LocalFileSystem], ['workingDirectory', WorkingDirectory],
     ])
@@ -82,7 +82,7 @@ export async function verifyMcpBrowser(
     const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('browser-upstream'), meta: { cwd: root } })
     await owner.agent.whenIdle()
     await ctx.systemPrompt.assemble({ agent: owner.agent, scope: owner.agent, signal: new AbortController().signal })
-    const schemas = ctx.tools.schemas(owner.agent)
+    const schemas = ctx.tools.getAll(owner.agent)
     expect(schemas.length).toBeGreaterThan(5)
     expect(schemas.every(tool => tool.name.startsWith(`mcp__${namespace}__`))).toBe(true)
     const result = await executeToolFixture(ctx, { agent: owner.agent, name: `mcp__${namespace}__${navigate.name}`, arguments: navigate.arguments(url), callId: brandString<ToolCallId>('navigate'), signal: new AbortController().signal })
@@ -90,7 +90,7 @@ export async function verifyMcpBrowser(
     expect(observed.has(`/${namespace}-${mode}`)).toBe(true)
     expect(result.content.length).toBeGreaterThan(0)
     await owner.dispose()
-    expect(ctx.tools.schemas(owner.agent)).toEqual([])
+    expect(ctx.tools.getAll(owner.agent)).toEqual([])
     if (browserConfig.mode === 'attach') {
       expect(external?.exitCode).toBeNull()
       const response = await fetch(`${browserConfig.endpoint}/json/list`)

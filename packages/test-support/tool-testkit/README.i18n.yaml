@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/test-support/tool-testkit/README.md
 /:
-  en: 6c56a58c1397154b
-  zh: 7e37b4f4915f0a75
+  en: bc862221379109aa
+  zh: 29486a4cde34b381
 /deepseek-ai-dsh-tool-testkit:
   en: 6f5f9186228a4b87
   zh: e05d9c94ad8a6c2e
@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 1db86285abf6c499
 /deepseek-ai-dsh-tool-testkit/use-this-package:
-  en: 0489d9c434d64281
-  zh: 02e72be3ec225898
+  en: 7f07c3ab8e8251d4
+  zh: 57a6e1e0219c96fa
 /deepseek-ai-dsh-tool-testkit/understand-the-implementation:
   en: 236c624cc2445cd1
   zh: 60d9dbafe03332b9

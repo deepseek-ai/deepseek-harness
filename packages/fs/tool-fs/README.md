@@ -161,7 +161,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-At assembly time, each guidance section checks `ctx.tools.get(name, scope)` and renders only while its tool is visible to that agent. The write paragraph recommends edit only while edit is visible. The text below is unchanged when all three tools are available; restrictions, their removal, and tool registration changes take effect on the next assembly. The same check works for direct agent restrictions and historical subagent filters restored from descriptors, including PTC capabilities behind `run_code`. The read-before-mutation sentences in write/edit describe the observation policy, not a requirement to invoke the tool named `read`. They remain when `read` is hidden: the policy still guards mutations, and another observing operation, such as `str_replace_editor` with `command: view`, can establish the same file observation. Tool visibility does not disable that precondition.
+Each guidance section is the tool's `guidance`, so it renders in every scope that can call the tool, including PTC capabilities behind `run_code`. A direct agent restriction or a historical subagent filter restored from a descriptor hides the tool and its section. The write paragraph recommends edit when the plugin's configuration enables edit. The read-before-mutation sentences in write/edit describe the observation policy, not a requirement to invoke the tool named `read`. They remain when `read` is hidden: the policy still guards mutations, and another observing operation, such as `str_replace_editor` with `command: view`, can establish the same file observation. Tool visibility does not disable that precondition.
 
 ##### Read guidance
 
@@ -183,11 +183,11 @@ Read a file before editing it unless you just created or edited it in this sessi
 
 #### Token effect
 
-Guidance cost follows the visible tools and their applicable cross-tool recommendations.
+Guidance cost follows the tools the Agent can call and the plugin's cross-tool recommendations; a restriction removes the restricted tool's section.
 
 #### KV Cache effect
 
-Prefix-stable while the visible tool set, plugin scope, and guidance text are unchanged. Restrictions or plugin lifecycle changes may invalidate reuse from the first changed section.
+Prefix-stable while the registered tools, plugin scope, restrictions, and guidance text are unchanged; a restriction removes the restricted tool's section. Plugin lifecycle changes may invalidate reuse from the first changed section.
 
 ### Tool schemas
 

@@ -3,19 +3,18 @@ export const inject = ['tools', 'loader']
 
 /** @param {import('@deepseek-ai/cordis').Context} ctx - Scenario-owned runtime. */
 export async function apply(ctx) {
-  // Resolve through the running profile so packaged runs share the bundled error classes.
-  const { NativeToolExecutor } = await ctx.loader.import('@deepseek-ai/dsh-tool-executor-native')
-  ctx.on('agent/created', ({ agent }) => {
-    const executor = new NativeToolExecutor(agent.ctx)
-    const scheduler = executor.pipeline
-    const prepare = scheduler.prepare
-    scheduler.prepare = async input => {
+  // Resolve through the running profile so packaged runs share the bundled pipeline class that ctx.tools runs.
+  const { ToolExecutionPipeline } = await ctx.loader.import('@deepseek-ai/dsh-tools/pipeline')
+  const stages = ToolExecutionPipeline.prototype
+  const prepare = stages.prepare
+  ctx.effect(() => {
+    stages.prepare = async function (input) {
       if (input.callId === 'scheduler-fail') {
-        scheduler.prepare = prepare
+        stages.prepare = prepare
         throw new Error('Snapshot scheduler preparation failed')
       }
-      return prepare.call(scheduler, input)
+      return prepare.call(this, input)
     }
-    agent.ctx.tools.setExecutor(executor)
-  })
+    return () => { stages.prepare = prepare }
+  }, 'snapshot scheduler failure')
 }

@@ -22,7 +22,7 @@ import { apply } from '../src/host/share-host.ts'
 import { executeOneTool } from './tool-call.ts'
 import type { TunnelWorkerInput } from '../src/host/tunnel-worker.ts'
 import type { ForkEnforcementFs } from '../src/host/fork-enforcement.ts'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 
 const worker = vi.hoisted(() => ({ listener: undefined as ((event: TunnelWorkerEvent) => void) | undefined,
   sent: [] as TunnelWorkerInput[] }))
@@ -59,7 +59,7 @@ async function fixture(mode: 'view' | 'write') {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   const session = Session.create(brandString<SessionId>('source'), [], { version: SESSION_FORMAT_VERSION,
     id: brandString<SessionId>('source'), cwd: directory, createdAt: 0, isSeeded: false })
   const unsupported = (): never => { throw new Error('this fixture does not drive the Inbox') }

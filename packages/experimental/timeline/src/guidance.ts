@@ -2,7 +2,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
-import { scopeParentOf } from '@deepseek-ai/dsh-scope'
 import type { Config } from './config.ts'
 import { delegationContext, isWorker } from './delegation.ts'
 import type { OwnsAgent } from './delegation.ts'
@@ -162,11 +161,9 @@ export function installGuidance(ctx: Context, config: Config, storage: TimelineS
         masks.delete(agent)
       }
       for (const agent of ctx.agents.list()) {
-        if (!owns(agent) || !storage.available(agent.session)) continue
-        if (masks.has(agent) || ctx.tools.get('todo_write', agent) === undefined) continue
-        // Restrict inherited capabilities. An explicit agent-local override is guarded below;
-        // the public registry deliberately exempts its owner from inherited restrictions.
-        if (ctx.tools.get('todo_write', scopeParentOf(agent)) === undefined) continue
+        if (!owns(agent) || !storage.available(agent.session) || masks.has(agent)) continue
+        // Deny the inherited tool whether or not anything offers it yet. An explicit agent-local
+        // override is guarded below; the registry exempts a scope's own tools from its restrictions.
         masks.set(agent, agent.ctx.tools.restrict({ deny: ['todo_write'] }))
       }
     } finally {

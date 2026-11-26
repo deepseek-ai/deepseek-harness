@@ -17,7 +17,7 @@ if (configPath === undefined) throw new Error('tool-pwsh driver requires a confi
 
 const ctx = await boot('tool-pwsh-loader-smoke', resolveConfigPath(configPath, undefined))
 try {
-  const schema = ctx.tools.schemas().find(tool => tool.name === 'pwsh')
+  const schema = ctx.tools.getAll().find(tool => tool.name === 'pwsh')
   if (schema === undefined) throw new Error('pwsh tool not registered by the composition')
   const prompt = (await ctx.systemPrompt.assemble()).sections.find(section => section.name === 'tool:pwsh')
 

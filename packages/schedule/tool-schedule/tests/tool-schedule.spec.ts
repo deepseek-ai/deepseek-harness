@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -7,7 +7,8 @@ import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import ScheduleService, {
   DEFAULT_LIST_LIMIT,
   MAX_LIST_LIMIT,
@@ -129,7 +130,7 @@ async function createOther(test: Setup) {
 describe('Schedule model tools', () => {
   it('registers the four tools only in the mounting Agent scope', async () => {
     const test = await setup()
-    expect(test.ctx.tools.schemas(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+    expect(test.ctx.tools.getAll(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
     const parallel = (name: string, args: Record<string, unknown>) => test.ctx.tools.get(name, test.agent)?.isConcurrencySafe?.(args)
     expect(parallel('schedule_list', {})).toBe(true)
     expect(parallel('schedule_view', { id: 'task' })).toBe(true)
@@ -155,11 +156,11 @@ describe('Schedule model tools', () => {
     expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).not.toContain(AUTHORIZATION)
     const later = agentFor(test.ctx, 'later')
     await mountToolSchedule(test.ctx, later)
-    expect(test.ctx.tools.schemas(later)).toEqual([])
+    expect(test.ctx.tools.getAll(later)).toEqual([])
     expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: later }))).not.toContain(AUTHORIZATION)
     await test.ctx.plugin(ScheduleService)
     for (const agent of [test.agent, later]) {
-      expect(test.ctx.tools.schemas(agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+      expect(test.ctx.tools.getAll(agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
       expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: agent })).split(AUTHORIZATION)).toHaveLength(2)
     }
   })
@@ -167,10 +168,10 @@ describe('Schedule model tools', () => {
   it('removes scoped guidance with its plugin and registers it once after remounting', async () => {
     const test = await setup()
     await test.scope.dispose()
-    expect(test.ctx.tools.schemas(test.agent)).toEqual([])
+    expect(test.ctx.tools.getAll(test.agent)).toEqual([])
     expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).not.toContain(AUTHORIZATION)
     await mountToolSchedule(test.ctx, test.agent)
-    expect(test.ctx.tools.schemas(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
+    expect(test.ctx.tools.getAll(test.agent).map(schema => schema.name).sort()).toEqual(TOOL_NAMES)
     expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent })).split(AUTHORIZATION)).toHaveLength(2)
   })
 
@@ -178,12 +179,12 @@ describe('Schedule model tools', () => {
     const test = await setup()
     if (mode === 'ptc') {
       await test.ctx.plugin(PromptRuntime)
-      await test.scope.ctx.plugin(PtcToolExecutor)
+      await test.scope.ctx.plugin(PtcToolRegistry)
     }
-    const assembly = await test.ctx.systemPrompt.assemble({ scope: test.agent })
+    const assembly = await test.ctx.systemPrompt.assemble({ scope: test.agent, toolStep: ToolStep.capture(test.ctx.tools, test.agent) })
     expect(renderPrompt(assembly).split(AUTHORIZATION)).toHaveLength(2)
     expect(assembly.tools.map(tool => tool.name).sort()).toEqual(mode === 'ptc' ? ['run_code'] : TOOL_NAMES)
-    for (const tool of test.ctx.tools.schemas(test.agent)) expect(tool.description).not.toContain(AUTHORIZATION)
+    for (const tool of test.ctx.tools.getAll(test.agent)) expect(tool.description).not.toContain(AUTHORIZATION)
     if (mode === 'ptc') {
       const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text
       expect(sdk).toContain('schedule_create')
@@ -193,10 +194,10 @@ describe('Schedule model tools', () => {
   })
 
   it.each([
-    { allow: ['schedule_create', 'schedule_list', 'schedule_view'], visible: true },
-    { allow: ['schedule_edit', 'schedule_list', 'schedule_view'], visible: true },
-    { allow: ['schedule_list', 'schedule_view'], visible: false },
-  ])('shows shared guidance only with a visible mutation tool: $allow', async ({ allow, visible }) => {
+    { allow: ['schedule_create', 'schedule_list', 'schedule_view'] },
+    { allow: ['schedule_edit', 'schedule_list', 'schedule_view'] },
+    { allow: ['schedule_list', 'schedule_view'] },
+  ])('shows the shared guidance while a scope allows schedule_create or schedule_edit: $allow', async ({ allow }) => {
     const test = await setup()
     const agent = agentFor(test.ctx, 'restricted')
     const scope = createScope(test.ctx, agent, { parent: test.agent })
@@ -205,10 +206,11 @@ describe('Schedule model tools', () => {
         { inject: ['tools'] }))
       const assembly = await test.ctx.systemPrompt.assemble({ scope: agent })
       expect(assembly.tools.map(tool => tool.name)).toEqual(allow)
-      expect(renderPrompt(assembly).split(AUTHORIZATION)).toHaveLength(visible ? 2 : 1)
+      const managed = allow.includes('schedule_create') || allow.includes('schedule_edit')
+      expect(renderPrompt(assembly).split(AUTHORIZATION)).toHaveLength(managed ? 2 : 1)
       expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: test.agent }))).toContain(AUTHORIZATION)
       await restriction.dispose()
-      expect(test.ctx.tools.schemas(agent).map(tool => tool.name).sort()).toEqual(TOOL_NAMES)
+      expect(test.ctx.tools.getAll(agent).map(tool => tool.name).sort()).toEqual(TOOL_NAMES)
       expect(renderPrompt(await test.ctx.systemPrompt.assemble({ scope: agent })).split(AUTHORIZATION)).toHaveLength(2)
     } finally {
       await scope.dispose()
@@ -261,7 +263,7 @@ describe('Schedule model tools', () => {
 
   it('describes the create parameters for the model', async () => {
     const test = await setup()
-    const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === 'schedule_create')
+    const schema = test.ctx.tools.getAll(test.agent).find(candidate => candidate.name === 'schedule_create')
     expect(schema?.parameters).toMatchObject({
       required: ['title', 'prompt', 'rrule', 'target'],
       properties: {
@@ -284,7 +286,7 @@ describe('Schedule model tools', () => {
 
   it.each(['schedule_create', 'schedule_edit'])('keeps %s authoring guidance RRULE-only', async (name) => {
     const test = await setup()
-    const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === name)
+    const schema = test.ctx.tools.getAll(test.agent).find(candidate => candidate.name === name)
     expect(schema).toBeDefined()
     const authoring = JSON.stringify({ description: schema?.description, parameters: schema?.parameters })
     expect(authoring).toMatch(/\brrule\b/i)
@@ -294,9 +296,12 @@ describe('Schedule model tools', () => {
 
   it('keeps the RRULE example copyable as a quoted string in the PTC SDK', async () => {
     const test = await setup()
+    // Under the PTC root `schedule_create` is a program binding, so the decoded example runs through the definition.
+    const create = test.ctx.tools.get('schedule_create', test.agent)
+    if (create === undefined) throw new Error('missing schedule_create')
     await test.ctx.plugin(PromptRuntime)
-    await test.scope.ctx.plugin(PtcToolExecutor)
-    const assembly = await test.ctx.systemPrompt.assemble({ scope: test.agent })
+    await test.scope.ctx.plugin(PtcToolRegistry)
+    const assembly = await test.ctx.systemPrompt.assemble({ scope: test.agent, toolStep: ToolStep.capture(test.ctx.tools, test.agent) })
     const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
     const example = /Example: ("[^"\n]+")/.exec(sdk)?.[1]
     expect(example).toContain('\\nRRULE:')
@@ -304,7 +309,10 @@ describe('Schedule model tools', () => {
     expect(typeof rrule).toBe('string')
     if (typeof rrule !== 'string') throw new Error('missing RRULE string example')
     expect(rrule).toContain('\nRRULE:')
-    expect(await call(test, 'schedule_create', { ...TASK, rrule })).toMatchObject({ kind: 'rrule' })
+    expect(await create.execute({ ...TASK, rrule }, {
+      callId: brandString<ToolCallId>('sdk-example'), rootCallId: brandString<ToolCallId>('sdk-example'), token: Symbol('sdk-example') as ToolExecutionToken,
+      name: 'schedule_create', arguments: { ...TASK, rrule }, agent: test.agent, signal: new AbortController().signal, deferContext() {}, concludeTurn() {},
+    })).toMatchObject({ kind: 'rrule' })
   })
 
   it.each([
@@ -313,7 +321,7 @@ describe('Schedule model tools', () => {
   ])('names the configured spacing of new deliveries in the target description: $newSessionIntervalSeconds s',
     async ({ newSessionIntervalSeconds, spacing }) => {
       const test = await setup({ config: { newSessionIntervalSeconds } })
-      const schema = test.ctx.tools.schemas(test.agent).find(candidate => candidate.name === 'schedule_create')
+      const schema = test.ctx.tools.getAll(test.agent).find(candidate => candidate.name === 'schedule_create')
       expect(schema?.parameters).toMatchObject({
         properties: {
           target: {

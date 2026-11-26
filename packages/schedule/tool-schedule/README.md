@@ -33,7 +33,7 @@ Choose it for any preset whose agents need to schedule future work, and load `@d
 
 ### User authorization
 
-One shared `tool:schedule` system-prompt section requires explicit user authorization to create or modify tasks. Prior explicit authorization for the running scheduled task remains valid, such as pausing that task after a monitored PR merges.
+One shared `tool:schedule` system-prompt section, shown while `schedule_create` or `schedule_edit` is available, requires explicit user authorization to create or modify tasks. Prior explicit authorization for the running scheduled task remains valid, such as pausing that task after a monitored PR merges.
 
 ### The four tools
 
@@ -60,7 +60,7 @@ The package declares no `Config` fields. It injects `ctx.tools` and `ctx.systemP
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin registers four `defineTool` definitions and one `tool:schedule` system-prompt section in the scope that resolves `ctx.schedule`, so a preset mount decides visibility and Cordis effect ownership disposes them with the mount. The section is empty when neither `schedule_create` nor `schedule_edit` is visible through `ctx.tools.get()` in the requesting scope, including delegated scopes whose preset filters those tools. This lookup works for both Native and PTC presentation. Execution reads `exec.agent` for the acting Session. The delegation-depth guard runs first and the argument checks of `schedule_edit` run next, both before the service call. A `ScheduleInputError` keeps its code when the output schema of the tool declares that code, and every other failure becomes `internal_error`, so storage details never reach the model. Model content is the canonical JSON of the returned value, and the Host service owns persistence, scheduling, Session restoration, and delivery.
+The plugin registers four `defineTool` definitions in the scope that resolves `ctx.schedule`, with the `tool:schedule` system-prompt section as the `guidance` of `schedule_create` and `schedule_edit`, so a preset mount decides visibility and Cordis effect ownership disposes them with the mount. The section renders while the scope can call either tool, under both Native and PTC roots; a restriction that hides both removes it. Execution reads `exec.agent` for the acting Session. The delegation-depth guard runs first and the argument checks of `schedule_edit` run next, both before the service call. A `ScheduleInputError` keeps its code when the output schema of the tool declares that code, and every other failure becomes `internal_error`, so storage details never reach the model. Model content is the canonical JSON of the returned value, and the Host service owns persistence, scheduling, Session restoration, and delivery.
 
 ### Source map
 
@@ -90,7 +90,7 @@ The plugin registers four `defineTool` definitions and one `tool:schedule` syste
 
 #### What the model sees
 
-One `tool:schedule` section when `schedule_create` or `schedule_edit` is visible in the calling Agent's scope. Tool descriptions retain their operation-specific guidance without repeating this policy. A `complete: true` system-prompt override replaces ordinary sections, including this one.
+One `tool:schedule` section while the Agent can call `schedule_create` or `schedule_edit`; a scope that restricts both does not receive it. Tool descriptions retain their operation-specific guidance without repeating this policy. A `complete: true` system-prompt override replaces ordinary sections, including this one.
 
 ##### Task authorization
 

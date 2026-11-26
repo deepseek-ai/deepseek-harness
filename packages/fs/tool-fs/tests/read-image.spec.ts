@@ -9,8 +9,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
@@ -119,7 +119,7 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin((options.toolMode ?? 'native') === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+  await ctx.plugin((options.toolMode ?? 'native') === 'ptc' ? PtcToolRegistry : NativeToolRegistry)
   if (options.toolMode === 'ptc') {
     await ctx.plugin(FakeRuntime)
   }
@@ -609,7 +609,7 @@ describe('argument and service preconditions', () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ ...config, attachments: false })
     expect(ctx.tools.get('read_image')).toBeUndefined()
-    expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('read_image')
+    expect(ctx.tools.getAll().map(schema => schema.name)).not.toContain('read_image')
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('unknown tool "read_image"')
@@ -914,7 +914,7 @@ describe('registration surface', () => {
   it('registers only read_image without text guidance', async () => {
     const ctx = await setup({ toolFs: { read: false, write: false, edit: false } })
     try {
-      expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['read_image'])
+      expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(['read_image'])
       expect((await ctx.systemPrompt.assemble()).sections.some(section => section.name.startsWith('tool:'))).toBe(false)
       await writeFile(join(dir, 'red.png'), PNG_1X1)
       const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
@@ -927,7 +927,7 @@ describe('registration surface', () => {
 
   it('omits read_image while an attachment store is mounted when readImage is false', async () => {
     const ctx = await setup({ toolFs: { readImage: false } })
-    expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(['apply_patch', 'edit', 'read', 'write'])
+    expect(ctx.tools.getAll().map(tool => tool.name).sort()).toEqual(['apply_patch', 'edit', 'read', 'write'])
     expect(ctx.tools.get('read_image')).toBeUndefined()
     expect((await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))).isError).toBe(true)
   })
@@ -939,11 +939,11 @@ describe('registration surface', () => {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       await ctx.plugin(LocalFileSystem, { cwd: dir })
       const attachment = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
       const plugin = await ctx.plugin(ToolFs, { read: false, write: false, edit: false })
-      const names = () => ctx.tools.schemas().map(tool => tool.name).sort()
+      const names = () => ctx.tools.getAll().map(tool => tool.name).sort()
       expect(names()).toEqual(['read_image'])
       await attachment.dispose()
       expect(names()).toEqual([])
@@ -962,12 +962,12 @@ describe('registration surface', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
     await ctx.plugin(FsPolicy)
     const attachmentsFiber = await ctx.plugin(LocalAttachmentStore, { dshHome: home })
     const toolFsFiber = await ctx.plugin(ToolFs)
-    const names = () => ctx.tools.schemas().map(schema => schema.name).sort()
+    const names = () => ctx.tools.getAll().map(schema => schema.name).sort()
     expect(names()).toEqual(['apply_patch', 'edit', 'read', 'read_image', 'write'])
 
     // Disposing only the attachment store tears down the scoped inject fiber:
@@ -987,7 +987,7 @@ describe('registration surface', () => {
 
   it('declares read_image parallel-safe and presents a read-family card', async () => {
     const ctx = await setup()
-    expect(new ToolExecutionPipeline(ctx).executionMode({
+    expect(new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) }).executionMode({
       signal: testToolSignal, callId: brandString<ToolCallId>('img-parallel'), name: 'read_image', arguments: { file_path: 'a.png' },
     })).toEqual({ kind: 'parallel' })
     expect(ctx.tools.get('read_image')?.presentCall?.({ file_path: 'shot.png' })).toEqual({

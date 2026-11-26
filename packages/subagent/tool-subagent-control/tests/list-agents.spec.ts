@@ -171,7 +171,7 @@ describe('list_agents', () => {
 
   it('registers list_agents once, globally, without parameters', async () => {
     const { ctx } = await setup([])
-    const schemas = ctx.tools.schemas().filter(schema => schema.name === 'list_agents')
+    const schemas = ctx.tools.getAll().filter(schema => schema.name === 'list_agents')
     expect(schemas).toHaveLength(1)
     const parameters = schemas[0]!.parameters as {
       properties?: Record<string, { enum?: string[]; description?: string }>
@@ -286,7 +286,7 @@ describe('list_agents', () => {
 
   it('describes inactive as turn availability and pins the status vocabulary', async () => {
     const { ctx } = await setup([])
-    const schema = ctx.tools.schemas().find(candidate => candidate.name === 'list_agents')
+    const schema = ctx.tools.getAll().find(candidate => candidate.name === 'list_agents')
     // Completion reaches the parent through its notice; listing is discovery,
     // so its inactive status must not send the model looking for a result.
     expect(schema?.description).toContain('While you remain active, you will be notified when a direct child finishes')
@@ -313,9 +313,9 @@ describe('list_agents', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(tool)
-    expect(ctx.tools.schemas().some(schema => schema.name === 'list_agents')).toBe(true)
+    expect(ctx.tools.getAll().some(schema => schema.name === 'list_agents')).toBe(true)
     await fiber.dispose()
-    expect(ctx.tools.schemas().some(schema => schema.name === 'list_agents')).toBe(false)
+    expect(ctx.tools.getAll().some(schema => schema.name === 'list_agents')).toBe(false)
   })
 
   it('has the namespace-plugin export shape', () => {

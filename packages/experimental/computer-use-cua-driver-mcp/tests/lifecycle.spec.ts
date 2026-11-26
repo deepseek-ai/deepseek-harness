@@ -1,6 +1,6 @@
 /** The external MCP process is replaced by barriers to pin disposal ordering. */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUse from '@deepseek-ai/dsh-computer-use'
@@ -46,7 +46,7 @@ async function context(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 

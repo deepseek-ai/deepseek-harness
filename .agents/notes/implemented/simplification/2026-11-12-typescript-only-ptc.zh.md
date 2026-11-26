@@ -10,7 +10,7 @@ Python 工具 SDK 最初让提供方能在保留类型化工具调用的同时�
 
 ## Decision
 
-`dsh-tool-executor-ptc` 仅支持 TypeScript。它移除 Python schema 渲染及导出、语言分发、完成值呈现与 Python 专属绑定排除规则。不支持的提供方在通过已选中的执行器组装提示词或执行程序时失败，也会在私有程序工具创建时失败。PTC 选择保持生效，避免无效提供方暴露继承的 native 工具。TypeScript 程序保留其 SDK、参数、显式输出选择、规范嵌套结果及取消行为。
+`dsh-tool-registry-ptc` 仅支持 TypeScript。它移除 Python schema 渲染及导出、语言分发、完成值呈现与 Python 专属绑定排除规则。不支持的提供方在通过 PTC 注册表组装提示词或执行程序时失败，也会在以自有 `runtime` 构造 `PtcToolRegistry` 时失败。PTC 根注册表的选择保持生效，避免无效提供方暴露继承的 native 工具。TypeScript 程序保留其 SDK、参数、显式输出选择、规范嵌套结果及取消行为。
 
 运行时服务仍独立于工具。其源码语言描述符让每个消费方检查自身要求；直接运行时消费方与工作流消费方保留完成值。Harness Python SDK、运行时 wheel 与其他工具的 Python 环境有各自的消费方，继续受到支持。
 
@@ -26,4 +26,4 @@ Python 工具 SDK 最初让提供方能在保留类型化工具调用的同时�
 
 外部 Python PTC 组合必须迁移到 TypeScript 提供方并改写程序；[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.2/python-ptc-removal/guide.zh.md)拥有具体步骤。不提供 Python 兼容分支。重新引入需要有明确负责方的提供方、具体消费需求、语言专属的拒绝与输出测试，以及已发布 profile 回放。
 
-拒绝测试通过 Cordis 挂载执行器与兼容选择器，再覆盖提示词组装、schema 投影、直接执行与私有工厂。构建导出检查固定 Python 渲染器的移除。现有免密钥 TypeScript profile 回放比较保持不变的模型提示和执行输出。绑定验证与真实进程执行覆盖不再需要 Python 排除规则的名称。已有 Session 日志和已提交历史代际逐字节保留。
+拒绝测试通过 Cordis 挂载 PTC 根注册表插件与兼容选择器，再覆盖提示词组装、schema 投影、直接执行，以及使用固定运行时的被引入注册表。构建导出检查固定 Python 渲染器的移除。现有免密钥 TypeScript profile 回放比较保持不变的模型提示和执行输出。绑定验证与真实进程执行覆盖不再需要 Python 排除规则的名称。已有 Session 日志和已提交历史代际逐字节保留。

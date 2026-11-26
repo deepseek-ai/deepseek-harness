@@ -5,6 +5,7 @@ import { bindScopeParent, createScope } from '@deepseek-ai/dsh-scope'
 import { createUserMessage, isAgentLoopRequest, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { updateVolatile } from '@deepseek-ai/cosmokit'
 import { textOutput } from './fixture.ts'
+import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { Config } from '../src/config.ts'
 import * as Timeline from '../src/index.ts'
@@ -12,6 +13,15 @@ import type { PluginConfig } from '../src/config.ts'
 import { Adapter, setup, summary, settle, untilReleased } from './fixture.ts'
 import { reportSchema, requestRecordSchema, treeSchema } from '../src/records.ts'
 import { languageText, outputLanguages } from '../src/policy.ts'
+import * as Cordis from '@deepseek-ai/cordis'
+import * as DshError from '@deepseek-ai/dsh-error'
+import * as Llm from '@deepseek-ai/dsh-llm'
+import * as Scope from '@deepseek-ai/dsh-scope'
+import * as SessionPackage from '@deepseek-ai/dsh-session'
+import * as Tools from '@deepseek-ai/dsh-tools'
+import * as UtilCrypto from '@deepseek-ai/dsh-util-crypto'
+import * as Schemastery from '@deepseek-ai/schemastery'
+import * as Zod from 'zod'
 
 const fixtures: Awaited<ReturnType<typeof setup>>[] = []
 afterEach(async () => {
@@ -1096,6 +1106,79 @@ describe('background summaries through a real agent loop', () => {
       await scoped.dispose()
     }
   })
+  it('lets the nearest installation own a scoped agent when it comes from a second copy of the package', async () => {
+    const SecondTimeline = await secondTimelineCopy()
+    expect(SecondTimeline.apply).not.toBe(Timeline.apply)
+    const f = await setup({ intervalMs: 60000 })
+    fixtures.push(f)
+    const parent = {}
+    const scoped = await createScope(f.ctx, parent).ctx.isolate('timeline').plugin(SecondTimeline, { intervalMs: 60000 })
+    try {
+      const { agent } = await f.ctx.agents.create({
+        sessionId: SessionId('timeline-second-copy'),
+        meta: { cwd: process.cwd() },
+        agentOptions: { provider: 'fixture', model: 'timeline' },
+      })
+      bindScopeParent(agent, parent)
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
+      agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Review inside the preset.' }] }))
+      await f.adapter.waitForMain(2)
+      await vi.advanceTimersByTimeAsync(60000)
+      await f.waitRecords('plugin:timeline/report', 1, agent.session.id)
+      // Only the copy nearest the agent reports its work; the root copy leaves it alone.
+      expect(f.adapter.checks.map(request => request.sessionId)).toEqual([agent.session.id])
+      expect(f.ctx.timeline.stateOf(agent.session).view.reports).toHaveLength(1)
+    } finally {
+      await scoped.dispose()
+    }
+  })
+  it('owns only its own application\'s agents when two applications share a worker', async () => {
+    const first = await setup({ intervalMs: 60000 })
+    fixtures.push(first)
+    const second = await setup({ intervalMs: 60000 })
+    fixtures.push(second)
+    for (const f of [first, second]) {
+      f.ctx.tools.register(defineTool({
+        name: 'todo_write', description: 'Inherited Todo', parameters: {}, output: textOutput,
+        execute: () => Promise.resolve('Unexpected write'),
+      }))
+    }
+    for (const f of [first, second]) {
+      expect(f.ctx.tools.get('todo_write', f.agent)).toBeUndefined()
+      expect(await executeToolFixture(f.ctx, {
+        agent: f.agent, name: 'todo_write', arguments: {}, callId: ToolCallId('isolated-todo'), signal: new AbortController().signal,
+      })).toMatchObject({ isError: true, error: { info: { code: 'TIMELINE_TOOL_UNAVAILABLE' } } })
+    }
+  })
+  it('hands a scoped agent to the root installation once the scoped installation unloads', async () => {
+    const f = await setup({ intervalMs: 60000 })
+    fixtures.push(f)
+    const parent = {}
+    const scoped = await createScope(f.ctx, parent).ctx.isolate('timeline').plugin(Timeline, { intervalMs: 60000 })
+    f.ctx.tools.register(defineTool({
+      name: 'todo_write', description: 'Inherited Todo', parameters: {}, output: textOutput,
+      execute: () => Promise.resolve('Unexpected write'),
+    }))
+    const { agent } = await f.ctx.agents.create({
+      sessionId: SessionId('timeline-handoff'),
+      meta: { cwd: process.cwd() },
+      agentOptions: { provider: 'fixture', model: 'timeline' },
+    })
+    bindScopeParent(agent, parent)
+    expect(f.ctx.tools.get('timeline_tree', agent)).not.toBe(f.ctx.tools.get('timeline_tree', f.agent))
+    await scoped.dispose()
+    // The root installation owns the agent now: it masks and denies todo_write and reports the agent's work.
+    expect(f.ctx.tools.get('todo_write', agent)).toBeUndefined()
+    expect(await executeToolFixture(f.ctx, {
+      agent, name: 'todo_write', arguments: {}, callId: ToolCallId('handoff-todo'), signal: new AbortController().signal,
+    })).toMatchObject({ isError: true, error: { info: { code: 'TIMELINE_TOOL_UNAVAILABLE' } } })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
+    agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Review after the preset unloads.' }] }))
+    await f.adapter.waitForMain(2)
+    await vi.advanceTimersByTimeAsync(60000)
+    await f.waitRecords('plugin:timeline/report', 1, agent.session.id)
+    expect(f.adapter.checks.map(request => request.sessionId)).toEqual([agent.session.id])
+  })
   it('rolls up quiet children after a live reload without needing another model request', async () => {
     const config = { intervalMs: 600000, rollupFactors: [2.5] }
     const adapter = new Adapter()
@@ -1181,3 +1264,24 @@ describe('background summaries through a real agent loop', () => {
     }
   })
 })
+
+/**
+ * Import a second copy of Timeline's own modules that shares the packages it
+ * depends on, as a composition that loads the package twice does.
+ * @returns the second copy's plugin entry.
+ */
+async function secondTimelineCopy(): Promise<typeof Timeline> {
+  const shared = new Map<string, object>([
+    ['@deepseek-ai/cordis', Cordis], ['@deepseek-ai/dsh-error', DshError], ['@deepseek-ai/dsh-llm', Llm],
+    ['@deepseek-ai/dsh-scope', Scope], ['@deepseek-ai/dsh-session', SessionPackage], ['@deepseek-ai/dsh-tools', Tools],
+    ['@deepseek-ai/dsh-util-crypto', UtilCrypto], ['@deepseek-ai/schemastery', Schemastery], ['zod', Zod],
+  ])
+  for (const [id, namespace] of shared) vi.doMock(id, () => namespace)
+  vi.resetModules()
+  try {
+    const copy: typeof Timeline = await import('../src/index.ts')
+    return copy
+  } finally {
+    for (const id of shared.keys()) vi.doUnmock(id)
+  }
+}

@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
+import { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { EVENT_API, queryEventApi, queryServiceApi } from './api-catalog.ts'
 import { queryLiveConfig } from './inspect-config.ts'
@@ -77,17 +78,22 @@ export function hostInspectProviders(ctx: Context): HostCordisInspectProviderReg
     {
       manifest: {
         id: 'Tool',
-        description: 'Tools visible to the requesting Agent, including scoped and dynamic registrations.',
+        description: 'Tools the requesting Agent can call directly: under a native root, every tool it sees, including scoped and dynamic registrations; under a PTC root, only the program entry.',
         methods: [{
           name: 'listTools',
-          description: 'Return every Tool schema currently callable by this Agent.',
+          description: 'Return the schema of every Tool this Agent can call directly now.',
           inputSchema: EMPTY_INPUT,
           outputSchema: ANY_OUTPUT,
         }],
       },
       query(method, _input, context) {
         if (method !== 'listTools') throw new InspectError(`unknown Tool inspect method "${method}"`, 'INSPECT_METHOD_NOT_FOUND')
-        return Promise.resolve({ tools: ctx.tools.schemas(context.agent) } as unknown as JsonValue)
+        // Detached projection: parameters are lossless JSON Schema.
+        const tools = ctx.tools.getAll(context.agent).map((tool) => {
+          const schema = projectToolSchema(tool, true)
+          return { ...schema, parameters: schema.parameters as Record<string, JsonValue> }
+        })
+        return Promise.resolve({ tools })
       },
     },
   ]

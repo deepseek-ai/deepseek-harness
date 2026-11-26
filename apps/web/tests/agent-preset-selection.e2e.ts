@@ -486,7 +486,7 @@ it.each([false, true])('starts Creator from Plugins with Coding Tools=%s without
     expect(creator.session.header.agentPreset).toBe('cordis')
     expect(scaffold.ctx.sessionProjections.checkpoint(creator.session).agentPreset?.val).toBe('cordis')
     expect(scaffold.ctx.agentPresets.composedPreset(creator.ctx)).toBe('cordis')
-    expect(scaffold.ctx.tools.schemas(creator).map(tool => tool.name))
+    expect(scaffold.ctx.tools.getAll(creator).map(tool => tool.name))
       .toEqual(expect.arrayContaining(['cordis_inspect', 'plugin_manager']))
     // The Session starts under Creator; a chip selection after the list updates records no switch.
     expect(creator.session.snapshotEvents().filter(event => event.type === 'agent-preset/selected')).toEqual([])

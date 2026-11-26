@@ -1,6 +1,8 @@
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import Loader from '@deepseek-ai/cordis-plugin-loader'
+import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import LlmRuntime, { createUserMessage, type GenerateOptions, type Message, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -31,7 +33,7 @@ async function harness(adapter: MockAdapter): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(PlanModeController, PLAN_CONFIG)
@@ -311,5 +313,65 @@ describe('plan mode through the agent loop', () => {
     expect(result.data.message.content).toEqual([{ type: 'text', text: 'The user dismissed the plan review to reply in their own words; plan mode remains active.' }])
     expect(findEvent(log, 'turn/end').data.reason).toEqual({ kind: 'completed' })
     expect(planActive(ctx, agent)).toBe(true)
+  })
+})
+
+describe('plan mode in agent presets', () => {
+  /** Boot the loop with two presets that each mount their own plan-mode service, as the Web presets do. */
+  async function presetHarness(adapter: MockAdapter): Promise<Context> {
+    const ctx = new Context()
+    ctx.baseUrl = import.meta.url
+    await ctx.plugin(Loader)
+    ctx.loader.builtins.planMode = PlanModeController
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolRegistry)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(AgentPresets, { default: 'first' })
+    for (const id of ['first', 'second']) {
+      await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
+        yield await owner.agentPresets.register({ id, plugins: [{ id: 'plan-mode', name: 'cordis:planMode', isolate: { planMode: true }, config: PLAN_CONFIG }] })
+      } })
+    }
+    ctx.llm.registerAdapter(['mock'], adapter)
+    return ctx
+  }
+
+  const create = (ctx: Context, id: string, preset: string, setup?: (agent: Agent) => void) => ctx.agents.create({
+    sessionId: brandString<SessionId>(id),
+    agentOptions: { provider: 'mock', model: 'mock' },
+    setup: async (agentCtx, agent) => {
+      await ctx.agentPresets.mount(agentCtx, preset)
+      setup?.(agent)
+    },
+  })
+
+  it('offers the exit tool after a blank Session switches to a preset another Session runs', async () => {
+    const adapter = new MockAdapter([textResponse('Planning.')])
+    const ctx = await presetHarness(adapter)
+    // The second preset's plan-mode service is already running for another Session.
+    const other = await create(ctx, 'it-preset-other', 'second')
+    expect(ctx.tools.get('exit_plan_mode', other.agent)).toBeUndefined()
+    const { agent } = await create(ctx, 'it-preset-blank', 'first')
+    expect(ctx.agentPresets.serviceFor(agent, 'planMode')?.set(agent, true)).toBe('committed')
+    expect(await ctx.agentPresets.select(agent, 'second')).toBe('second')
+
+    const idle = waitForIdle(ctx, agent)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'plan it' }], source: { kind: 'user' } }))
+    await idle
+    expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['exit_plan_mode'])
+  })
+
+  it('offers the exit tool when a preset selection is recorded while the Agent is created', async () => {
+    const ctx = await presetHarness(new MockAdapter([]))
+    const { agent } = await create(ctx, 'it-preset-recorded', 'second', (created) => {
+      created.session.append('plan/mode', { active: true })
+      created.session.append('agent-preset/selected', { agentPreset: 'second' })
+    })
+    expect(ctx.tools.get('exit_plan_mode', agent)).toBeDefined()
   })
 })

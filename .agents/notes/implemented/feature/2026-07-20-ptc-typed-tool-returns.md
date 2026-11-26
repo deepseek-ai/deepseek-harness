@@ -14,7 +14,7 @@ The [canonical tool-output contract](../../../../packages/core/tools/README.md) 
 
 ## Decision
 
-PTC mode is a typed projection of the visible tool registry. Ordinary successful bindings resolve to the final canonical `JsonValue` after post-execute policy, while failed bindings reject with a real `ToolCallError`. Intermediate values remain inside the run and cross the process boundary whole. The [explicit output decision](../architecture/2026-11-09-explicit-ptc-output.md) owns TypeScript Image bindings, completion suppression and selection of visible text and images. The [TypeScript-only executor decision](../simplification/2026-11-12-typescript-only-ptc.md) owns supported languages.
+PTC mode is a typed projection of the visible tool registry. Ordinary successful bindings resolve to the final canonical `JsonValue` after post-execute policy, while failed bindings reject with a real `ToolCallError`. Intermediate values remain inside the run and cross the process boundary whole. The [explicit output decision](../architecture/2026-11-09-explicit-ptc-output.md) owns TypeScript Image bindings, completion suppression and selection of visible text and images. The [TypeScript-only PTC decision](../simplification/2026-11-12-typescript-only-ptc.md) owns supported languages.
 
 This note owns the return and failure contract layered on the original [PTC mode foundation](2026-06-15-ptc.md). The unified schema vocabulary is owned by the [JSON-value schema DSL reference](../../../../packages/core/tools/README.md), and Native rendering and policy projection remain owned by the canonical-output note.
 

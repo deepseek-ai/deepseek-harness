@@ -136,15 +136,15 @@ function projectProgramTool(definition: ToolDefinition): Tool {
  * Create the MCP server for one stdio connection. The connection's Agent is created first, mounts the profile's
  * default preset, and lives until disposal; the provider registers `cua_run_code` for it, and each `tools/list`
  * re-reads that registration beside the two tools defined here. A call names a listed tool or fails as an unknown
- * tool before it reaches the executor, so a tool another row registers for the Agent is never callable without
+ * tool before it reaches the root registry, so a tool another row registers for the Agent is never callable without
  * being listed. `cua_get_api_reference` returns the provider's `cua` guidance for the Agent and keeps no state.
- * `cua_run_code` calls pass their arguments to the ordinary tool executor unchanged, one at a time in arrival
+ * `cua_run_code` calls pass their arguments to the Agent's root registry unchanged, one at a time in arrival
  * order, each as the Agent's maintenance activity: argument validation is answered by DSH, and disposing the Agent
  * cancels the running call and waits for it to settle. `cua_reset` bypasses the queue: it cancels the running program,
  * releases the Agent's program environment through `ctx.cuaPrograms`, answers after the cancelled program has settled,
  * and holds back programs that arrive meanwhile; the Agent, its native connection, and its application grants stay,
  * and the next program starts a fresh process. Concurrent resets share one release.
- * Consent questions of that Agent are answered by the configured mode. A call the executor cannot settle,
+ * Consent questions of that Agent are answered by the configured mode. A call the root registry cannot settle,
  * including a cancelled one, fails as a protocol error.
  * @param ctx - Profile context with Agents, presets, tools, the system prompt, and the attachment store.
  * @param options - Consent mode, working directory, and lifetime.
@@ -224,7 +224,7 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
           agent, signal: operation,
         }))
         const outcome = batch.results[0]
-        if (outcome === undefined) throw new Error(`The tool executor settled without a ${PROGRAM_TOOL} result`)
+        if (outcome === undefined) throw new Error(`The root tool registry settled without a ${PROGRAM_TOOL} result`)
         const result = await projectToolResult(outcome.result, batch.additionalContexts, {
           attachments: ctx.attachments, target: image => programs?.screenshotRequestTarget(image),
         }, operation)
@@ -277,7 +277,7 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     const { name, arguments: args = {} } = request.params
     if (name === REFERENCE_TOOL.name) return apiReference()
     if (name === RESET_TOOL.name) return resetEnvironment()
-    // The same judgement as tools/list: only the listed registration reaches the executor.
+    // The same judgement as tools/list: only the listed registration reaches the root registry.
     if (name !== PROGRAM_TOOL || ctx.tools.get(PROGRAM_TOOL, agent) === undefined) return failure(`unknown tool ${JSON.stringify(name)}`)
     return serialize(() => runTool(args, AbortSignal.any([options.signal, extra.mcpReq.signal])))
   })

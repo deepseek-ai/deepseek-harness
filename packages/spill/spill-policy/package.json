@@ -74,8 +74,8 @@
     "@deepseek-ai/dsh-llm-deepseek": "workspace:*",
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-attachment-local": "workspace:*",
-    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
-    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
+    "@deepseek-ai/dsh-tool-registry-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-registry-ptc": "workspace:*",
     "@deepseek-ai/dsh-tool-fs": "workspace:*",
     "sharp": "0.35.5",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*"

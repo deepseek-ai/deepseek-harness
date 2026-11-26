@@ -3,9 +3,9 @@
  * controlled Office service: model-visible content, canonical values, argument rules, output-path refusals, render
  * bounds, read authority, Office service failures, cancellation, PTC dispatch, and disposal.
  */
-import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import { executeModelToolFixture, executeDefinitionFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
@@ -20,6 +20,7 @@ import { LlmAdapter, LlmRuntime, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -146,7 +147,7 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(options.ptc === true ? PtcToolExecutor : NativeToolExecutor)
+  await ctx.plugin(options.ptc === true ? PtcToolRegistry : NativeToolRegistry)
   if (options.ptc === true) await ctx.plugin(FakeRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: dir })
@@ -173,27 +174,25 @@ function agentOn(model: string | undefined, options: { provider?: string; model?
 
 let calls = 0
 async function loadOffice(ctx: Context, agent: object): Promise<void> {
-  const dispose = ctx.tools.register(defineTool({
+  const skill = defineTool({
     name: 'skill', description: 'Fixture skill', parameters: { name: { type: 'string', required: true } },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     execute: async () => 'Office instructions',
-  }))
+  })
+  const dispose = ctx.tools.register(skill)
   try {
-    await executeToolFixture(ctx, { signal, name: 'skill', callId: brandString<ToolCallId>(`skill-${++calls}`), arguments: { name: 'office' }, agent: agent as never })
+    // Run the definition itself: under a PTC root, `skill` is a program binding rather than a root entry.
+    await executeDefinitionFixture(ctx, skill, { signal, name: 'skill', callId: brandString<ToolCallId>(`skill-${++calls}`), arguments: { name: 'office' }, agent: agent as never })
   } finally { dispose() }
 }
 
 async function office(ctx: Context, args: Record<string, unknown>, agent: object | null = agentOn('vision'), callSignal = signal) {
   const { operation, ...parameters } = args
   if (agent !== null) await loadOffice(ctx, agent)
-  const toolSet = agent === null ? undefined : await ctx.tools.resolve({ agent: agent as never,
-    modelSelection: { provider: 'visual', model: 'vision' }, signal: callSignal })
-  try {
-    return await executeToolFixture(ctx, {
-      signal: callSignal, callId: brandString<ToolCallId>(`office-${++calls}`), name: `document_${String(operation)}`, arguments: parameters,
-      ...agent === null ? {} : { agent: agent as never }, ...toolSet === undefined ? {} : { toolSet },
-    })
-  } finally { toolSet?.dispose() }
+  return await executeToolFixture(ctx, {
+    signal: callSignal, callId: brandString<ToolCallId>(`office-${++calls}`), name: `document_${String(operation)}`, arguments: parameters,
+    ...agent === null ? {} : { agent: agent as never, toolStep: ToolStep.capture(ctx.tools, agent as never) },
+  })
 }
 
 function text(result: { content: readonly { type: string; text?: string }[] }): string {
@@ -214,7 +213,7 @@ const officeToolError = (code: string) => ({ name: 'OfficeToolError', code })
 describe('office schema', () => {
   it('declares the model-facing description and parameters', async () => {
     const { ctx } = await setup()
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     expect(schemas.map(schema => schema.name)).toEqual(['document_render', 'document_convert', 'document_recalculate'])
     expect(schemas.map(schema => Object.keys(schema.parameters.properties ?? {}))).toEqual([
       ['input', 'pages', 'sheet', 'range', 'dpi', 'renderer'], ['input', 'format', 'sheet'], ['input', 'format'],
@@ -225,12 +224,12 @@ describe('office schema', () => {
       description: 'Rendering backend; omit to use the first available for this file type. poppler renders pdf only.' } } })
     expect(schemas[1]?.parameters).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(schemas[2]?.parameters).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
-    const outputs = ctx.tools.definitions().map(definition => definition.output.schema)
+    const outputs = ctx.tools.getAll().map(definition => definition.output.schema)
     expect(outputs[0]).toMatchObject({ properties: { images: { items: { properties: { mediaType: { enum: ['image/png', 'image/jpeg', 'image/webp'] } } } },
       renderer: { type: 'string', enum: ['libreoffice', 'poppler'] } }, required: expect.arrayContaining(['renderer']) as string[] })
     expect(outputs[1]).toMatchObject({ properties: { format: { enum: ['pdf', 'docx', 'odt', 'txt', 'xlsx', 'ods', 'csv', 'pptx', 'odp'] } } })
     expect(outputs[2]).toMatchObject({ properties: { format: { enum: ['xlsx', 'ods'] } } })
-    for (const definition of ctx.tools.definitions()) {
+    for (const definition of ctx.tools.getAll()) {
       expect(definition.output.schema).toMatchObject({ type: 'object', properties: { operation: { const: definition.name.replace('document_', '') } } })
       expect(definition.output.schema).not.toHaveProperty('oneOf')
     }
@@ -238,9 +237,9 @@ describe('office schema', () => {
 
   it('removes the tool when its plugin fiber is disposed', async () => {
     const { ctx, fiber } = await setup()
-    expect(ctx.tools.definitions()).toHaveLength(3)
+    expect(ctx.tools.getAll()).toHaveLength(3)
     await fiber.dispose()
-    expect(ctx.tools.definitions()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
   })
 
   it.each([
@@ -463,7 +462,7 @@ describe('Office service failures', () => {
 
   it('stays registered without the Office service, fails each call as unavailable, and uses the service once it is provided', async () => {
     const { ctx, kit } = await setup({ kit: false })
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['document_render', 'document_convert', 'document_recalculate'])
+    expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(['document_render', 'document_convert', 'document_recalculate'])
     for (const [args, verb] of [
       [{ operation: 'render', input: 'deck.pptx' }, 'render'],
       [{ operation: 'convert', input: 'deck.pptx', format: 'pdf' }, 'convert'],
@@ -764,11 +763,10 @@ describe('PTC dispatch', () => {
     }
     const agent = { ...agentOn('vision'), ctx }
     await loadOffice(ctx, agent)
-    const toolSet = await ctx.tools.resolve({ agent: agent as never, modelSelection: { provider: 'visual', model: 'vision' }, signal })
-    onTestFinished(() => { toolSet.dispose() })
+    const toolStep = ToolStep.capture(ctx.tools, agent as never)
     const run = (args: Record<string, unknown>) => executeModelToolFixture(ctx, {
       signal, callId: brandString<ToolCallId>(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
-      toolSet,
+      toolStep,
     })
     const result = await run({ code: 'await tools.document_render({ input: "deck.pptx" })', description: 'Render' })
     expect(result.isError).toBe(false)

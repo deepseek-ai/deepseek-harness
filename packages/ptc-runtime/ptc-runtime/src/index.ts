@@ -89,7 +89,7 @@ export abstract class PtcRuntime extends Service {
    * lowercase identifier. Informational, not gating — a consumer that
    * generates language-specific presentation (typed SDK stubs, usage
    * instructions) switches on it and fails loud on a language it cannot
-   * present. The shipped Node backend and `dsh-tool-executor-ptc` support
+   * present. The shipped Node backend and `dsh-tool-registry-ptc` support
    * `'typescript'`. Other languages require their own consumers.
    */
   abstract readonly language: string

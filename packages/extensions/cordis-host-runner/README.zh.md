@@ -76,11 +76,11 @@ Client 查询在 `clientInspectTimeoutMs` 内接受首个有效页面响应。�
 
 定义按会话隔离且仅在进程内存在：其他会话无法读取，重启会清空。历史日志保留工具参数和回执，但不会恢复注册表。浏览器页面重载后，需要再次显式运行才能加载 Client 部分。
 
-通过 `harness.defineTool` 定义的工具以 `PluginToolError` 失败：`execute` 抛出时为 `PLUGIN_TOOL_FAILED`，`message` 保留抛出的消息及其字符串 `code`；返回值不是无损 JSON 数据时为 `PLUGIN_TOOL_INVALID_RESULT`。抛出的 `HarnessError` 与取消之后的任何失败保留其自身身份。
+`harness.defineTool` 拒绝 `guidance`：动态工具在描述和参数描述中说明自身。通过 `harness.defineTool` 定义的工具以 `PluginToolError` 失败：`execute` 抛出时为 `PLUGIN_TOOL_FAILED`，`message` 保留抛出的消息及其字符串 `code`；返回值不是无损 JSON 数据时为 `PLUGIN_TOOL_INVALID_RESULT`。抛出的 `HarnessError` 与取消之后的任何失败保留其自身身份。
 
 ### 信任立场
 
-沙箱隔离全局变量，但不是安全边界：Node 全局变量不存在，或重定向到 Cordis 服务（`ctx.fs`、`ctx.web`、`ctx.bash` 与定时器 helper），host 半收到的是不含框架内部机制的 façade，但它声明的服务仍会触达存活运行时。对待动态包要像对待 bash 访问一样，参见[自引用工具集 参考](README.zh.md)。
+沙箱隔离全局变量，但不是安全边界：Node 全局变量不存在，或重定向到 Cordis 服务（`ctx.fs`、`ctx.web`、`ctx.bash` 与定时器 helper），host 半收到的是不含框架内部机制的 façade，但它声明的服务仍会触达存活运行时。沙箱提供的 `ctx.tools` façade 注册工具，并通过 `schemas()` 与 `get()` 读取 schema 视图；这两个方法跟随该包作用域下的 `ctx.tools.getAll()` 与 `get()`：在原生根注册表下列出每个工具，在 PTC 根注册表下只列出程序条目，没有根注册表时抛出 `ToolRegistryUnavailableError`。对待动态包要像对待 bash 访问一样，参见[自引用工具集 参考](README.zh.md)。
 
 -----
 

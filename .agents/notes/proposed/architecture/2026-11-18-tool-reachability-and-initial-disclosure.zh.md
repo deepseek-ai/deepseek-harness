@@ -6,7 +6,7 @@ Status: proposed
 
 ## Problem
 
-两个执行器在每个步骤都完整披露每个可达工具：`tool-executor-native` 通过请求的 `tools` 字段，`tool-executor-ptc` 通过 `tools:sdk` 章节。没有任何按工具的说明能表达模型可以如何调用某个工具，以及在任何发现之前它能收到多少内容；`ToolSchema.deferLoading` 只是以某一个提供方机制命名。
+两个根注册表在每个步骤都完整披露每个可达工具：`tool-registry-native` 通过请求的 `tools` 字段，`tool-registry-ptc` 通过 `tools:sdk` 章节。没有任何按工具的说明能表达模型可以如何调用某个工具，以及在任何发现之前它能收到多少内容；`ToolSchema.deferLoading` 只是以某一个提供方机制命名。
 
 ## Proposal
 
@@ -20,7 +20,7 @@ Status: proposed
 | `program` | 只能在 `run_code` 程序内部调用。 |
 | `both` | 两种方式都可调用。 |
 
-授权是独立的：被 `restrict()` 移除或因 `when` 条件未激活而移除的工具不在此模型之内；guard 拒绝的是一次执行，不改变任何一个维度。
+授权是独立的：被 `restrict()` 移除或提供方未为该 Agent 添加的工具不在此模型之内；guard 拒绝的是一次执行，不改变任何一个维度。
 
 ### 初始披露
 
@@ -41,8 +41,8 @@ Status: proposed
 
 ## Acceptance criteria
 
-- 每个已注册工具在每个步骤为每个维度解析出一个取值，两个执行器读取同一次解析。
-- 在录制快照中，一个 `none` 工具在每个执行器下都通过 `tool_search` 被找到并随后被调用；`native` 激活按[活跃工具请求头](../../implemented/architecture/2026-09-20-dynamic-tool-updates.zh.md)投影。
+- 每个已注册工具在每个步骤为每个维度解析出一个取值，两个根注册表读取同一次解析。
+- 在录制快照中，一个 `none` 工具在每个根注册表下都通过 `tool_search` 被找到并随后被调用；`native` 激活按[活跃工具请求头](../../implemented/architecture/2026-09-20-dynamic-tool-updates.zh.md)投影。
 
 ## Risks
 

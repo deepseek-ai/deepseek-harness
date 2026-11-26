@@ -42,7 +42,7 @@ it('selects one configured provider per call and exposes only task inputs', asyn
   const fiber = await ctx.plugin(externalTool, {
     providers: { codex: 'codex-provider', claude: 'claude-provider', future: 'future-provider' },
   })
-  const schema = ctx.tools.schemas().find(tool => tool.name === 'subagent_oar')
+  const schema = ctx.tools.getAll().find(tool => tool.name === 'subagent_oar')
   expect(schema?.parameters.required).toEqual(['runtime', 'description', 'prompt'])
   expect(Object.keys(schema?.parameters.properties as Record<string, unknown>).sort()).toEqual(['description', 'name', 'prompt', 'runtime'])
   expect(schema?.parameters.properties).toMatchObject({ runtime: { enum: ['codex', 'claude', 'future'] } })
@@ -68,7 +68,7 @@ it('selects one configured provider per call and exposes only task inputs', asyn
     runtime: 'codex', description: 'task', prompt: 'task',
   })).toBe(true)
   await fiber.dispose()
-  expect(ctx.tools.schemas().some(tool => tool.name === 'subagent_oar')).toBe(false)
+  expect(ctx.tools.getAll().some(tool => tool.name === 'subagent_oar')).toBe(false)
 })
 
 it('rejects unconfigured runtime names before starting any child', async (test) => {
@@ -149,5 +149,5 @@ it('supports direct composition with the declared optional defaults', async (tes
   const { ctx } = await setup()
   test.onTestFinished(() => ctx.fiber.dispose())
   externalTool.apply(ctx, { providers: { codex: 'codex-provider' } })
-  expect(ctx.tools.schemas().some(tool => tool.name === 'subagent_oar')).toBe(true)
+  expect(ctx.tools.getAll().some(tool => tool.name === 'subagent_oar')).toBe(true)
 })

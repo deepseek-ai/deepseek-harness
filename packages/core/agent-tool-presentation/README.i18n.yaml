@@ -6,8 +6,8 @@
   en: 1c67fea11cb4a325
   zh: 7dc1256148273b02
 /deepseek-ai-dsh-agent-tool-presentation:
-  en: db5b1de2af3a6f37
-  zh: e4b10a1484df8b29
+  en: 6a5f9b1570b614a5
+  zh: f3d14a2606ba98cf
 /deepseek-ai-dsh-agent-tool-presentation/summary:
   en: 4e7556ae08aa7259
   zh: 1d178d483a426267
@@ -15,14 +15,14 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-agent-tool-presentation/use-this-package:
-  en: 9ad88c3b4d6e389e
-  zh: f5d78ac15598aabb
+  en: 4c226705b43a760d
+  zh: c6a4e820bb075001
 /deepseek-ai-dsh-agent-tool-presentation/use-this-package/add-the-row-to-a-preset:
   en: 1550e3dcc5a3aa1e
   zh: 47b2d1e0e3e3cbf2
 /deepseek-ai-dsh-agent-tool-presentation/use-this-package/what-ptc-mode-requires:
-  en: 1dbf0a453121497f
-  zh: 0740aa8a0d52b276
+  en: 0d2251b6538ee46e
+  zh: 1c57eb8af5a9f0b4
 /deepseek-ai-dsh-agent-tool-presentation/use-this-package/one-presentation-per-agent:
   en: 46bf80f051175567
   zh: 8f5e1623da5d1520
@@ -30,20 +30,20 @@
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
 /deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation/design-concept:
-  en: 0fbb3dd32193e54c
-  zh: 5b3835aef5115bb7
+  en: e17f0c5facf0c5fc
+  zh: 7abe99c28dce4fd4
 /deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation/source-map:
-  en: 89ecdb3d5d032e7f
-  zh: 64ae2feb4344c679
+  en: fd74b044dced3585
+  zh: 3b2549d0c7df47a5
 /deepseek-ai-dsh-agent-tool-presentation/understand-the-implementation/behavior-notes:
-  en: d9300d0a040f3e70
-  zh: 11969cc8c9e60ad0
+  en: 54cdb837158edaf8
+  zh: 9596951414a9c61b
 /deepseek-ai-dsh-agent-tool-presentation/further-exploration:
-  en: 6a1d0096e4da25e4
-  zh: 9d5de770addb69d2
+  en: 53511734744f5636
+  zh: 52e83d0d7115e75d
 /deepseek-ai-dsh-agent-tool-presentation/model-experience:
-  en: 35621b26757d462e
-  zh: a8869139783ae475
+  en: d9bd1b236e5619fd
+  zh: 84f6b4e779fdbb28
 /deepseek-ai-dsh-agent-tool-presentation/model-experience/kv-cache-effect:
   en: c75b16e38577f026
   zh: f802d115af4bf9a1

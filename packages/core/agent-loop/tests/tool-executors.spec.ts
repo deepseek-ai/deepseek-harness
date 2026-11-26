@@ -1,67 +1,48 @@
-/** Scoped executor selection and lifetime through the real Agent loop. */
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import { expect, it, onTestFinished } from 'vitest'
+/** Scoped root registry selection and lifetime through the real Agent loop. */
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import LlmRuntime, { createUserMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, type StreamChunk, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { bindScopeParent, createScope, type Scope, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { AssembleContext, PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import Tools, { defineTool, ToolsService } from '@deepseek-ai/dsh-tools'
-import type { ToolExecutor, ToolBatchInput, ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
+import type { ToolRegistry, ToolBatchInput } from '@deepseek-ai/dsh-tools'
 import AgentLoop from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
 
-/** An independent execution implementation: no PTC executor inheritance or delegation. */
-function independent(ctx: Context, name: string, trace: string[], sectionPrefix = 'tools'): ToolExecutor {
+/**
+ * A root with one transport entry of its own and no native or PTC registry behind it.
+ * The entry runs `echo` from the registrations the root received.
+ */
+function independent(name: string, trace: string[], before?: () => Promise<void>): ToolRegistry {
+  const sources: Pick<ToolRegistry, 'get'>[] = []
   const transport = defineTool({
     name, description: `Execute through ${name}.`, parameters: {},
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute(_args, exec) {
-      const tool = ctx.tools.get('echo', exec.agent)
+      trace.push(`${name}:execute`)
+      await before?.()
+      const tool = sources.map(source => source.get('echo', exec.agent)).find(found => found !== undefined)
       if (tool === undefined) throw new Error('echo is not visible')
       return `${name}:${String(await tool.execute({}, exec))}`
     },
   })
-  const executor: ToolExecutor = {
-    sections: [
-      { name: `${sectionPrefix}:transport`, order: 800, text: `Call ${name}.`, interpolate: false },
-      { name: `${sectionPrefix}:sdk`, order: 5000, text: tools => tools.map(tool => tool.name).join(', '), interpolate: false },
-    ],
-    describe: () => ({ schemas: [transport], knownNames: [name] }),
-    async execute(input) {
-      trace.push(`${name}:execute`)
-      const results = []
-      for (const call of input.calls) {
-        if (call.name !== name) throw new Error(`unexpected transport ${call.name}`)
-        const callSeq = input.log === undefined ? undefined : input.agent!.session.append('tool/call', {
-          turn: input.log.turn, step: input.log.step,
-          callId: call.id, name: call.name, arguments: call.arguments,
-        }).seq
-        const exec: ToolRunContext = {
-          callId: call.id, name: call.name, arguments: JSON.parse(call.arguments), signal: input.signal,
-          ...input.agent === undefined ? {} : { agent: input.agent },
-          rootCallId: call.id, token: Symbol() as ToolExecutionToken,
-          deferContext() {}, concludeTurn() {},
-        }
-        const value = String(await transport.execute(exec.arguments, exec))
-        const result = { isError: false as const, value, content: [{ type: 'text' as const, text: value }] }
-        if (input.log !== undefined) {
-          const { agent, log: { turn, step } } = input
-          agent!.session.append('tool/result', {
-            turn, step, message: createToolResultMessage({ callId: call.id, content: result.content, isError: false }),
-          }, { surfaceOp: 'append', ...callSeq === undefined ? {} : { sourceEventSeqs: [callSeq] } })
-        }
-        results.push({ callId: call.id, result })
-      }
-      return { results, additionalContexts: [], concluded: false }
+  return {
+    register: () => { throw new Error(`${name} has no registrations`) },
+    include: (source) => {
+      sources.push(source)
+      return () => { sources.splice(sources.indexOf(source), 1) }
     },
+    get: entry => entry === name ? transport : undefined,
+    getAll: () => [transport],
   }
-  return executor
 }
 
 async function setup(adapter = new MockAdapter([]), maxParallelToolCalls?: number) {
@@ -72,7 +53,7 @@ async function setup(adapter = new MockAdapter([]), maxParallelToolCalls?: numbe
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [], ...maxParallelToolCalls === undefined ? {} : { maxParallelToolCalls } })
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -101,7 +82,18 @@ async function run(ctx: Context, agent: Agent): Promise<void> {
   await idle
 }
 
-it('shares the registry and selects an independent executor through the preset scope chain', async () => {
+/** One assistant response calling every named tool without arguments. */
+function toolCalls(...names: string[]): StreamChunk[] {
+  return [
+    ...names.flatMap((name, index): StreamChunk[] => [
+      { type: 'block-start', index, blockType: 'tool-call' },
+      { type: 'block-end', index, block: { type: 'tool-call', id: brandString<ToolCallId>(`call-${name}`), name, arguments: '{}' } },
+    ]),
+    { type: 'finish', reason: { kind: 'tool-calls' } },
+  ]
+}
+
+it('shares the registry and selects an independent root through the preset scope chain', async () => {
   const trace: string[] = []
   const adapter = new MockAdapter([
     toolCallResponse('sdk-call', 'sdk_eval', {}), textResponse('sdk done'),
@@ -110,13 +102,16 @@ it('shares the registry and selects an independent executor through the preset s
   const ctx = await setup(adapter)
   const presetKey = { preset: 'sdk' }
   const preset = await scoped(ctx, presetKey)
-  preset.ctx.tools.setExecutor(independent(preset.ctx, 'sdk_eval', trace))
+  preset.ctx.tools.setRoot(independent('sdk_eval', trace))
   const sdk = await ctx.agentLoop.create(brandString<SessionId>('sdk'), { provider: 'mock', model: 'mock' })
   bindScopeParent(sdk, presetKey)
   const native = await ctx.agentLoop.create(brandString<SessionId>('native'), { provider: 'mock', model: 'mock' })
   expect(ctx.tools).toBeInstanceOf(ToolsService)
   expect('registerExecutor' in ctx.tools).toBe(false)
-  expect(sdk.ctx.tools.get('echo', sdk)).toBe(ctx.tools.get('echo'))
+  expect('setExecutor' in ctx.tools).toBe(false)
+  // ctx.tools answers from each Agent's selected root.
+  expect(sdk.ctx.tools.get('echo', sdk)).toBeUndefined()
+  expect(sdk.ctx.tools.getAll(sdk).map(tool => tool.name)).toEqual(['sdk_eval'])
   expect(native.ctx.tools.get('echo', native)).toBe(ctx.tools.get('echo'))
   await run(ctx, sdk)
   await run(ctx, native)
@@ -128,10 +123,17 @@ it('shares the registry and selects an independent executor through the preset s
   })
 })
 
-it('dispatches through the current Agent scope after prompt listeners rebuild the assembly', async () => {
+it('dispatches through the root selected at dispatch, which runs only entries the step declared', async () => {
+  const bodies: string[] = []
+  const evaluator = (label: string) => defineTool({
+    name: 'first_eval', description: `Evaluate through ${label}.`, parameters: {},
+    output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+    execute: async () => { bodies.push(label); return label },
+  })
   const trace: string[] = []
+  const whileResponding: (() => void)[] = []
   const adapter = new MockAdapter([
-    () => { selectNearer(); return toolCallResponse('held', 'first_eval', {}) },
+    () => { for (const change of whileResponding) change(); return toolCalls('first_eval', 'echo') },
     textResponse('done'),
   ])
   const ctx = await setup(adapter)
@@ -141,35 +143,62 @@ it('dispatches through the current Agent scope after prompt listeners rebuild th
   })
   const presetKey = { preset: 'first' }
   const preset = await scoped(ctx, presetKey)
-  preset.ctx.tools.setExecutor(independent(preset.ctx, 'first_eval', trace))
+  const presetRoot = new NativeToolRegistry.NativeToolRegistry()
+  presetRoot.register(evaluator('preset'))
+  preset.ctx.tools.setRoot(presetRoot)
   const agent = await ctx.agentLoop.create(brandString<SessionId>('changing'), { provider: 'mock', model: 'mock' })
   bindScopeParent(agent, presetKey)
-  const selectNearer = () => {
-    const nearer = independent(agent.ctx, 'first_eval', trace, 'nearer-tools')
-    const execute = nearer.execute.bind(nearer)
-    nearer.execute = (input) => { trace.push('nearer'); return execute(input) }
-    agent.ctx.tools.setExecutor(nearer)
-  }
+  whileResponding.push(() => {
+    const nearer = new NativeToolRegistry.NativeToolRegistry()
+    nearer.register(evaluator('nearer'))
+    const get = nearer.get.bind(nearer)
+    nearer.get = (name, scope) => { trace.push(name); return get(name, scope) }
+    agent.ctx.tools.setRoot(nearer)
+  })
   await run(ctx, agent)
-  expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['first_eval'])
-  expect(adapter.requests[1]?.tools?.map(tool => tool.name)).toEqual(['first_eval'])
-  expect(trace).toEqual(['nearer', 'first_eval:execute'])
+  expect(adapter.requests.map(request => request.tools?.map(tool => tool.description).sort())).toEqual([
+    ['Evaluate through preset.', 'Shared capability.'], ['Evaluate through nearer.', 'Shared capability.'],
+  ])
+  // The batch resolves both calls through the nearer root selected at dispatch.
+  expect(new Set(trace)).toEqual(new Set(['first_eval', 'echo']))
+  // The nearer root's same-name entry is not the one the step declared; the shared definition is.
+  expect(bodies).toEqual([])
+  const results = agent.session.snapshotEvents().flatMap(event => event.type === 'tool/result' ? [event.data] : [])
+  expect(results.map(result => [result.message.toolCallId, result.error?.code])).toEqual([
+    ['call-first_eval', 'UNKNOWN_TOOL'], ['call-echo', undefined],
+  ])
+  expect(results[1]?.message.content).toEqual([{ type: 'text', text: 'shared' }])
 })
 
-it('rejects new batches after unload while an accepted batch settles on its original executor', async () => {
+it('fails a step whose selected root is unavailable before admitting model-visible input', async () => {
+  const adapter = new MockAdapter([textResponse('unused')])
+  const ctx = await setup(adapter)
+  const key = { preset: 'unloaded' }
+  const scope = await scoped(ctx, key)
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('unloaded'), { provider: 'mock', model: 'mock' })
+  bindScopeParent(agent, key)
+  scope.ctx.tools.setRoot(independent('unloaded_eval', []))()
+  expect(() => ToolStep.capture(ctx.tools, agent)).toThrow(expect.objectContaining({ code: 'TOOL_REGISTRY_UNAVAILABLE' }) as Error)
+  await run(ctx, agent)
+  expect(adapter.requests).toEqual([])
+  expect(agent.session.snapshotEvents().filter(event => ['request/header', 'system/message', 'user/message'].includes(event.type))).toEqual([])
+  expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data).toMatchObject({
+    reason: { kind: 'error', error: { message: expect.stringContaining('selected tool registry is unavailable') as string } },
+  })
+})
+
+it('rejects new batches after unload while an accepted batch settles on its original root', async () => {
   const trace: string[] = []
   const ctx = await setup()
   const key = { preset: 'temporary' }
   const scope = await scoped(ctx, key)
   const agent = await ctx.agentLoop.create(brandString<SessionId>('temporary'), { provider: 'mock', model: 'mock' })
   bindScopeParent(agent, key)
-  const provider = independent(scope.ctx, 'old_eval', trace)
   const entered = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
   onTestFinished(() => { release.resolve(undefined) })
-  const execute = provider.execute.bind(provider)
-  provider.execute = async (input) => { entered.resolve(undefined); await release.promise; return execute(input) }
-  const dispose = scope.ctx.tools.setExecutor(provider)
+  const provider = independent('old_eval', trace, async () => { entered.resolve(undefined); await release.promise })
+  const dispose = scope.ctx.tools.setRoot(provider)
   const input = {
     calls: [{ type: 'tool-call', name: 'old_eval', id: brandString<ToolCallId>('accepted'), arguments: '{}' }],
     signal: new AbortController().signal,
@@ -178,9 +207,9 @@ it('rejects new batches after unload while an accepted batch settles on its orig
   const pending = ctx.tools.execute(input)
   await entered.promise
   dispose()
-  await expect(ctx.systemPrompt.assemble({ scope: key })).rejects.toThrow('selected tool executor is unavailable')
-  await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool executor is unavailable')
-  scope.ctx.tools.setExecutor(independent(scope.ctx, 'replacement_eval', trace))
+  await expect(ctx.systemPrompt.assemble({ scope: key })).rejects.toThrow('selected tool registry is unavailable')
+  await expect(ctx.tools.execute(input)).rejects.toMatchObject({ code: 'TOOL_REGISTRY_UNAVAILABLE' })
+  scope.ctx.tools.setRoot(independent('replacement_eval', trace))
   release.resolve(undefined)
   const result = await pending
   expect(result.results[0]?.result).toMatchObject({ isError: false, value: 'old_eval:shared' })
@@ -192,7 +221,7 @@ it('rejects new batches after unload while an accepted batch settles on its orig
   expect(trace).toEqual(['old_eval:execute', 'replacement_eval:execute'])
 })
 
-it('refreshes executor projections without emitting tool registry changes', async () => {
+it('refreshes root projections and emits a tool registry change when a root is selected or unloads', async () => {
   const ctx = await setup()
   let registryChanges = 0
   ctx.on('tools/change', () => { registryChanges++ })
@@ -200,34 +229,25 @@ it('refreshes executor projections without emitting tool registry changes', asyn
   const scope = await scoped(ctx, key)
   const context: AssembleContext = { scope: key }
   expect((await ctx.systemPrompt.assemble(context)).tools.map(tool => tool.name)).toEqual(['echo'])
-  const dispose = scope.ctx.tools.setExecutor(independent(scope.ctx, 'new_eval', []))
+  const dispose = scope.ctx.tools.setRoot(independent('new_eval', []))
   expect((await ctx.systemPrompt.assemble(context)).tools.map(tool => tool.name)).toEqual(['new_eval'])
-  expect(registryChanges).toBe(0)
+  expect(registryChanges).toBe(1)
   dispose()
-  await expect(ctx.systemPrompt.assemble(context)).rejects.toThrow('selected tool executor is unavailable')
-  expect(registryChanges).toBe(0)
+  await expect(ctx.systemPrompt.assemble(context)).rejects.toThrow('selected tool registry is unavailable')
+  expect(registryChanges).toBe(2)
 })
 
-it('rolls back executor section registrations when a later section has an invalid order', async () => {
+it('rejects a second live root in one scope and keeps the first selected', async () => {
   const ctx = await setup()
-  const key = { preset: 'invalid-order' }
+  const key = { preset: 'occupied' }
   const scope = await scoped(ctx, key)
-  scope.ctx.systemPrompt.section({ name: 'occupied', order: 1, text: 'Existing guidance.' })
-  const executor: ToolExecutor = {
-    ...independent(scope.ctx, 'rejected_eval', []),
-    sections: [
-      { name: 'transient', order: 0, text: 'Must be rolled back.' },
-      { name: 'occupied', order: Number.NaN, text: 'Invalid contribution.' },
-    ],
-  }
-  expect(() => scope.ctx.tools.setExecutor(executor)).toThrow('order must be a finite number')
-  const assembly = await ctx.systemPrompt.assemble({ scope: key })
-  expect(assembly.tools.map(tool => tool.name)).toEqual(['echo'])
-  expect(assembly.sections.map(section => section.name)).not.toContain('transient')
-  expect(assembly.sections.find(section => section.name === 'occupied')?.text).toBe('Existing guidance.')
+  scope.ctx.tools.setRoot(independent('first_eval', []))
+  expect(() => scope.ctx.tools.setRoot(independent('second_eval', [])))
+    .toThrow('Only one root tool registry may be installed in each scope')
+  expect((await ctx.systemPrompt.assemble({ scope: key })).tools.map(tool => tool.name)).toEqual(['first_eval'])
 })
 
-it('assembles independent tools and section text for overlapping prompt assemblies', async () => {
+it('assembles independent tools for overlapping prompt assemblies', async () => {
   const ctx = await setup()
   const key = { preset: 'overlapping' }
   const scope = await scoped(ctx, key)
@@ -243,13 +263,14 @@ it('assembles independent tools and section text for overlapping prompt assembli
   })
   const pending = ctx.systemPrompt.assemble(context)
   await reached
-  const replacement = independent(scope.ctx, 'next_eval', [])
-  const describe = replacement.describe.bind(replacement)
+  const replacement = independent('next_eval', [])
   let projections = 0
-  replacement.describe = (tools) => { projections++; return describe(tools) }
   let second: PromptAssembly
   try {
-    scope.ctx.tools.setExecutor(replacement)
+    scope.ctx.tools.setRoot(replacement)
+    // Count only the assemblies' projections, not the selection's probe.
+    const getAll = replacement.getAll.bind(replacement)
+    replacement.getAll = (viewer) => { projections++; return getAll(viewer) }
     second = await ctx.systemPrompt.assemble(context)
   } finally {
     release()
@@ -258,30 +279,32 @@ it('assembles independent tools and section text for overlapping prompt assembli
   expect(first.tools.map(tool => tool.name)).toEqual(['echo'])
   expect(first).not.toHaveProperty('toolExecutor')
   expect(second.tools.map(tool => tool.name)).toEqual(['next_eval'])
-  expect(second.sections).toContainEqual({ name: 'tools:transport', order: 800, text: 'Call next_eval.', interpolate: false })
-  expect(second.sections).toContainEqual({ name: 'tools:sdk', order: 5000, text: 'echo', interpolate: false })
   expect(projections).toBe(1)
 })
 
-it('keeps the foundation usable for registration and requires an explicit executor for calls', async () => {
+it('keeps the foundation usable for registration and requires an explicit root for calls', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(Tools)
   ctx.tools.register(defineTool({
-    name: 'echo', description: 'Registered without an executor.', parameters: {},
+    name: 'echo', description: 'Registered without a root.', parameters: {},
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     execute: async () => 'shared',
   }))
-  expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['echo'])
-  await expect(ctx.systemPrompt.assemble()).rejects.toThrow('selected tool executor is unavailable')
+  expect(() => ctx.tools.getAll()).toThrow('selected tool registry is unavailable')
+  expect(() => ctx.tools.get('echo')).toThrow('selected tool registry is unavailable')
+  await expect(ctx.systemPrompt.assemble()).rejects.toThrow('selected tool registry is unavailable')
   await expect(ctx.tools.execute({
     calls: [{ type: 'tool-call', name: 'echo', id: brandString<ToolCallId>('unconfigured'), arguments: '{}' }], signal: new AbortController().signal,
-  })).rejects.toThrow('selected tool executor is unavailable')
+  })).rejects.toMatchObject({ name: 'ToolRegistryUnavailableError', code: 'TOOL_REGISTRY_UNAVAILABLE' })
+  // A root selected later receives the registrations made before it.
+  ctx.tools.setRoot(new NativeToolRegistry.NativeToolRegistry())
+  expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(['echo'])
 })
 
-it.each([undefined, 1, 6])('hands the executor raw calls and the resolved loop limit %s', async (maxParallelToolCalls) => {
+it.each([undefined, 1, 6])('hands ctx.tools raw calls, the step declarations, and the resolved loop limit %s', async (maxParallelToolCalls) => {
   const raw = ['{ "value": 1 }', '[2, 3]']
   const adapter = new MockAdapter([[
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -292,17 +315,19 @@ it.each([undefined, 1, 6])('hands the executor raw calls and the resolved loop l
   ], textResponse('done')])
   const ctx = await setup(adapter, maxParallelToolCalls)
   const agent = await ctx.agentLoop.create(brandString<SessionId>('raw-batch'), { provider: 'mock', model: 'mock' })
-  const executor = independent(agent.ctx, 'custom', [])
-  const batches: ToolBatchInput[] = []
-  const execute = executor.execute.bind(executor)
-  executor.execute = (input) => { batches.push(input); return execute(input) }
-  agent.ctx.tools.setExecutor(executor)
+  const root = independent('custom', [])
+  agent.ctx.tools.setRoot(root)
+  const execute = vi.spyOn(ToolsService.prototype, 'execute')
+  onTestFinished(() => { execute.mockRestore() })
   await run(ctx, agent)
+  const batches = execute.mock.calls.map(([input]) => input)
   expect(batches).toHaveLength(1)
   expect(batches[0]?.calls.map(call => call.arguments)).toEqual(raw)
   expect(batches[0]?.agent).toBe(agent)
   expect(batches[0]?.log).toMatchObject({ turn: 1, step: 1 })
   expect(batches[0]?.maxParallelToolCalls).toBe(maxParallelToolCalls ?? 10)
+  expect(batches[0]?.toolStep?.agent).toBe(agent)
+  expect(batches[0]?.toolStep?.declarations).toEqual([root.get('custom')])
   expect(agent.session.snapshotEvents().filter(event => event.type === 'tool/result').map(event => event.data.message.toolCallId))
     .toEqual(['one', 'two'])
 })

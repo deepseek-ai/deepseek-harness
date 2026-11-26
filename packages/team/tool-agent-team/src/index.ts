@@ -1,4 +1,4 @@
-/** Conditionally available task-board tools and guidance for Agent Teams. */
+/** Task-board tools and guidance added for Agents whose subagent tree runs in Team mode. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -6,13 +6,14 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type { TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { AgentToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
 /** Services required by the Team tool plugin. */
-export const inject = ['agentTeams', 'subagents', 'tools', 'systemPrompt']
+export const inject = ['agentTeams', 'subagents', 'tools', 'systemPrompt', 'agents']
 
 /** The Team tool plugin takes no configuration. */
 export type Config = Record<never, never>
@@ -79,15 +80,21 @@ function jsonOutput<const S extends ValueSchemaSpec>(schema: S): {
 /** One task as the model sees it: the owner's Session id is replaced by its agent name. */
 type NamedTaskView = Omit<TeamTaskView, 'ownerId' | 'ownerName'> & { readonly owner?: string }
 
-/** Recover the exact caller guaranteed by conditional Team-tool discovery. */
+/** Names of the Team tools added for Agents in Team mode. */
+const TEAM_TOOL_NAMES: readonly string[] = ['team_task_create', 'team_task_list', 'team_task_get', 'team_task_update']
+
+/** Recover the caller of a Team tool; only an Agent-less direct batch lacks one. */
 function callingAgent(agent: Agent | undefined, toolName: string): Agent {
-  /* v8 ignore next 2 -- The Team condition rejects callers without an Agent before execution. */
   if (agent === undefined) throw new ToolContextUnavailableError(`${toolName} requires a calling Agent`)
   return agent
 }
 
 /**
- * Register Team tools and guidance selected by each caller's root Session mode.
+ * Register Team tools and guidance selected by each caller's root Session mode. The tools are
+ * added for a root and its live descendants when the root Session's mode turns on, for a child
+ * when it joins an enabled tree, and on creation or resume; they are removed when the mode turns
+ * off or a child loses its live root. A failure to read the mode, other than a child without a
+ * live root, fails the Agent's creation.
  * @param ctx - context carrying Team, subagent, tool, and system prompt services.
  * @param config - the empty plugin configuration; removed keys fail at load.
  */
@@ -109,13 +116,24 @@ export function apply(ctx: Context, config: Config = {}): void {
       return false
     }
   }
+  const tools = new AgentToolRegistry()
+  const sync = (agent: Agent): void => { tools.set(agent, enabled(agent) ? TEAM_TOOL_NAMES : []) }
+  const syncAll = (): void => { for (const agent of ctx.agents.list()) sync(agent) }
+  ctx.on('agent/created', ({ agent }) => { sync(agent) })
+  ctx.on('subagent/start', ({ id }) => {
+    const child = ctx.agents.get(id)
+    if (child !== undefined) sync(child)
+  })
+  // A root mode change reaches every descendant; a disposed root leaves its children without Team mode.
+  ctx.on('session/event', (_session, event) => { if (event.type === 'team/mode') syncAll() }, { global: true })
+  ctx.on('agent/disposed', syncAll)
   ctx.systemPrompt.section({
     name: 'team:policy',
     retirement: 'The shared task board is no longer available. Its instructions no longer apply.',
     order: ctx.systemPrompt.getSectionOrder('TEAM_POLICY'),
     text: ({ agent }) => enabled(agent) ? TEAM_POLICY : '',
   })
-  ctx.tools.register(defineTool({
+  ctx.effect(() => tools.register(defineTool({
     name: 'team_task_create',
     description: 'Create one unowned pending task on the shared Team task board.',
     parameters: {
@@ -139,9 +157,9 @@ export function apply(ctx: Context, config: Config = {}): void {
       }, exec.signal)
       return withOwnerName(task)
     },
-  }), { when: ({ agent }) => enabled(agent) })
+  })), 'tool-agent-team.team_task_create')
 
-  ctx.tools.register(defineTool({
+  ctx.effect(() => tools.register(defineTool({
     name: 'team_task_list',
     description: 'List shared tasks, including readiness, owner, revision, blockers, and write-scope warnings.',
     parameters: {
@@ -180,9 +198,9 @@ export function apply(ctx: Context, config: Config = {}): void {
         ...(cursor + limit < filtered.length ? { nextCursor: cursor + limit } : {}),
       }
     },
-  }), { when: ({ agent }) => enabled(agent) })
+  })), 'tool-agent-team.team_task_list')
 
-  ctx.tools.register(defineTool({
+  ctx.effect(() => tools.register(defineTool({
     name: 'team_task_get',
     description: 'Read the complete latest value of one shared task before changing or executing it.',
     parameters: {
@@ -196,9 +214,9 @@ export function apply(ctx: Context, config: Config = {}): void {
       const task = ctx.agentTeams.getTask(caller, brandString<TeamTaskId>(args.task_id))
       return Promise.resolve(withOwnerName(task))
     },
-  }), { when: ({ agent }) => enabled(agent) })
+  })), 'tool-agent-team.team_task_get')
 
-  ctx.tools.register(defineTool({
+  ctx.effect(() => tools.register(defineTool({
     name: 'team_task_update',
     description: 'Compare-and-set a shared task action using the latest revision from team_task_get or team_task_list.',
     parameters: {
@@ -232,5 +250,9 @@ export function apply(ctx: Context, config: Config = {}): void {
       }, exec.signal)
       return withOwnerName(task)
     },
-  }), { when: ({ agent }) => enabled(agent) })
+  })), 'tool-agent-team.team_task_update')
+  // Including after registration lets a name conflict fail this plugin at load.
+  ctx.tools.include(tools)
+  // Agents created before this plugin loaded receive no creation event.
+  syncAll()
 }

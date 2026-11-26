@@ -1,7 +1,7 @@
-import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { scopeOf, scopeParentOf } from '@deepseek-ai/dsh-scope'
+import { scopeChainOf, scopeOf, scopeTarget } from '@deepseek-ai/dsh-scope'
+import type { ScopeKey, Scoped } from '@deepseek-ai/dsh-scope'
 import type { TimelineStorage } from './storage.ts'
 
 const planningTools = ['timeline_tree', 'timeline_tasks', 'timeline_pull', 'timeline_read', 'timeline_reply']
@@ -18,21 +18,44 @@ export function isWorker(agent: Agent | undefined): boolean {
 /** The Timeline installation that owns an agent's planning tools. */
 export type OwnsAgent = (agent: Agent) => boolean
 
+/** One Timeline installation and the scope it registered its tools in; undefined is the unscoped context. */
+export interface TimelineInstallation {
+  readonly scope: ScopeKey | undefined
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Collect the Timeline installations that can manage one Agent; the
+     * nearest one in the Agent's scope chain owns its planning tools. Each
+     * installation answers with its own record.
+     * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): an installation in a preset or Agent scope answers only for Agents in that scope.
+     * @param installations - receives each answering installation's record.
+     * @mode emit
+     */
+    'timeline/installation'(this: Scoped<Agent>, installations: TimelineInstallation[]): void
+  }
+}
+
 /**
- * Compare tool identity so an enclosing installation cannot also manage a scoped agent.
- * @param ctx - context that registered the planning tool.
+ * The nearest installation in an Agent's scope chain owns the Agent, so an
+ * enclosing installation cannot also manage an Agent under a scoped one. The
+ * same Agents see the owner's planning tools under a native root and bind them
+ * under a PTC root.
+ * @param ctx - context that registered the planning tools.
  * @returns a predicate that checks whether this installation owns an agent.
  */
 export function planningOwner(ctx: Context): OwnsAgent {
-  const definition = ctx.tools.get('timeline_tree', scopeOf(ctx))
-  assert(definition !== undefined, 'Timeline must register its planning tools first')
+  const own: TimelineInstallation = { scope: scopeOf(ctx) }
+  ctx.on('timeline/installation', (installations) => { installations.push(own) })
   return (agent) => {
-    if (!isWorker(agent)) return ctx.tools.get('timeline_tree', agent) === definition
-    // The worker's own scope hides planning tools. Look through its parent scopes instead.
-    for (let parent = scopeParentOf(agent); ; parent = scopeParentOf(parent)) {
-      const inherited = ctx.tools.get('timeline_tree', parent)
-      if (inherited !== undefined || parent === undefined) return inherited === definition
+    const installations: TimelineInstallation[] = []
+    ctx.emit(scopeTarget(agent, agent), 'timeline/installation', installations)
+    for (const scope of [...scopeChainOf(agent), undefined]) {
+      const nearest = installations.find(installation => installation.scope === scope)
+      if (nearest !== undefined) return nearest === own
     }
+    return false
   }
 }
 

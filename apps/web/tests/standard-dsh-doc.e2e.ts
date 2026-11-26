@@ -37,7 +37,7 @@ it('lists dsh-doc once without loading instructions or calling tools for an ordi
       expect(catalogs[0]?.source).toMatchObject({ entries: skills.map(skill => ({ name: skill.name })) })
       expect(events.filter(event => event.type === 'user/message'
         && event.data.source.kind === 'skill-invocation')).toEqual([])
-      const names = scaffold.ctx.tools.schemas(agent).map(tool => tool.name)
+      const names = scaffold.ctx.tools.getAll(agent).map(tool => tool.name)
       expect(names).toContain('cordis_inspect')
       await page.getByText('READY', { exact: true }).waitFor()
       await assertFixtureInventory(dirname(FIXTURE), ['session.v4.jsonl'])

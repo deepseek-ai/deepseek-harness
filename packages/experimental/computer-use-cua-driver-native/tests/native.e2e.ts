@@ -2,7 +2,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
@@ -22,11 +22,11 @@ it.skipIf(process.env.DSH_COMPUTER_USE_NATIVE_E2E !== '1')(
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       const provider = ctx.plugin(NativeProvider)
       await provider
       expect(ctx.computerUse.providerName).toBe('cua-driver-native')
-      const names = ctx.tools.schemas().map(tool => tool.name)
+      const names = ctx.tools.getAll().map(tool => tool.name)
       expect(names).toContain('cua_driver_native__check_permissions')
       expect(names).toContain('cua_driver_native__get_window_state')
       expect(names.every(name => name.startsWith('cua_driver_native__'))).toBe(true)
@@ -47,7 +47,7 @@ it.skipIf(process.env.DSH_COMPUTER_USE_NATIVE_E2E !== '1')(
       expect(result.content.some(block => block.type === 'image')).toBe(false)
 
       await provider.dispose()
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
       expect(ctx.computerUse.providerName).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()

@@ -2,7 +2,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 // Proves `allowParallelInProgress` is real configurability and not a constant:
 // the flag is set in a cordis.yml booted through the real Loader, and both faces
 // it controls — the model-facing description and the accepted input — follow it.
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -64,7 +64,7 @@ async function boot(configLines: readonly string[]): Promise<Context> {
     "- name: '@deepseek-ai/dsh-agent'",
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
-    "- name: '@deepseek-ai/dsh-tool-executor-native'",
+    "- name: '@deepseek-ai/dsh-tool-registry-native'",
     "- name: '@deepseek-ai/dsh-session-projection'",
     "- name: '@deepseek-ai/dsh-tool-todo'",
     ...configLines.length > 0 ? ['  config:', ...configLines] : [],
@@ -80,7 +80,7 @@ async function boot(configLines: readonly string[]): Promise<Context> {
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+    ['@deepseek-ai/dsh-tool-registry-native', NativeToolRegistry],
     ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-tool-todo', ToolTodo],
   ])
@@ -105,7 +105,7 @@ const PARALLEL_TODOS = [
 describe('tool-todo real Loader composition through cordis.yml', () => {
   it('allowParallelInProgress: false narrows the description and rejects a parallel write', async () => {
     const ctx = await boot(['    allowParallelInProgress: false'])
-    const description = ctx.tools.schemas().find(s => s.name === 'todo_write')?.description ?? ''
+    const description = ctx.tools.getAll().find(s => s.name === 'todo_write')?.description ?? ''
     expect(description).toContain('keep exactly one todo `in_progress`')
     expect(description).not.toContain('several only')
 
@@ -125,7 +125,7 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
 
   it('allowParallelInProgress: true permits a parallel write end to end', async () => {
     const ctx = await boot(['    allowParallelInProgress: true'])
-    const description = ctx.tools.schemas().find(s => s.name === 'todo_write')?.description ?? ''
+    const description = ctx.tools.getAll().find(s => s.name === 'todo_write')?.description ?? ''
     expect(description).toContain('several only when work runs in parallel')
 
     const owner = await agent(ctx)

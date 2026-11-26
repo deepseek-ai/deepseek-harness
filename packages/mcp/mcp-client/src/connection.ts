@@ -18,7 +18,6 @@
 
 import { Client } from '@modelcontextprotocol/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ScopeKey } from '@deepseek-ai/dsh-scope'
 import { assertNever, deepEqualJson, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ServerContext } from './server-context.ts'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -149,7 +148,7 @@ export function startConnection(
   const lifetime = new AbortController()
   const readiness = Promise.withResolvers<ConnectionOutcome>()
   const loader = config.toolLoading === 'on-demand'
-    ? new McpToolLoader(ctx, config.serverName, config.catalogDescriptionMaxLength)
+    ? new McpToolLoader(ctx, config.serverName, config.catalogDescriptionMaxLength, status)
     : undefined
   type Generation = {
     wire: McpGeneration
@@ -240,6 +239,7 @@ export function startConnection(
           recovery: { refusal: error => refusal(record, error), publish: (next) => { sends = next } },
           ...binding.redacting ? { redact: (text: string) => binding.redact(text) } : {},
           ...loader === undefined ? {} : { loader },
+          registrar: status,
         }, disposers, () => isCurrent(record))
       })
     })
@@ -497,7 +497,6 @@ export function startConnection(
   return {
     ready: readiness.promise,
     instructions: () => serverInstructions,
-    ...loader === undefined ? {} : { catalog: (scope: ScopeKey | undefined) => loader.catalog(scope) },
     resources: {
       async request(request, exec): Promise<JsonValue> {
         const record = current

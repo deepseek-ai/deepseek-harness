@@ -9,8 +9,8 @@
  */
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -118,7 +118,7 @@ async function setup(
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   let spill: StubStore | undefined
   if (withSpill) {
     await ctx.plugin(StubStore)
@@ -238,7 +238,7 @@ describe.each(PTC_MODES)('outer PTC mode failure capture ($mode)', (mode) => {
     await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 64 })
     await mountRuntime(ctx, mode, { maxOutputBytes: 500 })
@@ -285,7 +285,7 @@ describe.each(PTC_MODES)('the durable dispatch-log arm ($mode)', (mode) => {
     await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens })
     await mountRuntime(ctx, mode)
@@ -358,7 +358,7 @@ describe.each(PTC_MODES)('the durable dispatch-log arm ($mode)', (mode) => {
     await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 40 })
     await mountRuntime(ctx, mode)
@@ -413,7 +413,7 @@ describe.each(PTC_MODES)('the durable dispatch-log arm ($mode)', (mode) => {
     await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor, { maxParallelSubCalls: 1 })
+    await ctx.plugin(PtcToolRegistry, { maxParallelSubCalls: 1 })
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 40 })
     await mountRuntime(ctx, mode)
@@ -482,7 +482,7 @@ describe.each(PTC_MODES)('the durable dispatch-log arm ($mode)', (mode) => {
     await ctx.plugin(SessionProjections)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(StubStore)
     await ctx.plugin(SpillPolicy, { maxInlineTokens: 40 })
     await mountRuntime(ctx, mode)

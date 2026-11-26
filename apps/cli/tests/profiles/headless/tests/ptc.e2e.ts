@@ -150,6 +150,14 @@ async function typedPtcModeHarness(mode: PtcMode): Promise<Context> {
   return harness
 }
 
+/** The same harness under a native root, which offers the tools a PTC root binds only in programs. */
+async function typedNativeHarness(mode: PtcMode): Promise<Context> {
+  const harness = new Context()
+  await mountAgentLoopTestDependencies(harness, { workingDirectory: true })
+  await mountRuntime(harness, mode)
+  return harness
+}
+
 /** Keyless real-process harness with the task-owned bash lifecycle. */
 async function backgroundPtcModeHarness(mode: PtcMode, cwd: string): Promise<Context> {
   const harness = await typedPtcModeHarness(mode)
@@ -169,9 +177,11 @@ describe.each(PTC_MODES)('PTC mode typed values ($mode): keyless real-process co
     await writeFile(path, 'alpha\nbeta\n')
     ctx = await typedPtcModeHarness(mode)
     await ctx.plugin(ToolFs)
+    const reference = await typedNativeHarness(mode)
+    await reference.plugin(ToolFs)
 
     const formatted = `<path>${path}</path>\n<type>file</type>\n<content>\n1: alpha\n2: beta\n\n(End of file - total 2 lines)\n</content>`
-    const native = await executeToolFixture(ctx, {
+    const native = await executeToolFixture(reference, {
       callId: brandString<ToolCallId>('inspect-read-reference'), name: 'read',
       arguments: { file_path: path }, signal: testToolSignal,
     })
@@ -367,7 +377,8 @@ describe.each(PTC_MODES)('PTC mode typed values ($mode): keyless real-process co
       inspect(JSON.stringify({ provider: provider.id, names: inspected.data.tools.map(tool => tool.name) }));
     `, testToolSignal, agent))
 
-    expect(value).toEqual({ provider: 'Tool', names: ['cordis_inspect'] })
+    // Inspect lists the entries the Agent can call directly; a PTC root offers only its program entry.
+    expect(value).toEqual({ provider: 'Tool', names: ['run_code'] })
   })
 })
 

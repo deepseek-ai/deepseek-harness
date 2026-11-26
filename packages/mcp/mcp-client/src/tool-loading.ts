@@ -9,8 +9,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
-import { createScope, type Scope, type ScopeKey } from '@deepseek-ai/dsh-scope'
+import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
+import type { McpToolRegistrar } from './status.ts'
 import { publicToolName } from './tools.ts'
 
 /** Raw name of the loader tool inside the server's `mcp__<serverName>__` namespace. */
@@ -43,12 +44,19 @@ export class McpToolLoader {
    * @param ctx - the server plugin's context; it owns the loader and the agents' scopes.
    * @param serverName - the server's tool namespace.
    * @param descriptionMaxLength - maximum characters of each tool's catalog summary.
+   * @param registrar - registers the loader tool and loaded tools for the instance's status handle.
    */
-  constructor(private readonly ctx: Context, private readonly serverName: string, private readonly descriptionMaxLength: number) {
+  constructor(
+    private readonly ctx: Context,
+    private readonly serverName: string,
+    private readonly descriptionMaxLength: number,
+    private readonly registrar: McpToolRegistrar,
+  ) {
     this.name = publicToolName(serverName, LOADER_RAW_NAME)
     this.tool = defineTool({
       name: this.name,
       description: `Add tools from MCP server ${serverName} to your tool list. The system prompt lists them under "On-demand tools from MCP server ${serverName}".`,
+      guidance: { section: `mcp:${serverName}:tools`, order: 'MCP_SERVERS', text: () => this.catalog() },
       parameters: {
         tools: { type: 'array', required: true, items: { type: 'string' }, description: 'Tool names exactly as that list shows them.' },
       },
@@ -79,7 +87,7 @@ export class McpToolLoader {
    * @throws when the loader name is already registered; nothing is published then.
    */
   publish(tools: ReadonlyMap<string, ToolDefinition>): () => void {
-    const unregister = this.ctx.tools.register(this.tool)
+    const unregister = this.registrar.register(this.ctx, this.tool)
     this.offered = tools
     for (const loads of this.loads.values()) {
       for (const name of loads.names) {
@@ -99,12 +107,11 @@ export class McpToolLoader {
   }
 
   /**
-   * Render the system prompt catalog for one assembly.
-   * @param scope - the assembling agent, or undefined for the global view.
-   * @returns the catalog, or an empty string when no generation is published or the scope cannot see the loader.
+   * Render the system prompt catalog of the published generation, which registers the loader.
+   * @returns the catalog, or an empty string when no generation is published.
    */
-  catalog(scope: ScopeKey | undefined): string {
-    if (this.offered.size === 0 || this.ctx.tools.get(this.name, scope) !== this.tool) return ''
+  catalog(): string {
+    if (this.offered.size === 0) return ''
     const tools = [...this.offered].sort(([a], [b]) => a < b ? -1 : 1).map(([name, definition]) => {
       const summary = this.summary(definition.description)
       return summary === '' ? `- ${name}` : `- ${name}: ${summary}`
@@ -146,7 +153,7 @@ export class McpToolLoader {
         present.push(definition.name)
         continue
       }
-      loads.registered.set(name, loads.scope.ctx.tools.register(definition))
+      loads.registered.set(name, this.registrar.register(loads.scope.ctx, definition))
       loads.names.add(name)
       loaded.push(definition.name)
     }
@@ -159,7 +166,7 @@ export class McpToolLoader {
   /** Register one loaded tool for one agent; a failure drops only that tool for that agent. */
   private register(loads: AgentLoads, name: string, definition: ToolDefinition): void {
     try {
-      loads.registered.set(name, loads.scope.ctx.tools.register(definition))
+      loads.registered.set(name, this.registrar.register(loads.scope.ctx, definition))
     } catch (error) {
       loads.names.delete(name)
       this.ctx.logger.error(`mcp-client(${this.serverName}): could not restore loaded tool "${name}" for an agent: ${String(error)}`)

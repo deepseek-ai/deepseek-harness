@@ -1,28 +1,32 @@
 import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
 import { projectToolUpdates } from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { AgentToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 
 export const name = 'snapshot-dynamic-tool-updates'
 export const inject = ['tools']
 
-/** Activate a tool after reading, then disable it after use without changing prompt text. */
+/** Add a tool for the step after reading, then remove it after use without changing prompt text. */
 export function apply(ctx: Context): void {
-  let active = false
-  ctx.tools.register(defineContentToolFixture({
+  const tools = new AgentToolRegistry()
+  ctx.effect(() => tools.register(defineContentToolFixture({
     name: 'snapshot_ping', description: 'Return pong once.', parameters: {},
     async execute() { return [{ type: 'text', text: 'pong' }] },
-  }), { when: async () => active })
+  })), 'snapshot-dynamic-tool-updates.snapshot_ping')
+  ctx.tools.include(tools)
   let requests = 0
+  // The calling Agent's next step declares the change.
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const downstream = await next()
-    if (result.isError) return downstream
+    if (result.isError || exec.agent === undefined) return downstream
     switch (exec.name) {
       case 'read':
-        active = true
+        tools.set(exec.agent, ['snapshot_ping'])
         break
       case 'snapshot_ping':
-        active = false
+        tools.set(exec.agent, [])
         break
     }
     return downstream

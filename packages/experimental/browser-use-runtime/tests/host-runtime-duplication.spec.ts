@@ -53,7 +53,7 @@ async function load(): Promise<{ ctx: Context; root: string }> {
 }
 
 const toolNames = (ctx: Context, agent?: Agent): string[] =>
-  ctx.tools.schemas(agent).map(schema => schema.name)
+  ctx.tools.getAll(agent).map(schema => schema.name)
 
 it('rejects a missing working-directory provider before mounting browser resources', () => {
   const ctx = new Context()

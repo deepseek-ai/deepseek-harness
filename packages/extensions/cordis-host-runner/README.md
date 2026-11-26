@@ -76,11 +76,11 @@ Programmatic callers use `define`, `run`, `stop`, and `undefine`; the browser pa
 
 Definitions are session-scoped and process-local: other sessions read them as absent, and restart clears them. Historical logs retain tool arguments and receipts but do not restore the registry. Reloading a browser page requires another explicit run to load its Client half.
 
-A tool defined through `harness.defineTool` fails with `PluginToolError`: `PLUGIN_TOOL_FAILED` when `execute` throws, keeping the thrown message and any string `code` in `message`, and `PLUGIN_TOOL_INVALID_RESULT` when it returns a value that is not lossless JSON data. A thrown `HarnessError` and any failure after cancellation keep their own identity.
+`harness.defineTool` rejects `guidance`: a dynamic tool describes itself in its description and parameter descriptions. A tool defined through `harness.defineTool` fails with `PluginToolError`: `PLUGIN_TOOL_FAILED` when `execute` throws, keeping the thrown message and any string `code` in `message`, and `PLUGIN_TOOL_INVALID_RESULT` when it returns a value that is not lossless JSON data. A thrown `HarnessError` and any failure after cancellation keep their own identity.
 
 ### Trust stance
 
-The sandbox isolates globals but is not a security boundary: Node globals are absent or redirect to Cordis services (`ctx.fs`, `ctx.web`, `ctx.bash`, the timer helpers), and a host half receives a façade without framework internals, yet the services it declares reach the live runtime. Treat a dynamic package like bash access — see the [self-referential toolset reference](README.md).
+The sandbox isolates globals but is not a security boundary: Node globals are absent or redirect to Cordis services (`ctx.fs`, `ctx.web`, `ctx.bash`, the timer helpers), and a host half receives a façade without framework internals, yet the services it declares reach the live runtime. Its `ctx.tools` façade registers tools and reads schema views through `schemas()` and `get()`, which follow `ctx.tools.getAll()` and `get()` for the package's scope: they list every tool under a native root, only the program entry under a PTC root, and throw `ToolRegistryUnavailableError` without a root. Treat a dynamic package like bash access — see the [self-referential toolset reference](README.md).
 
 -----
 

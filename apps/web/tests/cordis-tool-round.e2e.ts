@@ -45,7 +45,7 @@ describe.skipIf(MODE === 'record')('web e2e: historical Cordis cards', () => {
     const tools = (events: typeof persisted) => events.filter(event => event.type === 'tool/call' || event.type === 'tool/result')
       .map(event => ({ type: event.type, data: event.data }))
     expect(tools(persisted)).toEqual(tools(expected))
-    const names = scaffold.ctx.tools.schemas().map(tool => tool.name)
+    const names = scaffold.ctx.tools.getAll().map(tool => tool.name)
     expect(names).not.toEqual(expect.arrayContaining(['cordis_define']))
     const define = page.locator('[data-tool="cordis_define"]').first()
     await expandOwningTurnProcess(page, define)

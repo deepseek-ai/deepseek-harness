@@ -10,6 +10,7 @@ import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
+import { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import * as control from '../src/index.ts'
 
 const contexts: Context[] = []
@@ -60,7 +61,7 @@ describe('wait_agent', () => {
     expect(renderContextSnapshot(assembled)).toContain('You are the root agent. Your name is "lead".')
     expect(renderContextSnapshot(assembled)).not.toContain('You are a subagent delegated by agent')
     expect(ctx.tools.get('wait_agent', agent)).toBeDefined()
-    expect(JSON.stringify(ctx.tools.schemas(agent))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)
+    expect(JSON.stringify(ctx.tools.getAll(agent).map(tool => projectToolSchema(tool, true)))).not.toMatch(/\b(?:Team|teammate|Lead)\b/)
   })
 
   it('is available without Team mode and leaves pending input for normal admission', async () => {

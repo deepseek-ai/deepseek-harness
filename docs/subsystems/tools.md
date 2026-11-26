@@ -8,7 +8,7 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 ## `ToolDefinition` — a registered tool
 
-A `ToolSchema` (the model-facing fields) plus a mandatory canonical output declaration, the `execute` function, host-only scheduler metadata, an optional final-content callback, and optional UI presenters. The registry holds these; the loop dispatches calls through them. The registry's `schemas()` builds the model-facing `ToolSchema[]` by an explicit allowlist — `output`/`execute`/`projectContent`/`finalizeContent`/`timeoutMs`/`isConcurrencySafe`/`presentCall`/`presentResult` must never leak into a model request.
+A `ToolSchema` (the model-facing fields) plus a mandatory canonical output declaration, the `execute` function, host-only scheduler metadata, an optional final-content callback, and optional UI presenters. The registry holds these; the loop dispatches calls through them. `projectToolSchema()` builds each model-facing `ToolSchema` by an explicit allowlist — `output`/`execute`/`projectContent`/`finalizeContent`/`timeoutMs`/`guidance`/`isConcurrencySafe`/`presentCall`/`presentResult` must never leak into a model request.
 
 ```ts type-equiv
 /** Tool-owned canonical output contract used after the body returns a JSON value. */
@@ -63,11 +63,18 @@ interface ToolDefinition extends ToolSchema {
   /**
    * Cooperative tool-call timeout budget in milliseconds. Omit for no deadline.
    * Enforced by `@deepseek-ai/dsh-tool-call-timeout-policy` (a `tools/execute` wrapper); it
-   * is NEVER sent to the model — `schemas()` whitelists only name/description/
+   * is NEVER sent to the model — `projectToolSchema()` keeps only name/description/
    * parameters. Declaring it asserts this tool forwards `exec.signal` to a
    * cooperative implementation that can reach quiescence when the signal aborts.
    */
   timeoutMs?: number
+  /**
+   * Existing system prompt guidance that `ctx.tools.register()` shows only
+   * while the viewing scope's registrations resolve this definition; not for
+   * new tools, which describe themselves in their schema. Registries other
+   * than `ctx.tools` ignore it.
+   */
+  readonly guidance?: ToolGuidance
   /**
    * Pure synchronous classifier for overlap with sibling tool calls. Only
    * `true` opts in; omission, exceptions, non-`true` returns, and invalid
@@ -100,6 +107,36 @@ interface ToolDefinition extends ToolSchema {
    * for the same replay reason.
    */
   presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined
+}
+```
+
+```ts type-equiv
+/**
+ * Literal system prompt section that `ctx.tools.register()` registers with a
+ * tool and renders only while the viewing scope's registrations resolve the
+ * tool's definition. Under the shipped Native and PTC roots that is while the
+ * scope can call the tool directly or in programs, so a restriction or a
+ * nearer same-name definition hides it. It keeps the prompt text that existing
+ * tools had; adding guidance is discouraged, and a new tool puts what the
+ * model needs into its description and parameter descriptions
+ * ([rationale](../../../../.agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.md)).
+ */
+interface ToolGuidance {
+  /**
+   * Section name, `tool:<name>` by default. Tools naming the same section
+   * share one section and must declare the same guidance; otherwise the
+   * latest registration in the nearest registering scope decides it.
+   */
+  readonly section?: string
+  /** Named section placement. */
+  readonly order: PromptSectionOrderName
+  /**
+   * Section text, or a provider called with the names of the section's tools
+   * whose definitions the viewing scope's registrations resolve, in name order.
+   */
+  readonly text: string | ((available: readonly string[]) => string)
+  /** Notice for Sessions that saw the section once no registration of it remains. */
+  readonly retirement?: string
 }
 ```
 
@@ -158,77 +195,80 @@ type InferArgs<S> = InferProperties<S, []>
 
 `defineTool({ name, description, parameters, output, execute, … })` ties parameter inference to `parameterSchemaSpecToJsonSchema()` and `validateArgs()`, and ties `execute`/`render`/`presentationMeta` to `InferValue<OutputSchema>`. Schema records contain only own enumerable string keys, and schema arrays are dense intrinsic arrays, so inference, compilation, and validation observe the same declaration. Inference stays exact through 16 container levels and then widens to `JsonValue`; runtime validation keeps walking the complete schema. `valueSchemaSpecToJsonSchema()` compiles output declarations through the same enforced raw subset. A parameter mismatch throws `ToolArgsError` (`INVALID_ARGS`); an invalid body or post-policy value throws `ToolOutputError` (`INVALID_TOOL_OUTPUT`). Both use the normal tool-error path. Raw JSON Schema remains open by default; unsupported keywords reject instead of being accepted without enforcement.
 
-Registration is a trusted same-process contract. The registry borrows the typed definition as readonly input, requires `output`, validates its raw schema, and checks semantic requirements such as a positive finite `timeoutMs`; `schemas()` constructs the model-facing projection when building a request, so execution and presentation share one resolved definition without leaking callbacks onto the wire.
+Registration is a trusted same-process contract. The registry borrows the typed definition as readonly input, requires `output`, validates its raw schema, and checks semantic requirements such as a positive finite `timeoutMs`; `projectToolSchema()` constructs the model-facing projection when building a request, so execution and presentation share one resolved definition without leaking callbacks onto the wire.
 
 ## `ToolRestriction` — one scope's live filter over what it inherits
 
-`ToolRestriction` applies to the tools a scope inherits: the deployment-global layer plus every ancestor scope on its chain. The registry compiles readonly names into private sets, intersects multiple restrictions, then overlays the scope's OWN registrations, which stay exempt so a delegated child keeps the tools it answers through. A deny-only filter admits later unlisted inherited tools, while an allow-list excludes them.
+`ToolRestriction` applies to the tools a scope inherits: the deployment-global layer plus every ancestor scope on its chain, including the entries those scopes include from other registries. The registry compiles readonly names into private sets, intersects multiple restrictions, then overlays the scope's OWN registrations and inclusions, which stay exempt so a delegated child keeps the tools it answers through. A deny-only filter admits later unlisted inherited tools, while an allow-list excludes them. An `allow` name must be one the scope inherits, including a tool listed by the unscoped view before an Agent sees it, so a provider can add the tool later under the restriction; `deny` accepts any name, so a scope can deny a tool before anything offers it.
 
 ```ts type-equiv
 /**
- * Per-scope filter over global tools. Restrictions intersect and do not affect
- * scoped registrations or the reserved PTC mode transport.
+ * Per-scope filter over inherited tools: global and ancestor registrations,
+ * including entries an ancestor includes from another registry. Restrictions
+ * intersect and do not affect the restricting scope's own contributions.
  */
 interface ToolRestriction {
-  /** Global tool names that stay visible; everything else is removed. */
+  /** Inherited tool names that stay visible; every other inherited tool is removed. */
   readonly allow?: readonly string[]
-  /** Global tool names removed from visibility. */
+  /** Inherited tool names removed from visibility; a name nothing offers is accepted. */
   readonly deny?: readonly string[]
 }
 ```
 
-## Conditional activation — step-owned admission
+## Tool registries, roots, and model steps
 
-A registration may carry a `when` condition. AgentLoop calls `ctx.tools.resolve()` once per proposed step with the captured model selection; the returned set decides that step's tool declarations, executor sections, and every call in its batch, including PTC program subcalls. `ctx.tools.executable()` applies the set at execution and, without one, excludes conditional registrations. A same-name replacement or a new restriction stops unstarted calls from using an admitted registration, and the loop disposes the set once the step's batch settles.
-
-```ts type-equiv
-/** Inputs for a tool's step-time activation condition. */
-interface ToolActivationContext {
-  /** Agent preparing the step. */
-  readonly agent: Agent
-  /** Provider, model, and optional reasoning effort captured for the step. */
-  readonly modelSelection: Readonly<ModelSelection>
-  /** Cancellation of step preparation; asynchronous conditions must observe it. */
-  readonly signal: AbortSignal
-}
-```
+A `ToolRegistry` is a set of directly callable entries. Including a registry reads its entries at every query, so the source keeps ownership of its definitions. A registry owns no batch execution; `ctx.tools.execute()` runs every batch.
 
 ```ts type-equiv
-/** Lifecycle-owned conditions for a registered tool. */
-interface ToolRegistrationOptions {
+/**
+ * A set of directly callable entries. Native registries expose their tools as
+ * entries; a PTC registry exposes one program entry and calls its other tools
+ * from programs. Registrations and inclusions return their exact disposers.
+ * `ctx.tools.execute()` runs the entries of the selected root, so a registry
+ * owns no batch execution of its entries.
+ */
+interface ToolRegistry {
   /**
-   * Decide whether the step's requests may call the tool. Omission enables
-   * it. False excludes it from both declarations and dispatch; rejection fails
-   * step preparation. Conditions must not mutate registrations or start tool work.
-   * @param context - preparing agent, captured model selection, and cancellation signal.
-   * @returns whether the tool participates in this step.
+   * Add one tool. A registry without scopes ignores the caller's scope.
+   * @param tool - validated definition; duplicate names in the same place fail.
+   * @returns the disposer that removes exactly this registration.
    */
-  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
-}
-```
-
-```ts type-equiv
-/** One step's admitted registrations, also used by nested PTC calls. */
-interface ResolvedToolSet {
-  /** Close admission after the step's tool batch settles. */
-  dispose(): void
+  register(tool: ToolDefinition): () => void
   /**
-   * Read admitted registrations that remain visible in their original scope.
-   * @param scope - exact requesting agent; another scope is never admitted.
-   * @returns original definitions excluding removed or restricted registrations.
+   * Read another registry's entries at every query. The source keeps ownership
+   * of its definitions; its later additions and removals appear in the next query.
+   * @param registry - source whose `get()` and `getAll()` entries this registry includes.
+   * @returns the disposer that removes exactly this inclusion.
    */
-  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
+  include(registry: Pick<ToolRegistry, 'get' | 'getAll'>): () => void
+  /**
+   * Resolve one entry as a scope sees it.
+   * @param name - entry name.
+   * @param scope - viewing Agent or preset; omission selects the unscoped view.
+   * @returns the entry, or undefined when the scope has none with that name.
+   * @throws ToolCompositionError when the deciding scope has several candidates for the name or an inclusion cycles.
+   */
+  get(name: string, scope?: ScopeKey): ToolDefinition | undefined
+  /**
+   * List the entries a scope sees. A registry lists every definition of a name
+   * that has several, so a registry that includes it decides that name in its
+   * own place. `get()` throws for such a name; `ctx.tools.getAll()` resolves
+   * its root's listing and throws when a name still has several.
+   * @param scope - viewing Agent or preset; omission selects the unscoped view.
+   * @returns entries in registration order.
+   * @throws ToolCompositionError when an inclusion cycles, or, for `ctx.tools`, when a name has several definitions.
+   */
+  getAll(scope?: ScopeKey): readonly ToolDefinition[]
 }
 ```
 
-## Executors and raw call batches
+Each scope selects one **root** registry with `ctx.tools.setRoot()`, and `ctx.tools` routes to it. `ctx.tools.register()` and `include()` contribute to the calling scope; the contribution reaches the root that scope selects and every root selected below it, and roots that load later receive the contributions made before them. The nearest scope offering a name decides it, and a scope's restrictions apply to what it inherits; one scope offering two different definitions under one name, or an inclusion cycle, fails as `ToolCompositionError` (`INVALID_TOOL_COMPOSITION`). A registry lists every definition of a conflicting name, and only the place that decides the name fails on it: a nearer scope offering the name shadows the conflict, and a registration or inclusion fails only for the names it contributes. `ctx.tools.get()` and `getAll()` return the selected root's entries for the viewing scope. A native root offers every tool the scope sees as an entry; a PTC root binds them in programs and offers one entry, `run_code`, so under it `ctx.tools.getAll()` is `[run_code]`. The nearest root wins, and an unloaded root stays selected so lookups and calls fail as `ToolRegistryUnavailableError` (`TOOL_REGISTRY_UNAVAILABLE`) instead of reaching another root; a scope without any root fails the same way. A root must not include or read `ctx.tools`: `setRoot()` rejects such a root as `INVALID_TOOL_COMPOSITION`, and a root, or a registry the root includes, that reads it later fails the lookup or call that reaches the read the same way, while a registry included in `ctx.tools` that reads it fails as an inclusion cycle; a root selected again keeps its one inclusion of the registrations, and selecting or unloading a root emits `tools/change`. A registry can also be included as one tool: Standard includes CUA's private PTC registry, whose `cua_run_code` entry binds only `cua`.
 
-`ctx.tools.execute()` delegates a complete raw model-call batch to the nearest scoped executor. The service selects the current provider when each batch starts; prompt assembly returns only model input. `agent` is absent for standalone service calls; `log` is absent for programmatic calls outside a model step, such as initialization hooks. An Agent without `log` still scopes tool access but produces no root call/result events. Tool-owned events may still use its Session.
+A tool section that is shown only while its tool is available is the definition's `guidance`; the filesystem, search, `apply_patch`, schedule, on-demand MCP catalog, and delegation sections are. `ctx.tools.register()` registers it in the same effect as the tool and renders it only while the viewing scope's registrations resolve that definition, which under the shipped Native and PTC roots means while the scope can call the tool directly or in programs, so a restriction or a nearer same-name definition hides it. Tools naming one `section` share it and must declare the same guidance, because the latest registration in the nearest registering scope decides it. Other tool sections, such as `tool:bash`, stay when their tool is restricted ([limitations](../../packages/core/tools/README.md#known-limitations-and-deferred-work)). New guidance is discouraged; a tool describes itself in its schema ([rationale](../../.agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.md)). Guidance may mention another plugin's tool without checking whether it is registered.
 
-```ts type-equiv
-/** Model-call schemas produced by an executor. */
-type ToolModelInput = Pick<ToolProviderResult, 'schemas' | 'knownNames'>
-```
+Before each model step, AgentLoop captures `ctx.tools.getAll(agent)` as a `ToolStep`. The step's prompt declares those entries; its batch and nested program calls execute only them, and a PTC root pins the bindings it declares for the step. Calls to a same-name replacement or to a tool added while the model responds therefore fail as `UNKNOWN_TOOL` until the next step, and so do calls to a declared tool that its provider removes or withdraws for the Agent. A model-direct call to a tool the root binds only in programs fails as `UNKNOWN_TOOL` before `tools/pre-execute`, approval, guards, and execution wrappers, and the message names the entries the step can call, so the model sees the program entry. Dispatch runs exactly the definition captured when the call was prepared. Providers that offer a tool to individual Agents include an `AgentToolRegistry` and call `set(agent, names)` when the Agent's state changes; a step captures the tools set before it starts. Web tools update when the Agent's model route, a credential, or the Web providers change; Plan, Office, and Team update on their own state changes.
+
+`ctx.tools.execute()` runs a complete raw model-call batch against the entries of the Agent's selected root, or the deployment root for a standalone call; an accepted batch settles through the root it started with even if that root unloads. Each execution record carries the `definition` its call resolved, so policies read the definition instead of looking the name up again. A composition failure fails only its call. One met while the call is prepared fails it before policy; dispatch repeats the lookup, so one first met there fails the call after `tools/pre-execute`, approval, guards, and `tools/execute` wrappers, and `tools/post-execute` sees it. Either way the result tells the model the tool is misconfigured, and the deployment log records the failure's message, which names the conflicting definitions when the failure is an ambiguity. `agent` is absent for standalone service calls; `log` is absent for programmatic calls outside a model step, such as initialization hooks. An Agent without `log` still scopes tool access but produces no root call/result events. Tool-owned events may still use its Session.
 
 ```ts type-equiv
 /** Raw model calls, with optional Agent ownership and model-step logging. */
@@ -236,9 +276,9 @@ interface ToolBatchInput {
   readonly calls: readonly ToolCallBlock[]
   readonly signal: AbortSignal
   /**
-   * Positive integer overriding the executor's concurrency limit for this batch.
-   * Applies to concurrency-safe root calls; program subcall limits remain separate.
-   * Undefined uses the executor's configured limit.
+   * Positive integer limiting how many concurrency-safe calls of this batch run
+   * at once; program call limits remain separate. Undefined allows
+   * `DEFAULT_MAX_PARALLEL_TOOL_CALLS` from `@deepseek-ai/dsh-tools/pipeline`.
    */
   readonly maxParallelToolCalls?: number
   /**
@@ -247,10 +287,11 @@ interface ToolBatchInput {
    */
   readonly agent?: Agent
   /**
-   * Step admission for every call in the batch, including program subcalls.
-   * Undefined admits only unconditional registrations.
+   * Model step whose declarations admit the calls, including program calls.
+   * A call whose current entry differs from the declared one fails as `UNKNOWN_TOOL`.
+   * Undefined resolves the root's current entries.
    */
-  readonly toolSet?: ResolvedToolSet
+  readonly toolStep?: ToolStep
   /**
    * Committed model step receiving root call/result events; requires `agent`.
    * Undefined when `agent` is absent or for calls outside a model response, such
@@ -281,36 +322,9 @@ interface ToolBatchResult {
 }
 ```
 
-```ts type-equiv
-/** A plugin owns argument parsing, dispatch, scheduling, cancellation, and logging. */
-interface ToolExecutor {
-  /** Guidance registered and disposed with this executor; absent means no executor-owned sections. */
-  readonly sections?: readonly ToolPromptSection[]
-  /**
-   * Describe the model's callable tools.
-   * @param tools - currently visible capability definitions, after scoped restrictions.
-   * @returns schemas and names used to validate tool ordering.
-   */
-  describe(tools: readonly ToolDefinition[]): ToolModelInput
-  /**
-   * Execute a complete batch. With log, commit root call/result events to the
-   * Agent's Session; without log, omit those events. Tool-owned events may still
-   * use the owning Agent's Session. Return
-   * one outcome per input call in input order, including skipped calls on abort.
-   * Never settle while started work is still running. Internal failures reject
-   * with ToolBatchExecutionError after draining, preserving committed outcomes
-   * and context; callers must stop dependent work and repair missing log results.
-   * An explicit maxParallelToolCalls takes precedence over executor configuration.
-   * @param input - original calls, cancellation, optional concurrency override, Agent and logging step.
-   * @returns settled results, deferred context, and whether a success concludes the turn.
-   */
-  execute(input: ToolBatchInput): Promise<ToolBatchResult>
-}
-```
-
 ## Execution: extensible waterfalls plus monotonic policy
 
-Built-in executors pass parsed `ToolExecutionInput` values to the shared `ToolExecutionPipeline`. The pipeline owns argument snapshots, execution identities, policy waterfalls, dispatch, and final-result notification, returning one `ToolExecutionResult` per invocation. Custom executors can implement their own execution; the public `ToolExecutor` requires only descriptions and batch execution.
+`ctx.tools.execute()` and the PTC registry's program calls pass parsed `ToolExecutionInput` values to the shared `ToolExecutionPipeline`. The pipeline owns argument snapshots, execution identities, policy waterfalls, dispatch, and final-result notification, returning one `ToolExecutionResult` per invocation. The public `ToolRegistry` has no batch execution: `ctx.tools.execute()` runs model-direct batches through the entries of the selected root, and a PTC registry runs its programs' calls through its own pipeline.
 
 ```ts type-equiv
 /** Opaque call identity that permits correlation without exposing mutable execution state. */
@@ -337,15 +351,18 @@ interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
-  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
-  readonly toolSet?: ResolvedToolSet
   /**
-   * Opaque token of the enclosing transport execution, when one exists. PTC
-   * mode sets this on SDK sub-dispatches so commit-style observers can wait for
-   * the outer `run_code` outcome without receiving its live mutable execution.
-   * The token also marks the call as a transport sub-dispatch rather than a
-   * model-direct call: with the PTC executor selected, only calls with a parent may
-   * execute a native tool name — a model-direct call (no parent) is denied as
+   * Model step whose declarations admit this call and its nested program calls.
+   * A call outside a model step omits it and resolves the registry's current entries.
+   */
+  readonly toolStep?: ToolStep
+  /**
+   * Opaque token of the enclosing program execution, when one exists. A PTC
+   * registry sets this on program calls so commit-style observers can wait for
+   * the outer program outcome without receiving its live mutable execution.
+   * The token also marks the call as a program call rather than a model-direct
+   * call: `ctx.tools.execute()` runs only model-direct calls, and one naming a
+   * tool that the selected root offers only inside programs fails as
    * `UNKNOWN_TOOL` before the policy pipeline.
    */
   readonly parent?: ToolExecutionToken
@@ -438,6 +455,14 @@ interface ToolExecution extends ToolExecutionInput {
   readonly rootCallId: ToolCallId
   /** Executor-assigned identity shared with nested calls only as their opaque `parent` token. */
   readonly token: ToolExecutionToken
+  /**
+   * The definition the registry resolved for this call, captured before policy
+   * runs. Absent when no visible definition has the name or when the call's
+   * model step declared a different definition; that call fails as
+   * `UNKNOWN_TOOL`. Dispatch runs exactly this definition: when the registry
+   * no longer offers it as dispatch starts, the call fails as `UNKNOWN_TOOL`.
+   */
+  readonly definition?: ToolDefinition
 }
 ```
 
@@ -649,89 +674,114 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.tools` — `ToolsService`
 
-Concrete tool registry and scoped executor dispatcher.
+`ctx.tools`: routes scoped tool contributions to the root registry each scope selects, answers lookups and dispatch from that root, and applies scoped restrictions and guards. A root receives the registrations its scope sees when it is selected; a native root offers them as model entries, and a PTC root binds them in programs.
 
 ```ts cordis-catalog
 /**
- * Register globally or in the calling agent scope. Scoped tools shadow
- * globals; duplicates within one layer and the reserved `run_code` name fail.
- * @param definition - tool schema, execution, and optional finalization/presentation callbacks.
- * @param options - optional step-time activation condition.
- * @returns the exact disposer that unregisters the tool.
+ * Register in the calling scope. The tool reaches the root the scope
+ * selects and the roots its descendant scopes select: a native root offers
+ * it as an entry, a PTC root binds it in programs. Nearer scopes shadow
+ * farther ones; duplicates within one scope, a name an inclusion in the
+ * scope already offers, and the reserved `run_code` name fail. A tool's
+ * `guidance` registers its system prompt section in the same effect; the
+ * section renders while the viewing scope's registrations resolve the tool.
+ * @param tool - tool schema, execution, and optional finalization, presentation, or guidance.
+ * @returns the exact disposer that unregisters the tool and its guidance.
+ * @throws ToolCompositionError when the scope's inclusions already offer another definition with the name.
  */
-register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void
+register(tool: ToolDefinition): () => void
 
 /**
- * Restrict global tools for the calling agent scope. Empty filters, unknown
- * names, scope-local names, and reserved transport names fail. Restrictions
- * intersect; scoped registrations remain visible.
- * @param filter - global-tool mask: `allow` (keep only) and/or `deny` (remove).
+ * Include another registry's entries in the calling scope; they reach roots
+ * as registrations do. Each query reads the source for the viewing scope.
+ * Descendant scopes inherit the entries, so their restrictions apply; the
+ * including scope's own restrictions do not.
+ * @param registry - source that keeps ownership of its definitions.
+ * @returns the exact disposer that removes this inclusion.
+ * @throws ToolCompositionError when the scope already offers another definition under one of the source's names,
+ * when the source itself offers several definitions under one of them, or when the source includes this service.
+ */
+include(registry: Pick<ToolRegistry, 'get' | 'getAll'>): () => void
+
+/**
+ * Restrict inherited tools for the calling scope. Restrictions intersect;
+ * the scope's own registrations and inclusions stay visible. `allow` names
+ * must be ones an inherited registration or inclusion can offer; an
+ * inclusion contributes its unscoped entries, so a tool a provider adds to
+ * Agents later can be allowed in advance. `deny` accepts any name, so a
+ * scope can deny a tool before anything offers it.
+ * @param filter - inherited-tool mask: `allow` (keep only) and/or `deny` (remove).
  * @returns the exact disposer that lifts this restriction.
+ * @throws Error when the context is unscoped, the filter is empty, a name is `run_code`, or an `allow` name is not inherited.
  */
 restrict(filter: ToolRestriction): () => void
 
 /**
- * Look up a tool as one scope sees it (scoped
- * shadows global; a restricted-away global reads as absent). Presenters pass
- * the calling agent so the rendered card matches the definition that
- * actually executed.
- * @param name - the tool name as registered.
- * @param scope - the viewing scope (the agent); omitted = the global view.
- * @param toolSet - step admission; omit only to inspect registered definitions.
- * @returns the definition the scope resolves, or undefined when none is visible.
+ * Resolve one entry of the root a scope selects: a native root resolves the
+ * scope's registrations, a PTC root only its program entry.
+ * @param name - entry name.
+ * @param scope - the viewing scope (the agent); omitted reads the root the unscoped context selects.
+ * @returns the root's entry, or undefined when the root has none with that name.
+ * @throws ToolRegistryUnavailableError when the scope's selected root is missing or unloaded.
+ * @throws ToolCompositionError when the deciding scope offers several definitions, or when the root
+ * or an included registry reads `ctx.tools`.
  */
-get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
+get(name: string, scope?: ScopeKey): ToolDefinition | undefined
 
 /**
- * Resolve the definition a call may execute. With a step's admitted set, the
- * set decides; without one, conditional registrations are unavailable.
- * @param name - the tool name as registered.
- * @param scope - the calling agent; omitted = the global view.
- * @param toolSet - step admission, or omitted for a call outside a model step.
- * @returns the executable definition, or undefined when the call must fail as `UNKNOWN_TOOL`.
+ * List the entries of the root a scope selects, which its model steps
+ * declare: a native root lists the scope's registrations after shadowing and
+ * restrictions, a PTC root only its program entry.
+ * @param scope - the viewing scope (the agent); omitted reads the root the unscoped context selects.
+ * @returns the root's entries.
+ * @throws ToolRegistryUnavailableError when the scope's selected root is missing or unloaded.
+ * @throws ToolCompositionError when a visible name has several definitions in its deciding scope, or
+ * when the root or an included registry reads `ctx.tools`.
  */
-executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined
+getAll(scope?: ScopeKey): readonly ToolDefinition[]
 
 /**
- * Resolve conditions once for this step without changing shared registrations.
- * Cancellation or a rejected condition publishes no partial selection. Removed
- * registrations cannot be restored by a late condition result.
- * @param context - preparing agent, captured model selection, and cancellation.
- * @returns the complete selection; the caller disposes it after its tool batch settles.
- */
-async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>
-
-/**
- * Read the visible capability definitions for descriptions and program bindings.
- * @param scope - viewing Agent or preset; omitted selects the global view.
- * @param toolSet - step admission; omit only to inspect registered definitions.
- * @returns definitions after scoped shadowing and restrictions, limited to the step's admission when given.
- */
-definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[]
-
-/**
- * Project visible definitions onto the allowlisted model-facing schema fields,
- * excluding execution and presentation callbacks.
- * @param scope - the viewing scope (the agent); omitted = the global view.
- * @param toolSet - step admission, or omitted for registered-definition inspection.
- * @returns one deep-cloned schema per visible tool.
- */
-schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[]
-
-/**
- * Provide the executor for the calling scope; an unscoped contribution is the deployment default.
- * Rendering any executor-owned section requires the viewing scope's selection to remain available.
- * Disposal retires its sections; a replacement's same-name sections supersede those notices.
- * @param executor - initialized provider owned by the contributing plugin.
+ * Select the root registry for the calling scope; an unscoped call selects
+ * the root for every scope without its own. Agents use the nearest selected root. The
+ * root includes the registrations each viewing scope sees, and keeps them
+ * after unloading so accepted batches settle their calls; selecting the
+ * same registry again does not include them twice. A root must not include
+ * or read `ctx.tools`: such a read fails with `ToolCompositionError` when
+ * the root is selected or, for a root that reads it later, in the lookup or
+ * batch that reaches it. Register tools through `ctx.tools`: a tool
+ * registered directly in a root skips the scope's conflict check, so another
+ * definition registered under its name through `ctx.tools` is accepted and
+ * the next `ctx.tools.getAll()` throws. Selecting or unloading a root emits
+ * `tools/change`; an observer that throws fails the selection, which
+ * restores the scope's earlier selection, or none, and emits `tools/change`
+ * again.
+ * @param registry - initialized root owned by the contributing plugin.
  * @returns the effect disposer. Unloading leaves the selection unavailable until it is replaced.
+ * @throws Error when the calling scope already has a live root.
+ * @throws ToolCompositionError when the root's own entries conflict with the registrations, or when the root reads `ctx.tools`.
+ * @throws the error a `tools/change` observer throws for the selection.
  */
-setExecutor(executor: ToolExecutor): () => void
+setRoot(registry: ToolRegistry): () => void
 
 /**
- * Delegate a raw call batch to its Agent's provider or the deployment default.
- * Select at dispatch; accepted batches settle through that provider even if it unloads.
- * @param input - original calls, optional owning Agent, and optional logging step.
- * @returns the selected executor's settled batch; unavailable selections reject.
+ * Execute a complete batch of calls to the entries of the root the Agent
+ * selects, or the unscoped context's root for a standalone call. Each call runs the entry the root
+ * resolves for the Agent; with a model step, only the exact entry the step
+ * declared, and any other call fails as `UNKNOWN_TOOL`. A call naming a
+ * tool the Agent can reach only from the root's entries, such as a program
+ * binding, fails as `UNKNOWN_TOOL` before `tools/pre-execute`, approval,
+ * guards, and execution wrappers, and its message names the entries the
+ * Agent can call directly. An accepted batch settles through the root it
+ * started with even if that root unloads. With log, root call/result events are committed to
+ * the Agent's Session; without log, they are omitted. One outcome is
+ * returned per input call in input order, including skipped calls on abort,
+ * and the batch never settles while started work is still running.
+ * Internal failures reject with ToolBatchExecutionError after draining,
+ * preserving committed outcomes and context; callers must stop dependent
+ * work and repair missing log results.
+ * @param input - original calls, cancellation, optional concurrency override, Agent, model step, and logging step.
+ * @returns settled results, deferred context, and whether a success concludes the turn.
+ * @throws ToolRegistryUnavailableError when the Agent's selected root is missing or unloaded.
  */
 async execute(input: ToolBatchInput): Promise<ToolBatchResult>
 
@@ -762,13 +812,20 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 #### `tools/change` — emit
 
-A tool was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent's next assembly.
+A tool was registered or unregistered, a registry inclusion changed, a scoped restriction changed, or a root registry was selected or unloaded. Entries an included registry adds or removes later do not emit this event. When `ctx.tools` emits it for a registration, inclusion, restriction, or root selection, a listener that throws fails that contribution, which is undone and emits this event again; a removal is not undone. Another producer may handle a listener failure differently, for example by logging it. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent's next assembly.
 
 ```ts cordis-catalog
 /**
- * A tool was registered or unregistered, or a scoped restriction changed.
- * Unfiltered registry notification: scoped listeners receive changes from every
- * scope because a global contribution can affect every agent's next assembly.
+ * A tool was registered or unregistered, a registry inclusion changed, a
+ * scoped restriction changed, or a root registry was selected or unloaded.
+ * Entries an included registry adds or removes later do not emit this
+ * event. When `ctx.tools` emits it for a registration, inclusion,
+ * restriction, or root selection, a listener that throws fails that
+ * contribution, which is undone and emits this event again; a removal is
+ * not undone. Another producer may handle a listener failure differently,
+ * for example by logging it. Unfiltered
+ * registry notification: scoped listeners receive changes from every scope
+ * because a global contribution can affect every agent's next assembly.
  * @mode emit
  */
 'tools/change'(): void
@@ -874,7 +931,7 @@ Allow a listener to replace content in the DURABLE LOG COPY of one `run_code` su
 
 Types: [ContentBlock](llm-streaming.md) · [Scoped](scope.md)
 
-Source: [`packages/core/tool-executor-ptc/src/runtime-types.ts`](../../packages/core/tool-executor-ptc/src/runtime-types.ts)
+Source: [`packages/core/tool-registry-ptc/src/runtime-types.ts`](../../packages/core/tool-registry-ptc/src/runtime-types.ts)
 
 <a id="toolsresult--emit"></a>
 

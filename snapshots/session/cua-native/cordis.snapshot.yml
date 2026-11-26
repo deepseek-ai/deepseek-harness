@@ -17,10 +17,10 @@
     root: !!js dshHomePath('sessions')
     compression: none
 
-- id: tool-executor-native
+- id: tool-registry-native
   disabled: false
 
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: true
 
 - id: system-prompt

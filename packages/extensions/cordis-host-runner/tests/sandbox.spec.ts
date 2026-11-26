@@ -15,6 +15,7 @@ import { AGENT_A, call, CONTENT_OUTPUT_CODE, mount, setup, text, running } from 
 describe('dynamic tool declaration boundary', () => {
   it.each([
     [42, 'options must be an object'],
+    [{ parameters: {}, guidance: { order: 'TOOL_READ', text: 'Use me.' } }, 'does not accept guidance; describe the tool in its description and parameter descriptions'],
     [{ parameters: {} }, 'output must declare { schema, render, presentationMeta? }'],
     [{ parameters: {}, output: { schema: { type: 'json' } }, execute: async (): Promise<null> => null }, 'output.render must be a function'],
     [{ parameters: {}, output: { schema: { type: 'json' }, render: () => [] }, execute: true }, 'execute must be a function'],

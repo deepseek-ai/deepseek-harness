@@ -1,5 +1,5 @@
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { externalTestParent } from '../../../subagent/subagent/tests/external-activation-helpers.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -40,7 +40,7 @@ import SubagentRuntime, {
 import type {} from '@deepseek-ai/dsh-shell'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolSubagent from '@deepseek-ai/dsh-tool-subagent'
-import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, type PreToolDecision, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, projectToolSchema, type PreToolDecision, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ApprovalService, { setApprovalPolicy, type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import * as AutoReview from '@deepseek-ai/dsh-experimental-auto-review'
@@ -147,7 +147,7 @@ async function harness(
     yield (await ctx.plugin(AgentRegistry)).dispose
     yield (await ctx.plugin(SystemPrompt, {})).dispose
     yield (await ctx.plugin(ToolRuntime)).dispose
-    yield (await ctx.plugin(NativeToolExecutor)).dispose
+    yield (await ctx.plugin(NativeToolRegistry)).dispose
     yield ctx.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('auto-review tests do not execute shell requests') },
@@ -1401,9 +1401,9 @@ describe('out-of-process delegation boundary', () => {
     const session = agent.session
     ctx.permissionPresets.set(session, AUTO_PRESET)
     setApprovalPolicy(session, 'never')
-    const schema = ctx.tools.schemas(agent).find(item => item.name === 'delegate_remote')
-    if (schema === undefined) throw new Error('remote delegation tool schema is missing')
-    appendHeader(session, [schema])
+    const definition = ctx.tools.get('delegate_remote', agent)
+    if (definition === undefined) throw new Error('remote delegation tool schema is missing')
+    appendHeader(session, [projectToolSchema(definition, true)])
     const args = {
       description: 'remote boundary',
       prompt: 'Inspect the child runtime permission boundary.',
@@ -1776,7 +1776,7 @@ describe('cancellation and integration teardown', () => {
     await invalid.plugin(AgentRegistry)
     await invalid.plugin(SystemPrompt, {})
     await invalid.plugin(ToolRuntime)
-    await invalid.plugin(NativeToolExecutor)
+    await invalid.plugin(NativeToolRegistry)
     invalid.provide('shell', {
       sandboxMode: 'workspace-write',
       resolve() { throw new Error('unused') },

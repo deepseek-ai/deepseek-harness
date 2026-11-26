@@ -9,7 +9,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { AddressInfo } from 'node:net'
@@ -23,7 +23,9 @@ import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import AgentRegistry, { agentEvents, type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 
 const testToolSignal = new AbortController().signal
 import WebRuntime from '@deepseek-ai/dsh-web'
@@ -54,7 +56,8 @@ beforeEach(async () => {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(WebRuntime, { fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID })
   // Provider cap generous so the tool returns a large formatted result; the
   // policy cap is what triggers the spill (the Agent Note's separation of concerns).
@@ -72,19 +75,15 @@ afterEach(async () => {
 })
 
 /**
- * A web_fetch call carrying a session owner (so the policy can scope the spill), run inside that
- * owner's step admission because web_fetch is a conditional registration.
+ * A web_fetch call carrying a session owner (so the policy can scope the spill), run in a step of
+ * that owner after its creation is announced, because tool-web adds web_fetch for an Agent then.
  */
 async function fetchCall(): Promise<{ isError: boolean; content: { type: string; text?: string }[] }> {
-  const agent = { session: { header: { id: brandString<SessionId>('web-sess') } } }
+  const current = (): Readonly<ModelSelection> | undefined => ({ provider: 'test', model: 'test' })
+  const agent = { session: { header: { id: brandString<SessionId>('web-sess') } }, model: { current } } as Agent
+  await agentEvents(ctx, agent).serial('agent/created', { source: 'startup' })
   const exec = { callId: brandString<ToolCallId>('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as ToolExecution
-  if (exec.agent === undefined) throw new Error('the spill fixture call needs its session owner')
-  const toolSet = await ctx.tools.resolve({ agent: exec.agent, modelSelection: { provider: 'test', model: 'test' }, signal: exec.signal })
-  try {
-    return await executeToolFixture(ctx, { ...exec, toolSet })
-  } finally {
-    toolSet.dispose()
-  }
+  return await executeToolFixture(ctx, { ...exec, toolStep: ToolStep.capture(ctx.tools, agent) })
 }
 
 describe('web_fetch spill showcase', () => {

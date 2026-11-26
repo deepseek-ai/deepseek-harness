@@ -5,7 +5,7 @@
 
 [English](tool-execution-pipeline.md) | 中文
 
-内置执行器负责原始批次解析、调度、取消和 Session 调用／结果日志。此图展示其共享调用流水线如何执行策略、钩子、沙箱、文件系统守卫、结果改写、最终结果观测和 UI 呈现，而无需改动循环。`tools/pre-execute` 瀑布先执行，然后是单调守卫，再是 `tools/execute` 和 `tools/post-execute` 瀑布；三个瀑布可以转换调用。定义拥有的 `projectContent` 在后置策略之前安装准备好的内容，`finalizeContent` 和 `tools/result` 在之后执行。
+`ctx.tools.execute()` 负责原始批次解析、调度、取消和 Session 调用／结果日志；选中的根注册表只提供调用可以运行的条目。此图展示共享调用流水线在何处执行策略、钩子、沙箱、文件系统守卫、结果改写、最终结果观测和 UI 呈现，而无需改动循环。`tools/pre-execute` 瀑布先执行，然后是单调守卫，再是 `tools/execute` 和 `tools/post-execute` 瀑布；三个瀑布可以转换调用。定义拥有的 `projectContent` 在后置策略之前安装准备好的内容，`finalizeContent` 和 `tools/result` 在之后执行。
 
 ```mermaid
 flowchart TD
@@ -29,7 +29,7 @@ flowchart TD
   toolResult["Session event: <code>tool/result</code><br/>single model-facing outcome"]
   allResults["Tool batch settled<br/>recorded tool/result events complete"]
   presentResult["UI completed card<br/>presentResult(args, result)"]
-  executor["Selected ToolExecutor.execute<br/>raw batch, Agent, optional logging step"]
+  executor["<code>ctx.tools.execute()</code><br/>raw batch, Agent, ToolStep, optional logging step<br/>entries from the selected root"]
   model --> executor --> toolCall
   toolCall --> presentCall
   toolCall --> pre

@@ -6,8 +6,8 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -120,7 +120,7 @@ async function setup(config: ToolFs.Config = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(FakeFs)
   await ctx.plugin(FsPolicy)
   await ctx.plugin(ToolFs, config)
@@ -169,7 +169,7 @@ describe('registration', () => {
   ])('omits disabled tools and their guidance: $config', async ({ config, tools, sections }) => {
     const { ctx } = await setup(config)
     try {
-      expect(ctx.tools.schemas().map(tool => tool.name).sort()).toEqual(tools)
+      expect(ctx.tools.getAll().map(tool => tool.name).sort()).toEqual(tools)
       expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)
         .filter(name => name.startsWith('tool:')).sort()).toEqual(sections)
       const excluded = ['read', 'write', 'edit', 'apply_patch'].find(name => !tools.some(tool => tool === name))!
@@ -185,7 +185,7 @@ describe('registration', () => {
 
   it('registers read, write, edit, and apply_patch, which follows edit unless set', async () => {
     const { ctx } = await setup()
-    expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['apply_patch', 'edit', 'read', 'write'])
+    expect(ctx.tools.getAll().map(s => s.name).sort()).toEqual(['apply_patch', 'edit', 'read', 'write'])
   })
 
   it.each([
@@ -194,7 +194,7 @@ describe('registration', () => {
   ])('requests file_path before content fields for $name', async ({ name, fields, hint }) => {
     const { ctx } = await setup()
     try {
-      const schema = ctx.tools.schemas().find(tool => tool.name === name)!
+      const schema = ctx.tools.getAll().find(tool => tool.name === name)!
       expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, fields.length + 1))
         .toEqual(['file_path', ...fields])
       expect(schema.parameters).toHaveProperty('required', ['file_path', ...fields])
@@ -206,11 +206,12 @@ describe('registration', () => {
 
   it('declares read parallel-safe while write/edit remain exclusive', async () => {
     const { ctx } = await setup()
-    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
+    const pipeline = new ToolExecutionPipeline(ctx, { get: (name, scope) => ctx.tools.get(name, scope) })
+    expect(pipeline.executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('read-safe'), name: 'read', arguments: { file_path: 'a.txt' } }))
       .toEqual({ kind: 'parallel' })
-    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('write-exclusive'), name: 'write', arguments: { file_path: 'a.txt', content: 'x' } }))
+    expect(pipeline.executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('write-exclusive'), name: 'write', arguments: { file_path: 'a.txt', content: 'x' } }))
       .toEqual({ kind: 'exclusive' })
-    expect(new ToolExecutionPipeline(ctx).executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('edit-exclusive'), name: 'edit', arguments: { file_path: 'a.txt', old_string: 'x', new_string: 'y' } }))
+    expect(pipeline.executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>('edit-exclusive'), name: 'edit', arguments: { file_path: 'a.txt', old_string: 'x', new_string: 'y' } }))
       .toEqual({ kind: 'exclusive' })
   })
 
@@ -228,9 +229,9 @@ describe('registration', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(ToolFs) // no fs provider
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
   })
 
   it('unregisters everything on fiber disposal (HMR safety)', async () => {
@@ -239,18 +240,18 @@ describe('registration', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(FakeFs)
     await ctx.plugin(FsPolicy)
     const fiber = await ctx.plugin(ToolFs)
     // Each tool contributes BOTH a schema and a prompt section; disposal must
     // withdraw both, not just the schemas.
-    expect(ctx.tools.schemas()).toHaveLength(4)
+    expect(ctx.tools.getAll()).toHaveLength(4)
     const sectionNames = (a: { sections: { name: string; retire?: boolean }[] }) => a.sections
       .filter(s => !s.retire).map(s => s.name).sort()
     expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix', 'harness:identity', 'tool:apply_patch', 'tool:edit', 'tool:read', 'tool:write'])
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
     // Only the system-prompt plugin's own built-in sections remain.
     expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix', 'harness:identity'])
   })
@@ -788,7 +789,7 @@ describe('read caps are plugin config', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(FakeFs)
     await ctx.plugin(FsPolicy)
     await ctx.plugin(ToolFs, config)
@@ -804,7 +805,7 @@ describe('read caps are plugin config', () => {
     expect(overCap.isError).toBe(true)
     expect(text(overCap)).toContain('less than or equal to 2')
     expect(overCap.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
-    const readSchema = ctx.tools.schemas().find(s => s.name === 'read')
+    const readSchema = ctx.tools.getAll().find(s => s.name === 'read')
     expect(JSON.stringify(readSchema)).toContain('Defaults to 2.')
   })
 
@@ -849,7 +850,7 @@ describe('read caps are plugin config', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(FakeFs)
     await expect(ctx.plugin(ToolFs, config)).rejects.toThrow(new RegExp(`tool-fs: ${name} must be a positive integer`))
   })
@@ -894,7 +895,7 @@ describe('sandbox escalation API (write/edit)', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write' })
     await ctx.plugin(SandboxingFakeFs)
@@ -949,7 +950,7 @@ describe('sandbox escalation API (write/edit)', () => {
   }
 
   function fsSchema(ctx: Context, name: 'write' | 'edit') {
-    const schema = ctx.tools.schemas().find(s => s.name === name)
+    const schema = ctx.tools.getAll().find(s => s.name === name)
     if (!schema) throw new Error(`${name} tool not registered`)
     return schema as unknown as { parameters: { properties: Record<string, { enum?: string[] }> } }
   }
@@ -960,7 +961,7 @@ describe('sandbox escalation API (write/edit)', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(SandboxingFakeFs)
     await expect(ctx.plugin(ToolFs)).rejects.toThrow('tool-fs: the mounted filesystem confines but ctx.sandboxPolicy is missing')
   })
@@ -1182,45 +1183,29 @@ const originalGuidance = {
   edit: 'Read a file before editing it unless you just created or edited it in this session.',
 }
 
-describe('scope-aware filesystem guidance', () => {
-  it.each(Array.from({ length: 8 }, (_, mask) => mask))('preserves exact text for visible tools (mask %i)', async (mask) => {
-    const { ctx } = await setup({ applyPatch: false })
-    const { key, scope } = await guidanceScope(ctx)
+describe('filesystem guidance registered with its tools', () => {
+  it.each(Array.from({ length: 8 }, (_, mask) => mask))('renders exactly the guidance of the registered tools (mask %i)', async (mask) => {
     const names = ['read', 'write', 'edit'] as const
-    const allow = names.filter((_, index) => (mask & (1 << index)) !== 0)
-    const baseline = withPersona(...names.map(name => originalGuidance[name]))
-    expect(renderPrompt(await ctx.systemPrompt.assemble())).toBe(baseline)
-    const release = scope.ctx.tools.restrict({ allow })
-    try {
-      const assembly = await ctx.systemPrompt.assemble({ scope: key })
-      expect(assembly.tools.map(tool => tool.name)).toEqual([...allow].sort())
-      const expected = withPersona(...allow.map(name => name === 'write' && !allow.includes('edit')
-        ? originalGuidance.write.replace(' and prefer edit for targeted changes', '')
-        : originalGuidance[name]))
-      expect(renderPrompt(assembly)).toBe(expected)
-      expect(renderPrompt(await ctx.systemPrompt.assemble())).toBe(baseline)
-      release()
-      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toBe(baseline)
-    } finally {
-      await scope.dispose()
-    }
+    const enabled = names.filter((_, index) => (mask & (1 << index)) !== 0)
+    const { ctx } = await setup({ read: enabled.includes('read'), write: enabled.includes('write'), edit: enabled.includes('edit'), applyPatch: false })
+    const assembly = await ctx.systemPrompt.assemble()
+    expect(assembly.tools.map(tool => tool.name)).toEqual([...enabled].sort())
+    expect(renderPrompt(assembly)).toBe(withPersona(...enabled.map(name => name === 'write' && !enabled.includes('edit')
+      ? originalGuidance.write.replace(' and prefer edit for targeted changes', '')
+      : originalGuidance[name])))
   })
 
-  it('honors deny filters and the existing exemption for own-scope tools', async () => {
+  it('hides guidance for tools a scope restricts, whose calls then fail', async () => {
     const { ctx } = await setup({ applyPatch: false })
     const { key, scope } = await guidanceScope(ctx)
-    const write = ctx.tools.get('write')!
     scope.ctx.tools.restrict({ deny: ['write', 'edit'] })
     try {
-      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toBe(withPersona(originalGuidance.read))
+      const assembly = await ctx.systemPrompt.assemble({ scope: key })
+      expect(assembly.tools.map(tool => tool.name)).toEqual(['read'])
+      expect(renderPrompt(assembly)).toBe(withPersona(originalGuidance.read))
       const denied = await call(ctx, 'write', { file_path: '/blocked', content: 'blocked' }, key)
       expect(denied.isError).toBe(true)
       expect(text(denied)).toContain('unknown tool "write"')
-      scope.ctx.tools.register(write)
-      const assembly = await ctx.systemPrompt.assemble({ scope: key })
-      expect(assembly.tools.map(tool => tool.name)).toEqual(['read', 'write'])
-      expect(renderPrompt(assembly)).toBe(withPersona(originalGuidance.read,
-        originalGuidance.write.replace(' and prefer edit for targeted changes', '')))
     } finally {
       await scope.dispose()
     }
@@ -1241,31 +1226,26 @@ class GuidancePtcRuntime extends PtcRuntime {
   run() { return Promise.resolve({ output: [] }) }
 }
 
-describe('scope-aware PTC guidance', () => {
-  it('uses capability visibility in PTC mode', async () => {
-    const mode = 'ptc'
+describe('filesystem guidance under a PTC root', () => {
+  it('renders the guidance of the tools programs can call', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(GuidancePtcRuntime)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(FakeFs)
     await ctx.plugin(ToolFs)
     const { key, scope } = await guidanceScope(ctx)
+    const guidance = async () => (await ctx.systemPrompt.assemble({ scope: key })).sections
+      .filter(section => ['tool:read', 'tool:write', 'tool:edit'].includes(section.name) && section.text !== '')
+      .map(section => section.text)
     try {
-      const baseline = renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))
-      const release = scope.ctx.tools.restrict({ allow: ['read'] })
-      const assembly = await ctx.systemPrompt.assemble({ scope: key })
-      expect(assembly.tools.map(tool => tool.name)).toEqual(mode === 'ptc' ? ['run_code'] : ['read', 'run_code'])
-      expect(assembly.sections.filter(section => ['tool:read', 'tool:write', 'tool:edit'].includes(section.name))
-        .map(section => section.text).filter(Boolean)).toEqual([originalGuidance.read])
-      expect(renderPrompt(assembly)).toContain(originalGuidance.read)
-      expect(renderPrompt(assembly)).not.toContain(originalGuidance.write)
-      expect(renderPrompt(assembly)).not.toContain(originalGuidance.edit)
-      release()
-      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toBe(baseline)
+      expect((await ctx.systemPrompt.assemble({ scope: key })).tools.map(tool => tool.name)).toEqual(['run_code'])
+      expect(await guidance()).toEqual([originalGuidance.read, originalGuidance.write, originalGuidance.edit])
+      scope.ctx.tools.restrict({ allow: ['read'] })
+      expect(await guidance()).toEqual([originalGuidance.read])
     } finally {
       await scope.dispose()
     }

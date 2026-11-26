@@ -11,7 +11,7 @@
  */
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -155,7 +155,7 @@ async function setup(toolConfig: Partial<ToolPwsh.Config> = {}, dshHome?: string
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(BashEnvPlugin, dshHome === undefined ? {} : { dshHome })
   await ctx.plugin(FakeBash)
@@ -171,7 +171,7 @@ async function setupWithJobs(toolConfig: Partial<ToolPwsh.Config> = {}, dshHome?
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(ToolJobs)
@@ -234,7 +234,7 @@ async function setupSandboxed(withApproval = false, toolConfig: Partial<ToolPwsh
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(ToolJobs)
@@ -367,7 +367,7 @@ describe('registration', () => {
   ] as const)('requests description before command in the %s schema', async (_mode, setupContext) => {
     const { ctx } = await setupContext()
     try {
-      const schema = ctx.tools.schemas().find(tool => tool.name === 'pwsh')!
+      const schema = ctx.tools.getAll().find(tool => tool.name === 'pwsh')!
       expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, 2))
         .toEqual(['description', 'command'])
       expect(schema.parameters).toHaveProperty('required', ['description', 'command'])
@@ -379,7 +379,7 @@ describe('registration', () => {
 
   it('registers the pwsh tool with its prompt section and schema', async () => {
     const { ctx } = await setupWithJobs()
-    const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')
+    const schema = ctx.tools.getAll().find(s => s.name === 'pwsh')
     expect(schema).toBeDefined()
     expect(schema?.description).toContain('PowerShell command')
     expect(schema?.parameters.properties).toMatchObject({
@@ -397,7 +397,7 @@ describe('registration', () => {
 
   it('registers a foreground-only schema without a job registry', async () => {
     const { ctx } = await setup()
-    const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')!
+    const schema = ctx.tools.getAll().find(s => s.name === 'pwsh')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
       .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
     expect(JSON.stringify(schema.parameters)).not.toContain('job_output')
@@ -409,9 +409,9 @@ describe('registration', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(ToolPwsh)
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
   })
 
   it('unregisters everything on fiber disposal (HMR safety)', async () => {
@@ -420,13 +420,13 @@ describe('registration', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(FakeBash)
     const fiber = await ctx.plugin(ToolPwsh)
-    expect(ctx.tools.schemas()).toHaveLength(1)
+    expect(ctx.tools.getAll()).toHaveLength(1)
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
   })
 })
 
@@ -637,7 +637,7 @@ describe('per-call sandbox policy resolution', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(ConfiningFakeBash)
@@ -657,7 +657,7 @@ describe('sandbox escalation through ctx.approval', () => {
 
   it('advertises the sandbox fields, the escalation clause, and the confined-mode contracts', async () => {
     const { ctx } = await setupSandboxed()
-    const schema = ctx.tools.schemas().find(item => item.name === 'pwsh')!
+    const schema = ctx.tools.getAll().find(item => item.name === 'pwsh')!
     const properties = schema.parameters.properties as Record<string, { enum?: string[]; description?: string }>
     expect(properties['sandbox_permissions']?.enum).toEqual(['workspace-write', 'danger-full-access'])
     expect(properties['sandbox_permissions']?.description).toContain('asks the user for approval')
@@ -677,7 +677,7 @@ describe('sandbox escalation through ctx.approval', () => {
 
   it('the escalation fields and the confined-mode clauses stay out of sandbox-less compositions', async () => {
     const { ctx } = await setup()
-    const schema = ctx.tools.schemas().find(item => item.name === 'pwsh')!
+    const schema = ctx.tools.getAll().find(item => item.name === 'pwsh')!
     expect(schema.description).not.toContain('ConstrainedLanguage')
     expect(schema.description).not.toContain('named pipes')
     expect(schema.description).not.toContain('sandbox_permissions')
@@ -919,7 +919,7 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(FakeBash)
@@ -935,7 +935,7 @@ describe('background execution through the job runtime', () => {
 
   it('enableRunInBackground: false removes the parameter and rejects the call', async () => {
     const { ctx } = await setup({ enableRunInBackground: false })
-    const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')!
+    const schema = ctx.tools.getAll().find(s => s.name === 'pwsh')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
       .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
     expect(schema.description).not.toContain('run_in_background')
@@ -956,7 +956,7 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(BashEnvPlugin)
@@ -964,7 +964,7 @@ describe('background execution through the job runtime', () => {
     ToolPwsh.apply(ctx, {})
     // The job-backed variant registers from the registry fork, one turn later.
     await new Promise(resolve => setTimeout(resolve, 0))
-    const schema = ctx.tools.schemas()[0]!
+    const schema = ctx.tools.getAll()[0]!
     expect(schema.parameters.properties).toHaveProperty('run_in_background')
     expect(JSON.stringify(schema.parameters)).toContain('job_output')
   })
@@ -977,7 +977,7 @@ describe('the background surface follows the job registry', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(FakeBash)

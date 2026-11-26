@@ -1,6 +1,6 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Events } from '@deepseek-ai/cordis'
@@ -23,7 +23,7 @@ async function mount(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -80,9 +80,9 @@ describe('scoped tool registration', () => {
     ctx.tools.register(tool('shared'))
     scope.ctx.tools.register(tool('mine'))
 
-    expect(ctx.tools.schemas(key).map(t => t.name).sort()).toEqual(['mine', 'shared'])
-    expect(ctx.tools.schemas().map(t => t.name)).toEqual(['shared'])
-    expect(ctx.tools.schemas(other).map(t => t.name)).toEqual(['shared'])
+    expect(ctx.tools.getAll(key).map(t => t.name).sort()).toEqual(['mine', 'shared'])
+    expect(ctx.tools.getAll().map(t => t.name)).toEqual(['shared'])
+    expect(ctx.tools.getAll(other).map(t => t.name)).toEqual(['shared'])
 
     expect(await run(ctx, 'mine', key)).toBe('ran:mine')
     // Out-of-view execution is indistinguishable from a nonexistent tool.
@@ -99,8 +99,8 @@ describe('scoped tool registration', () => {
     expect(await run(ctx, 'bash', key)).toBe('restricted-bash')
     expect(await run(ctx, 'bash')).toBe('global-bash')
     expect(ctx.tools.get('bash', key)?.description).toBe(ctx.tools.get('bash', key)?.description)
-    // Exactly one 'bash' in the scope's schema view (the shadow, not a double).
-    expect(ctx.tools.schemas(key).filter(t => t.name === 'bash')).toHaveLength(1)
+    // Exactly one 'bash' in the scope's view (the shadow, not a double).
+    expect(ctx.tools.getAll(key).filter(t => t.name === 'bash')).toHaveLength(1)
   })
 
   it('rejects a duplicate name within one layer, naming agent.ctx for the global case', async () => {
@@ -119,7 +119,7 @@ describe('scoped tool registration', () => {
     expect(ctx.tools.get('mine', key)).toBeDefined()
     await scope.dispose()
     expect(ctx.tools.get('mine', key)).toBeUndefined()
-    expect(ctx.tools.schemas(key)).toEqual([])
+    expect(ctx.tools.getAll(key)).toEqual([])
   })
 })
 
@@ -133,12 +133,12 @@ describe('restrict()', () => {
     scope.ctx.tools.restrict({ allow: ['read'] })
 
     // The scope-local registration survives the allow-list; the unlisted global is gone.
-    expect(ctx.tools.schemas(key).map(t => t.name).sort()).toEqual(['capture', 'read'])
+    expect(ctx.tools.getAll(key).map(t => t.name).sort()).toEqual(['capture', 'read'])
     expect(await run(ctx, 'bash', key)).toBe('Error: unknown tool "bash"')
     expect(await run(ctx, 'read', key)).toBe('ran:read')
     expect(await run(ctx, 'capture', key)).toBe('ran:capture')
     // Other scopes and the global view are untouched.
-    expect(ctx.tools.schemas().map(t => t.name).sort()).toEqual(['bash', 'read'])
+    expect(ctx.tools.getAll().map(t => t.name).sort()).toEqual(['bash', 'read'])
   })
 
   it('applies snapshotted filters to the live global registry before merging later scope-local tools', async () => {
@@ -154,9 +154,9 @@ describe('restrict()', () => {
     denied.scope.ctx.tools.register(tool('denied-local'))
     allowed.scope.ctx.tools.register(tool('allowed-local'))
 
-    expect(ctx.tools.schemas(denied.key).map(t => t.name).sort())
+    expect(ctx.tools.getAll(denied.key).map(t => t.name).sort())
       .toEqual(['denied-local', 'read', 'web'])
-    expect(ctx.tools.schemas(allowed.key).map(t => t.name).sort())
+    expect(ctx.tools.getAll(allowed.key).map(t => t.name).sort())
       .toEqual(['allowed-local', 'read'])
     expect(await run(ctx, 'web', denied.key)).toBe('ran:web')
     expect(await run(ctx, 'web', allowed.key)).toBe('Error: unknown tool "web"')
@@ -170,10 +170,10 @@ describe('restrict()', () => {
     for (const name of ['a', 'b', 'c']) ctx.tools.register(tool(name))
     const liftAllow = scope.ctx.tools.restrict({ allow: ['a', 'b'] })
     scope.ctx.tools.restrict({ deny: ['b'] })
-    expect(ctx.tools.schemas(key).map(t => t.name)).toEqual(['a'])
+    expect(ctx.tools.getAll(key).map(t => t.name)).toEqual(['a'])
     liftAllow()
     // The deny remains after the allow-list is lifted.
-    expect(ctx.tools.schemas(key).map(t => t.name).sort()).toEqual(['a', 'c'])
+    expect(ctx.tools.getAll(key).map(t => t.name).sort()).toEqual(['a', 'c'])
   })
 
   it('compiles the readonly filter values at registration', async () => {
@@ -184,10 +184,10 @@ describe('restrict()', () => {
     const filter = { deny: ['a'] }
     scope.ctx.tools.restrict(filter)
     filter.deny.push('b')
-    expect(ctx.tools.schemas(key).map(t => t.name)).toEqual(['b'])
+    expect(ctx.tools.getAll(key).map(t => t.name)).toEqual(['b'])
   })
 
-  it('fails loud on an unscoped call, an empty filter, and names it does not inherit', async () => {
+  it('fails loud on an unscoped call, an empty filter, and allow names it does not inherit', async () => {
     const ctx = await mount()
     const { scope } = await mintAgentScope(ctx, 'a')
     ctx.tools.register(tool('real'))
@@ -196,14 +196,26 @@ describe('restrict()', () => {
     expect(() => scope.ctx.tools.restrict({})).toThrow(/no-op/)
     // A scope's own registration is exempt from its own filter, so naming it
     // is a caller error rather than a silent no-op.
-    expect(() => scope.ctx.tools.restrict({ allow: ['local'] })).toThrow(/unknown global tool "local"/)
-    expect(() => scope.ctx.tools.restrict({ allow: ['reall'] })).toThrow(/unknown global tool "reall".*known global tools: real/s)
-    expect(() => scope.ctx.tools.restrict({ deny: ['ghost', 'wraith'] })).toThrow(/unknown global tools "ghost", "wraith"/)
+    expect(() => scope.ctx.tools.restrict({ allow: ['local'] })).toThrow(/unknown inherited tool "local"/)
+    expect(() => scope.ctx.tools.restrict({ allow: ['reall'] })).toThrow(/unknown inherited tool "reall".*known inherited tools: real/s)
+    expect(() => scope.ctx.tools.restrict({ allow: ['ghost', 'wraith'] })).toThrow(/unknown inherited tools "ghost", "wraith"/)
+    expect(() => scope.ctx.tools.restrict({ deny: ['run_code'] })).toThrow(/reserved PTC program entry/)
 
     const emptyCtx = await mount()
     const { scope: emptyScope } = await mintAgentScope(emptyCtx, 'empty')
-    expect(() => emptyScope.ctx.tools.restrict({ deny: ['ghost'] }))
-      .toThrow(/known global tools: \(none\)/)
+    expect(() => emptyScope.ctx.tools.restrict({ allow: ['ghost'] }))
+      .toThrow(/known inherited tools: \(none\)/)
+  })
+
+  it('accepts a deny name nothing offers yet and applies it once the tool is inherited', async () => {
+    const ctx = await mount()
+    const { scope, key } = await mintAgentScope(ctx, 'early')
+    ctx.tools.register(tool('kept'))
+    scope.ctx.tools.restrict({ deny: ['later', 'local'] })
+    scope.ctx.tools.register(tool('local'))
+    ctx.tools.register(tool('later'))
+    // The scope's own registration stays exempt from its own denial.
+    expect(ctx.tools.getAll(key).map(t => t.name)).toEqual(['kept', 'local'])
   })
 })
 
@@ -227,15 +239,15 @@ describe('restrict() over an inherited scope layer', () => {
     parent.scope.ctx.tools.register(tool('read'))
     const child = await mintChild(ctx, parent.key, 'child')
 
-    expect(ctx.tools.schemas(child.key).map(t => t.name).sort()).toEqual(['bash', 'read'])
+    expect(ctx.tools.getAll(child.key).map(t => t.name).sort()).toEqual(['bash', 'read'])
     child.scope.ctx.tools.restrict({ deny: ['bash'] })
 
     // Reading the exempt set as "the global layer" left this unfiltered, and
     // the name unrestrictable in the first place.
-    expect(ctx.tools.schemas(child.key).map(t => t.name)).toEqual(['read'])
+    expect(ctx.tools.getAll(child.key).map(t => t.name)).toEqual(['read'])
     expect(await run(ctx, 'bash', child.key)).toBe('Error: unknown tool "bash"')
     // The ancestor keeps its whole surface: a child's filter is its own.
-    expect(ctx.tools.schemas(parent.key).map(t => t.name).sort()).toEqual(['bash', 'read'])
+    expect(ctx.tools.getAll(parent.key).map(t => t.name).sort()).toEqual(['bash', 'read'])
   })
 
   it('keeps the child\'s own registrations outside its own filter', async () => {
@@ -251,7 +263,7 @@ describe('restrict() over an inherited scope layer', () => {
 
     child.scope.ctx.tools.restrict({ allow: ['read'] })
 
-    expect(ctx.tools.schemas(child.key).map(t => t.name).sort()).toEqual(['read', 'report'])
+    expect(ctx.tools.getAll(child.key).map(t => t.name).sort()).toEqual(['read', 'report'])
     expect(await run(ctx, 'report', child.key)).toBe('ran:report')
   })
 
@@ -263,8 +275,8 @@ describe('restrict() over an inherited scope layer', () => {
     const child = await mintChild(ctx, parent.key, 'child')
     parent.scope.ctx.tools.restrict({ deny: ['web'] })
 
-    expect(ctx.tools.schemas(child.key).map(t => t.name)).toEqual(['bash'])
-    expect(ctx.tools.schemas(parent.key).map(t => t.name)).toEqual(['bash'])
+    expect(ctx.tools.getAll(child.key).map(t => t.name)).toEqual(['bash'])
+    expect(ctx.tools.getAll(parent.key).map(t => t.name)).toEqual(['bash'])
   })
 })
 

@@ -85,7 +85,7 @@ The band is one instance per session, drawn by the first mod in load order whose
 | `$.plugin` | `name`, `root` | the `defineMod` spec |
 | `$.ui` | `resolve`, `invalidate`, `open`, `close`, `panes`, `log`, `toast`, `status`, `ask` | `resolve` hands out the element constructors; `invalidate`, `open`, `close` redraw the band; `ask` on `ctx.userQuestions`; `log`, `toast`, `status` reach the host log |
 | `$.command` | `register`, `run`, `list` | `ctx.commands`, scoped to the agent whose event is running |
-| `$.tool` | `register`, `call`, `list` | `ctx.tools`; a registered tool is named `mcp__<plugin>__<tool>`; contexts a tool defers to the next request are injected into the session |
+| `$.tool` | `register`, `call`, `list` | `ctx.tools`; a registered tool is named `mcp__<plugin>__<tool>`; contexts a tool defers to the next request are injected into the session; `list` returns the entries of the calling Agent's root, which under a PTC root is only `run_code`, and rejects with `TOOL_REGISTRY_UNAVAILABLE` without a root |
 | `$.prompt` | `submit` | `agent.followup()` as a `user`-sourced message, framed as a message from the mod unless `asUser`; the `prompt.submit` it raises carries `origin: { kind: 'plugin', name }` |
 | `$.session` | `id`, `cwd`, `root`, `model`, `turns`, `messages`, `usage`, `version` | the agent's Session, `agents.turnBoundaryOf()`, and optional `tokenMeter.contextPressure()`; `cwd` reports the committed current directory through `ctx.workingDirectory`; `root` keeps the original project |
 | `$.state` | `get`, `set` | memory held for the session, addressed by the `{ plugin, key }` a mod names; a read during `ui.render` subscribes the band |

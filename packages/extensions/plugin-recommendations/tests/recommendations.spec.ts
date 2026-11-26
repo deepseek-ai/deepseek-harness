@@ -12,7 +12,7 @@ import { ACTION, bundle, cardAnswer, cardId, fixture, logProposal, proposal } fr
 describe('official recommendations', () => {
   it('offers the live catalog through a skill, adds no tools of its own, and withdraws the skill and card kind on unload', async () => {
     const f = await fixture()
-    const tools = () => f.ctx.tools.definitions().map(tool => tool.name).sort()
+    const tools = () => f.ctx.tools.getAll().map(tool => tool.name).sort()
     const changeListeners = () => f.ctx.events._hooks['plugin-manager/changed']?.length ?? 0
     const withPlugin = tools()
     expect(changeListeners()).toBe(1)

@@ -8,12 +8,12 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { AddressInfo } from 'node:net'
 import { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents, type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
@@ -22,6 +22,7 @@ import { createScope } from '@deepseek-ai/dsh-scope'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as WebFetchLocal from '@deepseek-ai/dsh-web-fetch-http'
 import * as WebDeepSeekApi from '@deepseek-ai/dsh-web-deepseek-api'
@@ -38,8 +39,14 @@ let base: string
 let handler: Handler
 let ctx: Context
 let fiber: Awaited<ReturnType<Context['plugin']>>
-// web_search and web_fetch are conditional registrations, so calls run inside an agent's step admission.
-const agent = { id: brandString<SessionId>('tool-web-integration'), session: { requestContext: () => undefined } } as Agent
+// tool-web adds web_search and web_fetch for an Agent once its creation is announced, so each context announces it.
+const current = (): Readonly<ModelSelection> | undefined => ({ provider: 'test', model: 'test' })
+const agent = { id: brandString<SessionId>('tool-web-integration'), session: { requestContext: () => undefined }, model: { current } } as Agent
+
+/** Announce the Agent's creation in one context, as the agent loop does. */
+async function announce(on: Context): Promise<void> {
+  await agentEvents(on, agent).serial('agent/created', { source: 'startup' })
+}
 
 beforeEach(async () => {
   handler = (_req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<h1>Hello</h1><p>World</p>') }
@@ -51,7 +58,8 @@ beforeEach(async () => {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(WebRuntime, {
     searchProvider: WebDeepSeekApi.DEEPSEEK_SEARCH_API_PROVIDER_ID,
     fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID,
@@ -67,6 +75,7 @@ beforeEach(async () => {
   await ctx.plugin(TimeoutPolicy)
   fiber = await ctx.plugin(ToolWeb)
   await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
+  await announce(ctx)
 })
 
 afterEach(async () => {
@@ -78,12 +87,8 @@ afterEach(async () => {
 
 let counter = 0
 async function call(name: string, args: unknown, on: Context = ctx): Promise<ToolExecutionResult> {
-  const toolSet = await on.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal: testToolSignal })
-  try {
-    return await executeToolFixture(on, { agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
-  } finally {
-    toolSet.dispose()
-  }
+  const toolStep = ToolStep.capture(on.tools, agent)
+  return await executeToolFixture(on, { agent, toolStep, signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
 }
 
 describe('web_fetch integration over the real backend', () => {
@@ -137,7 +142,7 @@ describe('web_search integration over the real DeepSeek Search API provider', ()
 
 describe('tool-call timeout policy over the migrated web tools', () => {
   it('neither model schema exposes a timeout parameter after the migration', () => {
-    const byName = new Map(ctx.tools.schemas().map(s => [s.name, s]))
+    const byName = new Map(ctx.tools.getAll().map(s => [s.name, s]))
     const fetchParams = byName.get('web_fetch')!.parameters as { properties: Record<string, unknown> }
     const searchParams = byName.get('web_search')!.parameters as { properties: Record<string, unknown>; required?: string[] }
     expect(Object.keys(fetchParams.properties)).toEqual(['url'])
@@ -167,13 +172,15 @@ describe('tool-call timeout returns TOOL_TIMEOUT (deadline wins over a slow fetc
     await tctx.plugin(SessionProjectionRegistry)
     await tctx.plugin(SystemPrompt)
     await tctx.plugin(ToolRuntime)
-    await tctx.plugin(NativeToolExecutor)
+    await tctx.plugin(NativeToolRegistry)
+    await tctx.plugin(AgentRegistry)
     await tctx.plugin(WebRuntime, { fetchProvider: WebFetchLocal.LOCAL_FETCH_PROVIDER_ID })
     // Provider backstop well ABOVE the tool-call budget, so the policy wins.
     await tctx.plugin(WebFetchLocal, { timeoutMs: 30_000 })
     await tctx.plugin(TimeoutPolicy)
     // The tool-call budget is declared by tool-web config, enforced by the policy.
     tfiber = await tctx.plugin(ToolWeb, { fetchTimeoutMs: 50 })
+    await announce(tctx)
   })
 
   afterEach(async () => {

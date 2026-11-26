@@ -8,7 +8,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeRoot from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -17,19 +17,21 @@ import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED, type ToolExecutionInput, type PostToolDecision } from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as timeoutPolicy from '@deepseek-ai/dsh-tool-call-timeout-policy'
 import { TOOL_TIMEOUT } from '@deepseek-ai/dsh-tool-call-timeout-policy'
 
 const testToolSignal = new AbortController().signal
 
-/** Mount the registry + the zero-config timeout-policy enforcer. */
-async function setup() {
+/** Mount the registry, a native root (the plugin's, or the given one), and the zero-config timeout-policy enforcer. */
+async function setup(root?: NativeToolRegistry) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  if (root === undefined) await ctx.plugin(NativeRoot)
+  else ctx.tools.setRoot(root)
   await ctx.plugin(timeoutPolicy)
   return ctx
 }
@@ -120,6 +122,16 @@ describe('timeout-policy TOOL_TIMEOUT replacement (deadline wins)', () => {
         info: { name: 'ToolTimeoutError', code: 'TOOL_TIMEOUT' },
       },
     })
+  })
+
+  it('reads the budget from the definition the root resolves, for a tool no ctx.tools registration offers', async () => {
+    const root = new NativeToolRegistry()
+    const ctx = await setup(root)
+    // Plugins register through ctx.tools; registering in the root here leaves the call's definition as the only source.
+    root.register(cooperativeTool)
+    const pending = executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'slow', arguments: {} })
+    await vi.advanceTimersByTimeAsync(150)
+    expect((await pending).error?.info).toEqual({ name: 'ToolTimeoutError', code: 'TOOL_TIMEOUT' })
   })
 
   it('replaces a provider-owned abort ERROR result with TOOL_TIMEOUT when the signal was ours', async () => {
@@ -213,7 +225,7 @@ describe('timeout-policy disposal (HMR safety)', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeRoot)
     let seenSignal: AbortSignal | undefined
     ctx.tools.register(defineContentToolFixture({ name: 'probe', description: 'd', parameters: {}, timeoutMs: 10_000,
       async execute(_a, exec) { seenSignal = exec.signal; return [{ type: 'text' as const, text: 'ok' }] } }))
@@ -243,7 +255,7 @@ describe('dsh-tool-call-timeout-policy real-load-path guard', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeRoot)
     ctx.tools.register(defineContentToolFixture({ name: 'fast', description: 'd', parameters: {}, timeoutMs: 5_000,
       async execute() { return [{ type: 'text' as const, text: 'ok' }] } }))
     const loader = Object.create(Loader.prototype) as Loader

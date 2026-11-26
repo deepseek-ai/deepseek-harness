@@ -302,25 +302,21 @@ export function presentGlobResult(_args: { pattern: string; path?: string }, res
 }
 
 /**
- * Register the `glob` tool and its scope-aware system-prompt guidance.
+ * Register the `glob` tool and its system-prompt guidance with the same lifetime.
  *
  * @param ctx - the plugin context; registrations are effects scoped to it, and
  *   execution uses its `subprocess` service.
  * @param caps - the deployment's resolved glob caps (plugin config after defaulting).
  */
 export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
-  ctx.systemPrompt.section({
-    name: 'tool:glob',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_GLOB'),
-    text: ({ scope }) => ctx.tools.get('glob', scope) === undefined
-      ? ''
-      : 'Use the glob tool — not shell find — to discover files by path pattern.',
-    retirement: 'The glob tool is no longer available. Its guidance no longer applies.',
-  })
-
   const overCapDescription = caps.sampleOverCapGlobResults ? 'is sampled across top-level entries' : 'keeps the first paths'
   const tool = defineTool({
     name: 'glob',
+    guidance: {
+      order: 'TOOL_GLOB',
+      text: 'Use the glob tool — not shell find — to discover files by path pattern.',
+      retirement: 'The glob tool is no longer available. Its guidance no longer applies.',
+    },
     description: 'Find files, not directories, whose paths match a glob pattern, including hidden and ignored files. '
       + `Returns up to ${caps.maxResults} paths in modification-time order; a larger result ${overCapDescription} `
       + 'and reports where the complete list was saved.',
@@ -372,7 +368,7 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
 
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
-    const value = acceptedDirectCallValue(ctx, tool, exec, result, decision) as { root: string; paths: string[] } | undefined
+    const value = acceptedDirectCallValue(tool, exec, result, decision) as { root: string; paths: string[] } | undefined
     if (value === undefined) return decision
     const paths = value.paths
     if (paths.length <= caps.maxResults) return decision

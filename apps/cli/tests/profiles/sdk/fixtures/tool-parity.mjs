@@ -1,7 +1,8 @@
-/** Observe step-admitted model context without changing either shipped tool executor. */
+/** Observe the model context a step declares without changing either shipped root tool registry. */
 import { realpathSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { projectToolSchema } from '@deepseek-ai/dsh-tools'
 
 export const inject = ['tools', 'agents', 'loader']
 
@@ -28,10 +29,10 @@ export function apply(ctx, config) {
   // Prepended so the observation includes every other listener's contribution.
   ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
     const assembly = await next()
-    if (context.toolSet !== undefined) {
+    if (context.toolStep !== undefined) {
       observed = normalize({
         // Code unit order, the order the test sorts request tool names in.
-        tools: ctx.tools.schemas(context.scope, context.toolSet).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0),
+        tools: context.toolStep.declarations.map(tool => projectToolSchema(tool, true)).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0),
         sections: assembly.sections.map(({ name, text }) => ({ name, text })),
         contexts: assembly.contexts.map(({ name, text }) => ({ name, text })),
         hmr: ctx.get('hmr') !== undefined,

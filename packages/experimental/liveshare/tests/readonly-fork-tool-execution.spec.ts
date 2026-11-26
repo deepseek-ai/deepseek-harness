@@ -41,7 +41,7 @@ import { forkToolGuard, installChildEnforcement, type ForkToolExecution } from '
 import { READ_ONLY_FORK_CEILING } from '../src/host/fork-policy.ts'
 import { describeSharedTool } from '../src/host/shared-tools.ts'
 import { executeOneTool } from './tool-call.ts'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 
 const childSessionId = 'child-1'
 const viewer = { providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'ou_viewer' }
@@ -141,7 +141,7 @@ beforeEach(async () => {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: root })
   await ctx.plugin(ToolFs)
 

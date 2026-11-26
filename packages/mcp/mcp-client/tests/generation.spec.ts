@@ -9,6 +9,7 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import { startConnection, resolveReconnectPolicy } from '../src/connection.ts'
 import { probeServer } from '../src/probe.ts'
 import { McpGeneration } from '../src/generation.ts'
@@ -30,6 +31,7 @@ it('unregisters tools when disposal interrupts the registration result', async (
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  ctx.tools.setRoot(new NativeToolRegistry())
   const server = new McpServer({ name: 'fixture', version: '1' })
   server.registerTool('ping', { inputSchema: z.object({}) }, async () => ({ content: [] }))
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -53,7 +55,7 @@ it('unregisters tools when disposal interrupts the registration result', async (
   await disposed.promise
   expect(spy).toHaveBeenCalledOnce()
   expect(status.closure()).toEqual({ closeConfirmed: true })
-  expect(ctx.tools.schemas()).toEqual([])
+  expect(ctx.tools.getAll()).toEqual([])
 })
 
 it.each([false, true])('uses the probe budget independently of startupTimeoutMs (expires: %s)', async (expires) => {

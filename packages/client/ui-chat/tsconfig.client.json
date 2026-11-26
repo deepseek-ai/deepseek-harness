@@ -121,7 +121,7 @@
       "path": "../ui-file-drag"
     },
     {
-      "path": "../../core/tool-executor-ptc"
+      "path": "../../core/tool-registry-ptc"
     },
     {
       "path": "../ui-context-menu"

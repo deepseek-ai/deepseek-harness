@@ -48,9 +48,16 @@ declare module '@deepseek-ai/cordis' {
      */
     'tools/result'(this: Scoped<ToolsService>, exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): undefined
     /**
-     * A tool was registered or unregistered, or a scoped restriction changed.
-     * Unfiltered registry notification: scoped listeners receive changes from every
-     * scope because a global contribution can affect every agent's next assembly.
+     * A tool was registered or unregistered, a registry inclusion changed, a
+     * scoped restriction changed, or a root registry was selected or unloaded.
+     * Entries an included registry adds or removes later do not emit this
+     * event. When `ctx.tools` emits it for a registration, inclusion,
+     * restriction, or root selection, a listener that throws fails that
+     * contribution, which is undone and emits this event again; a removal is
+     * not undone. Another producer may handle a listener failure differently,
+     * for example by logging it. Unfiltered
+     * registry notification: scoped listeners receive changes from every scope
+     * because a global contribution can affect every agent's next assembly.
      * @mode emit
      */
     'tools/change'(): void

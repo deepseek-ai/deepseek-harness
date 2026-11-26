@@ -1,12 +1,13 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { setImmediate as nextEventLoopTurn } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { bindScopeParent, createScope, type Scope } from '@deepseek-ai/dsh-scope'
@@ -43,7 +44,7 @@ async function setup(mode: ('native' | 'ptc') = 'native') {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+  await ctx.plugin(mode === 'ptc' ? PtcToolRegistry : NativeToolRegistry)
   if (mode !== 'native') await ctx.plugin(BindingProbe)
   await ctx.plugin(McpResources)
   return ctx
@@ -58,7 +59,13 @@ async function resourceScope(ctx: Context, owner: Agent): Promise<Scope> {
 }
 
 function visibleResourceTools(ctx: Context, agent?: Agent): string[] {
-  return ctx.tools.schemas(agent).map(tool => tool.name).filter(name => resourceToolNames.includes(name)).sort()
+  return ctx.tools.getAll(agent).map(tool => tool.name).filter(name => resourceToolNames.includes(name)).sort()
+}
+
+/** Assemble one model step for a structural Agent; PTC guidance renders only for a step that declares its entry. */
+async function stepPrompt(ctx: Context) {
+  const agent = {} as Agent
+  return await ctx.systemPrompt.assemble({ scope: agent, toolStep: ToolStep.capture(ctx.tools, agent) })
 }
 
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
@@ -74,7 +81,7 @@ describe('MCP resource tools', () => {
   it.each(['native', 'ptc'] as const)('omits every MCP contribution with no servers in %s mode', async (mode) => {
     const ctx = await setup(mode)
     expect(visibleResourceTools(ctx)).toEqual([])
-    const assembly = await ctx.systemPrompt.assemble()
+    const assembly = await stepPrompt(ctx)
     expect(renderPrompt(assembly)).not.toContain('mcp')
     expect(assembly.tools.map(tool => tool.name).filter(name => resourceToolNames.includes(name))).toEqual([])
     for (const name of resourceToolNames) {
@@ -209,7 +216,7 @@ describe('MCP resource tools', () => {
     const ctx = await setup('ptc')
     const request = vi.fn<McpResourceProvider['request']>().mockResolvedValue({ resources: [] })
     const remove = ctx.mcpResources.register('docs', { request })
-    expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain('list_mcp_resources:')
+    expect(renderPrompt(await stepPrompt(ctx))).toContain('list_mcp_resources:')
     const runtime = ctx.ptcRuntime as BindingProbe
     runtime.behavior = async (spec) => {
       const binding = spec.bindings[0]!.functions['list_mcp_resources']!
@@ -222,7 +229,7 @@ describe('MCP resource tools', () => {
     const result = await call(ctx, 'run_code', { code: 'invoke and remove provider', description: 'Use resource binding' })
     expect(result.isError).toBe(false)
     expect(request).toHaveBeenCalledOnce()
-    expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('mcp')
+    expect(renderPrompt(await stepPrompt(ctx))).not.toContain('mcp')
     runtime.behavior = async spec => ({ output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions)) }] })
     expect(await call(ctx, 'run_code', { code: 'inspect bindings', description: 'Inspect bindings' }))
       .toMatchObject({ isError: false, value: { logs: ['[]'] } })
@@ -295,7 +302,7 @@ describe('MCP resource tools', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const fiber = await ctx.plugin(McpResources)
     ctx.mcpResources.register('docs', { request: async () => ({ resources: [] }) })
     expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain('MCP resource servers')

@@ -31,7 +31,7 @@ import {
 } from '../src/host/fork-enforcement.ts'
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
 import { executeOneTool } from './tool-call.ts'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 
 const testToolSignal = new AbortController().signal
 const session = 'session-shared'
@@ -119,7 +119,7 @@ beforeEach(async () => {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(LocalFileSystem, { cwd: root })
   await ctx.plugin(ToolFs)
 

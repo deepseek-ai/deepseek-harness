@@ -36,7 +36,7 @@ Status: implemented
 
 ### 工具过滤是一条作用于实时全局视图的规则
 
-工具过滤同时控制能力可见性和可执行查找。进程内提供方在发布前于子 agent 作用域中安装 `ToolRuntime.restrict()`，注册表的单一解析器对协议格式（wire format）的工具 schema、查找、执行和 PTC mode SDK 生成施加相同的结果。独立注册的系统提示词段落仍由各插件负责。文件系统、搜索和 Web 工具插件使用已有的 `PromptSection.text({ scope })` 回调与 `ctx.tools.get(name, scope)`，省略不可用工具的指导，并选择适用的跨工具文本。这会保留受支持工具集合下的原有措辞与顺序，适用于任意 agent scope，也包括协议呈现为 `run_code` 的底层 PTC 能力。该方式不新增段落归属元数据或组装步骤；`restrict()` 不会自动改写其他静态文字。
+工具过滤同时控制能力可见性和可执行查找。进程内提供方在发布前于子 agent 作用域中安装 `ToolRuntime.restrict()`，每个根注册表读取的注册视图对协议格式（wire format）的工具 schema、查找、执行和 PTC mode SDK 生成施加相同的结果。系统提示词段落仍由各插件负责，并与其工具一起注册（[可组合工具注册表](../architecture/2026-11-19-composable-tool-registries.zh.md)），因此被过滤的子 agent 仍保留其无法调用的工具的使用指引；`restrict()` 不改写任何提示词文本。
 
 解析遵循以下规则：
 

@@ -90,7 +90,7 @@ The command child activates only when a commands service is composed. It maps ba
 
 ### The exit tool
 
-`exit_plan_mode` is disclosed progressively: it is admitted from the first step whose selected plan state is active and stays admitted for the rest of the Session, so entering plan mode the first time adds it together with the guidance, and later transitions change only the guidance; Native and PTC execution use the same admitted set. A call while plan mode is not committed fails with `PlanModeError` `PLAN_NOT_ACTIVE`, and a plan without a leading `#` heading fails with `ToolArgsError` before review. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel (`ToolContextUnavailableError`), or after a service reload while the review is pending (`PLAN_REVIEW_INTERRUPTED`), the call fails closed and `/plan off` remains the manual escape. [`src/error.ts`](src/error.ts) lists the `PlanModeError` codes.
+`exit_plan_mode` is disclosed progressively: the service registers it in an `AgentToolRegistry` and adds it for an Agent once the Agent's selected plan state is active or its Session has entered plan mode, so entering plan mode the first time adds it together with the guidance, and later transitions change only the guidance; cancelling a first entry before it is appended removes it again. The service updates an Agent's tools on Agent creation, on `set()`, at the step-start append, after an approved exit, and on `agent-preset/selected` when a blank Session's preset change moves the Agent into the service's preset, and it updates the Agents that exist when it loads. Native and PTC execution use the same tools. A call while plan mode is not committed fails with `PlanModeError` `PLAN_NOT_ACTIVE`, and a plan without a leading `#` heading fails with `ToolArgsError` before review. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel (`ToolContextUnavailableError`), or after a service reload while the review is pending (`PLAN_REVIEW_INTERRUPTED`), the call fails closed and `/plan off` remains the manual escape. [`src/error.ts`](src/error.ts) lists the `PlanModeError` codes.
 
 ### Session projection unit
 
@@ -171,7 +171,7 @@ The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-
 
 #### Token effect
 
-The schema is paid from the first entry on, according to ToolRuntime mode, and each plan argument and review result remains in conversation history.
+The schema is paid from the first entry on, as a direct schema under a native root or an SDK binding under a PTC root, and each plan argument and review result remains in conversation history.
 
 #### KV Cache effect
 

@@ -1,7 +1,7 @@
 /** Real attachments, filesystem recovery, Node PTC, and DeepSeek image request bytes without a desktop or API key. */
 import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -56,7 +56,7 @@ async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(mode === 'ptc' ? PtcToolExecutor : NativeToolExecutor)
+  await ctx.plugin(mode === 'ptc' ? PtcToolRegistry : NativeToolRegistry)
   await ctx.plugin(FileSystem, { cwd: root })
   await ctx.plugin(LocalAttachments, { dshHome: join(root, 'home') })
   await ctx.plugin(ToolFs)

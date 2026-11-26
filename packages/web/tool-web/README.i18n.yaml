@@ -33,8 +33,8 @@
   en: d542f546c78c40f5
   zh: 3589d1b27a326a8a
 /deepseek-ai-dsh-tool-web/use-this-package/search-and-fetch-readiness:
-  en: d6affa753dce742a
-  zh: 74ac25a77f8eb034
+  en: e966be62eb69eb1c
+  zh: aa08ecffdfb659dc
 /deepseek-ai-dsh-tool-web/use-this-package/failures-and-recovery:
   en: 7cc513403e7d99d7
   zh: 99d8278dde46091b
@@ -42,17 +42,17 @@
   en: 8d42e5fa5b3215ad
   zh: ce3eeb2b28718089
 /deepseek-ai-dsh-tool-web/understand-the-implementation/design-philosophy:
-  en: 2e509d9fb339fab5
-  zh: 3e4f052c8135fa8d
+  en: bc5a4b7706c0c8b9
+  zh: 182fb62fb286e984
 /deepseek-ai-dsh-tool-web/understand-the-implementation/source-map:
-  en: 72bef08cbfa2f3a7
-  zh: 0d504871abaf3cb2
+  en: 8f4e4bd079c7476d
+  zh: 43a3f189a106bb38
 /deepseek-ai-dsh-tool-web/understand-the-implementation/search-flow:
-  en: e132415eb5d94d72
-  zh: 1d1dde6eb983b683
+  en: ee091eae259dee5b
+  zh: ea9f35331f308740
 /deepseek-ai-dsh-tool-web/understand-the-implementation/readiness-flow:
-  en: f5e46c1f6f713e72
-  zh: 3c9a8b165c46d2b1
+  en: 8cc854e660740ccc
+  zh: 18e9872e6aee1701
 /deepseek-ai-dsh-tool-web/understand-the-implementation/fetch-flow:
   en: bcb3270167081dbf
   zh: 82036ab27ae6fd96
@@ -69,8 +69,8 @@
   en: cf78b9dd5596495f
   zh: bd44560f8c2435e8
 /deepseek-ai-dsh-tool-web/model-experience/system-prompt/what-the-model-sees:
-  en: 4f6093748f69cd6c
-  zh: 599175f5d484344b
+  en: 3888350fec7e8b2f
+  zh: e121b77f89b952d8
 /deepseek-ai-dsh-tool-web/model-experience/system-prompt/what-the-model-sees/web-search-guidance-with-fetch-enabled:
   en: 8221f44691b46903
   zh: 783e44de387666e9
@@ -81,11 +81,11 @@
   en: 14e07e00636efc17
   zh: 6f2b22015dc3293a
 /deepseek-ai-dsh-tool-web/model-experience/system-prompt/token-effect:
-  en: 2701b438293d63e5
-  zh: ac6e234498e161c4
+  en: 370082080b8a691d
+  zh: fdaadc806fd1838e
 /deepseek-ai-dsh-tool-web/model-experience/system-prompt/kv-cache-effect:
-  en: b4fddfb807d4ba2d
-  zh: e0fe349c5caf0a33
+  en: ac1701df53bcf249
+  zh: b43741fcf7c26d4c
 /deepseek-ai-dsh-tool-web/model-experience/tool-schemas:
   en: 3039bc5e7a796b21
   zh: 6b7a9eaf69c9ea53
@@ -93,8 +93,8 @@
   en: 1d30b997ee27dbcc
   zh: 6553a79a7c80f69f
 /deepseek-ai-dsh-tool-web/model-experience/tool-schemas/token-effect:
-  en: bb21ae48e420c8d8
-  zh: 7acd2a1798de0e80
+  en: 13dfeed73d5fddb9
+  zh: 7165fbebc78663e7
 /deepseek-ai-dsh-tool-web/model-experience/tool-schemas/kv-cache-effect:
   en: 72f983b0fdc81e41
   zh: 9b58de4a7d9393c9
@@ -102,8 +102,8 @@
   en: 6155b510f2d1d88a
   zh: 36c1888bd5012725
 /deepseek-ai-dsh-tool-web/model-experience/withheld-web-tools/what-the-model-sees:
-  en: 28c204f3417040fb
-  zh: 704cba17b87ca2ef
+  en: 0c8ce4cbcb6b5d21
+  zh: d6544ab5c1dd7b33
 /deepseek-ai-dsh-tool-web/model-experience/withheld-web-tools/token-effect:
   en: 4e75bf3d1e75e28c
   zh: 608bfad662133716
@@ -159,8 +159,8 @@
   en: f5d5f97a153f7c70
   zh: f681f89596f500f5
 /deepseek-ai-dsh-tool-web/known-limitations-and-deferred-work:
-  en: e0ec246e789e949b
-  zh: 390441fc09d1370b
+  en: dd3c00f53667f3f4
+  zh: d6e112d72bb847f8
 /deepseek-ai-dsh-tool-web/known-limitations-and-deferred-work/dev-note:
   en: 7f775cc79dbce94b
   zh: 12b8f68f9e7c48ca

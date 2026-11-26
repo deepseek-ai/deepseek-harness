@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Agents and host UIs can complete `@file` mentions with ranked paths from each agent's local workspace, with bounded discovery that stays responsive in large repositories. Results refresh after tool activity without blocking completion, and directory symlinks are never followed. When `read` is available, the model also receives stable guidance for interpreting referenced paths. Choose this package when `read` uses the Harness host filesystem; remote or virtual namespaces need matching discovery.
+Agents and host UIs can complete `@file` mentions with ranked paths from each agent's local workspace, with bounded discovery that stays responsive in large repositories. Results refresh after tool activity without blocking completion, and directory symlinks are never followed. The model also receives stable guidance for interpreting referenced paths with the `read` tool. Choose this package when `read` uses the Harness host filesystem; remote or virtual namespaces need matching discovery.
 
 ## Table of Contents
 
@@ -65,7 +65,7 @@ This section explains the design of the provider; the observable behavior is cov
 
 ### Design concept
 
-The provider maintains one reusable `WorkspaceFileSearch` per agent, rooted at that session's `cwd`. Directory-scoped queries (`a/b/...`) list live directory state, while bare fuzzy queries share one bounded recursive traversal. Only a workspace's first bare query waits for that traversal; a `tool/result` event marks the settled entries stale, and the next bare query serves them while the replacement builds. The model guidance is a per-agent prompt section contributed only while the addressed agent has a `read` tool; creation awaits prompt installation and rolls back on failure; agent disposal releases both the index and the prompt fiber.
+The provider maintains one reusable `WorkspaceFileSearch` per agent, rooted at that session's `cwd`. Directory-scoped queries (`a/b/...`) list live directory state, while bare fuzzy queries share one bounded recursive traversal. Only a workspace's first bare query waits for that traversal; a `tool/result` event marks the settled entries stale, and the next bare query serves them while the replacement builds. The model guidance is a per-agent prompt section contributed for every agent the provider serves, whether or not a `read` tool is registered; creation awaits prompt installation and rolls back on failure; agent disposal releases both the index and the prompt fiber.
 
 ### Source map
 
@@ -97,11 +97,11 @@ Read these pages when the package-level contract is not enough. They move from t
 <a id="model-experience"></a>
 ## Model Experience
 
-### File-reference guidance when read is available
+### File-reference guidance
 
 #### What the model sees
 
-When the addressed agent has an effective `read` tool, the provider contributes this stable system-prompt section:
+For every agent it serves, the provider contributes this stable system-prompt section, which mentions the `read` tool without checking that it is registered:
 
 ##### File-reference instruction
 
@@ -111,11 +111,11 @@ Tokens prefixed with @ are paths the user explicitly referenced. Relative paths 
 
 #### Token effect
 
-Conditional and fixed: the one sentence is present while `read` is visible to the addressed agent; candidate lookup itself adds no tokens, and a selected path contributes only its ordinary user-message characters.
+Fixed: the one sentence is present for every agent the provider serves; candidate lookup itself adds no tokens, and a selected path contributes only its ordinary user-message characters.
 
 #### KV Cache effect
 
-The stable sentence joins the system-prompt prefix. Mounting or removing this provider, or changing whether `read` is visible, changes that prefix; queries, candidates, and index staleness do not.
+The stable sentence joins the system-prompt prefix. Mounting or removing this provider changes that prefix; queries, candidates, and index staleness do not.
 
 ## Known Limitations and Deferred Work
 

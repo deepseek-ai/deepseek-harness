@@ -15,7 +15,7 @@
  */
 
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -44,14 +44,14 @@ describe('dsh-tool-fs-search real-load-path guard', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalSubprocessRuntime)
 
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(toolFsSearch) as Parameters<Context['plugin']>[0]
     // A collapsed export shape (dropped inject) would throw "without inject" here.
     const fiber = await ctx.plugin(unwrapped, { sampleOverCapGlobResults: true })
-    expect(ctx.tools.schemas().map(s => s.name)).toEqual(expect.arrayContaining(['glob', 'grep']))
+    expect(ctx.tools.getAll().map(s => s.name)).toEqual(expect.arrayContaining(['glob', 'grep']))
     await fiber.dispose()
   })
 })

@@ -124,7 +124,7 @@ JS
 node tests/.dsh-build/glob-native.perf.mjs
 ```
 
-The diagnostic creates 20,000 unrelated files and six matches, then measures five `ctx.tools.execute()` calls through the Native executor with a real Agent, working-directory service, and local subprocess backend. It reports raw timings, the median, and a hash of the complete value, text, and presentation metadata. `--plugin <built-module>` selects another search-package revision; `--workspace <directory>` opts into a read-only existing workspace instead of the synthetic tree. Setup, model generation, UI, and Session persistence are excluded; there is no timing threshold.
+The diagnostic creates 20,000 unrelated files and six matches, then measures five `ctx.tools.execute()` calls through the native root registry with a real Agent, working-directory service, and local subprocess backend. It reports raw timings, the median, and a hash of the complete value, text, and presentation metadata. `--plugin <built-module>` selects another search-package revision; `--workspace <directory>` opts into a read-only existing workspace instead of the synthetic tree. Setup, model generation, UI, and Session persistence are excluded; there is no timing threshold.
 
 ### Two budgets, two artifacts
 
@@ -155,7 +155,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-At assembly time, each section checks `ctx.tools.get(name, scope)` and renders only while its tool is visible. The grep paragraph includes its read follow-up sentence only while read is visible. The original text and section order stay unchanged for the same supported tool set, including PTC capabilities behind `run_code`. This scope-dependent text selection applies to system-prompt sections. Tool schema descriptions remain registration-time text and do not name other tools.
+Each section is the tool's `guidance`, so it renders in every scope that can call the tool, including PTC capabilities behind `run_code`; a scope that restricts the tool omits its section. The grep paragraph always includes its read follow-up sentence. Tool schema descriptions remain registration-time text and do not name other tools.
 
 ##### Glob guidance
 
@@ -171,11 +171,11 @@ Use the grep tool — not shell grep or rg — to search file contents. Use read
 
 #### Token effect
 
-Guidance cost follows the visible tools; the required sampling choice selects one glob variant.
+Guidance cost follows the tools the scope can call, so a restriction removes the restricted tool's paragraph; the required sampling choice selects one glob variant.
 
 #### KV Cache effect
 
-Prefix-stable while the visible tool set, plugin scope, sampling choice, and guidance text are unchanged. Restrictions, activation, disposal, or changing the choice may invalidate reuse from the first changed section.
+Prefix-stable while the registered tools, plugin scope, sampling choice, and guidance text are unchanged. Activation, disposal, or changing the choice may invalidate reuse from the first changed section.
 
 ### Tool schemas
 

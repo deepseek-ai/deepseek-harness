@@ -118,9 +118,9 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 原生清理期间到达的请求等待清理确认后再发送。等待期间取消的请求不会发给 helper。正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
 
-`agentPreset` 默认为 `ptc`：使用该 preset 的 Agent 获得原始 `cua` 工具和 PTC 指引，其他 Agent 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset、未组合 preset 的 Agent，以及没有 preset 注册表的组合中的全部 Agent，例如 SDK、headless 和 ACP profile。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件、可选 preset 注册表的加载与卸载和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按定义对象的身份同步替换每组工具及提示词；程序服务不可用时只撤回程序工具定义，保留原始工具的注册。preset 选择或注册表变化后，某个 Agent 的更新失败时只记录警告，不影响其他 Agent 的更新。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。设置 `agentPreset: false` 可改为全局注册原始 `cua` 工具；没有 preset 的 Host 挂载 PTC 工具执行器时，需要这项设置才能提供 `tools.cua`。Host 负责权限、本机连接和取消；preset 定义保持不变。
+`agentPreset` 默认为 `ptc`：使用该 preset 的 Agent 获得原始 `cua` 工具和 PTC 指引，其他 Agent 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset、未组合 preset 的 Agent，以及没有 preset 注册表的组合中的全部 Agent，例如 SDK、headless 和 ACP profile。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件、可选 preset 注册表的加载与卸载和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按身份同步替换每组工具及提示词：注册原始定义，或引入私有程序注册表；程序服务不可用时只撤回程序注册表，保留原始工具的注册。preset 选择或注册表变化后，某个 Agent 的更新失败时只记录警告，不影响其他 Agent 的更新。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。设置 `agentPreset: false` 可改为全局注册原始 `cua` 工具；没有 preset 的 Host 挂载 PTC 根注册表时，需要这项设置才能提供 `tools.cua`。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
-`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。CUA 在该运行时注册环境初始化程序，为每个新进程安装一次 `cua`，包括临时提权执行。初始化程序的所属作用域只依赖运行时，程序工具的依赖重载时仍保留这项注册。先销毁程序工具并等待其执行结束，再注销初始化程序并关闭运行时。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。该运行时存在期间，提供方发布 `ctx.cuaPrograms`：`release(agent)` 就是运行时对该 Agent 的 owner release，因此其程序进程退出，仍在运行的程序以中止失败，下一次程序在新进程中由初始化程序重新创建 `cua`，应用授权和本机连接则保留；释放结算之前运行时会拒绝该 Agent 的程序，因此由调用方把它们挡在后面；`screenshotRequestTarget(image)` 返回已配置的 `screenshotTarget` 为某张已存储截图选定的请求图片目标，使在模型请求之外转发截图的宿主交付程序观察到的那一版。
+`cua_run_code` 是一个私有 [PTC 工具注册表](../../core/tool-registry-ptc/README.zh.md)的条目，每个程序模式 Agent 的作用域都引入该注册表，注册表使用 CUA 提供方持有的一个隔离 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。CUA 在该运行时注册环境初始化程序，为每个新进程安装一次 `cua`，包括临时提权执行。初始化程序的所属作用域只依赖运行时，程序工具的依赖重载时仍保留这项注册。先销毁程序工具并等待其执行结束，再注销初始化程序并关闭运行时。该注册表唯一的绑定是私有 `cua` 操作工具，并保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。该运行时存在期间，提供方发布 `ctx.cuaPrograms`：`release(agent)` 就是运行时对该 Agent 的 owner release，因此其程序进程退出，仍在运行的程序以中止失败，下一次程序在新进程中由初始化程序重新创建 `cua`，应用授权和本机连接则保留；释放结算之前运行时会拒绝该 Agent 的程序，因此由调用方把它们挡在后面；`screenshotRequestTarget(image)` 返回已配置的 `screenshotTarget` 为某张已存储截图选定的请求图片目标，使在模型请求之外转发截图的宿主交付程序观察到的那一版。
 
 [操作 schema](src/protocol.ts) 定义模型参数，以及 Host 补充的请求字段。[原生观察](src/native-observation.ts) 解析窗口回复的私有字段，更新坐标记录后返回公开结果。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 
@@ -171,7 +171,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 - 会话决定没有自动保留期限，也不会随对话删除而自动清理。撤销会移除许可，但保留撤销代次，用于拒绝旧句柄和先前尚未完成的审批。
 - 原生行为和桌面验证由各平台负责；支持的应用、输入限制和实测覆盖范围见对应提供方文档。
-- `agentPreset` 选择一个 preset ID，不检测执行器。ID 不匹配的自定义 PTC preset 会在外层 `run_code` 中获得 `tools.cua_run_code`。嵌套程序使用独立的 CUA 环境和 `standaloneRunCode` 上限，同时仍受外层程序的截止时间和取消约束。将 `agentPreset` 设为该自定义 ID，可在其中使用原始 `tools.cua`；只有匹配的 ID 获得原始形态。没有 preset 的 Host 挂载 PTC 工具执行器时会得到同样的嵌套形态，在其中设置 `agentPreset: false`。
+- `agentPreset` 选择一个 preset ID，不检测根注册表。ID 不匹配的自定义 PTC preset 会在外层 `run_code` 中获得 `tools.cua_run_code`。嵌套程序使用独立的 CUA 环境和 `standaloneRunCode` 上限，同时仍受外层程序的截止时间和取消约束。将 `agentPreset` 设为该自定义 ID，可在其中使用原始 `tools.cua`；只有匹配的 ID 获得原始形态。没有 preset 的 Host 挂载 PTC 根注册表时会得到同样的嵌套形态，在其中设置 `agentPreset: false`。
 - `cua_run_code` 状态仅保存在内存中，且独立于 PTC 状态。进程丢失、Agent 销毁或提供方卸载都会丢弃它；应用授权仍独立保存。
 - 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。指针移动和观察不恢复先前的鼠标位置；[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。
 - 元素 ID 是应用当前辅助功能快照中的不透明字符串。之后读取同一应用的任一窗口会替换当前快照，因此调用方必须使用最新树中的 ID；旧字符串可能被复用于另一个控件。截图或指针输入要求显式选择窗口。

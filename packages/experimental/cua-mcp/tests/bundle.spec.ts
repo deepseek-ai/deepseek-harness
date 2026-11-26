@@ -43,7 +43,7 @@ describe('cua-mcp bundle', () => {
       'session', 'session-persistence-jsonl', 'session-projection', 'attachment-local', 'working-directory',
       'storage', 'storage-json', 'storage-domain',
       'subprocess', 'sandbox', 'sandbox-policy', 'approval', 'fs-sandbox',
-      'tools', 'tool-executor-native', 'system-prompt', 'user-questions', 'llm', 'agent', 'agent-loop',
+      'tools', 'tool-registry-native', 'system-prompt', 'user-questions', 'llm', 'agent', 'agent-loop',
       'cua-mcp-presets', 'cua-mcp-preset', 'cua-mcp-computer-use', 'cua-mcp-provider', 'cua-mcp-provider-windows', 'cua-mcp',
     ])
     // The llm hub carries no adapter row, so no model request can leave this profile.

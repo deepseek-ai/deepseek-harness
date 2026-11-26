@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use `dsh-tools` to expose typed capabilities to models, validate calls, enforce allow/deny/ask policy, and return finalized results without ending a turn on ordinary tool failures. Mount a native or PTC executor to choose the model interaction and batch execution behavior. Tool authors use `defineTool` to declare typed parameters and outputs, cooperative timeouts, parallel-safety, and optional UI presentation. Models see each permitted tool's declared name, description, and parameter schema; per-agent restrictions can narrow that visible set.
+Use `dsh-tools` to expose typed capabilities to models, validate calls, enforce allow/deny/ask policy, and return finalized results without ending a turn on ordinary tool failures. Mount a native or PTC root registry to choose whether models call tools directly or through programs. Tool authors use `defineTool` to declare typed parameters and outputs, cooperative timeouts, parallel-safety, and optional UI presentation. Models see each permitted tool's declared name, description, and parameter schema; per-agent restrictions can narrow that visible set.
 
 ## Table of Contents
 
@@ -25,9 +25,9 @@ Use `dsh-tools` to expose typed capabilities to models, validate calls, enforce 
 <a id="use-this-package"></a>
 ## Use this package
 
-`ctx.tools.execute()` accepts a complete raw call batch. `agent` is absent for standalone service calls; `log` is absent for programmatic calls outside a model step, including initialization hooks. An Agent without `log` still supplies tool scope but does not produce root call/result events.
+`ctx.tools.execute()` runs a complete raw call batch against the entries of the Agent's selected root registry; every call record carries the `definition` it resolved. `agent` is absent for standalone service calls; `log` is absent for programmatic calls outside a model step, including initialization hooks. An Agent without `log` still supplies tool scope but does not produce root call/result events.
 
-Mount `dsh-tools` wherever agents call tools: it provides `ctx.tools`, the registry every tool plugin registers into and the selected executor resolves. Registering a tool is enough to make it visible — the registry feeds its schemas into the system-prompt assembly automatically.
+Mount `dsh-tools` and one root registry wherever agents call tools: `ctx.tools` routes every registration to the root the scope selects. Registering a tool is enough to make it visible: the root declares it to the model directly or binds it in programs. Describe a tool to the model in its description and parameter descriptions.
 
 ### Register a tool
 
@@ -61,31 +61,34 @@ ctx.tools.register(defineTool({
 }))
 ```
 
+A definition's `guidance` is a system prompt section that existing tools show only while the tool is available: `ctx.tools.register()` registers it in the same effect as the tool and renders it, literally, only while the viewing scope's registrations resolve that definition, which under the shipped Native and PTC roots means while the scope can call the tool directly or in programs, so a restriction or a nearer same-name definition hides it. Tools that name the same `section` share one section, whose text receives the names of the tools the scope resolves; they must declare the same guidance, because the latest registration in the nearest registering scope decides it. Adding new guidance is discouraged ([rationale](../../../.agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.md)); guidance may mention another plugin's tool without checking for it.
+
 The unified schema DSL supports `string`, `number`, `integer`, `boolean`, `null`, `array`, `object`, author-only `json`, and exact-one `oneOf`; `InferValue` preserves exact types through 16 container levels before widening to `JsonValue`. A raw JSON Schema (`JsonSchemaNode`) is the wire-level counterpart shared with subagents, workflows, and MCP.
 
-<a id="conditional-tools"></a>
-### Conditional tools
+<a id="compose-registries"></a>
+### Compose registries
 
-`register(definition, { when })` evaluates a synchronous or asynchronous condition once for each model step. The condition receives `{ agent, modelSelection, signal }`; `modelSelection` is the provider, model, and reasoning effort that step preparation captured for every request attempt in the step, the same value as `AssembleContext.modelSelection`. False omits the tool from the executor's description, PTC bindings, and execution. A thrown condition fails step preparation as `TOOL_ACTIVATION_FAILED`; it is not treated as ordinary unavailability. Conditions must observe cancellation and must not change registrations or perform tool work.
+`ctx.tools` and every root registry implement `ToolRegistry`: `register(tool)`, `include(registry)`, `get(name, scope?)`, and `getAll(scope?)`. `include()` reads another registry's entries at every query and returns its disposer; the source keeps ownership of its definitions. A source's `getAll()` can list several definitions under one name, so a registry that includes it resolves each name through `get()` or treats a repeated name as a conflict. A registration or inclusion on `ctx.tools` reaches the root its scope selects and the roots selected below it, including roots that load later: nearer registrations and inclusions shadow farther ones, and one scope offering two different definitions under one name fails as `INVALID_TOOL_COMPOSITION`. A conflict that appears later, such as an included registry adding a second definition for an Agent, or an included registry that reads `ctx.tools`, fails the lookups that reach it; in a batch only the affected call fails, its result tells the model that the tool is misconfigured, and the deployment log records the failure's message, which names the conflicting definitions when the failure is an ambiguity. `ctx.tools.get()` and `getAll()` return the selected root's entries for the viewing scope: every visible tool under a native root, only `run_code` under a PTC root. Without an available root they throw `TOOL_REGISTRY_UNAVAILABLE`, like `execute()`.
 
-`resolve({ agent, modelSelection, signal })` returns a step-owned `ResolvedToolSet`. Pass it as `toolSet` to prompt assembly and the step's `ctx.tools.execute()` batch, then dispose it after the batch settles; retries in the step reuse it. Executors apply the batch's set to every call, including PTC program subcalls. Registrations stay effect-owned; each selection admits only the original registration in its exact agent scope. Disposal, new restrictions, or same-name replacement prevent unstarted calls from using it; after cancellation, calls settle with the shared pipeline's cancellation results. Started operations retain their cooperative cancellation obligations. Conditional calls in a batch without a resolved set return `UNKNOWN_TOOL`.
-
-`get(name, scope, toolSet)`, `definitions(scope, toolSet)`, and `schemas(scope, toolSet)` inspect an admitted set; omitting `toolSet` inspects registered definitions without evaluating conditions. `executable(name, scope, toolSet)` is the execution lookup: it applies the set, and without one it excludes conditional registrations. Executor descriptions and sections receive the same selection as `AssembleContext.toolSet`. A presentation transform cannot add or remove callable tools.
-
-### Select an executor
-
-Mount one executor in the deployment, preset, or Agent scope. The nearest scope selects the provider; duplicate providers in one scope fail. Native exposes visible capabilities directly; PTC exposes `run_code` and a generated SDK. Executor registration and disposal do not emit `tools/change`; prompt assemblies and batches resolve the current executor when they run.
+`ctx.tools.setRoot(registry)` installs the calling scope's root and hands it the registrations its scopes see; an unscoped call installs the deployment default. Agents use the nearest root, and each scope allows one. A root must not include or read `ctx.tools`; such a read fails with `INVALID_TOOL_COMPOSITION`, in `setRoot()`, which then keeps the scope's earlier selection, or in the later lookup or call that reaches it. Register tools through `ctx.tools`: a tool registered directly in a root skips the scope's conflict check, so another definition registered under its name through `ctx.tools` is accepted and the next `ctx.tools.getAll()` throws. A root selected again after it unloads keeps its single inclusion of the registrations. Selecting or unloading a root emits `tools/change`; an observer that throws fails the selection, which restores the earlier selection and emits `tools/change` again. An unloaded root stays selected as unavailable, so lookups, new batches, and prompt assemblies fail with `TOOL_REGISTRY_UNAVAILABLE` until a replacement is installed; an accepted batch settles through its root. Mount one root plugin:
 
 ```yaml
 - name: '@deepseek-ai/dsh-tools'
-- name: '@deepseek-ai/dsh-tool-executor-native'
+- name: '@deepseek-ai/dsh-tool-registry-native'
 ```
 
-Agent-step concurrency uses the [agent-loop configuration](../agent-loop/README.md). See the [native](../tool-executor-native/README.md) or [PTC](../tool-executor-ptc/README.md) package for executor settings. Custom providers implement only `describe(definitions)` and `execute(batch)`; the shared pipeline is optional. The registry selects the current scoped executor separately for prompt descriptions and each `ctx.tools.execute()` batch. An accepted batch settles through its selected provider even if that provider unloads; settlement may include cancellation errors according to the provider’s disposal policy. New batches reject until a replacement is registered. Executor prompt sections follow ordinary [section lifecycle rules](../system-prompt/README.md): teardown removes registrations, and the next assembly compares any replacement registrations or prepares retirement notices.
+The [native](../tool-registry-native/README.md) root offers every visible tool directly; the [PTC](../tool-registry-ptc/README.md) root offers `run_code` and declares the tools as a generated SDK. Agent-step concurrency uses the [agent-loop configuration](../agent-loop/README.md). A PTC root's prompt sections follow ordinary [section lifecycle rules](../system-prompt/README.md): unloading the root retires them at the next assembly.
+
+<a id="per-agent-tools"></a>
+### Offer tools to individual Agents
+
+Before each model step, AgentLoop captures `ctx.tools.getAll(agent)` as a `ToolStep`. The step's prompt declares those entries, and its batch and program calls execute only those exact definitions; a tool registered or replaced while the model responds takes effect in the next step, while calls to a declared tool that its provider removes or withdraws for the Agent fail as `UNKNOWN_TOOL`. A model-direct call to a tool the root binds only in programs fails as `UNKNOWN_TOOL` before `tools/pre-execute`, approval, guards, and execution wrappers, with a message naming the entries the step can call. A call to a name nothing registers, or to a tool a restriction or its provider withholds from the Agent, runs policy and then fails at dispatch. Dispatch runs exactly the definition captured when the call was prepared. Request retries keep the step's tools.
+
+A provider whose tool depends on Agent state includes an `AgentToolRegistry` (exported with `ToolStep` and `NativeToolRegistry` from `@deepseek-ai/dsh-tools/pipeline`), registers the tool there, and calls `set(agent, names)` when the state changes: when the Agent is created or resumed, when the plugin loads for existing Agents, when the state itself changes, and when a blank Session's preset change (`agent-preset/selected`) moves a live Agent into the provider's preset. A step uses the tools set before it starts. The unscoped view lists every registered tool, so restrictions and `toolOrder` can name it before an Agent sees it; a call without an Agent reaches the tool's body, which checks `exec.agent` when it needs one. Web tools call `set()` when the Agent's model route, a credential, or the Web providers change; Plan, Office, and Team call it from their own state changes. A per-Agent provider decides its guidance for each Agent from its own registry, such as `registry.get(name, agent)`.
 
 ### Restrict tools per agent
 
-`ctx.tools.restrict(filter)` applies an allow or deny mask to the global tools one agent inherits; masks intersect, scoped registrations stay visible, and the restriction lifts when disposed. `ctx.tools.get(name, scope)` resolves a tool as one scope sees it. A Host-local presenter consumer passes the calling agent when it must match the definition that executed. `ctx.tools.schemas(scope)` returns the visible schemas without the `execute` functions.
+`ctx.tools.restrict(filter)` applies an allow or deny mask to the tools one agent inherits, including tools an ancestor includes from another registry; masks intersect, the scope's own registrations and inclusions stay visible, and the restriction lifts when disposed. An `allow` name must be inherited, while `deny` accepts a name nothing offers yet. Roots apply the mask to their entries and program bindings, and a restricted tool's `guidance` stops rendering for that agent. A policy that must match the definition that executed reads `exec.definition`. `projectToolSchema()` returns a definition's model-facing schema without its callbacks.
 
 ### Enforce policy on calls
 
@@ -109,13 +112,17 @@ This section explains how the package realizes the behavior above; the observabl
 
 ### Design concept
 
-The registry holds typed `ToolDefinition`s in scoped layers and projects them onto the model-facing `ToolSchema` set at request time — `output`, `execute`, `finalizeContent`, `timeoutMs`, and presentation callbacks never leak onto the wire. Built-in executors reuse the shared pipeline: `tools/pre-execute` (extensible allow/deny/ask) → registered monotonic guards → `tools/execute` (around-dispatch wrappers) → `tools/post-execute` (inspect/replace, attach context) → definition-owned `finalizeContent` → the observe-only `tools/result` event. Only the `tools/execute` view may replace the required signal, and the registry re-fuses the caller signal before the body.
+The registry holds typed `ToolDefinition`s in scoped layers and projects them onto the model-facing `ToolSchema` set at request time — `output`, `execute`, `finalizeContent`, `timeoutMs`, and presentation callbacks never leak onto the wire. Built-in registries reuse the shared pipeline: `tools/pre-execute` (extensible allow/deny/ask) → registered monotonic guards → `tools/execute` (around-dispatch wrappers) → `tools/post-execute` (inspect/replace, attach context) → definition-owned `finalizeContent` → the observe-only `tools/result` event. Only the `tools/execute` view may replace the required signal, and the registry re-fuses the caller signal before the body.
 
 ### Source map
 
-- [`src/index.ts`](src/index.ts) — Plugin entry and public tool APIs; scoped tool service and executor selection.
+- [`src/index.ts`](src/index.ts) — Plugin entry and public tool APIs; scoped registrations routed to the selected root, and batch execution.
 - [`src/contracts.ts`](src/contracts.ts) — Tool definitions, invocation results, guards and decisions.
-- [`src/executor.ts`](src/executor.ts) — Executor descriptions and batch input/output.
+- [`src/registry.ts`](src/registry.ts) — `ToolRegistry` and batch input/output.
+- [`src/entries.ts`](src/entries.ts) — Registrations and live inclusions of registries without scopes.
+- [`src/step.ts`](src/step.ts) — `ToolStep`, the entries one model step declared.
+- [`src/agent-tools.ts`](src/agent-tools.ts) — `AgentToolRegistry`, tools added per Agent.
+- [`src/native-registry.ts`](src/native-registry.ts) — `NativeToolRegistry`, whose entries are model-callable tools.
 - [`src/pipeline.ts`](src/pipeline.ts) — Shared `prepare`, `dispatch`, and `complete` stages, their result types, and the batch entry point.
 - [`src/batch.ts`](src/batch.ts) — Concurrency, ordered results and optional Session logging.
 - [`src/events.ts`](src/events.ts) — Shared execution policy events.
@@ -129,12 +136,12 @@ Each typed invocation materializes and freezes parsed arguments, assigns an opaq
 
 ### PTC mode
 
-The [PTC executor](../tool-executor-ptc/README.md) owns program transport, SDK generation, nested dispatch, and image context.
+The [PTC registry](../tool-registry-ptc/README.md) owns program transport, SDK generation, nested dispatch, and image context.
 
 <a id="extension-points"></a>
 ### Extension points
 
-Tool plugins call `ctx.tools.register()` and their schemas flow into prompt assembly automatically. `tools/pre-execute` is the reorderable allow/deny/ask gate; `ctx.tools.guard()` adds monotonic owner policy after it; `tools/execute` wraps normalized canonical dispatch for timeout, retry, or metrics; `tools/post-execute` may replace content or value, block with feedback, or attach ordered contexts; `tools/result` observes the immutable final outcome. MCP servers discover tools and register them with the server's schemas.
+Tool plugins call `ctx.tools.register()` and their schemas flow into prompt assembly through the selected root. `tools/pre-execute` is the reorderable allow/deny/ask gate; `ctx.tools.guard()` adds monotonic owner policy after it; `tools/execute` wraps normalized canonical dispatch for timeout, retry, or metrics; `tools/post-execute` may replace content or value, block with feedback, or attach ordered contexts; `tools/result` observes the immutable final outcome. MCP servers discover tools and register them with the server's schemas.
 
 </details>
 
@@ -146,7 +153,7 @@ Tool plugins call `ctx.tools.register()` and their schemas flow into prompt asse
 The package-level contract is enough for most consumers; read these when you need the surrounding domain.
 
 - [Tools subsystem](../../../docs/subsystems/tools.md) — the full pipeline types, schema DSL, and generated service API.
-- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-executor-ptc) — the shipped tools' schemas the model receives.
+- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-registry-ptc) — the shipped tools' schemas the model receives.
 - [Tool execution pipeline](../../../docs/tool-execution-pipeline.md) — the pipeline visualized.
 - [Adding a tool cookbook](../../../docs/cookbook/adding-a-tool.md) — step-by-step tool authoring.
 - [Tool testkit](../../test-support/tool-testkit/README.md) — tool-definition and execution fixtures for tests and benchmarks.
@@ -162,7 +169,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-In normal mode the model sees each visible definition's exact name, description, and JSON Schema; the shipped definitions are recorded in the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-executor-ptc). Agent-scoped restrictions, shadows, and extension registrations change that agent's end-tool set.
+In normal mode the model sees each visible definition's exact name, description, and JSON Schema; the shipped definitions are recorded in the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-registry-ptc). Agent-scoped restrictions, shadows, and extension registrations change that agent's end-tool set.
 
 #### Token effect
 
@@ -197,6 +204,7 @@ These limits define when the registry needs special care. They are current packa
 - **`tools/pre-execute` deliberately cannot rewrite `exec.arguments`** — logged and rendered args would desync from what ran; the rewrite design is [a proposed Agent Note](../../../.agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.md).
 - **Caller-defined subagent and workflow structured outputs remain object-rooted** — this is a consumer-level guard; the shared schema vocabulary and tool outputs support every JSON root.
 - **`timeoutMs` on a definition is declarative only** — the registry never enforces deadlines; enforcement requires the `@deepseek-ai/dsh-tool-call-timeout-policy` wrapper.
+- **Some tool prompt text stays when its tool is restricted** — only a definition's `guidance` follows the tool's availability. Sections registered apart from their tool with `systemPrompt.section()`, such as bash's, stay while their plugin is loaded. So do the sections of per-Agent providers (Web, Plan, Office, Team) and CUA, the delegation depth context, the `send_message` and `list_agents` lines of the subagent identity context, and the skill catalog message.
 
 `defineTool()`, registry schema projection, and system-prompt assembly preserve `deferLoading: true`. The marker requests deferred definition loading and does not imply a `tool-addition` record; the [LLM package](../../../packages/llm/llm/README.md#known-limitations-and-deferred-work) documents provider enforcement limits.
 

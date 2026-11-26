@@ -104,7 +104,7 @@ it('gives every Agent off the configured preset a program tool without changing 
   const mounted = await ctx.plugin(provider, {})
   for (const preset of ['standard', 'cordis', 'minimal', 'custom']) {
     const handle = await create(`cua-${preset}`, preset)
-    expect(ctx.tools.schemas(handle.agent).map(tool => tool.name)).toContain('cua_run_code')
+    expect(ctx.tools.getAll(handle.agent).map(tool => tool.name)).toContain('cua_run_code')
     expect(ctx.tools.get('cua', handle.agent)).toBeUndefined()
     expect(ctx.tools.get('cua_run_code', handle.agent)?.description).toContain('global cua object is ready')
     await handle.dispose()
@@ -146,7 +146,7 @@ it('gives Agents a program tool in a composition without a preset registry', asy
   const mounted = await ctx.plugin(provider, {})
   await expect.poll(() => ctx.tools.get('cua_run_code', existing.agent)).toBeDefined()
   const fresh = await ctx.agents.create({ sessionId: brandString<SessionId>('no-registry-fresh') })
-  expect(ctx.tools.schemas(fresh.agent).map(tool => tool.name)).toContain('cua_run_code')
+  expect(ctx.tools.getAll(fresh.agent).map(tool => tool.name)).toContain('cua_run_code')
   expect(ctx.tools.get('cua', fresh.agent)).toBeUndefined()
   expect(await cuaPrompts(ctx, fresh.agent)).toEqual([programPrompt])
   await fresh.dispose()
@@ -218,7 +218,7 @@ it('selects one CUA transport for existing and new Agents and removes both on un
   const { sections } = await ctx.systemPrompt.assemble({ scope: existing.agent })
   expect(sections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Fixture CUA guidance')
   await ctx.agentPresets.select(existing.agent, 'ptc')
-  expect(ctx.tools.schemas(existing.agent).filter(tool => tool.name === 'cua')).toHaveLength(1)
+  expect(ctx.tools.getAll(existing.agent).filter(tool => tool.name === 'cua')).toHaveLength(1)
   const fresh = await create('fresh', 'ptc')
   expect(ctx.tools.get('cua', fresh.agent)).toBeDefined()
   await ctx.agentPresets.select(existing.agent, 'standard')
@@ -434,7 +434,7 @@ it('switches modes synchronously without exposing both tools while programs are 
   await directoryProvider.dispose()
   const counts: number[] = []
   ctx.on('tools/change', () => {
-    counts.push(ctx.tools.schemas(owner.agent).filter(tool => tool.name === 'cua' || tool.name === 'cua_run_code').length)
+    counts.push(ctx.tools.getAll(owner.agent).filter(tool => tool.name === 'cua' || tool.name === 'cua_run_code').length)
   })
   await ctx.agentPresets.select(owner.agent, 'standard')
   expect(ctx.tools.get('cua', owner.agent)).toBeUndefined()

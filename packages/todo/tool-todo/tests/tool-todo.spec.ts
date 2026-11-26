@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -36,7 +36,7 @@ async function setup(allowParallelInProgress: boolean): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(tool, { allowParallelInProgress })
   return ctx
 }
@@ -60,7 +60,7 @@ function text(result: { content: { type: string; text?: string }[] }): string {
 describe('dsh-tool-todo', () => {
   it('registers a `todo_write` tool whose schema is an array of {content,status}', async () => {
     const ctx = await setup(true)
-    const schema = ctx.tools.schemas().find(s => s.name === 'todo_write')
+    const schema = ctx.tools.getAll().find(s => s.name === 'todo_write')
     expect(schema).toBeDefined()
     const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props)).toEqual(['todos'])
@@ -182,11 +182,11 @@ describe('dsh-tool-todo', () => {
 
     it('instructs the model to keep at most one active, while true instructs parallel', async () => {
       const single = await setup(false)
-      const singleDesc = single.tools.schemas().find(s => s.name === 'todo_write')!.description
+      const singleDesc = single.tools.getAll().find(s => s.name === 'todo_write')!.description
       expect(singleDesc).toContain('keep exactly one todo `in_progress`')
       expect(singleDesc).not.toContain('several only')
 
-      const parallelDesc = (await setup(true)).tools.schemas().find(s => s.name === 'todo_write')!.description
+      const parallelDesc = (await setup(true)).tools.getAll().find(s => s.name === 'todo_write')!.description
       expect(parallelDesc).toContain('several only when work runs in parallel')
       expect(parallelDesc).not.toContain('exactly one')
     })
@@ -224,11 +224,11 @@ describe('dsh-tool-todo', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const fiber = await ctx.plugin(tool, { allowParallelInProgress: true })
-    expect(ctx.tools.schemas().some(s => s.name === 'todo_write')).toBe(true)
+    expect(ctx.tools.getAll().some(s => s.name === 'todo_write')).toBe(true)
     await fiber.dispose()
-    expect(ctx.tools.schemas().some(s => s.name === 'todo_write')).toBe(false)
+    expect(ctx.tools.getAll().some(s => s.name === 'todo_write')).toBe(false)
   })
 
   it('has the namespace-plugin export shape (no stray default) so the Loader keeps name/inject/apply', () => {

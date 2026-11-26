@@ -15,7 +15,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import Llm, { LlmAdapter, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import Skills from '@deepseek-ai/dsh-skill'
 import Access from '@deepseek-ai/dsh-api-remote-access'
 import * as ActionCards from '@deepseek-ai/dsh-action-cards'
@@ -86,7 +86,7 @@ async function bootProfile(connector?: string) {
     ctx.provide('appReady', { onReady: (listener) => { listener(); return () => {} } })
     Object.assign(ctx.loader.builtins, {
       sessions: Sessions, projections: Projections, llm: Llm, prompt: SystemPrompt, tools: Tools,
-      executor: NativeToolExecutor, skills: Skills, agents: Agents, loop: AgentLoop, access: Access, manager: PluginManager,
+      executor: NativeToolRegistry, skills: Skills, agents: Agents, loop: AgentLoop, access: Access, manager: PluginManager,
       actionCards: ActionCards, recommendations: Recommendations,
     })
   })

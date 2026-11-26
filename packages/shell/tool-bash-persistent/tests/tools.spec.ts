@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -313,7 +313,7 @@ async function setup(
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(TerminalSessionService)
   const stub = stubBackend(initialMode)
@@ -328,8 +328,8 @@ describe('tool-bash-persistent', () => {
       backendType: 'stub',
       description: 'deployment-specific persistent shell',
     })
-    const schema = ctx.tools.schemas()[0]
-    expect(ctx.tools.schemas().map(item => item.name)).toEqual(['bash'])
+    const schema = ctx.tools.getAll()[0]
+    expect(ctx.tools.getAll().map(item => item.name)).toEqual(['bash'])
     expect(schema?.description).toBe('deployment-specific persistent shell')
     expect(schema?.parameters).toMatchObject({
       required: ['command'],
@@ -348,7 +348,7 @@ describe('tool-bash-persistent', () => {
     expect(stub.sessions).toHaveLength(2)
 
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(ctx.tools.get('bash')).toBeUndefined()
   })
 
@@ -726,7 +726,7 @@ describe('tool-bash-persistent', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(TerminalSessionService)
     const spawnStarted = Promise.withResolvers<undefined>()

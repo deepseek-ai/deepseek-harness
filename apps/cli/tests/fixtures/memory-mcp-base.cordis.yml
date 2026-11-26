@@ -9,3 +9,6 @@
 
 - id: tools
   name: cordis:memory-test-tools
+
+- id: tool-registry
+  name: cordis:memory-test-tool-registry

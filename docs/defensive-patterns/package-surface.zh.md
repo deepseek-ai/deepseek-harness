@@ -79,7 +79,6 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 - 标准键，每个键在全仓只有一个含义，统计口径是 `packages/*/*/package.json` 与 `apps/*/package.json`：`.`（包主入口）、`./package.json`（工具链访问，不是语义导出）、`./src/*`（测试与工具的源码透传，文档状态仍待定）、`./client`（浏览器入口，与 `dsh.client` 声明配对）、`./types`（类型入口）、`./typert`（typert 类型运行时）、`./remote`（`@Remote` 调用面）、`./locale/*.json`（本地化资源）、`./cordis.patch.yml`（`dsh.bundle` 声明的 bundle 补丁层）。这里不列各键的包数，因为下一个包就会让它过期；下面的复算命令会打印当前数字。
 - 集合之外的键（`./brand` 5 个包、`./worker` 4 个、`./startup`、`./runner`、`./protocol` 各 2 个，另有大量一次性键）没有文档含义，属待核项，不是可照抄的先例。
 - `dsh-tools` 另行提供 `./pipeline`，用于复用调用阶段与批量调度。主入口与 pipeline bundle 共享运行时 chunk，以保持错误类的身份一致；工作区检查验证导出目标与发布文件。
-- `dsh-tool-executor-ptc` 提供 `./run-code`，用于共享程序工具工厂、显式指定运行时及调用上限，并传入私有可调用工具定义。工作区检查验证其导出目标与发布文件。
 - `dsh-llm-pi-ai` 提供 `./provider`，用于它的提供方条目插件：这是第二个 Loader 入口，配置层以 `@deepseek-ai/dsh-llm-pi-ai/provider` 指名；另提供 `./provider/locale/*.json`，用于该插件的 locale 资源。条目插件向适配器入口的注册表注册，因此两个入口位于同一个包。工作区检查验证其导出目标与发布文件。
 - `dsh-mcp-manager` 提供 `./server`，用于它的服务器条目插件：这是第二个 Loader 入口，配置层以 `@deepseek-ai/dsh-mcp-manager/server` 指名；另提供 `./server/locale/*.json`，用于该插件的 locale 资源。条目插件向管理器入口的注册表注册，因此两个入口位于同一个包。工作区检查验证其导出目标与发布文件。
 - 判定条件：改动是否新增了标准集合以外的 export 键？

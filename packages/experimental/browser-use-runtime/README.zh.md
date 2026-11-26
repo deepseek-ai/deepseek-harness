@@ -29,7 +29,7 @@ kind: "package-library"
 
 原生提供方从包根入口构造 `SessionResources`，提供资源获取与清理回调。调用向 `run()` 传递确切的实时 Agent；失效的所有者与独占附加的第二个所有者在获取资源前失败。取消资源获取等待不会终止初始化，同一 Session 的其他调用方仍可继续等待；释放 Session 会中止并等待该初始化结束。提供方将注册保留到 `dispose()` 完成。
 
-所有权失败抛出 `BrowserSessionError`，与封闭的 `BROWSER_SESSION_ERROR_CODES` 列表一同导出：`BROWSER_OWNER_NOT_LIVE` 表示所有者失效或提供方正在释放，`BROWSER_LOCKED` 表示独占附加出现第二个所有者，`BROWSER_CLOSED` 表示操作因其 Session 的浏览器关闭而中断，`BROWSER_CLEANUP_FAILED` 表示 `dispose()` 失败，其 `cause` 是汇总各项关闭失败的 `AggregateError`，`BROWSER_FOREIGN_SESSION` 表示没有自己连接的 Session 发起了 MCP 调用。取消等待且中止原因不是 `Error` 时，以带 `ABORTED` 代码的 `AbortError` 拒绝。
+所有权失败抛出 `BrowserSessionError`，与封闭的 `BROWSER_SESSION_ERROR_CODES` 列表一同导出：`BROWSER_OWNER_NOT_LIVE` 表示所有者失效或提供方正在释放，`BROWSER_LOCKED` 表示独占附加出现第二个所有者，`BROWSER_CLOSED` 表示操作因其 Session 的浏览器关闭而中断，`BROWSER_CLEANUP_FAILED` 表示 `dispose()` 失败，其 `cause` 是汇总各项关闭失败的 `AggregateError`，`BROWSER_FOREIGN_SESSION` 表示没有自己连接的 Session 发起了 MCP 调用，或者某个浏览器工具调用所用的定义并非由调用方 Session 自己的连接注册，例如子 Session 调用它从父级 Session 的浏览器继承的工具，无论处于哪种工具根注册表之下。取消等待且中止原因不是 `Error` 时，以带 `ABORTED` 代码的 `AbortError` 拒绝。
 
 MCP 提供方使用 `@deepseek-ai/dsh-experimental-browser-use-runtime/mcp` 中的 `mountSessionMcp`，提供固定服务器名称、可执行文件、参数与所有权策略。挂载上下文必须提供 `workingDirectory`。获取连接时通过[工作目录服务](../../session/working-directory/README.zh.md)验证或恢复当前目录，并将其设为 MCP 服务器进程的初始目录。Session 后续选择其他目录时，保留的服务器继续使用该目录。辅助库在每个后续 Agent 的 `agent/created` 事件中等待一次有作用域的客户端启动与发现尝试。Agent 创建或恢复在发现完成后结束，随后才运行排队输入；成功的客户端跨轮次归该 Session 所有。
 

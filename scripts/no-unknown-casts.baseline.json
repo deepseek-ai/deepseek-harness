@@ -840,10 +840,10 @@
   "packages/core/system-prompt/src/index.ts": {
     "7fe58280287ff63d40e979e72329f975e11015a95e9a8eec207a5a78748d3c89": 1
   },
-  "packages/core/tool-executor-ptc/tests/ptc.spec.ts": {
+  "packages/core/tool-registry-ptc/tests/ptc.spec.ts": {
     "52faf4558fcd91bd27dbdfa7e497843e8eeb75ea5f68ee231335018d5b3f2053": 1
   },
-  "packages/core/tool-executor-ptc/tests/ts-types.spec.ts": {
+  "packages/core/tool-registry-ptc/tests/ts-types.spec.ts": {
     "054c87ca977d98749baf70bb5dcad1bb8d9e725d08a480b7804a181434633873": 1,
     "0d733b2c7c458f6a7c4d287ed741c321842339cbe5908a8720660883423474c0": 1,
     "84a5877f154b369cc0528281904d1dc18e20fd3ad74a26c939301ba0db20ae02": 1,
@@ -853,8 +853,7 @@
     "62870121f1e1644b67c62606e94a375bb40f880cc88edf7cd6baab0249e9da46": 1
   },
   "packages/core/tools/tests/execution-mode.spec.ts": {
-    "33dec0693f265044c830377981b51852b773e1a8a765e0b3398a4542c646537b": 1,
-    "f9c9afc4ff66b96c59303ffa5475e26719ef101dc45504fee4b56145ff4be02c": 1
+    "33dec0693f265044c830377981b51852b773e1a8a765e0b3398a4542c646537b": 1
   },
   "packages/core/tools/tests/gen-tool-catalog.spec.ts": {
     "2b6ade025dd0cee54e990f00c3a4abc489f91455f695b1ae6a8eb62fe50d51b5": 1,
@@ -886,8 +885,7 @@
     "aed777355c58f2dc68b012fcad12ba4f75a6c4299062317058f64f7eab3de412": 1,
     "b67917fbaa47b872a2a45eeb9a7e4a9186b06edaedabab2c33920f1c5acdf6c3": 2,
     "c81c76a591071c793e11fbe74421c4a2d4660510d064e5dec3d996589dd4beeb": 1,
-    "d3478c9f3a88906a17d5daa6d19c3694a33618cfc000c7c0ee8f3e16f2697322": 1,
-    "f9c9afc4ff66b96c59303ffa5475e26719ef101dc45504fee4b56145ff4be02c": 2
+    "d3478c9f3a88906a17d5daa6d19c3694a33618cfc000c7c0ee8f3e16f2697322": 1
   },
   "packages/credentials/credentials-local/tests/drain.spec.ts": {
     "a96f4a3497a1c661f76e47ef5fda3c32d2759a7a5f9c519527fa46801a91bf79": 1
@@ -1109,8 +1107,7 @@
   },
   "packages/extensions/cordis-host-runner/src/inspect-providers.ts": {
     "1b3ab83a5e026a9147a8e49324b677b78af1f2983acde975fe791b29ff755f40": 1,
-    "3706ba0e7ecb37ef9aa4d5e6bb732001b78443acf77f015f97b1b11d3a2cf941": 1,
-    "67c8811e65c7d4c40d6de95cb9b9576873c717164d609124dcac39e82e95abca": 1
+    "3706ba0e7ecb37ef9aa4d5e6bb732001b78443acf77f015f97b1b11d3a2cf941": 1
   },
   "packages/extensions/cordis-host-runner/tests/helpers.ts": {
     "071d912e5507b95946e1bcc86f3bfabb1cd627f749577c84ddab9dd683b4754c": 1,

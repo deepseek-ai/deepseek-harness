@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 用户授权
 
-共享的 `tool:schedule` system prompt 段落要求创建或修改任务时获得用户明确授权。用户此前为当前运行的定时任务明确授予的授权继续有效，例如在监控的 PR 合并后暂停该任务。
+共享的 `tool:schedule` system prompt 段落只在 `schedule_create` 或 `schedule_edit` 可调用时显示，并要求创建或修改任务时获得用户明确授权。用户此前为当前运行的定时任务明确授予的授权继续有效，例如在监控的 PR 合并后暂停该任务。
 
 ### 四个工具
 
@@ -60,7 +60,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-插件在解析到 `ctx.schedule` 的作用域内注册四个 `defineTool` 定义与一个 `tool:schedule` system prompt 段落，因此由 preset 挂载决定可见性，并由 Cordis effect 的所有权随挂载一并释放。当请求作用域中的 `ctx.tools.get()` 既看不到 `schedule_create` 也看不到 `schedule_edit` 时，该段落为空；preset 过滤了这些工具的委派作用域也包括在内。此查询同时适用于 Native 与 PTC 呈现方式。执行时读取 `exec.agent` 作为执行操作的 Session。委派深度守卫先运行，`schedule_edit` 的参数校验随后运行，二者都在服务调用之前完成。当工具的输出 schema 声明了某个 `ScheduleInputError` 的错误码时，该错误保留其错误码；其他任何失败都变为 `internal_error`，因此存储细节不会到达模型。模型内容为返回值的规范 JSON，而持久化、调度、Session 恢复与投递都由宿主服务负责。
+插件在解析到 `ctx.schedule` 的作用域内注册四个 `defineTool` 定义，`tool:schedule` system prompt 段落作为 `schedule_create` 与 `schedule_edit` 的 `guidance`，因此由 preset 挂载决定可见性，并由 Cordis effect 的所有权随挂载一并释放。只要该作用域可以调用其中任一工具，该段落就会渲染，Native 与 PTC 根注册表下都是如此；同时隐藏这两个工具的限制会移除它。执行时读取 `exec.agent` 作为执行操作的 Session。委派深度守卫先运行，`schedule_edit` 的参数校验随后运行，二者都在服务调用之前完成。当工具的输出 schema 声明了某个 `ScheduleInputError` 的错误码时，该错误保留其错误码；其他任何失败都变为 `internal_error`，因此存储细节不会到达模型。模型内容为返回值的规范 JSON，而持久化、调度、Session 恢复与投递都由宿主服务负责。
 
 ### 源码映射
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 
 #### What the model sees
 
-当 `schedule_create` 或 `schedule_edit` 在调用方 Agent 的作用域内可见时，模型收到一个 `tool:schedule` 段落。工具说明保留各自的操作指导，不再重复这条规则。`complete: true` 的 system prompt 覆盖会替换普通段落，本段落也包括在内。
+Agent 可以调用 `schedule_create` 或 `schedule_edit` 时，模型收到一个 `tool:schedule` 段落；同时限制这两个工具的作用域不会收到它。工具说明保留各自的操作指导，不再重复这条规则。`complete: true` 的 system prompt 覆盖会替换普通段落，本段落也包括在内。
 
 ##### 任务授权
 

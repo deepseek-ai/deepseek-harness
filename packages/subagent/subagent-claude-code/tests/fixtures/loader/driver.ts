@@ -50,7 +50,7 @@ try {
     }
   })
   const tools = toolNames.map((toolName) => {
-    const tool = ctx.tools.schemas().find(schema => schema.name === toolName)
+    const tool = ctx.tools.getAll().find(schema => schema.name === toolName)
     if (tool === undefined) throw new Error(`${toolName} tool was not registered`)
     const properties = tool.parameters.properties
     if (
@@ -66,7 +66,7 @@ try {
       required: tool.parameters.required,
     }
   })
-  const jobTools = ctx.tools.schemas()
+  const jobTools = ctx.tools.getAll()
     .map(schema => schema.name)
     .filter(name => name === 'job_kill' || name === 'job_list' || name === 'job_output')
     .sort()

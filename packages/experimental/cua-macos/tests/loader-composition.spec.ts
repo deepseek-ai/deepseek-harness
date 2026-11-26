@@ -1,6 +1,6 @@
 /** Real Loader, AgentLoop and helper-process transport; only desktop and model responses are fixtures. */
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -84,7 +84,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const readEvents = async () => (await readFile(join(root, 'helper-events.jsonl'), 'utf8')).trim().split('\n').map(line => AuditEvent.parse(JSON.parse(line)))
   const modules = {
     llm: LlmRuntime, session: SessionStore, projection: SessionProjectionRegistry,
-    systemPrompt: SystemPrompt, tools: ToolRuntime, toolExecutor: NativeToolExecutor, agents: AgentRegistry, agentLoop: AgentLoop,
+    systemPrompt: SystemPrompt, tools: ToolRuntime, toolRegistry: NativeToolRegistry, agents: AgentRegistry, agentLoop: AgentLoop,
     attachments: LocalAttachmentStore, computerUse: ComputerUseRegistry, subprocess: SubprocessLocal,
     cua: NativeProvider,
   }
@@ -232,5 +232,6 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const tools = context.tools
   await context.fiber.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(2)
-  expect(tools.schemas()).toEqual([])
+  // The disposed composition leaves no root that could still offer its tools.
+  expect(() => tools.getAll()).toThrow('selected tool registry is unavailable')
 })

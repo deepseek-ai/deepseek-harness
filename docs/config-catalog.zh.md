@@ -210,7 +210,7 @@ export interface Config {
 ```ts config-catalog
 /**
  * Plugin config.
- * @deprecated Select the native or PTC executor plugin directly instead of configuring a mode.
+ * @deprecated Select the native or PTC root registry plugin directly instead of configuring a mode.
  */
 export interface Config {
   /**
@@ -1396,7 +1396,7 @@ export interface StagehandModelConfig {
 ## `@deepseek-ai/dsh-experimental-claude-code-mods`
 
 - `inject`: `workingDirectory` · `agents`
-- `source`: [`packages/experimental/claude-code-mods/src/index.ts:55`](../packages/experimental/claude-code-mods/src/index.ts)
+- `source`: [`packages/experimental/claude-code-mods/src/index.ts:54`](../packages/experimental/claude-code-mods/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: the limits mod hooks run under. */
@@ -1935,7 +1935,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-file-reference-local`
 
 - `inject`: `agents` · `workingDirectory`
-- `source`: [`packages/context/file-reference-local/src/index.ts:27`](../packages/context/file-reference-local/src/index.ts)
+- `source`: [`packages/context/file-reference-local/src/index.ts:26`](../packages/context/file-reference-local/src/index.ts)
 
 ```ts config-catalog
 /** Local file-reference discovery configuration. */
@@ -3437,7 +3437,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-plan-mode`
 
 - `inject`: `tools` · `systemPrompt` · `sessionProjections` · `agents`
-- `source`: [`packages/plan/plan-mode/src/index.ts:69`](../packages/plan/plan-mode/src/index.ts)
+- `source`: [`packages/plan/plan-mode/src/index.ts:73`](../packages/plan/plan-mode/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned plan guidance. */
@@ -4750,8 +4750,10 @@ export interface Config {
   personaSuffix?: string
   /**
    * Model-facing tool names in order, with {@link TOOL_ORDER_REST} exactly once.
-   * Invalid fields fail at load and unknown names fail at assembly; known names
-   * hidden in one scope may be absent there. Omitted means lexicographic order.
+   * Invalid fields fail at load. At assembly each listed name must be offered
+   * by the scope's own or inherited contributions or declared by its root, and
+   * any other name fails the assembly; a known name the scope does not declare
+   * is absent from its order. Omitted means lexicographic order.
    */
   toolOrder?: string[]
 }
@@ -5083,8 +5085,8 @@ export type TokenMeterConfig = Record<string, never>
 
 ## `@deepseek-ai/dsh-tool-agent-team`
 
-- `inject`: `agentTeams` · `subagents` · `tools` · `systemPrompt`
-- `source`: [`packages/team/tool-agent-team/src/index.ts:18`](../packages/team/tool-agent-team/src/index.ts)
+- `inject`: `agentTeams` · `subagents` · `tools` · `systemPrompt` · `agents`
+- `source`: [`packages/team/tool-agent-team/src/index.ts:19`](../packages/team/tool-agent-team/src/index.ts)
 
 ```ts config-catalog
 /** The Team tool plugin takes no configuration. */
@@ -5170,7 +5172,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-document`
 
 - `inject`: `tools` · `fs` · `workingDirectory` · `agents`
-- `source`: [`packages/document/tool-document/src/index.ts:43`](../packages/document/tool-document/src/index.ts)
+- `source`: [`packages/document/tool-document/src/index.ts:44`](../packages/document/tool-document/src/index.ts)
 
 ```ts config-catalog
 /** Activation skills and render bounds; lower deployment attachment limits take precedence. */
@@ -5188,25 +5190,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-document -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
-<a id="deepseek-aidsh-tool-executor-ptc"></a>
-
-## `@deepseek-ai/dsh-tool-executor-ptc`
-
-- `inject`: `tools` · `systemPrompt` · `ptcRuntime`
-- `source`: [`packages/core/tool-executor-ptc/src/config.ts:5`](../packages/core/tool-executor-ptc/src/config.ts)
-
-```ts config-catalog
-/** Program execution limits. */
-export interface Config {
-  /** Nested tool-call attempts per minute of resolved runtime timeout, including failed calls. */
-  maxSubCallsPerMinute: number
-  /** Maximum overlapping concurrency-safe program subcalls. */
-  maxParallelSubCalls: number
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-fs -->
 <a id="deepseek-aidsh-tool-fs"></a>
@@ -5452,6 +5435,25 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-ralph -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-registry-ptc -->
+<a id="deepseek-aidsh-tool-registry-ptc"></a>
+
+## `@deepseek-ai/dsh-tool-registry-ptc`
+
+- `inject`: `tools` · `systemPrompt` · `ptcRuntime`
+- `source`: [`packages/core/tool-registry-ptc/src/config.ts:5`](../packages/core/tool-registry-ptc/src/config.ts)
+
+```ts config-catalog
+/** Program execution limits. */
+export interface Config {
+  /** Nested tool-call attempts per minute of resolved runtime timeout, including failed calls. */
+  maxSubCallsPerMinute: number
+  /** Maximum overlapping concurrency-safe program subcalls. */
+  maxParallelSubCalls: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-registry-ptc -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-session-query -->
 <a id="deepseek-aidsh-tool-session-query"></a>
 
@@ -5516,7 +5518,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt`
 - `refs`: [`AgentOptions`](subsystems/core.zh.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:46`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:49`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -5631,8 +5633,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-tool-web`
 
-- `inject`: `tools` · `web` · `systemPrompt`
-- `source`: [`packages/web/tool-web/src/index.ts:39`](../packages/web/tool-web/src/index.ts)
+- `inject`: `tools` · `web` · `systemPrompt` · `agents`
+- `source`: [`packages/web/tool-web/src/index.ts:41`](../packages/web/tool-web/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
@@ -6186,7 +6188,7 @@ export interface Config {
 | `@deepseek-ai/dsh-terminal` | — | [`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts) |
 | `@deepseek-ai/dsh-tool-call-timeout-policy` | `tools` | [`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts) |
 | `@deepseek-ai/dsh-tool-cordis` | `tools` · `cordisInspect` | [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts) |
-| `@deepseek-ai/dsh-tool-executor-native` | `tools` | [`packages/core/tool-executor-native/src/index.ts`](../packages/core/tool-executor-native/src/index.ts) |
+| `@deepseek-ai/dsh-tool-registry-native` | `tools` | [`packages/core/tool-registry-native/src/index.ts`](../packages/core/tool-registry-native/src/index.ts) |
 | `@deepseek-ai/dsh-tool-schedule` | `tools` · `systemPrompt` | [`packages/schedule/tool-schedule/src/index.ts`](../packages/schedule/tool-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-tool-session-control` | `tools` · `sessionController` · `workspaceRegistry` | [`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts) |
 | `@deepseek-ai/dsh-tool-session-list` | `tools` · `sessions` · `sessionQuery` · `workspaceRegistry` · `sessionProjections` | [`packages/session-query/tool-session-list/src/index.ts`](../packages/session-query/tool-session-list/src/index.ts) |

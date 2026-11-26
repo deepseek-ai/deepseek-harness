@@ -16,9 +16,9 @@ import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-p
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import ToolRuntime, { type ToolExecutionMode, type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { projectToolSchema, type ToolExecutionMode, type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { outsideTempWorkspaceParent } from '../../../../scripts/snapshot-workspace-parent.ts'
 import {
   ImChatKey, ImMessageKey, ImSourceId, type ImBinding, type ImChat, type ImConfig, type ImHistory, type ImMessage,
@@ -253,7 +253,7 @@ async function mount(options: { config?: Partial<ImConfig>; fs?: ReturnType<type
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   const fs = options.fs ?? fakeFs()
   ctx.provide('fs', fs as never)
   ctx.provide('workingDirectory', { get: () => '/work', ensure: async () => '/work' } as never)
@@ -278,7 +278,7 @@ async function mount(options: { config?: Partial<ImConfig>; fs?: ReturnType<type
     }),
     prompt: async agent => renderPrompt(await ctx.systemPrompt.assemble(agent === undefined ? {} : { agent })),
     mode: (name, args) => ({ kind: ctx.tools.get(name)?.isConcurrencySafe?.(args) === true ? 'parallel' : 'exclusive' }),
-    names: () => ctx.tools.schemas().map(schema => schema.name),
+    names: () => ctx.tools.getAll().map(tool => tool.name),
   }
 }
 
@@ -834,7 +834,7 @@ describe('im_read_file', () => {
       await ctx.plugin(SandboxedFileSystem, { cwd: workspace })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       ctx.provide('workingDirectory', { get: () => workspace, ensure: async () => workspace } as never)
       const im = new FakeIm()
       const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
@@ -880,7 +880,7 @@ describe('im_read_file', () => {
       await ctx.plugin(SandboxedFileSystem, { cwd: fallbackDir })
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       ctx.provide('workingDirectory', { get: () => sessionDir, ensure: async () => sessionDir } as never)
       const im = new FakeIm()
       const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }] })
@@ -929,6 +929,7 @@ describe('im_read_file', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolRegistry)
     ctx.provide('fs', { ...fakeFs(), sandboxMode: 'workspace-write' } as never)
     ctx.provide('workingDirectory', { get: () => '/work', ensure: async () => '/work' } as never)
     const im = new FakeIm()
@@ -945,7 +946,8 @@ describe('model-visible surface', () => {
   // verbatim so a change to a description, a parameter or a guidance sentence shows up as a diff someone reviews.
   it('pins the schema of every registered IM tool', async () => {
     const mounted = await mount()
-    const schemas = mounted.ctx.tools.schemas().map(({ name, description, parameters }) => ({ name, description, parameters }))
+    const schemas = mounted.ctx.tools.getAll().map(tool => projectToolSchema(tool, true))
+      .map(({ name, description, parameters }) => ({ name, description, parameters }))
     expect(schemas).toMatchSnapshot()
   })
 

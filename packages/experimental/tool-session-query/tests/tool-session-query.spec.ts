@@ -1,6 +1,6 @@
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -227,7 +227,7 @@ async function mount(
   await registerTurnBoundary(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   if (enforceTimeout) await ctx.plugin(TimeoutPolicy)
   await ctx.plugin(FakeQuery)
   const fiber = await ctx.plugin(ToolSessionQuery, config)
@@ -259,7 +259,7 @@ function errorCode(result: ToolExecutionResult): string | undefined {
 describe('registration and schemas', () => {
   it('registers the five cursor-free tools, prompt, timeouts, and pure generic presenters, then disposes them', async () => {
     const mounted = await mount({ maxSearchResults: 7, searchTimeoutMs: 1234 })
-    const names = mounted.ctx.tools.schemas().map(schema => schema.name)
+    const names = mounted.ctx.tools.getAll().map(schema => schema.name)
     expect(names).toEqual([
       'session_search',
       'session_event_search',
@@ -267,7 +267,7 @@ describe('registration and schemas', () => {
       'session_event_trace',
       'session_event_read',
     ])
-    const sessionSchema = mounted.ctx.tools.schemas().find(schema => schema.name === 'session_search')
+    const sessionSchema = mounted.ctx.tools.getAll().find(schema => schema.name === 'session_search')
     expect(sessionSchema?.parameters).not.toHaveProperty('properties.cursor')
     expect(sessionSchema?.parameters).not.toHaveProperty('properties.limit')
     expect(sessionSchema?.parameters).not.toHaveProperty('properties.cwd')
@@ -305,7 +305,7 @@ describe('registration and schemas', () => {
       .toContain('prior sessions')
 
     await mounted.fiber.dispose()
-    expect(mounted.ctx.tools.schemas().map(schema => schema.name)).toEqual([])
+    expect(mounted.ctx.tools.getAll().map(schema => schema.name)).toEqual([])
     expect((await mounted.ctx.systemPrompt.assemble()).sections.filter(section => !section.retire).map(section => section.name))
       .not.toContain('tool:session-query')
   })
@@ -1665,7 +1665,7 @@ describe('search paging, prior-history bounds, titles, and cancellation', () => 
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(FakeQuery)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(ToolSessionQuery)

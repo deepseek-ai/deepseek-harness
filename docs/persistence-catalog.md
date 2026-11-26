@@ -750,7 +750,7 @@ Source: [`packages/interaction/permission-presets/src/index.ts:61`](../packages/
 'plan/mode': { active: boolean }
 ```
 
-Source: [`packages/plan/plan-mode/src/index.ts:55`](../packages/plan/plan-mode/src/index.ts)
+Source: [`packages/plan/plan-mode/src/index.ts:59`](../packages/plan/plan-mode/src/index.ts)
 
 ### `request/*`
 
@@ -1140,7 +1140,7 @@ Source: [`packages/core/session/src/types.ts:380`](../packages/core/session/src/
 'tool/ptc-dispatch': PtcDispatchEventData
 ```
 
-Source: [`packages/core/tool-executor-ptc/src/types.ts:61`](../packages/core/tool-executor-ptc/src/types.ts)
+Source: [`packages/core/tool-registry-ptc/src/types.ts:61`](../packages/core/tool-registry-ptc/src/types.ts)
 
 <a id="toolptc-dispatch-start--log-only"></a>
 
@@ -1163,7 +1163,7 @@ Source: [`packages/core/tool-executor-ptc/src/types.ts:61`](../packages/core/too
 'tool/ptc-dispatch-start': PtcDispatchStartEventData
 ```
 
-Source: [`packages/core/tool-executor-ptc/src/types.ts:45`](../packages/core/tool-executor-ptc/src/types.ts)
+Source: [`packages/core/tool-registry-ptc/src/types.ts:45`](../packages/core/tool-registry-ptc/src/types.ts)
 
 <a id="toolresult--surface"></a>
 
@@ -4675,7 +4675,7 @@ Array of [`PresentedFile`](#persistence-type-sha256-b8fc636a2121df9d8423c242e03c
 
 <a id="persistence-type-sha256-cef171adf021a1867d244618a3dbbaafc22beb17c7f3df3ee203393271c8c6f6"></a>
 
-<a id="persistence-type-packagescoretool-executor-ptcsrctypestsptcdispatcheventdata"></a>
+<a id="persistence-type-packagescoretool-registry-ptcsrctypestsptcdispatcheventdata"></a>
 
 <a id="persistence-type-ptcdispatcheventdata"></a>
 
@@ -4683,7 +4683,7 @@ Array of [`PresentedFile`](#persistence-type-sha256-b8fc636a2121df9d8423c242e03c
 
 SHA-256: `cef171adf021a1867d244618a3dbbaafc22beb17c7f3df3ee203393271c8c6f6`
 
-Sources: [`packages/core/tool-executor-ptc/src/types.ts:21`](../packages/core/tool-executor-ptc/src/types.ts)
+Sources: [`packages/core/tool-registry-ptc/src/types.ts:21`](../packages/core/tool-registry-ptc/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -4699,7 +4699,7 @@ Sources: [`packages/core/tool-executor-ptc/src/types.ts:21`](../packages/core/to
 
 <a id="persistence-type-sha256-2fe5026daf14bd4ff2b7bfb7cf9791c302d9cbba06802178b6dfec00b892698f"></a>
 
-<a id="persistence-type-packagescoretool-executor-ptcsrctypestsptcdispatchstarteventdata"></a>
+<a id="persistence-type-packagescoretool-registry-ptcsrctypestsptcdispatchstarteventdata"></a>
 
 <a id="persistence-type-ptcdispatchstarteventdata"></a>
 
@@ -4707,7 +4707,7 @@ Sources: [`packages/core/tool-executor-ptc/src/types.ts:21`](../packages/core/to
 
 SHA-256: `2fe5026daf14bd4ff2b7bfb7cf9791c302d9cbba06802178b6dfec00b892698f`
 
-Sources: [`packages/core/tool-executor-ptc/src/types.ts:12`](../packages/core/tool-executor-ptc/src/types.ts)
+Sources: [`packages/core/tool-registry-ptc/src/types.ts:12`](../packages/core/tool-registry-ptc/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -5477,7 +5477,7 @@ Sources: [`packages/llm/llm/src/types.ts:134`](../packages/llm/llm/src/types.ts)
 
 SHA-256: `3cfc3a56502da1f8c6153c2c56657bab4b749056968634dd0991d325ec1c919f`
 
-Sources: [`packages/core/tools/src/contracts.ts:395`](../packages/core/tools/src/contracts.ts)
+Sources: [`packages/core/tools/src/contracts.ts:411`](../packages/core/tools/src/contracts.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6091,7 +6091,7 @@ Array of `unknown` (opaque).
 
 SHA-256: `20a57544bbf204dacd1ae6beb2ab29444365c3c869f2afdf489dcdcbc3d9c8c5`
 
-Sources: [`packages/plan/plan-mode/src/index.ts:55`](../packages/plan/plan-mode/src/index.ts)
+Sources: [`packages/plan/plan-mode/src/index.ts:59`](../packages/plan/plan-mode/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6359,7 +6359,7 @@ Sources: [`packages/api/session-controller/src/types.ts:394`](../packages/api/se
 
 SHA-256: `a81059ca06999da1e712414520c2c65e491d052fcf9640fae20aa38f0a5dc735`
 
-Sources: [`packages/core/session/src/types.ts:402`](../packages/core/session/src/types.ts) · [`packages/core/tool-executor-ptc/src/types.ts:27`](../packages/core/tool-executor-ptc/src/types.ts)
+Sources: [`packages/core/session/src/types.ts:402`](../packages/core/session/src/types.ts) · [`packages/core/tool-registry-ptc/src/types.ts:27`](../packages/core/tool-registry-ptc/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -7594,7 +7594,7 @@ Sources: [`packages/session/session-title/src/types.ts:30`](../packages/session/
 
 SHA-256: `dba54c09c6e7aafc9acbed7792ecc920d99f92d0784aeeed10af55f7fe0bc8cd`
 
-Sources: [`packages/core/tool-executor-ptc/src/types.ts:68`](../packages/core/tool-executor-ptc/src/types.ts)
+Sources: [`packages/core/tool-registry-ptc/src/types.ts:68`](../packages/core/tool-registry-ptc/src/types.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -8205,7 +8205,7 @@ SHA-256: `c5228b7a55498d84f529591744a0ab26e0b93ade18a70a26db1377a1ecfa6b49`
 
 SHA-256: `8fcb0b44a575e998665c053643d1ab04c82f39253ebd190ac0c975b78e40b543`
 
-Sources: [`packages/core/tools/src/index.ts:28`](../packages/core/tools/src/index.ts)
+Sources: [`packages/core/tools/src/index.ts:30`](../packages/core/tools/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|

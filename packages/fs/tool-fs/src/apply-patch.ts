@@ -10,21 +10,20 @@ import type { FsEscalationArgs, FsSandboxController } from './sandbox.ts'
 interface ApplyPatchArgs extends FsEscalationArgs { input: string }
 
 /**
- * Register the patch tool and scope-aware guidance using the shared mutation controller.
+ * Register the patch tool and its guidance with the same lifetime, using the shared mutation controller.
  * @param ctx - plugin effect scope and filesystem services.
  * @param sandbox - per-call policy resolver and denial mapper.
  */
 export function applyApplyPatchTool(ctx: Context, sandbox: FsSandboxController): void {
-  ctx.systemPrompt.section({
-    name: 'tool:apply_patch', order: ctx.systemPrompt.getSectionOrder('TOOL_APPLY_PATCH'),
-    text: ({ scope }) => ctx.tools.get('apply_patch', scope) === undefined ? ''
-      : 'Prefer apply_patch over separate edit calls for changes across files or separated regions. '
+  ctx.tools.register(defineTool({
+    name: 'apply_patch',
+    guidance: {
+      order: 'TOOL_APPLY_PATCH',
+      text: 'Prefer apply_patch over separate edit calls for changes across files or separated regions. '
         + 'Give every hunk enough surrounding context lines to match one place in the current file. '
         + 'The whole patch is checked first (syntax, hunk matching, missing files) and a rejected patch changes nothing; '
         + 'once applying starts, operations run in order, stop at the first failure, and are not rolled back, so re-read affected files before retrying when needed.',
-  })
-  ctx.tools.register(defineTool({
-    name: 'apply_patch',
+    },
     description: 'Create, update, delete, or move UTF-8 text files with one patch; '
       + 'prefer it over multiple edit calls when a change spans several files or separated regions.',
     parameters: {

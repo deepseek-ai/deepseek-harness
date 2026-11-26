@@ -7,7 +7,7 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
-> **Deprecated:** For new configurations, mount `@deepseek-ai/dsh-tool-executor-native` or `@deepseek-ai/dsh-tool-executor-ptc` directly. Existing configurations remain supported. To migrate, replace this selector row with the corresponding executor row and remove `config.mode`; do not load both in the same scope.
+> **Deprecated:** For new configurations, mount `@deepseek-ai/dsh-tool-registry-native` or `@deepseek-ai/dsh-tool-registry-ptc` directly. Existing configurations remain supported. To migrate, replace this selector row with the corresponding root registry row and remove `config.mode`; do not load both in the same scope.
 
 ## Summary
 
@@ -27,7 +27,7 @@ Existing [agent presets](../../preset/agent-preset-registry/README.md) can keep 
 <a id="use-this-package"></a>
 ## Use this package
 
-Add this row to an agent preset to fix how every agent joined to that preset sees its tools. `native` presents each visible tool schema as a function definition; `ptc` presents only the `run_code` transport plus a generated SDK and the rule that only `run_code` may be called directly. Agents that declare nothing inherit the nearest executor mounted in their composition.
+Add this row to an agent preset to fix how every agent joined to that preset sees its tools. `native` presents each visible tool schema as a function definition; `ptc` presents only the `run_code` transport plus a generated SDK and the rule that only `run_code` may be called directly. Agents that declare nothing use the nearest root registry mounted in their composition.
 
 ### Add the row to a preset
 
@@ -45,7 +45,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What PTC mode requires
 
-Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) reporting `language: 'typescript'`; [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md) supplies the shipped provider. Once a runtime is available, the PTC child remains selected and rejects unsupported languages during prompt assembly and execution; it does not fall back to the inherited executor. Before the runtime first becomes available, this compatibility selector leaves the inherited executor active. Mount `dsh-tool-executor-ptc` directly when preset activation must reject a missing runtime.
+Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) reporting `language: 'typescript'`; [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md) supplies the shipped provider. Once a runtime is available, the PTC child remains selected and rejects unsupported languages during prompt assembly and execution; it does not fall back to the inherited root. Before the runtime first becomes available, this compatibility selector leaves the inherited root active. Mount `dsh-tool-registry-ptc` directly when preset activation must reject a missing runtime.
 
 ### One presentation per agent
 
@@ -63,17 +63,17 @@ This section explains how the package realizes the behavior above; the observabl
 
 ### Design concept
 
-The tool registry cannot move into a preset: its consumers are all host-plane — the agent loop resolves its executor, the API proxy reads its presenters, and every tool plugin registers into it — and a service only moves down when all of its consumers move with it. What a preset can own is the presentation of that registry. `ctx.tools.setExecutor()` declares an executor for the mounting scope, which is the preset's standing mount, so the declaration covers every agent joined to that preset and a PTC mode preset runs beside native ones in one process. One row per composition, not one per session.
+The tool registry cannot move into a preset: its consumers are all host-plane — the agent loop captures each step's tools from it, the API proxy reads its presenters, and every tool plugin registers into it — and a service only moves down when all of its consumers move with it. What a preset can own is the presentation of that registry. `ctx.tools.setRoot()` installs a root registry for the mounting scope, which is the preset's standing mount, so the selection covers every agent joined to that preset and a PTC mode preset runs beside native ones in one process. One row per composition, not one per session.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `mode` config, `apply` wiring `ctx.tools.setExecutor` for the mounting scope |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `mode` config, `apply` mounting the native or PTC root registry plugin in the mounting scope |
 
 ### Behavior notes
 
-The selected child plugin registers its executor when its required services are available. After registration, unloading the child or its runtime makes the selected executor unavailable until a replacement registers; calls do not fall back to an inherited executor.
+The selected child plugin installs its root when its required services are available. After installation, unloading the child or its runtime makes the selected root unavailable until a replacement is installed; calls do not fall back to an inherited root.
 
 </details>
 
@@ -84,7 +84,7 @@ The selected child plugin registers its executor when its required services are 
 
 The package-level contract is enough for most consumers; read these when you need the surrounding domain.
 
-- [tools package](../tools/README.md) — the scoped registry and executor API.
+- [tools package](../tools/README.md) — the scoped registry and root selection API.
 - [agent-presets package](../../preset/agent-preset-registry/README.md) — how presets compose agents and their standing mounts.
 - [Node ptc-runtime package](../../ptc-runtime/ptc-runtime-node/README.md) — the TypeScript runtime a PTC mode needs.
 - [historical PTC mode executor-collapse note](../../../.agents/notes/archived/bug-fix/2026-08-07-ptc-executor-collapse.md) — why the announced and callable surfaces stay the same.
@@ -95,7 +95,7 @@ The package-level contract is enough for most consumers; read these when you nee
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through the tool presentation it selects in `dsh-tools` — the row only chooses between the two projections `dsh-tools` owns and registers no prompt, schema, or result of its own.
+Indirectly, through the root registry it mounts — the row only chooses between the native and PTC registries and registers no prompt, schema, or result of its own.
 
 #### KV Cache effect
 

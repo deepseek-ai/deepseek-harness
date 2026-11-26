@@ -32,6 +32,12 @@
     },
     {
       "path": "../web"
+    },
+    {
+      "path": "../../preset/agent-preset-registry"
+    },
+    {
+      "path": "../../credentials/credentials"
     }
   ]
 }

@@ -142,7 +142,7 @@ it('ignores stale authorization errors and finishes sign-out while a failed conn
     await signout
     expect(await invocation).toMatchObject({ isError: true })
     expect(await world.ctx.credentials.readRecord(world.store.key)).toBeUndefined()
-    expect(world.ctx.tools.schemas()).toEqual([])
+    expect(world.ctx.tools.getAll()).toEqual([])
   } finally { gate.resolve(); await invocation }
 })
 
@@ -187,7 +187,7 @@ it('signs out an unchanged entry after an already queued restart', async () => {
   await Promise.all([restarting, signingOut])
   expect(await world.ctx.credentials.readRecord(world.store.key)).toBeUndefined()
   await world.state('waiting-authorization')
-  expect(world.ctx.tools.schemas()).toEqual([])
+  expect(world.ctx.tools.getAll()).toEqual([])
 })
 
 it('preserves the grant when configuration changes before a queued sign-out', async () => {
@@ -264,7 +264,7 @@ it('signs out through the profile while retaining registration and excluding sta
   await entered.promise
   await expect(world.manager.startAuthorization('oauth')).rejects.toThrow('mcp-manager: configuration for "oauth" is changing')
   await expect(world.manager.probe('oauth')).rejects.toThrow('changing')
-  expect(world.ctx.tools.schemas()).toEqual([])
+  expect(world.ctx.tools.getAll()).toEqual([])
   deletion.resolve()
   await signout
   await world.state('waiting-authorization')
@@ -303,7 +303,7 @@ it('cancels connection refresh before draining authorization commit queued on th
   expect(await call).toMatchObject({ isError: true })
   await world.state('waiting-authorization')
   expect(await world.ctx.credentials.readRecord(world.store.key)).toBeUndefined()
-  expect(world.ctx.tools.schemas()).toEqual([])
+  expect(world.ctx.tools.getAll()).toEqual([])
   expect((await world.ctx.credentials.listRecords()).length).toBe(1)
 })
 
@@ -321,11 +321,11 @@ it.each(['unauthorized', 'invalid-grant', 'scope', 'forbidden'] as const)('handl
   expect(await world.invoke()).toMatchObject({ isError: true })
   if (reason === 'forbidden') {
     expect(world.view().status.state).toBe('connected')
-    expect(world.ctx.tools.schemas()).toHaveLength(2)
+    expect(world.ctx.tools.getAll()).toHaveLength(2)
   } else {
     await world.state('waiting-authorization')
     expect(world.view().status).toMatchObject({ reason: reason === 'scope' ? 'scope' : 'rejected' })
-    expect(world.ctx.tools.schemas()).toEqual([])
+    expect(world.ctx.tools.getAll()).toEqual([])
   }
   expect(world.registrations()).toBe(1)
   expect(world.view().authorization?.phase).toBe('authorized')

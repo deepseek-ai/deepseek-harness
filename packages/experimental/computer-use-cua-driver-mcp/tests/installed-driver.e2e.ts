@@ -1,7 +1,7 @@
 /** Explicit opt-in compatibility check against an installed Cua Driver executable. */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { isAbsolute } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUse from '@deepseek-ai/dsh-computer-use'
@@ -37,14 +37,14 @@ it.skipIf(executable === undefined || executable === '')(
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       const provider = await ctx.plugin(Provider, {
         command: executable,
         args: driverArguments(),
         reconnect: { enabled: false },
       })
       expect(ctx.computerUse.providerName).toBe('cua-driver-mcp')
-      const schemas = ctx.tools.schemas()
+      const schemas = ctx.tools.getAll()
       expect(schemas.length).toBeGreaterThan(0)
       expect(schemas.every(tool => tool.name.startsWith('mcp__cua-driver-mcp__'))).toBe(true)
       const permissions = ctx.tools.get('mcp__cua-driver-mcp__check_permissions')
@@ -66,7 +66,7 @@ it.skipIf(executable === undefined || executable === '')(
       expect(result.content.length).toBeGreaterThan(0)
       expect(result.content.every(block => block.type === 'text')).toBe(true)
       await provider.dispose()
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
       expect(ctx.computerUse.providerName).toBeUndefined()
     } finally {
       await ctx.fiber.dispose()

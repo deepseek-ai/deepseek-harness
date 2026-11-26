@@ -39,7 +39,7 @@ export const Config: z<Config> = z.object({
  */
 export function apply(ctx: Context, config: Config = {}): void {
   const interrupt = config.interrupt !== false
-  const listAgents = registerListAgents(ctx)
+  registerListAgents(ctx)
   registerWaitAgent(ctx)
   const sendMessage = defineTool({
     name: 'send_message',
@@ -88,7 +88,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
     required: true,
     interpolate: false,
-    text: ({ agent, scope, toolSet }) => {
+    text: ({ agent }) => {
       if (agent === undefined) return ''
       try {
         const names = ctx.subagents.namesOf(agent)
@@ -97,19 +97,14 @@ export function apply(ctx: Context, config: Config = {}): void {
           : `You are a subagent delegated by agent ${JSON.stringify(names.parent)}.\n`
             + `Your name is ${JSON.stringify(names.self)}.\n`
             + `The root agent of your collaboration tree is ${JSON.stringify(ROOT_AGENT_NAME)}.`
-        const guidance: string[] = []
-        if (ctx.tools.get(sendMessage.name, scope, toolSet) === sendMessage) {
-          guidance.push('To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).')
-          // Team mode coordinates results through shared tasks, so only plain delegation asks for a report.
-          if (names.parent !== undefined && ctx.get('agentTeams')?.isEnabled(agent) !== true) {
-            guidance.push('When you finish, use send_message to send a self-contained result to the agent that delegated you. '
-              + 'Message any agent as soon as a finding changes what it should do next; sending a message does not end your turn.')
-          }
+        const guidance = ['To message other agents, use send_message({ agent: "<agent-name>", message: "..." }).']
+        // Team mode coordinates results through shared tasks, so only plain delegation asks for a report.
+        if (names.parent !== undefined && ctx.get('agentTeams')?.isEnabled(agent) !== true) {
+          guidance.push('When you finish, use send_message to send a self-contained result to the agent that delegated you. '
+            + 'Message any agent as soon as a finding changes what it should do next; sending a message does not end your turn.')
         }
-        if (ctx.tools.get(listAgents.name, scope, toolSet) === listAgents) {
-          guidance.push('Use list_agents({}) to find your collaborator agents and their names.')
-        }
-        if (guidance.length > 0) identity += '\n\n' + guidance.join('\n')
+        guidance.push('Use list_agents({}) to find your collaborator agents and their names.')
+        identity += '\n\n' + guidance.join('\n')
         return identity
       } catch (error: unknown) {
         const rootUnavailable = typeof error === 'object' && error !== null

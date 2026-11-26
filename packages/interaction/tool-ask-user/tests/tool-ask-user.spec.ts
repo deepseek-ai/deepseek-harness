@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,7 @@ import { createToolResultMessage, type ToolCallId, type ToolSchema } from '@deep
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { Session, type SessionId, SessionSeq, SESSION_FORMAT_VERSION, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import UserQuestionService, {
   isTimedAskUserQuestionSchema,
   type AskUserQuestionAnswer,
@@ -78,7 +78,7 @@ async function setup(config: toolAskUser.Config = { mode: 'timed', timeout: -1 }
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(UserQuestionService)
   await ctx.plugin(toolAskUser, config)
   return ctx
@@ -113,12 +113,12 @@ describe('ask_user_question tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(UserQuestionService)
 
     toolAskUser.apply(ctx)
 
-    const schema = ctx.tools.schemas().find(tool => tool.name === 'ask_user_question')
+    const schema = ctx.tools.getAll().find(tool => tool.name === 'ask_user_question')
     expect(schema?.parameters).not.toHaveProperty('properties.timeout')
     expect(schema?.description).toContain('Ask the user a concise question')
   })
@@ -126,7 +126,7 @@ describe('ask_user_question tool', () => {
   it('registers the timed tool only when the Cordis row opts in', async () => {
     const ctx = await setup({ mode: 'timed' })
 
-    const schema = ctx.tools.schemas().find(tool => tool.name === 'ask_user_question')
+    const schema = ctx.tools.getAll().find(tool => tool.name === 'ask_user_question')
 
     expect(schema?.parameters).toHaveProperty('properties.timeout')
     expect(JSON.stringify(schema)).toContain('pending')
@@ -138,12 +138,12 @@ describe('ask_user_question tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(UserQuestionService)
 
     toolAskUser.apply(ctx, { mode: 'timed' })
 
-    expect(JSON.stringify(ctx.tools.schemas().find(tool => tool.name === 'ask_user_question'))).toContain('Wait seconds for the entire batch (default 120)')
+    expect(JSON.stringify(ctx.tools.getAll().find(tool => tool.name === 'ask_user_question'))).toContain('Wait seconds for the entire batch (default 120)')
   })
 
   it('returns the answer batch when the Client answers inside the configured wait', async () => {
@@ -174,7 +174,7 @@ describe('ask_user_question tool', () => {
   it('describes the configured default timeout to the model', async () => {
     const ctx = await setup({ mode: 'timed', timeout: 45 })
 
-    const schema = ctx.tools.schemas().find(tool => tool.name === 'ask_user_question')
+    const schema = ctx.tools.getAll().find(tool => tool.name === 'ask_user_question')
 
     expect(JSON.stringify(schema)).toContain('Wait seconds for the entire batch (default 45); omit unless the user specifies a duration. Use -1 only when an answer is required before proceeding.')
     expect(JSON.stringify(schema)).not.toContain('Wait seconds for the entire batch (default 120)')
@@ -182,7 +182,7 @@ describe('ask_user_question tool', () => {
 
   it('registers a model-facing tool schema', async () => {
     const ctx = await setup()
-    const schema = ctx.tools.schemas().find(tool => tool.name === 'ask_user_question')
+    const schema = ctx.tools.getAll().find(tool => tool.name === 'ask_user_question')
 
     expect(schema).toMatchObject({
       name: 'ask_user_question',
@@ -223,7 +223,7 @@ describe('ask_user_question tool', () => {
         return { answers: [{ id: 'continue', selected: ['yes'] }] }
       },
     })
-    const schemas = ctx.tools.schemas().filter(tool => tool.name === 'ask_user_question')
+    const schemas = ctx.tools.getAll().filter(tool => tool.name === 'ask_user_question')
 
     expect(schemas).toHaveLength(1)
     expect(schemas[0]).toMatchObject({
@@ -236,7 +236,7 @@ describe('ask_user_question tool', () => {
     // legacy Session never folds into a question card or a transcript pill.
     expect(isTimedAskUserQuestionSchema(schemas[0]!)).toBe(false)
     expect(foldUserQuestions([
-      headerEvent(0, ctx.tools.schemas()),
+      headerEvent(0, ctx.tools.getAll().map(tool => projectToolSchema(tool, true))),
       askedEvent(1, 'ask-legacy', '{"questions":[{"id":"continue","question":"Continue?"}]}'),
     ])).toEqual({ active: [], settled: [] })
 
@@ -508,9 +508,9 @@ describe('ask_user_question tool', () => {
     expect(content.text).toContain('Do not treat this as permission.')
     // The question the model timed out on stays answerable: the projection
     // reads the same recorded text, so this pins the two readings together.
-    expect(isTimedAskUserQuestionSchema(ctx.tools.schemas().find(tool => tool.name === 'ask_user_question')!)).toBe(true)
+    expect(isTimedAskUserQuestionSchema(ctx.tools.getAll().find(tool => tool.name === 'ask_user_question')!)).toBe(true)
     expect(foldUserQuestions([
-      headerEvent(0, ctx.tools.schemas()),
+      headerEvent(0, ctx.tools.getAll().map(tool => projectToolSchema(tool, true))),
       askedEvent(1, 'ask-timeout', '{"questions":[{"id":"continue","question":"Continue?"}]}'),
       resultedEvent(2, 'ask-timeout', content.text),
     ]).active).toEqual([{
@@ -689,7 +689,7 @@ describe('ask_user_question tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(UserQuestionService)
     const fiber = await ctx.plugin(toolAskUser)
     expect(ctx.tools.get('ask_user_question')).toBeDefined()

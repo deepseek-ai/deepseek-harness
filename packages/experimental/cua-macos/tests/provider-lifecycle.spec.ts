@@ -1,6 +1,7 @@
 /** Native helper replacement is synchronized with Agent and provider disposal. */
 import { randomUUID } from 'node:crypto'
-import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeModelToolFixture, executeDefinitionFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -25,7 +26,7 @@ import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import NodeRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
-import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
+import { PtcToolRegistry } from '@deepseek-ai/dsh-tool-registry-ptc'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { LlmAdapter, LlmError, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk, createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -186,7 +187,13 @@ async function setup(
   const execute = (method = 'listApps', params: Record<string, unknown> = {}, signal = new AbortController().signal) => executeToolFixture(ctx, {
     agent: handle.agent, signal, callId: brandString<ToolCallId>(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
   })
-  return { ctx, provider, handle, execute }
+  // Under a PTC root `cua` is a program binding; record the definition the first program call runs.
+  const bindings: { cua?: ToolDefinition } = {}
+  ctx.on('tools/execute', (exec, next) => {
+    if (exec.name === 'cua' && exec.definition !== undefined) bindings.cua ??= exec.definition
+    return next()
+  })
+  return { ctx, provider, handle, execute, ptc, bindings }
 }
 
 async function thinkingTurn(f: Awaited<ReturnType<typeof setup>>) {
@@ -213,15 +220,13 @@ async function executeProgram(
   f: Awaited<ReturnType<typeof setup>>, name: 'run_code' | 'cua_run_code',
   code: string, description: string, signal = new AbortController().signal,
 ) {
-  if (name === 'cua_run_code') {
-    f.ctx.tools.register(createRunCodeTool(f.ctx, {
-      name, description: 'Run a computer use program.', runtime: f.ctx.ptcRuntime,
-      tools: f.ctx.tools.definitions(),
-    }))
-  }
-  const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
-  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>(`keyboard-${name}`), name,
-    arguments: { code, description }, signal })
+  const input = { agent: f.handle.agent, callId: brandString<ToolCallId>(`keyboard-${name}`), name, arguments: { code, description }, signal }
+  if (name === 'run_code') return executeModelToolFixture(f.ctx, input)
+  const cua = f.bindings.cua
+  if (cua === undefined) throw new Error('a run_code program must call cua before a cua_run_code program')
+  const programs = new PtcToolRegistry(f.ctx, { name, description: 'Run a computer use program.', runtime: f.ctx.ptcRuntime })
+  programs.register(cua)
+  return executeDefinitionFixture(f.ctx, programs.getAll()[0]!, input)
 }
 
 async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
@@ -229,7 +234,11 @@ async function selectApplication(f: Awaited<ReturnType<typeof setup>>) {
   f.ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
   native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
     authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: false } })
-  expect((await f.execute('getApp', { selector: 'Fixture' })).isError).toBe(false)
+  // Under a PTC root the model reaches `cua` from a program.
+  const selected = f.ptc === undefined
+    ? await f.execute('getApp', { selector: 'Fixture' })
+    : await executeProgram(f, 'run_code', f.ptc.complete("await tools.cua({ method: 'getApp', params: { selector: 'Fixture' } })"), 'Select Fixture')
+  expect(selected.isError).toBe(false)
 }
 
 it('delivers window activity at the next accepted step and clears it at turn end', async () => {
@@ -459,7 +468,7 @@ it('aborts pending replacement before provider disposal can finish', async () =>
     expect((await reacquiring).isError).toBe(true)
     await disposing
     expect(native.instances).toHaveLength(1)
-    expect(f.ctx.tools.schemas()).toEqual([])
+    expect(f.ctx.tools.getAll()).toEqual([])
   } finally { release.resolve(); await disposing; await reacquiring }
 })
 
@@ -566,7 +575,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
     await Promise.all([f.handle.dispose(), other.dispose()])
     expect(native.dispose).toHaveBeenCalledTimes(2)
     expect(errors).toHaveBeenCalledTimes(errorsBeforeAgentDisposal)
-    expect(f.ctx.tools.schemas()).toEqual([])
+    expect(f.ctx.tools.getAll()).toEqual([])
   } finally { release.resolve(); await closing }
 })
 
@@ -635,7 +644,7 @@ it('supplies configured resource bounds and clears registrations on unload', asy
     expect(native.request).toHaveBeenLastCalledWith('findApps', { query, maxAppMatches: 20 }, expect.any(AbortSignal), expect.any(String))
   }
   await f.provider.dispose()
-  expect(f.ctx.tools.schemas()).toEqual([])
+  expect(f.ctx.tools.getAll()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)
 })
 
@@ -987,12 +996,12 @@ it('keeps Cordis loading until preparation succeeds and reports preparation fail
   const provider = entry.fiber!
   await entered.promise
   expect(provider.state).toBe(FiberState.LOADING)
-  expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)
+  expect(f.ctx.tools.getAll().some(tool => tool.name === 'cua')).toBe(false)
   const failed = expect(provider.await()).rejects.toThrow('compiler unavailable')
   ready.reject(new Error('compiler unavailable'))
   await failed
   expect(provider.state).toBe(FiberState.FAILED)
-  expect(f.ctx.tools.schemas().some(tool => tool.name === 'cua')).toBe(false)
+  expect(f.ctx.tools.getAll().some(tool => tool.name === 'cua')).toBe(false)
   expect(native.instances).toHaveLength(0)
 })
 

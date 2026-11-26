@@ -1,6 +1,6 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client'
 import { Context } from '@deepseek-ai/cordis'
@@ -16,6 +16,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PostToolDecision } from '@deepseek-ai/dsh-tools'
 import { McpToolRegistrationError, publicToolName, syncTools, type ToolBridgeOptions } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
+import { McpStatusCell } from '@deepseek-ai/dsh-mcp-client/src/status.ts'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/client/validators/ajv'
 import { createTransport } from '@deepseek-ai/dsh-mcp-client/src/transport.ts'
 import { Config } from '@deepseek-ai/dsh-mcp-client'
@@ -63,7 +64,7 @@ async function mountRegistry(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -146,6 +147,7 @@ const defaultOpts: ToolBridgeOptions = {
   signal: testToolSignal,
   serverName: 'srv',
   toolCallTimeoutMs: 60_000,
+  registrar: new McpStatusCell(() => {}),
 }
 
 // ---- Tests ----
@@ -720,7 +722,8 @@ describe('tool execution', () => {
     }
   })
 
-  it.each(['value', 'renderer'] as const)('keeps a dispatch %s replacement instead of prepared images', async (replacement) => {
+  // A value replacement replaces the prepared images; a registration replaced during dispatch applies from the next call.
+  it.each(['value', 'renderer'] as const)('settles a dispatch %s replacement through the dispatched definition', async (replacement) => {
     const rich = await mountRichRegistry()
     try {
       const client = createMockClient(
@@ -748,7 +751,8 @@ describe('tool execution', () => {
       })
       expect(result.isError).toBe(false)
       expect(rich.attachments.saved).toHaveLength(1)
-      expect(result.content).toEqual([{ type: 'text', text: 'dispatch replacement' }])
+      if (replacement === 'value') expect(result.content).toEqual([{ type: 'text', text: 'dispatch replacement' }])
+      else expect(result.content).toMatchObject([{ type: 'image' }])
     } finally {
       await rich.ctx.fiber.dispose()
     }

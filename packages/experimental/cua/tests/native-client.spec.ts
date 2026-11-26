@@ -5,7 +5,7 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tool-registry-native'
 import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -285,7 +285,8 @@ describe('native helper transport', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(Tools)
-    ctx.tools.setExecutor(new NativeToolExecutor(ctx))
+    const native = new NativeToolRegistry()
+    ctx.tools.setRoot(native)
     const f = fixture()
     ctx.tools.register(defineTool({ name: 'capture_fixture', description: 'Capture the fixture window.', parameters: {},
       output: { schema: { type: 'json' }, render: () => [] },

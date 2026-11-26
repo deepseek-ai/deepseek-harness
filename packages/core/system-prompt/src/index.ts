@@ -330,8 +330,10 @@ export interface Config {
   personaSuffix?: string
   /**
    * Model-facing tool names in order, with {@link TOOL_ORDER_REST} exactly once.
-   * Invalid fields fail at load and unknown names fail at assembly; known names
-   * hidden in one scope may be absent there. Omitted means lexicographic order.
+   * Invalid fields fail at load. At assembly each listed name must be offered
+   * by the scope's own or inherited contributions or declared by its root, and
+   * any other name fails the assembly; a known name the scope does not declare
+   * is absent from its order. Omitted means lexicographic order.
    */
   toolOrder?: string[]
 }
@@ -685,7 +687,7 @@ export class SystemPrompt extends Service {
    * that an effective complete section is restored afterwards as the sole
    * prompt section; tool declarations stay provider-owned. Section text and
    * lifecycle are fixed here; `systemUpdates()` compares them with committed state later.
-   * @param context - the optional scope, step tool set, and plugin-defined assembly fields.
+   * @param context - the optional scope, model step, and plugin-defined assembly fields.
    * @returns the post-waterfall presentation and the system updates for the supplied Session.
    */
   async assemble(context: AssembleContext = {}): Promise<PromptAssembly> {

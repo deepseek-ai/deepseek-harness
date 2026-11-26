@@ -124,7 +124,7 @@ JS
 node tests/.dsh-build/glob-native.perf.mjs
 ```
 
-诊断脚本创建 20,000 个无关文件和六个匹配文件，然后通过 Native executor 测量五次 `ctx.tools.execute()` 调用，使用真实 Agent、工作目录服务和本地 subprocess 后端。输出包括原始耗时、中位数，以及完整值、文本和展示元数据的哈希。`--plugin <built-module>` 选择其他搜索包版本；`--workspace <directory>` 显式选择只读的现有工作区，替代合成目录。计时排除初始化、模型生成、UI 和 Session 持久化；不设耗时阈值。
+诊断脚本创建 20,000 个无关文件和六个匹配文件，然后通过原生根注册表测量五次 `ctx.tools.execute()` 调用，使用真实 Agent、工作目录服务和本地 subprocess 后端。输出包括原始耗时、中位数，以及完整值、文本和展示元数据的哈希。`--plugin <built-module>` 选择其他搜索包版本；`--workspace <directory>` 显式选择只读的现有工作区，替代合成目录。计时排除初始化、模型生成、UI 和 Session 持久化；不设耗时阈值。
 
 ### 两类预算、两类产物
 
@@ -155,7 +155,7 @@ node tests/.dsh-build/glob-native.perf.mjs
 
 #### 模型看到的内容
 
-组装时，每个段落通过 `ctx.tools.get(name, scope)` 检查对应工具，仅在其可见时输出。grep 段落仅在 read 可见时包含后续使用 read 的句子。同一受支持工具集合下，原文和段落顺序保持不变，包括通过 `run_code` 暴露的 PTC 能力。 这种按 scope 选择文本的机制适用于系统提示词段落。工具 schema 描述仍是注册时的文本，不提及其他工具。
+每个段落都是该工具的 `guidance`，因此会在每个可以调用该工具的作用域中渲染，包括通过 `run_code` 暴露的 PTC 能力；限制该工具的作用域会略去其段落。grep 段落始终包含后续使用 read 的句子。工具 schema 描述仍是注册时的文本，不提及其他工具。
 
 ##### Glob 指导
 
@@ -171,11 +171,11 @@ Use the grep tool — not shell grep or rg — to search file contents. Use read
 
 #### Token 影响
 
-指导成本取决于可见工具；必填的采样选择决定采用哪一个 glob 变体。
+使用指引成本取决于该作用域可以调用的工具，因此限制会移除被限制工具的段落；必填的采样选择决定采用哪一个 glob 变体。
 
 #### KV Cache 影响
 
-可见工具集合、插件作用域、采样选择与指导文本不变时前缀稳定。限制、激活、dispose（资源释放）或改变选择可能从首个变化的段落开始使复用失效。
+已注册的工具、插件作用域、采样选择与使用指引文本不变时前缀稳定。激活、dispose（资源释放）或改变选择可能从首个变化的段落开始使复用失效。
 
 ### 工具 schema
 

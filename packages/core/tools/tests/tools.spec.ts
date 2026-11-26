@@ -1,6 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -12,8 +11,9 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
-import ToolRuntime, { ToolContextUnavailableError, defineTool, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { ToolContextUnavailableError, defineTool, projectToolSchema, JsonSchemaError, parameterSchemaSpecToJsonSchema, validateArgs, ToolArgsError, ToolNotFoundError, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, type InferArgs, type ParameterSchemaSpec, type PreToolDecision, type PostToolDecision, type JsonSchemaNode, type ToolDefinition, type ToolDispatchExecution, type ToolExecutionResult, type ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 declare module '@deepseek-ai/dsh-llm' {
@@ -36,7 +36,7 @@ async function setup() {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -64,12 +64,12 @@ describe('ToolRuntime', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
-  it('settles accepted calls after the actual native executor fiber unloads', async () => {
+  it('settles accepted calls after the actual native root fiber unloads', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    const provider = ctx.plugin(NativeToolExecutor)
+    const provider = ctx.plugin(NativeToolRegistry)
     await provider
     ctx.tools.register(echoTool)
     const entered = Promise.withResolvers<undefined>()
@@ -86,7 +86,7 @@ describe('ToolRuntime', () => {
     try {
       await entered.promise
       await provider.dispose()
-      await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool executor is unavailable')
+      await expect(ctx.tools.execute(input)).rejects.toThrow('selected tool registry is unavailable')
       release.resolve(undefined)
       expect((await pending).results.map(({ result }) => result)).toMatchObject([
         { isError: false, value: 'first' }, { isError: false, value: 'second' },
@@ -102,7 +102,7 @@ describe('ToolRuntime', () => {
     const ctx = await setup()
     try {
       ctx.tools.register(defineContentToolFixture({ name: 'deferred', description: '', parameters: {}, deferLoading: true, async execute() { return [] } }))
-      expect(ctx.tools.schemas()[0]?.deferLoading).toBe(true)
+      expect(ctx.tools.getAll()[0]?.deferLoading).toBe(true)
       expect((await ctx.systemPrompt.assemble()).tools[0]?.deferLoading).toBe(true)
     } finally {
       await ctx.fiber.dispose()
@@ -113,23 +113,22 @@ describe('ToolRuntime', () => {
     const ctx = await setup()
     ctx.tools.register(echoTool)
 
-    expect(ctx.tools.schemas()).toEqual([{
+    expect(ctx.tools.getAll().map(tool => projectToolSchema(tool, true))).toEqual([{
       name: 'echo',
       description: 'echo arguments back',
       parameters: { type: 'object', properties: { text: { type: 'string' } } },
     }])
-    // schemas() result must not leak execute — ToolSchema deliberately has no
-    // 'execute' key, so widen through unknown to probe for the absent property
-    expect((ctx.tools.schemas()[0] as unknown as Record<string, unknown>).execute).toBeUndefined()
 
     const assembly = await ctx.systemPrompt.assemble()
     expect(assembly.tools.map(t => t.name)).toEqual(['echo'])
+    // The model-facing schema must not leak execute.
+    expect('execute' in assembly.tools[0]!).toBe(false)
   })
 
-  it('schemas() drops host callbacks — they must never reach the model', async () => {
+  it('the model-facing schema drops host callbacks — they must never reach the model', async () => {
     const ctx = await setup()
     // Tool definitions contain output, finalization, execution, and presentation
-    // callbacks. schemas() is an explicit allowlist so none can reach the model.
+    // callbacks. Schema projection is an explicit allowlist so none can reach the model.
     ctx.tools.register(defineContentToolFixture({
       name: 'present',
       description: 'has presenters',
@@ -139,12 +138,11 @@ describe('ToolRuntime', () => {
       presentCall: args => ({ card: 'generic', title: args.x }),
       presentResult: (args, result) => ({ card: 'generic', title: args.x, content: result.content }),
     }))
-    const schema = ctx.tools.schemas()[0] as unknown as Record<string, unknown>
-    expect(Object.keys(schema).sort()).toEqual(['description', 'name', 'parameters'])
-    expect(schema.finalizeContent).toBeUndefined()
-    expect(schema.presentCall).toBeUndefined()
-    expect(schema.presentResult).toBeUndefined()
-    expect(schema.execute).toBeUndefined()
+    const [schema] = (await ctx.systemPrompt.assemble()).tools
+    expect(Object.keys(schema!).sort()).toEqual(['description', 'name', 'parameters'])
+    for (const callback of ['finalizeContent', 'presentCall', 'presentResult', 'execute']) {
+      expect(callback in schema!).toBe(false)
+    }
   })
 
   it('runs the captured content projector before policy and keeps later replacement authoritative', async () => {
@@ -166,7 +164,7 @@ describe('ToolRuntime', () => {
       return { kind: 'accept', content: [{ type: 'text', text: 'policy result' }] }
     })
     try {
-      expect(Object.keys(ctx.tools.schemas()[0]!)).not.toContain('projectContent')
+      expect(Object.keys((await ctx.systemPrompt.assemble()).tools[0]!)).not.toContain('projectContent')
       const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('projection'), name: 'projected', arguments: {} })
       expect(result.content).toEqual([{ type: 'text', text: 'policy result' }])
       if (result.isError) throw new Error('expected successful projection')
@@ -187,15 +185,15 @@ describe('ToolRuntime', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
-  it('schemas() excludes timeoutMs — the budget must never reach the model', async () => {
+  it('the model-facing schema excludes timeoutMs — the budget must never reach the model', async () => {
     const ctx = await setup()
     ctx.tools.register(defineContentToolFixture({
       name: 'budgeted', description: 'has a budget', parameters: {}, timeoutMs: 5_000,
       async execute() { return [{ type: 'text' as const, text: 'ok' }] },
     }))
-    const schema = ctx.tools.schemas().find(s => s.name === 'budgeted')
+    const schema = (await ctx.systemPrompt.assemble()).tools.find(s => s.name === 'budgeted')
     expect(schema).toBeDefined()
-    expect('timeoutMs' in (schema as object)).toBe(false)
+    expect('timeoutMs' in schema!).toBe(false)
   })
 
   it('executes a tool and returns its content', async () => {
@@ -621,7 +619,7 @@ describe('ToolRuntime', () => {
     expect(result.error?.message).toBe('tools/post-execute cannot replace the value of a failed result')
   })
 
-  it('fails value replacement when the owning tool disappears before post-policy resolves', async () => {
+  it('validates a value replacement through the dispatched definition after the owning tool disappears', async () => {
     const ctx = await setup()
     const dispose = ctx.tools.register(echoTool)
     ctx.on('tools/post-execute', async () => {
@@ -630,10 +628,7 @@ describe('ToolRuntime', () => {
     })
 
     const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('post-disposed'), name: 'echo', arguments: {} })
-    expect(result.error).toEqual({
-      message: 'unknown tool "echo"',
-      info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' },
-    })
+    expect(result).toMatchObject({ isError: false, value: 'replacement', content: [{ type: 'text', text: 'replacement' }] })
   })
 
   it('normalizes wrapper-authored failure metadata and contexts', async () => {
@@ -664,7 +659,7 @@ describe('ToolRuntime', () => {
     })
   })
 
-  it('fails wrapper-authored success normalization when the owning tool disappears', async () => {
+  it('normalizes a wrapper-authored success through the dispatched definition after the owning tool disappears', async () => {
     const ctx = await setup()
     const dispose = ctx.tools.register(echoTool)
     ctx.on('tools/execute', async () => {
@@ -673,10 +668,7 @@ describe('ToolRuntime', () => {
     })
 
     const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('wrapper-disposed'), name: 'echo', arguments: {} })
-    expect(result.error).toEqual({
-      message: 'unknown tool "echo"',
-      info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' },
-    })
+    expect(result).toMatchObject({ isError: false, value: 'replacement', content: [{ type: 'text', text: 'replacement' }] })
   })
 
   it('projects presentation metadata for native and nested composite dispatches', async () => {
@@ -894,7 +886,7 @@ describe('ToolRuntime', () => {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(AgentLoop, { agents: [] })
       await ctx.plugin(ApprovalService)
@@ -1962,22 +1954,29 @@ describe('ToolRuntime', () => {
     expect(observed).toBe(1)
   })
 
-  it('reports cancellation before an executor refusal without entering policy', async ({ onTestFinished }) => {
+  it('reports cancellation before a registry refusal without entering policy', async ({ onTestFinished }) => {
     const ctx = await setup()
     onTestFinished(() => ctx.fiber.dispose())
     let policyCalls = 0
     ctx.on('tools/pre-execute', async (_exec, next) => { policyCalls += 1; return next() })
     const pipeline = new ToolExecutionPipeline(ctx, {
       get: () => echoTool,
-      reject: () => new Error('executor refuses direct calls'),
+      reject: () => new ToolNotFoundError('echo', ['run_code']),
     })
-    const prepared = await pipeline.prepare({
+    const cancelled = await pipeline.prepare({
       callId: brandString<ToolCallId>('cancelled-refusal'), name: 'echo', arguments: {}, signal: AbortSignal.abort(),
     })
-    expect(prepared.kind).toBe('final-result')
-    if (prepared.kind === 'dispatch') throw new Error('cancelled call was dispatched')
-    const result = await pipeline.complete(prepared.exec, prepared)
-    expect(result.error?.info?.code).toBe(TOOL_ABORTED_BEFORE_DISPATCH)
+    expect(cancelled.kind).toBe('final-result')
+    if (cancelled.kind === 'dispatch') throw new Error('cancelled call was dispatched')
+    expect((await pipeline.complete(cancelled.exec, cancelled)).error?.info?.code).toBe(TOOL_ABORTED_BEFORE_DISPATCH)
+    const refused = await pipeline.prepare({
+      callId: brandString<ToolCallId>('refusal'), name: 'echo', arguments: {}, signal: testToolSignal,
+    })
+    if (refused.kind === 'dispatch') throw new Error('refused call was dispatched')
+    expect((await pipeline.complete(refused.exec, refused)).error).toEqual({
+      message: 'unknown tool "echo"; tools you can call directly: run_code',
+      info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' },
+    })
     expect(policyCalls).toBe(0)
   })
 
@@ -2276,23 +2275,24 @@ describe('ToolRuntime', () => {
     })
   })
 
-  it('schemas() snapshots tool schemas instead of exposing registry objects', async () => {
+  it('detached schema projection snapshots tool schemas instead of exposing registry objects', async () => {
     const ctx = await setup()
     ctx.tools.register(echoTool)
+    const schemas = () => ctx.tools.getAll().map(tool => projectToolSchema(tool, true))
 
-    const first = ctx.tools.schemas()
+    const first = schemas()
     const firstParameters = first[0]!.parameters as { properties: Record<string, unknown> }
     firstParameters.properties['mutated'] = { type: 'string' }
     first[0]!.description = 'mutated'
 
-    expect(ctx.tools.schemas()).toEqual([{
+    expect(schemas()).toEqual([{
       name: 'echo',
       description: 'echo arguments back',
       parameters: { type: 'object', properties: { text: { type: 'string' } } },
     }])
   })
 
-  it('schemas() snapshots deeply nested parameters without using structured-clone recursion', async () => {
+  it('detached schema projection snapshots deeply nested parameters without using structured-clone recursion', async () => {
     const ctx = await setup()
     const depth = 5_000
     let nested: JsonSchemaNode = { type: 'string' }
@@ -2303,7 +2303,7 @@ describe('ToolRuntime', () => {
       parameters: { type: 'object', properties: { nested } },
     })
 
-    const projected = ctx.tools.schemas()[0]!.parameters as JsonSchemaNode
+    const projected = projectToolSchema(ctx.tools.getAll()[0]!, true).parameters as JsonSchemaNode
 
     let cursor = projected.properties!.nested!
     let layers = 0
@@ -2323,7 +2323,7 @@ describe('ToolRuntime', () => {
       parameters: { type: 'object', default: Number.NaN },
     })
 
-    expect(() => ctx.tools.schemas())
+    expect(() => ctx.tools.getAll().map(tool => projectToolSchema(tool, true)))
       .toThrow('tool "lossy-schema" parameters must be lossless JSON before schema projection')
   })
 
@@ -2343,10 +2343,10 @@ describe('ToolRuntime', () => {
     const fiber = await ctx.plugin(Object.assign((inner: Context) => {
       inner.tools.register({ ...echoTool, name: 'scoped' })
     }, { inject: ['tools'] }))
-    expect(ctx.tools.schemas().map(t => t.name)).toEqual(['echo', 'scoped'])
+    expect(ctx.tools.getAll().map(t => t.name)).toEqual(['echo', 'scoped'])
 
     await fiber.dispose()
-    expect(ctx.tools.schemas().map(t => t.name)).toEqual(['echo'])
+    expect(ctx.tools.getAll().map(t => t.name)).toEqual(['echo'])
   })
 
   it('returns a callable disposer from register() that unregisters the tool', async () => {
@@ -2354,10 +2354,10 @@ describe('ToolRuntime', () => {
     ctx.tools.register(echoTool)
 
     const dispose = ctx.tools.register({ ...echoTool, name: 'disposable' })
-    expect(ctx.tools.schemas().map(t => t.name)).toEqual(['echo', 'disposable'])
+    expect(ctx.tools.getAll().map(t => t.name)).toEqual(['echo', 'disposable'])
 
     dispose()
-    expect(ctx.tools.schemas().map(t => t.name)).toEqual(['echo'])
+    expect(ctx.tools.getAll().map(t => t.name)).toEqual(['echo'])
   })
 
   it('rolls back the tool entry when a tools/change listener throws (P1-1)', async () => {
@@ -2371,12 +2371,12 @@ describe('ToolRuntime', () => {
     // The throwing emit must roll the entry back, not leak it.
     expect(() => ctx.tools.register(echoTool)).toThrow('boom change listener')
     expect(ctx.tools.get('echo')).toBeUndefined() // rolled back, not leaked
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
 
     // A subsequent listener-free register of the SAME name succeeds and is
     // exposed exactly once (the duplicate-name check is not wedged).
     const dispose = ctx.tools.register(echoTool)
-    expect(ctx.tools.schemas().map(t => t.name)).toEqual(['echo'])
+    expect(ctx.tools.getAll().map(t => t.name)).toEqual(['echo'])
     dispose()
     expect(ctx.tools.get('echo')).toBeUndefined()
   })
@@ -2481,7 +2481,7 @@ describe('defineTool / schema DSL', () => {
     })
 
     ctx.tools.register(tool)
-    expect(ctx.tools.schemas()).toEqual([{
+    expect(ctx.tools.getAll().map(definition => projectToolSchema(definition, true))).toEqual([{
       name: 'typed-echo',
       description: 'A typed echo tool',
       parameters: {
@@ -2522,7 +2522,7 @@ describe('defineTool / schema DSL', () => {
     void tool
   })
 
-  it('registry round-trips a defineTool definition (register→schemas→execute)', async () => {
+  it('registry round-trips a defineTool definition (register→getAll→execute)', async () => {
     const ctx = await setup()
     ctx.tools.register(defineTool({
       name: 'roundtrip',
@@ -2540,8 +2540,8 @@ describe('defineTool / schema DSL', () => {
       },
     }))
 
-    // Schema round-trip: schemas() returns standard JSON Schema
-    const schemas = ctx.tools.schemas()
+    // Schema round-trip: getAll() returns standard JSON Schema parameters
+    const schemas = ctx.tools.getAll()
     expect(schemas).toHaveLength(1)
     expect(schemas[0]!.parameters).toEqual({
       type: 'object',
@@ -2583,7 +2583,7 @@ describe('defineTool / schema DSL', () => {
       },
     })
 
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     expect(schemas[0]!.parameters).toEqual({
       type: 'object',
       properties: { path: { type: 'string' } },

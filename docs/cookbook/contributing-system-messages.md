@@ -87,7 +87,7 @@ Call the returned `dispose()` when the instructions stop applying before plugin 
 
 Disposal removes that exact registration. If another visible registration has the same name, the next assembly uses its text and replacement notice instead of retiring the source. Retirement requires every registration in the visible scope chain to be disposed; only Sessions that observed registrations and previously committed the name receive it. The last disposed observed registration supplies the retirement notice. Registering and disposing before admission produces no retirement message for an uninformed Session. Disposing and re-registering the same name before the next admission sends nothing when the rendered text is unchanged, or one replacement update when it differs.
 
-For several registrations sharing one lifetime, yield their disposers from a Cordis generator effect. The [tools executor registration](../../packages/core/tools/src/index.ts) uses this pattern. If a later registration throws, Cordis cleans up the earlier registrations; their ordinary retirement behavior still applies.
+For several registrations sharing one lifetime, yield their disposers from a Cordis generator effect. The [PTC root registration](../../packages/core/tool-registry-ptc/src/index.ts) in `PtcToolRegistry.mountRoot()` uses this pattern. If a later registration throws, Cordis cleans up the earlier registrations; their ordinary retirement behavior still applies.
 
 <a id="4-choose-scope-and-message-kind"></a>
 

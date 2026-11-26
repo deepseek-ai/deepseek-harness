@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-tools'
+import { AgentToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 
 export const name = 'snapshot-in-history-series-start'
 export const inject = ['tools', 'systemPrompt']
@@ -14,21 +15,23 @@ export const inject = ['tools', 'systemPrompt']
  * prompt is unchanged, which must keep both prompt versions in the request.
  */
 export function apply(ctx: Context): void {
-  let active = false
-  ctx.tools.register(defineContentToolFixture({
+  const tools = new AgentToolRegistry()
+  ctx.effect(() => tools.register(defineContentToolFixture({
     name: 'snapshot_ping', description: 'Return pong once.', parameters: {},
     async execute() { return [{ type: 'text', text: 'pong' }] },
-  }), { when: async () => active })
+  })), 'snapshot-in-history-series-start.snapshot_ping')
+  ctx.tools.include(tools)
   let guidance = ''
   ctx.systemPrompt.section({ name: 'snapshot:series-start-guidance', order: 400, text: () => guidance })
+  // The calling Agent's next step declares the tool change.
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const downstream = await next()
-    if (result.isError) return downstream
+    if (result.isError || exec.agent === undefined) return downstream
     if (exec.name === 'read' && guidance === '') {
       guidance = 'Snapshot guidance added after the first read: call snapshot_ping once, then reply DONE.'
-      active = true
+      tools.set(exec.agent, ['snapshot_ping'])
     }
-    if (exec.name === 'snapshot_ping') active = false
+    if (exec.name === 'snapshot_ping') tools.set(exec.agent, [])
     return downstream
   })
   let steps = 0

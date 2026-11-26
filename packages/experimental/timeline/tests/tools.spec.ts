@@ -1,7 +1,7 @@
 import { executeTool } from './execute-tool.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { textOutput } from './fixture.ts'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { bindScopeParent, createScope } from '@deepseek-ai/dsh-scope'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -268,9 +268,9 @@ describe('agent tools in the production loop', () => {
         .parse(JSON.parse(result.content.find(block => block.type === 'text')?.text ?? '{}')).guidance
     try {
       const system = (await f.ctx.systemPrompt.assemble({ scope: f.agent })).sections
-      const schemas = f.ctx.tools.schemas(f.agent)
+      const schemas = f.ctx.tools.getAll(f.agent).map(tool => projectToolSchema(tool, true))
       expect(JSON.stringify(system)).not.toContain('Explain what recovery checks prove.')
-      const writing = () => f.ctx.tools.schemas(f.agent).find(tool => tool.name === 'timeline_tasks')
+      const writing = () => f.ctx.tools.getAll(f.agent).find(tool => tool.name === 'timeline_tasks')
       expect(writing()?.description).toContain('Explain what recovery checks prove.')
       expect(
         schemas.filter(tool => tool.description.includes('Explain what recovery checks prove.')),
@@ -287,7 +287,7 @@ describe('agent tools in the production loop', () => {
       expect((await f.ctx.systemPrompt.assemble({ scope: f.agent })).sections).toEqual(system)
       expect(writing()?.description).toContain('Explain limits and decided next steps.')
       expect(writing()?.description).not.toContain('Explain what recovery checks prove.')
-      expect(f.ctx.tools.schemas(f.agent).filter(tool => tool.name !== 'timeline_tasks')).toEqual(
+      expect(f.ctx.tools.getAll(f.agent).map(tool => projectToolSchema(tool, true)).filter(tool => tool.name !== 'timeline_tasks')).toEqual(
         schemas.filter(tool => tool.name !== 'timeline_tasks'),
       )
       expect(guidanceOf(await call('timeline_read', {}))).toBeUndefined()
@@ -313,7 +313,7 @@ describe('agent tools in the production loop', () => {
     try {
       await call('timeline_tree', { action: 'start', title: 'Check model contracts' })
       const schema = JSON.stringify(
-        f.ctx.tools.schemas(f.agent).find(tool => tool.name === 'timeline_tasks'),
+        f.ctx.tools.getAll(f.agent).map(tool => projectToolSchema(tool, true)).find(tool => tool.name === 'timeline_tasks'),
       )
       for (const [name, value] of [
         ['remaining', 5],
@@ -440,7 +440,7 @@ describe('agent tools in the production loop', () => {
       expect(f.ctx.tools.get('todo_write', f.agent)).toBeUndefined()
       set(true)
       expect(f.ctx.tools.get('todo_write', f.agent)).toBeDefined()
-      expect(f.ctx.tools.schemas(f.agent).map(tool => tool.name)).toContain('todo_write')
+      expect(f.ctx.tools.getAll(f.agent).map(tool => tool.name)).toContain('todo_write')
       await executeTool(f.ctx, {
         name: 'todo_write',
         arguments: {},
@@ -475,7 +475,7 @@ describe('agent tools in the production loop', () => {
     const adapter = new Adapter()
     const f = await setup({ intervalMs: 86400000 }, adapter)
     try {
-      expect(f.ctx.tools.schemas(f.agent).find(tool => tool.name === 'timeline_tasks')).toMatchObject({
+      expect(f.ctx.tools.getAll(f.agent).find(tool => tool.name === 'timeline_tasks')).toMatchObject({
         parameters: { properties: { tasks: { items: { properties: { weight: { type: 'number' } } } } } },
       })
       adapter.mainActions = [
@@ -593,7 +593,7 @@ describe('agent tools in the production loop', () => {
       })
       expect(f.ctx.tools.get('todo_write', parent)).toBeDefined()
       expect(f.ctx.tools.get('todo_write', f.agent)).toBeUndefined()
-      expect(f.ctx.tools.schemas(f.agent).map(tool => tool.name)).not.toContain('todo_write')
+      expect(f.ctx.tools.getAll(f.agent).map(tool => tool.name)).not.toContain('todo_write')
       const next = await f.ctx.agents.create({
         sessionId: SessionId('timeline-new-preset-agent'),
         agentOptions: { provider: 'fixture', model: 'timeline' },

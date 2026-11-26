@@ -48,7 +48,7 @@
       "path": "../../sandbox/sandbox-policy"
     },
     {
-      "path": "../../core/tool-executor-ptc"
+      "path": "../../core/tool-registry-ptc"
     }
   ]
 }

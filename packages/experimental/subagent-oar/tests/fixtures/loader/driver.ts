@@ -23,7 +23,7 @@ try {
     if (provider === undefined) throw new Error(`Missing provider: ${name}`)
     return { name, capabilities: provider.capabilities, inheritsParentContext: provider.inheritsParentContext }
   })
-  const tools = ctx.tools.schemas()
+  const tools = ctx.tools.getAll()
     .filter(tool => tool.name === 'subagent_oar')
     .map(tool => ({ name: tool.name, required: tool.parameters.required }))
     .sort((left, right) => left.name.localeCompare(right.name))

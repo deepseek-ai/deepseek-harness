@@ -153,9 +153,9 @@ kind: "package-reference"
 | [`src/generation.ts`](src/generation.ts) | 传输归属、取消、待处理工作与关闭确认 |
 | [`src/credentials.ts`](src/credentials.ts) | 运行时模板绑定，并替换每个已解析的值 |
 | [`src/templates.ts`](src/templates.ts) | 凭据模板语法、替换与引用发现 |
-| [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册、字面服务器指令与按需工具目录 |
+| [`src/server-context.ts`](src/server-context.ts) | 资源提供方注册与字面服务器指令 |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
-| [`src/tool-loading.ts`](src/tool-loading.ts) | 按需加载：加载器工具、提示词目录与各 agent 已加载的工具 |
+| [`src/tool-loading.ts`](src/tool-loading.ts) | 按需加载：加载器工具及其作为 `guidance` 的提示词目录，以及各 agent 已加载的工具 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
 | [`src/status.ts`](src/status.ts) | 以 Fiber 为键的状态单元，保留最终清理结果 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
@@ -172,7 +172,7 @@ kind: "package-reference"
 
 `apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 agent（智能体）作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭协商中的传输或已绑定的客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。
 
-宿主的 `mount` 在实例激活完成后给出其状态句柄。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。宿主的 `probe(config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
+宿主的 `mount` 在实例激活完成后给出其状态句柄。同一 Fiber 重载后句柄保持不变，dispose 后仍保留最终连接与清理结果；最终 dispose 会移除观察者。句柄的 `registers(definition)` 回答某个工具定义是否属于该实例当前生效的注册项（其当前世代的工具，或在按需加载时，其加载器工具以及各 Agent 已加载的工具），因此按 Agent 挂载服务器的插件可以区分自己的工具与继承而来的工具。状态观察者可以在重载时销毁 Fiber；清理仍覆盖该轮连接尝试。宿主的 `probe(config, options)` 测试服务器，不预留名称或注册工具。其 `timeoutMs` 共同约束模板解析、连接与列表查询，独立于运行时的 `startupTimeoutMs`；清理使用 `closeTimeoutMs`，并单独报告 `closeConfirmed`。传输关闭已确认时仍可能存在 `cleanupError`；关闭未确认或清理失败都会阻止替换。
 
 SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器将每次重新同步排队并重新发布已连接的工具数；获取失败时保留之前的注册代，注册冲突则回滚本次尝试并关闭连接，再按重连策略处理。每次故障共享一个尝试预算：连续失败达到 `maxAttempts` 后注销工具并停止重连；连接持续超过 `maxDelayMs` 则重置预算。
 
@@ -238,7 +238,7 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 
 #### 模型看到什么
 
-按需服务器提供一个工具 `mcp__<serverName>__load_tools`，以及一个标题为 `On-demand tools from MCP server <serverName>` 的系统提示词段落，列出每个工具的原始名称和摘要。只有能看到加载器的 agent 才会看到该段落。一次加载返回它新增或已经加载的公开名称；下一次请求带上这些工具的定义，会话日志记录这次工具添加。
+按需服务器提供一个工具 `mcp__<serverName>__load_tools`，以及一个标题为 `On-demand tools from MCP server <serverName>` 的系统提示词段落，列出每个工具的原始名称和摘要。该段落是加载器的 `guidance`，因此只有能调用加载器的 agent 才会看到它。某一代工具被撤回时，见过该段落的会话会收到 `The earlier instructions from mcp:<serverName>:tools no longer apply.`，下一代工具会再次添加该段落；在没有加载器的情况下恢复的会话会保留它见过的目录，且不会收到这条通知。一次加载返回它新增或已经加载的公开名称；下一次请求带上这些工具的定义，会话日志记录这次工具添加。
 
 #### Token 影响
 
@@ -275,7 +275,8 @@ SDK 通过旧版通知或现代协议订阅接收工具列表变化。监督器�
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **无效的协议结果或输出 schema 由 SDK 拒绝**——桥接器不接受旧式 `toolResult` 替代结果，也不绕过已声明的 schema 校验。
 - **OAuth 授权需要浏览器能直接访问 Host Web 服务器**——回调地址是该服务器自身的源地址：监听地址加端口，启用 TLS 时使用 HTTPS。只能通过代理或 Web 应用的 `publicUrl` 访问 DSH 的浏览器无法完成授权。动态客户端注册以该回调地址区分，监听地址或端口改变、或端口随机分配时，下一次显式授权会注册新的客户端；退出登录会保留之前的注册记录。
-- **按需加载不受工具限制约束**——已加载的工具位于调用方 agent 自己的作用域，`tools.restrict()` 的 allow 与 deny 掩码不过滤它们，而且这些掩码会拒绝继承工具列表中不存在的名称。要按名称禁止可加载的工具，使用执行 guard（`tools.guard`）。PTC 模式下程序在开始时绑定工具，`run_code` 内加载的工具要到下一个程序才能调用。
+- **按需加载不受工具限制约束**——已加载的工具位于调用方 agent 自己的作用域，`tools.restrict()` 的 allow 与 deny 掩码不过滤它们，而且 `allow` 掩码会拒绝继承工具列表中不存在的名称。要按名称禁止可加载的工具，使用执行 guard（`tools.guard`）。PTC 模式下程序在开始时绑定工具，`run_code` 内加载的工具要到下一个程序才能调用。
+- **目录可能在重启后比其服务器存留更久**——只有当前进程见过的来源才会被检测为退役，因此在没有该服务器加载器的进程中恢复的会话会保留它见过的目录，且不会收到通知（[来源生命周期](../../core/system-prompt/README.zh.md#known-limitations-and-deferred-work)）。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
 
 <a id="dev-note"></a>

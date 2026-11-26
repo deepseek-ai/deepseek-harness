@@ -120,8 +120,8 @@
     - id: tools
       name: '@deepseek-ai/dsh-tools'
 
-    - id: tool-executor-native
-      name: '@deepseek-ai/dsh-tool-executor-native'
+    - id: tool-registry-native
+      name: '@deepseek-ai/dsh-tool-registry-native'
 
     - id: mcp-resources
       name: '@deepseek-ai/dsh-mcp-resources'

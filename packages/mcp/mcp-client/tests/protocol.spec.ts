@@ -1,7 +1,7 @@
 /** Real SDK negotiation, subscription, and cancellation through the connection supervisor. */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { z } from 'zod'
 
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -31,7 +31,7 @@ async function connect(server: McpServer, options?: { resources: true }): Promis
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   const serving = serveStdio(() => server, { transport: serverTransport })
   mockTransport.mockReturnValue(clientTransport)
@@ -77,7 +77,7 @@ describe('modern MCP connections', () => {
       contents: [{ uri: 'memo://readme', text: 'memo' }],
     }))
     const ctx = await connect(server)
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
   })
 
   it('keeps shared resource tools for a configured server without resource capability', async () => {
@@ -86,7 +86,7 @@ describe('modern MCP connections', () => {
       content: [{ type: 'text', text: 'pong' }],
     }))
     const ctx = await connect(server, { resources: true })
-    const names = ctx.tools.schemas().map(tool => tool.name)
+    const names = ctx.tools.getAll().map(tool => tool.name)
     expect(names.toSorted()).toEqual([
       'list_mcp_resource_templates', 'list_mcp_resources', 'mcp__fixture__ping', 'read_mcp_resource',
     ])
@@ -110,7 +110,7 @@ describe('modern MCP connections', () => {
     })
     expect(read.isError).toBe(true)
     if (read.isError) expect(read.error.message).toContain('Method not found')
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(names)
+    expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(names)
     const ping = await executeToolFixture(ctx, {
       name: 'mcp__fixture__ping', arguments: {},
       callId: brandString<ToolCallId>('ping-after-resource-errors'), signal: new AbortController().signal,

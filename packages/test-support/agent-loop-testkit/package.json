@@ -42,8 +42,8 @@
     "@deepseek-ai/dsh-fs-local": "workspace:*"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
-    "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*"
+    "@deepseek-ai/dsh-tool-registry-native": "workspace:*",
+    "@deepseek-ai/dsh-tool-registry-ptc": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",

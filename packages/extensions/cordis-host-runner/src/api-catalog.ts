@@ -369,7 +369,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async setEnabled(agent: Agent, enabled: boolean, signal?: AbortSignal): Promise<void>',
-        description: 'Save a root Session\'s Team selection without stopping children or deleting tasks. The selection takes effect before awaiting persistence. Tools resolve availability at step preparation; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted operations finish.',
+        description: 'Save a root Session\'s Team selection without stopping children or deleting tasks. The selection takes effect before awaiting persistence. The Team tool provider updates the tree\'s tools from the logged selection; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted operations finish.',
         parameters: [{ name: 'agent', description: 'exact live root whose tree receives the selection.' }, { name: 'enabled', description: 'selected Team mode.' }, { name: 'signal', description: 'cancellation checked before changing the selection.' }],
         returns: 'fulfillment after the selection flushes.',
         throws: ['when called by a descendant or persistence fails. An appended selection remains active; retrying the same selection flushes without a duplicate event.'],
@@ -3116,8 +3116,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'planMode',
-    summary: '`ctx.planMode`: owns logged plan state, applies and narrates selected state at step start, the `plan:policy` section, the `/plan` command, and the conditional exit tool.',
-    description: '`ctx.planMode`: owns logged plan state, applies and narrates selected state at step start, the `plan:policy` section, the `/plan` command, and the conditional exit tool. Client carriers expose the projection\'s cropped `{ active, pending }` view. Agent prompt assembly fails while the projection reader is not ready; callers must await plugin activation before running an agent.',
+    summary: '`ctx.planMode`: owns logged plan state, applies and narrates selected state at step start, the `plan:policy` section, the `/plan` command, and the exit tool it adds per Agent.',
+    description: '`ctx.planMode`: owns logged plan state, applies and narrates selected state at step start, the `plan:policy` section, the `/plan` command, and the exit tool it adds per Agent. Client carriers expose the projection\'s cropped `{ active, pending }` view. Agent prompt assembly fails while the projection reader is not ready; callers must await plugin activation before running an agent.',
     methods: [
       {
         signature: 'get(agent: Agent): { active: boolean; pending?: boolean }',
@@ -3371,7 +3371,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'abstract readonly language: string',
-        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. The shipped Node backend and `dsh-tool-executor-ptc` support `\'typescript\'`. Other languages require their own consumers.',
+        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. The shipped Node backend and `dsh-tool-registry-ptc` support `\'typescript\'`. Other languages require their own consumers.',
         parameters: [],
       },
       {
@@ -4913,7 +4913,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async assemble(context: AssembleContext = {}): Promise<PromptAssembly>',
         description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the presentation waterfall. Scoped variables shadow globals; section IDs have one effective owner. The waterfall\'s text is authoritative except that an effective complete section is restored afterwards as the sole prompt section; tool declarations stay provider-owned. Section text and lifecycle are fixed here; `systemUpdates()` compares them with committed state later.',
-        parameters: [{ name: 'context', description: 'the optional scope, step tool set, and plugin-defined assembly fields.' }],
+        parameters: [{ name: 'context', description: 'the optional scope, model step, and plugin-defined assembly fields.' }],
         returns: 'the post-waterfall presentation and the system updates for the supplied Session.',
       },
     ],
@@ -5197,62 +5197,57 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'tools',
-    summary: 'Concrete tool registry and scoped executor dispatcher.',
-    description: 'Concrete tool registry and scoped executor dispatcher.',
+    summary: '`ctx.tools`: routes scoped tool contributions to the root registry each scope selects, answers lookups and dispatch from that root, and applies scoped restrictions and guards.',
+    description: '`ctx.tools`: routes scoped tool contributions to the root registry each scope selects, answers lookups and dispatch from that root, and applies scoped restrictions and guards. A root receives the registrations its scope sees when it is selected; a native root offers them as model entries, and a PTC root binds them in programs.',
     methods: [
       {
-        signature: 'register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void',
-        description: 'Register globally or in the calling agent scope. Scoped tools shadow globals; duplicates within one layer and the reserved `run_code` name fail.',
-        parameters: [{ name: 'definition', description: 'tool schema, execution, and optional finalization/presentation callbacks.' }, { name: 'options', description: 'optional step-time activation condition.' }],
-        returns: 'the exact disposer that unregisters the tool.',
+        signature: 'register(tool: ToolDefinition): () => void',
+        description: 'Register in the calling scope. The tool reaches the root the scope selects and the roots its descendant scopes select: a native root offers it as an entry, a PTC root binds it in programs. Nearer scopes shadow farther ones; duplicates within one scope, a name an inclusion in the scope already offers, and the reserved `run_code` name fail. A tool\'s `guidance` registers its system prompt section in the same effect; the section renders while the viewing scope\'s registrations resolve the tool.',
+        parameters: [{ name: 'tool', description: 'tool schema, execution, and optional finalization, presentation, or guidance.' }],
+        returns: 'the exact disposer that unregisters the tool and its guidance.',
+        throws: ['ToolCompositionError when the scope\'s inclusions already offer another definition with the name.'],
+      },
+      {
+        signature: 'include(registry: Pick<ToolRegistry, \'get\' | \'getAll\'>): () => void',
+        description: 'Include another registry\'s entries in the calling scope; they reach roots as registrations do. Each query reads the source for the viewing scope. Descendant scopes inherit the entries, so their restrictions apply; the including scope\'s own restrictions do not.',
+        parameters: [{ name: 'registry', description: 'source that keeps ownership of its definitions.' }],
+        returns: 'the exact disposer that removes this inclusion.',
+        throws: ['ToolCompositionError when the scope already offers another definition under one of the source\'s names, when the source itself offers several definitions under one of them, or when the source includes this service.'],
       },
       {
         signature: 'restrict(filter: ToolRestriction): () => void',
-        description: 'Restrict global tools for the calling agent scope. Empty filters, unknown names, scope-local names, and reserved transport names fail. Restrictions intersect; scoped registrations remain visible.',
-        parameters: [{ name: 'filter', description: 'global-tool mask: `allow` (keep only) and/or `deny` (remove).' }],
+        description: 'Restrict inherited tools for the calling scope. Restrictions intersect; the scope\'s own registrations and inclusions stay visible. `allow` names must be ones an inherited registration or inclusion can offer; an inclusion contributes its unscoped entries, so a tool a provider adds to Agents later can be allowed in advance. `deny` accepts any name, so a scope can deny a tool before anything offers it.',
+        parameters: [{ name: 'filter', description: 'inherited-tool mask: `allow` (keep only) and/or `deny` (remove).' }],
         returns: 'the exact disposer that lifts this restriction.',
+        throws: ['Error when the context is unscoped, the filter is empty, a name is `run_code`, or an `allow` name is not inherited.'],
       },
       {
-        signature: 'get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined',
-        description: 'Look up a tool as one scope sees it (scoped shadows global; a restricted-away global reads as absent). Presenters pass the calling agent so the rendered card matches the definition that actually executed.',
-        parameters: [{ name: 'name', description: 'the tool name as registered.' }, { name: 'scope', description: 'the viewing scope (the agent); omitted = the global view.' }, { name: 'toolSet', description: 'step admission; omit only to inspect registered definitions.' }],
-        returns: 'the definition the scope resolves, or undefined when none is visible.',
+        signature: 'get(name: string, scope?: ScopeKey): ToolDefinition | undefined',
+        description: 'Resolve one entry of the root a scope selects: a native root resolves the scope\'s registrations, a PTC root only its program entry.',
+        parameters: [{ name: 'name', description: 'entry name.' }, { name: 'scope', description: 'the viewing scope (the agent); omitted reads the root the unscoped context selects.' }],
+        returns: 'the root\'s entry, or undefined when the root has none with that name.',
+        throws: ['ToolRegistryUnavailableError when the scope\'s selected root is missing or unloaded.', 'ToolCompositionError when the deciding scope offers several definitions, or when the root or an included registry reads `ctx.tools`.'],
       },
       {
-        signature: 'executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined',
-        description: 'Resolve the definition a call may execute. With a step\'s admitted set, the set decides; without one, conditional registrations are unavailable.',
-        parameters: [{ name: 'name', description: 'the tool name as registered.' }, { name: 'scope', description: 'the calling agent; omitted = the global view.' }, { name: 'toolSet', description: 'step admission, or omitted for a call outside a model step.' }],
-        returns: 'the executable definition, or undefined when the call must fail as `UNKNOWN_TOOL`.',
+        signature: 'getAll(scope?: ScopeKey): readonly ToolDefinition[]',
+        description: 'List the entries of the root a scope selects, which its model steps declare: a native root lists the scope\'s registrations after shadowing and restrictions, a PTC root only its program entry.',
+        parameters: [{ name: 'scope', description: 'the viewing scope (the agent); omitted reads the root the unscoped context selects.' }],
+        returns: 'the root\'s entries.',
+        throws: ['ToolRegistryUnavailableError when the scope\'s selected root is missing or unloaded.', 'ToolCompositionError when a visible name has several definitions in its deciding scope, or when the root or an included registry reads `ctx.tools`.'],
       },
       {
-        signature: 'async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>',
-        description: 'Resolve conditions once for this step without changing shared registrations. Cancellation or a rejected condition publishes no partial selection. Removed registrations cannot be restored by a late condition result.',
-        parameters: [{ name: 'context', description: 'preparing agent, captured model selection, and cancellation.' }],
-        returns: 'the complete selection; the caller disposes it after its tool batch settles.',
-      },
-      {
-        signature: 'definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[]',
-        description: 'Read the visible capability definitions for descriptions and program bindings.',
-        parameters: [{ name: 'scope', description: 'viewing Agent or preset; omitted selects the global view.' }, { name: 'toolSet', description: 'step admission; omit only to inspect registered definitions.' }],
-        returns: 'definitions after scoped shadowing and restrictions, limited to the step\'s admission when given.',
-      },
-      {
-        signature: 'schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[]',
-        description: 'Project visible definitions onto the allowlisted model-facing schema fields, excluding execution and presentation callbacks.',
-        parameters: [{ name: 'scope', description: 'the viewing scope (the agent); omitted = the global view.' }, { name: 'toolSet', description: 'step admission, or omitted for registered-definition inspection.' }],
-        returns: 'one deep-cloned schema per visible tool.',
-      },
-      {
-        signature: 'setExecutor(executor: ToolExecutor): () => void',
-        description: 'Provide the executor for the calling scope; an unscoped contribution is the deployment default. Rendering any executor-owned section requires the viewing scope\'s selection to remain available. Disposal retires its sections; a replacement\'s same-name sections supersede those notices.',
-        parameters: [{ name: 'executor', description: 'initialized provider owned by the contributing plugin.' }],
+        signature: 'setRoot(registry: ToolRegistry): () => void',
+        description: 'Select the root registry for the calling scope; an unscoped call selects the root for every scope without its own. Agents use the nearest selected root. The root includes the registrations each viewing scope sees, and keeps them after unloading so accepted batches settle their calls; selecting the same registry again does not include them twice. A root must not include or read `ctx.tools`: such a read fails with `ToolCompositionError` when the root is selected or, for a root that reads it later, in the lookup or batch that reaches it. Register tools through `ctx.tools`: a tool registered directly in a root skips the scope\'s conflict check, so another definition registered under its name through `ctx.tools` is accepted and the next `ctx.tools.getAll()` throws. Selecting or unloading a root emits `tools/change`; an observer that throws fails the selection, which restores the scope\'s earlier selection, or none, and emits `tools/change` again.',
+        parameters: [{ name: 'registry', description: 'initialized root owned by the contributing plugin.' }],
         returns: 'the effect disposer. Unloading leaves the selection unavailable until it is replaced.',
+        throws: ['Error when the calling scope already has a live root.', 'ToolCompositionError when the root\'s own entries conflict with the registrations, or when the root reads `ctx.tools`.', 'the error a `tools/change` observer throws for the selection.'],
       },
       {
         signature: 'async execute(input: ToolBatchInput): Promise<ToolBatchResult>',
-        description: 'Delegate a raw call batch to its Agent\'s provider or the deployment default. Select at dispatch; accepted batches settle through that provider even if it unloads.',
-        parameters: [{ name: 'input', description: 'original calls, optional owning Agent, and optional logging step.' }],
-        returns: 'the selected executor\'s settled batch; unavailable selections reject.',
+        description: 'Execute a complete batch of calls to the entries of the root the Agent selects, or the unscoped context\'s root for a standalone call. Each call runs the entry the root resolves for the Agent; with a model step, only the exact entry the step declared, and any other call fails as `UNKNOWN_TOOL`. A call naming a tool the Agent can reach only from the root\'s entries, such as a program binding, fails as `UNKNOWN_TOOL` before `tools/pre-execute`, approval, guards, and execution wrappers, and its message names the entries the Agent can call directly. An accepted batch settles through the root it started with even if that root unloads. With log, root call/result events are committed to the Agent\'s Session; without log, they are omitted. One outcome is returned per input call in input order, including skipped calls on abort, and the batch never settles while started work is still running. Internal failures reject with ToolBatchExecutionError after draining, preserving committed outcomes and context; callers must stop dependent work and repair missing log results.',
+        parameters: [{ name: 'input', description: 'original calls, cancellation, optional concurrency override, Agent, model step, and logging step.' }],
+        returns: 'settled results, deferred context, and whether a success concludes the turn.',
+        throws: ['ToolRegistryUnavailableError when the Agent\'s selected root is missing or unloaded.'],
       },
       {
         signature: 'guard(guard: ToolGuard): () => void',
@@ -6565,6 +6560,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'timeline/installation',
+    mode: 'emit',
+    signature: '\'timeline/installation\'(this: Scoped<Agent>, installations: TimelineInstallation[]): void',
+    summary: 'Collect the Timeline installations that can manage one Agent; the nearest one in the Agent\'s scope chain owns its planning tools.',
+    description: 'Collect the Timeline installations that can manage one Agent; the nearest one in the Agent\'s scope chain owns its planning tools. Each installation answers with its own record. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): an installation in a preset or Agent scope answers only for Agents in that scope.',
+    parameters: [{ name: 'installations', description: 'receives each answering installation\'s record.' }],
+  },
+  {
     name: 'timeline/priority',
     mode: 'emit',
     signature: '\'timeline/priority\'(session: Session): void',
@@ -6576,8 +6579,8 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'tools/change',
     mode: 'emit',
     signature: '\'tools/change\'(): void',
-    summary: 'A tool was registered or unregistered, or a scoped restriction changed.',
-    description: 'A tool was registered or unregistered, or a scoped restriction changed. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent\'s next assembly.',
+    summary: 'A tool was registered or unregistered, a registry inclusion changed, a scoped restriction changed, or a root registry was selected or unloaded.',
+    description: 'A tool was registered or unregistered, a registry inclusion changed, a scoped restriction changed, or a root registry was selected or unloaded. Entries an included registry adds or removes later do not emit this event. When `ctx.tools` emits it for a registration, inclusion, restriction, or root selection, a listener that throws fails that contribution, which is undone and emits this event again; a removal is not undone. Another producer may handle a listener failure differently, for example by logging it. Unfiltered registry notification: scoped listeners receive changes from every scope because a global contribution can affect every agent\'s next assembly.',
     parameters: [],
   },
   {
@@ -9378,7 +9381,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'McpConnectionStatusHandle',
-    declaration: 'export interface McpConnectionStatusHandle {\n    current(): McpConnectionStatus;\n    closure(): McpCloseResult;\n    onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void;\n}',
+    declaration: 'export interface McpConnectionStatusHandle {\n    current(): McpConnectionStatus;\n    closure(): McpCloseResult;\n    onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void;\n    registers(definition: ToolDefinition): boolean;\n}',
   },
   {
     name: 'McpManagedServerStatus',
@@ -10427,10 +10430,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ResolvedSubagentStartRequest',
     declaration: 'export interface ResolvedSubagentStartRequest extends SubagentStartRequest {\n    readonly cwd: string;\n}',
-  },
-  {
-    name: 'ResolvedToolSet',
-    declaration: 'export interface ResolvedToolSet {\n    dispose(): void;\n    view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>;\n}',
   },
   {
     name: 'RestartReason',
@@ -12129,6 +12128,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TimedUserQuestionResult = AskUserQuestionAnswer | {\n    pending: true;\n    callId: ToolCallId;\n};',
   },
   {
+    name: 'TimelineInstallation',
+    declaration: 'export interface TimelineInstallation {\n    readonly scope: ScopeKey | undefined;\n}',
+  },
+  {
     name: 'ToastOptions',
     declaration: 'export interface ToastOptions {\n    timeoutMs?: number;\n}',
   },
@@ -12149,16 +12152,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TokenUsage {\n    inputTokens: number;\n    outputTokens: number;\n    totalTokens?: number;\n    cacheReadTokens?: number;\n    cacheWriteTokens?: number;\n    reasoningTokens?: number;\n}',
   },
   {
-    name: 'ToolActivationContext',
-    declaration: 'export interface ToolActivationContext {\n    readonly agent: Agent;\n    readonly modelSelection: Readonly<ModelSelection>;\n    readonly signal: AbortSignal;\n}',
-  },
-  {
     name: 'ToolAdditionBlock',
     declaration: 'export interface ToolAdditionBlock {\n    type: \'tool-addition\';\n    toolName: string;\n    tool?: never;\n}',
   },
   {
     name: 'ToolBatchInput',
-    declaration: 'export interface ToolBatchInput {\n    readonly calls: readonly ToolCallBlock[];\n    readonly signal: AbortSignal;\n    readonly maxParallelToolCalls?: number;\n    readonly agent?: Agent;\n    readonly toolSet?: ResolvedToolSet;\n    readonly log?: {\n        readonly turn: number;\n        readonly step: number;\n    };\n}',
+    declaration: 'export interface ToolBatchInput {\n    readonly calls: readonly ToolCallBlock[];\n    readonly signal: AbortSignal;\n    readonly maxParallelToolCalls?: number;\n    readonly agent?: Agent;\n    readonly toolStep?: ToolStep;\n    readonly log?: {\n        readonly turn: number;\n        readonly step: number;\n    };\n}',
   },
   {
     name: 'ToolBatchResult',
@@ -12186,7 +12185,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolDefinition',
-    declaration: 'export interface ToolDefinition extends ToolSchema {\n    readonly output: ToolOutputDefinition;\n    execute(args: unknown, exec: ToolRunContext): Promise<unknown>;\n    projectContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    finalizeContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    timeoutMs?: number;\n    isConcurrencySafe?(args: unknown): boolean;\n    presentCall?(args: unknown): ToolCallView | undefined;\n    presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined;\n}',
+    declaration: 'export interface ToolDefinition extends ToolSchema {\n    readonly output: ToolOutputDefinition;\n    execute(args: unknown, exec: ToolRunContext): Promise<unknown>;\n    projectContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    finalizeContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    timeoutMs?: number;\n    readonly guidance?: ToolGuidance;\n    isConcurrencySafe?(args: unknown): boolean;\n    presentCall?(args: unknown): ToolCallView | undefined;\n    presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined;\n}',
   },
   {
     name: 'ToolDispatchExecution',
@@ -12198,7 +12197,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolExecution',
-    declaration: 'export interface ToolExecution extends ToolExecutionInput {\n    readonly rootCallId: ToolCallId;\n    readonly token: ToolExecutionToken;\n}',
+    declaration: 'export interface ToolExecution extends ToolExecutionInput {\n    readonly rootCallId: ToolCallId;\n    readonly token: ToolExecutionToken;\n    readonly definition?: ToolDefinition;\n}',
   },
   {
     name: 'ToolExecutionFailure',
@@ -12206,7 +12205,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolExecutionInput',
-    declaration: 'export interface ToolExecutionInput {\n    readonly callId: ToolCallId;\n    readonly rootCallId?: ToolCallId;\n    readonly name: string;\n    readonly schema?: ToolSchema;\n    readonly arguments: unknown;\n    readonly agent?: Agent;\n    readonly toolSet?: ResolvedToolSet;\n    readonly parent?: ToolExecutionToken;\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface ToolExecutionInput {\n    readonly callId: ToolCallId;\n    readonly rootCallId?: ToolCallId;\n    readonly name: string;\n    readonly schema?: ToolSchema;\n    readonly arguments: unknown;\n    readonly agent?: Agent;\n    readonly toolStep?: ToolStep;\n    readonly parent?: ToolExecutionToken;\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'ToolExecutionResult',
@@ -12221,10 +12220,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ToolExecutionToken = symbol & {\n    readonly [toolExecutionTokenBrand]: true;\n};',
   },
   {
-    name: 'ToolExecutor',
-    declaration: 'export interface ToolExecutor {\n    readonly sections?: readonly ToolPromptSection[];\n    describe(tools: readonly ToolDefinition[]): ToolModelInput;\n    execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n}',
-  },
-  {
     name: 'ToolFailure',
     declaration: 'export interface ToolFailure {\n    message: string;\n    info?: ToolErrorInfo;\n}',
   },
@@ -12235,6 +12230,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ToolGuardDenial',
     declaration: 'export interface ToolGuardDenial {\n    readonly reason: string;\n    readonly info?: ToolErrorInfo;\n}',
+  },
+  {
+    name: 'ToolGuidance',
+    declaration: 'export interface ToolGuidance {\n    readonly section?: string;\n    readonly order: PromptSectionOrderName;\n    readonly text: string | ((available: readonly string[]) => string);\n    readonly retirement?: string;\n}',
   },
   {
     name: 'ToolHistory',
@@ -12249,24 +12248,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ToolMessageSource {\n    kind: \'tool\';\n    callId: ToolCallId;\n}',
   },
   {
-    name: 'ToolModelInput',
-    declaration: 'export type ToolModelInput = Pick<ToolProviderResult, \'schemas\' | \'knownNames\'>;',
-  },
-  {
     name: 'ToolOutputDefinition',
     declaration: 'export interface ToolOutputDefinition {\n    readonly schema: JsonSchemaNode;\n    render(args: unknown, value: JsonValue): ContentBlock[];\n    presentationMeta?(args: unknown, value: JsonValue): JsonValue;\n}',
-  },
-  {
-    name: 'ToolPromptSection',
-    declaration: 'export interface ToolPromptSection extends Pick<PromptSection, \'name\' | \'order\' | \'interpolate\'> {\n    readonly text: string | ((tools: readonly ToolDefinition[]) => string);\n}',
   },
   {
     name: 'ToolProviderResult',
     declaration: 'export interface ToolProviderResult {\n    readonly schemas: readonly ToolSchema[];\n    readonly knownNames?: readonly string[];\n}',
   },
   {
-    name: 'ToolRegistrationOptions',
-    declaration: 'export interface ToolRegistrationOptions {\n    readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>;\n}',
+    name: 'ToolRegistry',
+    declaration: 'export interface ToolRegistry {\n    register(tool: ToolDefinition): () => void;\n    include(registry: Pick<ToolRegistry, \'get\' | \'getAll\'>): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    getAll(scope?: ScopeKey): readonly ToolDefinition[];\n}',
   },
   {
     name: 'ToolRemovalBlock',
@@ -12302,7 +12293,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolsService',
-    declaration: 'export class ToolsService extends Service {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(definition: ToolDefinition, options: ToolRegistrationOptions = {}): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    executable(name: string, scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolDefinition | undefined;\n    async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>;\n    definitions(scope?: ScopeKey, toolSet?: ResolvedToolSet): readonly ToolDefinition[];\n    schemas(scope?: ScopeKey, toolSet?: ResolvedToolSet): ToolSchema[];\n    setExecutor(executor: ToolExecutor): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): ToolGuardDenial | undefined;\n}',
+    declaration: 'export class ToolsService extends Service implements ToolRegistry {\n    static inject;\n    static Config;\n    constructor(ctx: Context);\n    register(tool: ToolDefinition): () => void;\n    include(registry: Pick<ToolRegistry, \'get\' | \'getAll\'>): () => void;\n    restrict(filter: ToolRestriction): () => void;\n    get(name: string, scope?: ScopeKey): ToolDefinition | undefined;\n    getAll(scope?: ScopeKey): readonly ToolDefinition[];\n    setRoot(registry: ToolRegistry): () => void;\n    async execute(input: ToolBatchInput): Promise<ToolBatchResult>;\n    guard(guard: ToolGuard): () => void;\n    checkGuards(exec: ToolExecution): ToolGuardDenial | undefined;\n}',
+  },
+  {
+    name: 'ToolStep',
+    declaration: 'export class ToolStep {\n    static capture(tools: Pick<ToolRegistry, \'getAll\'>, agent: Agent): ToolStep;\n    get declarations(): readonly ToolDefinition[];\n    declares(definition: ToolDefinition): boolean;\n}',
   },
   {
     name: 'ToolUpdate',

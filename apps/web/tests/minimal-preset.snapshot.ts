@@ -14,6 +14,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import {
   acknowledgeReloadConnectionLoss,
   assertFixtureInventory,
@@ -145,8 +146,9 @@ describe('minimal agent preset', () => {
     `)
     const requestedTools = new Set(requestHeader.tools?.map(tool => tool.name))
     expect(requestHeader.tools?.toSorted((left, right) => left.name.localeCompare(right.name)))
-      .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent)
+      .toEqual(scaffold.ctx.tools.getAll(agentHandle.agent)
         .filter(tool => requestedTools.has(tool.name))
+        .map(tool => projectToolSchema(tool, true))
         .toSorted((left, right) => left.name.localeCompare(right.name)))
   })
 

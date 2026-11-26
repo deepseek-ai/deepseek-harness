@@ -1,5 +1,5 @@
 /** Optional bundles through the shipped Web Loader, live package manager, and real Agent loop. */
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeToolFixture, stepToolNames } from '@deepseek-ai/dsh-tool-testkit'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -21,6 +21,7 @@ import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-session-title-llm'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { textResponse, toolCallResponse } from '../../../packages/core/agent-loop/tests/mock-adapter.ts'
 
@@ -164,7 +165,10 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(result, JSON.stringify(result)).toMatchObject({ changed: true, application: 'applied' })
   }
 
-  const names = (owner?: Agent) => ctx.tools.schemas(owner).map(tool => tool.name).sort()
+  /** Tools an Agent's next step can call, directly or from programs; without an Agent, the deployment root's entries. */
+  const names = async (owner?: Agent): Promise<string[]> => owner === undefined
+    ? ctx.tools.getAll().map(tool => tool.name).sort()
+    : stepToolNames(await ctx.systemPrompt.assemble({ scope: owner, agent: owner, toolStep: ToolStep.capture(ctx.tools, owner) }))
   const toolResult = (owner: Agent, callId: string) => owner.session.deriveMessages()
     .flatMap(message => message.role === 'tool' && message.toolCallId === callId ? message.content : [])
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
@@ -172,9 +176,9 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('keeps the default host and minimal tool catalogs while every optional bundle is off', async () => {
     const minimal = await agent('minimal')
     const standard = await agent()
-    expect(names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
-    for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'user_terminal_list', 'ralph']) expect(names(standard.agent)).not.toContain(name)
+    expect(await names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
+    expect(await names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image'])
+    for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'user_terminal_list', 'ralph']) expect(await names(standard.agent)).not.toContain(name)
     expect((await ctx.skills.list({ cwd: workspace, scope: standard.agent })).some(skill => skill.name === 'dsh-badge')).toBe(false)
   })
 
@@ -183,11 +187,11 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     const coded = await agent('ptc')
     const native = await agent('cordis')
     const minimal = await agent('minimal')
-    const assembly = await ctx.systemPrompt.assemble({ scope: coded.agent })
+    const assembly = await ctx.systemPrompt.assemble({ scope: coded.agent, toolStep: ToolStep.capture(ctx.tools, coded.agent) })
     expect(assembly.tools.map(tool => tool.name)).toEqual(['run_code'])
     expect(assembly.sections.find(section => section.name === 'tools:sdk')?.text).toContain('session_trace')
-    expect(names(native.agent)).toContain('session_search')
-    expect(names(minimal.agent)).toContain('session_search')
+    expect(await names(native.agent)).toContain('session_search')
+    expect(await names(minimal.agent)).toContain('session_search')
     await turn(coded.agent, 'Read this session lineage through run_code.', [
       toolCallResponse('ptc-search', 'run_code', {
         code: 'inspect(await tools.session_trace({}));',
@@ -212,7 +216,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     const foreign = await agent('standard', otherWorkspace)
     await turn(foreign.agent, 'Keep OPTIONAL_SEARCH_MARKER in the other workspace.', [textResponse('Other marker recorded.')])
     await select(bundles.search, true)
-    expect(names(live.agent)).toContain('session_search')
+    expect(await names(live.agent)).toContain('session_search')
     const searcher = await agent()
     await turn(searcher.agent, 'Find the previous marker in session history.', [
       toolCallResponse('search-history', 'session_search', { query: 'OPTIONAL_SEARCH_MARKER' }), textResponse('SEARCH_DONE'),
@@ -222,14 +226,14 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(searcher.agent, 'search-history')).not.toContain(foreign.agent.session.id)
     expect(toolResult(searcher.agent, 'search-history')).toContain('OPTIONAL_SEARCH_MARKER')
     await select(bundles.search, false)
-    expect(names(searcher.agent)).not.toContain('session_search')
-    expect(names((await agent()).agent)).not.toContain('session_search')
+    expect(await names(searcher.agent)).not.toContain('session_search')
+    expect(await names((await agent()).agent)).not.toContain('session_search')
     const sessionId = searcher.agent.session.id
     await searcher.dispose()
     handles.delete(searcher)
     const reopened = await ctx.agents.resume({ resumeSessionId: sessionId, setup: scoped => ctx.agentPresets.mount(scoped, 'standard').then(() => undefined) })
     handles.add(reopened)
-    expect(names(reopened.agent)).not.toContain('session_search')
+    expect(await names(reopened.agent)).not.toContain('session_search')
   })
 
   it('loads the actual badge asset only while its bundle is selected', async () => {
@@ -247,7 +251,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'badge-on')).toContain('dsh-badge.png')
     const minimal = await agent('minimal')
     expect((await ctx.skills.list({ cwd: workspace, scope: minimal.agent })).map(skill => skill.name)).toContain('dsh-badge')
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update'])
+    expect(await names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image'])
     await select(bundles.badge, false)
     expect((await load('badge-after')).isError).toBe(true)
   })
@@ -255,7 +259,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('runs and closes a real persistent terminal delivered by its bundle', async () => {
     await select(bundles.terminal, true)
     const owner = await agent()
-    expect(names(owner.agent)).toEqual(expect.arrayContaining(['terminal_open', 'user_terminal_list', 'user_terminal_read']))
+    expect(await names(owner.agent)).toEqual(expect.arrayContaining(['terminal_open', 'user_terminal_list', 'user_terminal_read']))
     const target = join(workspace, 'terminal-output.txt')
     let terminalId: string | undefined
     const id = () => {
@@ -281,8 +285,8 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(await readFile(target, 'utf8')).toBe('TERMINAL_BUNDLE_OK')
     expect(toolResult(owner.agent, 'terminal-close')).toContain('closed terminal session')
     await select(bundles.terminal, false)
-    expect(names((await agent()).agent)).not.toContain('terminal_open')
-    expect(names((await agent()).agent)).not.toContain('user_terminal_list')
+    expect(await names((await agent()).agent)).not.toContain('terminal_open')
+    expect(await names((await agent()).agent)).not.toContain('user_terminal_list')
   })
 
   it('runs a real fresh-Agent Ralph workflow through the selected bundle', async () => {
@@ -296,7 +300,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'ralph-run')).toContain('OPTIONAL_RALPH_DONE')
     expect(model.requests.some(request => request.sessionId !== owner.agent.session.id && request.tools?.some(tool => tool.name === 'structured_output'))).toBe(true)
     await select(bundles.ralph, false)
-    expect(names((await agent()).agent)).not.toContain('ralph')
+    expect(await names((await agent()).agent)).not.toContain('ralph')
   })
 
   it('switches title cadence off/on/off through the live manager', async () => {
@@ -335,7 +339,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     let coded: Agent | undefined
     for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {
       const owner = await agent(preset)
-      expect(names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'user_terminal_read', 'ralph']))
+      expect(await names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'user_terminal_read', 'ralph']))
       if (preset === 'ptc') coded = owner.agent
     }
     if (coded === undefined) throw new Error('the PTC Agent was not created')
@@ -347,8 +351,8 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     ])
     expect(toolResult(coded, 'combined-program')).toContain(coded.session.id)
     expect(toolResult(coded, 'combined-program')).toContain('dsh-badge')
-    expect(names()).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph']))
+    expect(await names()).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph']))
     for (const name of [...Object.values(bundles)].reverse()) await select(name, false)
-    expect(names((await agent()).agent)).not.toContain('session_search')
+    expect(await names((await agent()).agent)).not.toContain('session_search')
   })
 })

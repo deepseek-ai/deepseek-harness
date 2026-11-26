@@ -1,9 +1,9 @@
 import { createRequire } from 'node:module'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRegistry from '@deepseek-ai/dsh-tools'
+import ToolRegistry, { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import { queryServiceApi } from '../src/api-catalog.ts'
 import DynamicCordisRunnerService from '../src/index.ts'
@@ -22,7 +22,7 @@ async function host(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRegistry)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -64,6 +64,26 @@ describe('the first-party Host inspect providers', () => {
     const agent = { ctx } as never
     const signal = new AbortController().signal
     expect(await ctx.cordisInspect.query('host', 'Runtime', 'getVersion', undefined, agent, signal)).toEqual({ version: (createRequire(import.meta.url)('@deepseek-ai/dsh-app-boot/package.json') as { version: string }).version })
+    await ctx.fiber.dispose()
+  })
+
+  it('lists the tools an Agent can call directly from its root', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRegistry)
+    const tool = (name: string): ToolDefinition => defineTool({
+      name, description: name, parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      execute: () => Promise.resolve(name),
+    })
+    ctx.tools.register(tool('read'))
+    const program = tool('program')
+    ctx.tools.setRoot({ register: () => () => {}, include: () => () => {}, get: name => name === 'program' ? program : undefined, getAll: () => [program] })
+    const provider = hostInspectProviders(ctx).find(candidate => candidate.manifest.id === 'Tool')!
+    const listed = await provider.query('listTools', undefined, { agent: undefined as never, signal: new AbortController().signal }) as { tools: { name: string }[] }
+    // A root that binds tools in programs offers only its program entry.
+    expect(listed.tools.map(entry => entry.name)).toEqual(['program'])
     await ctx.fiber.dispose()
   })
 

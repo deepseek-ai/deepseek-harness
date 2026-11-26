@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -50,7 +50,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)
@@ -124,7 +124,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     await registerTurnBoundary(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)

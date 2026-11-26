@@ -6,11 +6,13 @@ import Schema from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/types'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
+import type { McpConnectionStatusHandle } from '@deepseek-ai/dsh-mcp-client'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import { BrowserSessionError, SessionResources } from './index.ts'
 import type {} from '@deepseek-ai/dsh-browser-use'
-import { ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { ToolContextUnavailableError, ToolRegistryUnavailableError } from '@deepseek-ai/dsh-tools'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-working-directory'
 
@@ -90,6 +92,30 @@ export interface SessionMcpOptions {
 interface ClientState {
   status: 'ready' | 'blocked'
   mask?: Scope
+  /** The Agent's own MCP client, which records the browser tools it registered; absent while blocked. */
+  client?: McpConnectionStatusHandle
+}
+
+/** One Agent's browser scope and the MCP client mounted in it. */
+interface SessionClient {
+  readonly scope: Scope
+  readonly client: McpConnectionStatusHandle
+}
+
+/**
+ * List the entries an Agent's root offers; without a selected root it offers none.
+ * Under a PTC root these exclude the browser tools, which programs bind instead.
+ * @param ctx - context reading the tool registry.
+ * @param agent - viewing Agent.
+ * @returns the root's entries for the Agent.
+ */
+function rootEntries(ctx: Context, agent: Agent): readonly ToolDefinition[] {
+  try {
+    return ctx.tools.getAll(agent)
+  } catch (error: unknown) {
+    if (error instanceof ToolRegistryUnavailableError) return []
+    throw error
+  }
 }
 
 /**
@@ -103,7 +129,7 @@ interface ClientState {
 export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void {
   const workingDirectory = ctx.get('workingDirectory')
   if (workingDirectory === undefined) throw new Error(`${options.name}: browser MCP requires a working-directory provider`)
-  let resources!: SessionResources<Scope>
+  let resources!: SessionResources<SessionClient>
   const clients = new Map<Agent, ClientState>()
   const toolPrefix = `mcp__${options.name}__`
   const resourceTools = new Set(['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource'])
@@ -116,7 +142,7 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
     try {
       for (const [agent, state] of clients) {
         if (state.status !== 'blocked') continue
-        const inherited = ctx.tools.schemas(agent).filter(tool => tool.name.startsWith(toolPrefix))
+        const inherited = rootEntries(ctx, agent).filter(tool => tool.name.startsWith(toolPrefix))
         if (inherited.length === 0) continue
         state.mask ??= createScope(ctx, agent)
         state.mask.ctx.tools.restrict({ deny: inherited.map(tool => tool.name) })
@@ -138,15 +164,20 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
         signal.addEventListener('abort', cancel, { once: true })
         try {
           signal.throwIfAborted()
+          // A descendant Agent runs only the browser tools its own client registered, never this Session's browser.
           scope.ctx.on('tools/execute', async (exec, next) => {
-            if (!exec.name.startsWith(toolPrefix)) return next()
-            if (exec.agent !== agent) {
-              if (ctx.tools.get(exec.name, exec.agent) !== ctx.tools.get(exec.name, agent)) return next()
-              throw new BrowserSessionError(`${options.name}: browser tool belongs to another Session`, 'BROWSER_FOREIGN_SESSION')
-            }
-            return next()
+            if (!exec.name.startsWith(toolPrefix) || exec.agent === agent) return next()
+            // A call that resolved no definition runs no browser tool; dispatch fails it as an unknown tool.
+            if (exec.definition === undefined) return next()
+            const caller = exec.agent
+            /* v8 ignore next -- a scope-tagged listener receives only calls that name an Agent */
+            const own = caller === undefined ? undefined : clients.get(caller)?.client
+            if (own?.registers(exec.definition) === true) return next()
+            throw new BrowserSessionError(`${options.name}: browser tool belongs to another Session`, 'BROWSER_FOREIGN_SESSION')
           })
-          await scope.ctx.plugin(McpClient, McpClient.Config({
+          // A host per Agent mounts the client in the Agent's scope and reports the tools that client registered.
+          const host = new McpClient.McpClientHost(scope.ctx.isolate('mcpClientHost'))
+          const client = await host.mount(McpClient.Config({
             transport: 'stdio',
             serverName: options.name,
             command: options.command,
@@ -156,10 +187,10 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
             ...options.toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs: options.toolCallTimeoutMs },
             failOnStartupError: true,
             reconnect: { enabled: false },
-          }))
+          })).ready
           signal.throwIfAborted()
           return {
-            value: scope,
+            value: { scope, client },
             close() {
               clients.delete(agent)
               return scope.dispose()
@@ -190,7 +221,7 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
       refreshBlockedMasks()
       return
     }
-    await resources.get(agent, signal)
+    state.client = (await resources.get(agent, signal)).client
     clients.set(agent, state)
   }, { prepend: true })
   ctx.on('tools/change', refreshBlockedMasks)

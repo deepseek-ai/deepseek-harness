@@ -13,6 +13,15 @@ import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import { stepToolNames } from '@deepseek-ai/dsh-tool-testkit'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
+
+/** Tools an Agent's next step can call, directly or from programs. */
+async function reachable(scaffold: WebScaffold, agent: Agent): Promise<string[]> {
+  const toolStep = ToolStep.capture(scaffold.ctx.tools, agent)
+  return stepToolNames(await scaffold.ctx.systemPrompt.assemble({ scope: agent, agent, toolStep }))
+}
 
 // This fixture exercises the macOS provider’s permission setup.
 it.skipIf(process.platform !== 'darwin').each([
@@ -67,7 +76,7 @@ it.skipIf(process.platform !== 'darwin').each([
       sessionId: brandString<SessionId>('cua-existing-ptc'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx, 'ptc') },
     })).agent
-    expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(false)
+    expect((await reachable(scaffold, ptcAgent)).includes('cua')).toBe(false)
     const runtimeFiber = () => [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'ptc-runtime')?.fiber
     const originalRuntimeFiber = runtimeFiber()
     expect(originalRuntimeFiber).toBeDefined()
@@ -128,23 +137,23 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.agents.get(originalAgent.id) === originalAgent).toBe(true)
     expect(scaffold.ctx.agents.get(ptcAgent.id) === ptcAgent).toBe(true)
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
-    expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(false)
-    expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua_run_code')).toBe(true)
-    expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua_run_code')).toBe(false)
-    expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(true)
+    expect((await reachable(scaffold, originalAgent)).includes('cua')).toBe(false)
+    expect((await reachable(scaffold, originalAgent)).includes('cua_run_code')).toBe(true)
+    expect((await reachable(scaffold, ptcAgent)).includes('cua_run_code')).toBe(false)
+    expect((await reachable(scaffold, ptcAgent)).includes('cua')).toBe(true)
     expect((await scaffold.ctx.systemPrompt.assemble({ scope: ptcAgent })).tools.map(tool => tool.name)).toEqual(['run_code'])
     for (const preset of ['ptc', 'standard', 'ptc', initialDefault]) {
       await scaffold.ctx.agentPresets.select(originalAgent, preset)
-      expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(preset === 'ptc')
-      expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua_run_code')).toBe(preset !== 'ptc')
+      expect((await reachable(scaffold, originalAgent)).includes('cua')).toBe(preset === 'ptc')
+      expect((await reachable(scaffold, originalAgent)).includes('cua_run_code')).toBe(preset !== 'ptc')
     }
     const child = await scaffold.ctx.agents.create({
       sessionId: brandString<SessionId>('cua-child'),
       setup: (ctx) => { scaffold.ctx.agentPresets.composeFrom(ctx, ptcAgent.ctx) },
     })
-    expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(true)
+    expect((await reachable(scaffold, child.agent)).includes('cua')).toBe(true)
     await child.dispose()
-    expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(false)
+    expect(scaffold.ctx.tools.getAll(child.agent).some(tool => tool.name === 'cua')).toBe(false)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(runtimeFiber() === originalRuntimeFiber).toBe(true)
     expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'function-body')
@@ -168,14 +177,14 @@ it.skipIf(process.platform !== 'darwin').each([
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx) },
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(freshDefault.ctx)).toBe(initialDefault)
-    expect(scaffold.ctx.tools.schemas(freshDefault).some(tool => tool.name === 'cua')).toBe(false)
-    expect(scaffold.ctx.tools.schemas(freshDefault).some(tool => tool.name === 'cua_run_code')).toBe(true)
+    expect((await reachable(scaffold, freshDefault)).includes('cua')).toBe(false)
+    expect((await reachable(scaffold, freshDefault)).includes('cua_run_code')).toBe(true)
     const fresh = (await scaffold.ctx.agents.create({
       sessionId: brandString<SessionId>('cua-new-ptc'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx, 'ptc') },
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(fresh.ctx)).toBe('ptc')
-    expect(scaffold.ctx.tools.schemas(fresh).some(tool => tool.name === 'cua')).toBe(true)
+    expect((await reachable(scaffold, fresh)).includes('cua')).toBe(true)
     await card.getByRole('button', { name: '查看 自动电脑操作', exact: true }).click()
     const detail = plugins.locator('[data-detail-document]')
     await detail.getByRole('img', { name: '在多窗口桌面中自动操作选定任务看板窗口的示意图' }).waitFor()
@@ -213,10 +222,10 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(scaffold.ctx.agents.get(ptcAgent.id) === ptcAgent).toBe(true)
     for (const agent of [originalAgent, freshDefault, ptcAgent, fresh]) {
-      expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua_run_code')).toBe(false)
+      expect((await reachable(scaffold, agent)).includes('cua_run_code')).toBe(false)
     }
     for (const agent of [ptcAgent, fresh]) {
-      expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua')).toBe(false)
+      expect((await reachable(scaffold, agent)).includes('cua')).toBe(false)
       expect((await scaffold.ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['run_code'])
     }
     expect(await readFile(settingsPath, 'utf8')).toBe(saved)

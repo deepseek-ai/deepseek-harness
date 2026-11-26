@@ -1,8 +1,8 @@
 # Replays the native-then-PTC denial details with the scoped REPL.
-- id: tool-executor-native
+- id: tool-registry-native
   disabled: false
 
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: true
 
 - insert:

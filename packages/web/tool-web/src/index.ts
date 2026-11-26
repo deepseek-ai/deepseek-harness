@@ -2,13 +2,15 @@
  * Model-facing `web_search` and `web_fetch` tools over `ctx.web`. This package owns schemas,
  * validation, prompt guidance, limits, and presentation, never concrete providers. Enablement
  * controls tool registration; an enabled tool remains visible when its provider is unavailable
- * and fails with a structured error at execution time. A model step does not admit
- * `web_search` or `web_fetch` while `ctx.web.searchReady()` or `ctx.web.fetchReady()`
- * reports that the selected provider cannot authenticate for that step's chat route.
+ * and fails with a structured error at execution time. An Agent sees `web_search` or `web_fetch`
+ * only while `ctx.web.searchReady()` or `ctx.web.fetchReady()` reports that the selected provider
+ * can authenticate for the Agent's chat route; the plugin checks again when the route, a
+ * credential, or the registered Web providers change.
  * @module @deepseek-ai/dsh-tool-web
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { AgentToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-web'
 import { applyWebSearchTool, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_SUMMARY_MAX_CHARS } from './search.ts'
@@ -23,7 +25,7 @@ export type { WebFetchMeta } from './fetch.ts'
 export const name = 'tool-web'
 
 /** Services required by the web tool suite. */
-export const inject = ['tools', 'web', 'systemPrompt']
+export const inject = ['tools', 'web', 'systemPrompt', 'agents']
 
 /** Default cooperative tool-call timeout budget (ms) for the web tools. */
 export const DEFAULT_WEB_TOOL_TIMEOUT_MS = 30_000
@@ -94,10 +96,13 @@ export function apply(ctx: Context, config: Config): void {
   assertPositiveInteger('fetchTimeoutMs', resolved.fetchTimeoutMs)
   assertPositiveInteger('searchTimeoutMs', resolved.searchTimeoutMs)
   assertPositiveInteger('fetchMaxOutputChars', resolved.fetchMaxOutputChars)
+  // Search registers first so the declared tool order stays search, then fetch.
+  let fetchTools: AgentToolRegistry | undefined
   if (resolved.search) {
     applyWebSearchTool(
-      ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchSummaryMaxChars, resolved.searchTimeoutMs, resolved.fetch,
+      ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchSummaryMaxChars, resolved.searchTimeoutMs,
+      scope => fetchTools?.get('web_fetch', scope) !== undefined,
     )
   }
-  if (resolved.fetch) applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars)
+  if (resolved.fetch) fetchTools = applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars)
 }

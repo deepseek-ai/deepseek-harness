@@ -746,8 +746,8 @@ interface TurnEndReasonMap {
   /**
    * The turn failed. `error` is always a structured failure: the `LlmError`
    * facts verbatim, or `{ message: errorChain(error), code }` flattened from
-   * any other error, where `code` is `TOOL_ACTIVATION_FAILED` for a failed
-   * tool condition and `UNKNOWN` otherwise.
+   * any other error under the `UNKNOWN` code. Released logs may also carry
+   * `TOOL_ACTIVATION_FAILED`.
    */
   error: { kind: 'error'; error: LlmFailure }
   /** At least one step reached its output-token ceiling, even if a plugin continued the turn. */
@@ -1466,6 +1466,28 @@ Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/i
 <a id="timeline-events"></a>
 
 ### `timeline/*` events
+
+<a id="timelineinstallation--emit"></a>
+
+#### `timeline/installation` — emit
+
+Collect the Timeline installations that can manage one Agent; the nearest one in the Agent's scope chain owns its planning tools. Each installation answers with its own record. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): an installation in a preset or Agent scope answers only for Agents in that scope.
+
+```ts cordis-catalog
+/**
+ * Collect the Timeline installations that can manage one Agent; the
+ * nearest one in the Agent's scope chain owns its planning tools. Each
+ * installation answers with its own record.
+ * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): an installation in a preset or Agent scope answers only for Agents in that scope.
+ * @param installations - receives each answering installation's record.
+ * @mode emit
+ */
+'timeline/installation'(this: Scoped<Agent>, installations: TimelineInstallation[]): void
+```
+
+Types: [Agent](core.zh.md) · [Scoped](scope.zh.md)
+
+Source: [`packages/experimental/timeline/src/delegation.ts`](../../packages/experimental/timeline/src/delegation.ts)
 
 <a id="timelinepriority--emit"></a>
 

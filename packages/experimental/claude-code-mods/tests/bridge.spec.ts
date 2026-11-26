@@ -1,4 +1,5 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeDefinitionFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -237,7 +238,7 @@ describe('ticket-mod: a mod-registered tool, prompt context, and a turn.complete
     const adapter = new MockAdapter([toolCallResponse('c1', 'mcp__ticket-mod__ticket', { id: 'T-1' }), textResponse('ok')])
     const h = await harness(['ticket-mod'], adapter)
     const agent = await h.agent()
-    const schema = h.ctx.tools.schemas(scopeOf(agent.ctx)).find(tool => tool.name === 'mcp__ticket-mod__ticket')
+    const schema = h.ctx.tools.getAll(scopeOf(agent.ctx)).find(tool => tool.name === 'mcp__ticket-mod__ticket')
     expect(schema).toMatchObject({ description: 'Look up a ticket by its id and return its title and status', parameters: { type: 'object', required: ['id'] } })
     await h.turn(agent, 'what is T-1 about?')
     expect(toolResult(agent)).toEqual({ isError: false, text: 'Login button does nothing (open)' })
@@ -425,6 +426,27 @@ describe('tool.call: answers and rewrites', () => {
     expect(refusals).toEqual([
       'claude-code-mods: answer-mod: tool.call hook skipped: rewrote the arguments of echo; argument rewrites need the pre-tool input rewrite mechanism (.agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.md)',
     ])
+  })
+
+  it('answers a program binding by the binding\'s own output schema', async () => {
+    const mod = writeMod('binding-mod', `
+      export function register(on) {
+        on('tool.call', { tool: 'greet' }, async () => ({ result: 'hello from binding-mod' }))
+      }
+    `)
+    const h = await harness([mod], new MockAdapter([]))
+    // The root does not offer this definition, as with a binding a PTC program calls.
+    const greet: ToolDefinition = {
+      name: 'greet', description: 'greets', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: `rendered ${value as string}` }] },
+      execute: () => Promise.resolve('never runs'),
+    }
+    expect(h.ctx.tools.get('greet')).toBeUndefined()
+    const result = await executeDefinitionFixture(h.ctx, greet, {
+      callId: brandString<ToolCallIdOf>('binding'), name: 'greet', arguments: {}, signal: new AbortController().signal,
+    })
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: 'rendered hello from binding-mod' }])
   })
 
   it('leaves tools alone when no mod hooks tool.call', async () => {

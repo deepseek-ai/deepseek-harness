@@ -1,4 +1,6 @@
-import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { executeModelToolFixture, executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { ToolCompositionError } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -100,21 +102,13 @@ async function execute(
   args: unknown,
   signal: AbortSignal = SIGNAL,
 ) {
-  const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({
-    agent, modelSelection: { provider: 'mock', model: 'mock' }, signal,
+  return await executeToolFixture(ctx, {
+    callId: brandString<ToolCallId>(`team-call-${++callNumber}`),
+    name,
+    arguments: args,
+    signal,
+    ...agent === undefined ? {} : { agent, toolStep: ToolStep.capture(ctx.tools, agent) },
   })
-  try {
-    return await executeToolFixture(ctx, {
-      callId: brandString<ToolCallId>(`team-call-${++callNumber}`),
-      name,
-      arguments: args,
-      signal,
-      ...toolSet === undefined ? {} : { toolSet },
-      ...agent === undefined ? {} : { agent },
-    })
-  } finally {
-    toolSet?.dispose()
-  }
 }
 
 function text(result: Awaited<ReturnType<typeof execute>>): string {
@@ -150,12 +144,7 @@ async function spawn(ctx: Context, lead: Agent, description: string | undefined,
 async function assembly(ctx: Context, agent: Agent) {
   const scope = scopeOf(agent.ctx)
   if (scope === undefined) throw new Error('expected Agent scope')
-  const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'mock', model: 'mock' }, signal: SIGNAL })
-  try {
-    return await ctx.systemPrompt.assemble({ scope, agent, toolSet })
-  } finally {
-    toolSet.dispose()
-  }
+  return await ctx.systemPrompt.assemble({ scope, agent, toolStep: ToolStep.capture(ctx.tools, agent) })
 }
 
 function teamTools(assembled: Awaited<ReturnType<typeof assembly>>): string[] {
@@ -863,7 +852,12 @@ describe('dsh-tool-team', () => {
       async execute() { return [{ type: 'text', text: 'collision' }] },
     }))
 
-    await expect(ctx.plugin(toolTeam)).rejects.toThrow(/already registered/u)
+    const failure: unknown = await ctx.plugin(toolTeam).then(() => undefined, (error: unknown) => error)
+    expect(failure).toBeInstanceOf(ToolCompositionError)
+    expect(failure).toMatchObject({
+      code: 'INVALID_TOOL_COMPOSITION',
+      message: expect.stringContaining('tool "team_task_create" has several definitions') as string,
+    })
     const assembled = await assembly(ctx, lead)
     expect(teamTools(assembled)).toEqual(['team_task_create'])
     expect(assembled.contexts.some(context => context.name === 'team:identity')).toBe(false)
@@ -1005,27 +999,22 @@ describe('dsh-tool-team', () => {
     expect(renderContextSnapshot(disabled)).toContain(leadIdentity(lead))
   })
 
-  it('keeps step admission stable while task operations enforce the current mode', async () => {
+  it('keeps step declarations stable while calls follow the current mode', async () => {
     const { ctx, lead } = await setup([], false)
-    const resolve = () => ctx.tools.resolve({ agent: lead, modelSelection: { provider: 'mock', model: 'mock' }, signal: SIGNAL })
-    const disabled = await resolve()
+    const disabled = ToolStep.capture(ctx.tools, lead)
     await ctx.agentTeams.setEnabled(lead, true)
-    const enabled = await resolve()
+    const enabled = ToolStep.capture(ctx.tools, lead)
     const input = {
       agent: lead, name: 'team_task_list', arguments: {}, signal: SIGNAL,
       callId: brandString<ToolCallId>('admitted-before-mode-change'),
     }
-    try {
-      expect((await executeToolFixture(ctx, { ...input, toolSet: disabled })).error?.info?.code).toBe('UNKNOWN_TOOL')
-      expect((await executeToolFixture(ctx, { ...input, toolSet: enabled })).isError).toBe(false)
-      await ctx.agentTeams.setEnabled(lead, false)
-      expect(ctx.tools.schemas(lead, enabled).map(tool => tool.name)).toEqual(expect.arrayContaining(TEAM_TOOLS))
-      expect((await executeToolFixture(ctx, { ...input, toolSet: enabled })).error?.info?.code).toBe('TEAM_DISABLED')
-      expect((await execute(ctx, lead, 'team_task_list', {})).error?.info?.code).toBe('UNKNOWN_TOOL')
-    } finally {
-      disabled.dispose()
-      enabled.dispose()
-    }
+    expect((await executeToolFixture(ctx, { ...input, toolStep: disabled })).error?.info?.code).toBe('UNKNOWN_TOOL')
+    expect((await executeToolFixture(ctx, { ...input, toolStep: enabled })).isError).toBe(false)
+    await ctx.agentTeams.setEnabled(lead, false)
+    expect(enabled.declarations.map(tool => tool.name)).toEqual(expect.arrayContaining(TEAM_TOOLS))
+    // Turning Team off removes the tools for the Agent, so a call of the earlier step no longer resolves.
+    expect((await executeToolFixture(ctx, { ...input, toolStep: enabled })).error?.info?.code).toBe('UNKNOWN_TOOL')
+    expect((await execute(ctx, lead, 'team_task_list', {})).error?.info?.code).toBe('UNKNOWN_TOOL')
   })
 
   it('installs Team scope before a cold-resumed teammate request', async () => {
@@ -1094,8 +1083,15 @@ describe('dsh-tool-team', () => {
   ])('propagates unexpected identity lookup failures: %s', async (failure) => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
-    await expect(assembly(ctx, lead)).rejects.toMatchObject({ code: 'TOOL_ACTIVATION_FAILED', cause: failure })
+    await expect(assembly(ctx, lead)).rejects.toBe(failure)
     await expect(ctx.systemPrompt.assemble({ scope: lead, agent: lead })).rejects.toBe(failure)
+  })
+
+  it('fails Agent creation when reading the Team mode fails for a reason other than an unavailable root', async () => {
+    const { ctx } = await setup([])
+    const failure = new SubagentError('Team root data is unreadable', 'PERSISTENCE_UNAVAILABLE')
+    vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })
+    await expect(ctx.agents.create({ sessionId: brandString<SessionId>('team-mode-unreadable') })).rejects.toBe(failure)
   })
 
   it('omits Team guidance when its root is unavailable', async () => {
@@ -1110,11 +1106,23 @@ describe('dsh-tool-team', () => {
 
   it('fails safely without a calling Agent and has the function-plugin export shape', async () => {
     const { ctx } = await setup([])
-    const result = await execute(ctx, undefined, 'team_task_list', {})
-    expect(result.isError).toBe(true)
-    expect(text(result)).toContain('unknown tool "team_task_list"')
+    // An Agent-less direct batch resolves the unscoped view, which lists every Team tool.
+    const validArguments: Record<string, object> = {
+      team_task_create: { subject: 'Plan', description: 'Plan the work' },
+      team_task_get: { task_id: 'task-1' },
+      team_task_list: {},
+      team_task_update: { task_id: 'task-1', expected_revision: 1, action: 'claim' },
+    }
+    for (const name of TEAM_TOOLS) {
+      const result = await executeModelToolFixture(ctx, {
+        callId: brandString<ToolCallId>(`agentless-${name}`), name, arguments: validArguments[name], signal: SIGNAL,
+      })
+      expect(result.isError).toBe(true)
+      expect(text(result)).toBe(`Error: ${name} requires a calling Agent`)
+      expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    }
     expect('default' in toolTeam).toBe(false)
     expect(toolTeam.name).toBe('tool-agent-team')
-    expect(toolTeam.inject).toEqual(['agentTeams', 'subagents', 'tools', 'systemPrompt'])
+    expect(toolTeam.inject).toEqual(['agentTeams', 'subagents', 'tools', 'systemPrompt', 'agents'])
   })
 })

@@ -48,7 +48,7 @@ function smokeOptions(
       const entry = (name: string, config?: object, id?: string) => ({ name: `@deepseek-ai/dsh-${name}`, config, id })
       await writeFile(join(cwd, 'cordis.yml'), JSON.stringify([
         entry('llm'), entry('session'), entry('session-projection'), entry('agent'),
-        entry('system-prompt'), entry('tools'), entry('tool-executor-native'),
+        entry('system-prompt'), entry('tools'), entry('tool-registry-native'),
         entry('session-persistence-jsonl', { root: './sessions', compression: 'none' }),
         entry('agent-loop'), entry('storage'), entry('storage-json', { root: './storage' }),
         entry('storage-domain', { backend: 'json' }), entry('workspace'),

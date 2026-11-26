@@ -9,8 +9,8 @@
   en: b711ded29c7b9a17
   zh: cbccba927743f35f
 /deepseek-ai-dsh-agent-loop/summary:
-  en: b2971780b74fd785
-  zh: 05a3043f49fb646d
+  en: f26c71eebc040098
+  zh: a3845dc9a1430ed7
 /deepseek-ai-dsh-agent-loop/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,14 +18,14 @@
   en: 35a960c0100a6aa4
   zh: 438e133fb4c24a9e
 /deepseek-ai-dsh-agent-loop/use-this-package/configure-declarative-agents:
-  en: d5ac4be018308358
-  zh: 4c429a40f666abfb
+  en: 7e02e5c26a3657b8
+  zh: 219fffe5e426cbd9
 /deepseek-ai-dsh-agent-loop/use-this-package/create-or-resume-agents-programmatically:
   en: 82ec792637e8e57f
   zh: e32f8ec5ee17afcf
 /deepseek-ai-dsh-agent-loop/use-this-package/what-a-step-does:
-  en: 43220bd6bb04d698
-  zh: 1e9f8b37036c3a81
+  en: 4e474a90c26b30a1
+  zh: 8b3204189d95737e
 /deepseek-ai-dsh-agent-loop/understand-the-implementation:
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
@@ -45,8 +45,8 @@
   en: e796c442d8ce8fcf
   zh: 051b43f5d3a94ad7
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/turn-and-step-flow:
-  en: d48dbffa3ffe0691
-  zh: 74b023c3b61ffc91
+  en: 19076901aef1df5a
+  zh: 1adfa1ae24767abe
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/failure-and-cancellation:
   en: 4f0c03f8e8919e6f
   zh: a12b74184d3e443a

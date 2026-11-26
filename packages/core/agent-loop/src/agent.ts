@@ -33,8 +33,8 @@ import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnE
 import { canonicalHeader, headerEquals, ToolCallRecovery } from '@deepseek-ai/dsh-session'
 import { renderContextSections } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
-import { ToolActivationError, ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
-import type { ResolvedToolSet } from '@deepseek-ai/dsh-tools'
+import { ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import type { Context } from '@deepseek-ai/cordis'
 import { ReactLoopInbox, type InboxProjectionState } from './inbox.ts'
 import { RuntimeContextProjection } from './runtime-context.ts'
@@ -68,8 +68,8 @@ type PreparedStep =
     startsRequestSeries?: true
     assembly: PromptAssembly
     selection: Readonly<ModelSelection>
-    /** Admission shared by the step's declarations and dispatch; the turn disposes it after the step. */
-    toolSet: ResolvedToolSet
+    /** Entries the step declared; its tool batch and program calls execute only these. */
+    toolStep: ToolStep
   }
 
 /** Remove adapter-derived values before plugins propose the next request config. */
@@ -291,31 +291,23 @@ export class ReactLoopAgent implements Agent {
     if (selection === undefined) {
       throw new Error(`agent "${this.id}" has no provider/model: set AgentOptions.provider and AgentOptions.model or record a model selection`)
     }
-    const toolSet = await this.loopCtx.tools.resolve({ agent: this, modelSelection: selection, signal })
-    try {
-      const assembly = await this.loopCtx.systemPrompt.assemble({ ...assembleContextFor(this, signal), modelSelection: selection, toolSet })
-      signal.throwIfAborted()
-      const decision = await this.dispatch.waterfall(
-        'agent/pre-step', { messages: claimed, ...position, signal, modelSelection: selection },
-        (): Promise<PreStepDecision> => {
-          const sections = renderContextSections(assembly)
-          const context = this.runtimeContext.project(sections)
-          return Promise.resolve<PreStepDecision>({
-            kind: 'enter',
-            messages: context === undefined ? claimed : [...claimed, context],
-          })
-        },
-      )
-      signal.throwIfAborted()
-      if (decision.kind === 'reject') {
-        toolSet.dispose()
-        return decision
-      }
-      return { ...decision, assembly, selection, toolSet }
-    } catch (error: unknown) {
-      toolSet.dispose()
-      throw error
-    }
+    const toolStep = ToolStep.capture(this.loopCtx.tools, this)
+    const assembly = await this.loopCtx.systemPrompt.assemble({ ...assembleContextFor(this, signal), modelSelection: selection, toolStep })
+    signal.throwIfAborted()
+    const decision = await this.dispatch.waterfall(
+      'agent/pre-step', { messages: claimed, ...position, signal, modelSelection: selection },
+      (): Promise<PreStepDecision> => {
+        const sections = renderContextSections(assembly)
+        const context = this.runtimeContext.project(sections)
+        return Promise.resolve<PreStepDecision>({
+          kind: 'enter',
+          messages: context === undefined ? claimed : [...claimed, context],
+        })
+      },
+    )
+    signal.throwIfAborted()
+    if (decision.kind === 'reject') return decision
+    return { ...decision, assembly, selection, toolStep }
   }
 
   /** Open one turn before claiming its first proposed step. */
@@ -344,47 +336,42 @@ export class ReactLoopAgent implements Agent {
           turnEnds = { kind: 'blocked' }
           return false
         }
+        if (turnEnds && decision.messages.length === 0) break
+        // A removed waking message or an enter decision rewritten to empty
+        // still owns the initial turn boundary, but it spends no model call.
+        if (phase.step === 0 && decision.messages.length === 0) {
+          turnEnds = { kind: 'completed' }
+          return false
+        }
+        signal.throwIfAborted()
+        this.session.append('step/start', { turn, step })
+        phase.step = step
+        const toolRecovery = new ToolCallRecovery()
+        const stopRecovery = this.ctx.on('session/event', (session, event) => {
+          if (session === this.session) toolRecovery.observe(event)
+        })
         try {
-          if (turnEnds && decision.messages.length === 0) break
-          // A removed waking message or an enter decision rewritten to empty
-          // still owns the initial turn boundary, but it spends no model call.
-          if (phase.step === 0 && decision.messages.length === 0) {
-            turnEnds = { kind: 'completed' }
-            return false
-          }
-          signal.throwIfAborted()
-          this.session.append('step/start', { turn, step })
-          phase.step = step
-          const toolRecovery = new ToolCallRecovery()
-          const stopRecovery = this.ctx.on('session/event', (session, event) => {
-            if (session === this.session) toolRecovery.observe(event)
-          })
+          // max-tokens is sticky: once any step hits the ceiling, later steps
+          // that complete normally must not downgrade the turn outcome.
+          const stepEnd = await this.step(decision)
+          // max-tokens stays sticky: a later completed step must not
+          // downgrade the turn outcome.
+          if (turnEnds === null || turnEnds.kind !== 'max-tokens') turnEnds = stepEnd
+        } catch (error: unknown) {
           try {
-            // max-tokens is sticky: once any step hits the ceiling, later steps
-            // that complete normally must not downgrade the turn outcome.
-            const stepEnd = await this.step(decision)
-            // max-tokens stays sticky: a later completed step must not
-            // downgrade the turn outcome.
-            if (turnEnds === null || turnEnds.kind !== 'max-tokens') turnEnds = stepEnd
-          } catch (error: unknown) {
-            try {
-              for (const event of toolRecovery.results()) {
-                this.session.append('tool/result', event.data, {
-                  surfaceOp: 'append',
-                  ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
-                })
-              }
-            } catch (recoveryError: unknown) {
-              throw new AggregateError([error, recoveryError], 'Step failed and its pending tool results could not be recorded', { cause: error })
+            for (const event of toolRecovery.results()) {
+              this.session.append('tool/result', event.data, {
+                surfaceOp: 'append',
+                ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
+              })
             }
-            throw error
-          } finally {
-            stopRecovery()
-            this.session.append('step/end', { turn, step })
+          } catch (recoveryError: unknown) {
+            throw new AggregateError([error, recoveryError], 'Step failed and its pending tool results could not be recorded', { cause: error })
           }
+          throw error
         } finally {
-          // Admission closes once the step's tool batch settles or no step opens.
-          decision.toolSet.dispose()
+          stopRecovery()
+          this.session.append('step/end', { turn, step })
         }
         signal.throwIfAborted()
         if (turnEnds && this.inbox.nextStep.length === 0) {
@@ -397,15 +384,14 @@ export class ReactLoopAgent implements Agent {
     } catch (error: unknown) {
       // A cause is present exactly while the signal is aborted.
       const cause = abortedCancelCause(signal)
-      // Every failure is structured: an `LlmError` keeps its facts, a tool
-      // activation failure keeps its code, and anything else flattens to
-      // `errorChain` text under the `UNKNOWN` code.
+      // Every failure is structured: an `LlmError` keeps its facts, and
+      // anything else flattens to `errorChain` text under the `UNKNOWN` code.
       turnEnds = cause === undefined
         ? {
           kind: 'error',
           error: error instanceof LlmError
             ? error.failure
-            : { message: errorChain(error), code: error instanceof ToolActivationError ? error.code : 'UNKNOWN' },
+            : { message: errorChain(error), code: 'UNKNOWN' },
         }
         : { kind: 'aborted', reason: cause }
       // Before `turn/end` settles the claim, the inbox returns it unless the queue was cleared.
@@ -584,7 +570,7 @@ export class ReactLoopAgent implements Agent {
         try {
           const result = await this.loopCtx.tools.execute({
             calls: toolCalls, signal, agent: this, log: { turn, step },
-            maxParallelToolCalls, toolSet: decision.toolSet,
+            maxParallelToolCalls, toolStep: decision.toolStep,
           })
           for (const context of result.additionalContexts) {
             this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context])

@@ -6,10 +6,11 @@
  */
 
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WebRuntime from '@deepseek-ai/dsh-web'
@@ -23,7 +24,7 @@ describe('dsh-tool-web real-load-path guard', () => {
     const unwrapped = loader.unwrapExports(toolWeb) as Record<string, unknown>
     expect(unwrapped).toBe(toolWeb)
     expect(unwrapped.name).toBe('tool-web')
-    expect(unwrapped.inject).toEqual(['tools', 'web', 'systemPrompt'])
+    expect(unwrapped.inject).toEqual(['tools', 'web', 'systemPrompt', 'agents'])
     expect(typeof unwrapped.apply).toBe('function')
   })
 
@@ -32,14 +33,15 @@ describe('dsh-tool-web real-load-path guard', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(WebRuntime, {})
 
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(toolWeb) as Parameters<Context['plugin']>[0]
     // Mounting the collapsed shape would throw for missing injection here.
     const fiber = await ctx.plugin(unwrapped)
-    expect(ctx.tools.schemas().map(s => s.name)).toEqual(expect.arrayContaining(['web_search', 'web_fetch']))
+    expect(ctx.tools.getAll().map(s => s.name)).toEqual(expect.arrayContaining(['web_search', 'web_fetch']))
     await fiber.dispose()
   })
 })

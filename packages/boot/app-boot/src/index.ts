@@ -969,8 +969,8 @@ const FIBER_DISPOSED = 4 as FiberState.DISPOSED
  */
 const requiredStartupEntryIds = new Set<string>([
   'agent-loop',
-  'tool-executor-native',
-  'tool-executor-ptc',
+  'tool-registry-native',
+  'tool-registry-ptc',
   'webserver',
   'web-runtime',
   'modules',

@@ -798,6 +798,11 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolGuidance",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
       "symbol": "ValueSchemaSpec",
       "source": "packages/core/tools/src/schema.ts"
     },
@@ -849,7 +854,7 @@
     {
       "doc": "docs/subsystems/tools.md",
       "symbol": "PtcDispatchLog",
-      "source": "packages/core/tool-executor-ptc/src/runtime-types.ts"
+      "source": "packages/core/tool-registry-ptc/src/runtime-types.ts"
     },
     {
       "doc": "docs/subsystems/tools.md",
@@ -878,18 +883,8 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
-      "symbol": "ToolActivationContext",
-      "source": "packages/core/tools/src/contracts.ts"
-    },
-    {
-      "doc": "docs/subsystems/tools.md",
-      "symbol": "ToolRegistrationOptions",
-      "source": "packages/core/tools/src/contracts.ts"
-    },
-    {
-      "doc": "docs/subsystems/tools.md",
-      "symbol": "ResolvedToolSet",
-      "source": "packages/core/tools/src/contracts.ts"
+      "symbol": "ToolRegistry",
+      "source": "packages/core/tools/src/registry.ts"
     },
     {
       "doc": "docs/subsystems/tools.md",
@@ -2631,28 +2626,18 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
-      "symbol": "ToolModelInput",
-      "source": "packages/core/tools/src/executor.ts"
-    },
-    {
-      "doc": "docs/subsystems/tools.md",
       "symbol": "ToolBatchInput",
-      "source": "packages/core/tools/src/executor.ts"
+      "source": "packages/core/tools/src/registry.ts"
     },
     {
       "doc": "docs/subsystems/tools.md",
       "symbol": "ToolCallResult",
-      "source": "packages/core/tools/src/executor.ts"
+      "source": "packages/core/tools/src/registry.ts"
     },
     {
       "doc": "docs/subsystems/tools.md",
       "symbol": "ToolBatchResult",
-      "source": "packages/core/tools/src/executor.ts"
-    },
-    {
-      "doc": "docs/subsystems/tools.md",
-      "symbol": "ToolExecutor",
-      "source": "packages/core/tools/src/executor.ts"
+      "source": "packages/core/tools/src/registry.ts"
     },
     {
       "doc": "docs/subsystems/core.md",

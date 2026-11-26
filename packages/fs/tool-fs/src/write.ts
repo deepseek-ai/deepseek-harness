@@ -55,24 +55,19 @@ interface WriteToolArgs {
 }
 
 /**
- * Register the `write` tool and its scope-aware system-prompt guidance.
+ * Register the `write` tool and its system-prompt guidance with the same lifetime.
  * @param ctx - the plugin context; registrations are effects scoped to it, and execution uses its `fs` service.
  * @param sandbox - the shared sandbox-escalation API (advertisement, mode stamping, denial mapping).
+ * @param withEdit - whether this plugin also registers `edit`, which the guidance then recommends for targeted changes.
  */
-export function applyWriteTool(ctx: Context, sandbox: FsSandboxController): void {
-  ctx.systemPrompt.section({
-    name: 'tool:write',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_WRITE'),
-    text: ({ scope }) => ctx.tools.get('write', scope) === undefined
-      ? ''
-      : 'Read an existing file before overwriting it with write'
-        + (ctx.tools.get('edit', scope) === undefined ? '' : ' and prefer edit for targeted changes')
-        + '.',
-    retirement: 'The write tool is no longer available. Its guidance no longer applies.',
-  })
-
+export function applyWriteTool(ctx: Context, sandbox: FsSandboxController, withEdit: boolean): void {
   ctx.tools.register(defineTool({
     name: 'write',
+    guidance: {
+      order: 'TOOL_WRITE',
+      text: `Read an existing file before overwriting it with write${withEdit ? ' and prefer edit for targeted changes' : ''}.`,
+      retirement: 'The write tool is no longer available. Its guidance no longer applies.',
+    },
     description: 'Create or fully replace a UTF-8 text file.',
     parameters: {
       file_path: {

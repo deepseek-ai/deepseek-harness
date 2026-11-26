@@ -382,8 +382,8 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
       const registry = ctx.get('tools')
       if (registry === undefined) return []
       const agent = context.binding.agent
-      return registry.schemas(agent === undefined ? undefined : scopeOf(agent.ctx))
-        .map((schema): ToolInfo => ({ name: aliases.toMod(schema.name), description: schema.description }))
+      return registry.getAll(agent === undefined ? undefined : scopeOf(agent.ctx))
+        .map((tool): ToolInfo => ({ name: aliases.toMod(tool.name), description: tool.description }))
     },
 
     // ---- prompt ----

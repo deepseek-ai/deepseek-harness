@@ -5,7 +5,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, projectToolSchema } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -118,7 +119,7 @@ async function waitNoActivation(ctx: Context, childId: SessionId): Promise<void>
 describe('dsh-tool-subagent-control', () => {
   it('registers send_message once, globally, with the two required parameters', async () => {
     const { ctx } = await setup([])
-    const schemas = ctx.tools.schemas().filter(schema => schema.name === 'send_message')
+    const schemas = ctx.tools.getAll().filter(schema => schema.name === 'send_message')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual(['agent', 'message'])
@@ -154,8 +155,8 @@ describe('dsh-tool-subagent-control', () => {
     const child = ctx.agents.get(started.childId)
     if (child === undefined) throw new Error('expected a live fork child')
 
-    const parentSchemas = ctx.tools.schemas(parent)
-    const childSchemas = ctx.tools.schemas(child)
+    const parentSchemas = ctx.tools.getAll(parent).map(tool => projectToolSchema(tool, true))
+    const childSchemas = ctx.tools.getAll(child).map(tool => projectToolSchema(tool, true))
     expect(JSON.stringify(childSchemas)).toBe(JSON.stringify(parentSchemas))
     expect(childSchemas.map(schema => schema.name)).not.toContain('report')
 
@@ -207,7 +208,7 @@ describe('dsh-tool-subagent-control', () => {
     { name: 'send_message', instruction: 'use send_message to send a self-contained result to the agent that delegated you', other: 'Use list_agents' },
     { name: 'send_message', instruction: 'To message other agents', other: 'Use list_agents' },
     { name: 'list_agents', instruction: 'Use list_agents', other: 'To message other agents' },
-  ])('gates $name guidance "$instruction" independently in an agent scope', async ({ name, instruction, other }) => {
+  ])('keeps $name guidance "$instruction" when an agent scope shadows or restricts the tool', async ({ name, instruction, other }) => {
     const { ctx, parent } = await setup([])
     const { agent: child } = await ctx.agents.create({
       sessionId: brandString<SessionId>('communication-child'),
@@ -222,17 +223,16 @@ describe('dsh-tool-subagent-control', () => {
       output: { schema: { type: 'object', additionalProperties: false, properties: {} }, render: () => [] },
       execute: () => Promise.resolve({}),
     }))
-    expect(await communication()).not.toContain(instruction)
+    expect(await communication()).toContain(instruction)
     expect(await communication()).toContain(other)
     expect(await communication()).toContain('You are a subagent delegated by agent "lead".\nYour name is "communication-child".')
     off()
-    expect(await communication()).toContain(instruction)
     child.ctx.tools.restrict({ deny: [name] })
-    const toolSet = await ctx.tools.resolve({ agent: child, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
-    const filtered = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolSet }))
-    expect(filtered).not.toContain(instruction)
+    expect(ctx.tools.getAll(child).map(tool => tool.name)).not.toContain(name)
+    const toolStep = ToolStep.capture(ctx.tools, child)
+    const filtered = renderContextSnapshot(await ctx.systemPrompt.assemble({ agent: child, scope: child, toolStep }))
+    expect(filtered).toContain(instruction)
     expect(filtered).toContain(other)
-    toolSet.dispose()
   })
 
   it('asks a delegated agent to report with send_message only while Team mode is off', async () => {
@@ -309,7 +309,7 @@ describe('dsh-tool-subagent-control', () => {
     }
   })
 
-  it('keeps required identity while both discovery and messaging are filtered', async () => {
+  it('keeps identity and messaging guidance while both discovery and messaging are filtered', async () => {
     const { ctx, parent } = await setup([])
     ctx.systemPrompt.suppressRuntimeContext()
     const available = await ctx.systemPrompt.assemble({ agent: parent, scope: parent })
@@ -318,14 +318,13 @@ describe('dsh-tool-subagent-control', () => {
     expect(renderContextSnapshot(available)).toContain('Use list_agents')
     expect(renderContextSnapshot(available)).toContain('To message other agents')
     parent.ctx.tools.restrict({ deny: ['send_message', 'list_agents'] })
-    const toolSet = await ctx.tools.resolve({ agent: parent, modelSelection: { provider: 'mock', model: 'mock' }, signal: testToolSignal })
-    const filtered = await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolSet })
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).not.toContain('list_agents')
+    const filtered = await ctx.systemPrompt.assemble({ agent: parent, scope: parent, toolStep: ToolStep.capture(ctx.tools, parent) })
     expect(filtered.tools.some(tool => tool.name === 'list_agents')).toBe(false)
     const context = renderContextSnapshot(filtered)
     expect(context).toContain('You are the root agent. Your name is "lead".')
-    expect(context).not.toContain('Use list_agents')
-    expect(context).not.toContain('To message other agents')
-    toolSet.dispose()
+    expect(context).toContain('Use list_agents')
+    expect(context).toContain('To message other agents')
   })
 
   it.each(['parent', 'caller'] as const)('keeps %s result delivery independent of messaging tools', async (delivery) => {
@@ -509,7 +508,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(await communication()).toContain('You are a subagent delegated by agent')
     const names = ['send_message', 'list_agents', 'wait_agent']
     if (config.interrupt !== false) names.push('interrupt_agent')
-    for (const name of names) expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+    for (const name of names) expect(ctx.tools.getAll().filter(schema => schema.name === name)).toHaveLength(1)
     expect(ctx.tools.get('list_agents')?.description).not.toContain('interrupt')
     if (config.interrupt === false) {
       expect(ctx.tools.get('interrupt_agent')).toBeUndefined()
@@ -522,7 +521,7 @@ describe('dsh-tool-subagent-control', () => {
     const reloaded = await ctx.plugin(tool)
     expect(await communication()).toContain('You are a subagent delegated by agent')
     for (const name of ['send_message', 'interrupt_agent', 'list_agents', 'wait_agent']) {
-      expect(ctx.tools.schemas().filter(schema => schema.name === name)).toHaveLength(1)
+      expect(ctx.tools.getAll().filter(schema => schema.name === name)).toHaveLength(1)
     }
     await reloaded.dispose()
   })
@@ -544,7 +543,7 @@ describe('dsh-tool-subagent-control', () => {
 describe('dsh-tool-subagent-control interrupt_agent', () => {
   it('registers interrupt_agent with the single agent parameter and current-turn wording', async () => {
     const { ctx } = await setup([])
-    const schemas = ctx.tools.schemas().filter(schema => schema.name === 'interrupt_agent')
+    const schemas = ctx.tools.getAll().filter(schema => schema.name === 'interrupt_agent')
     expect(schemas).toHaveLength(1)
     const props = (schemas[0]!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props)).toEqual(['agent'])

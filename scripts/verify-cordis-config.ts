@@ -120,7 +120,7 @@ function validateClientHalvesDeclared(): string[] {
 
 /**
  * No shipped agent preset may repeat an unscoped row the host composition still runs.
- * Tool executors select through the mounting scope and may appear on both planes.
+ * Root tool registries select through the mounting scope and may appear on both planes.
  *
  * A preset contributes what ONE session adds to the host's registries. A row
  * active on both planes is therefore mounted twice — once per process and once
@@ -196,8 +196,8 @@ export function exclusivePlaneRowIds(rows: unknown): Set<string> {
     }
     if (!isRecord(value)) return
     if (typeof value.id === 'string' && typeof value.name === 'string'
-      && value.name !== '@deepseek-ai/dsh-tool-executor-native'
-      && value.name !== '@deepseek-ai/dsh-tool-executor-ptc') ids.add(value.id)
+      && value.name !== '@deepseek-ai/dsh-tool-registry-native'
+      && value.name !== '@deepseek-ai/dsh-tool-registry-ptc') ids.add(value.id)
     walk(value.insert)
     if (isCordisGroupEntry(value)) walk(value.config)
   }

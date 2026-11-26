@@ -27,10 +27,10 @@
         reconnect:
           enabled: false
 
-- id: tool-executor-native
+- id: tool-registry-native
   disabled: true
 
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: false
 
 # Recorded programs are async function bodies, so replay keeps the per-call runtime.

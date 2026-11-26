@@ -73,10 +73,10 @@
 - id: tool-pwsh
   disabled: true
 
-- id: tool-executor-native
+- id: tool-registry-native
   disabled: true
 
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: false
 
 - id: ptc-runtime

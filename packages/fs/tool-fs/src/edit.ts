@@ -69,22 +69,18 @@ export function formatEditOutput(displayPath: string, replaceAll: boolean): stri
 }
 
 /**
- * Register the `edit` tool and its scope-aware system-prompt guidance.
+ * Register the `edit` tool and its system-prompt guidance with the same lifetime.
  * @param ctx - the plugin context; registrations are effects scoped to it, and execution uses its `fs` service.
  * @param sandbox - the shared sandbox-escalation API (advertisement, mode stamping, denial mapping).
  */
 export function applyEditTool(ctx: Context, sandbox: FsSandboxController): void {
-  ctx.systemPrompt.section({
-    name: 'tool:edit',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_EDIT'),
-    text: ({ scope }) => ctx.tools.get('edit', scope) === undefined
-      ? ''
-      : 'Read a file before editing it unless you just created or edited it in this session.',
-    retirement: 'The edit tool is no longer available. Its guidance no longer applies.',
-  })
-
   ctx.tools.register(defineTool({
     name: 'edit',
+    guidance: {
+      order: 'TOOL_EDIT',
+      text: 'Read a file before editing it unless you just created or edited it in this session.',
+      retirement: 'The edit tool is no longer available. Its guidance no longer applies.',
+    },
     description: 'Edit an existing UTF-8 text file by replacing literal text.',
     parameters: {
       file_path: {

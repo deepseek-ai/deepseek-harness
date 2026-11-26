@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-19-composable-tool-registries.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.md
+/agent-note-compose-tool-registries-under-a-scoped-root:
+  en: 195c7cf96e970580
+  zh: 7fe20f730d12ef52
+/agent-note-compose-tool-registries-under-a-scoped-root/problem:
+  en: 094ee054e2f966b2
+  zh: a96f67f5b869f593
+/agent-note-compose-tool-registries-under-a-scoped-root/decision:
+  en: 72376c7b5cb5a946
+  zh: 7c5c5d16e8c7e649
+/agent-note-compose-tool-registries-under-a-scoped-root/alternatives-considered:
+  en: d64fcfba650c42cf
+  zh: d776df8ea29504a5
+/agent-note-compose-tool-registries-under-a-scoped-root/consequences:
+  en: 303a1bd1912574f4
+  zh: 9bc070674e3ee3f8

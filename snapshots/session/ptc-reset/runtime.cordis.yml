@@ -2,7 +2,7 @@
   config:
     executionMode: vm-script
     scriptPersistence: true
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: true
 - insert:
     - id: ptc-host-reset-fixture

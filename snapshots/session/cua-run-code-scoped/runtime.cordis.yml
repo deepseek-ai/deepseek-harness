@@ -18,7 +18,7 @@
       config:
         id: standard
         plugins:
-          - name: '@deepseek-ai/dsh-tool-executor-native'
+          - name: '@deepseek-ai/dsh-tool-registry-native'
     - id: cua-standard-selection
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/parent-agent-preset.ts'
       config:

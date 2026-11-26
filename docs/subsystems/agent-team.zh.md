@@ -77,7 +77,7 @@ interface TeamTaskSnapshot {
 
 ## Web 投影
 
-`agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待刷盘。工具在步骤准备时确定可用性；提示词提供方在求值时读取选择。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更不会结束收件箱等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
+`agentTeam.enabled` 提供根 Session 保存的选择。新 Session 默认为 false；`team/mode` 记录显式选择。历史任务在显式选择前视为开启。仅根可调用 `setEnabled`；后代共享该模式。Web 菜单通过 `remote.agentTeams.setEnabled` 调用同一方法，Gateway 将根 Session id 解析为其存活 Agent。模式写入先立即生效，再等待刷盘。Team 工具提供方依据已记录的选择更新整棵树的工具；提示词提供方在求值时读取选择。任务修改在排队操作开始时检查当前模式；已获准的修改可继续完成。模式变更不会结束收件箱等待。刷盘失败时已追加的选择仍然生效；重试相同选择会再次刷盘，不重复追加事件。
 
 根 Session 通过 `SessionProjectionMap.agentTeam` 发布未删除任务视图。`failure` 在最后有效状态旁报告被拒绝的持久化任务或模式记录。历史名册与邮箱记录不参与投影。视图以 Session id 标识每个负责人；任务面板和任务工具显示负责人的 agent 名称，负责人没有名称时显示其 Session id。
 
@@ -140,8 +140,8 @@ isEnabled(caller: Agent): boolean
 
 /**
  * Save a root Session's Team selection without stopping children or deleting tasks.
- * The selection takes effect before awaiting persistence. Tools resolve availability at
- * step preparation; prompt providers read the selection when evaluated. Task mutations
+ * The selection takes effect before awaiting persistence. The Team tool provider updates the
+ * tree's tools from the logged selection; prompt providers read the selection when evaluated. Task mutations
  * check the current mode when their queued operation starts; admitted operations finish.
  * @param agent - exact live root whose tree receives the selection.
  * @param enabled - selected Team mode.

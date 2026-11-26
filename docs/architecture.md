@@ -89,7 +89,7 @@ A **step** is one model request plus the tools it calls. A **turn** is zero or m
 ```text
 turn/start
   claim next-step input plus one queued message
-  snapshot Session model selection; assemble prompt sections + step-admitted tool schemas
+  snapshot model selection; capture ToolStep; assemble sections + ToolStep schemas
   -> agent/pre-step; project runtime context at fallback
                                      reject | enter(messages, startsRequestSeries?)
      reject, or a first enter rewritten empty -> close the turn with no step
@@ -115,19 +115,17 @@ Fork creation stores the caller-supplied history; a sharing backend persists the
 
 Injected context waits for a wake. The `inbox` projection tracks queues and [claims for unopened steps](../packages/core/agent-loop/README.md#returned-input) across Agent lifetimes.
 
-Before assembly, the loop captures Session model selection in `AssembleContext.modelSelection` and `agent/pre-step.modelSelection`; retries retain it; omitted reasoning effort uses adapter defaults. System assembly captures live source values and lifecycle with committed Session admissions, fixing whether to append updates or rebuild the full prompt. `agent/pre-step` listeners accept, rewrite, or reject claimed messages; a rejected or empty first claim closes a durable turn without a step. An enter decision may set `startsRequestSeries`: the loop logs a fresh `request/header` (reason `series`, or `change` with `startsSeries: true` when the envelope also changed). Wrapping listeners preserve that declaration with `{ ...decision, messages }`.
+Before assembly, the loop captures Session model selection and the Agent's [`ToolStep`](subsystems/tools.md#tool-registries-roots-and-model-steps); retries retain both; omitted reasoning effort uses adapter defaults. System assembly captures live source values and lifecycle with committed Session admissions, fixing whether to append updates or rebuild the full prompt. `agent/pre-step` listeners accept, rewrite, or reject claimed messages; a rejected or empty first claim closes a durable turn without a step. An enter decision may set `startsRequestSeries`: the loop logs a fresh `request/header` (reason `series`, or `change` with `startsSeries: true` when the envelope also changed). Wrapping listeners preserve that declaration with `{ ...decision, messages }`.
 
-After acceptance and `step/start`, the deprecated `agent/request` hook adjusts controls without changing provider, model, or effort selection; `prepareCall()` binds the adapter. Cancellation during either async phase commits neither system candidates nor accepted users. Every attempt refreshes runtime facts and derives history; the first commits both.
+After acceptance and `step/start`, the deprecated `agent/request` hook adjusts controls without changing provider, model, or effort selection; `prepareCall()` binds the adapter. Cancellation during either phase commits neither system candidates nor accepted users. Every attempt refreshes runtime facts and derives history; the first commits both.
 
-Retries retain their assembly; later source changes wait for the next one. Surface replacements and image-offload decisions start a new request series; unchanged resume continues it. Each attempt appends the assembly’s `systemUpdates()` writes; at the first attempt after a logged compaction summary, including a retry, they clear retained system additions and replace the initial system node with the captured instructions through ordinary `system/message` events. [Agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) owns request and retry timing.
+Retries retain their assembly and `ToolStep`; later source changes wait for the next assembly. Surface replacements and image-offload decisions start a new request series; unchanged resume continues it. Each attempt appends the assembly’s `systemUpdates()` writes; at the first attempt after a logged compaction summary, including a retry, they clear retained system additions and replace the initial system node with the captured instructions through ordinary `system/message` events. [Agent-loop](../packages/core/agent-loop/README.md#understand-the-implementation) owns request and retry timing.
 
 The loop sends immutable requests with live cancellation and reuses freeze evidence for frozen identities; [agent-loop](../packages/core/agent-loop/README.md) owns construction and cancellation causes.
 
 Failed steps [record missing tool results](../packages/core/agent-loop/README.md#understand-the-implementation).
 
-Details: the [sequence diagram](agent-lifecycle.md), the [tool pipeline](tool-execution-pipeline.md), and [cancellation and error recovery](subsystems/core.md#the-agent-handle).
-
-[`ctx.tools.execute()`](subsystems/tools.md) receives raw batches and concurrency limits.
+Details: the [sequence diagram](agent-lifecycle.md), the [tool pipeline](tool-execution-pipeline.md) behind [`ctx.tools.execute()`](subsystems/tools.md), and [cancellation and error recovery](subsystems/core.md#the-agent-handle).
 
 ## Session log
 

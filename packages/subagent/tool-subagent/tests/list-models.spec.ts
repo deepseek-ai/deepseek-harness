@@ -1,9 +1,9 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { type ToolCallId,
   LlmAdapter, type ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
@@ -66,6 +66,7 @@ class CatalogAdapter extends LlmAdapter {
 }
 
 const callingAgents = new WeakMap<Context, Agent>()
+const toolFibers = new WeakMap<Context, Fiber>()
 
 async function setupListTool(routes = [
   { provider: 'alpha', model: 'fast' },
@@ -79,7 +80,7 @@ async function setupListTool(routes = [
   await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: routes })
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
+  toolFibers.set(ctx, await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true }))
   const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('discovery-parent') })
   callingAgents.set(ctx, agent)
   return ctx
@@ -109,7 +110,7 @@ describe('list_subagent_models', () => {
   it('defaults discovery off independently of model selection', async () => {
     const ctx = await setup({ provider: 'mock', modelSelection: true })
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
-    const schema = ctx.tools.schemas().find(candidate => candidate.name === 'subagent')!
+    const schema = ctx.tools.getAll().find(candidate => candidate.name === 'subagent')!
     expect(schema.parameters).toHaveProperty('properties.model')
   })
 
@@ -121,7 +122,7 @@ describe('list_subagent_models', () => {
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     const discoveryConfig = { provider: 'mock', toolName: 'discovery_subagent', modelDiscovery: true }
     const owner = await ctx.plugin(tool, discoveryConfig)
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     expect(schemas.filter(schema => schema.name === 'list_subagent_models')).toHaveLength(1)
     expect(schemas.find(schema => schema.name === 'discovery_subagent')!.parameters)
       .not.toHaveProperty('properties.model')
@@ -132,7 +133,7 @@ describe('list_subagent_models', () => {
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
     expect(ctx.tools.get('subagent')).toBeDefined()
     const reloaded = await ctx.plugin(tool, discoveryConfig)
-    expect(ctx.tools.schemas().filter(schema => schema.name === 'list_subagent_models')).toHaveLength(1)
+    expect(ctx.tools.getAll().filter(schema => schema.name === 'list_subagent_models')).toHaveLength(1)
     await reloaded.dispose()
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
   })
@@ -172,7 +173,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -210,7 +211,7 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
@@ -239,9 +240,8 @@ describe('list_subagent_models', () => {
     const changed = await call(ctx, {})
     expect(text(changed)).toBe('beta — BETA API')
 
-    const tools = ctx.tools
-    await ctx.fiber.dispose()
-    expect(tools.get('list_subagent_models')).toBeUndefined()
+    await toolFibers.get(ctx)!.dispose()
+    expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
   })
 
   it('lists one provider\'s advertised models without treating the catalog as a whitelist', async () => {

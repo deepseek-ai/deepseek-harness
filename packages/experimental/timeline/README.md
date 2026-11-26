@@ -117,6 +117,7 @@ Enabling Timeline adds tools and planning guidance to subsequent requests. The f
 - The timeline shows up to seven days of reports at a time and up to 512 discussions. The Session log retains report history outside the visible range.
 - A task update writes the current tree to the Session log, up to 2 MiB per write. Revisions keep the description and progress at each edit and show a short preview when details change.
 - Pause and continue controls ask the agent to update the plan at a safe checkpoint. Use Harness Stop to stop an active turn.
+- When several Timeline installations share a composition, the one nearest to an agent's scope manages it, under a native or PTC tool root alike.
 
 <a id="dev-note"></a>
 ### Dev Note

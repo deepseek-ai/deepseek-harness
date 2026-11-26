@@ -11,14 +11,17 @@
  * @module dsh-tools/batch
  */
 
-import { ToolBatchExecutionError } from './executor.ts'
+import { ToolBatchExecutionError } from './registry.ts'
 import { TOOL_ABORTED_BEFORE_DISPATCH } from './contracts.ts'
-import type { ToolBatchInput, ToolBatchResult, ToolCallResult } from './executor.ts'
+import type { ToolBatchInput, ToolBatchResult, ToolCallResult } from './registry.ts'
 import { createToolResultMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ToolExecutionInput, ToolExecutionMode, ToolExecutionResult, ToolRunContext } from './contracts.ts'
 import type { ScheduledToolDispatch, ToolExecutionPipeline } from './pipeline.ts'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+
+/** Concurrency-safe calls of one batch that run at once when the batch sets no `maxParallelToolCalls`. */
+export const DEFAULT_MAX_PARALLEL_TOOL_CALLS = 10
 
 /** One tool call after argument parsing, ready to schedule. */
 interface PlannedCall {
@@ -41,18 +44,15 @@ interface GroupOutcome {
  * Execute raw calls with ordered policy and results around overlapping tool bodies.
  * Abort drains started calls and synthesizes results for skipped calls. Internal
  * failures drain before rejecting with the already committed results and context.
+ * Concurrency-safe calls run at most `input.maxParallelToolCalls` at once, or
+ * {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS} without an override.
  * @param input - raw calls, optional concurrency override, and optional Session owner.
- * @param pipeline - executor-owned invocation implementation.
- * @param maxParallel - reads the executor's current validated limit when input has no override.
+ * @param pipeline - invocation stages that resolve each call's definition.
  * @returns model-ordered outcomes after every started body has settled.
  * @throws RangeError when the explicit concurrency override is not a positive integer.
  */
-export async function executeToolBatch(
-  input: ToolBatchInput,
-  pipeline: ToolExecutionPipeline,
-  maxParallel: () => number,
-): Promise<ToolBatchResult> {
-  const { calls: toolCalls, signal, agent, toolSet, maxParallelToolCalls } = input
+export async function executeToolBatch(input: ToolBatchInput, pipeline: ToolExecutionPipeline): Promise<ToolBatchResult> {
+  const { calls: toolCalls, signal, agent, toolStep, maxParallelToolCalls } = input
   if (maxParallelToolCalls !== undefined && (!Number.isInteger(maxParallelToolCalls) || maxParallelToolCalls < 1)) {
     throw new RangeError('maxParallelToolCalls must be a positive integer')
   }
@@ -66,7 +66,7 @@ export async function executeToolBatch(
         name: block.name,
         arguments: parseArguments(block.arguments),
         ...agent === undefined ? {} : { agent },
-        ...toolSet === undefined ? {} : { toolSet },
+        ...toolStep === undefined ? {} : { toolStep },
         signal,
       },
     }))
@@ -80,7 +80,7 @@ export async function executeToolBatch(
       const mode = pipeline.executionMode(first.exec).kind
       const group = mode === 'parallel' ? planned.slice(next) : [first]
       const outcome = await runGroup(
-        pipeline, settlement, maxParallelToolCalls ?? maxParallel(), group, mode, signal,
+        pipeline, settlement, maxParallelToolCalls ?? DEFAULT_MAX_PARALLEL_TOOL_CALLS, group, mode, signal,
       )
       next += outcome.consumed
       concluded ||= outcome.concluded

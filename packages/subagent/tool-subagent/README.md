@@ -94,7 +94,7 @@ One instance is one provider plus one tool name. The plugin registers its defini
 
 ### Activation ownership
 
-The tool calls `ctx.subagents.startActivation()` with parent delivery selected. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. A startup failure is an errored tool result. Rejections before startup are coded: a missing calling Agent, `llm` service, or effective parent route throws `ToolContextUnavailableError`; an unpaired route field throws `ToolArgsError`, and an empty route field counts as omitted; and `SubagentError` reports a disabled selection (`MODEL_SELECTION_DISABLED`, `PRESET_SELECTION_DISABLED`), a preset outside the allowlist (`PRESET_NOT_ALLOWED`), a route the current Host setting does not authorize (`MODEL_ROUTE_NOT_ALLOWED`), invalid enabled model-selection settings (`INVALID_MODEL_SELECTION_SETTINGS`), an LLM provider unknown to discovery (`LLM_PROVIDER_NOT_FOUND`), or a provider replaced during route preflight (`PROVIDER_CHANGED`). When the caller can call `list_subagent_models`, unpaired-field and unauthorized-route rejections tell the model to call it. Failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
+The tool calls `ctx.subagents.startActivation()` with parent delivery selected. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. A startup failure is an errored tool result. Rejections before startup are coded: a missing calling Agent, `llm` service, or effective parent route throws `ToolContextUnavailableError`; an unpaired route field throws `ToolArgsError`, and an empty route field counts as omitted; and `SubagentError` reports a disabled selection (`MODEL_SELECTION_DISABLED`, `PRESET_SELECTION_DISABLED`), a preset outside the allowlist (`PRESET_NOT_ALLOWED`), a route the current Host setting does not authorize (`MODEL_ROUTE_NOT_ALLOWED`), invalid enabled model-selection settings (`INVALID_MODEL_SELECTION_SETTINGS`), an LLM provider unknown to discovery (`LLM_PROVIDER_NOT_FOUND`), or a provider replaced during route preflight (`PROVIDER_CHANGED`). Unpaired-field and unauthorized-route rejections tell the model to call `list_subagent_models` if it is available. Failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
 
 ### Result acknowledgement
 
@@ -139,11 +139,11 @@ Read these pages when the package-level contract is not enough; they move from t
 
 #### What the model sees
 
-The generated default [`subagent` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) appears under the configured tool name while its provider exists. An instance with `modelSelection` adds `provider`, `model`, and `reasoning_effort` in every Session. The `provider` description tells the model to set the fields only when the task needs a different model and names the omitted-field route: the parent's current model and effort, or the default configured for the tool or backend. It names `list_subagent_models` as the source of provider ids when the same instance enables `modelDiscovery`. `allowedAgentPresets` adds the `agent_preset` enum and guidance for the default or inherited selection. Context inheritance and continuation support determine task and follow-up descriptions. Agent restrictions apply to inherited preset delegation tools in schemas, execution, and guidance, including when historical `toolFilter` overrides are restored; sibling Agents remain unaffected. Preset-selection guidance depends only on the tool configuration, so it does not depend on other presets’ declaration order.
+The generated default [`subagent` schema](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) appears under the configured tool name while its provider exists. An instance with `modelSelection` adds `provider`, `model`, and `reasoning_effort` in every Session. The `provider` description tells the model to set the fields only when the task needs a different model and names the omitted-field route: the parent's current model and effort, or the default configured for the tool or backend. It names `list_subagent_models` as the source of provider ids when the same instance enables `modelDiscovery`. `allowedAgentPresets` adds the `agent_preset` enum and guidance for the default or inherited selection. Context inheritance and continuation support determine task and follow-up descriptions. Agent restrictions apply to inherited preset delegation tools in schemas, guidance, and execution, including when historical `toolFilter` overrides are restored; sibling Agents remain unaffected. Preset-selection guidance depends only on the tool configuration, so it does not depend on other presets’ declaration order.
 
 #### Token effect
 
-Fixed schema cost per parent request, including the optional `name` field; `modelSelection` adds three optional route fields, while preset selection adds one enum parameter and default guidance. Each tool instance adds one schema; visible delegation tools share one short system-prompt section.
+Fixed schema cost per parent request, including the optional `name` field; `modelSelection` adds three optional route fields, while preset selection adds one enum parameter and default guidance. Each tool instance adds one schema; the delegation tools share one short system-prompt section.
 
 #### KV Cache effect
 
@@ -167,7 +167,7 @@ The schema is prefix-stable across adapter registration and catalog changes. Eac
 
 #### What the model sees
 
-Visible delegation tools share delegation and collaboration guidance, listing tools in name order and instructing the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Ending the turn works because a settled child notifies its parent and a notice that reaches an idle parent starts one independent model request; hosts that keep children progressing alternate `agent.whenIdle()` and `waitForChildren(agent)` ([`dsh-subagent`](../subagent/README.md), [`session.ts`](../../acp/acp/src/session.ts)). Hidden or unavailable tools are omitted; no guidance appears when none are visible. With both `subagent` and `subagent_fork` visible and the default concurrency limit of `8`, the text is:
+Every delegation tool carries `tool:subagent` as its `guidance`, so the delegation tools of one composition share one delegation and collaboration section, which lists, in name order, the delegation tools the Agent can call and instructs the model to start independent delegations together and keep working while they run, and to end its turn instead of sleeping or polling when only waiting for their results remains. Ending the turn works because a settled child notifies its parent and a notice that reaches an idle parent starts one independent model request; hosts that keep children progressing alternate `agent.whenIdle()` and `waitForChildren(agent)` ([`dsh-subagent`](../subagent/README.md), [`session.ts`](../../acp/acp/src/session.ts)). A tool whose provider is unavailable or that the Agent's scope restricts is omitted, and no guidance appears when the Agent can call none. With both `subagent` and `subagent_fork` mounted and the default concurrency limit of `8`, the text is:
 
 ##### Tool-guidance section
 
@@ -179,7 +179,7 @@ Bash, formatters, code generators, and scripts can overwrite concurrent edits wi
 
 #### Token effect
 
-Two guidance paragraphs per parent request with visible delegation tools, listing their names and shared-file coordination rules.
+Two guidance paragraphs per parent request whose Agent can call a delegation tool, listing the callable delegation tools and the shared-file coordination rules; a restricted delegation tool is left out, and no section is sent when the Agent can call none.
 
 #### KV Cache effect
 
@@ -244,6 +244,8 @@ These limits define what this tool does not return or enforce; they are current 
 - **Preset choices omit descriptions** — `agent_preset` exposes ids and default or inheritance guidance only. The schema does not read candidate preset documents, so registration is independent of their declaration order. Use ids that convey each candidate's purpose.
 - **Preset references are checked on delegation** — Host-mounted and preset-mounted tools both resolve the target when starting a child. A target can be declared or replaced after tool registration, so loading the tool cannot establish its availability for a later call. Misspelled or unavailable ids remain undetected until selected; that call returns an error.
 - **Shipped fork tools omit model selection** — their configuration leaves `modelSelection` disabled to preserve inherited-prefix reuse. Custom fork tools may enable it under the same Host authorization and adapter validation as other delegation tools.
+- **Delegation guidance can outlive its tools across restarts** — a retirement is detected only for a source this process saw, so a Session resumed in a process without a delegation tool keeps the `tool:subagent` section it saw without a notice ([source lifecycle](../../core/system-prompt/README.md#known-limitations-and-deferred-work)).
+- **Sessions from earlier releases can repeat the delegation guidance** — earlier releases named the shared section after the first callable delegation tool in name order. A resumed Session whose first such tool was not `subagent` keeps that `tool:<name>` section and also receives `tool:subagent` with the same text.
 - **Depth caps are fixed per instance** — another cap requires another distinctly named tool. Child personas and tools belong to the selected Agent Preset. Explicit LLM selection requires `modelSelection` and is restricted to the routes the Host setting authorizes at call time, or the current parent route when it is disabled.
 
 <a id="dev-note"></a>

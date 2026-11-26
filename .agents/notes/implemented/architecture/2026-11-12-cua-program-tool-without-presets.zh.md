@@ -22,10 +22,10 @@ SDK、headless 和 ACP 应用创建 Agent 时不组合 Agent preset，它们的 
 
 **在 SDK server 中组合 preset** 只覆盖三个 Host 中的一个，需要修改非实验性的包，并要求每个部署声明一个 ID 与 `agentPreset` 不同的空 preset。
 
-**按工具执行器选择形态**需要执行器接口标识程序执行器，而该接口没有这项信息。
+**按 Agent 的根注册表选择形态**需要注册表接口标识 PTC 根注册表，而该接口没有这项信息。
 
 **程序服务不可用时照常创建 Agent、不注册该工具并记录警告**会在本决策所服务的 Host 上掩盖失败：SDK 或 headless 的调用方会得到一次没有 Computer Use 的完整运行，并且收不到任何错误。提供方因此沿用它对使用其他 preset 的 Agent 采用的规则：创建时等待专用运行时，在该运行时或 `workingDirectory` 服务不可用时拒绝创建，例如运行时设置无效，或组合中没有 `workingDirectory`。这与[Host 平面说明](2026-08-10-host-plane-ownership-after-presets.zh.md)否决的检查不同。那项检查会拒绝所有未加入 preset 的 Agent，而 SDK server、ACP 桥和 headless bundle 创建的 Agent 全部如此。提供方只在无法提供其配置所选的工具时拒绝创建，并且 `agentPreset: false` 可以去掉对程序运行时的依赖。
 
 ## 后果
 
-不组合 preset 的 Host 使用默认配置即可获得 `cua_run_code`；Web 和 Desktop 会话都会组合 preset，不受影响。在不组合 preset 的 Host 上，创建 Agent 时会等待专用程序运行时，其所需服务不可用时创建失败。这类 Host 挂载 PTC 执行器时，`run_code` 内会出现 `tools.cua_run_code`，除非提供方设置 `agentPreset: false`。迁移步骤见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.2/cua-agents-without-preset/guide.zh.md)。单元测试覆盖有注册表和没有注册表的组合，以及注册表的加载与卸载；已记录的 SDK 会话和 headless 会话覆盖组装后的请求和程序执行，其中 headless 会话经由 PTC 工具执行器。
+不组合 preset 的 Host 使用默认配置即可获得 `cua_run_code`；Web 和 Desktop 会话都会组合 preset，不受影响。在不组合 preset 的 Host 上，创建 Agent 时会等待专用程序运行时，其所需服务不可用时创建失败。这类 Host 挂载 PTC 根注册表时，该根注册表会绑定被引入的 `cua_run_code` 注册表，并在 `run_code` 内暴露 `tools.cua_run_code`（[可组合的工具注册表](2026-11-19-composable-tool-registries.zh.md)），除非提供方设置 `agentPreset: false`。迁移步骤见[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.2/cua-agents-without-preset/guide.zh.md)。单元测试覆盖有注册表和没有注册表的组合，以及注册表的加载与卸载；已记录的 SDK 会话和 headless 会话覆盖组装后的请求和程序执行，其中 headless 会话经由 PTC 根注册表。

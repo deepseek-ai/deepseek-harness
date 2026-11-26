@@ -1,4 +1,5 @@
-import type { Fiber } from '@deepseek-ai/cordis'
+import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { McpCloseResult, McpConnectionStatus } from './types.ts'
 
 /**
@@ -9,7 +10,7 @@ import type { McpCloseResult, McpConnectionStatus } from './types.ts'
  * @module
  */
 
-/** Read-and-observe handle over one instance's {@link McpConnectionStatus}. */
+/** Read-and-observe handle over one instance's {@link McpConnectionStatus} and the tools it registered. */
 export interface McpConnectionStatusHandle {
   /**
    * The current status.
@@ -29,12 +30,59 @@ export interface McpConnectionStatusHandle {
    * @returns the disposer removing this observer.
    */
   onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void
+  /**
+   * Whether this instance currently has one tool definition registered: a tool
+   * of its current generation or, with on-demand loading, its loader tool or a
+   * tool an Agent loaded. A generation swap, reconnection, or unload withdraws
+   * the earlier definitions.
+   * @param definition - tool definition to look up by identity.
+   * @returns whether the definition is one of this instance's live registrations.
+   */
+  registers(definition: ToolDefinition): boolean
+}
+
+/** Registers tool definitions on behalf of one instance and records them while they stay registered. */
+export interface McpToolRegistrar {
+  /**
+   * Register one definition through a context's tool registry.
+   * @param ctx - context whose `ctx.tools` receives the registration.
+   * @param definition - tool definition to register.
+   * @returns the disposer that unregisters the definition and stops recording it.
+   */
+  register(ctx: Context, definition: ToolDefinition): () => void
 }
 
 /** Writable status cell retained across supervisors on the same Fiber. */
-export class McpStatusCell implements McpConnectionStatusHandle {
+export class McpStatusCell implements McpConnectionStatusHandle, McpToolRegistrar {
   private value: McpConnectionStatus = { state: 'connecting', attempt: 0 }
   private closeResult: McpCloseResult = { closeConfirmed: true }
+  /** Live registrations by definition; on-demand loading registers one definition once per loading Agent. */
+  private readonly registrations = new Map<ToolDefinition, Set<object>>()
+
+  registers(definition: ToolDefinition): boolean {
+    return this.registrations.has(definition)
+  }
+
+  register(ctx: Context, definition: ToolDefinition): () => void {
+    const registrations = this.registrations
+    // The record shares the registration's effect, so disposing the context's Fiber also ends it.
+    // oxlint-disable-next-line typescript/no-misused-promises -- synchronous cleanup; preserve the Cordis disposer identity
+    return ctx.effect(function* () {
+      yield ctx.tools.register(definition)
+      const registration = {}
+      let live = registrations.get(definition)
+      if (live === undefined) {
+        live = new Set()
+        registrations.set(definition, live)
+      }
+      live.add(registration)
+      const own = live
+      yield () => {
+        own.delete(registration)
+        if (own.size === 0) registrations.delete(definition)
+      }
+    }, 'mcp-client: tool registration')
+  }
 
   closure(): McpCloseResult { return this.closeResult }
 

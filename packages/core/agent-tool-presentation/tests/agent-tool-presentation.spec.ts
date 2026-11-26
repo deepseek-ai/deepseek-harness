@@ -2,11 +2,11 @@
  * The row an agent preset carries to pick its tool presentation. What it owes
  * its caller: the choice reaches THIS agent and no other, it unwinds with the
  * agent, and PTC selection waits for a runtime before replacing the
- * inherited executor.
+ * inherited root registry.
  */
 
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
@@ -14,6 +14,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { apply, Config, inject, name } from '@deepseek-ai/dsh-agent-tool-presentation'
@@ -43,7 +44,7 @@ async function host(options: { runtime?: boolean; language?: string } = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   if (options.runtime !== false) await ctx.plugin(StubRuntime, options.language === undefined ? {} : { language: options.language })
   ctx.tools.register(defineTool({
     name: 'echo',
@@ -85,7 +86,7 @@ describe('the tool-presentation row', () => {
     const coded = await mount(ctx, { mode: 'ptc' }, 'coded')
     const plain = await mount(ctx, { mode: 'native' }, 'plain')
 
-    const codedAssembly = await ctx.systemPrompt.assemble({ scope: coded.agent })
+    const codedAssembly = await ctx.systemPrompt.assemble({ scope: coded.agent, toolStep: ToolStep.capture(ctx.tools, coded.agent) })
     const plainAssembly = await ctx.systemPrompt.assemble({ scope: plain.agent })
 
     expect(codedAssembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
@@ -99,10 +100,10 @@ describe('the tool-presentation row', () => {
 
     await row.dispose()
 
-    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('selected tool executor is unavailable')
+    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow('selected tool registry is unavailable')
   })
 
-  it('keeps the inherited executor while waiting for a PTC runtime', async () => {
+  it('keeps the inherited root while waiting for a PTC runtime', async () => {
     const ctx = await host({ runtime: false })
 
     const { agent, row } = await mount(ctx, { mode: 'ptc' })

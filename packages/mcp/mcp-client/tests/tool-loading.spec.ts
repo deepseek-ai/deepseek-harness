@@ -1,15 +1,17 @@
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import * as McpClient from '../src/index.ts'
-import { connectionStatusIn } from '../src/status.ts'
+import { connectionStatusIn, McpStatusCell } from '../src/status.ts'
 import { McpToolLoader } from '../src/tool-loading.ts'
 import { McpToolRegistrationError, syncTools, type ToolBridgeOptions, type ToolDisposers } from '../src/tools.ts'
 import { startHttpMcpFixture } from './http-fixture.ts'
@@ -23,7 +25,7 @@ async function host(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -58,12 +60,14 @@ const object = { type: 'object' }
 async function onDemand(ctx: Context, maxLength = 160) {
   let owner!: Context
   await ctx.plugin({ inject: ['tools'], apply(inner: Context) { owner = inner } })
-  const loader = new McpToolLoader(owner, 'srv', maxLength)
-  const opts: ToolBridgeOptions = { signal: new AbortController().signal, serverName: 'srv', toolCallTimeoutMs: 60_000, loader }
+  const status = new McpStatusCell(() => {})
+  const loader = new McpToolLoader(owner, 'srv', maxLength, status)
+  const opts: ToolBridgeOptions = { signal: new AbortController().signal, serverName: 'srv', toolCallTimeoutMs: 60_000, loader, registrar: status }
   let disposers: ToolDisposers = new Map()
   return {
     owner,
     loader,
+    status,
     async sync(tools: MockTool[]): Promise<ToolDisposers> {
       disposers = await syncTools(createMockClient(tools) as never, owner, opts, disposers)
       return disposers
@@ -96,23 +100,45 @@ it('registers only the loader for an on-demand generation and lists its tools in
   expect(ctx.tools.get('mcp__srv__search')).toBeUndefined()
   expect(ctx.tools.get('mcp__srv__load_tools')?.description)
     .toBe('Add tools from MCP server srv to your tool list. The system prompt lists them under "On-demand tools from MCP server srv".')
-  expect(server.loader.catalog(undefined)).toBe([
+  expect(server.loader.catalog()).toBe([
     '### On-demand tools from MCP server srv',
     'These tools are not in your tool list. Before calling one, load it with mcp__srv__load_tools.',
     '- fetch: Fetch one page by its...\n- ping\n- search: Search the workspace.',
   ].join('\n\n'))
 })
 
-it('omits the catalog for an agent that cannot see the loader and while no generation is published', async () => {
+it('omits the catalog while no generation is published', async () => {
   const ctx = await host()
   const server = await onDemand(ctx)
-  expect(server.loader.catalog(undefined)).toBe('')
+  expect(server.loader.catalog()).toBe('')
   await server.sync([{ name: 'search', inputSchema: object }])
-  const { agent, scope } = await createAgent(ctx)
-  scope.ctx.tools.restrict({ deny: ['mcp__srv__load_tools'] })
+  expect(server.loader.catalog()).not.toBe('')
+})
 
-  expect(server.loader.catalog(agent)).toBe('')
-  expect(server.loader.catalog(undefined)).not.toBe('')
+it('shows the catalog only where the loader is callable and retires it with the generation', async () => {
+  const ctx = await host()
+  const server = await onDemand(ctx)
+  await server.sync([{ name: 'search', inputSchema: object }])
+  const catalog = server.loader.catalog()
+  const restricted = await createAgent(ctx)
+  const peer = await createAgent(ctx)
+  restricted.scope.ctx.tools.restrict({ deny: ['mcp__srv__load_tools'] })
+  const section = async (agent: Agent) => (await ctx.systemPrompt.assemble({ scope: agent })).sections
+    .find(entry => entry.name === 'mcp:srv:tools')
+  expect((await section(restricted.agent))?.text).toBe('')
+  expect((await section(peer.agent))?.text).toBe(catalog)
+
+  const session = Session.create(brandString<SessionId>('catalog-session'))
+  const admit = async () => {
+    const assembly = await ctx.systemPrompt.assemble({ session })
+    for (const { message, intent } of assembly.systemUpdates(false)) session.append('system/message', { turn: 1, step: 1, message }, intent)
+    return assembly.sections.find(entry => entry.name === 'mcp:srv:tools')
+  }
+  expect((await admit())?.text).toBe(catalog)
+  server.clear()
+  expect(await admit()).toMatchObject({ retire: true, text: 'The earlier instructions from mcp:srv:tools no longer apply.' })
+  await server.sync([{ name: 'search', inputSchema: object }])
+  expect(await admit()).toMatchObject({ text: catalog })
 })
 
 it('registers loaded tools in the calling agent\'s own scope', async () => {
@@ -126,12 +152,22 @@ it('registers loaded tools in the calling agent\'s own scope', async () => {
   expect(await load(ctx, first.agent, ['fetch', 'search']))
     .toMatchObject({ isError: false, value: 'Loaded: mcp__srv__fetch.\nAlready loaded: mcp__srv__search.' })
   expect(await load(ctx, first.agent, ['search'])).toMatchObject({ isError: false, value: 'Already loaded: mcp__srv__search.' })
-  expect(ctx.tools.get('mcp__srv__search', first.agent)).toBeDefined()
+  const search = ctx.tools.get('mcp__srv__search', first.agent)!
+  expect(search).toBeDefined()
   expect(ctx.tools.get('mcp__srv__search')).toBeUndefined()
   expect(ctx.tools.get('mcp__srv__search', second.agent)).toBeUndefined()
+  expect(server.status.registers(ctx.tools.get('mcp__srv__load_tools')!)).toBe(true)
+  expect(server.status.registers(search)).toBe(true)
   expect(await executeToolFixture(ctx, {
     name: 'mcp__srv__search', arguments: {}, callId: ToolCallId('search'), signal: new AbortController().signal, agent: first.agent,
   })).toMatchObject({ isError: false, value: { content: [{ type: 'text', text: 'called search' }] } })
+  // One definition loaded by two Agents stays recorded until both registrations end.
+  await load(ctx, second.agent, ['search'])
+  await first.dispose()
+  await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__search', first.agent)).toBeUndefined() })
+  expect(server.status.registers(search)).toBe(true)
+  await second.dispose()
+  await vi.waitFor(() => { expect(server.status.registers(search)).toBe(false) })
 })
 
 it('rejects a load that names no agent, no tool, or a tool the server does not offer', async () => {
@@ -171,7 +207,11 @@ it('withdraws the loader and loaded tools with the generation and restores loade
   const { agent } = await createAgent(ctx)
   await load(ctx, agent, ['search'])
 
+  const loaderTool = ctx.tools.get('mcp__srv__load_tools')!
+  const search = ctx.tools.get('mcp__srv__search', agent)!
   server.clear()
+  expect(server.status.registers(loaderTool)).toBe(false)
+  expect(server.status.registers(search)).toBe(false)
   expect(ctx.tools.get('mcp__srv__load_tools')).toBeUndefined()
   expect(ctx.tools.get('mcp__srv__search', agent)).toBeUndefined()
   expect(server.loader.size).toBe(0)

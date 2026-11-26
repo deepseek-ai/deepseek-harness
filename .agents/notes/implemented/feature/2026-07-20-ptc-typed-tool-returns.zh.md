@@ -14,7 +14,7 @@ PTC mode 过去会把每个嵌套工具的结果从 `ContentBlock[]` 重新投�
 
 ## 决策
 
-PTC mode 是可见工具注册表的类型化投影。普通成功绑定调用解析为 post-execute 策略处理后的最终规范 `JsonValue`，失败的绑定调用则以真正的 `ToolCallError` 拒绝 Promise。中间值保留在运行中，并完整跨越进程边界。[显式输出决策](../architecture/2026-11-09-explicit-ptc-output.zh.md)负责 TypeScript Image 绑定、完成值抑制及可见文本和图片的选择。[仅支持 TypeScript 的执行器决定](../simplification/2026-11-12-typescript-only-ptc.zh.md)拥有受支持语言。
+PTC mode 是可见工具注册表的类型化投影。普通成功绑定调用解析为 post-execute 策略处理后的最终规范 `JsonValue`，失败的绑定调用则以真正的 `ToolCallError` 拒绝 Promise。中间值保留在运行中，并完整跨越进程边界。[显式输出决策](../architecture/2026-11-09-explicit-ptc-output.zh.md)负责 TypeScript Image 绑定、完成值抑制及可见文本和图片的选择。[仅支持 TypeScript 的 PTC 决定](../simplification/2026-11-12-typescript-only-ptc.zh.md)拥有受支持语言。
 
 本文档定义叠加在原始 [PTC mode 基础](2026-06-15-ptc.zh.md)之上的返回值与失败约定。统一 schema 词汇由 [JSON 值 schema DSL reference](../../../../packages/core/tools/README.zh.md)负责定义；Native 渲染与策略投影仍由规范输出 Agent Note 负责定义。
 

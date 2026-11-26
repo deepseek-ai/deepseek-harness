@@ -78,7 +78,7 @@ it('aborts model admission on unload, restores caller cancellation, and closes t
     expect(controller.signal.aborted).toBe(false)
     expect(dispatch?.signal).toBe(controller.signal)
     expect(ctx.computerUse.providerName).toBeUndefined()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(fixture.shutdowns).toBe(1)
     expect(fixture.destroys).toBe(1)
   } finally {

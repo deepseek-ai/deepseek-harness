@@ -9,26 +9,26 @@
   en: bb2af1250bfefe4b
   zh: 893e3ab2e563a8a5
 /deepseek-ai-dsh-tools/summary:
-  en: ad53df5cc542fc32
-  zh: 1ab915da46e01d20
+  en: 2c4896f9323d5bbc
+  zh: 72f10818fbc52c6d
 /deepseek-ai-dsh-tools/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tools/use-this-package:
-  en: d382227271bf92ae
-  zh: 1f66b181418c91b9
+  en: 042e90cfd6014572
+  zh: 5f430cf031629b7e
 /deepseek-ai-dsh-tools/use-this-package/register-a-tool:
-  en: 1808e2a95ee21584
-  zh: 40c40da7d1418407
-/deepseek-ai-dsh-tools/use-this-package/conditional-tools:
-  en: eb80334754c2493a
-  zh: b431635ec1f4664f
-/deepseek-ai-dsh-tools/use-this-package/select-an-executor:
-  en: 068e9099cec285a7
-  zh: 3964a1a1760580e8
+  en: f2971fdb57873793
+  zh: 051c2ee5f5d60f38
+/deepseek-ai-dsh-tools/use-this-package/compose-registries:
+  en: c1dbe13bd196237a
+  zh: 29953981f2fb80d4
+/deepseek-ai-dsh-tools/use-this-package/offer-tools-to-individual-agents:
+  en: 01c0298c034009a5
+  zh: 106c1d20d4312177
 /deepseek-ai-dsh-tools/use-this-package/restrict-tools-per-agent:
-  en: c6f98b2283cc2e47
-  zh: c2cdce5d13473f15
+  en: 90fbb9e40d131f3f
+  zh: ea492758b97874b5
 /deepseek-ai-dsh-tools/use-this-package/enforce-policy-on-calls:
   en: cbfe8317565ac62d
   zh: 1e71c66941e50881
@@ -39,23 +39,23 @@
   en: ce7e776e9d516bdb
   zh: 59d2751743db7795
 /deepseek-ai-dsh-tools/understand-the-implementation/design-concept:
-  en: 516a6195a21e742b
-  zh: 33c7b99b42c5acac
+  en: 11697e4f03b60ad6
+  zh: 45e4dfaeeed6dd3a
 /deepseek-ai-dsh-tools/understand-the-implementation/source-map:
-  en: 2dee0a37e0c1fa38
-  zh: 0963cba32685612e
+  en: c84248c82891c490
+  zh: c354880f522f9f3d
 /deepseek-ai-dsh-tools/understand-the-implementation/execution-and-cancellation:
   en: 5f289c5a05345776
   zh: c2b488e03fa38deb
 /deepseek-ai-dsh-tools/understand-the-implementation/ptc-mode:
-  en: 83cf9a5077158879
-  zh: 80508a70a3674226
+  en: 91db4ed08e6a08f9
+  zh: dc491eb5262a4fb8
 /deepseek-ai-dsh-tools/understand-the-implementation/extension-points:
-  en: c2a14d6f22bc9428
-  zh: 89c1414fca465931
+  en: 55b9c04939a49b6c
+  zh: 10541c35cd4d7e5d
 /deepseek-ai-dsh-tools/further-exploration:
-  en: b112e13c7db15bf3
-  zh: 39e726a15ca40f21
+  en: 22bc7c9af35151ea
+  zh: a14ea083ce877e87
 /deepseek-ai-dsh-tools/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -63,8 +63,8 @@
   en: 483b01d9bb2cb49a
   zh: 1d95095e76fb0996
 /deepseek-ai-dsh-tools/model-experience/normal-tool-schemas/what-the-model-sees:
-  en: d6a5c32a421bfe97
-  zh: 542d49df376e70a4
+  en: 2a65cc383bc35c77
+  zh: 85c4ce749a010474
 /deepseek-ai-dsh-tools/model-experience/normal-tool-schemas/token-effect:
   en: d594b71ff5e4cc87
   zh: dcec1ea0dd2a0fa6
@@ -84,8 +84,8 @@
   en: 2fbf2175168e8244
   zh: ad59a120b54a0996
 /deepseek-ai-dsh-tools/known-limitations-and-deferred-work:
-  en: e8c410dee66e1639
-  zh: ae4965fa70234fd1
+  en: 1b4f7507610e548a
+  zh: bc2589abc700fc01
 /deepseek-ai-dsh-tools/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

@@ -1,5 +1,5 @@
 ---
-description: "Define test tools and invoke tool pipelines or selected executors in repository tests and benchmarks."
+description: "Define test tools and invoke tool pipelines or selected root registries in repository tests and benchmarks."
 kind: "package-library"
 ---
 
@@ -38,7 +38,7 @@ const tool = defineContentToolFixture({
 })
 ```
 
-Register the returned definition through the caller's tool registry. Use `executeToolFixture` for an already-parsed invocation, or `executeModelToolFixture` to pass one JSON-encoded call through the selected executor. The latter requires the caller to mount that executor and rejects arguments that cannot be JSON-encoded or an executor response without a result. See [`src/index.ts`](src/index.ts) for invocation fields.
+Register the returned definition through the caller's tool registry and mount a root registry, such as the native root. Use `executeToolFixture` for an already-parsed invocation, resolved to the entry `ctx.tools.get()` returns for the calling scope and, with `toolStep`, only when that step declared it, `executeDefinitionFixture` for a definition `ctx.tools.get()` does not resolve, such as a program binding under a PTC root, or `executeModelToolFixture` to pass one JSON-encoded call through `ctx.tools.execute()`. The latter rejects arguments that cannot be JSON-encoded or a batch without a result. See [`src/index.ts`](src/index.ts) for invocation fields.
 
 -----
 

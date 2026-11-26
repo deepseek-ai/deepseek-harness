@@ -1,4 +1,4 @@
-# Computer Use with the provider's default preset selection under the PTC tool executor, on a profile that composes no presets.
+# Computer Use with the provider's default preset selection under the PTC root tool registry, on a profile that composes no presets.
 - insert:
     - id: computer-use
       name: '@deepseek-ai/dsh-computer-use'

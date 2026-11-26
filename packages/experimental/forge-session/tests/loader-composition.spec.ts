@@ -27,8 +27,8 @@ import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import { GH_COMMANDS } from '@deepseek-ai/dsh-experimental-forge-github/src/commands.ts'
@@ -237,7 +237,7 @@ const PTC_MODULES = [
   ['@deepseek-ai/dsh-sandbox-local', LocalSandbox],
   ['@deepseek-ai/dsh-sandbox-policy', SandboxPolicy],
   ['@deepseek-ai/dsh-ptc-runtime-node', NodeRuntime],
-  ['@deepseek-ai/dsh-tool-executor-ptc', PtcToolExecutor],
+  ['@deepseek-ai/dsh-tool-registry-ptc', PtcToolRegistry],
 ] as const
 
 /**
@@ -265,7 +265,7 @@ async function load(mode: 'native' | 'ptc' = 'native') {
     ['@deepseek-ai/dsh-fs-local', LocalFileSystem],
     ['@deepseek-ai/dsh-working-directory', WorkingDirectoryService],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ...mode === 'native' ? [['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor] as const] : PTC_MODULES,
+    ...mode === 'native' ? [['@deepseek-ai/dsh-tool-registry-native', NativeToolRegistry] as const] : PTC_MODULES,
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-subprocess-local', LocalSubprocessRuntime],

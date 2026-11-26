@@ -15,7 +15,7 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as captures from '../src/capture.ts'
 import * as WorkspaceChanges from '../src/index.ts'
@@ -52,7 +52,7 @@ async function boot(environment: string) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(LocalFileSystem, { cwd })
   await ctx.plugin(FsPolicy)
   await ctx.plugin(ToolFs, { applyPatch: true })

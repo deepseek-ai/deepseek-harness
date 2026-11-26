@@ -8,6 +8,7 @@ import { LlmAdapter, ToolCallId, type GenerateOptions, type StreamChunk } from '
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ToolSessionControl from '../src/index.ts'
@@ -201,7 +202,7 @@ describe('Session message tool', () => {
       card: 'generic', kind: 'other', title: 'Send message', rawInput: 'recipient',
       content: [{ type: 'text', text: 'Review this' }],
     })
-    const schema = ctx.tools.schemas().find(item => item.name === 'session_send_message')!
+    const schema = projectToolSchema(tool, false)
     expect(Object.keys(schema.parameters.properties ?? {})).toEqual(['session_id', 'message'])
     expect(schema.parameters.required).toEqual(['session_id', 'message'])
     await fiber.dispose()

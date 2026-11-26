@@ -363,20 +363,15 @@ export function apply(ctx: Context): void {
  * @param ctx - Scope whose `schedule` service the tools act through.
  */
 function registerScheduleTools(ctx: Context): void {
-  ctx.systemPrompt.section({
-    name: 'tool:schedule',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_SCHEDULE'),
-    text: ({ scope }) => ctx.tools.get('schedule_create', scope) !== undefined
-      || ctx.tools.get('schedule_edit', scope) !== undefined
-      ? MANAGEMENT_AUTHORIZATION
-      : '',
-  })
+  // The create and edit tools share one section that renders while either is available.
+  const guidance = { section: 'tool:schedule', order: 'TOOL_SCHEDULE', text: MANAGEMENT_AUTHORIZATION } as const
 
   // Plugin configuration is fixed for the life of the Host service, so the description is read once.
   const targetDescription = targetHelp(ctx.schedule.deliveryLimits().newSessionIntervalSeconds)
 
   ctx.tools.register(defineTool({
     name: 'schedule_create',
+    guidance,
     description: CREATE_DESCRIPTION,
     parameters: {
       title: {
@@ -440,6 +435,7 @@ function registerScheduleTools(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'schedule_edit',
+    guidance,
     description: EDIT_DESCRIPTION,
     parameters: {
       id: { type: 'string', required: true, description: 'Task id.' },

@@ -90,7 +90,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 退出工具
 
-`exit_plan_mode` 采用渐进式披露：从已选计划状态首次为激活的步骤起准入，并在会话剩余部分保持准入，因此首次进入计划模式时它与指引一起出现，之后的切换只改变指引；原生与 PTC 执行使用同一准入集合。计划模式未提交时调用以 `PlanModeError` `PLAN_NOT_ACTIVE` 失败，没有前导 `#` 标题的计划在评审前以 `ToolArgsError` 失败。经批准的评审会记录一个静默的待生效退出，由下一个被接受的轮内 pre-step 追加，当前这批工具调用剩余部分仍保留计划引导。缺少用户交互通道（`ToolContextUnavailableError`），或评审等待期间服务重载（`PLAN_REVIEW_INTERRUPTED`），调用都会以拒绝方式失败，`/plan off` 仍是手动退路。[`src/error.ts`](src/error.ts) 列出 `PlanModeError` 的 code。
+`exit_plan_mode` 采用渐进式披露：服务把它注册在一个 `AgentToolRegistry` 中，一旦 Agent 已选的计划状态为激活，或其会话已进入过计划模式，就为该 Agent 添加它，因此首次进入计划模式时它与指引一起出现，之后的切换只改变指引；首次进入在追加之前被取消时，会再次移除它。服务在 Agent 创建时、`set()` 时、步骤开始的追加时、经批准的退出之后，以及收到 `agent-preset/selected` 且空白会话的预设变化把该 Agent 移入该服务所属预设时，更新 Agent 的工具，并在加载时更新已存在的 Agent。原生与 PTC 执行使用同样的工具。计划模式未提交时调用以 `PlanModeError` `PLAN_NOT_ACTIVE` 失败，没有前导 `#` 标题的计划在评审前以 `ToolArgsError` 失败。经批准的评审会记录一个静默的待生效退出，由下一个被接受的轮内 pre-step 追加，当前这批工具调用剩余部分仍保留计划引导。缺少用户交互通道（`ToolContextUnavailableError`），或评审等待期间服务重载（`PLAN_REVIEW_INTERRUPTED`），调用都会以拒绝方式失败，`/plan off` 仍是手动退路。[`src/error.ts`](src/error.ts) 列出 `PlanModeError` 的 code。
 
 ### 会话投影单元
 
@@ -171,7 +171,7 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 
 #### Token 影响
 
-schema 从首次进入计划模式起按 ToolRuntime 模式计入开销；每份计划参数与评审结果保留在对话历史中。
+schema 从首次进入计划模式起计入开销：在原生根注册表下是一份直接 schema，在 PTC 根注册表下是一个 SDK 绑定；每份计划参数与评审结果保留在对话历史中。
 
 #### KV Cache 影响
 

@@ -1,5 +1,5 @@
 /** Account route cancellation uses the real loop, registry, and tool lifecycle. */
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, expect, it, vi } from 'vitest'
 import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 import { Context } from '@deepseek-ai/cordis'
@@ -35,7 +35,7 @@ async function harness() {
   const ctx = new Context()
   contexts.push(ctx)
   for (const plugin of [
-    LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolExecutor, AgentRegistry,
+    LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolRegistry, AgentRegistry,
   ]) {
     await ctx.plugin(plugin)
   }

@@ -10,6 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Transport } from '@modelcontextprotocol/client'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import type { Config, McpConnectionStatus } from '@deepseek-ai/dsh-mcp-client'
 
 const { mockConnect, mockClose, mockListTools, mockSetNotificationHandler, MockClient, instances } = vi.hoisted(() => {
@@ -76,6 +77,7 @@ async function mountRegistry(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  ctx.tools.setRoot(new NativeToolRegistry())
   return ctx
 }
 
@@ -268,6 +270,24 @@ describe('connection status surface', () => {
     expect(seen.length).toBe(settled)
   })
 
+  it('records the definitions its current generation registered', async () => {
+    const fiber = ctx.plugin(McpClient, { transport: 'stdio', serverName: 'tracked', command: 'echo' })
+    await fiber
+    const handle = connectionStatusOf(fiber)!
+    const first = ctx.tools.get('mcp__tracked__remote')!
+    expect(handle.registers(first)).toBe(true)
+    expect(handle.registers({ ...first })).toBe(false)
+    // A re-sync swaps the generation and withdraws the earlier definitions.
+    const notification = mockSetNotificationHandler.mock.calls.at(-1)![1] as () => void
+    notification()
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__tracked__remote')).not.toBe(first) })
+    const second = ctx.tools.get('mcp__tracked__remote')!
+    expect(handle.registers(first)).toBe(false)
+    expect(handle.registers(second)).toBe(true)
+    await fiber.dispose()
+    expect(handle.registers(second)).toBe(false)
+  })
+
   it('keeps the final status readable when the plugin instance is disposed', async () => {
     const fiber = ctx.plugin(McpClient, { transport: 'stdio', serverName: 'scoped', command: 'echo' })
     const actualFiber = await fiber
@@ -320,7 +340,7 @@ describe('connection status surface', () => {
         closeConfirmed: mode === 'cleanup-error',
         cleanupError: mode === 'cleanup-error' ? 'Error: transport cleanup failed' : 'McpLocalError: MCP cleanup did not settle',
       })
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       vi.useRealTimers()
     }
@@ -342,7 +362,7 @@ describe('connection status surface', () => {
       expect(fiber.uid).toBeNull()
       expect(handle.current()).toEqual({ state: 'closed', result: { closeConfirmed: true } })
       expect(mockConnect).toHaveBeenCalledTimes(1)
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       connect.resolve()
       await vi.waitFor(() => { expect(handle.closure().closeConfirmed).toBe(true) })

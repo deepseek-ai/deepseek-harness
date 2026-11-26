@@ -20,7 +20,7 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../../core/tool-executor-ptc"
+      "path": "../../core/tool-registry-ptc"
     },
     {
       "path": "../../llm/llm"

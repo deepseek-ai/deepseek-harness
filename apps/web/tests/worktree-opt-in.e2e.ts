@@ -56,7 +56,7 @@ it('persists the unified review and worktree switch and retains checkouts after 
   await git('-c', 'user.name=Worktree fixture', '-c', 'user.email=worktree@example.invalid', '-c', 'commit.gpgSign=false',
     'commit', '-m', 'initial')
 
-  const tools = () => scaffold.ctx.tools.schemas(agent).map(schema => schema.name)
+  const tools = () => scaffold.ctx.tools.getAll(agent).map(tool => tool.name)
   const rows = () => [...scaffold.ctx.loader.entries()]
     .filter(entry => ['worktree', 'tool-worktree'].includes(entry.options.id) && entry.fiber?.state === FiberState.ACTIVE)
   const selectedBundles = async (): Promise<string[]> => {

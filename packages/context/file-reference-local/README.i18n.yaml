@@ -9,8 +9,8 @@
   en: 9149ae1430a55ba8
   zh: 54c229b01013c4d6
 /deepseek-ai-dsh-file-reference-local/summary:
-  en: 74449d8df9ec0f95
-  zh: e32b383ddddbfdbf
+  en: a1b5046bf3ea598c
+  zh: 4cc228e7b3d0fa8e
 /deepseek-ai-dsh-file-reference-local/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -30,8 +30,8 @@
   en: e047061055178783
   zh: da3309d34d65e965
 /deepseek-ai-dsh-file-reference-local/understand-the-implementation/design-concept:
-  en: f0023b9c833747b5
-  zh: 42aef0c0fce9ce8c
+  en: ff90e43948e29e90
+  zh: 3b89ad784de10a41
 /deepseek-ai-dsh-file-reference-local/understand-the-implementation/source-map:
   en: 50b4cb9acee6e4a7
   zh: a1455ea70c837ebc
@@ -44,21 +44,21 @@
 /deepseek-ai-dsh-file-reference-local/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available:
-  en: 9a457db92875eedb
-  zh: 3b6d3fd974c8a91a
-/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/what-the-model-sees:
-  en: a8efdbf46dfc65d6
-  zh: a8e578eec71c9d98
-/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/what-the-model-sees/file-reference-instruction:
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance:
+  en: def6db96da0ca05a
+  zh: 9d7c20bfb2e501f5
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance/what-the-model-sees:
+  en: 811573772410e948
+  zh: c81dc83ee74faf10
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance/what-the-model-sees/file-reference-instruction:
   en: 840f6256a44e78ba
   zh: ebc00f948c48b635
-/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/token-effect:
-  en: 912448c13f2b2f35
-  zh: 013de25c1511bd65
-/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance-when-read-is-available/kv-cache-effect:
-  en: 1c3ebc786f362851
-  zh: 01f43411f28d2993
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance/token-effect:
+  en: 20d21d457db0b8cb
+  zh: 36b148874c19399d
+/deepseek-ai-dsh-file-reference-local/model-experience/file-reference-guidance/kv-cache-effect:
+  en: 3c596e6a7c7dad4a
+  zh: 68d713ddf1dd01c0
 /deepseek-ai-dsh-file-reference-local/known-limitations-and-deferred-work:
   en: 42f854dbb8d0df02
   zh: 2045a8c0a6f69400

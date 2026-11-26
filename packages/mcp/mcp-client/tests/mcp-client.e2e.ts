@@ -10,7 +10,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,7 +47,7 @@ async function mountRegistry(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -128,7 +128,7 @@ describe('fixture server — controlled scenarios', () => {
   })
 
   it('discovers all fixture tools under the server namespace', () => {
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     const names = schemas.map(s => s.name)
     expect(names).toContain('mcp__fixture__add')
     expect(names).toContain('mcp__fixture__greet')
@@ -241,7 +241,7 @@ describe('fixture server — disposal', () => {
 
     // Tools are registered before dispose.
     expect(ctx.tools.get('mcp__fixture__add')).toBeDefined()
-    expect(ctx.tools.schemas().length).toBeGreaterThanOrEqual(4)
+    expect(ctx.tools.getAll().length).toBeGreaterThanOrEqual(4)
 
     // Dispose should complete without throwing.
     await ctx.fiber.dispose()
@@ -294,7 +294,7 @@ describe('fixture server — crash recovery', () => {
     }, { timeout: 15_000, interval: 250 })
 
     // The recovered generation replaced the dead one: no duplicates, no leak.
-    const addEntries = ctx.tools.schemas().map(s => s.name).filter(name => name === 'mcp__crashy__add')
+    const addEntries = ctx.tools.getAll().map(s => s.name).filter(name => name === 'mcp__crashy__add')
     expect(addEntries).toHaveLength(1)
 
     await ctx.fiber.dispose()
@@ -359,7 +359,7 @@ describe('server-everything — official test server', () => {
   })
 
   it('discovers tools from server-everything', () => {
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     const names = schemas.map(s => s.name)
     expect(names).toContain('mcp__everything__echo')
     expect(names).toContain('mcp__everything__get-sum')
@@ -427,7 +427,7 @@ describe('server-filesystem — real filesystem operations', () => {
   })
 
   it('discovers filesystem tools', () => {
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     const names = schemas.map(s => s.name)
     expect(names).toContain('mcp__filesystem__read_file')
     expect(names).toContain('mcp__filesystem__write_file')
@@ -540,7 +540,7 @@ describe('streamable-http — in-process MCP server', () => {
   })
 
   it('discovers tools under the server namespace over HTTP', () => {
-    const names = ctx.tools.schemas().map(s => s.name)
+    const names = ctx.tools.getAll().map(s => s.name)
     expect(names).toContain('mcp__web__ping')
     expect(names).toContain('mcp__web__shout')
   })

@@ -98,8 +98,8 @@ export class TeamService extends TypertRemoteService {
 
   /**
    * Save a root Session's Team selection without stopping children or deleting tasks.
-   * The selection takes effect before awaiting persistence. Tools resolve availability at
-   * step preparation; prompt providers read the selection when evaluated. Task mutations
+   * The selection takes effect before awaiting persistence. The Team tool provider updates the
+   * tree's tools from the logged selection; prompt providers read the selection when evaluated. Task mutations
    * check the current mode when their queued operation starts; admitted operations finish.
    * @param agent - exact live root whose tree receives the selection.
    * @param enabled - selected Team mode.

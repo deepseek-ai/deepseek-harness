@@ -12,6 +12,7 @@ import { auditStartupEntries } from '@deepseek-ai/dsh-app-boot'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import { managerProfile, profileRow, serverRow } from './profile-fixture.ts'
 
 const { MockClient, MockTransport, clients, stdioConfigs } = vi.hoisted(() => {
@@ -66,6 +67,7 @@ async function registry(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  ctx.tools.setRoot(new NativeToolRegistry())
   return ctx
 }
 

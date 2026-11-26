@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Agents can discover and load skills during a session. When the `skill` tool is visible, model-invocable skills or incomplete discovery produce a durable catalog before the first request. The tool loads full instructions; users can invoke user-invocable skills with `/name`. Entry, visibility, and completeness changes append a replacement catalog. Incomplete discovery publishes confirmed skills with a warning, including when none are confirmed. Configure `catalogDescriptionMaxLength` to cap descriptions.
+Agents can discover and load skills during a session. For every Agent in the scope where the `skill` tool is registered, model-invocable skills or incomplete discovery produce a durable catalog before the first request. The tool loads full instructions; users can invoke user-invocable skills with `/name`. Entry, model-invocability, and completeness changes append a replacement catalog. Incomplete discovery publishes confirmed skills with a warning, including when none are confirmed. Configure `catalogDescriptionMaxLength` to cap descriptions.
 
 ## Table of Contents
 
@@ -52,14 +52,14 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What the model gets
 
-- **A session catalog.** When the `skill` tool is visible and either model-invocable skills exist or discovery is incomplete, the agent receives a durable user-role message before its first request, listing each confirmed skill's name and a capped description; a non-empty catalog tells the model to load a skill with the tool before acting on it, and never to infer instructions from the summary alone.
+- **A session catalog.** For every Agent in the scope where the `skill` tool is registered, when either model-invocable skills exist or discovery is incomplete, the agent receives a durable user-role message before its first request, listing each confirmed skill's name and a capped description; a non-empty catalog tells the model to load a skill with the tool before acting on it, and never to infer instructions from the summary alone.
 - **A loader tool.** The model calls `skill` with the exact skill name and receives the full instruction body plus resource guidance in a canonical `<skill_content>` block; the result is retained as ordinary tool history.
 - **Explicit user invocation.** A `/name` token in direct user input that names a user-invocable skill injects that skill's instructions into the step, without the model having to load it.
-- **Live catalog updates.** Later membership, description, visibility, or completeness changes append a replacement catalog; removing every skill appends an empty catalog that retires older names.
+- **Live catalog updates.** Later membership, description, model-invocability, or completeness changes append a replacement catalog; removing every skill appends an empty catalog that retires older names.
 
 ### Observable success and failures
 
-Loading a listed skill returns its full instructions; the model sees one canonical shape whether the load came from the tool or from a user's explicit invocation. An invalid name reports `Error: invalid arguments: invalid skill name "<name>"`, an unknown name reports the skill is unknown or no longer available, and a skill disabled for model invocation reports it is not available for model invocation. The catalog is omitted entirely when no catalog was ever published and either discovery is complete with no model-invocable skills or the `skill` tool is hidden or shadowed; after a catalog has been published, either visibility loss — the `skill` tool hidden or shadowed by a same-name scoped tool — or removal of every skill instead appends an empty catalog that retires older names.
+Loading a listed skill returns its full instructions; the model sees one canonical shape whether the load came from the tool or from a user's explicit invocation. An invalid name reports `Error: invalid arguments: invalid skill name "<name>"`, an unknown name reports the skill is unknown or no longer available, and a skill disabled for model invocation reports it is not available for model invocation. The catalog is omitted entirely when no catalog was ever published and discovery is complete with no model-invocable skills; after a catalog has been published, removing every skill instead appends an empty catalog that retires older names. A scope that restricts the `skill` tool, or registers its own `skill`, still receives this plugin's catalog.
 
 -----
 
@@ -83,7 +83,7 @@ The package is built on two ideas. First, the catalog is a durable projection, d
 
 ### Catalog lifecycle
 
-At each eligible `agent/pre-step`, the plugin snapshots the calling session's skill catalog, applies exact `skill` tool visibility, filters to model-invocable skills, and compares a digest of the entries and completeness against the newest visible `skill-catalog` message in the session log. When the digest changed, it hands the `enter` decision a durable user-role message containing the replacement catalog; an empty replacement explicitly retires earlier names. An incomplete snapshot publishes its readable entries with a discovery warning and durable `incomplete: true` source metadata, including when no entries remain. Completeness participates in the digest, so recovery clears the warning even when the entries stay the same; incomplete observations are retried rather than cached. The visibility check compares against the exact tool definition this plugin registered, so a scoped same-name shadow removes both the schema and its guidance; the plugin works mounted globally or inside one agent's composition.
+At each eligible `agent/pre-step` in the scopes that inherit its registration, the plugin snapshots the calling session's skill catalog, filters to model-invocable skills, and compares a digest of the entries and completeness against the newest visible `skill-catalog` message in the session log. When the digest changed, it hands the `enter` decision a durable user-role message containing the replacement catalog; an empty replacement explicitly retires earlier names. An incomplete snapshot publishes its readable entries with a discovery warning and durable `incomplete: true` source metadata, including when no entries remain. Completeness participates in the digest, so recovery clears the warning even when the entries stay the same; incomplete observations are retried rather than cached. The listener runs only for Agents in the scope where the plugin registered its tool, so the plugin works mounted globally or inside one agent's composition; it reads no tool registry, so a scope that restricts or shadows the tool still receives the catalog.
 
 ### Invocation boundary
 
@@ -112,7 +112,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-If this exact `skill` tool is visible and either model-invocable skills exist or discovery is incomplete, the agent receives the catalog template below as a durable user-role message before the first request, with one data-dependent entry per sorted skill. Later membership, description, visibility, or completeness changes append a replacement using the same `<available_skills>` envelope; deleting every skill appends an empty envelope with an explicit instruction not to use older names. The template's closing sentence is the rule against double-loading: the user-explicit gesture boundary (the pre-step listener below) injects the same `renderSkillContent` output (shared from `@deepseek-ai/dsh-skill`) inline, and the catalog tells the model to follow that block instead of re-loading the skill through the tool; the replacement-catalog template carries the same anti-double-loading rule in both arms, including the emptied catalog.
+For every Agent that inherits this plugin's `skill` registration, including one that restricts or shadows the tool, if either model-invocable skills exist or discovery is incomplete, the agent receives the catalog template below as a durable user-role message before the first request, with one data-dependent entry per sorted skill. Later membership, description, model-invocability, or completeness changes append a replacement using the same `<available_skills>` envelope; deleting every skill appends an empty envelope with an explicit instruction not to use older names. The template's closing sentence is the rule against double-loading: the user-explicit gesture boundary (the pre-step listener below) injects the same `renderSkillContent` output (shared from `@deepseek-ai/dsh-skill`) inline, and the catalog tells the model to follow that block instead of re-loading the skill through the tool; the replacement-catalog template carries the same anti-double-loading rule in both arms, including the emptied catalog.
 
 ##### Incomplete discovery notice
 
@@ -150,7 +150,7 @@ A user may also invoke a skill directly; its <skill_content> block then appears 
 
 #### Token effect
 
-Repeated input cost scales with skill count and `catalogDescriptionMaxLength`; no initial catalog tokens are sent when discovery is complete and empty or the tool is hidden or shadowed. Each entry or completeness change adds one retained replacement message; incomplete discovery adds a warning.
+Repeated input cost scales with skill count and `catalogDescriptionMaxLength`; no initial catalog tokens are sent when discovery is complete and empty; an Agent whose scope restricts or shadows the tool still receives the catalog. Each entry or completeness change adds one retained replacement message; incomplete discovery adds a warning.
 
 #### KV Cache effect
 
@@ -266,6 +266,7 @@ These limits define when the catalog or the loader is a poor fit. They are curre
 - **Resources are guidance, not attachments** — the tool reports a base directory/URL/opaque hint but neither enumerates nor fetches referenced files for the model.
 - **Loading is one-shot text** — there is no partial, streaming, or cached-content handle when a remote provider is slow or a skill body is large.
 - **Catalog replacement is whole-list** — one changed name or description appends every visible summary; this keeps stale-name retirement explicit but costs tokens proportional to the catalog.
+- **The catalog follows the registration, not the tool the model can call** — an Agent whose scope restricts `skill`, or registers a different `skill`, still receives this plugin's catalog, so its summaries can point at a tool the Agent cannot call or that another plugin answers.
 - **Bodies are not versioned** — body-only edits do not change the catalog digest or notify the model; a later tool call reads the current provider content while earlier tool results remain historical facts.
 
 <a id="dev-note"></a>

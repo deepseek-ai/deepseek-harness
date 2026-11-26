@@ -80,9 +80,9 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-agent': ['emitAgentEvent'],
   // Profile settings must match the installed Node provider's configuration schema.
   '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
-  // CUA mounts the installed provider and shares executor error classes with PTC.
+  // CUA mounts the installed provider and shares registry error classes with PTC.
   '@deepseek-ai/dsh-ptc-runtime-node': ['default'],
-  '@deepseek-ai/dsh-tool-executor-ptc/run-code': ['RunCodeConfig', 'createRunCodeTool'],
+  '@deepseek-ai/dsh-tool-registry-ptc': ['PtcToolRegistry'],
   // CUA checks UserQuestionError and preserves AttachmentError from image admission; longEdgeDimensions is pure
   // arithmetic that rides the same peer.
   '@deepseek-ai/dsh-attachment': ['admitEncodedImages', 'longEdgeDimensions'],
@@ -100,7 +100,7 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-host-webserver': ['normalizeBindAddress'],
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
-  '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeParentOf', 'scopeTarget'],
+  '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeChainOf', 'scopeOf', 'scopeTarget'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
   // The DeepSeek chat importer validates its seed with the installed Session log validation before storing it.
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf', 'validateSessionLog'],

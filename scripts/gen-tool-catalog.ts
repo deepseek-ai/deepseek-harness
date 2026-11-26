@@ -21,9 +21,9 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
 import GoalService from '@deepseek-ai/dsh-goal'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
-import { PtcExecutor } from '@deepseek-ai/dsh-tool-executor-ptc'
+import ToolRuntime, { projectToolSchema, RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tool-registry-native'
+import { PtcToolRegistry } from '@deepseek-ai/dsh-tool-registry-ptc'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import LocalSandboxProvider from '@deepseek-ai/dsh-sandbox-local'
 import LocalBashExecutor from '@deepseek-ai/dsh-bash-local'
@@ -201,8 +201,8 @@ export interface ToolPackage {
   mount: (ctx: Context) => Promise<void>
   /** Agent-like scope key whose tool view is catalogued instead of the global view. */
   scope?: (ctx: Context) => Agent
-  /** Select the program transport when harvesting the PTC package. */
-  executor?: 'ptc'
+  /** Select a PTC root, whose program entry the catalog lists, when harvesting the PTC package. */
+  root?: 'ptc'
   /**
    * A deployment note rendered after the package's tools, for a fact that
    * booting the package alone cannot show. The registered tool NAME can be a
@@ -313,12 +313,12 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'ask_user_question keeps the original blocking behavior by default; set `mode: timed` to opt into a foreground timeout and pending result while the question remains answerable. In timed mode, `timeout: -1` keeps that call blocking indefinitely.',
   },
   {
-    pkg: '@deepseek-ai/dsh-tool-executor-ptc',
-    dir: 'tool-executor-ptc',
-    source: 'packages/core/tool-executor-ptc/src/ptc.ts',
+    pkg: '@deepseek-ai/dsh-tool-registry-ptc',
+    dir: 'tool-registry-ptc',
+    source: 'packages/core/tool-registry-ptc/src/ptc.ts',
     requires: ['ctx.workingDirectory (Agent executions)', 'ctx.tools', 'ctx.ptcRuntime', 'ctx.systemPrompt'],
     writes: ['tool/call', 'one tool/ptc-dispatch-start + tool/ptc-dispatch pair per bridged sub-call', 'tool/result'],
-    executor: 'ptc',
+    root: 'ptc',
     async mount(ctx) {
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(LocalSandboxProvider)
@@ -326,7 +326,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(NodePtcRuntime)
     },
     note:
-      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated TypeScript SDK. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program.',
+      'A PTC root registry exposes only run_code to the model and declares the other tools its scope offers in a generated TypeScript SDK. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program.',
   },
   {
     pkg: '@deepseek-ai/dsh-plan-mode',
@@ -781,12 +781,13 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-web',
     dir: 'tool-web',
     source: 'packages/web/tool-web/src/index.ts',
-    requires: ['ctx.tools', 'ctx.web', 'ctx.systemPrompt'],
+    requires: ['ctx.tools', 'ctx.web', 'ctx.systemPrompt', 'ctx.agents'],
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       // Mount search and fetch providers so both tools register. Their schemas
       // do not depend on provider identity or availability. The DeepSeek
       // provider starts only beside the authentication service.
+      await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime)
       await ctx.plugin(DeepSeekAuth)
       await ctx.plugin(WebDeepSeekApi)
@@ -828,7 +829,7 @@ export function assertManifestComplete(packages: ToolPackage[] = TOOL_PACKAGES, 
   const onDisk = globSync('packages/*/tool-*', { cwd: scanRoot })
     .filter(path => basename(dirname(path)) !== 'test-support')
     .map(p => basename(p))
-    .filter(dir => dir !== 'tool-executor-native').sort()
+    .filter(dir => dir !== 'tool-registry-native').sort()
   const listed = new Set(packages.map(p => p.dir))
   const missing = onDisk.filter(dir => !listed.has(dir))
   if (missing.length > 0) {
@@ -866,7 +867,7 @@ export function assertToolsHarvested(entry: ToolPackage, harvested: number): voi
  * Boot each tool package on a fresh Context and harvest its model-facing
  * schemas. A fresh Context per package keeps attribution clean (each entry's
  * schemas come from exactly that package) and isolates a boot failure to its
- * own entry. Disposed after harvest so no executor/provider outlives the run.
+ * own entry. Disposed after harvest so no registry/provider outlives the run.
  */
 export async function collectToolCatalog(packages: ToolPackage[] = TOOL_PACKAGES): Promise<ToolCatalog> {
   assertManifestComplete(packages)
@@ -874,7 +875,7 @@ export async function collectToolCatalog(packages: ToolPackage[] = TOOL_PACKAGES
   for (const entry of packages) {
     const ctx = new Context()
     // Dispose in `finally` so a throw from `mount`/`schemas()` after earlier
-    // plugins mounted still tears the context down (no leaked executor/provider
+    // plugins mounted still tears the context down (no leaked registry/provider
     // fiber) — the repo's "dispose must reach quiescence" rule.
     try {
       await ctx.plugin(SessionProjectionRegistry)
@@ -882,12 +883,13 @@ export async function collectToolCatalog(packages: ToolPackage[] = TOOL_PACKAGES
       await ctx.plugin(LocalFileSystem)
       await ctx.plugin(WorkingDirectory)
       await ctx.plugin(ToolRuntime)
-      const executor = entry.executor === 'ptc' ? new PtcExecutor(ctx) : new NativeToolExecutor(ctx)
-      ctx.tools.setExecutor(executor)
+      const root = entry.root === 'ptc' ? new PtcToolRegistry(ctx, { name: RUN_CODE_NAME }) : new NativeToolRegistry()
+      ctx.tools.setRoot(root)
       await entry.mount(ctx)
       const scope = entry.scope?.(ctx)
-      const described = executor.describe(ctx.tools.definitions(scope))
-      const schemas = [...new Map([...ctx.tools.schemas(scope), ...described.schemas].map(schema => [schema.name, schema])).values()]
+      const schemas = [...new Map([...ctx.tools.getAll(scope), ...root.getAll(scope)]
+        .map(definition => projectToolSchema(definition, true))
+        .map(schema => [schema.name, schema])).values()]
         .sort((a, b) => a.name.localeCompare(b.name))
       assertToolsHarvested(entry, schemas.length)
       catalog.push({
@@ -948,7 +950,7 @@ export function render(catalog: ToolCatalog): string {
     '',
     'Every model-facing tool a shipped plugin contributes to `ctx.tools`: the `name`, `description`, and JSON-Schema `parameters` the model receives via the system-prompt assembly. It complements the [subsystem pages](subsystems/core.md) (the types plus each page\'s generated Cordis API region) — this page is the *tools* the agent is offered.',
     '',
-    'This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.schemas()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and fails if any package is missing from the generator\'s boot manifest, so a new tool cannot be silently undocumented.',
+    'This file is GENERATED and verified fresh by `pnpm run verify-tool-catalog` (part of `doc-sync`) — do not edit it by hand. Unlike the cordis catalog (a pure source-AST pass), this generator BOOTS each tool plugin on a real context and reads `ctx.tools.getAll()`, because a tool schema is not statically knowable (runtime-spread enums, concatenated descriptions, config-driven names, raw-JSON-Schema MCP tools). A completeness guard globs `packages/*/tool-*` and fails if any package is missing from the generator\'s boot manifest, so a new tool cannot be silently undocumented.',
     '',
     'Scope: shipped product tools under `packages/*/tool-*`, each booted with its DEFAULT config, except where a Config field is REQUIRED with no default — there the generator must choose, and the per-package note records which branch this page shows. The registered tool NAME can be a load-time config (e.g. `tool-subagent`\'s `toolName`), so a deployment may expose a package under a different or additional name — a per-package note records those shipped aliases where they exist. The `examples/` demo tools (e.g. `echo`) are excluded, matching the cordis catalog\'s packages-only scope.',
     '',

@@ -1,6 +1,6 @@
 /** Real SDK probe ownership, failed negotiation recovery, and subprocess quiescence. */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { once } from 'node:events'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
@@ -32,7 +32,7 @@ async function connection(factory: () => Transport, retry: boolean) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   const errors: string[] = []
   const warns: string[] = []
   ctx.logger.error = (message: unknown) => { errors.push(String(message)) }

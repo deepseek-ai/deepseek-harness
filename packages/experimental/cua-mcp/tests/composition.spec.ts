@@ -27,7 +27,7 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
@@ -155,7 +155,7 @@ async function setup(options: SetupOptions = {}) {
     tools: ToolRuntime, agents: AgentRegistry, agentLoop: AgentLoop, agentPresets: AgentPresets, preset: AgentPreset,
     fs: FileSystem, workingDirectory: WorkingDirectory, subprocess: Subprocess, userQuestions: UserQuestions,
     sandbox: Sandbox, sandboxPolicy: SandboxPolicy, sharedRuntime: NodeRuntime,
-    attachments: LocalAttachmentStore, computerUse: ComputerUseRegistry, native: NativeToolExecutor,
+    attachments: LocalAttachmentStore, computerUse: ComputerUseRegistry, native: NativeToolRegistry,
     cua: {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
@@ -367,7 +367,7 @@ describe('Computer Use MCP composition', () => {
     const listed = await client.listTools()
     expect(listed.tools.map(tool => tool.name)).toEqual(['cua_get_api_reference', 'cua_run_code', 'cua_reset'])
     // The MCP tool is the Agent's registration: name, description, and parameters field for field.
-    const registered = ctx.tools.schemas(adapter.agent).find(tool => tool.name === 'cua_run_code')
+    const registered = ctx.tools.getAll(adapter.agent).find(tool => tool.name === 'cua_run_code')
     if (registered === undefined) throw new Error('the provider registered no cua_run_code for the connection Agent')
     // Field for field, minus the sandbox-escalation controls the registration carries and this profile refuses.
     const { properties, ...schema } = registered.parameters as { properties: Record<string, unknown> }

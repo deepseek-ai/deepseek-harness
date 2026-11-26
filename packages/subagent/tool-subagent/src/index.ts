@@ -38,9 +38,12 @@ import type {} from './model-selection-settings.ts'
 export const name = 'tool-subagent'
 export const inject = ['tools', 'subagents', 'systemPrompt']
 
-// Definition identity keeps shared guidance scoped to the actual visible tools,
-// including scoped overrides and independently loaded tool registries.
-const delegationTools = new Set<ToolDefinition>()
+/**
+ * Guidance section every delegation tool shares. Whichever registration the
+ * system prompt renders lists the delegation tools the viewing scope's
+ * registrations resolve.
+ */
+const DELEGATION_SECTION = 'tool:subagent'
 
 /** Config: which registered provider this tool delegates to, plus child defaults. */
 export interface Config extends PresetSelectionConfig {
@@ -203,10 +206,15 @@ export function apply(ctx: Context, config: Config): void {
     const defaultRoute = providerRouteDefaults !== undefined || hasConfiguredLlmSelection(config.agentOptions)
       ? 'the default model configured for this tool'
       : 'your current model and reasoning effort'
-    // Discovery visibility is per Agent; only a same-instance owner is known to exist at mount.
     const providerSource = config.modelDiscovery === true ? ' Use a provider id listed by `list_subagent_models`.' : ''
     const definition = defineTool({
       name: toolName,
+      guidance: {
+        section: DELEGATION_SECTION,
+        order: 'TOOL_SUBAGENT',
+        retirement: 'The subagent delegation tools are no longer available. Their instructions no longer apply.',
+        text: available => `Start independent delegations with ${available.map(name => `\`${name}\``).join(' or ')} together in one assistant message and continue useful work while they run. The concurrency limit of all the subagents is ${ctx.subagents.maxActiveSubagents}. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.\n\nBash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.`,
+      },
       description: wording.description
         + ' This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing.'
         + (subagentProvider.prepareContinuable !== undefined
@@ -293,7 +301,6 @@ export function apply(ctx: Context, config: Config): void {
           modelSelectionEnabled,
           modelSelectionPolicy,
           parentOptions,
-          ctx.tools.get('list_subagent_models', parent, exec.toolSet) !== undefined,
         )
         if (subagentProvider.prepareContinuable === undefined && requiresRoutePreflight) {
           const llm = ctx.get('llm')
@@ -336,14 +343,7 @@ export function apply(ctx: Context, config: Config): void {
         return { kind: 'activation' as const, name: started.name }
       },
     })
-    const disposeTool = ctx.effect(() => {
-      const unregister = ctx.tools.register(definition)
-      delegationTools.add(definition)
-      return () => {
-        delegationTools.delete(definition)
-        unregister()
-      }
-    })
+    const disposeTool = ctx.effect(() => ctx.tools.register(definition))
     // oxlint-disable-next-line typescript/no-misused-promises -- Tool and guidance disposal are synchronous.
     mounted = { subagentProvider, definition, disposeTool }
   }
@@ -364,27 +364,11 @@ export function apply(ctx: Context, config: Config): void {
     // A backend fiber may activate later; a misspelled provider remains visible in this log.
     ctx.logger.info(`subagent provider "${config.provider}" not registered yet; the "${config.toolName ?? 'subagent'}" tool will register when it appears`)
   }
-  ctx.systemPrompt.section({
-    name: `tool:${toolName}`,
-    order: ctx.systemPrompt.getSectionOrder('TOOL_SUBAGENT'),
-    retirement: `The ${toolName} tool is no longer available. Its instructions no longer apply.`,
-    text: (context) => {
-      if (mounted === undefined) return ''
-      const visible = [...delegationTools]
-        .filter(tool => ctx.tools.get(tool.name, context.scope) === tool)
-        .map(tool => tool.name)
-        .sort()
-      if (visible[0] !== toolName) return ''
-      const names = visible.map(name => `\`${name}\``).join(' or ')
-      return `Start independent delegations with ${names} together in one assistant message and continue useful work while they run. The concurrency limit of all the subagents is ${ctx.subagents.maxActiveSubagents}. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.\n\nBash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.`
-    },
-  })
   ctx.systemPrompt.context({
     name: `tool:${toolName}:depth`,
     order: ctx.systemPrompt.getContextOrder('SUBAGENT_DELEGATION'),
     text: (context) => {
-      if (context.agent === undefined || mounted === undefined
-        || ctx.tools.get(toolName, context.scope) !== mounted.definition) return ''
+      if (context.agent === undefined || mounted === undefined) return ''
       const maxDepth = ctx.subagents.resolveMaxDepth(config.maxDepth)
       if (maxDepth === undefined) return ''
       const depth = delegationDepthOf(context.agent)

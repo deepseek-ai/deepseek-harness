@@ -10,6 +10,9 @@ import type { PluginConfig } from '../src/config.ts'
 import { newId, taskId } from '../src/records.ts'
 import { delegationContext } from '../src/delegation.ts'
 import { setup } from './fixture.ts'
+import { executeDefinitionFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { bindScopeParent, createScope } from '@deepseek-ai/dsh-scope'
+import type { ToolDefinition, ToolRegistry } from '@deepseek-ai/dsh-tools'
 
 describe('manager-owned delegated planning', () => {
   it('limits guidance when restored worker ancestry is missing or cyclic', async () => {
@@ -75,7 +78,7 @@ describe('manager-owned delegated planning', () => {
         })
       ).agent
       for (const agent of [worker, nested]) {
-        expect(f.ctx.tools.schemas(agent).some(tool => tool.name.startsWith('timeline_'))).toBe(false)
+        expect(f.ctx.tools.getAll(agent).some(tool => tool.name.startsWith('timeline_'))).toBe(false)
         const prompt = await f.ctx.systemPrompt.assemble({ agent, scope: agent })
         const guidance = prompt.sections.find(section => section.name === 'timeline:planning')?.text
         expect(guidance).toContain('The manager owns the shared Timeline tree')
@@ -89,7 +92,7 @@ describe('manager-owned delegated planning', () => {
         expect(context).not.toContain('Restore saved work')
         expect(f.ctx.timeline.stateOf(agent.session).view.trees).toHaveLength(0)
       }
-      expect(f.ctx.tools.schemas(fork).some(tool => tool.name === 'timeline_tree')).toBe(true)
+      expect(f.ctx.tools.getAll(fork).some(tool => tool.name === 'timeline_tree')).toBe(true)
       const signal = new AbortController().signal
       const before = await f.ctx.systemPrompt.assemble({ agent: worker, scope: worker, signal })
       await call('timeline_tree', { action: 'start', title: 'Review the next release' })
@@ -217,6 +220,43 @@ describe('manager-owned delegated planning', () => {
       expect(f.ctx.timeline.stateOf(f.agent.session).view.annotations[0]?.reply?.text).toContain(
         'Saved notes survive restart',
       )
+    } finally {
+      await f.close()
+    }
+  })
+
+  it('manages an Agent under a root that offers only a program entry', async () => {
+    const f = await setup({ intervalMs: 86400000 })
+    try {
+      const program: ToolDefinition = defineTool({
+        name: 'program', description: 'Program entry', parameters: {}, output: textOutput,
+        execute: () => Promise.resolve('ran'),
+      })
+      const root: ToolRegistry = {
+        register: () => () => {},
+        include: () => () => {},
+        get: name => name === program.name ? program : undefined,
+        getAll: () => [program],
+      }
+      const preset = {}
+      await f.ctx.plugin(Object.assign((inner: typeof f.ctx) => { createScope(inner, preset).ctx.tools.setRoot(root) }, { inject: ['tools'] }))
+      const todo = defineTool({
+        name: 'todo_write', description: 'Inherited Todo', parameters: {}, output: textOutput,
+        execute: () => Promise.resolve('Unexpected write'),
+      })
+      f.ctx.tools.register(todo)
+      const { agent } = await f.ctx.agents.create({
+        sessionId: SessionId('timeline-program-root'),
+        meta: { cwd: process.cwd() },
+        agentOptions: { provider: 'fixture', model: 'timeline' },
+        setup: (_inner, created) => { bindScopeParent(created, preset) },
+      })
+      expect(f.ctx.tools.getAll(agent).map(tool => tool.name)).toEqual(['program'])
+      // A program call to the inherited Todo binding is denied as for a native root.
+      const denied = await executeDefinitionFixture(f.ctx, todo, {
+        agent, name: 'todo_write', arguments: {}, callId: ToolCallId('program-todo'), signal: new AbortController().signal,
+      })
+      expect(denied).toMatchObject({ isError: true, error: { info: { code: 'TIMELINE_TOOL_UNAVAILABLE' } } })
     } finally {
       await f.close()
     }

@@ -25,7 +25,7 @@ This package lets every agent in a subagent tree create, claim, and complete sha
 <a id="use-this-package"></a>
 ## Use this package
 
-Team tools are available to each model step only while the root Session enables Team mode. Prompt providers read the same selection when evaluated. Ordinary subagent controls remain available.
+Team tools are offered to an Agent only while its root Session enables Team mode. Prompt providers read the same selection when evaluated. Ordinary subagent controls remain available.
 
 Mount this package with `@deepseek-ai/dsh-agent-team` when models need the shared board. The root and descendants receive identical task schemas and task policy.
 
@@ -76,7 +76,7 @@ This section explains the design decisions behind the adapter and points at the 
 
 The adapter is built on four commitments:
 
-- **Session-selected tools.** Shared tool registrations select availability from each caller’s root Session; the service resolves tree authority when called.
+- **Session-selected tools.** The adapter adds the shared task tools to each Agent whose root Session has Team mode enabled; the service resolves tree authority when called.
 - **One tool family.** Team registers no messaging, listing, or interruption tool; the standard subagent tools serve Leads and teammates alike.
 - **Declared results, compact JSON.** Every tool declares its complete result schema and renders that value as compact JSON, so the compiler checks `execute` against what the model is promised and no result spends tokens on indentation.
 - **The domain owns authority.** Tools delegate to `ctx.agentTeams`, which enforces Lead authority and revision checks; the adapter adds no weaker path.
@@ -87,15 +87,15 @@ The [subagent teammates Agent Note](../../../.agents/notes/implemented/architect
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, Team policy and four conditional task tools |
+| [`src/index.ts`](src/index.ts) | Plugin entry, removed-key rejection, Team policy and four per-Agent task tools |
 
 ### Policy and tools
 
-One plugin registration provides a dynamic `team:policy` section and four conditional task tools. Each provider reads the caller’s root Session selection, including fork children. An unavailable root disables Team tools and guidance. Tree authority comes from `ctx.subagents.rootOf(agent)`; task owners remain Session ids in `ctx.agentTeams`. Owner arguments resolve through `ctx.subagents.resolveName()`, which grants no authority. Results replace the saved `ownerId` and `ownerName` fields with `owner: ownerName ?? ownerId`. Displaying a task or editing its content requires no descendant catalog reads. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and keep that ownership when Team mode switches; enabling Team mode removes only their result report instruction. The subagent runtime delivers final results.
+One plugin registration provides a dynamic `team:policy` section and four task tools in an `AgentToolRegistry` that `ctx.tools` includes. The section and each Agent's tool set follow the Agent's root Session selection, including fork children. An unavailable root disables Team tools and guidance. Tree authority comes from `ctx.subagents.rootOf(agent)`; task owners remain Session ids in `ctx.agentTeams`. Owner arguments resolve through `ctx.subagents.resolveName()`, which grants no authority. Results replace the saved `ownerId` and `ownerName` fields with `owner: ownerName ?? ownerId`. Displaying a task or editing its content requires no descendant catalog reads. Identity, discovery, communication, and waiting belong to [subagent controls](../../subagent/tool-subagent-control/README.md) and keep that ownership when Team mode switches; enabling Team mode removes only their result report instruction. The subagent runtime delivers final results.
 
 ### Scoped registration and teardown
 
-Tool `when` conditions resolve at step preparation, including the first step of new, forked, and resumed Agents. Policy text is evaluated during prompt assembly. After the policy has been admitted, disabling Team mode appends a notice withdrawing it; unloading this plugin appends its retirement notice on the next accepted assembly. An already prepared step retains its tool selection, but task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
+The plugin sets an Agent's task tools when the Agent is created, forked, or resumed, and when a child joins its tree on `subagent/start`; a failure to read the root's mode, other than for a child without a live root, fails the Agent's creation. It updates every Agent on a `team/mode` Session event and after `agent/disposed`, so a child whose root is gone loses them, and it updates the Agents that exist when it loads. Policy text is evaluated during prompt assembly. After the policy has been admitted, disabling Team mode appends a notice withdrawing it; unloading this plugin appends its retirement notice on the next accepted assembly. A task tool withdrawn while a step runs fails that step's unstarted calls as `UNKNOWN_TOOL`, and task operations check the current mode before starting. Plugin disposal removes all registrations through their owning effects.
 
 </details>
 

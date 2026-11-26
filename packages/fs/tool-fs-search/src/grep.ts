@@ -267,25 +267,20 @@ export function presentGrepResult(
 }
 
 /**
- * Register the `grep` tool and its scope-aware system-prompt guidance.
+ * Register the `grep` tool and its system-prompt guidance with the same lifetime.
  *
  * @param ctx - the plugin context; registrations are effects scoped to it, and
  *   execution uses its `subprocess` service.
  * @param caps - the deployment's resolved grep caps (plugin config after defaulting).
  */
 export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
-  ctx.systemPrompt.section({
-    name: 'tool:grep',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_GREP'),
-    text: ({ scope }) => ctx.tools.get('grep', scope) === undefined
-      ? ''
-      : 'Use the grep tool — not shell grep or rg — to search file contents.'
-        + (ctx.tools.get('read', scope) === undefined ? '' : ' Use read on a matched file when you need surrounding context.'),
-    retirement: 'The grep tool is no longer available. Its guidance no longer applies.',
-  })
-
   const tool = defineTool({
     name: 'grep',
+    guidance: {
+      order: 'TOOL_GREP',
+      text: 'Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.',
+      retirement: 'The grep tool is no longer available. Its guidance no longer applies.',
+    },
     description: 'Search file contents with a ripgrep regular expression. Returns matching lines with line numbers, grouped by file. '
       + `Returns up to ${caps.maxMatches} matches; a larger result reports where the complete match list was saved.`,
     parameters: {
@@ -346,7 +341,7 @@ export function applyGrepTool(ctx: Context, caps: GrepToolCaps): void {
 
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
-    const value = acceptedDirectCallValue(ctx, tool, exec, result, decision) as { matches: GrepMatch[] } | undefined
+    const value = acceptedDirectCallValue(tool, exec, result, decision) as { matches: GrepMatch[] } | undefined
     if (value === undefined) return decision
     const matches = value.matches
     if (matches.length <= caps.maxMatches) return decision

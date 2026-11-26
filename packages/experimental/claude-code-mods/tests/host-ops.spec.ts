@@ -12,6 +12,8 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness, provideWorki
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ModsEngine } from '../src/engine.ts'
 import type { OpContext } from '../src/engine.ts'
 import { createHostOps, FS_MAX_BYTES, STORE_MAX_BYTES, toolCallResultOf } from '../src/host-ops.ts'
@@ -107,6 +109,15 @@ describe('values', () => {
 })
 
 describe('services a deployment did not compose', () => {
+  it('lists tools like ctx.tools, failing without a selected root', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    const { call } = await setup(ctx)
+    await expect(call('tool.list', {})).rejects.toMatchObject({ name: 'ToolRegistryUnavailableError', code: 'TOOL_REGISTRY_UNAVAILABLE' })
+  })
+
   it('names the missing service in each call', async () => {
     const { call, ctx } = await setup()
     const agent = fakeAgent(ctx)
@@ -258,7 +269,7 @@ describe('registrations outside a session', () => {
     const { call, registrations, engine } = await setup(ctx)
     await call('command.register', { name: 'Global', description: 'global command' })
     await call('tool.register', { name: 'global_tool', description: 'global tool' })
-    expect(ctx.tools.schemas().map(tool => tool.name)).toContain('mcp__unit-mod__global_tool')
+    expect(ctx.tools.getAll().map(tool => tool.name)).toContain('mcp__unit-mod__global_tool')
     expect((await call('tool.list', {}) as { name: string }[]).map(tool => tool.name)).toContain('mcp__unit-mod__global_tool')
     const agent = fakeAgent(ctx)
     expect((await call('command.list', {}, agent) as { name: string; source: string }[])).toEqual([{ name: 'global', description: 'global command', source: 'plugin' }])
@@ -266,7 +277,7 @@ describe('registrations outside a session', () => {
     expect(registrations.get('')?.size).toBe(2)
     void engine
     for (const dispose of registrations.get('') ?? []) dispose()
-    expect(ctx.tools.schemas().map(tool => tool.name)).not.toContain('mcp__unit-mod__global_tool')
+    expect(ctx.tools.getAll().map(tool => tool.name)).not.toContain('mcp__unit-mod__global_tool')
   })
 })
 

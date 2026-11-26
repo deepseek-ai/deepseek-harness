@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,7 +81,7 @@ async function setup(
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   if (options.sandboxMode === undefined) {
     await ctx.plugin(LocalFileSystem, { cwd: root })
@@ -97,8 +97,8 @@ async function setup(
 describe('tool-str-replace-editor', () => {
   it('registers the standalone schema and configurable description', async () => {
     const { ctx, fiber } = await setup({ description: 'custom editor description' })
-    const schema = ctx.tools.schemas()[0]
-    expect(ctx.tools.schemas().map(item => item.name)).toEqual(['str_replace_editor'])
+    const schema = ctx.tools.getAll()[0]
+    expect(ctx.tools.getAll().map(item => item.name)).toEqual(['str_replace_editor'])
     expect(schema?.description).toBe('custom editor description')
     const properties = (schema?.parameters as {
       properties: Record<string, {
@@ -194,7 +194,7 @@ describe('tool-str-replace-editor', () => {
     })
 
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(ctx.tools.get('str_replace_editor')).toBeUndefined()
   })
 
@@ -624,7 +624,7 @@ describe('tool-str-replace-editor', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: root })
     Object.defineProperty(ctx.fs, 'sandboxMode', { value: 'read-only' })

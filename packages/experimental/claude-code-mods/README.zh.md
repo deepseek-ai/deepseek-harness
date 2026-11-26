@@ -85,7 +85,7 @@ Blast Radius 的 DSH 包装使用当前运行的可执行文件提供 Node 计�
 | `$.plugin` | `name`、`root` | `defineMod` 的规格 |
 | `$.ui` | `resolve`、`invalidate`、`open`、`close`、`panes`、`log`、`toast`、`status`、`ask` | `resolve` 交出元素构造器；`invalidate`、`open`、`close` 重绘横幅；`ask` 基于 `ctx.userQuestions`；`log`、`toast`、`status` 到达宿主日志 |
 | `$.command` | `register`、`run`、`list` | `ctx.commands`，限定在事件所属的智能体 |
-| `$.tool` | `register`、`call`、`list` | `ctx.tools`；注册的工具名为 `mcp__<plugin>__<tool>`；工具推迟到下一请求的上下文会注入会话 |
+| `$.tool` | `register`、`call`、`list` | `ctx.tools`；注册的工具名为 `mcp__<plugin>__<tool>`；工具推迟到下一请求的上下文会注入会话；`list` 返回发起调用的智能体的根注册表条目，在 PTC 根注册表下只有 `run_code`，没有根注册表时以 `TOOL_REGISTRY_UNAVAILABLE` 拒绝 |
 | `$.prompt` | `submit` | `agent.followup()`，作为 `user` 来源的消息，除非 `asUser` 否则套上"来自模组"的框架；它触发的 `prompt.submit` 带 `origin: { kind: 'plugin', name }` |
 | `$.session` | `id`、`cwd`、`root`、`model`、`turns`、`messages`、`usage`、`version` | 智能体的 Session、`agents.turnBoundaryOf()` 和可选的 `tokenMeter.contextPressure()`；`cwd` 通过 `ctx.workingDirectory` 报告已提交的当前目录；`root` 保留原始项目 |
 | `$.state` | `get`、`set` | 为会话持有的内存，以模组命名的 `{ plugin, key }` 寻址；`ui.render` 期间的读取会让横幅订阅 |

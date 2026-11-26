@@ -14,7 +14,7 @@ declare module '@deepseek-ai/dsh-llm/types' {
   }
 }
 
-import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
+import type {} from '@deepseek-ai/dsh-tool-registry-ptc/types'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'

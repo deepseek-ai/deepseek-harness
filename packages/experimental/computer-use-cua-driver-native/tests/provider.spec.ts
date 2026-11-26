@@ -2,7 +2,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
@@ -25,7 +25,7 @@ beforeEach(async () => {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
 })
 
 afterEach(async () => {
@@ -46,12 +46,12 @@ describe('Cua Driver native provider', () => {
     const fiber = ctx.plugin(NativeProvider)
     await fiber
     expect(ctx.computerUse.providerName).toBe('cua-driver-native')
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(catalog.tools.map(tool => `cua_driver_native__${tool.name}`))
+    expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(catalog.tools.map(tool => `cua_driver_native__${tool.name}`))
     const result = await execute('click', { pid: 9, window_id: 7 })
     expect(result.isError).toBe(false)
     expect(fixture.calls).toMatchObject([{ name: 'click', args: { pid: 9, window_id: 7 } }])
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(ctx.computerUse.providerName).toBeUndefined()
     expect(fixture.shutdowns).toBe(1)
     expect(fixture.destroys).toBe(1)
@@ -69,14 +69,14 @@ describe('Cua Driver native provider', () => {
     fixture.createError = new Error('native library initialization failed')
     await expect(ctx.plugin(NativeProvider)).rejects.toThrow('native library initialization failed')
     expect(ctx.computerUse.providerName).toBeUndefined()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(fixture.shutdowns).toBe(0)
   })
 
   it('accepts upstream tools whose optional description is absent', async () => {
     fixture.list = async () => JSON.stringify({ tools: [{ name: 'check_permissions', inputSchema: { type: 'object', properties: {} } }] })
     await ctx.plugin(NativeProvider)
-    expect(ctx.tools.schemas()[0]?.description).toBe('')
+    expect(ctx.tools.getAll()[0]?.description).toBe('')
   })
 
   it.each([
@@ -88,7 +88,7 @@ describe('Cua Driver native provider', () => {
     fixture.list = async () => response
     await expect(ctx.plugin(NativeProvider)).rejects.toThrow()
     expect(ctx.computerUse.providerName).toBeUndefined()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(fixture.shutdowns).toBe(1)
     expect(fixture.destroys).toBe(1)
   })
@@ -158,7 +158,7 @@ describe('Cua Driver native provider', () => {
       expect(signal.aborted).toBe(false)
       expect(fixture.shutdowns).toBe(1)
       expect(fixture.destroys).toBe(1)
-      expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['unrelated'])
+      expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(['unrelated'])
     } finally {
       settled.resolve(true)
       await result
@@ -187,7 +187,7 @@ describe('Cua Driver native provider', () => {
     try {
       await vi.waitFor(() => {
         expect(fixture.calls[0]?.signal?.aborted).toBe(true)
-        expect(ctx.tools.schemas()).toEqual([])
+        expect(ctx.tools.getAll()).toEqual([])
       })
       expect(ctx.computerUse.providerName).toBe('cua-driver-native')
       expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')
@@ -247,7 +247,7 @@ describe('Cua Driver native provider', () => {
     await fiber.dispose()
     await readiness
     expect(ctx.computerUse.providerName).toBeUndefined()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(fixture.shutdowns).toBe(1)
     expect(fixture.destroys).toBe(1)
   })
@@ -257,7 +257,7 @@ describe('Cua Driver native provider', () => {
     const fiber = ctx.plugin(NativeProvider)
     await fiber
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(ctx.computerUse.providerName).toBe('cua-driver-native')
     expect(fixture.destroys).toBe(0)
     expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')

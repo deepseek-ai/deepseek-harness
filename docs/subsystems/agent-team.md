@@ -77,7 +77,7 @@ interface TeamTaskSnapshot {
 
 ## Web projection
 
-`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting persistence. Tools resolve availability at step preparation; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes do not end inbox waits. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
+`agentTeam.enabled` exposes the root Session’s saved selection. New Sessions default to false; `team/mode` records explicit selections. Historical tasks imply enabled until an explicit selection. Only the root can call `setEnabled`; descendants share that mode. The Web menu calls the same method through `remote.agentTeams.setEnabled`, with the root Session id resolved to its live Agent by the Gateway. Mode writes take effect before awaiting persistence. The Team tool provider updates the tree's tools from the logged selection; prompt providers read the selection when evaluated. Task mutations check the current mode when their queued operation starts; admitted mutations may finish. Mode changes do not end inbox waits. A failed flush leaves the appended selection active; retrying the same selection flushes it without a duplicate event.
 
 The root Session publishes non-deleted task views through `SessionProjectionMap.agentTeam`. `failure` reports a rejected persisted task or mode record beside the last valid state. Historical roster and mailbox records are not projected. Views identify every owner by its Session id; the task panel and task tools display the owner's agent name, or the Session id when the owner has no name.
 
@@ -140,8 +140,8 @@ isEnabled(caller: Agent): boolean
 
 /**
  * Save a root Session's Team selection without stopping children or deleting tasks.
- * The selection takes effect before awaiting persistence. Tools resolve availability at
- * step preparation; prompt providers read the selection when evaluated. Task mutations
+ * The selection takes effect before awaiting persistence. The Team tool provider updates the
+ * tree's tools from the logged selection; prompt providers read the selection when evaluated. Task mutations
  * check the current mode when their queued operation starts; admitted operations finish.
  * @param agent - exact live root whose tree receives the selection.
  * @param enabled - selected Team mode.

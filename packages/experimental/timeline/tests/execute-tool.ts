@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 
-/** Dispatch one fixture call through the selected Harness tool executor. */
+/** Dispatch one fixture call through the selected root tool registry. */
 export async function executeTool(
   ctx: Context,
   { agent, arguments: args, callId, name, signal }: ToolExecutionInput,

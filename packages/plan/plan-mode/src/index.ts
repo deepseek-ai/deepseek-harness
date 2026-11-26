@@ -12,10 +12,12 @@
  * assembly, then appends `plan/mode` from `agent/pre-step` only when the step
  * is accepted. Same-step request retries reuse their assembly.
  *
- * The exit tool is disclosed progressively: it is admitted from the first step
- * whose selected state is active and stays admitted for the rest of the
- * Session, so leaving plan mode changes only the guidance section. Native
- * declarations, PTC bindings, and execution share that admission.
+ * The exit tool is disclosed progressively: the service adds it for an Agent
+ * when that Agent's selected state first becomes active and keeps it for the
+ * rest of the Session, so leaving plan mode changes only the guidance section.
+ * Resume, fork, and a blank Session's preset change add it again from the
+ * logged state. A step that has already captured its tools sees the change
+ * from its next step.
  *
  * See packages/plan/plan-mode/README.md.
  *
@@ -31,8 +33,10 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { AgentToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type { PlanProjection, PlanUnitState } from './types.ts'
@@ -166,7 +170,7 @@ export const planProjectionDefinition = {
 
 /**
  * `ctx.planMode`: owns logged plan state, applies and narrates selected state at step start,
- * the `plan:policy` section, the `/plan` command, and the conditional exit tool.
+ * the `plan:policy` section, the `/plan` command, and the exit tool it adds per Agent.
  * Client carriers expose the projection's cropped `{ active, pending }` view.
  * Agent prompt assembly fails while the projection reader is not ready;
  * callers must await plugin activation before running an agent.
@@ -177,6 +181,8 @@ export class PlanModeController extends Service {
   /** Validated deployment-owned guidance. */
   private readonly section: string
   private planProjectionHandle: ProjectionHandle<PlanUnitState> | undefined
+  /** The exit tool, added for each Agent whose plan mode has been selected or entered. */
+  private readonly exitTool: AgentToolRegistry
 
   /**
    * Latest selection per session awaiting the next accepted in-turn pre-step.
@@ -188,6 +194,7 @@ export class PlanModeController extends Service {
   constructor(ctx: Context, config: PlanModeConfig = { section: '' }) {
     super(ctx, 'planMode')
     this.section = resolveConfig(config).section
+    this.exitTool = new AgentToolRegistry()
   }
 
   protected async [Service.init](): Promise<void> {
@@ -239,11 +246,19 @@ export class PlanModeController extends Service {
         ctx.logger.warn('dsh-plan-mode: failed to append selected plan mode at step start: %o', error)
         return decision
       }
+      this.offerExit(agent)
       return narration === undefined
         ? decision
         : { ...decision, messages: [...decision.messages, narration] }
     })
     ctx.effect(() => () => { disposed = true }, 'dsh-plan-mode: close service lifetime')
+    ctx.on('agent/created', ({ agent }) => { this.offerExit(agent) })
+    // A blank Session's preset change moves its live Agent into this service's scope without a creation event.
+    ctx.on('session/event', (session, event) => {
+      if (event.type !== 'agent-preset/selected') return
+      const agent = ctx.agents.get(session.id)
+      if (agent !== undefined) this.offerExit(agent)
+    })
 
     // The command child activates only when a command registry is composed.
     ctx.inject(['commands'], (commandCtx) => {
@@ -294,7 +309,7 @@ export class PlanModeController extends Service {
       })
     })
 
-    ctx.tools.register(defineTool({
+    ctx.effect(() => this.exitTool.register(defineTool({
       name: EXIT_PLAN_MODE,
       description: EXIT_DESCRIPTION,
       parameters: {
@@ -384,6 +399,7 @@ export class PlanModeController extends Service {
         // silent selection is appended at the next accepted in-turn pre-step,
         // before its request assembly.
         this.pendingIntents.set(agent.session, { active: false, narrate: false })
+        this.offerExit(agent)
         return { approved: true }
       },
       presentCall: args => ({
@@ -397,7 +413,17 @@ export class PlanModeController extends Service {
         title: 'Plan review',
         content: result.content,
       }),
-    }), { when: ({ agent }) => this.selectedActive(agent.session) || this.planState(agent.session).entered })
+    })), 'dsh-plan-mode: exit tool')
+    // Including after registration lets a name conflict fail this service at load.
+    ctx.tools.include(this.exitTool)
+    // Agents created before this service loaded receive no creation event.
+    for (const agent of ctx.agents.list()) this.offerExit(agent)
+  }
+
+  /** Add the exit tool for an Agent once its plan mode is selected or has been entered; withdraw a cancelled first entry. */
+  private offerExit(agent: Agent): void {
+    const offered = this.selectedActive(agent.session) || this.planState(agent.session).entered
+    this.exitTool.set(agent, offered ? [EXIT_PLAN_MODE] : [])
   }
 
   private loggedActive(session: Session): boolean {
@@ -457,16 +483,19 @@ export class PlanModeController extends Service {
     if (active === target) return 'noop'
     if (this.hasOpenTurn(session)) {
       this.pendingIntents.set(session, { active, narrate: true })
+      this.offerExit(agent)
       return this.loggedActive(session) === active ? 'cancelled' : 'queued'
     }
     // No open turn: commit now. Delete only after append succeeds so a
     // failed durable write leaves the selection retryable, not dropped.
     if (active === this.loggedActive(session)) {
       this.pendingIntents.delete(session)
+      this.offerExit(agent)
       return 'cancelled'
     }
     session.append('plan/mode', { active })
     this.pendingIntents.delete(session)
+    this.offerExit(agent)
     agent.inject(this.narration(active))
     return 'committed'
   }

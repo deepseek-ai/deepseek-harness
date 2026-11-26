@@ -107,7 +107,7 @@ export function hasDelegationModelRequest(request: DelegationModelRequest): bool
 }
 
 /** Model-facing pointer to route discovery, appended to route-selection rejections. */
-const ROUTE_DISCOVERY_HINT = ' Call `list_subagent_models` to see the routes you may select.'
+const ROUTE_DISCOVERY_HINT = ' Call `list_subagent_models`, if available, to see the routes you may select.'
 
 /**
  * Validate explicit selection against the current Host setting and merge it over child defaults.
@@ -118,7 +118,6 @@ const ROUTE_DISCOVERY_HINT = ' Call `list_subagent_models` to see the routes you
  * @param enabled - Whether this tool instance permits model-facing selection.
  * @param policy - Current Host allowlist; omission permits only the current parent route.
  * @param parentOptions - Current parent route used when the Host setting is disabled or absent.
- * @param routeDiscoveryVisible - Whether the caller can call `list_subagent_models`; rejections then point to it.
  * @returns Child Agent options, preserving omission when no layer contributes one.
  * @throws {SubagentError} `MODEL_SELECTION_DISABLED` when this tool instance
  *   forbids selection, or `MODEL_ROUTE_NOT_ALLOWED` when the allowlist excludes the route.
@@ -130,20 +129,18 @@ export function requestedAgentOptions(
   enabled: boolean,
   policy: ModelSelectionPolicy | undefined,
   parentOptions: AgentOptions,
-  routeDiscoveryVisible: boolean,
 ): AgentOptions | undefined {
   if (!hasDelegationModelRequest(request)) return configured
   if (!enabled) {
     throw new SubagentError('child model selection is disabled for this tool instance', 'MODEL_SELECTION_DISABLED')
   }
-  const hint = routeDiscoveryVisible ? ROUTE_DISCOVERY_HINT : ''
   if (request.provider === undefined || request.model === undefined) {
     throw new ToolArgsError([(request.reasoning_effort === undefined
       ? 'child LLM `provider` and `model` must be supplied together.'
-      : 'child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields.') + hint])
+      : 'child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields.') + ROUTE_DISCOVERY_HINT])
   }
 
-  assertAllowedModelSelection(policy, parentOptions, { provider: request.provider, model: request.model }, routeDiscoveryVisible)
+  assertAllowedModelSelection(policy, parentOptions, { provider: request.provider, model: request.model })
   return {
     ...configured,
     provider: request.provider,
@@ -158,14 +155,12 @@ export function requestedAgentOptions(
  * @param policy - Current Host allowlist; omission permits only the current parent route.
  * @param parentOptions - Current parent route used when the Host setting is disabled or absent.
  * @param route - Validated provider/model pair from the tool call.
- * @param routeDiscoveryVisible - Whether the caller can call `list_subagent_models`; the rejection then points to it.
  * @throws {SubagentError} `MODEL_ROUTE_NOT_ALLOWED` when the allowlist excludes the route.
  */
 export function assertAllowedModelSelection(
   policy: ModelSelectionPolicy | undefined,
   parentOptions: AgentOptions,
   route: AllowedModelRoute,
-  routeDiscoveryVisible: boolean,
 ): void {
   const { provider, model } = route
   const allowed = policy === undefined
@@ -176,7 +171,7 @@ export function assertAllowedModelSelection(
     + (policy === undefined
       ? '; while subagent model selection is disabled, explicit selection is limited to the parent route'
       : '')
-    + '.' + (routeDiscoveryVisible ? ROUTE_DISCOVERY_HINT : ''), 'MODEL_ROUTE_NOT_ALLOWED')
+    + '.' + ROUTE_DISCOVERY_HINT, 'MODEL_ROUTE_NOT_ALLOWED')
 }
 
 /**

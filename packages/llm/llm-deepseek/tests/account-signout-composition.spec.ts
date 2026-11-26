@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -109,7 +109,7 @@ async function boot(origin: string) {
   const modules = new Map<string, { module: unknown; config?: object }>([
     ['@deepseek-ai/dsh-llm', { module: LlmRuntime }], ['@deepseek-ai/dsh-session', { module: SessionStore }],
     ['@deepseek-ai/dsh-session-projection', { module: SessionProjectionRegistry }], ['@deepseek-ai/dsh-system-prompt', { module: SystemPrompt }],
-    ['@deepseek-ai/dsh-tools', { module: ToolRuntime }], ['@deepseek-ai/dsh-tool-executor-native', { module: NativeToolExecutor }],
+    ['@deepseek-ai/dsh-tools', { module: ToolRuntime }], ['@deepseek-ai/dsh-tool-registry-native', { module: NativeToolRegistry }],
     ['@deepseek-ai/dsh-agent', { module: AgentRegistry }], ['@deepseek-ai/dsh-agent-loop', { module: AgentLoop, config: { agents: [] } }],
     ['@deepseek-ai/dsh-credentials-local', { module: LocalCredentials, config: { path: join(home, '.credentials.yaml'), watch: false } }],
     ['@deepseek-ai/dsh-authorization', { module: AuthorizationService }],

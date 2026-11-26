@@ -48,11 +48,11 @@
   en: 4e213d68082b07f0
   zh: 7617949ba46a3b63
 /deepseek-ai-dsh-mcp-client/understand-the-implementation/source-map:
-  en: be6a1a2398f2de79
-  zh: 3b30b65c188fe6a5
+  en: c9b118721a284416
+  zh: 81ca6d1c368ff94d
 /deepseek-ai-dsh-mcp-client/understand-the-implementation/lifecycle-and-sync:
-  en: 050876ab17d19c0a
-  zh: ef5983732afd9efd
+  en: b4b5a5646bd83dde
+  zh: 9853c1d94c3022ee
 /deepseek-ai-dsh-mcp-client/understand-the-implementation/tool-execution-internals:
   en: a5353853cc70220a
   zh: 4abe645b02c6556a
@@ -93,8 +93,8 @@
   en: a6c14c7b2d7d39f4
   zh: 7b555e8cb3f47d4b
 /deepseek-ai-dsh-mcp-client/model-experience/on-demand-tools/what-the-model-sees:
-  en: 8efbf711918c1128
-  zh: 90e277ce7b5c0fd8
+  en: 6d7254854573e6ce
+  zh: 1240078baf110754
 /deepseek-ai-dsh-mcp-client/model-experience/on-demand-tools/token-effect:
   en: 9a662db85a7da1b8
   zh: 5272801e35cff20a
@@ -114,8 +114,8 @@
   en: 8cc97c1aea173d71
   zh: b7ced8660c64a11a
 /deepseek-ai-dsh-mcp-client/known-limitations-and-deferred-work:
-  en: 4883b1c09453252a
-  zh: 53d680712b0c1c19
+  en: e6cbc4882d8c06be
+  zh: aac32f1005bad17f
 /deepseek-ai-dsh-mcp-client/known-limitations-and-deferred-work/dev-note:
   en: 34374b896d0fcd40
   zh: 0a4c5a161a91f173

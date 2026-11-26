@@ -23,10 +23,10 @@
 
       Verify your work by running the code or tests. Keep answers brief and factual.
 
-- id: tool-executor-native
+- id: tool-registry-native
   disabled: true
 
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: false
 
 - id: attachment-local

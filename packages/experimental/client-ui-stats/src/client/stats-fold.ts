@@ -6,7 +6,7 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { AssistantMessage, ContentBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
 import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 // Type-only: the PTC event members this fold reads.
-import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
+import type {} from '@deepseek-ai/dsh-tool-registry-ptc/types'
 import type {
   StatsCall, StatsStepMetrics, StatsStepState, StatsToolCount,
 } from './stats-contract.ts'

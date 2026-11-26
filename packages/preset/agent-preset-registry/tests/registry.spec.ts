@@ -27,10 +27,10 @@ describe('declarative preset revisions', () => {
     expect(ctx.agentPresets.inspectCompositions(ctx)).toEqual([])
     expect(ctx.agentPresets.inspectCompositions(first.ctx).map(row => row.id)).toEqual(['standard'])
     expect(ctx.agentPresets.inspectCompositions(second.ctx).map(row => row.id)).toEqual(['minimal'])
-    expect(ctx.tools.schemas(first).map(row => row.name)).toEqual(['standard'])
-    expect(ctx.tools.schemas(second).map(row => row.name)).toEqual(['minimal'])
-    expect(ctx.tools.schemas(third).map(row => row.name)).toEqual(['standard'])
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll(first).map(row => row.name)).toEqual(['standard'])
+    expect(ctx.tools.getAll(second).map(row => row.name)).toEqual(['minimal'])
+    expect(ctx.tools.getAll(third).map(row => row.name)).toEqual(['standard'])
+    expect(ctx.tools.getAll()).toEqual([])
     const prompt = await ctx.systemPrompt.assemble(assembleContextFor(first))
     expect(prompt.sections.map(row => row.name)).toContain('preset:standard')
     expect(prompt.sections.map(row => row.name)).not.toContain('preset:minimal')
@@ -54,7 +54,7 @@ describe('declarative preset revisions', () => {
     await child.dispose()
     expect(ctx.agentPresets.inspectCompositions()).toHaveLength(1)
     const fresh = await agentOn(ctx, 'fresh')
-    expect(ctx.tools.schemas(fresh).map(row => row.name)).toEqual(['replacement'])
+    expect(ctx.tools.getAll(fresh).map(row => row.name)).toEqual(['replacement'])
   })
 
   it('removes definitions without revoking live bindings', async () => {

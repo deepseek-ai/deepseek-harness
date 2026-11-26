@@ -41,7 +41,7 @@ DSH 已为另外两个生态提供桥接：为 Claude Code 与 Codex 编写的 s
 | `registerCommand`、`getCommands` | Agent 作用域的 `ctx.commands` |
 | `sendUserMessage`、`sendMessage` | `agent.followup()`、`agent.steer()`、`agent.inject()` |
 | `appendEntry`、`setLabel`、工具 `details`、`ctx.sessionManager` | ignorable Session 记录与 `tool/result` 元数据，读回时还原为 Pi 条目 |
-| `getActiveTools`、`setActiveTools`、`getAllTools` | `ctx.tools.schemas()`；`setActiveTools` 对全局工具使用作用域内的 `ctx.tools.restrict()`，并增删桥接自己在 Agent 作用域的注册，因为限制不会隐藏作用域内的工具 |
+| `getActiveTools`、`setActiveTools`、`getAllTools` | 用 `projectToolSchema()` 投影的 `ctx.tools.getAll()`；`setActiveTools` 对全局工具使用作用域内的 `ctx.tools.restrict()`，并增删桥接自己在 Agent 作用域的注册，因为限制不会隐藏作用域内的工具 |
 | `setModel`、`getThinkingLevel`、`setThinkingLevel` | `agent/request` 覆盖 |
 | `exec` | `ctx.subprocess`，不经 shell 的 argv |
 | `ctx.ui.select`、`confirm`、`input`、`editor` | `ctx.userQuestions` |

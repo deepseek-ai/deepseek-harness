@@ -70,7 +70,7 @@ describe('delegation depth context', () => {
     ])
   })
 
-  it('follows the visible definition and removes context with the provider', async () => {
+  it('follows each mounted tool plugin and removes context with the provider', async () => {
     const ctx = await setup({ provider: 'mock', maxDepth: 0 })
     const root = modelSelectionSetupAgent(ctx)
     const { agent } = await ctx.agents.create({
@@ -81,22 +81,21 @@ describe('delegation depth context', () => {
         await agentCtx.plugin(tool, { provider: 'mock', toolName: 'scoped_subagent', maxDepth: 1 })
       },
     })
-    expect(await depthContext(ctx, agent)).toEqual([
+    const rootContext = 'Delegation depth for `subagent`: current 0, maximum 0, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.'
+    // A restriction hides the deployment tool, not the context registered with it.
+    expect(await depthContext(ctx, agent)).toEqual(expect.arrayContaining([
       'Delegation depth for `scoped_subagent`: current 1, maximum 1, remaining levels 0. Do not call `scoped_subagent` at this depth; carry out the work directly.',
-    ])
+      'Delegation depth for `subagent`: current 1, maximum 0, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.',
+    ]))
+    expect(await depthContext(ctx, agent)).toHaveLength(2)
     const restore = root.ctx.tools.restrict({ deny: ['subagent'] })
-    expect(await depthContext(ctx, root)).toEqual([])
+    expect(await depthContext(ctx, root)).toEqual([rootContext])
     restore()
-    expect(await depthContext(ctx, root)).toEqual([
-      'Delegation depth for `subagent`: current 0, maximum 0, remaining levels 0. Do not call `subagent` at this depth; carry out the work directly.',
-    ])
-    const removeOverride = root.ctx.tools.register({ ...ctx.tools.get('subagent')!, description: 'Scoped replacement' })
-    expect(await depthContext(ctx, root)).toEqual([])
-    removeOverride()
+    expect(await depthContext(ctx, root)).toEqual([rootContext])
     await disposeSetupProvider(ctx)
     expect(await depthContext(ctx, agent)).toEqual([])
     await mountScriptedProvider(ctx, { name: 'mock' })
-    expect(await depthContext(ctx, agent)).toHaveLength(1)
+    expect(await depthContext(ctx, agent)).toHaveLength(2)
   })
 
   it('disposes its depth contribution with the tool plugin', async () => {

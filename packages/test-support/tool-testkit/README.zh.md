@@ -1,5 +1,5 @@
 ---
-description: "在仓库测试和基准测试中定义测试工具，并调用工具流水线或选定的执行器。"
+description: "在仓库测试和基准测试中定义测试工具，并调用工具流水线或选定的根注册表。"
 kind: "package-library"
 ---
 
@@ -38,7 +38,7 @@ const tool = defineContentToolFixture({
 })
 ```
 
-通过调用方的工具注册表注册返回的定义。使用 `executeToolFixture` 执行已解析的调用，或使用 `executeModelToolFixture` 将一次 JSON 编码的调用交给选定的执行器。后者要求调用方挂载该执行器，并在参数无法编码为 JSON 或执行器响应缺少结果时拒绝。调用字段见 [`src/index.ts`](src/index.ts)。
+通过调用方的工具注册表注册返回的定义，并挂载一个根注册表，例如原生根注册表。使用 `executeToolFixture` 执行已解析的调用：它解析为 `ctx.tools.get()` 针对调用方作用域返回的条目，传入 `toolStep` 时只在该步骤声明了该条目时才解析；使用 `executeDefinitionFixture` 执行 `ctx.tools.get()` 无法解析的定义，例如 PTC 根注册表下的程序绑定；或使用 `executeModelToolFixture` 将一次 JSON 编码的调用交给 `ctx.tools.execute()`。后者在参数无法编码为 JSON 或批次缺少结果时拒绝。调用字段见 [`src/index.ts`](src/index.ts)。
 
 -----
 

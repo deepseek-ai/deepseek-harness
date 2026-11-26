@@ -102,7 +102,7 @@ it('lazily launches distinct browsers and preserves each Session tab state', asy
   const provider = ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: '/fixture/chromium', headless: false })
   await provider
   expect(fixture.browsers).toEqual([])
-  const schemas = ctx.tools.schemas()
+  const schemas = ctx.tools.getAll()
   expect(schemas).toHaveLength(6)
   for (const tool of schemas) expect(tool.parameters).toMatchObject({ type: 'object' })
   expect((await execute(first, 'navigate', { url: 'https://first.example' })).isError).toBe(false)
@@ -117,7 +117,7 @@ it('lazily launches distinct browsers and preserves each Session tab state', asy
   await provider.dispose()
   expect(fixture.browsers.every(browser => browser.closed && browser.stagehandClosed)).toBe(true)
   expect(ctx.browserUse.providerName).toBeUndefined()
-  expect(ctx.tools.schemas()).toEqual([])
+  expect(ctx.tools.getAll()).toEqual([])
 })
 
 it('reserves an attached browser for one live owner and rejects model connection overrides', async () => {
@@ -202,7 +202,7 @@ it('holds the provider reservation until browser cleanup settles', async () => {
   const closing = provider.dispose()
   try {
     await started.promise
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(() => ctx.browserUse.register(brandString<BrowserUseProviderName>('other'))).toThrow('already registered')
   } finally {
     settle.resolve()

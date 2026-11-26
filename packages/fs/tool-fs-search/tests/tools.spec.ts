@@ -12,7 +12,7 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -209,7 +209,7 @@ async function setup(options: SetupOptions = {}) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(FakeSubprocess)
   const subprocess = ctx.subprocess as FakeSubprocess
   if (options.spill === true) await ctx.plugin(FakeSpill)
@@ -254,11 +254,11 @@ describe('registration', () => {
     // Registration performs NO load-time probe: the packaged binary is always
     // available, so nothing spawns until a tool call.
     expect(subprocess.spawns).toHaveLength(0)
-    expect(ctx.tools.schemas().map(s => s.name).sort()).toEqual(['glob', 'grep'])
+    expect(ctx.tools.getAll().map(s => s.name).sort()).toEqual(['glob', 'grep'])
     const prompt = renderPrompt(await ctx.systemPrompt.assemble())
     expect(prompt).toContain('Use the glob tool')
     expect(prompt).toContain('Use the grep tool')
-    const glob = ctx.tools.schemas().find(schema => schema.name === 'glob')
+    const glob = ctx.tools.getAll().find(schema => schema.name === 'glob')
     expect(glob?.description).toContain('sampled across top-level entries')
   })
 
@@ -274,16 +274,16 @@ describe('registration', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(ToolFsSearch, DEFAULT_CONFIG) // no subprocess service
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
   })
 
   it('unregisters everything on fiber disposal (HMR safety)', async () => {
     const { ctx, fiber } = await setup()
-    expect(ctx.tools.schemas()).toHaveLength(2)
+    expect(ctx.tools.getAll()).toHaveLength(2)
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
     const sections = (await ctx.systemPrompt.assemble()).sections.filter(s => !s.retire).map(s => s.name)
     expect(sections).not.toContain('tool:glob')
     expect(sections).not.toContain('tool:grep')
@@ -303,7 +303,7 @@ describe('registration', () => {
 
   it('describes the modification-time head when over-cap sampling is disabled', async () => {
     const { ctx } = await setup({ config: { sampleOverCapGlobResults: false } })
-    const glob = ctx.tools.schemas().find(schema => schema.name === 'glob')
+    const glob = ctx.tools.getAll().find(schema => schema.name === 'glob')
     expect(glob?.description).toContain('Returns up to 100 paths in modification-time order; a larger result keeps the first paths')
     expect(glob?.description).not.toContain('sampled across top-level entries')
   })
@@ -332,7 +332,7 @@ describe('config validation', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(FakeSubprocess)
     await expect(ctx.plugin(ToolFsSearch, { ...DEFAULT_CONFIG, ...config })).rejects.toThrow(new RegExp(`tool-fs-search: ${name} must be a positive integer`))
   })
@@ -343,7 +343,7 @@ describe('config validation', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(FakeSubprocess)
     await expect(ctx.plugin(ToolFsSearch, {
       ...DEFAULT_CONFIG,
@@ -1313,39 +1313,24 @@ const originalSearchGuidance = {
   grep: 'Use the grep tool — not shell grep or rg — to search file contents. Use read on a matched file when you need surrounding context.',
 }
 
-describe('scope-aware search guidance', () => {
-  it.each([[], ['glob'], ['grep'], ['glob', 'grep']].map(allow => ({ allow })))('renders only visible search guidance: $allow', async ({ allow }) => {
+describe('search guidance registered with its tools', () => {
+  it.each([[], ['glob'], ['grep'], ['glob', 'grep']].map(allow => ({ allow })))('renders the guidance of the tools a scope allows: $allow', async ({ allow }) => {
     const { ctx } = await setup()
     const { key, scope } = await guidanceScope(ctx)
     scope.ctx.tools.restrict({ allow })
     try {
       const assembly = await ctx.systemPrompt.assemble({ scope: key })
       expect(assembly.tools.map(tool => tool.name)).toEqual([...allow].sort())
-      expect(renderPrompt(assembly)).toBe(withPersona(...allow.map(name => name === 'glob'
-        ? originalSearchGuidance.glob
-        : originalSearchGuidance.grep.replace(' Use read on a matched file when you need surrounding context.', ''))))
+      expect(renderPrompt(assembly)).toBe(withPersona(...[...allow].sort().map(name => originalSearchGuidance[name as 'glob' | 'grep'])))
     } finally {
       await scope.dispose()
     }
   })
 
-  it('reuses the unchanged grep paragraph when read is visible', async () => {
+  it('mentions read in the grep paragraph whether or not read is registered', async () => {
     const { ctx } = await setup()
-    ctx.tools.register({
-      name: 'read', description: 'read fixture', parameters: {},
-      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: '' }] },
-      execute: () => Promise.resolve(''),
-    })
-    const { key, scope } = await guidanceScope(ctx)
-    try {
-      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key })))
-        .toBe(withPersona(originalSearchGuidance.glob, originalSearchGuidance.grep))
-      scope.ctx.tools.restrict({ deny: ['read'] })
-      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key })))
-        .toBe(withPersona(originalSearchGuidance.glob, originalSearchGuidance.grep.split(' Use read')[0]!))
-    } finally {
-      await scope.dispose()
-    }
+    expect(ctx.tools.get('read')).toBeUndefined()
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).toBe(withPersona(originalSearchGuidance.glob, originalSearchGuidance.grep))
   })
 })
 

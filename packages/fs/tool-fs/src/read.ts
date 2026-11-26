@@ -61,22 +61,18 @@ export function parseReadArgs(args: { file_path: string; offset?: number; limit?
 }
 
 /**
- * Register the `read` tool and its scope-aware system-prompt guidance.
+ * Register the `read` tool and its system-prompt guidance with the same lifetime.
  * @param ctx - the plugin context; registrations are effects scoped to it, and execution uses its `fs` service.
  * @param caps - the deployment's resolved read caps (plugin config after defaulting).
  */
 export function applyReadTool(ctx: Context, caps: ReadToolCaps): void {
-  ctx.systemPrompt.section({
-    name: 'tool:read',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_READ'),
-    text: ({ scope }) => ctx.tools.get('read', scope) === undefined
-      ? ''
-      : 'Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.',
-    retirement: 'The read tool is no longer available. Its guidance no longer applies.',
-  })
-
   ctx.tools.register(defineTool({
     name: 'read',
+    guidance: {
+      order: 'TOOL_READ',
+      text: 'Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.',
+      retirement: 'The read tool is no longer available. Its guidance no longer applies.',
+    },
     description: 'Read a UTF-8 text file and return line-numbered content.',
     parameters: {
       file_path: { type: 'string', required: true, description: 'Path to read, resolved by the filesystem backend.' },

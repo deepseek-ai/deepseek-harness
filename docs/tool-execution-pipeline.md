@@ -3,7 +3,7 @@
 
 # Tool Execution Pipeline
 
-Built-in executors own raw batch parsing, scheduling, cancellation, and Session call/result logging. This graph shows where their shared invocation pipeline applies policy, hooks, sandboxing, filesystem guards, result rewriting, final-outcome observation, and UI rendering without changing the loop. The `tools/pre-execute` waterfall runs first, monotonic guards run next, and the `tools/execute` and `tools/post-execute` waterfalls follow; the three waterfalls may transform a call. Definition-owned `projectContent` installs prepared content before post-execute; `finalizeContent` and `tools/result` run afterward.
+`ctx.tools.execute()` owns raw batch parsing, scheduling, cancellation, and Session call/result logging; the selected root registry only supplies the entries a call may run. This graph shows where the shared invocation pipeline applies policy, hooks, sandboxing, filesystem guards, result rewriting, final-outcome observation, and UI rendering without changing the loop. The `tools/pre-execute` waterfall runs first, monotonic guards run next, and the `tools/execute` and `tools/post-execute` waterfalls follow; the three waterfalls may transform a call. Definition-owned `projectContent` installs prepared content before post-execute; `finalizeContent` and `tools/result` run afterward.
 
 ```mermaid
 flowchart TD
@@ -27,7 +27,7 @@ flowchart TD
   toolResult["Session event: <code>tool/result</code><br/>single model-facing outcome"]
   allResults["Tool batch settled<br/>recorded tool/result events complete"]
   presentResult["UI completed card<br/>presentResult(args, result)"]
-  executor["Selected ToolExecutor.execute<br/>raw batch, Agent, optional logging step"]
+  executor["<code>ctx.tools.execute()</code><br/>raw batch, Agent, ToolStep, optional logging step<br/>entries from the selected root"]
   model --> executor --> toolCall
   toolCall --> presentCall
   toolCall --> pre

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在提供 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy` 的组合中挂载本提供方。`dsh-tool-executor-ptc`传入调用 Session 的目录和常设策略；直接运行时消费方在执行前解析这些选项。
+在提供 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy` 的组合中挂载本提供方。`dsh-tool-registry-ptc`传入调用 Session 的目录和常设策略；直接运行时消费方在执行前解析这些选项。
 
 程序通过顶层 `inspect(...values)` 展示文本、对象与 `Image`；同一次调用可混合多段文本和多张图片，图片也可嵌入数组或对象。`Image.attachmentId` 与模型收到的图片说明中的附件 ID 一致。`Image.path` 是执行环境可读取的已存储附件文件，`width` 与 `height` 为该文件的像素尺寸。图片元数据与文本共用 `maxOutputBytes` 预算。
 
@@ -128,7 +128,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 对于携带 Session 策略的调用，模式变化会取消其准入，即使调用仍在等待清理或进程启动。恢复先前的模式不会重新启用已取消的调用。
 
-PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.md) 的说明公开逐次超时与经审批的沙箱选择。运行时只读 `timeout` 描述符向该消费方报告有效默认值与上限。提供方通过 `executionInstructions` 负责求值语法、输出方式和状态保留指引。工具消费者将对应模式的规则附加到面向模型的 schema，不根据 `programFormat` 推断是否保留状态。
+PTC 消费方按 [dsh-tool-registry-ptc](../../core/tool-registry-ptc/README.zh.md) 的说明公开逐次超时与经审批的沙箱选择。运行时只读 `timeout` 描述符向该消费方报告有效默认值与上限。提供方通过 `executionInstructions` 负责求值语法、输出方式和状态保留指引。工具消费者将对应模式的规则附加到面向模型的 schema，不根据 `programFormat` 推断是否保留状态。
 
 省略 `timeoutMs` 使用配置的经过时间默认值；数值请求经过验证并封顶。服务调用方可以显式传入 `timeoutMs: null` 来省略经过时间定时器，工作流适配器即如此；`run_code` 仍只接受正数覆盖值。启用的截止覆盖运行时准备和执行，包括等待嵌套工具或审批的时间。它不是 CPU 计量器。超时结果保留已捕获的输出；在程序提交给就绪进程之前报告 `execution timed out before code started`，提交后报告 `execution timed out during execution`。保留环境中的执行超时或取消会请求协作式撤销。发出停止请求后产生的捕获输出会被丢弃，包括 `catch` 和 `finally` 处理器的捕获输出。收到确认后保留 VM 和变量，包括此前发生的修改。如果执行线程未在 `stopGraceMs` 内确认，或确认失败，宿主终止受管进程范围并等待清理。结果仍为 `timeout` 或 `abort`，并说明变量被保留还是清空；超时消息还会报告经过时间预算。确认终止后，下一次调用创建空环境。清理失败返回 `worker-exit`，并阻止复用，直到宿主释放成功。启动前超时、临时执行停止以及逐次执行成功完成均立即终止受管进程范围。选择结果后、清理前停止计时器，因此调用可能要在执行截止之后等待清理结算才返回。
 
@@ -231,7 +231,7 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 <a id="model-experience"></a>
 ## 模型体验
 
-通过 `dsh-tool-executor-ptc`与 `dsh-workflow-ptc` 间接提供；它们通过各自的工具结果呈现程序结果。中间绑定通信不进入模型历史；外层结果遵循普通工具溢出策略。
+通过 `dsh-tool-registry-ptc`与 `dsh-workflow-ptc` 间接提供；它们通过各自的工具结果呈现程序结果。中间绑定通信不进入模型历史；外层结果遵循普通工具溢出策略。
 
 #### KV Cache effect
 

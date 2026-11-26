@@ -22,7 +22,7 @@ import { installForkEnforcementForAgent, installSourceSessionAccess } from '../s
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
 import { ForkRegistry } from '../src/host/fork-registry.ts'
 import { executeOneTool } from './tool-call.ts'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 
 const viewer = { providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'viewer' }
 type AccessKind = 'source' | 'fork'
@@ -88,7 +88,7 @@ beforeEach(async ({ onTestFinished }) => {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: deploymentRoot })
   await ctx.plugin(SandboxedFileSystem, { cwd: deploymentRoot })
   await ctx.plugin(FsObservationPolicy)

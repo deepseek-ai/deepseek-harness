@@ -7,7 +7,7 @@
  */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it, vi, beforeEach, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ProtocolError, SdkError, SdkErrorCode, SdkHttpError, type Transport } from '@modelcontextprotocol/client'
@@ -107,7 +107,7 @@ async function mountRegistry(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -267,7 +267,7 @@ describe('reconnect supervisor', () => {
       expect(status.current()).toEqual({
         state: 'closed', result: { closeConfirmed: true, cleanupError: 'Error: tool cleanup failed' },
       })
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       spy.mockRestore()
       await handle.dispose()
@@ -782,7 +782,7 @@ describe('reconnect supervisor', () => {
       await disposing
       expect(mockClose).toHaveBeenCalledTimes(1)
       expect(mockListTools).not.toHaveBeenCalled()
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       continueStartup.resolve()
       spy.mockRestore()
@@ -804,7 +804,7 @@ describe('reconnect supervisor', () => {
       await disposing
       expect(status.current()).toEqual({ state: 'closed', result: { closeConfirmed: true } })
       expect(instances).toHaveLength(1)
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       await handle.dispose()
       vi.useRealTimers()

@@ -16,10 +16,10 @@
   config:
     maxBytes: 65536
 
-- id: tool-executor-native
+- id: tool-registry-native
   disabled: false
 
-- id: tool-executor-ptc
+- id: tool-registry-ptc
   disabled: true
 
 - id: system-prompt

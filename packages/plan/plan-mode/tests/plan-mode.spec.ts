@@ -1,6 +1,6 @@
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -9,10 +9,11 @@ import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import { ToolStep } from '@deepseek-ai/dsh-tools/pipeline'
 import type { ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { Session, type SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
-import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents, type Agent, type SessionStartSource } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import UserQuestionService, {
   UserQuestionError, type AskUserQuestionAnswer, type AskUserQuestionRequest,
@@ -25,7 +26,6 @@ import type { PlanModeConfig } from '../src/index.ts'
 import type { PlanUnitState } from '../src/types.ts'
 
 const testToolSignal = new AbortController().signal
-const TEST_MODEL_SELECTION = { provider: 'test', model: 'test' }
 
 const TEST_PLAN_SECTION = 'Test plan mode instructions.'
 const PLAN_CONFIG = { section: TEST_PLAN_SECTION } satisfies PlanModeConfig
@@ -49,7 +49,13 @@ function registerQuestionAnswerer(ctx: Context, answerer: QuestionAnswerer): () 
 async function agentWithSession(
   ctx: Context,
   id = 'agent-1',
-  { active, owner }: { active?: boolean; owner?: Agent } = {},
+  { active, owner, logged = active === undefined ? [] : [active], source = 'startup' }: {
+    active?: boolean
+    owner?: Agent
+    /** Plan states logged before creation, as a resumed or forked log carries them; defaults to `active`. */
+    logged?: readonly boolean[]
+    source?: SessionStartSource
+  } = {},
 ): Promise<Agent & { session: Session }> {
   // A live store session when a store is mounted (the command executor logs
   // lifecycle events through it); bare otherwise (fold/tool-only benches).
@@ -70,22 +76,22 @@ async function agentWithSession(
   }))
   ;(agent as { ctx?: Context }).ctx = scoped
   // Seeded plan state lands before the creation announcement, matching resume.
-  if (active !== undefined) session.append('plan/mode', { active })
+  for (const value of logged) session.append('plan/mode', { active: value })
   // The loop publishes through the live registry when it is composed; narrow
   // fold-only benches retain the direct lifecycle event used before it exists.
   const agents = ctx.get('agents')
   if (agents === undefined) {
-    await ctx.serial('agent/created', { agent, source: 'startup' })
+    await ctx.serial('agent/created', { agent, source })
   } else {
     agents.enter(agent)
-    await agents.announce(agent, 'startup')
+    await agents.announce(agent, source)
   }
   return agent
 }
 
+/** Capture the Agent's declared entries and assemble its prompt, as the agent loop does for a step. */
 async function assembleFor(ctx: Context, agent: Agent) {
-  const toolSet = await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal })
-  return ctx.systemPrompt.assemble({ agent, scope: agent, toolSet })
+  return ctx.systemPrompt.assemble({ agent, scope: agent, toolStep: ToolStep.capture(ctx.tools, agent) })
 }
 
 function foldPlanMode(events: readonly SessionEvent[], end = events.length): boolean {
@@ -109,7 +115,7 @@ async function setup(config: PlanModeConfig = PLAN_CONFIG): Promise<Context> {
   await mountProjectionSeam(ctx)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(PlanModeController, config)
   return ctx
 }
@@ -240,7 +246,7 @@ describe('ctx.planMode: get/set', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(PlanModeController, PLAN_CONFIG)
     expect(ctx.get('planMode')).toBeUndefined()
   })
@@ -339,7 +345,7 @@ describe('the boundary flush', () => {
     await mountProjectionSeam(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const fiber = await ctx.plugin(PlanModeController, PLAN_CONFIG)
     const agent = await agentWithSession(ctx)
     openTurn(agent.session)
@@ -470,12 +476,12 @@ describe('the soft layer', () => {
     expect(defaultAssembly.tools.map(tool => tool.name)).toEqual(['read', 'write'])
     expect(defaultAssembly.sections.find(section => section.name === 'plan:policy')?.text).toBe('')
 
-    agent.session.append('plan/mode', { active: true })
+    expect(ctx.planMode.set(agent, true)).toBe('committed')
     const planAssembly = await assembleFor(ctx, agent)
     expect(planAssembly.tools.map(tool => tool.name)).toEqual([EXIT_PLAN_MODE, 'read', 'write'])
     expect(planAssembly.sections.find(section => section.name === 'plan:policy')?.text).toBe(`The following instructions apply only while plan mode is active.\n\n${TEST_PLAN_SECTION}`)
 
-    agent.session.append('plan/mode', { active: false })
+    expect(ctx.planMode.set(agent, false)).toBe('committed')
     const leftAssembly = await assembleFor(ctx, agent)
     expect(leftAssembly.tools).toEqual(planAssembly.tools)
     expect(leftAssembly.sections.find(section => section.name === 'plan:policy')?.text).toBe(planAssembly.sections.find(section => section.name === 'plan:policy')?.text)
@@ -524,7 +530,7 @@ describe('the soft layer', () => {
     await mountProjectionSeam(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(FakeRuntime)
     await ctx.plugin(PlanModeController, PLAN_CONFIG)
     registerNamedTools(ctx, ['read', 'write'])
@@ -549,17 +555,17 @@ describe('the soft layer', () => {
     await mountProjectionSeam(withPlanMode)
     await withPlanMode.plugin(SystemPrompt)
     await withPlanMode.plugin(ToolRuntime)
-    await withPlanMode.plugin(PtcToolExecutor)
+    await withPlanMode.plugin(PtcToolRegistry)
     await withPlanMode.plugin(FakeRuntime)
     await withPlanMode.plugin(PlanModeController, PLAN_CONFIG)
     registerNamedTools(withPlanMode, ['read', 'write'])
     const agent = await agentWithSession(withPlanMode)
     const defaultSdk = (await assembleFor(withPlanMode, agent)).sections.find(section => section.name === 'tools:sdk')?.text ?? ''
     expect(defaultSdk).not.toContain('exit_plan_mode:')
-    agent.session.append('plan/mode', { active: true })
+    expect(withPlanMode.planMode.set(agent, true)).toBe('committed')
     const planSdk = (await assembleFor(withPlanMode, agent)).sections.find(section => section.name === 'tools:sdk')?.text ?? ''
     expectPlanPtcSdkBindings(planSdk)
-    agent.session.append('plan/mode', { active: false })
+    expect(withPlanMode.planMode.set(agent, false)).toBe('committed')
     const leftSdk = (await assembleFor(withPlanMode, agent)).sections.find(section => section.name === 'tools:sdk')?.text ?? ''
     expect(leftSdk).toBe(planSdk)
 
@@ -567,10 +573,10 @@ describe('the soft layer', () => {
     await bare.plugin(SessionProjectionRegistry)
     await bare.plugin(SystemPrompt)
     await bare.plugin(ToolRuntime)
-    await bare.plugin(PtcToolExecutor)
+    await bare.plugin(PtcToolRegistry)
     await bare.plugin(FakeRuntime)
     registerNamedTools(bare, ['read', 'write'])
-    const bareSdk = (await bare.systemPrompt.assemble({ agent })).sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+    const bareSdk = (await assembleFor(bare, agent)).sections.find(section => section.name === 'tools:sdk')?.text ?? ''
     expect(bareSdk).not.toContain('exit_plan_mode:')
     expect(defaultSdk).toBe(bareSdk)
   })
@@ -783,7 +789,7 @@ describe('/plan', () => {
     await mountProjectionSeam(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(CommandRuntime)
     const fiber = await ctx.plugin(PlanModeController, PLAN_CONFIG)
     await new Promise(resolve => setImmediate(resolve))
@@ -813,33 +819,37 @@ describe('exit_plan_mode', () => {
     return { ctx, agent, asked }
   }
 
-  async function callExit(ctx: Context, agent: Agent | undefined, plan = '# The plan\n\ndo things') {
-    const signal = new AbortController().signal
-    const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal })
+  async function callExit(ctx: Context, agent: Agent, plan = '# The plan\n\ndo things') {
     return executeToolFixture(ctx, {
-      ...toolSet === undefined ? {} : { toolSet },
+      agent,
+      toolStep: ToolStep.capture(ctx.tools, agent),
       callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan },
       signal: new AbortController().signal,
-      ...agent ? { agent } : {},
     })
   }
 
   it('registers the tool with one required plan argument', async () => {
     const ctx = await setup()
-    const schema = ctx.tools.schemas().find(entry => entry.name === EXIT_PLAN_MODE)
+    const schema = ctx.tools.getAll().find(entry => entry.name === EXIT_PLAN_MODE)
     const parameters = schema?.parameters as { required?: string[]; properties?: Record<string, unknown> }
     expect(schema?.description).toMatch(/^Use only in plan mode\./)
     expect(Object.keys(parameters.properties ?? {})).toEqual(['plan'])
     expect(parameters.required).toEqual(['plan'])
   })
 
-  it('rejects an agent-less call', async () => {
+  it('rejects an Agent-less direct batch, whose unscoped view lists the exit tool', async () => {
     const ctx = await setup()
-    const result = await callExit(ctx, undefined)
+    const result = await executeModelToolFixture(ctx, {
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
+      name: EXIT_PLAN_MODE,
+      arguments: { plan: '# The plan' },
+      signal: testToolSignal,
+    })
     expect(result.isError).toBe(true)
-    expect(result.content).toEqual([{ type: 'text', text: 'Error: unknown tool "exit_plan_mode"' }])
+    expect(result.content).toEqual([{ type: 'text', text: `Error: ${EXIT_PLAN_MODE} requires a calling agent` }])
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('omits and rejects the exit tool before the Session enters plan mode', async () => {
@@ -888,6 +898,59 @@ describe('exit_plan_mode', () => {
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode is only available in plan mode' }])
     expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_NOT_ACTIVE' })
+  })
+
+  it('withdraws the exit tool when /plan off cancels a pending first entry', async () => {
+    const ctx = await setup()
+    const agent = await agentWithSession(ctx)
+    openTurn(agent.session)
+    expect(ctx.planMode.set(agent, true)).toBe('queued')
+    expect((await assembleFor(ctx, agent)).tools.map(tool => tool.name)).toContain(EXIT_PLAN_MODE)
+    expect(ctx.planMode.set(agent, false)).toBe('cancelled')
+    expect((await assembleFor(ctx, agent)).tools.map(tool => tool.name)).not.toContain(EXIT_PLAN_MODE)
+    const result = await callExit(ctx, agent)
+    expect(result.content).toEqual([{ type: 'text', text: 'Error: unknown tool "exit_plan_mode"' }])
+  })
+
+  it('withdraws a pending first entry cancelled between turns', async () => {
+    const ctx = await setup()
+    const agent = await agentWithSession(ctx)
+    openTurn(agent.session)
+    expect(ctx.planMode.set(agent, true)).toBe('queued')
+    closeTurn(agent.session)
+    expect(ctx.planMode.set(agent, false)).toBe('cancelled')
+    expect((await assembleFor(ctx, agent)).tools.map(tool => tool.name)).not.toContain(EXIT_PLAN_MODE)
+  })
+
+  it.each([
+    ['resume', 'resume'],
+    ['fork', 'startup'],
+  ] as const)('restores the exit tool from the logged entry on %s', async (_label, source) => {
+    const ctx = await setup()
+    const left = await agentWithSession(ctx, 'restored-left', { logged: [true, false], source })
+    const leftAssembly = await assembleFor(ctx, left)
+    expect(leftAssembly.tools.map(tool => tool.name)).toContain(EXIT_PLAN_MODE)
+    expect(leftAssembly.sections.find(section => section.name === 'plan:policy')?.text).toContain(TEST_PLAN_SECTION)
+    expect(leftAssembly.sections.find(section => section.name === 'plan:status')?.text).toBe('Plan mode is inactive. The plan-mode instructions no longer apply.')
+    const never = await agentWithSession(ctx, 'restored-never', { logged: [false], source })
+    expect((await assembleFor(ctx, never)).tools.map(tool => tool.name)).not.toContain(EXIT_PLAN_MODE)
+  })
+
+  it('offers the exit tool to Agents that exist when the service loads', async () => {
+    const ctx = new Context()
+    await mountProjectionSeam(ctx)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(NativeToolRegistry)
+    const planning = await agentWithSession(ctx, 'loaded-planning', { active: true })
+    const left = await agentWithSession(ctx, 'loaded-left', { logged: [true, false] })
+    const never = await agentWithSession(ctx, 'loaded-never')
+    await ctx.plugin(PlanModeController, PLAN_CONFIG)
+    const planningAssembly = await assembleFor(ctx, planning)
+    expect(planningAssembly.tools.map(tool => tool.name)).toContain(EXIT_PLAN_MODE)
+    expect(planningAssembly.sections.find(section => section.name === 'plan:policy')?.text).toBe(`The following instructions apply only while plan mode is active.\n\n${TEST_PLAN_SECTION}`)
+    expect((await assembleFor(ctx, left)).tools.map(tool => tool.name)).toContain(EXIT_PLAN_MODE)
+    expect((await assembleFor(ctx, never)).tools.map(tool => tool.name)).not.toContain(EXIT_PLAN_MODE)
   })
 
   it('rejects an empty or heading-less plan before asking the reviewer', async () => {
@@ -976,7 +1039,7 @@ describe('exit_plan_mode', () => {
     await mountProjectionSeam(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     await ctx.plugin(ExitRuntime)
     provideWorkingDirectoryFixture(ctx)
     await ctx.plugin(PlanModeController, PLAN_CONFIG)
@@ -991,7 +1054,7 @@ describe('exit_plan_mode', () => {
     const agent = await agentWithSession(ctx, 'ptc-exit', { active: true })
 
     const result = await executeModelToolFixture(ctx, {
-      toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
+      toolStep: ToolStep.capture(ctx.tools, agent),
       callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: RUN_CODE_NAME,
       arguments: { code: `return await tools.${EXIT_PLAN_MODE}({ plan: ${JSON.stringify(plan)} })`, description: 'Submit the plan for review' },
@@ -1152,7 +1215,7 @@ describe('exit_plan_mode', () => {
     const { ctx, agent, asked } = await setupWithReview({ selected: ['Approve'] })
     const controller = new AbortController()
     const result = await executeToolFixture(ctx, {
-      toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
+      toolStep: ToolStep.capture(ctx.tools, agent),
       callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' },
@@ -1168,7 +1231,7 @@ describe('exit_plan_mode', () => {
     await mountProjectionSeam(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const fiber = await ctx.plugin(PlanModeController, PLAN_CONFIG)
     await ctx.plugin(UserQuestionService)
     let answer!: (value: { answers: { id: string; selected: string[] }[] }) => void
@@ -1235,7 +1298,7 @@ describe('HMR disposal', () => {
     await mountProjectionSeam(ctx)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const fiber = await ctx.plugin(PlanModeController, PLAN_CONFIG)
     const agent = await agentWithSession(ctx, 'disposed-recovery')
     openTurn(agent.session)

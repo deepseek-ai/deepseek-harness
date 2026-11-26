@@ -151,7 +151,7 @@ function latestUserQuestion(session: Session | undefined): string | undefined {
 /**
  * Register the Search API and Fetch API providers over one live settings section. Each operation reads one settings
  * snapshot and the route of the initiating Session's latest model request; each `ready()` call reads one settings
- * snapshot and the route of the model request being prepared. Both resolve the same ordered credentials.
+ * snapshot and the route its caller names. Both resolve the same ordered credentials.
  * @param ctx - plugin context owning both registrations.
  * @param config - live settings, read once per operation.
  */

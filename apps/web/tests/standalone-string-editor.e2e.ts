@@ -34,7 +34,7 @@ describe('web snapshot: standalone string editor through PTC', () => {
       compareReplaySession: true,
       ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
     })
-    expect(scaffold.ctx.tools.schemas().some(tool => tool.name === 'str_replace_editor')).toBe(true)
+    expect(scaffold.ctx.tools.getAll().some(tool => tool.name === 'str_replace_editor')).toBe(true)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)

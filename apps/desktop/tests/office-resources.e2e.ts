@@ -35,7 +35,7 @@ export function apply(ctx) {
       const office = await ctx.skills.get('office')
       const content = { office: office?.content ?? null }
       const resources = office?.resourceBase?.kind === 'directory' ? await readdir(office.resourceBase.path) : null
-      response.end(JSON.stringify({ names, content, resources, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.schemas().map(tool => tool.name).filter(name => name.startsWith('document_')) }))
+      response.end(JSON.stringify({ names, content, resources, loaded, officeKit: ctx.get('officeKit') !== undefined, tools: ctx.tools.getAll().map(tool => tool.name).filter(name => name.startsWith('document_')) }))
     } catch (error) {
       response.statusCode = 500
       response.end(String(error?.stack ?? error))

@@ -21,10 +21,10 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../tool-executor-native"
+      "path": "../tool-registry-native"
     },
     {
-      "path": "../tool-executor-ptc"
+      "path": "../tool-registry-ptc"
     }
   ]
 }

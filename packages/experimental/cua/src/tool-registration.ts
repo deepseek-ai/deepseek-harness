@@ -4,7 +4,7 @@ import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
-import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
+import { PtcToolRegistry } from '@deepseek-ai/dsh-tool-registry-ptc'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { longEdgeDimensions, type ImageAttachmentRef, type ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
@@ -105,8 +105,9 @@ var { connectCua } = await import(${ptcBridgeUrl});
 var cua = connectCua(() => tools.cua);
 \`\`\``
   } }
-  const register = (scope: Context, definition: ToolDefinition, instructions: PromptSection): (() => void) => {
-    const removeTool = scope.tools.register(definition)
+  // Raw mode registers the native tool; program mode includes the private registry that offers cua_run_code.
+  const register = (scope: Context, source: ToolDefinition | PtcToolRegistry, instructions: PromptSection): (() => void) => {
+    const removeTool = source instanceof PtcToolRegistry ? scope.tools.include(source) : scope.tools.register(source)
     let removePrompt: () => void
     try { removePrompt = scope.systemPrompt.section(instructions) }
     catch (error) { removeTool(); throw error }
@@ -114,8 +115,8 @@ var cua = connectCua(() => tools.cua);
   }
   if (config.agentPreset === false) return register(ctx, tool, rawPrompt)
   return ctx.inject(['tools', 'agents', 'systemPrompt'], (base) => {
-    const scopes = new Map<Agent, { scope: Scope; current?: { definition: ToolDefinition; remove: () => void } }>()
-    let program: ToolDefinition | undefined
+    const scopes = new Map<Agent, { scope: Scope; current?: { source: ToolDefinition | PtcToolRegistry; remove: () => void } }>()
+    let program: PtcToolRegistry | undefined
     let programs: Fiber | undefined
     let closing = false
     // The preset registry is optional; while none is mounted no Agent runs the configured preset.
@@ -123,20 +124,20 @@ var cua = connectCua(() => tools.cua);
       base.get('agentPresets')?.composedPreset(agent.ctx) === config.agentPreset ? 'raw' : 'program'
     const sync = (agent: Agent): void => {
       const mode = modeOf(agent)
-      const definition = mode === 'raw' ? tool : program
+      const source = mode === 'raw' ? tool : program
       let entry = scopes.get(agent)
-      if (entry?.current?.definition === definition) return
+      if (entry?.current?.source === source) return
       if (entry?.current !== undefined) { entry.current.remove(); delete entry.current }
-      if (definition === undefined) return
+      if (source === undefined) return
       if (entry === undefined) {
         const scope = createScope(agent.ctx, agent)
         entry = { scope }
         scopes.set(agent, entry)
         scope.ctx.effect(() => () => { scopes.delete(agent) }, 'cua.agent-tools')
       }
-      const remove = register(entry.scope.ctx, definition,
+      const remove = register(entry.scope.ctx, source,
         mode === 'raw' ? rawPrompt : { ...prompt, text: programGuidance })
-      entry.current = { definition, remove }
+      entry.current = { source, remove }
     }
     const syncAll = (): void => { for (const agent of base.agents.list()) sync(agent) }
     // A preset or registry change updates each Agent separately, so one failed registration leaves the others current.
@@ -161,10 +162,11 @@ var cua = connectCua(() => tools.cua);
             const child = owner.plugin({
               name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory'],
               apply(consumer: Context) {
-                const definition = createRunCodeTool(consumer, {
+                const registry = new PtcToolRegistry(consumer, {
                   name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
-                  tools: [tool], limits: config.standaloneRunCode.executor,
+                  config: config.standaloneRunCode.executor,
                 })
+                consumer.effect(() => registry.register(tool), 'cua.program-binding')
                 // Hosts without a model (MCP frontends) end an Agent's environment with the runtime's owner release.
                 consumer.provide('cuaPrograms', {
                   release: async (agent: Agent) => {
@@ -184,11 +186,11 @@ var cua = connectCua(() => tools.cua);
                 } satisfies CuaPrograms)
                 consumer.effect(function* () {
                   yield () => {
-                    if (program !== definition) return
+                    if (program !== registry) return
                     program = undefined
                     syncAll()
                   }
-                  program = definition
+                  program = registry
                   syncAll()
                 }, 'cua.program-publication')
               },

@@ -213,7 +213,7 @@ refreshContext(assembly: PromptAssembly, context: AssembleContext = {}): PromptA
  * that an effective complete section is restored afterwards as the sole
  * prompt section; tool declarations stay provider-owned. Section text and
  * lifecycle are fixed here; `systemUpdates()` compares them with committed state later.
- * @param context - the optional scope, step tool set, and plugin-defined assembly fields.
+ * @param context - the optional scope, model step, and plugin-defined assembly fields.
  * @returns the post-waterfall presentation and the system updates for the supplied Session.
  */
 async assemble(context: AssembleContext = {}): Promise<PromptAssembly>

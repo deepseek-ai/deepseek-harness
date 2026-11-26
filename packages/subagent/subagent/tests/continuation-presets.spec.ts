@@ -194,7 +194,7 @@ describe('continuable child presets', () => {
       label: 'preset work',
     })
     expect(adapter.requests[0]?.tools?.map(tool => tool.name)).toEqual(['reviewing_only'])
-    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).toEqual(['preset_only'])
   })
 
   it('restores an explicit same-as-parent selection after the parent switches and the provider unloads', async () => {
@@ -212,7 +212,7 @@ describe('continuable child presets', () => {
       .toEqual([['preset_only'], ['preset_only']])
     expect(stored.events.filter(event => event.type === 'agent-preset/selected')).toHaveLength(1)
     expect(stored.events.filter(event => event.type === 'subagent/descriptor')).toHaveLength(1)
-    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
   })
 
   it('restores a nested target with its own preset while its creator remains offline', async () => {
@@ -234,7 +234,7 @@ describe('continuable child presets', () => {
     expect(restored).toEqual([leaf.childId])
     expect(adapter.requests.filter(request => request.sessionId === leaf.childId)
       .map(request => request.tools?.map(tool => tool.name))).toEqual([['reviewing_only'], ['reviewing_only']])
-    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).toEqual(['preset_only'])
     expect(ctx.agents.get(creator.childId)).toBeUndefined()
   })
 
@@ -336,7 +336,7 @@ describe('continuable child presets', () => {
       code: 'NOT_RESUMABLE', cause: { code: 'agent-preset/not-found' },
     })
     expect(adapter.requests).toHaveLength(2)
-    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).toEqual(['reviewing_only'])
   })
 
   it.each(['missing', 'broken'] as const)('refuses an independent cold resume when its preset is %s', async (failure) => {
@@ -357,7 +357,7 @@ describe('continuable child presets', () => {
     expect(adapter.requests).toHaveLength(1)
     expect(stored.events.slice(0, created.events.length)).toEqual(created.events)
     expect(stored.events.slice(created.events.length)).toMatchObject([{ type: 'session/end-seed', data: {} }])
-    expect(ctx.tools.schemas(parent).map(tool => tool.name)).toEqual(['preset_only'])
+    expect(ctx.tools.getAll(parent).map(tool => tool.name)).toEqual(['preset_only'])
   })
 
   it('refuses restoration when a recorded preset selection cannot be projected', async () => {

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 激活只匹配 `activationSkills` 中列出的技能名，因此须同时挂载 [`@deepseek-ai/dsh-skill-office`](../../skill/skill-office/README.zh.md)，或其他注册了同名技能的 provider；否则三个工具永远不会出现。
 
-工具在每次调用时读取 Office 套件服务。Kit 缺失时，调用以该服务的 `unavailable` 消息失败；服务不存在时，调用以 `The document converter is unavailable.` 失败。每个 `unavailable` 失败都提示模型告知用户；原因可能是暂时的（例如输出存储已满或服务正在卸载）时稍后重试，并且不改用系统 soffice、npx 或其他转换工具。调用指定了 `renderer: poppler` 时，提示改为 `Omit renderer, or choose libreoffice.`
+工具在每次调用时读取 Office 套件服务。Kit 缺失时，调用以该服务的 `unavailable` 消息失败；服务不存在时，调用以 `The document converter is unavailable.` 失败。每个 `unavailable` 失败都提示模型告知用户，或在原因可能是暂时的（例如输出存储已满或服务正在卸载）时稍后重试，并且不改用系统 soffice、npx 或其他转换工具。调用指定了 `renderer: poppler` 时，提示改为 `Omit renderer, or choose libreoffice.`
 
 ```yaml
 - name: '@deepseek-ai/dsh-office-kit'
@@ -68,7 +68,7 @@ kind: "package-reference"
 
 每个工具分别声明参数和结果 schema。受支持的 schema 子集无法表达页码唯一性、数值范围和跨参数规则，因此这些渲染选择以及依赖输入类型的转换格式在运行时检查。Office 套件的错误报告为 `cannot <operation> "<path>": <message>`，其中 `<path>` 为解析后的输入路径，服务缺失时为调用给出的路径；`unavailable` 附带告知用户、或在其原因可能是暂时的时候稍后重试且不改用其他转换器的提示，`busy` 附带重试提示，渲染过大时附带缩小选择的提示。PTC 嵌套调用重新进入同一执行管线，因此策略和日志同样适用；嵌套渲染的图片在程序运行结束后附加。
 
-成功的 `tools/result` 通知将调用方 Agent 记入插件拥有的 WeakSet。提交后的 `session/event` 事件流也会标记用户直接调用的技能，不依赖 pre-step 监听器顺序。`agent/disposed` 清除标记。三个工具共用一个 `when`：Agent 已被标记，或 Session 最新的公开 `requestHeader()` 中列出了任一 Office 工具，包括改名前创建的 Session 记录的旧名 `office_render`、`office_convert` 和 `office_recalculate`。不注册额外的 projection 或 Session 事件。
+三个工具注册在 `ctx.tools` 引入的同一个 `AgentToolRegistry` 中，插件通过 `set()` 为 Agent 一并添加这三个工具：已配置技能的 `skill` 调用成功产生 `tools/result` 之后，包括嵌套的 PTC 调用；提交后的 `session/event` 事件流出现用户直接调用技能时，不依赖 pre-step 监听器顺序；以及 Session 最新的公开 `requestHeader()` 列出任一 Office 工具（包括改名前创建的 Session 记录的旧名 `office_render`、`office_convert` 和 `office_recalculate`）时，在 `agent/created` 时添加，并为插件加载时已存在的 Agent 添加。注册表在内存中保存每个 Agent 的集合，并随 Agent 一起丢弃。不注册额外的 projection 或 Session 事件。
 
 原生请求头在恢复和分叉后保留 Office 声明，包括还原后的首次请求；压缩只替换对话内容，不删除请求头。PTC 的请求头只记录 `run_code`，因此恢复或分叉后的 PTC Agent 必须重新加载 Office 技能。如果 Agent 在原生 Office 声明落盘前丢失内存，激活状态也会丢失；再次调用 `skill` 即可在下一步恢复。
 
@@ -98,7 +98,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-原生模式下，工具在对话中途激活时追加一条带 `tool-addition` 块的 `developer/message`；声明了 `toolUpdate` 的路由保持请求前缀不变，其他路由开始一次新的请求序列。原生模式的恢复和分叉保留这些声明。PTC 模式下，三个工具是系统提示中 `run_code` 一节列出的程序绑定，因此激活会重写系统提示：声明了 `systemPromptUpdate: in-history` 的路由追加一条系统消息，其他路由开始一次新的请求序列。PTC 恢复或分叉会丢失内存中的标记，因此系统提示会变化两次：下一步移除这些绑定，再次加载 Office 技能后又加回。结果追加到对话末尾；图片卸载之后可能通过其自身记录的事件把某个图片出现替换为占位文本。
+原生模式下，工具在对话中途激活时追加一条带 `tool-addition` 块的 `developer/message`；声明了 `toolUpdate` 的路由保持请求前缀不变，其他路由开始一次新的请求序列。原生模式的恢复和分叉保留这些声明。PTC 模式下，三个工具是系统提示中 `run_code` 一节列出的程序绑定，因此激活会重写系统提示：声明了 `systemPromptUpdate: in-history` 的路由追加一条系统消息，其他路由开始一次新的请求序列。PTC 恢复或分叉会丢失内存中的 Agent 集合，因此系统提示会变化两次：下一步移除这些绑定，再次加载 Office 技能后又加回。结果追加到对话末尾；图片卸载之后可能通过其自身记录的事件把某个图片出现替换为占位文本。
 
 ## 已知限制与延期工作
 
@@ -110,8 +110,8 @@ kind: "package-reference"
 - **Web GUI 不显示渲染图片** — [ui-tool](../../client/ui-tool/README.zh.md) 的 Office 行显示 `document_render` 结果的文本块并略去其中的图片，因此用户看不到模型检查过的页面。模型仍会收到每张图片。
 - **原生引擎在 Host 进程内运行** — 由模型发起的渲染、转换和重算通过 `ctx.officeKit` 在 Host 进程内运行原生 LibreOffice Kit 引擎，Poppler 则在 subprocess 提供方的子进程中渲染 PDF，因此不受 shell 沙箱和 PTC 权限约束。输入仍受文件系统后端读取权限的约束。原生解析器以 Host 用户的权限处理不可信的文档。
 - **PTC 激活状态不跨恢复和分叉保留** — PTC 请求头只记录 `run_code`，因此恢复或分叉后的 PTC Agent 在模型重新加载 Office 技能前不提供 Office 绑定；移除和重新加入各重写一次系统提示，缓存影响见 KV Cache 影响一节。
-- **插件重载会清除激活状态** — 热重载、或停用后再启用插件，会清空内存中的标记。如果期间运行过一步，该步的请求头不再包含这三个工具，模型须重新加载 Office 技能才能恢复。
-- **直接调用从下一步起激活** — 一步的工具集在用户调用的技能（如 `/office`）内容注入前就已确定，因此调用后的第一个模型请求不声明 Office 工具。这些工具从模型的下一步起出现。
+- **插件重载会清除激活状态** — 热重载、或停用后再启用插件，会清空内存中的 Agent 集合；加载时，插件只恢复最新请求头列出 Office 工具的 Agent。如果期间运行过一步，该步的请求头不再包含这三个工具，模型须重新加载 Office 技能才能恢复。
+- **直接调用从下一步起激活** — 一步在用户调用的技能（如 `/office`）内容注入前就已捕获其工具，因此调用后的第一个模型请求不声明 Office 工具。这些工具从模型的下一步起出现。
 - 渲染保真度、字体和分页取决于 LibreOffice Kit，可能与 Microsoft Office 不同。Poppler 渲染的 PDF 页面可能与 LibreOffice 渲染的同一页面不同。
 
 <a id="dev-note"></a>

@@ -51,7 +51,7 @@ kind: "package-reference"
 | `personaSuffix` | `''` | 全局 `deployment:persona-suffix` 模板，顺序为 `10200`，位于第一方指导之后 |
 | `toolOrder` | — | 显式面向模型工具顺序，含一个 `'<unlisted-tools>'` 其余项标记 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-system-prompt)是每个受支持字段的穷尽式真源。没有恰好一个其余项或存在重复项的 `toolOrder` 列表会在加载时失败；已列名称没有对应已注册工具会使每次 `assemble()` 被拒绝。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-system-prompt)是每个受支持字段的穷尽式真源。没有恰好一个其余项或存在重复项的 `toolOrder` 列表会在加载时失败。执行 `assemble()` 时，列出的每个名称都必须由正在组装的作用域自身或继承的注册与引入提供，或由该作用域的根注册表声明；其他名称会使该次组装被拒绝，因此没有任何注册的名称会使每次组装都被拒绝。`run_code` 只由 PTC 根注册表声明，因此列出它会使原生根注册表下的组装被拒绝。作用域未声明的已知名称（因为限制隐藏了它，或 PTC 根注册表在程序中绑定它）不会出现在该作用域的顺序中。
 
 ### 贡献提示词段
 
@@ -69,11 +69,13 @@ ctx.systemPrompt.section({
 })
 ```
 
+在工具不可用时必须消失的工具段就是工具定义中的 `guidance`，`ctx.tools.register()` 把它与工具一起注册，并且只有当查看方作用域的注册项解析出该定义时才渲染它（[tools](../tools/README.zh.md#register-a-tool)）；通过 `section()` 注册的段在其工具受限时仍会保留。新增工具使用指引不被鼓励：在工具自身的 schema 中描述它（[理由](../../../.agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.zh.md)）。为单个 Agent 添加工具的提供方依据自己的注册表，为该段选择按 Agent 区分的文本。
+
 在段或动态上下文上设置 `interpolate: false` 可原样保留文本，包括生成的工具文档或目录名中的 `{{…}}` 组。其他贡献默认执行变量插值。
 
 `refreshContext(assembly, context)` 在 pre-step 与路由准备之后刷新已注册的运行时事实。它保留已接纳的段、工具、变量及仅由组装 waterfall 添加的上下文，应用当前的可选上下文抑制，并恢复缺失的必需条目。将变化的事实放在上下文 provider 中；已注册上下文的文本会在准入前再次读取。
 
-agent loop 在 `agent/pre-step` 之前为每个拟议步骤调用 `assemble(context)`，传入 Session、捕获的模型选择（`context.modelSelection`）和准入工具集合（`context.toolSet`）。结果为该 Session 固定段文本和生命周期。每次模型尝试前，循环追加 `assembly.systemUpdates(retry)` 返回的写入：首次尝试写入普通增量；压缩后的首次尝试（包括重试）写入重建的系统头节点。重试复用该组装，不重新求值段回调。提交前拒绝或取消不会改变已提交准入。组装后的来源变化留到下一次组装处理。展示监听器接收段、上下文与变量；工具声明仍由提供方持有。
+agent loop 在 `agent/pre-step` 之前为每个拟议步骤调用 `assemble(context)`，传入 Session、捕获的模型选择（`context.modelSelection`）和该步骤的 `ToolStep`（`context.toolStep`）。工具注册表恰好声明 `context.toolStep` 捕获的条目，即该步骤的调用所执行的定义；程序注册表读取 `context.toolStep` 来渲染该步骤的绑定。结果为该 Session 固定段文本和生命周期。每次模型尝试前，循环追加 `assembly.systemUpdates(retry)` 返回的写入：首次尝试写入普通增量；压缩后的首次尝试（包括重试）写入重建的系统头节点。重试复用该组装，不重新求值段回调。提交前拒绝或取消不会改变已提交准入。组装后的来源变化留到下一次组装处理。展示监听器接收段、上下文与变量；工具声明仍由提供方持有。
 
 调用返回的 disposer 或卸载所属插件时，Cordis 清理只移除对应注册。移除覆盖会显露下一个活跃定义，并按普通文本更新处理。只有当 Session 可见的作用域链中已无活跃注册，且该 Session 此前提交过此名称时，才会退役；通知来自该 Session 观察过的最后一个被释放的注册。可将 `retirement` 设为非空字面通知；省略时使用 `The earlier instructions from ${name} no longer apply.`。退役绝不调用已销毁生产方的回调。组装前销毁并重新注册同名段时，会将新文本与已提交文本比较；文本和顺序相同则不发送内容。
 
@@ -186,7 +188,7 @@ You are an AI agent powered by DeepSeek Harness.
 
 #### 模型看到什么
 
-对于已交付工具，模型会收到[生成工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-executor-ptc)中对每个 agent 可见的子集；限制与步骤时激活完成后，按配置或字典序排列。扩展可以通过同一注册表贡献其他定义。段与 schema 提供方是独立的组装输入。限制不会移除段落注册：工具指导插件通过 `text({ scope, toolSet })` 与 `ctx.tools.get(name, scope, toolSet)` 返回空文本或选择适用片段。任意静态段落不会被自动改写。
+对于已交付工具，模型会收到 Agent 的根注册表为该步骤声明的条目：在原生根注册表下，是[生成工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-registry-ptc)中对每个 agent 可见的子集，在应用限制并加入提供方按 Agent 添加的工具后，按配置或字典序排列；在 [PTC 根注册表](../tool-registry-ptc/README.zh.md)下，只有 `run_code`。扩展可以通过同一注册表贡献其他定义。段与 schema 提供方是独立的组装输入。工具的 `guidance` 段具有该工具的作用域和生命周期，并且只有当该 Agent 可以调用该工具时才渲染，因此限制会同时移除 schema 和该段。
 
 #### Token 影响
 

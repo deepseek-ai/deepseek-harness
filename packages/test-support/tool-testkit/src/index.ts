@@ -53,29 +53,55 @@ export function defineContentToolFixture<const S extends ParameterSchemaSpec>(
 
 /**
  * Exercise invocation stages directly, preserving parsed and nested test inputs.
- * Use executeModelToolFixture for a complete single-call batch.
- * @param ctx - context owning the tool definitions and execution policy.
+ * The call resolves the entry `ctx.tools.get()` returns, so the context needs a
+ * selected root; a PTC root resolves only its program entry. Use
+ * executeModelToolFixture for a complete single-call batch.
+ * @param ctx - context owning the tool definitions, the selected root, and execution policy.
  * @param input - parsed invocation, including nested identity when testing a composite.
  * @returns the settled capability result.
  * @internal
  */
 export async function executeToolFixture(ctx: Context, input: ToolExecutionInput): Promise<ToolExecutionResult> {
-  const pipeline = new ToolExecutionPipeline(ctx)
+  return runStages(new ToolExecutionPipeline(ctx, {
+    get: (name, scope, toolStep) => {
+      const tool = ctx.tools.get(name, scope)
+      return tool !== undefined && (toolStep?.declares(tool) ?? true) ? tool : undefined
+    },
+  }), input)
+}
+
+/**
+ * Exercise invocation stages for one known definition without a registry lookup,
+ * such as a program binding under a PTC root, which `ctx.tools.get()` does not resolve.
+ * @param ctx - context owning the execution policy.
+ * @param definition - the definition the call runs when its name matches.
+ * @param input - parsed invocation, including nested identity when testing a composite.
+ * @returns the settled capability result.
+ * @internal
+ */
+export async function executeDefinitionFixture(
+  ctx: Context, definition: ToolDefinition, input: ToolExecutionInput,
+): Promise<ToolExecutionResult> {
+  return runStages(new ToolExecutionPipeline(ctx, { get: name => name === definition.name ? definition : undefined }), input)
+}
+
+/** Prepare, dispatch when policy allows, and complete one invocation. */
+async function runStages(pipeline: ToolExecutionPipeline, input: ToolExecutionInput): Promise<ToolExecutionResult> {
   const prepared = await pipeline.prepare(input)
   const outcome = prepared.kind === 'dispatch' ? await pipeline.dispatch(prepared.exec) : prepared
   return pipeline.complete(prepared.exec, outcome)
 }
 
 /**
- * Run one raw call through the selected executor without root Session logging.
- * @param ctx - context owning the selected executor.
- * @param input - JSON arguments, optional Agent supplying scoped tools and tool context, and optional step admission.
+ * Run one raw call through `ctx.tools.execute()` without root Session logging.
+ * @param ctx - context owning the selected root registry.
+ * @param input - JSON arguments, optional Agent supplying scoped tools and tool context, and optional model step.
  * @returns the single settled result.
  * @internal
  */
 export async function executeModelToolFixture(
   ctx: Context,
-  input: Pick<ToolExecutionInput, 'callId' | 'name' | 'arguments' | 'signal' | 'agent' | 'toolSet'>,
+  input: Pick<ToolExecutionInput, 'callId' | 'name' | 'arguments' | 'signal' | 'agent' | 'toolStep'>,
 ): Promise<ToolExecutionResult> {
   const args = JSON.stringify(input.arguments)
   // oxlint-disable-next-line typescript/no-unnecessary-condition -- JSON.stringify returns undefined for non-JSON fixture arguments
@@ -84,9 +110,32 @@ export async function executeModelToolFixture(
     calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: args }],
     signal: input.signal,
     ...input.agent === undefined ? {} : { agent: input.agent },
-    ...input.toolSet === undefined ? {} : { toolSet: input.toolSet },
+    ...input.toolStep === undefined ? {} : { toolStep: input.toolStep },
   })
   const outcome = batch.results[0]
-  if (outcome === undefined) throw new Error('Executor omitted the model tool fixture result')
+  if (outcome === undefined) throw new Error('ctx.tools.execute() omitted the model tool fixture result')
   return outcome.result
+}
+
+/** The parts of a prompt assembly that name the tools one model step can call. */
+export interface StepToolAssembly {
+  readonly tools: readonly { readonly name: string }[]
+  readonly sections: readonly { readonly name: string; readonly text: string }[]
+}
+
+/**
+ * List the tools one assembled model step can call: its declared entries, or,
+ * when the step declares a PTC program entry, the bindings its `tools:sdk`
+ * section declares in `ToolArgsMap`.
+ * @param assembly - prompt assembly of a step captured with `ToolStep.capture()`.
+ * @returns tool names, sorted.
+ * @internal
+ */
+export function stepToolNames(assembly: StepToolAssembly): string[] {
+  const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
+  if (sdk === '') return assembly.tools.map(tool => tool.name).sort()
+  const members = /^interface ToolArgsMap \{\n([\s\S]*?)\n\}$/mu.exec(sdk)?.[1] ?? ''
+  return [...members.matchAll(/^ {2}("(?:[^"\\]|\\.)*"|[A-Za-z_$][\w$]*)\??: /gmu)]
+    .map(([, key = '']) => key.startsWith('"') ? JSON.parse(key) as string : key)
+    .sort()
 }

@@ -57,7 +57,7 @@ kind: "package-reference"
 <a id="authentication"></a>
 ### 鉴权
 
-Search 与 Fetch 每次操作各自从同一份设置快照解析端点和凭据，因此保存的设置、模型提供方变更、登录或存入的密钥从下一次操作开始生效。会话的路由是发起会话最近一次请求上下文的 `provider`；`ready()` 使用正在准备的模型请求的路由。
+Search 与 Fetch 每次操作各自从同一份设置快照解析端点和凭据，因此保存的设置、模型提供方变更、登录或存入的密钥从下一次操作开始生效。会话的路由是发起会话最近一次请求上下文的 `provider`；`ready()` 使用调用方指明的路由，`dsh-tool-web` 从该 Agent 当前的模型选择中取得这一路由。
 
 - **单独配置。** 设置了非空 `*BaseURL` 或 `*ApiKeyEnv` 的能力在任何路由上都只以 `Authorization: Bearer` 把其 `*ApiKeyEnv`（未设置时为 `DEEPSEEK_API_KEY`）下的密钥发往其 `*BaseURL`（未设置时为 `https://api.deepseek.com/v1/tools`），从不发送账号令牌。没有该密钥时，操作失败，诊断信息点名该引用和 `*ApiKeyEnv` 字段。
 - **账号凭据。** 操作通过 `x-dsh-auth-token` 发送 `ctx.deepseekAccount` 为请求端点释放的凭据；2026-10-16 公网 Search 与 Fetch 路由已接受该凭据。挂载了 `deepseek-account` 模型路由时，端点位于该路由基础地址的 origin 下；没有该路由时，位于 `DEEPSEEK_BASE_URL` 所指 origin 下，默认 `https://api.deepseek.com`。没有登录或没有账号服务都算没有凭据。凭据读取失败时操作失败，不再尝试其他凭据。已挂载路由的设置无法解析，或 `DEEPSEEK_BASE_URL` 不是不含凭据的 HTTP(S) URL 时，操作在轮到该来源时于读取凭据前失败。

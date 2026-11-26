@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import * as fs from 'node:fs/promises'
 import { lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -242,7 +242,7 @@ it('reports preparation failures with structured tool errors', async () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const { source, root, manifest, directory } = await fixture()
     await ctx.plugin(workspaceDependencies, { source, root })
     const call = async (id: string) => (await executeToolFixture(ctx, {
@@ -312,10 +312,10 @@ it('loads the real tool through Cordis, exposes payload paths in place, and unre
     ctx.loader.builtins.include = Include
     Object.assign(ctx.loader.builtins, {
       agents: AgentRegistry, systemPrompt: SystemPrompt, tools: ToolRuntime,
-      toolExecutor: NativeToolExecutor, dependencies: workspaceDependencies,
+      toolRegistry: NativeToolRegistry, dependencies: workspaceDependencies,
     })
     const config = join(directory, 'cordis.yml')
-    await writeFile(config, `- name: cordis:agents\n- name: cordis:systemPrompt\n- name: cordis:tools\n- name: cordis:toolExecutor\n- name: cordis:dependencies\n  config:\n    source: ${JSON.stringify(source)}\n`)
+    await writeFile(config, `- name: cordis:agents\n- name: cordis:systemPrompt\n- name: cordis:tools\n- name: cordis:toolRegistry\n- name: cordis:dependencies\n  config:\n    source: ${JSON.stringify(source)}\n`)
     await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(config).href } })
     await ctx.loader.await()
     for (const entry of ctx.loader.entries()) await entry.fiber?.await()
@@ -330,7 +330,7 @@ it('loads the real tool through Cordis, exposes payload paths in place, and unre
     const entry = [...ctx.loader.entries()].find(entry => entry.options.name === 'cordis:dependencies')
     expect(entry).toBeDefined()
     await entry?.fiber?.dispose()
-    expect(ctx.tools.schemas().some(tool => tool.name === 'load_workspace_dependencies')).toBe(false)
+    expect(ctx.tools.getAll().some(tool => tool.name === 'load_workspace_dependencies')).toBe(false)
   } finally {
     await ctx.fiber.dispose()
   }
@@ -369,7 +369,7 @@ async function tool(config: workspaceDependencies.Config) {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     const fiber = ctx.plugin(workspaceDependencies, config)
     await fiber
     const execute = () => executeToolFixture(ctx, {
@@ -464,7 +464,7 @@ it.each([false, true])('disposal waits for pending filesystem preparation (failu
     release()
     await disposal
     expect((await pending).isError).toBe(failure)
-    expect(ctx.tools.schemas().some(value => value.name === 'load_workspace_dependencies')).toBe(false)
+    expect(ctx.tools.getAll().some(value => value.name === 'load_workspace_dependencies')).toBe(false)
   } finally {
     release()
     await pending

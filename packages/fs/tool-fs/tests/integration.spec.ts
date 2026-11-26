@@ -7,8 +7,8 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { mountAgentLoopTestDependencies, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
@@ -71,7 +71,7 @@ describe('guarded deployment (with dsh-fs-observation-policy)', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
     await ctx.plugin(FsPolicy)
     fiber = await ctx.plugin(ToolFs)
@@ -347,7 +347,7 @@ describe('bare provider (no dsh-fs-observation-policy)', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
     fiber = await ctx.plugin(ToolFs)
   })
@@ -439,7 +439,7 @@ describe('per-session cwd', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: dir }) // config.cwd = dir, NOT sessionDir
     await ctx.plugin(FsPolicy)
     fiber = await ctx.plugin(ToolFs)
@@ -487,7 +487,7 @@ describe('signal, concurrency, and the fs/observed contract', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalFileSystem, { cwd: dir })
     await ctx.plugin(FsPolicy)
     fiber = await ctx.plugin(ToolFs)
@@ -651,7 +651,7 @@ describe('current working directory', () => {
         }
       }
       await ctx.plugin(ReadBindingRuntime)
-      await agent.ctx.plugin(PtcToolExecutor)
+      await agent.ctx.plugin(PtcToolRegistry)
       const nested = await executeModelToolFixture(ctx, {
         signal: testToolSignal, callId: brandString<ToolCallId>('ptc-read-current'), name: 'run_code',
         arguments: { code: 'return await tools.read({file_path: "note.txt"})', description: 'Read the current note' }, agent,

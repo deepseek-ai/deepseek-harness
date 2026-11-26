@@ -15,7 +15,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { FsTargetKey, FsVersion, FsEditOutcome, FsTarget, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { PreToolDecision, ToolDefinition } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { type PreToolDecision, type ToolDefinition, type ToolRegistry } from '@deepseek-ai/dsh-tools'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   installForkEnforcement,
@@ -409,6 +411,39 @@ describe('fork enforcement wiring', () => {
     expect(failure.registration).toMatchObject({ tool: 'write' })
     expect((failure.registration?.error as Error).message).toBe('the child scope already holds write')
     expect(forks.enforcementInstalled(child)).toBe(false)
+    await ctx.fiber.dispose()
+  })
+
+  it('refuses a shared session as tool-unavailable when its root offers only a program entry', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    ctx.tools.register(readDefinition)
+    const program: ToolDefinition = { ...readDefinition, name: 'program' }
+    const root: ToolRegistry = {
+      register: () => () => {},
+      include: () => () => {},
+      get: name => name === program.name ? program : undefined,
+      getAll: () => [program],
+    }
+    ctx.tools.setRoot(root)
+    let scoped!: Context
+    await ctx.plugin(Object.assign((inner: Context) => { scoped = createScope(inner, childScope).ctx }, { inject: ['tools'] }))
+    const installation = installSourceSessionAccess({
+      sessionId: 'session-program-root',
+      context: scoped,
+      scope: childScope,
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
+      cwd: grantedRoot,
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>('session-program-root') }),
+      fs,
+      tools: ctx.tools,
+      describe: describeTool,
+    })
+    // The root view answers with the program entry only, so the deployment read is not found.
+    expect(installation.refusal).toBe('tool-unavailable')
+    installation.dispose()
     await ctx.fiber.dispose()
   })
 

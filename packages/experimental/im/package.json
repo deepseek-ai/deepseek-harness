@@ -78,7 +78,7 @@
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "js-yaml": "^4.1.1",
     "@deepseek-ai/dsh-tool-testkit": "workspace:*",
-    "@deepseek-ai/dsh-tool-executor-native": "workspace:*"
+    "@deepseek-ai/dsh-tool-registry-native": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",

@@ -16,8 +16,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { Config as SystemPromptConfig } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import FsLocal from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 
@@ -84,8 +84,8 @@ export async function mountAgentLoopTestDependencies(
     await ctx.plugin(WorkingDirectory)
   }
   await ctx.plugin(ToolRuntime)
-  if (options.tools?.mode === 'ptc') await ctx.plugin(PtcToolExecutor, { ...options.tools.maxParallelSubCalls !== undefined ? { maxParallelSubCalls: options.tools.maxParallelSubCalls } : {} })
-  else await ctx.plugin(NativeToolExecutor)
+  if (options.tools?.mode === 'ptc') await ctx.plugin(PtcToolRegistry, { ...options.tools.maxParallelSubCalls !== undefined ? { maxParallelSubCalls: options.tools.maxParallelSubCalls } : {} })
+  else await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
 }
 

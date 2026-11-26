@@ -41,10 +41,10 @@ describe('sandbox context façade — escape surface is closed', () => {
     expect(message).toContain('withheld by design')
   })
 
-  it('withholds executor control through ctx.tools.setExecutor', async () => {
+  it('withholds root selection and inclusion through ctx.tools', async () => {
     const harness = await setup()
-    const message = await runTouching(harness, 'ctx.tools.setExecutor()')
-    expect(message).toContain('is not a function')
+    expect(await runTouching(harness, 'ctx.tools.setRoot()')).toContain('is not a function')
+    expect(await runTouching(harness, 'ctx.tools.include()')).toContain('is not a function')
   })
 
   it('the classic ctx.root.tools.register bypass registers nothing and fails loud', async () => {

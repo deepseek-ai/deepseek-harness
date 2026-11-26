@@ -13,6 +13,7 @@ import type { Transport } from '@modelcontextprotocol/client'
 import type Settings from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import { CredentialProvider, credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {
   CredentialInfo, CredentialKey, CredentialRecord, CredentialRecordEntry, CredentialRecordInfo,
@@ -155,6 +156,7 @@ async function mountWorld(options?: {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  ctx.tools.setRoot(new NativeToolRegistry())
   let credentials: MemoryCredentials | undefined
   if (options?.withCredentials === true) {
     await ctx.plugin(MemoryCredentials)

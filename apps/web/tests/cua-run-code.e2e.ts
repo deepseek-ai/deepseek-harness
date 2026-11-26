@@ -7,7 +7,7 @@ import { chromium, type Browser } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
+import type {} from '@deepseek-ai/dsh-tool-registry-ptc/types'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
@@ -46,8 +46,8 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   await connectFreshWorkspace(page, scaffold.workspaceCwd)
   const agent = scaffold.ctx.agents.list()[0]!
   expect(scaffold.ctx.agentPresets.composedPreset(agent.ctx)).toBe('standard')
-  expect(scaffold.ctx.tools.schemas(agent).map(tool => tool.name)).toContain('cua_run_code')
-  expect(scaffold.ctx.tools.schemas(agent).map(tool => tool.name)).not.toContain('cua')
+  expect(scaffold.ctx.tools.getAll(agent).map(tool => tool.name)).toContain('cua_run_code')
+  expect(scaffold.ctx.tools.getAll(agent).map(tool => tool.name)).not.toContain('cua')
   const prompts = fixtureUserPrompts(await readFile(await selectedSessionFixture(fixture), 'utf8'))
   expect(prompts).toHaveLength(1)
   const prompt = prompts.at(0)

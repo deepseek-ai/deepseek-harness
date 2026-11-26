@@ -25,6 +25,7 @@ import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { describeError, McpLocalError, mcpRequestError, McpToolError } from './diagnostic.ts'
+import type { McpToolRegistrar } from './status.ts'
 import type { McpToolLoader } from './tool-loading.ts'
 
 /** Resolved options relevant to tool bridging. */
@@ -42,6 +43,8 @@ export interface ToolBridgeOptions {
   redact?: (text: string) => string
   /** On-demand loading: the generation is published to this loader instead of the tool registry. */
   loader?: McpToolLoader
+  /** Registers the generation's tools and records them for the instance's status handle. */
+  registrar: McpToolRegistrar
   /** Supervised connection: lets a call the server refused for its session be sent once more after the reconnect. */
   recovery?: McpCallRecovery
 }
@@ -278,7 +281,7 @@ export async function syncTools(
   try {
     if (opts.loader === undefined) {
       for (const [publicName, { definition }] of definitions) {
-        disposers.set(publicName, ctx.tools.register(definition))
+        disposers.set(publicName, opts.registrar.register(ctx, definition))
       }
     } else {
       const offered = new Map([...definitions.values()].map(({ rawName, definition }) => [rawName, definition]))
@@ -380,8 +383,6 @@ interface McpContentBlock {
 interface PreparedProjection {
   /** Canonical MCP value returned by execute before registry materialization. */
   value: McpResult
-  /** Synchronous output.render projection expected before finalization. */
-  fallback: ContentBlock[]
   /** Image-enriched or explicit-refusal projection prepared during execute. */
   content: ContentBlock[]
 }
@@ -445,7 +446,6 @@ export function createMcpToolDefinition(
       projections.delete(exec)
       if (result.isError) return undefined
       if (!isDeepStrictEqual(result.value, projection.value)) return undefined
-      if (!isDeepStrictEqual(result.content, projection.fallback)) return undefined
       return projection.content
     },
   }
@@ -510,7 +510,6 @@ function createExecutor(
         : {},
     }
     if (!containsImage(content)) return value
-    const fallback: ContentBlock[] = [{ type: 'text', text: extractText(content, rawName) }]
     const { content: projected, attachments } = await prepareImageProjection(ctx, exec, content, rawName)
     const admitted: McpResult = attachments === undefined ? value : {
       ...value,
@@ -519,7 +518,7 @@ function createExecutor(
         return ref === undefined || !isRecord(block) ? block : { ...block, attachment: { ...ref } }
       }),
     }
-    projections.set(exec, { value: admitted, fallback, content: projected })
+    projections.set(exec, { value: admitted, content: projected })
     return admitted
   }
 }

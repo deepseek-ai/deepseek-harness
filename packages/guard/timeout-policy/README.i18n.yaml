@@ -30,11 +30,11 @@
   en: 9bdd0f9388915825
   zh: c101ec504869d187
 /deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/design-philosophy:
-  en: 39f08d20a467b458
-  zh: 61f9e8ba3a5479d2
+  en: 4cf352fe67e95d13
+  zh: 0e87fb4b54630289
 /deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/how-a-deadline-is-armed-and-mapped:
-  en: 4c2f31d760d5ad4b
-  zh: 42e5c42675c32dcc
+  en: 372ae838ab14b29a
+  zh: e5420a9dd35ca8b7
 /deepseek-ai-dsh-tool-call-timeout-policy/understand-the-implementation/composing-with-other-wrappers:
   en: 09fba7333cf511f6
   zh: 965c60634d370287

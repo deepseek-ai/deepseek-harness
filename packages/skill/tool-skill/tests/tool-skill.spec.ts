@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { afterEach, describe, expect, it } from 'vitest'
 import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -62,7 +62,7 @@ async function setup(home: string, config: toolSkill.Config = {}): Promise<Conte
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SkillRegistry)
   await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), watch: false })
@@ -202,7 +202,7 @@ describe('dsh-tool-skill', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     const home = await tempDir('tool-schema')
     await ctx.plugin(SkillRegistry)
@@ -210,7 +210,7 @@ describe('dsh-tool-skill', () => {
     ctx.skills.register({ name: 'lifecycle-skill', description: 'Lifecycle', source: 'runtime', content: 'body' })
 
     const fiber = await ctx.plugin(toolSkill)
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['skill'])
+    expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(['skill'])
     expect(await composePrefix(ctx, '/workspace')).toHaveLength(1)
     expect(ctx.tools.get('skill')?.presentCall?.({ name: 'project-skill' })).toEqual({
       card: 'generic',
@@ -219,11 +219,11 @@ describe('dsh-tool-skill', () => {
       rawInput: 'project-skill',
     })
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toEqual([])
+    expect(ctx.tools.getAll()).toEqual([])
     expect(await composePrefix(ctx, '/workspace')).toEqual([])
 
     toolSkill.apply(ctx)
-    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(['skill'])
+    expect(ctx.tools.getAll().map(tool => tool.name)).toEqual(['skill'])
   })
 
   it('forwards the step abort signal to skill discovery', async () => {
@@ -850,7 +850,7 @@ describe('dsh-tool-skill', () => {
     expect(JSON.stringify(catalogMessages(session)[1]?.data.content)).not.toContain('Some skills could not be checked')
   })
 
-  it('omits catalog guidance when the calling agent restricts away the shipped skill tool', async () => {
+  it('keeps catalog guidance when the calling agent restricts the shipped skill tool', async () => {
     const home = await tempDir('tool-restricted-catalog')
     const ctx = await setup(home)
     ctx.skills.register({ name: 'listed-skill', description: 'Listed', source: 'runtime', content: 'body' })
@@ -860,16 +860,15 @@ describe('dsh-tool-skill', () => {
     const { scope } = await mintAgentScope(ctx, agent)
     scope.ctx.tools.restrict({ deny: ['skill'] })
 
+    // A restriction hides the tool, not the catalog registered with it.
     expect(ctx.tools.get('skill', agent)).toBeUndefined()
-    await composePrefixForAgent(ctx, agent)
-    expect(catalogMessages(session)).toEqual([])
     await fireStep(ctx, agent, 1, 1)
-    expect(catalogMessages(session)).toEqual([])
+    expect(catalogMessages(session)).toHaveLength(1)
     expect(await composePrefix(ctx, '/workspace')).toHaveLength(1)
     await scope.dispose()
   })
 
-  it('does not attach shipped catalog guidance to a scoped same-name tool shadow', async () => {
+  it('keeps shipped catalog guidance for an Agent whose scope shadows the skill tool', async () => {
     const home = await tempDir('tool-shadowed-catalog')
     const ctx = await setup(home)
     ctx.skills.register({ name: 'listed-skill', description: 'Listed', source: 'runtime', content: 'body' })
@@ -884,7 +883,7 @@ describe('dsh-tool-skill', () => {
     }))
 
     expect(ctx.tools.get('skill', agent)).not.toBe(ctx.tools.get('skill'))
-    expect(await composePrefixForAgent(ctx, agent)).toEqual([])
+    expect(await composePrefixForAgent(ctx, agent)).toHaveLength(1)
     expect(await composePrefix(ctx, '/workspace')).toHaveLength(1)
     await scope.dispose()
   })
@@ -896,7 +895,7 @@ describe('dsh-tool-skill', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SkillRegistry)
     await ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), watch: false })

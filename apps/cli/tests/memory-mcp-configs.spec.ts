@@ -14,6 +14,7 @@ import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 
 interface ExampleContract {
@@ -75,7 +76,7 @@ function insertedRow(patches: PatchOptions[]): InsertedRow {
 
 async function waitForTool(ctx: Context, name: string): Promise<void> {
   const deadline = Date.now() + 10_000
-  while (!ctx.tools.schemas().some(schema => schema.name === name)) {
+  while (!ctx.tools.getAll().some(tool => tool.name === name)) {
     if (Date.now() >= deadline) throw new Error(`timed out waiting for ${name}`)
     await new Promise(resolveWait => setTimeout(resolveWait, 25))
   }
@@ -126,6 +127,10 @@ describe('third-party memory MCP example overlays', () => {
         ctx.loader.builtins['memory-test-session-projection'] = SessionProjectionRegistry
         ctx.loader.builtins['memory-test-system-prompt'] = SystemPrompt
         ctx.loader.builtins['memory-test-tools'] = ToolRuntime
+        ctx.loader.builtins['memory-test-tool-registry'] = {
+          name: 'memory-test-tool-registry', inject: ['tools'],
+          apply: (scope: Context) => { scope.tools.setRoot(new NativeToolRegistry()) },
+        }
         ctx.loader.builtins['memory-test-mcp-client'] = McpClient
       },
     )

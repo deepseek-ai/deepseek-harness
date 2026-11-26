@@ -11,9 +11,10 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import SubagentRuntime, { applyChildComposition } from '@deepseek-ai/dsh-subagent'
-import { assembleContextFor } from '@deepseek-ai/dsh-agent'
+import { assembleContextFor, type Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { projectToolSchema } from '@deepseek-ai/dsh-tools'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -75,7 +76,7 @@ describe('spawn preset selection', () => {
       allowedAgentPresets: ['writer', 'reviewer'],
       modelSelection,
     })
-    const schema = ctx.tools.schemas().find(schema => schema.name === 'subagent')
+    const schema = ctx.tools.getAll().find(schema => schema.name === 'subagent')
     expect(JSON.stringify(schema)).toContain('agent_preset')
     expect(schema).toHaveProperty('parameters.properties.agent_preset.enum', ['writer', 'reviewer'])
     expect(schema?.parameters.properties).toHaveProperty('agent_preset')
@@ -93,7 +94,7 @@ describe('spawn preset selection', () => {
 
   it('uses a default without exposing a model selector', async () => {
     const { ctx, onStart } = await setup({ agentPreset: 'reviewer' })
-    expect(JSON.stringify(ctx.tools.schemas())).not.toContain('agent_preset')
+    expect(JSON.stringify(ctx.tools.getAll().map(tool => projectToolSchema(tool, true)))).not.toContain('agent_preset')
     await callSubagent(ctx, args)
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agentPreset: 'reviewer' }))
     const forced = await callSubagent(ctx, { ...args, agent_preset: 'writer' })
@@ -199,7 +200,7 @@ describe('spawn preset selection', () => {
       sessionId: brandString<SessionId>('self-selecting-preset'),
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'self') },
     })
-    const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'self_delegate')
+    const schema = ctx.tools.getAll(handle.agent).find(schema => schema.name === 'self_delegate')
     expect(schema).toHaveProperty('parameters.properties.agent_preset.enum', ['self'])
   })
 
@@ -223,7 +224,7 @@ describe('spawn preset selection', () => {
         sessionId: brandString<SessionId>(`mutually-selecting-${id}`),
         setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, id) },
       })
-      const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'peer_delegate')
+      const schema = ctx.tools.getAll(handle.agent).find(schema => schema.name === 'peer_delegate')
       expect(schema).toHaveProperty('parameters.properties.agent_preset.enum', [other])
     }
   })
@@ -292,7 +293,7 @@ describe('spawn preset selection', () => {
     const views: Array<{ preset: string; names: string[] }> = []
     for (const preset of ['coding', 'planning', 'coding', 'planning']) {
       await ctx.agentPresets.select(agent, preset)
-      views.push({ preset, names: ctx.tools.schemas(agent).map(schema => schema.name) })
+      views.push({ preset, names: ctx.tools.getAll(agent).map(schema => schema.name) })
     }
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Reply with Ready.' }], source: { kind: 'user' } }))
     await agent.whenIdle()
@@ -326,19 +327,22 @@ describe('spawn preset selection', () => {
       })
       const removeRestriction = mode === 'agent restriction'
         ? subject.agent.ctx.tools.restrict({ deny: ['subagent'] }) : undefined
-      expect(ctx.tools.schemas(subject.agent).map(schema => schema.name)).not.toContain('subagent')
-      const assembly = await ctx.systemPrompt.assemble(assembleContextFor(subject.agent))
-      expect(assembly.sections.find(section => section.name === 'tool:subagent')?.text).toBe('')
+      expect(ctx.tools.getAll(subject.agent).map(schema => schema.name)).not.toContain('subagent')
+      const guidance = async (agent: Agent) => (await ctx.systemPrompt.assemble(assembleContextFor(agent)))
+        .sections.find(section => section.name === 'tool:subagent')?.text
+      expect(await guidance(subject.agent)).toBe('')
+      expect(await guidance(peer.agent)).toContain('Start independent delegations with `subagent`')
       const denied = await callSubagent(ctx, args, { agent: subject.agent })
       expect(denied.isError).toBe(true)
       expect(denied.error?.info?.code).toBe('UNKNOWN_TOOL')
       expect(onStart).not.toHaveBeenCalled()
-      expect(ctx.tools.schemas(peer.agent).map(schema => schema.name)).toContain('subagent')
+      expect(ctx.tools.getAll(peer.agent).map(schema => schema.name)).toContain('subagent')
       expect((await callSubagent(ctx, args, { agent: peer.agent })).isError).not.toBe(true)
       expect(onStart).toHaveBeenCalledTimes(1)
       if (removeRestriction !== undefined) {
         removeRestriction()
-        expect(ctx.tools.schemas(subject.agent).map(schema => schema.name)).toContain('subagent')
+        expect(ctx.tools.getAll(subject.agent).map(schema => schema.name)).toContain('subagent')
+        expect(await guidance(subject.agent)).toContain('Start independent delegations with `subagent`')
       }
     },
   )

@@ -216,13 +216,9 @@ export function apply(ctx: Context, config: Config = {}): void {
     return { ...decision, messages: [...decision.messages, ...injections] }
   })
 
-  // Register after the tool so reverse teardown removes guidance first. Exact definition
-  // identity prevents a scoped shadow merely named `skill` from inheriting this catalog.
-  //
-  // The comparison is against the definition this plugin registered, not against
-  // a lookup of its own name: `register()` files into the CALLING context's
-  // scope, so a plugin mounted inside an agent preset registers for that agent
-  // alone and an unscoped lookup correctly finds nothing.
+  // Register after the tool so reverse teardown removes guidance first. The listener shares the
+  // tool's registration scope: every Agent under it receives the catalog, including one whose
+  // scope restricts or shadows the tool.
   ctx.on('agent/pre-step', async (
     { agent, signal },
     next,
@@ -230,10 +226,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const decision = await next()
     if (decision.kind === 'reject') return decision
     signal.throwIfAborted()
-    const toolVisible = ctx.tools.get(skillTool.name, agent) === skillTool
-    const snapshot = toolVisible
-      ? await ctx.skills.snapshot({ cwd: await ctx.workingDirectory.ensure(agent, signal), signal, scope: agent })
-      : { skills: [], complete: true }
+    const snapshot = await ctx.skills.snapshot({ cwd: await ctx.workingDirectory.ensure(agent, signal), signal, scope: agent })
     signal.throwIfAborted()
     const skills = snapshot.skills.filter(skill => isModelInvocable(skill) && !excludedSkills.has(skill.name))
     const entries = catalogSourceEntries(skills, catalogDescriptionMaxLength)

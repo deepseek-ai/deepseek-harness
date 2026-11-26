@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-> **已弃用：** 新配置请直接挂载 `@deepseek-ai/dsh-tool-executor-native` 或 `@deepseek-ai/dsh-tool-executor-ptc`。现有配置仍受支持。迁移时，将本选择器条目替换为对应的 executor 条目，并移除 `config.mode`；不要在同一作用域同时加载两者。
+> **已弃用：** 新配置请直接挂载 `@deepseek-ai/dsh-tool-registry-native` 或 `@deepseek-ai/dsh-tool-registry-ptc`。现有配置仍受支持。迁移时，将本选择器条目替换为对应的根注册表条目，并移除 `config.mode`；不要在同一作用域同时加载两者。
 
 ## 概述
 
@@ -27,7 +27,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把这一行加入 agent preset，以固定每个加入该 preset 的 agent 看到其工具的方式。`native` 以函数定义的形式呈现每个可见工具 schema；`ptc` 只呈现 `run_code` 传输、一份生成的 SDK 以及「只有 `run_code` 可被直接调用」这条规则。未作声明的 agent 继承组合中最近的执行器。
+把这一行加入 agent preset，以固定每个加入该 preset 的 agent 看到其工具的方式。`native` 以函数定义的形式呈现每个可见工具 schema；`ptc` 只呈现 `run_code` 传输、一份生成的 SDK 以及「只有 `run_code` 可被直接调用」这条规则。未作声明的 agent 使用组合中挂载的最近根注册表。
 
 ### 把这一行加入 preset
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### PTC 模式需要什么
 
-选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`）报告 `language: 'typescript'`；[`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md)提供已发布的提供方。运行时可用后，PTC 子插件保持选中，并在提示词组装与执行时拒绝不支持的语言，不回落到继承的执行器。在运行时首次可用之前，此兼容选择器会保留继承的执行器。若需要在 preset 激活时拒绝缺少运行时的配置，请直接挂载 `dsh-tool-executor-ptc`。
+选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`）报告 `language: 'typescript'`；[`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md)提供已发布的提供方。运行时可用后，PTC 子插件保持选中，并在提示词组装与执行时拒绝不支持的语言，不回落到继承的根注册表。在运行时首次可用之前，此兼容选择器会让继承的根注册表保持生效。若需要在 preset 激活时拒绝缺少运行时的配置，请直接挂载 `dsh-tool-registry-ptc`。
 
 ### 每个 agent 只声明一次呈现方式
 
@@ -63,17 +63,17 @@ kind: "package-reference"
 
 ### 设计理念
 
-工具注册表搬不进 preset：它的消费方全在宿主平面——agent loop（智能体循环）读它的调度器，API proxy 读它的展示转换器，每个工具插件都往里注册——而一个服务只有在所有消费方一起下沉时才能下沉。preset 能拥有的是这份注册表的呈现方式。`ctx.tools.setExecutor()` 为挂载作用域声明它，而挂载作用域就是 preset 的常驻挂载，因此该声明覆盖每个加入该 preset 的 agent，一个 PTC mode preset 可以与多个 native preset 同进程并存。每个组合一行，而不是每个会话一行。
+工具注册表搬不进 preset：它的消费方全在宿主平面——agent loop（智能体循环）从它捕获每个步骤的工具，API proxy 读它的展示转换器，每个工具插件都往里注册——而一个服务只有在所有消费方一起下沉时才能下沉。preset 能拥有的是这份注册表的呈现方式。`ctx.tools.setRoot()` 为挂载作用域安装一个根注册表，而挂载作用域就是 preset 的常驻挂载，因此该选择覆盖每个加入该 preset 的 agent，一个 PTC mode preset 可以与多个 native preset 同进程并存。每个组合一行，而不是每个会话一行。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`mode` 配置、把 `ctx.tools.setExecutor` 接到挂载作用域的 `apply` |
+| [`src/index.ts`](src/index.ts) | 插件入口：`mode` 配置、在挂载作用域中挂载原生或 PTC 根注册表插件的 `apply` |
 
 ### 行为说明
 
-选中的子插件在所需服务可用时注册执行器。注册后，卸载子插件或其运行时会使选中的执行器不可用，直到替代执行器完成注册；调用不会回退到继承的执行器。
+选中的子插件在所需服务可用时安装其根注册表。安装后，卸载子插件或其运行时会使选中的根注册表不可用，直到安装了替代根注册表；调用不会回退到继承的根注册表。
 
 </details>
 
@@ -84,7 +84,7 @@ kind: "package-reference"
 
 包级约定对大多数消费方已经足够；需要周边领域时再阅读以下页面。
 
-- [tools 包](../tools/README.zh.md)——工具呈现模式与 `setExecutor` API。
+- [tools 包](../tools/README.zh.md)——作用域注册表与根注册表选择 API。
 - [agent-presets 包](../../preset/agent-preset-registry/README.zh.md)——preset 如何组合 agent 及其常驻挂载。
 - [Node ptc-runtime 包](../../ptc-runtime/ptc-runtime-node/README.zh.md)——PTC 模式所需的 TypeScript 运行时。
 - [历史PTC mode 执行器塌缩 note](../../../.agents/notes/archived/bug-fix/2026-08-07-ptc-executor-collapse.md)——通告面与可调用面为何保持一致。
@@ -95,7 +95,7 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-通过在 `dsh-tools` 中选择的工具呈现方式间接影响——这一行只在 `dsh-tools` 拥有的两种投影之间选择，本身不注册任何提示词、schema 或结果。
+通过它挂载的根注册表间接影响——这一行只在原生与 PTC 注册表之间选择，本身不注册任何提示词、schema 或结果。
 
 #### KV Cache 影响
 

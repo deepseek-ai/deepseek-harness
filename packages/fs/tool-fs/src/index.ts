@@ -104,7 +104,7 @@ export function apply(ctx: Context, config: Config): void {
   // the mounted ctx.fs confines (ctx.fs.sandboxMode).
   if (resolved.write || resolved.edit || resolved.applyPatch) {
     const sandbox = new FsSandboxController(ctx)
-    if (resolved.write) applyWriteTool(ctx, sandbox)
+    if (resolved.write) applyWriteTool(ctx, sandbox, resolved.edit)
     if (resolved.edit) applyEditTool(ctx, sandbox)
     if (resolved.applyPatch) applyApplyPatchTool(ctx, sandbox)
   }

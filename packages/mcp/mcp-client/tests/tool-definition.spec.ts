@@ -1,6 +1,6 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
@@ -17,7 +17,7 @@ describe('MCP result callback adaptation', () => {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       let execution: ToolExecution | undefined
       ctx.on('tools/execute', (exec, next) => {
         execution = exec
@@ -55,7 +55,7 @@ describe('MCP result callback adaptation', () => {
         await ctx.plugin(SessionProjectionRegistry)
         await ctx.plugin(SystemPrompt)
         await ctx.plugin(ToolRuntime)
-        await ctx.plugin(NativeToolExecutor)
+        await ctx.plugin(NativeToolRegistry)
         ctx.tools.register(createMcpToolDefinition(ctx, {
           name: 'invalid_result', rawName: 'invalid', description: 'External result fixture.',
           inputSchema: { type: 'object' }, call: async () => invalid,
@@ -84,7 +84,7 @@ describe('MCP result callback adaptation', () => {
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SystemPrompt)
       await ctx.plugin(ToolRuntime)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       const call = vi.fn(async () => raw)
       ctx.tools.register(createMcpToolDefinition(ctx, {
         name: 'native_window', rawName: 'window', description: 'Read the selected window.',

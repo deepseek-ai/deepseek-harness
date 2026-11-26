@@ -2,11 +2,11 @@
  * Exercises scheduler ordering and cancellation with deterministic gated tools.
  * ACP expected outputs own transcript-facing coverage.
  */
-import type { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
+import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, type ToolCallId, StreamChunk  } from '@deepseek-ai/dsh-llm'
@@ -29,29 +29,31 @@ declare module '@deepseek-ai/dsh-llm' {
   }
 }
 
-async function harness(adapter: MockAdapter, maxParallelToolCalls?: number, executorLimit?: number) {
+async function harness(adapter: MockAdapter, maxParallelToolCalls?: number) {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
-  let toolPipeline!: ToolExecutionPipeline
-  await ctx.plugin({
-    inject: ['tools'],
-    apply(owner: Context) {
-      const executor = new NativeToolExecutor.NativeToolExecutor(owner, () => executorLimit ?? 10)
-      toolPipeline = executor['pipeline']
-      owner.tools.setExecutor(executor)
-    },
-  })
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, {
     agents: [],
     ...maxParallelToolCalls === undefined ? {} : { maxParallelToolCalls },
   })
   ctx.llm.registerAdapter(['mock'], adapter)
-  return Object.assign(ctx, { toolPipeline })
+  return ctx
+}
+
+/** The stages of every pipeline `ctx.tools.execute()` creates while a spy replaces them. */
+const pipelineStages = ToolExecutionPipeline.prototype
+// oxlint-disable-next-line typescript/unbound-method -- each replacement calls the original stage with its pipeline as `this`
+const { executionMode, prepare, dispatch, complete } = pipelineStages
+
+/** Restore every replaced pipeline stage when the test ends. */
+function restoreStagesAfterTest(): void {
+  onTestFinished(() => { vi.restoreAllMocks() })
 }
 
 function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
@@ -281,15 +283,15 @@ describe('tool-call scheduler: model-order results despite out-of-order settleme
 
 describe('tool-call scheduler: rolling pool honors maxParallelToolCalls', () => {
   it.each([
-    { executorLimit: 1, loopLimit: 2, expected: 2 },
-    { executorLimit: 3, loopLimit: 1, expected: 1 },
-    { executorLimit: 2, loopLimit: undefined, expected: 10 },
-  ])('uses $expected parallel calls with executor $executorLimit and loop limit $loopLimit', async ({ executorLimit, loopLimit, expected }) => {
+    { loopLimit: 2, expected: 2 },
+    { loopLimit: 1, expected: 1 },
+    { loopLimit: undefined, expected: 10 },
+  ])('uses $expected parallel calls with loop limit $loopLimit', async ({ loopLimit, expected }) => {
     const adapter = new MockAdapter([
       multiCall(Array.from({ length: 12 }, (_, n) => ({ id: `c${n}`, name: 'overlap', args: {} }))),
       textResponse('done'),
     ])
-    const ctx = await harness(adapter, loopLimit, executorLimit)
+    const ctx = await harness(adapter, loopLimit)
     onTestFinished(() => ctx.fiber.dispose())
     let active = 0
     let peak = 0
@@ -387,7 +389,7 @@ describe('tool-call scheduler: rolling pool honors maxParallelToolCalls', () => 
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [], maxParallelToolCalls: 1 })
     ctx.llm.registerAdapter(['mock'], adapter)
@@ -703,26 +705,23 @@ describe('tool-call scheduler: failure quiescence', () => {
         return [{ type: 'text', text: `done-${args.id}` }]
       },
     }))
-    const scheduler = ctx.toolPipeline
-    const executionMode = ctx.toolPipeline.executionMode.bind(ctx.toolPipeline)
-    const prepare = scheduler.prepare.bind(scheduler)
-    const complete = scheduler.complete.bind(scheduler)
+    restoreStagesAfterTest()
     const failure = new Error(`${phase} failed`)
     if (phase === 'execution-mode') {
-      ctx.toolPipeline.executionMode = (exec) => {
+      vi.spyOn(pipelineStages, 'executionMode').mockImplementation(function (this: ToolExecutionPipeline, exec) {
         if (exec.callId === brandString<ToolCallId>('c2')) throw failure
-        return executionMode(exec)
-      }
+        return executionMode.call(this, exec)
+      })
     } else if (phase === 'prepare') {
-      scheduler.prepare = (exec) => {
+      vi.spyOn(pipelineStages, 'prepare').mockImplementation(function (this: ToolExecutionPipeline, exec) {
         if (exec.callId === brandString<ToolCallId>('c2')) throw failure
-        return prepare(exec)
-      }
+        return prepare.call(this, exec)
+      })
     } else {
-      scheduler.complete = (exec, outcome) => {
+      vi.spyOn(pipelineStages, 'complete').mockImplementation(function (this: ToolExecutionPipeline, exec, outcome) {
         if (exec.callId === brandString<ToolCallId>('c2')) throw failure
-        return complete(exec, outcome)
-      }
+        return complete.call(this, exec, outcome)
+      })
     }
     const agent = await ctx.agentLoop.create(brandString<SessionId>(`failure-${phase}`), { provider: 'mock', model: 'mock' })
     const listenerCount = () => ctx.events.dispatch('emit', ['session/event', agent.session, events(agent).at(-1)]).length
@@ -755,9 +754,7 @@ describe('tool-call scheduler: failure quiescence', () => {
     })
     expect(listenerCount()).toBe(idleListenerCount)
 
-    ctx.toolPipeline.executionMode = executionMode
-    scheduler.prepare = prepare
-    scheduler.complete = complete
+    vi.restoreAllMocks()
     const nextTurn = waitForIdle(ctx, agent)
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'continue' }], source: { kind: 'user' } }))
     await nextTurn
@@ -784,7 +781,8 @@ describe('tool-call scheduler: failure quiescence', () => {
     onTestFinished(() => ctx.fiber.dispose())
     const failure = new Error('prepare failed')
     const recoveryFailure = new Error('recovery result rejected')
-    ctx.toolPipeline.prepare = () => { throw failure }
+    restoreStagesAfterTest()
+    vi.spyOn(pipelineStages, 'prepare').mockImplementation(() => { throw failure })
     ctx.on('internal/dispatch', (_mode, name, args) => {
       if (name === 'session/event' && (args[1] as SessionEvent).type === 'tool/result') throw recoveryFailure
     })
@@ -819,16 +817,15 @@ describe('tool-call scheduler: failure quiescence', () => {
       name: 'p', description: 'probe', parameters: {},
       async execute() { return [{ type: 'text', text: 'completed' }] },
     }))
-    const scheduler = ctx.toolPipeline
-    const dispatch = scheduler.dispatch.bind(scheduler)
-    scheduler.dispatch = async (exec) => {
+    restoreStagesAfterTest()
+    vi.spyOn(pipelineStages, 'dispatch').mockImplementation(async function (this: ToolExecutionPipeline, exec) {
       if (exec.agent?.id === brandString<SessionId>('first-agent')) {
         enteredDispatch.resolve(undefined)
         await releaseDispatch.promise
         throw new Error('first agent dispatch failed')
       }
-      return dispatch(exec)
-    }
+      return dispatch.call(this, exec)
+    })
     const first = await ctx.agentLoop.create(brandString<SessionId>('first-agent'), { provider: 'mock', model: 'mock' })
     const { agent: second } = await first.ctx.agents.create({
       sessionId: brandString<SessionId>('second-agent'),
@@ -872,21 +869,19 @@ describe('tool-call scheduler: failure quiescence', () => {
     const ctx = await harness(adapter, 3)
     const gated = gatedParallelTool('p')
     ctx.tools.register(gated.tool)
-    // The registry contains expected failures as results; replace its internal
-    // view only to inject the invariant violation this boundary must contain.
-    const scheduler = ctx.toolPipeline
-    const prepare = scheduler.prepare.bind(scheduler)
-    const dispatch = scheduler.dispatch.bind(scheduler)
+    // The pipeline contains expected failures as results; replace its stages
+    // only to inject the invariant violation this boundary must contain.
+    restoreStagesAfterTest()
     const prepareGate = Promise.withResolvers<undefined>()
     let thirdPrepareEntered = false
-    scheduler.prepare = async (exec) => {
-      const prepared = await prepare(exec)
+    vi.spyOn(pipelineStages, 'prepare').mockImplementation(async function (this: ToolExecutionPipeline, exec) {
+      const prepared = await prepare.call(this, exec)
       if (exec.callId === brandString<ToolCallId>('c3')) {
         thirdPrepareEntered = true
         await prepareGate.promise
       }
       return prepared
-    }
+    })
     const schedulerError = new Error('scheduler exploded')
     const drainedError = new Error('sibling failed while draining')
     let rejectFirst: ((error: Error) => void) | undefined
@@ -896,9 +891,11 @@ describe('tool-call scheduler: failure quiescence', () => {
       for (const id of gated.pending()) gated.release(id)
       await ctx.fiber.dispose()
     })
-    scheduler.dispatch = exec => exec.callId === brandString<ToolCallId>('c1')
-      ? new Promise((_resolve, reject) => { rejectFirst = reject })
-      : dispatch(exec).then(() => { throw drainedError })
+    vi.spyOn(pipelineStages, 'dispatch').mockImplementation(function (this: ToolExecutionPipeline, exec) {
+      return exec.callId === brandString<ToolCallId>('c1')
+        ? new Promise((_resolve, reject) => { rejectFirst = reject })
+        : dispatch.call(this, exec).then(() => { throw drainedError })
+    })
     const agent = await ctx.agentLoop.create(brandString<SessionId>('scheduler-failure'), { provider: 'mock', model: 'mock' })
     let idle = false
     const idlePromise = waitForIdle(ctx, agent).then(() => { idle = true })
@@ -954,7 +951,7 @@ describe('PTC mode native-tool denial through the agent loop', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(PtcToolExecutor)
+    await ctx.plugin(PtcToolRegistry)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- FakePtcRuntime is an internal test helper with an opaque type shape
     await ctx.plugin(FakePtcRuntime as any)
     await ctx.plugin(AgentRegistry)

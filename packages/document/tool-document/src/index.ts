@@ -1,6 +1,6 @@
 /**
  * Model-facing Office tools render document pages, convert documents, and recalculate workbooks through the shared
- * `officeKit` service. Tools are admitted after an Office skill loads; a missing service makes admitted calls fail
+ * `officeKit` service. Tools are added for an Agent after an Office skill loads; a missing service makes their calls fail
  * as `unavailable`. Reads use the filesystem backend's read authority; each call reads
  * one source byte before the service runs, so a cached result never answers a call that cannot read the source.
  * Converted files stay in the Office kit's private output store; the model copies them into the workspace with the
@@ -21,7 +21,8 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { OfficeSourceKey } from '@deepseek-ai/dsh-office-kit/types'
 import { OfficeKitError, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
   type OfficeKitSource, type DocumentRenderer, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
-import { defineTool, ToolContextUnavailableError, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { AgentToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { checkParameterNames, checkRenderArguments, checkConversionArguments, extensionOf, inputFamily, OUTPUT_FORMATS,
   RECALCULATION_FORMATS,
@@ -87,13 +88,12 @@ const IMAGE_SCHEMA = {
 
 const MISSING_FONTS_SCHEMA = { type: 'array', required: true, items: { type: 'string' } } as const
 const RENDERERS = ['libreoffice', 'poppler'] as const satisfies readonly DocumentRenderer[]
+const DOCUMENT_TOOL_NAMES: readonly string[] = ['document_render', 'document_convert', 'document_recalculate']
 /**
- * Tool names whose declaration in a Session's request header keeps the tools active. The `office_*` names are the
- * earlier names of these tools; they let Sessions recorded before the rename activate the tools after resume or fork.
+ * Tool names whose declaration in a Session's request header adds the tools for a resumed or forked Agent. The
+ * `office_*` names are the earlier names of these tools, so Sessions recorded before the rename get the tools too.
  */
-const OFFICE_TOOL_NAMES: readonly string[] = [
-  'document_render', 'document_convert', 'document_recalculate', 'office_render', 'office_convert', 'office_recalculate',
-]
+const DECLARED_TOOL_NAMES: readonly string[] = [...DOCUMENT_TOOL_NAMES, 'office_render', 'office_convert', 'office_recalculate']
 
 const RENDER_PARAMETERS = {
   input: { type: 'string', required: true, description: 'Path to doc, docx, odt, xls, xlsx, ods, ppt, pptx, odp, or pdf; not modified.' },
@@ -151,31 +151,36 @@ function fileOutput<const Operation extends 'convert' | 'recalculate', const For
 }
 
 /**
- * Register Office tools admitted after a successful skill load or an earlier Office declaration.
+ * Register Office tools and add them for each Agent after a successful skill load or an earlier Office declaration.
  * @param ctx - registration scope; disposing it removes the tools.
  * @param config - validated activation skills and render bounds.
  */
 export function apply(ctx: Context, config: Config): void {
   const skills = new Set(config.activationSkills)
-  const marked = new WeakSet<Agent>()
+  const tools = new AgentToolRegistry()
+  const add = (agent: Agent): void => { tools.set(agent, DOCUMENT_TOOL_NAMES) }
   ctx.on('tools/result', (exec, result) => {
     if (exec.agent === undefined || exec.name !== 'skill' || result.isError) return
     const args = exec.arguments
     if (typeof args === 'object' && args !== null && 'name' in args && typeof args.name === 'string' && skills.has(args.name)) {
-      marked.add(exec.agent)
+      add(exec.agent)
     }
   })
   ctx.on('session/event', (session, event) => {
     if (event.type !== 'user/message' || event.data.source.kind !== 'skill-invocation' || !skills.has(event.data.source.name)) return
     const agent = ctx.agents.get(session.id)
-    if (agent?.session === session) marked.add(agent)
+    if (agent?.session === session) add(agent)
   })
-  ctx.on('agent/disposed', ({ agent }) => { marked.delete(agent) })
   // Native request headers retain these declarations across resume and fork. PTC headers contain only run_code;
-  // after losing the in-memory mark, a PTC agent must load an Office skill again.
-  const when = ({ agent }: ToolActivationContext): boolean => marked.has(agent)
-    || agent.session.requestHeader()?.tools?.some(tool => OFFICE_TOOL_NAMES.includes(tool.name)) === true
-  ctx.tools.register(defineTool({
+  // a resumed PTC agent must load an Office skill again. The header is read from the log, where a seeded or
+  // malformed header may carry no schema list, as the user-questions projection also allows.
+  const restore = (agent: Agent): void => {
+    const tools: unknown = agent.session.requestHeader()?.tools
+    if (Array.isArray(tools) && tools.some((tool: unknown) => typeof tool === 'object' && tool !== null
+      && 'name' in tool && typeof tool.name === 'string' && DECLARED_TOOL_NAMES.includes(tool.name))) add(agent)
+  }
+  ctx.on('agent/created', ({ agent }) => { restore(agent) })
+  ctx.effect(() => tools.register(defineTool({
     name: 'document_render',
     description: 'Render document pages, slides, or worksheet areas as images you can view.',
     parameters: RENDER_PARAMETERS,
@@ -203,8 +208,8 @@ export function apply(ctx: Context, config: Config): void {
       return render(ctx, kit, config, agent, exec.signal, args, target, source)
     },
     presentCall: args => ({ card: 'generic', title: `Render ${args.input}`, kind: 'read', locations: [{ path: args.input }] }),
-  }), { when })
-  ctx.tools.register(defineTool({
+  })), 'tool-document.document_render')
+  ctx.effect(() => tools.register(defineTool({
     name: 'document_convert',
     description: 'Convert a document to another format. Return a temporary file to copy to its destination with the shell.',
     parameters: CONVERT_PARAMETERS,
@@ -218,8 +223,8 @@ export function apply(ctx: Context, config: Config): void {
       return convertFile(ctx, kit, agent, exec.signal, 'convert', args, target, source)
     },
     presentCall: args => ({ card: 'generic', title: `Convert ${args.input} to ${args.format}`, kind: 'other', locations: [{ path: args.input }] }),
-  }), { when })
-  ctx.tools.register(defineTool({
+  })), 'tool-document.document_convert')
+  ctx.effect(() => tools.register(defineTool({
     name: 'document_recalculate',
     description: 'Recalculate spreadsheet formulas. Return a temporary workbook to copy to its destination with the shell.',
     parameters: RECALCULATE_PARAMETERS,
@@ -232,7 +237,11 @@ export function apply(ctx: Context, config: Config): void {
       return convertFile(ctx, kit, agent, exec.signal, 'recalculate', args, target, source)
     },
     presentCall: args => ({ card: 'generic', title: `Recalculate ${args.input}`, kind: 'other', locations: [{ path: args.input }] }),
-  }), { when })
+  })), 'tool-document.document_recalculate')
+  // Including after registration lets a name conflict fail this plugin at load.
+  ctx.tools.include(tools)
+  // Agents created before this plugin loaded receive no creation event.
+  for (const agent of ctx.agents.list()) restore(agent)
 }
 
 /**
@@ -241,7 +250,7 @@ export function apply(ctx: Context, config: Config): void {
  */
 async function prepareInput(ctx: Context, exec: ToolExecution, operation: OfficeOperationName, input: string) {
   const { agent, signal } = exec
-  // Conditional registrations execute only through a step tool set, which the calling Agent resolves.
+  // Office tools are added only for Agents, so only an Agent-less direct batch reaches this branch.
   if (agent === undefined) throw new ToolContextUnavailableError(`cannot ${operation} "${input}": Office tools run only in an Agent step`)
   const kit = ctx.get('officeKit')
   if (kit === undefined) {

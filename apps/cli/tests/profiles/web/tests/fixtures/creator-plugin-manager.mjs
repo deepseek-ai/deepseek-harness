@@ -28,7 +28,7 @@ export function apply(ctx, config) {
       handles.push(handle)
       return handle.agent
     }
-    const names = agent => ctx.tools.schemas(agent).map(tool => tool.name)
+    const names = agent => ctx.tools.getAll(agent).map(tool => tool.name)
     try {
       const first = await make(`${phase}-first`)
       const before = names(first)

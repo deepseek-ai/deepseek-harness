@@ -1,5 +1,5 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { tmpdir } from 'node:os'
@@ -54,7 +54,7 @@ async function setup() {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalSubprocessRuntime)
   ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
@@ -71,7 +71,7 @@ async function setupWithJobs() {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(ToolJobs)
@@ -221,7 +221,7 @@ async function setupSandboxed(withApproval = false, toolConfig: Partial<ToolBash
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(ToolJobs)
@@ -323,7 +323,7 @@ describe('bash tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalSubprocessRuntime)
     ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
     await ctx.plugin(LocalBashExecutor, { maxOutputBytes: 100, graceMs: 200 })
@@ -415,7 +415,7 @@ describe('bash tool', () => {
   ] as const)('requests description before command in the %s schema', async (_mode, setupContext) => {
     const ctx = await setupContext()
     try {
-      const schema = ctx.tools.schemas().find(tool => tool.name === 'bash')!
+      const schema = ctx.tools.getAll().find(tool => tool.name === 'bash')!
       expect(Object.keys(schema.parameters.properties as Record<string, unknown>).slice(0, 2))
         .toEqual(['description', 'command'])
       expect(schema.parameters).toHaveProperty('required', ['description', 'command'])
@@ -427,7 +427,7 @@ describe('bash tool', () => {
 
   it('registers the bash schema with run_in_background exposed while a job registry is composed', async () => {
     const ctx = await setupWithJobs()
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     expect(schemas.map(schema => schema.name).sort()).toEqual(['bash', 'job_kill', 'job_list', 'job_output'])
     const bashSchema = schemas.find(schema => schema.name === 'bash')!
     expect(bashSchema.parameters).toMatchObject({
@@ -442,7 +442,7 @@ describe('bash tool', () => {
 
   it('registers a foreground-only schema without a job registry', async () => {
     const ctx = await setup()
-    const schemas = ctx.tools.schemas()
+    const schemas = ctx.tools.getAll()
     expect(schemas.map(schema => schema.name)).toEqual(['bash'])
     const bashSchema = schemas[0]!
     expect(Object.keys(bashSchema.parameters.properties as Record<string, unknown>))
@@ -482,15 +482,15 @@ describe('bash tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, {})
     await ctx.plugin(BashEnvPlugin)
     const fiber = await ctx.plugin(ToolBash)
-    expect(ctx.tools.schemas()).toHaveLength(1)
+    expect(ctx.tools.getAll()).toHaveLength(1)
     expect((await ctx.systemPrompt.assemble()).sections.filter(s => !s.retire).map(s => s.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'tool:bash', 'deployment:persona-suffix'])
     await fiber.dispose()
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
     // Only the system-prompt plugin's own built-in sections remain.
     expect((await ctx.systemPrompt.assemble()).sections.filter(s => !s.retire).map(s => s.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'deployment:persona-suffix'])
   })
@@ -501,15 +501,15 @@ describe('bash tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     // inject: ['tools', 'bash'] keeps the plugin pending until bash exists.
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(ToolBash)
-    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect(ctx.tools.getAll()).toHaveLength(0)
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, {})
     await new Promise(resolve => setTimeout(resolve, 0))
-    expect(ctx.tools.schemas()).toHaveLength(1)
+    expect(ctx.tools.getAll()).toHaveLength(1)
   })
 
   it('applies the built-in background default when apply() receives a bare config', async () => {
@@ -520,7 +520,7 @@ describe('bash tool', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(LocalSubprocessRuntime)
@@ -528,7 +528,7 @@ describe('bash tool', () => {
     ToolBash.apply(ctx, {})
     // The job-backed variant registers from the registry fork, one turn later.
     await new Promise(resolve => setTimeout(resolve, 0))
-    const schema = ctx.tools.schemas()[0]!
+    const schema = ctx.tools.getAll()[0]!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
       .toContain('run_in_background')
   })
@@ -541,7 +541,7 @@ describe('the background surface follows the job registry', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalSubprocessRuntime)
     ;(ctx.subprocess as LocalSubprocessRuntime).internals = { spillDir }
@@ -657,7 +657,7 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolJobs)
@@ -689,7 +689,7 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(CountingStartExecutor)
@@ -709,13 +709,13 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(BashEnvPlugin)
     await ctx.plugin(LocalBashExecutor, {})
     await ctx.plugin(ToolBash, { enableRunInBackground: false })
 
-    const schema = ctx.tools.schemas().find(s => s.name === 'bash')!
+    const schema = ctx.tools.getAll().find(s => s.name === 'bash')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
       .toEqual(['description', 'command', 'timeoutMs', 'workdir'])
     expect(schema.description).not.toContain('run_in_background')
@@ -746,7 +746,7 @@ describe('sandbox escalation through the generic task producer', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(RecordingSandboxExecutor)
     await ctx.plugin(BashEnvPlugin)
     await expect(ctx.plugin(ToolBash)).rejects.toThrow('tool-bash: the mounted bash executor confines but ctx.sandboxPolicy is missing')
@@ -754,7 +754,7 @@ describe('sandbox escalation through the generic task producer', () => {
 
   it('advertises the sandbox fields and validates their pairing', async () => {
     const { ctx } = await setupSandboxed()
-    const schema = ctx.tools.schemas().find(item => item.name === 'bash')!
+    const schema = ctx.tools.getAll().find(item => item.name === 'bash')!
     const properties = schema.parameters.properties as Record<string, { enum?: string[]; description?: string }>
     expect(properties['sandbox_permissions']?.enum).toEqual(['workspace-write', 'danger-full-access'])
     expect(properties['sandbox_permissions']?.description).toContain('asks the user for approval')
@@ -1384,7 +1384,7 @@ describe('the model-facing bash tool builds its request from named args only (no
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
-    await ctx.plugin(NativeToolExecutor)
+    await ctx.plugin(NativeToolRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(LocalJobRegistry)
     await ctx.plugin(ToolJobs)

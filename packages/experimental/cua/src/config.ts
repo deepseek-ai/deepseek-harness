@@ -1,14 +1,14 @@
 /** Schemastery fields for platform-specific native CUA configuration. */
 import Schema from '@deepseek-ai/schemastery'
 import NodePtcRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
-import { RunCodeConfig } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
+import { PtcToolRegistry, type Config as PtcToolRegistryConfig } from '@deepseek-ai/dsh-tool-registry-ptc'
 
 /** Resource bounds for the dedicated CUA program runtime and its nested tool calls. */
 export interface CuaStandaloneRunCodeConfig {
   /** Node limits and launch settings; setting executionMode or scriptPersistence is rejected. */
   runtime: Omit<NodeRuntimeConfig, 'executionMode' | 'scriptPersistence'>
   /** Timeout-scaled tool-call allowance and maximum concurrent subcalls. */
-  executor: RunCodeConfig
+  executor: PtcToolRegistryConfig
 }
 
 const runtimeFields: Record<string, Schema> = {
@@ -17,10 +17,10 @@ const runtimeFields: Record<string, Schema> = {
   scriptPersistence: Schema.never().hidden(),
 }
 
-/** Validate CUA program limits with the shared Node and executor defaults. */
+/** Validate CUA program limits with the shared Node runtime and PTC registry defaults. */
 export const CuaStandaloneRunCodeConfig: Schema<Partial<CuaStandaloneRunCodeConfig>, CuaStandaloneRunCodeConfig> = Schema.object({
   runtime: Schema.object(runtimeFields).default({}),
-  executor: RunCodeConfig.default({}),
+  executor: PtcToolRegistry.Config.default({}),
 })
 
 /** Fixed request-image target for screenshots when no model route selects one. */

@@ -1,5 +1,5 @@
 import { executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
+import * as PtcToolRegistry from '@deepseek-ai/dsh-tool-registry-ptc'
 import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -122,7 +122,7 @@ describe('bash tool through the agent loop', () => {
         }
       }
       await ctx.plugin(BashBindingRuntime)
-      await agent.ctx.plugin(PtcToolExecutor)
+      await agent.ctx.plugin(PtcToolRegistry)
       const result = await executeModelToolFixture(ctx, {
         callId: brandString<ToolCallId>('nested-shell-root'), agent, signal: new AbortController().signal, name: 'run_code',
         arguments: { code: 'return await tools.bash({ command: "pwd", description: "Print launch directory" })', description: 'Inspect current directory' },

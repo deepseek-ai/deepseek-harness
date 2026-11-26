@@ -31,7 +31,7 @@ describe('recorded code programs', () => {
     expect(codeProgram({ ...CELL, ...(schemaDetail === undefined ? {} : { schemaDetail }) })?.language).toBeUndefined()
   })
 
-  // Historical run_code schemas from tool-executor-ptc use this literal prefix.
+  // Historical run_code schemas from tool-registry-ptc use this literal prefix.
   it.each([
     ['Execute a program in `typescript` against the available tools.', 'typescript'],
     ['Execute a program in `python` against the available tools.', 'python'],

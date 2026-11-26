@@ -1,0 +1,67 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/core/tool-registry-ptc/README.md
+/:
+  en: 93b346254eff025a
+  zh: 69aa6364ca2ffa7d
+/deepseek-ai-dsh-tool-registry-ptc:
+  en: 4658f251502ba754
+  zh: b2732c26a314a984
+/deepseek-ai-dsh-tool-registry-ptc/summary:
+  en: e9b9f9044df9dd98
+  zh: 79d54cba394bbb67
+/deepseek-ai-dsh-tool-registry-ptc/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-registry-ptc/use-this-package:
+  en: 058670f8e63560ce
+  zh: 1f8f50959ae8afd9
+/deepseek-ai-dsh-tool-registry-ptc/understand-the-implementation:
+  en: a15df4189b1f7225
+  zh: 90e50cd64c5f15c7
+/deepseek-ai-dsh-tool-registry-ptc/understand-the-implementation/ptc-mode:
+  en: ada6e6c1983eaefb
+  zh: 806dd8d156a388e8
+/deepseek-ai-dsh-tool-registry-ptc/further-exploration:
+  en: 4e6282bc80b35d6c
+  zh: f6bda6aa2c884b14
+/deepseek-ai-dsh-tool-registry-ptc/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/ptc-mode-schema-and-system-prompt:
+  en: eaefd7303f22977d
+  zh: 9c425f9501128224
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees:
+  en: 2ec19e07636c8662
+  zh: c55552fe56b75ca8
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees/typescript-ptc-mode-sdk-instructions-with-bash:
+  en: 3a8df15e4ae32f9e
+  zh: fc4a800ba363e835
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees/tool-call-allowance-exhausted:
+  en: 079e063e47dff7ed
+  zh: 271ee8bb3441eb2e
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/ptc-mode-schema-and-system-prompt/token-effect:
+  en: 0ae2c687fcf8f300
+  zh: 8a1c5a88a1ca9bbe
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/ptc-mode-schema-and-system-prompt/kv-cache-effect:
+  en: 9afb9ba68eb2c600
+  zh: 447b17b983a58774
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/included-program-tools:
+  en: d617b89ef75d0c89
+  zh: 84ddb49f15ad5536
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/included-program-tools/what-the-model-sees:
+  en: fa2832b7cb10076e
+  zh: 749b062623a14f36
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/included-program-tools/token-effect:
+  en: 753b5a832a1f7e28
+  zh: 91f77ec40d6adc94
+/deepseek-ai-dsh-tool-registry-ptc/model-experience/included-program-tools/kv-cache-effect:
+  en: f4703836365dc3d4
+  zh: a09ff48a6550fd69
+/deepseek-ai-dsh-tool-registry-ptc/known-limitations-and-deferred-work:
+  en: 2ecfbe831a1c6655
+  zh: c1cd7030cd6b9cc2
+/deepseek-ai-dsh-tool-registry-ptc/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

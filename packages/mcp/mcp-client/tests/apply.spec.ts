@@ -3,7 +3,7 @@
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import assert from 'node:assert/strict'
 import { describe, expect, it, vi, beforeEach, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -82,7 +82,7 @@ async function mountRegistry(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   return ctx
 }
 
@@ -265,7 +265,7 @@ describe('apply (plugin lifecycle)', () => {
       await activation
       expect(mockClose).toHaveBeenCalledTimes(1)
       expect(mockListTools).not.toHaveBeenCalled()
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       connecting.resolve()
       await ctx.fiber.dispose()
@@ -287,7 +287,7 @@ describe('apply (plugin lifecycle)', () => {
     await first.plugin(SessionProjectionRegistry)
     await first.plugin(SystemPrompt)
     await first.plugin(ToolRuntime)
-    await first.plugin(NativeToolExecutor)
+    await first.plugin(NativeToolRegistry)
     await apply(first, stdioConfig)
 
     await first.fiber.dispose()
@@ -299,7 +299,7 @@ describe('apply (plugin lifecycle)', () => {
     await second.plugin(SessionProjectionRegistry)
     await second.plugin(SystemPrompt)
     await second.plugin(ToolRuntime)
-    await second.plugin(NativeToolExecutor)
+    await second.plugin(NativeToolRegistry)
     await expect(apply(second, stdioConfig)).resolves.toBeUndefined()
     await second.fiber.dispose()
   })
@@ -497,7 +497,7 @@ describe('server instruction limits', () => {
       assert(failure.cause instanceof Error)
       expect(failure.cause.message).toContain('server instructions exceed maxInstructionBytes')
       expect(failure.cause).toMatchObject({ name: 'McpLocalError', code: 'MCP_INSTRUCTIONS_TOO_LARGE' })
-      expect(ctx.tools.schemas()).toEqual([])
+      expect(ctx.tools.getAll()).toEqual([])
     } finally {
       spy.mockRestore()
       await ctx.fiber.dispose()

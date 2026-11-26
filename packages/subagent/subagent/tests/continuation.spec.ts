@@ -4522,7 +4522,7 @@ describe('continuable public API', () => {
       expect(subagents[absent]).toBeUndefined()
     }
     // No steering tool and no report tool are registered by this seam.
-    const names = ctx.tools.schemas().map(schema => schema.name)
+    const names = ctx.tools.getAll().map(schema => schema.name)
     expect(names).not.toContain('report')
     expect(names).not.toContain('steer_subagent')
   })

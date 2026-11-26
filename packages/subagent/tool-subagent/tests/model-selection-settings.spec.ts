@@ -28,12 +28,12 @@ const subagentConfigs = new WeakMap<Context, Awaited<ReturnType<typeof liveConfi
 
 /** Read whether one Agent's delegation definition contains route fields. */
 function selectable(ctx: Context, agent: Awaited<ReturnType<Context['agents']['create']>>['agent']): boolean {
-  const schema = ctx.tools.schemas(agent).find(candidate => candidate.name === 'subagent')
+  const schema = ctx.tools.getAll(agent).find(candidate => candidate.name === 'subagent')
   const properties = (schema?.parameters as { properties?: Record<string, unknown> } | undefined)?.properties
   return properties?.['provider'] !== undefined
     && properties['model'] !== undefined
     && properties['reasoning_effort'] !== undefined
-    && ctx.tools.schemas(agent).some(candidate => candidate.name === 'list_subagent_models')
+    && ctx.tools.getAll(agent).some(candidate => candidate.name === 'list_subagent_models')
 }
 
 /** Mount the real settings, Agent, provider, and optional preset tool services. */

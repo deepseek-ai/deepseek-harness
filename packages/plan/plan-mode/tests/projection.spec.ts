@@ -1,6 +1,6 @@
 /** Plan projection behavior. */
 
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -27,7 +27,7 @@ async function harness(withPlanMode: boolean): Promise<Bench> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(UserQuestionService)
   await ctx.plugin(AgentRegistry)
   if (withPlanMode) await ctx.plugin(PlanModeController, { section: 'plan policy' })

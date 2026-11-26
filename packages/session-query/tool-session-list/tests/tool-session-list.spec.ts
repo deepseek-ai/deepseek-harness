@@ -20,6 +20,7 @@ import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import { NativeToolRegistry } from '@deepseek-ai/dsh-tools/pipeline'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import WorkspaceRegistry, { WorkspaceId, workspaceDomainSpec } from '@deepseek-ai/dsh-workspace'
 import type { WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
@@ -114,6 +115,7 @@ async function mount(options: {
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
+  ctx.tools.setRoot(new NativeToolRegistry())
   await ctx.plugin(Storage)
   await ctx.plugin(StorageJson, { root: await directory() })
   await ctx.plugin(StorageDomain, { backend: 'json' })

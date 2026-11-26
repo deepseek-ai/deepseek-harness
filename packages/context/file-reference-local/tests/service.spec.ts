@@ -1,4 +1,4 @@
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,7 +31,7 @@ async function harness(): Promise<Context> {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRegistry)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalFileSystem)
   await ctx.plugin(WorkingDirectory)
@@ -79,7 +79,7 @@ describe('LocalFileReferenceService', () => {
       expect(ctx.agents.get(agent.id)).toBe(agent)
       await ctx.plugin(SystemPrompt, { personaPrefix: '' })
       await ctx.plugin(ToolRegistry)
-      await ctx.plugin(NativeToolExecutor)
+      await ctx.plugin(NativeToolRegistry)
       ctx.tools.register(defineContentToolFixture({
         name: 'read', description: 'read a file', parameters: {}, execute: () => Promise.resolve([]),
       }))
@@ -89,7 +89,7 @@ describe('LocalFileReferenceService', () => {
     }
   })
 
-  it('serves the addressed workspace and installs read-tool guidance for existing agents', async () => {
+  it('serves the addressed workspace and installs file-reference guidance for existing agents', async () => {
     const ctx = await harness()
     const { agent } = await stubAgent(ctx)
     const fiber = ctx.plugin(LocalFileReferenceService, {
@@ -100,14 +100,8 @@ describe('LocalFileReferenceService', () => {
     await fiber
     await expect(ctx.fileReferences.list(agent, 'README', new AbortController().signal))
       .resolves.toEqual([{ path: 'README.md', kind: 'file' }])
-    expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain(FILE_REFERENCE_PROMPT)
-
-    ctx.tools.register(defineContentToolFixture({
-      name: 'read',
-      description: 'read a file',
-      parameters: {},
-      execute: () => Promise.resolve([]),
-    }))
+    // The guidance mentions the read tool whether or not a read tool is registered.
+    expect(ctx.tools.get('read')).toBeUndefined()
     expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain(FILE_REFERENCE_PROMPT)
     await fiber.dispose()
     expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain(FILE_REFERENCE_PROMPT)

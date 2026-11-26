@@ -1,7 +1,7 @@
 /** The read-only market listing tool over the same service the Discover page uses. */
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import { Context, Service } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { ToolArgsError } from '@deepseek-ai/dsh-tools'
@@ -37,7 +37,7 @@ async function fixture(indexes: readonly string[] = [URL_A]) {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   const fiber = await ctx.plugin(tool)
   const call = async (args: unknown, signal = new AbortController().signal) => {
     const result = await executeToolFixture(ctx, { name: 'plugin_market', arguments: args, callId: brandString<ToolCallId>('market-call'), signal })
@@ -225,7 +225,7 @@ it('registers the tool only while the pluginMarket service is mounted', async ()
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(tool)
   expect(ctx.tools.get('plugin_market')).toBeUndefined()
   const market = await ctx.plugin(PluginMarket, { indexes: [], detailCacheDir: UNUSED_CACHE })

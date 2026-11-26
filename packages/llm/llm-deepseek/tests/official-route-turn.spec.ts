@@ -8,7 +8,7 @@ import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as NativeToolRegistry from '@deepseek-ai/dsh-tool-registry-native'
 import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import DeepSeekAuth from '@deepseek-ai/dsh-deepseek-auth'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -28,7 +28,7 @@ it('records the prompt and fails the request when the official endpoint has a ma
   for (const plugin of [LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, AgentRegistry]) {
     await ctx.plugin(plugin)
   }
-  await ctx.plugin(NativeToolExecutor)
+  await ctx.plugin(NativeToolRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(DeepSeekAuth)
   await ctx.plugin(DeepSeek, {})

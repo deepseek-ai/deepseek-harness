@@ -25,7 +25,7 @@ Execute model-written TypeScript with host-provided async functions. The default
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this provider in a composition that supplies `fs`, `subprocess`, `sandbox` and `sandboxPolicy`. `dsh-tool-executor-ptc` supplies the calling Session's directory and standing policy; direct runtime consumers resolve those options before execution.
+Mount this provider in a composition that supplies `fs`, `subprocess`, `sandbox` and `sandboxPolicy`. `dsh-tool-registry-ptc` supplies the calling Session's directory and standing policy; direct runtime consumers resolve those options before execution.
 
 Programs display text, objects, and `Image` values through top-level `inspect(...values)`. One call can mix multiple texts and images, including images nested in arrays and objects. `Image.attachmentId` matches the attachment ID in the model's image description. `Image.path` names a stored attachment file readable in the execution environment; `width` and `height` describe that file’s pixels. Image descriptors share the `maxOutputBytes` budget with text.
 
@@ -128,7 +128,7 @@ Service consumers pass an object as `stateOwner` to reuse its environment and aw
 
 For calls carrying a Session policy, a mode change cancels admission even while waiting for cleanup or process startup. Restoring the previous mode does not revive a canceled call.
 
-The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.md). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The provider owns execution syntax, output syntax and state-retention guidance in `executionInstructions`. The tool consumer appends those mode-specific rules to its model-visible schema without inferring persistence from `programFormat`.
+The PTC consumer exposes per-call timeout and approved sandbox choices as described in [dsh-tool-registry-ptc](../../core/tool-registry-ptc/README.md). The runtime's readonly `timeout` descriptor reports its effective default and maximum to that consumer. The provider owns execution syntax, output syntax and state-retention guidance in `executionInstructions`. The tool consumer appends those mode-specific rules to its model-visible schema without inferring persistence from `programFormat`.
 
 Omitting `timeoutMs` uses the configured elapsed default; numeric requests are validated and capped. Service callers can explicitly pass `timeoutMs: null` to omit the elapsed timer, as the workflow adapter does; `run_code` continues to accept only positive numeric overrides. An enabled deadline covers runtime setup and execution, including time awaiting nested tools or approval. It is not a CPU meter. Timeout results retain captured output and report `execution timed out before code started` until the program is submitted to the ready process, or `execution timed out during execution` afterward. Timeout or cancellation during retained execution requests cooperative revocation. Captured output produced after the stop request is discarded, including output from `catch` and `finally` handlers. Acknowledgment preserves the VM and variables, including earlier mutations. If the execution thread cannot acknowledge within `stopGraceMs`, or the acknowledgment fails, the host terminates the managed process range and waits for cleanup. The result remains `timeout` or `abort` and reports whether variables were preserved or cleared; timeout messages also report the elapsed budget. After confirmed termination, the next call creates an empty environment. Cleanup failure returns `worker-exit` and blocks reuse until host release succeeds. Startup timeouts, temporary execution stops and successful per-call completion terminate the managed process range immediately. The timer stops when an outcome is selected, before cleanup, so the returned call can take longer than its execution deadline while cleanup settles.
 
@@ -231,7 +231,7 @@ Read the service contract before using the provider directly; the decisions expl
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through `dsh-tool-executor-ptc` and `dsh-workflow-ptc`, which present program outcomes through their own tool results. Intermediate binding traffic stays outside model history; the outer result follows the ordinary tool spill policy.
+Indirectly, through `dsh-tool-registry-ptc` and `dsh-workflow-ptc`, which present program outcomes through their own tool results. Intermediate binding traffic stays outside model history; the outer result follows the ordinary tool spill policy.
 
 #### KV Cache effect
 

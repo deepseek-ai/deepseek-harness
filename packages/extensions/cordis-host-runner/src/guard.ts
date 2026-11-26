@@ -16,7 +16,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Plugin } from '@deepseek-ai/cordis'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
-import { assertSupportedJsonSchema, defineTool } from '@deepseek-ai/dsh-tools'
+import { assertSupportedJsonSchema, defineTool, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import { toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-error'
@@ -601,11 +601,15 @@ function pluginToolFailure(error: unknown): PluginToolError {
  * {@link PluginToolError} `PLUGIN_TOOL_INVALID_RESULT` instead of poisoning the session log, and a
  * value thrown by `execute` fails it with `PLUGIN_TOOL_FAILED` unless it is a `HarnessError` or
  * the caller's cancellation.
- * @param options - the standard `defineTool` options; `parameters` may be the ParameterSchemaSpec DSL or a JSON-Schema-style wrapper.
+ * @param options - the standard `defineTool` options without `guidance`; `parameters` may be the
+ *   ParameterSchemaSpec DSL or a JSON-Schema-style wrapper.
  * @returns the marker-tagged definition `harness.registerTool` (and the guarded `ctx.tools.register`) accepts.
  */
 export function sandboxDefineTool(options: unknown): ToolDefinition {
   if (!isPlainRecord(options)) throw new Error('harness.defineTool options must be an object')
+  if (options.guidance !== undefined) {
+    throw new Error('harness.defineTool does not accept guidance; describe the tool in its description and parameter descriptions')
+  }
   const normalized = normalizeParameterSchemaSpec(options.parameters)
   if (!isPlainRecord(options.output)) {
     throw new Error('harness.defineTool output must declare { schema, render, presentationMeta? }')
@@ -718,8 +722,11 @@ function sandboxTools(ctx: Context): Record<string, unknown> {
   // Resolve reads and writes through the package's own scope.
   return {
     register: (tool: unknown): (() => void) => sandboxRegisterTool(ctx, tool),
-    schemas: () => ctx.tools.schemas(scopeOf(ctx)),
-    get: (name: string) => ctx.tools.schemas(scopeOf(ctx)).find(schema => schema.name === name),
+    schemas: () => ctx.tools.getAll(scopeOf(ctx)).map(tool => projectToolSchema(tool, true)),
+    get: (name: string) => {
+      const tool = ctx.tools.get(name, scopeOf(ctx))
+      return tool === undefined ? undefined : projectToolSchema(tool, true)
+    },
   }
 }
 

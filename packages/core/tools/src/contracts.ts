@@ -1,13 +1,14 @@
-/** Tool definitions and invocation data shared by registries and executors. @module */
+/** Tool definitions and invocation data shared by tool registries. @module */
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { TOOL_CONTEXT_UNAVAILABLE } from './error-codes.ts'
 import type { ToolCallId, ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
-import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
-import type { ScopeKey } from '@deepseek-ai/dsh-scope'
+import type { PromptSectionOrderName } from '@deepseek-ai/dsh-system-prompt'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { JsonSchemaNode } from './json-schema.ts'
 import type { ToolCallView, ToolResultView } from './presentation.ts'
+import type { ToolStep } from './step.ts'
 
 /** Reserved model-facing program transport name. */
 export const RUN_CODE_NAME = 'run_code'
@@ -21,6 +22,34 @@ export interface ToolOutputDefinition {
   render(args: unknown, value: JsonValue): ContentBlock[]
   /** Pure replayable presentation projection for native and nested calls. */
   presentationMeta?(args: unknown, value: JsonValue): JsonValue
+}
+
+/**
+ * Literal system prompt section that `ctx.tools.register()` registers with a
+ * tool and renders only while the viewing scope's registrations resolve the
+ * tool's definition. Under the shipped Native and PTC roots that is while the
+ * scope can call the tool directly or in programs, so a restriction or a
+ * nearer same-name definition hides it. It keeps the prompt text that existing
+ * tools had; adding guidance is discouraged, and a new tool puts what the
+ * model needs into its description and parameter descriptions
+ * ([rationale](../../../../.agents/notes/implemented/architecture/2026-11-19-composable-tool-registries.md)).
+ */
+export interface ToolGuidance {
+  /**
+   * Section name, `tool:<name>` by default. Tools naming the same section
+   * share one section and must declare the same guidance; otherwise the
+   * latest registration in the nearest registering scope decides it.
+   */
+  readonly section?: string
+  /** Named section placement. */
+  readonly order: PromptSectionOrderName
+  /**
+   * Section text, or a provider called with the names of the section's tools
+   * whose definitions the viewing scope's registrations resolve, in name order.
+   */
+  readonly text: string | ((available: readonly string[]) => string)
+  /** Notice for Sessions that saw the section once no registration of it remains. */
+  readonly retirement?: string
 }
 
 /** A registered tool: its schema plus the execution function. */
@@ -63,11 +92,18 @@ export interface ToolDefinition extends ToolSchema {
   /**
    * Cooperative tool-call timeout budget in milliseconds. Omit for no deadline.
    * Enforced by `@deepseek-ai/dsh-tool-call-timeout-policy` (a `tools/execute` wrapper); it
-   * is NEVER sent to the model — `schemas()` whitelists only name/description/
+   * is NEVER sent to the model — `projectToolSchema()` keeps only name/description/
    * parameters. Declaring it asserts this tool forwards `exec.signal` to a
    * cooperative implementation that can reach quiescence when the signal aborts.
    */
   timeoutMs?: number
+  /**
+   * Existing system prompt guidance that `ctx.tools.register()` shows only
+   * while the viewing scope's registrations resolve this definition; not for
+   * new tools, which describe themselves in their schema. Registries other
+   * than `ctx.tools` ignore it.
+   */
+  readonly guidance?: ToolGuidance
   /**
    * Pure synchronous classifier for overlap with sibling tool calls. Only
    * `true` opts in; omission, exceptions, non-`true` returns, and invalid
@@ -102,50 +138,17 @@ export interface ToolDefinition extends ToolSchema {
   presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined
 }
 
-/** Inputs for a tool's step-time activation condition. */
-export interface ToolActivationContext {
-  /** Agent preparing the step. */
-  readonly agent: Agent
-  /** Provider, model, and optional reasoning effort captured for the step. */
-  readonly modelSelection: Readonly<ModelSelection>
-  /** Cancellation of step preparation; asynchronous conditions must observe it. */
-  readonly signal: AbortSignal
-}
-
-/** Lifecycle-owned conditions for a registered tool. */
-export interface ToolRegistrationOptions {
+/**
+ * A tool name resolves to more than one candidate in the scope that decides it,
+ * or a registry inclusion reaches the registry that is being queried.
+ */
+export class ToolCompositionError extends HarnessError {
   /**
-   * Decide whether the step's requests may call the tool. Omission enables
-   * it. False excludes it from both declarations and dispatch; rejection fails
-   * step preparation. Conditions must not mutate registrations or start tool work.
-   * @param context - preparing agent, captured model selection, and cancellation signal.
-   * @returns whether the tool participates in this step.
+   * @param message - names the ambiguous tool or the inclusion cycle.
    */
-  readonly when?: (context: ToolActivationContext) => boolean | Promise<boolean>
-}
-
-/** One step's admitted registrations, also used by nested PTC calls. */
-export interface ResolvedToolSet {
-  /** Close admission after the step's tool batch settles. */
-  dispose(): void
-  /**
-   * Read admitted registrations that remain visible in their original scope.
-   * @param scope - exact requesting agent; another scope is never admitted.
-   * @returns original definitions excluding removed or restricted registrations.
-   */
-  view(scope: ScopeKey | undefined): ReadonlyMap<string, ToolDefinition>
-}
-
-/** Failure to determine a tool's step-time availability. */
-export class ToolActivationError extends HarnessError {
-  /**
-   * Preserve a condition failure without treating it as normal unavailability.
-   * @param name - tool whose condition rejected.
-   * @param cause - underlying condition failure.
-   */
-  constructor(name: string, cause: unknown) {
-    super(`cannot resolve availability of tool "${name}"`, 'TOOL_ACTIVATION_FAILED', { cause })
-    this.name = 'ToolActivationError'
+  constructor(message: string) {
+    super(message, 'INVALID_TOOL_COMPOSITION')
+    this.name = 'ToolCompositionError'
   }
 }
 
@@ -186,15 +189,18 @@ export interface ToolExecutionInput {
   readonly arguments: unknown
   /** The agent on whose behalf the call runs (set by the agent loop). */
   readonly agent?: Agent
-  /** Step admission shared by Native and PTC dispatch. Conditional tools require it. */
-  readonly toolSet?: ResolvedToolSet
   /**
-   * Opaque token of the enclosing transport execution, when one exists. PTC
-   * mode sets this on SDK sub-dispatches so commit-style observers can wait for
-   * the outer `run_code` outcome without receiving its live mutable execution.
-   * The token also marks the call as a transport sub-dispatch rather than a
-   * model-direct call: with the PTC executor selected, only calls with a parent may
-   * execute a native tool name — a model-direct call (no parent) is denied as
+   * Model step whose declarations admit this call and its nested program calls.
+   * A call outside a model step omits it and resolves the registry's current entries.
+   */
+  readonly toolStep?: ToolStep
+  /**
+   * Opaque token of the enclosing program execution, when one exists. A PTC
+   * registry sets this on program calls so commit-style observers can wait for
+   * the outer program outcome without receiving its live mutable execution.
+   * The token also marks the call as a program call rather than a model-direct
+   * call: `ctx.tools.execute()` runs only model-direct calls, and one naming a
+   * tool that the selected root offers only inside programs fails as
    * `UNKNOWN_TOOL` before the policy pipeline.
    */
   readonly parent?: ToolExecutionToken
@@ -222,6 +228,14 @@ export interface ToolExecution extends ToolExecutionInput {
   readonly rootCallId: ToolCallId
   /** Executor-assigned identity shared with nested calls only as their opaque `parent` token. */
   readonly token: ToolExecutionToken
+  /**
+   * The definition the registry resolved for this call, captured before policy
+   * runs. Absent when no visible definition has the name or when the call's
+   * model step declared a different definition; that call fails as
+   * `UNKNOWN_TOOL`. Dispatch runs exactly this definition: when the registry
+   * no longer offers it as dispatch starts, the call fails as `UNKNOWN_TOOL`.
+   */
+  readonly definition?: ToolDefinition
 }
 
 /**
@@ -284,7 +298,7 @@ export interface ToolFailure {
 }
 
 /**
- * Thrown (internally) when the model requests a tool that isn't registered.
+ * Thrown (internally) when a call names no definition its caller may execute.
  * Extends {@link HarnessError} (`code: 'UNKNOWN_TOOL'`) so an unknown-tool
  * failure is as routable as a tool-thrown one — retry/sandbox/replay code can
  * distinguish it from a tool body's own error.
@@ -292,15 +306,16 @@ export interface ToolFailure {
 export class ToolNotFoundError extends HarnessError {
   /**
    * @param toolName - the name the caller asked for.
-   * @param reachableFrom - how the model reaches this tool instead, when the
-   *   name IS visible and only the presentation denies calling it directly.
-   *   Omitted for a name that is registered nowhere.
+   * @param callable - the entries the caller can call directly, which the message
+   *   lists; given when the name is a tool the caller can reach only from those
+   *   entries, such as a program binding, and omitted otherwise. An empty list
+   *   adds nothing to the message.
    */
-  constructor(toolName: string, reachableFrom?: string) {
+  constructor(toolName: string, callable: readonly string[] = []) {
     super(
-      reachableFrom === undefined
+      callable.length === 0
         ? `unknown tool "${toolName}"`
-        : `unknown tool "${toolName}": ${reachableFrom}`,
+        : `unknown tool "${toolName}"; tools you can call directly: ${callable.join(', ')}`,
       'UNKNOWN_TOOL',
     )
     this.name = 'ToolNotFoundError'
@@ -389,13 +404,14 @@ export type PostToolDecision =
   | { kind: 'block'; feedback: ContentBlock[]; info?: ToolErrorInfo; additionalContexts?: UserMessage[] }
 
 /**
- * Per-scope filter over global tools. Restrictions intersect and do not affect
- * scoped registrations or the reserved PTC mode transport.
+ * Per-scope filter over inherited tools: global and ancestor registrations,
+ * including entries an ancestor includes from another registry. Restrictions
+ * intersect and do not affect the restricting scope's own contributions.
  */
 export interface ToolRestriction {
-  /** Global tool names that stay visible; everything else is removed. */
+  /** Inherited tool names that stay visible; every other inherited tool is removed. */
   readonly allow?: readonly string[]
-  /** Global tool names removed from visibility. */
+  /** Inherited tool names removed from visibility; a name nothing offers is accepted. */
   readonly deny?: readonly string[]
 }
 
