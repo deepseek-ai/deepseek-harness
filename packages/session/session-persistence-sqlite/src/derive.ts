@@ -87,6 +87,22 @@ function identifier(value: string): string {
   return value
 }
 
+/** Name of the index a derivation declares for one list of its columns. */
+function indexName(derivation: Derivation, columns: readonly string[]): string {
+  return `${derivation.name}_by_${columns.join('_')}`
+}
+
+/**
+ * Every SQLite object one derivation owns: its table, the per-Session view, its indexes, and its further views.
+ * @param derivation - derivation whose declared objects are listed.
+ * @returns the object names, all of which a complete installation holds.
+ */
+function objects(derivation: Derivation): string[] {
+  return [derivation.name, `session_${derivation.name}`,
+    ...(derivation.indexes ?? []).map(columns => indexName(derivation, columns)),
+    ...Object.keys(derivation.views ?? {})]
+}
+
 /** The derived tables of one store: schema installation, row derivation, and rebuilding from events. */
 export class DerivedTables {
   private readonly statements = new Map<DatabaseSync, Prepared>()
@@ -119,9 +135,9 @@ export class DerivedTables {
   }
 
   /**
-   * Create missing tables, schedule a rebuild for each table that is missing or whose stored
-   * version differs, and mark each stored table without a derivation here as
-   * behind from the current end of the log, inside the caller's write transaction.
+   * Create every missing table, view and index, schedule a rebuild for each table that is missing or whose stored
+   * version differs, and mark each stored table without a derivation here as behind from the current end of the log,
+   * inside the caller's write transaction.
    * @param db - open database inside an immediate transaction.
    * @param populated - whether events already exist, so a new table starts behind them.
    */
@@ -133,15 +149,17 @@ export class DerivedTables {
       const entry = registered.parse(row)
       return [entry.name, entry.version]
     }))
-    const present = new Set(db.prepare(this.sql.text('store/table-names')).all().map(row => row.name))
-    // A recorded table that is missing is rebuilt like one of another version. Views read tables, so every
-    // stale object is dropped before any is created again.
-    const stale = this.derivations.filter(derivation => stored.get(derivation.name) !== derivation.version || !present.has(derivation.name))
+    const present = new Set(db.prepare(this.sql.text('store/object-names')).all().map(row => row.name))
+    // A recorded table whose version changed, or that lost any object it declares, is built again.
+    const stale = this.derivations.filter(derivation => stored.get(derivation.name) !== derivation.version
+      || !objects(derivation).every(name => present.has(name)))
     // The statements that drop and create derived objects stay inline: their identifiers, columns and view
     // bodies come from each derivation, so they have no fixed text.
     for (const derivation of stale.toReversed()) {
       for (const view of Object.keys(derivation.views ?? {}).toReversed()) db.exec(`DROP VIEW IF EXISTS ${view}`)
-      db.exec(`DROP VIEW IF EXISTS session_${derivation.name}; DROP TABLE IF EXISTS ${derivation.name}`)
+      db.exec(`DROP VIEW IF EXISTS session_${derivation.name}`)
+      for (const index of derivation.indexes ?? []) db.exec(`DROP INDEX IF EXISTS ${indexName(derivation, index)}`)
+      db.exec(`DROP TABLE IF EXISTS ${derivation.name}`)
     }
     const record = db.prepare(this.sql.text('derived/record-derivation'))
     for (const derivation of stale) {
@@ -150,12 +168,16 @@ export class DerivedTables {
         segment_id INTEGER NOT NULL, seq INTEGER NOT NULL,
         ${Object.entries(derivation.columns).map(([column, type]) => `${column} ${type},`).join(' ')}
         PRIMARY KEY(segment_id, seq)) STRICT, WITHOUT ROWID;
-        ${(derivation.indexes ?? []).map(columns => `CREATE INDEX ${name}_by_${columns.join('_')} ON ${name}(${columns.join(', ')});`).join(' ')}
+        ${(derivation.indexes ?? []).map(columns => `CREATE INDEX ${indexName(derivation, columns)} ON ${name}(${columns.join(', ')});`).join(' ')}
         CREATE VIEW session_${name} AS SELECT p.session_id, d.* FROM session_segments p
           JOIN ${name} d ON d.segment_id = p.segment_id AND d.seq < p.end_seq;
         ${Object.entries(derivation.views ?? {}).map(([view, select]) => `CREATE VIEW ${view} AS ${select};`).join(' ')}`)
       record.run(name, derivation.version, populated ? 0 : null)
     }
+    // The planner needs statistics to prefer a derived index over a primary-key scan; without them the correlated
+    // lookup in `session_tools` reads every result of the Segment for each tool call. A full analysis is worth its cost
+    // only once, when none exist yet; `PRAGMA optimize` on close keeps them current afterwards.
+    if (db.prepare(this.sql.text('store/has-statistics')).get() === undefined) db.exec(this.sql.text('store/analyze'))
   }
 
   /**

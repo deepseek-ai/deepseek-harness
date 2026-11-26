@@ -46,6 +46,7 @@ The database lives at `<root>/.segments/sessions.sqlite`. Application callers co
 | `root` | Required | Storage root containing the database and any existing JSONL histories. |
 | `compression` | `zstd` | Encoding of existing JSONL histories and of new event rows: `zstd` compresses a large event `data` when that is smaller, `none` stores JSON text. Stored rows decode by their own codec. |
 | `listConcurrency` | `3` | Concurrent filesystem reads for legacy metadata and routing records. |
+| `recovery` | `replace` | What an open does when the database cannot be used. `replace` moves the file aside and starts an empty database, so Sessions stay available; `report` refuses and leaves the storage root for repair. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-persistence-sqlite) documents all accepted fields.
 
@@ -68,10 +69,12 @@ Every view except `session_summary` and `session_tools` also returns `segment_id
 ```sql
 SELECT tool, count(*) AS calls, sum(is_error) AS errors FROM session_tools WHERE session_id = ? GROUP BY tool;
 SELECT sum(input_tokens), sum(output_tokens) FROM session_llm_calls WHERE session_id = ?;
-SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type = 'model/selection';
+SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type = 'model/selection' AND codec = 0;
 ```
 
-Times are Unix milliseconds. `data` is JSON text when `codec` is `0`, which SQLite's JSON operators read directly, and Zstandard bytes when `codec` is `1`. The tables `llm_calls`, `tool_calls`, `tool_results` and `compactions` hold each stored event once, so use them for totals across the whole store; summing a `session_*` view over all Sessions counts a shared event once per Session that inherits it. Token columns are the usage each call reported; the `tokenUsage` projection remains the figure DSH displays.
+Times are Unix milliseconds. `data` is JSON text when `codec` is `0`, which SQLite's JSON operators read directly, and Zstandard bytes when `codec` is `1`. A stored value of at least 1,024 characters is compressed whenever compression shrinks it, so the largest events are the ones JSON operators cannot read: `SELECT` a `data ->> ...` expression from a filtered query, because one compressed row in the result raises `malformed JSON` and fails the whole statement. Add `AND codec = 0` to skip them, or use a derived table. The tables `llm_calls`, `tool_calls`, `tool_results` and `compactions` hold each stored event once, so use them for totals across the whole store; summing a `session_*` view over all Sessions counts a shared event once per Session that inherits it. Token columns are the usage each call reported; the `tokenUsage` projection remains the figure DSH displays.
+
+The first open of a new or upgraded database analyzes it once, and each close refreshes the statistics of the tables that changed. Without them SQLite reads every result in a Segment for each tool call instead of seeking the derived index: on a store of 84,000 tool calls, `session_tools` takes 2.3 s before the analysis and 22 ms after it.
 
 ### Opening existing history
 
@@ -159,7 +162,8 @@ These constraints apply when selecting this provider.
 - Other SQL clients cannot read `data` stored with `codec` 1 without a Zstandard function; every other column, the derived tables and small events remain readable.
 - The derived tables are the built-in four: no setting turns them off, and no service registers a `Derivation` from another plugin.
 - Processes of different builds must not write one database at the same time. An earlier build fails once a later one upgrades the schema. A derived table is caught up when a build that holds its derivation opens the database; if a process of a build without that derivation is still running then and appends afterwards, the rows of those events are missing until the table's version changes.
-- An open that meets another process's write lock, such as a running upgrade, blocks its process for the five-second busy timeout and then fails.
+- An open that meets another process's write lock, such as a running upgrade, blocks its process for the five-second busy timeout. Under the default `recovery: replace` it then moves the locked file aside and starts an empty database, which leaves the locking writer's later commits in the moved file; set `recovery: report` for a storage root that another process may write.
+- Recovery moves a database aside instead of deleting it, so a storage root keeps one full copy per recovery. Remove an `*.unreadable-*`, `*.locked-*`, or `*.orphaned-*` file once its Sessions are no longer needed.
 - Sessions cannot be deleted, so storage shared between forks is never reclaimed.
 - Each event with a large `data` leaves part of its last overflow page unused; the [decision record](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md) holds the measured sizes.
 

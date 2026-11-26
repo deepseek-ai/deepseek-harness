@@ -20,11 +20,12 @@ const UNREADABLE_TYPE = 'storage/unreadable'
 const FRAME_CODEC_ZSTD = 1
 const FRAME_TABLES = ['frames', 'traces', 'segments', 'segment_ancestors']
 const segmentV1 = z.object({ segment_uuid: z.string(), parent_segment_uuid: z.string().nullable(),
-  base_seq: z.number().int().nonnegative() })
+  parent_end_seq: z.number().int().nonnegative().nullable(), base_seq: z.number().int().nonnegative() })
 const frame = z.object({ frame: z.number().int(), segment_id: z.number().int(), segment_uuid: z.string(),
   base_seq: z.number().int().nonnegative(),
   start_seq: z.number().int().nonnegative(), end_seq: z.number().int().positive(),
   codec: z.number().int(), payload: z.instanceof(Uint8Array) })
+const orphanFrame = z.object({ frame: z.number().int(), segment_uuid: z.string(), start_seq: z.number().int().nonnegative() })
 
 /**
  * Rewrites a frame-layout database as event rows. Segment and Session
@@ -33,13 +34,13 @@ const frame = z.object({ frame: z.number().int(), segment_id: z.number().int(), 
  * Events are carried over by their envelope alone, so an event type this build
  * does not know upgrades with the rest and is judged when its Session is read.
  * Damage that made a read fail before the upgrade makes the same read fail after
- * it, and nothing else. A frame whose bytes cannot be split into its recorded
- * number of lines gets one row that no reader decodes, at its last sequence. A
- * frame that splits is carried over event by event, and only an event that
- * cannot be read (not JSON, out of sequence, or an envelope the event row cannot
- * hold) gets such a row. The Segment keeps its event count either way. Each
- * damaged frame is reported once and copied unchanged into `frames_set_aside`,
- * a table that exists only then.
+ * it, and nothing else: the frame layout served whatever prefix of a frame it
+ * could read, so every sequence of the recorded range is carried over that way
+ * and only a sequence with no readable line gets a row that no reader decodes.
+ * Lines past the recorded range are not part of the Segment's history and were
+ * never readable, so they are dropped. The Segment keeps its event count either
+ * way. Each damaged frame is reported once and copied unchanged into
+ * `frames_set_aside`, a table that exists only then.
  */
 export const frames: Migration = {
   from: 1,
@@ -52,23 +53,50 @@ export const frames: Migration = {
     // Parents precede children so the path trigger of the new schema sees each parent's path.
     db.exec(sql.text('upgrade/1-to-2/retire-v1-objects'))
     db.exec(sql.text('schema/v2'))
+    // Read every Segment before checking any, so the order the rows arrive in cannot decide whether a parent is found.
+    const v1Segments = db.prepare(sql.text('upgrade/1-to-2/segments-parents-first')).all().map((raw) => {
+      const segment = segmentV1.parse(raw)
+      return { uuid: segment.segment_uuid, parent: segment.parent_segment_uuid, base: segment.base_seq,
+        parentEnd: segment.parent_end_seq }
+    })
+    const segmentBase = new Map(v1Segments.map(segment => [segment.uuid, segment.base]))
+    for (const { uuid, parent, parentEnd, base } of v1Segments) {
+      if (parent !== null) {
+        const parentBase = segmentBase.get(parent)
+        // The frame layout refused a child that did not start where its parent ended, so rows that disagree describe no
+        // history this build can carry over. The upgrade stops rather than give the child a history it never had.
+        if (parentBase === undefined) throw new Error(`schema version 1 Segment "${uuid}" names parent "${parent}", which is not stored`)
+        // A version 1 table refused a parent without a recorded end, so `parentEnd` is present whenever `parent` is.
+        /* v8 ignore next -- the version 1 table refuses a null parent_end_seq beside a parent. */
+        const parentEnded = parentEnd ?? 0
+        if (base !== parentBase + parentEnded) {
+          throw new Error(`schema version 1 Segment "${uuid}" starts at ${base}, not at its parent's end ${parentBase + parentEnded}`)
+        }
+      }
+    }
     // One statement per Segment: a single INSERT ... SELECT reads `segments` before it stores any row,
     // so no child would find its parent.
     const segment = db.prepare(sql.text('upgrade/1-to-2/insert-segment'))
-    for (const raw of db.prepare(sql.text('upgrade/1-to-2/segments-parents-first')).all()) {
-      const { segment_uuid: uuid, parent_segment_uuid: parent, base_seq: base } = segmentV1.parse(raw)
-      segment.run(uuid, parent, base)
-    }
+    for (const { uuid, parent, base } of v1Segments) segment.run(uuid, parent, base)
     db.exec(sql.text('upgrade/1-to-2/insert-sessions'))
     const insert = db.prepare(sql.text('upgrade/1-to-2/insert-event'))
     const stored = db.prepare(sql.text('upgrade/1-to-2/frames-by-segment'))
+    const orphaned = db.prepare(sql.text('upgrade/1-to-2/orphan-frames')).all()
     const damaged: number[] = []
-    const standIn = (segment: number, seq: number): void => {
-      insert.run(segment, seq, UNREADABLE_TYPE, 0, null, null, null, EVENT_CODEC_UNREADABLE, new Uint8Array())
+    /**
+     * Record one unreadable sequence; a row no reader decodes keeps the Segment's event count. The `time` repeats the
+     * nearest readable event, so a Session's last event time stays a real instant instead of the epoch.
+     */
+    const standIn = (segment: number, seq: number, time: number): void => {
+      insert.run(segment, seq, UNREADABLE_TYPE, time, null, null, null, EVENT_CODEC_UNREADABLE, new Uint8Array())
     }
+    // Frames arrive ordered by Segment and start sequence, so the last time read carries into the next frame.
+    let time = 0
+    let timeSegment: number | undefined
     for (const raw of stored.iterate()) {
       const { frame: rowid, segment_id: segment, segment_uuid: uuid, base_seq: base, start_seq: start, end_seq: end,
         codec, payload } = frame.parse(raw)
+      if (segment !== timeSegment) { time = 0; timeSegment = segment }
       const setAside = (error: unknown): void => {
         if (damaged.at(-1) === rowid) return
         damaged.push(rowid)
@@ -78,16 +106,22 @@ export const frames: Migration = {
       try {
         const bytes = codec === FRAME_CODEC_ZSTD ? zstdDecompressSync(payload) : payload
         texts = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf8').split('\n')
-        if (texts.length !== end - start) throw new RangeError(`SQLite frame at ${start} does not hold its recorded range`)
       } catch (error: unknown) {
-        // No line of the frame can be placed. A row no reader decodes holds its last sequence, so the Segment
-        // keeps its event count and a read that reaches the frame is refused, as it was before the upgrade.
+        // No line of the frame can be placed, so no sequence of its range is readable: each one stands in, and a read
+        // that reaches the frame is refused at its first sequence, as the whole frame was refused before the upgrade.
         setAside(error)
-        standIn(segment, base + end - 1)
+        for (let seq = base + start; seq < base + end; seq++) standIn(segment, seq, time)
         continue
       }
-      for (const [index, text] of texts.entries()) {
+      for (let index = 0; index < end - start; index++) {
         const seq = base + start + index
+        const text = texts[index]
+        if (text === undefined) {
+          // Fewer lines than recorded: the frame layout served this prefix, so only the missing tail stands in.
+          setAside(new RangeError(`SQLite frame at ${start} holds ${texts.length} of its ${end - start} recorded events`))
+          standIn(segment, seq, time)
+          continue
+        }
         let event: StoredEnvelope
         try {
           event = decodeEnvelope(JSON.parse(text))
@@ -96,12 +130,19 @@ export const frames: Migration = {
           // The frame layout parsed only the lines a read asked for, so the other events of this frame stayed
           // readable; they are carried over, and only this event is replaced.
           setAside(error)
-          standIn(segment, seq)
+          standIn(segment, seq, time)
           continue
         }
+        time = event.time
         const row = encodeRow(event, compression)
         insert.run(segment, row.seq, row.type, row.time, row.surface_op, row.source_seqs, row.ignorable, row.codec, row.data)
       }
+    }
+    for (const raw of orphaned) {
+      const orphan = orphanFrame.parse(raw)
+      damaged.push(orphan.frame)
+      onSetAside(`frame at ${orphan.start_seq} of Segment ${orphan.segment_uuid}`,
+        new Error('the Segment of this frame is not stored, so no Session reaches it'))
     }
     if (damaged.length > 0) {
       db.exec(sql.text('upgrade/1-to-2/create-frames-set-aside'))

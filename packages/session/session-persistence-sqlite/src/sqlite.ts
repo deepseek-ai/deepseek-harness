@@ -4,8 +4,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { DatabaseSync, StatementSync } from 'node:sqlite'
-import { mkdir, open, stat, readdir, realpath } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { mkdir, open, rename, stat, readdir, realpath } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
@@ -58,6 +58,28 @@ const REBUILD_BUSY_RETRY_MS = 1000
 function isBusy(error: unknown): boolean {
   const code = (error as { errcode?: unknown } | null)?.errcode
   return typeof code === 'number' && (code & 0xff) === SQLITE_BUSY
+}
+/** Whether a SQLite failure reports file bytes that are not a readable database. */
+function isUnreadable(error: unknown): boolean {
+  const code = (error as { errcode?: unknown } | null)?.errcode
+  return typeof code === 'number' && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(code & 0xff)
+}
+/**
+ * Why a database file is replaced. Only these two states replace the file; a refused schema and a failed upgrade keep
+ * theirs, because their bytes are readable and only a different build can interpret them.
+ */
+type ReplaceReason = 'unreadable' | 'locked' | 'orphaned'
+/** How an open recovers a database it cannot use; see {@link SqliteStoreOptions.recovery}. */
+export type Recovery = 'replace' | 'report'
+/**
+ * One open that must replace its file, so the recovery can tell a file to move aside from a failure that leaves a
+ * usable file.
+ */
+class ReplaceDatabase extends Error {
+  constructor(readonly reason: ReplaceReason, readonly wrapped: Error) {
+    super(wrapped.message, { cause: wrapped })
+    this.name = 'ReplaceDatabase'
+  }
 }
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
@@ -134,6 +156,14 @@ export interface SqliteStoreOptions {
   readonly reportUpgrade: (from: number, to: number) => void
   /** Report stored data a schema upgrade could not carry over and set aside; the Session it belongs to reads as damaged. */
   readonly reportSetAside: (detail: string, error: unknown) => void
+  /** Report a database moved aside for a new empty one; its stored Sessions are no longer listed. */
+  readonly reportRecovery: (detail: string) => void
+  /**
+   * What an open does when the stored database cannot be used. `replace` keeps every stored byte by moving the file
+   * aside and starts a new empty database, so the Session service stays available. `report` refuses and leaves the
+   * storage root for an operator to repair. Defaults to `replace`.
+   */
+  readonly recovery?: Recovery
 }
 
 /** Session persistence over private predecessor-linked Segments in one SQLite database. */
@@ -152,6 +182,8 @@ export class SqliteStore {
   private readonly reportDerivation: SqliteStoreOptions['reportDerivation']
   private readonly reportUpgrade: SqliteStoreOptions['reportUpgrade']
   private readonly reportSetAside: SqliteStoreOptions['reportSetAside']
+  private readonly reportRecovery: SqliteStoreOptions['reportRecovery']
+  private readonly recovery: Recovery
   private readonly pendingCreates = new Map<SessionId, {
     header: SessionHeader
     inheritedCount: number
@@ -180,6 +212,8 @@ export class SqliteStore {
     this.reportDerivation = options.reportDerivation
     this.reportUpgrade = options.reportUpgrade
     this.reportSetAside = options.reportSetAside
+    this.reportRecovery = options.reportRecovery
+    this.recovery = options.recovery ?? 'replace'
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -220,7 +254,12 @@ export class SqliteStore {
 
   /**
    * Refuse to use or create a database while routing records claim one that is missing.
+   *
+   * Routing records name Sessions whose history lived in the database, so an absent database is history an operator
+   * can still restore. Under `replace` the orphaned records are reported and then ignored, and a new empty database
+   * takes their place.
    * @returns resolves when the database file exists or no routing record requires it.
+   * @throws {HarnessError} `SESSION_STORAGE_MISSING` under `report`, with the file left absent for a restore.
    */
   async assertRoutingDatabase(): Promise<void> {
     if (this.ready !== undefined || await this.databaseFileExists()) return
@@ -230,13 +269,82 @@ export class SqliteStore {
       if (isAbsent(error)) return
       throw error
     }
-    if (!records.some(record => record.endsWith('.json'))) return
+    const orphaned = records.filter(record => record.endsWith('.json'))
+    if (orphaned.length === 0) return
     // Another initializer may have created the database while routing records were read.
     if (await this.databaseFileExists()) return
+    if (this.recovery === 'replace') {
+      this.reportRecovery(`SQLite Session database "${this.path}" is missing while ${orphaned.length} routing record(s) remain; `
+        + 'a new empty database replaces it. The Sessions those records name are recoverable only from a backup')
+      return
+    }
     throw new HarnessError('The Segment database is missing but routing records remain; restore the database before using Sessions', 'SESSION_STORAGE_MISSING')
   }
 
+  /**
+   * Prepare the database, which may be absent, locked by another process, or unreadable.
+   *
+   * An absent file becomes a new empty database with the current schema. A lock waits for the busy timeout, because the
+   * writer that holds it may commit meanwhile. A file the open still cannot use is then moved aside to
+   * `<name>.<reason>-<timestamp>` beside it, and a new empty database takes its place: the store keeps working and every
+   * stored byte stays available, so nothing is deleted. `report` refuses instead, which leaves the storage root exactly
+   * as it was for an operator to repair.
+   * @returns the open database.
+   * @throws {HarnessError} `SESSION_STORAGE_LOCKED` or `SESSION_STORAGE_MISSING` under `report`. A refused schema and a
+   * failed upgrade propagate under either mode, because their file is readable and must not be replaced.
+   */
   private async initialize(): Promise<DatabaseSync> {
+    try { return await this.openDatabase() }
+    catch (error: unknown) {
+      // Anything else is a file this build cannot interpret, which only an operator or another build can resolve.
+      if (!(error instanceof ReplaceDatabase)) throw error
+      await this.setAside(error.reason)
+      return await this.openDatabase()
+    }
+  }
+
+  /**
+   * Move a database and its journal aside so the next open creates a new one, keeping every stored byte.
+   * @param reason - why the file is replaced; it names the new file's suffix and the report.
+   * @returns whether the file was moved; an already-absent file needs no move.
+   */
+  private async setAside(reason: ReplaceReason): Promise<boolean> {
+    // The suffix keeps the database name first, so a later recovery never overwrites an earlier one.
+    const aside = `${this.path}.${reason}-${new Date().toISOString().replace(/[:.]/gu, '-')}`
+    // The journal belongs to the bytes being moved, so a new database must not adopt it. A journal is usually absent, and
+    // a move that fails for any other reason is a real storage fault the caller must see.
+    for (const [from, to] of [[this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`]] as const) {
+      try { await rename(from, to) }
+      catch (error: unknown) {
+        /* v8 ignore next -- a rename fails for a reason other than absence only under a storage fault. */
+        if (!isAbsent(error)) throw error
+      }
+    }
+    this.reportRecovery(reason === 'unreadable'
+      ? `SQLite Session database "${this.path}" cannot be read; it was moved to "${basename(aside)}" and a new empty `
+        + 'database replaces it. The stored Sessions are in the moved file'
+      : `SQLite Session database "${this.path}" stayed locked past the busy timeout and its file was moved to `
+        + `"${basename(aside)}" for a new empty database. A writer that still held it keeps writing to the moved file, `
+        + 'so its later commits are not in the new database')
+    return true
+  }
+
+  /**
+   * Decide what one lock past the busy timeout means. SQLite holds its locks as operating-system locks, which a process
+   * releases when it exits, so a surviving lock belongs to a live writer. Under `replace` its file is moved aside,
+   * which leaves the writer's later commits in the moved file instead of the new database.
+   * @param error - the busy failure.
+   * @returns the error to throw.
+   */
+  private lockOutcome(error: unknown): Error {
+    const locked = new HarnessError(`SQLite Session database "${this.path}" is locked by another process, which may be `
+      + 'writing it; close every other DSH process that uses this storage root and open the Session again',
+    'SESSION_STORAGE_LOCKED', { cause: asError(error) })
+    return this.recovery === 'replace' ? new ReplaceDatabase('locked', locked) : locked
+  }
+
+  /** Open, create, and validate the configured database. */
+  private async openDatabase(): Promise<DatabaseSync> {
     await this.assertRoutingDatabase()
     await this.ensureDirectory(dirname(this.path))
     // Retain the routing directory before the first Session commit.
@@ -257,7 +365,8 @@ export class SqliteStore {
       for (;;) {
         try { opened.exec('PRAGMA journal_mode = WAL'); break }
         catch (error: unknown) {
-          if (!isBusy(error) || performance.now() >= deadline) throw error
+          if (!isBusy(error)) throw error
+          if (performance.now() >= deadline) throw this.lockOutcome(error)
           // SQLite can bypass its busy handler during the journal-mode lock upgrade.
           // No schema or Session writes have started, so retrying this pragma is safe.
           await setImmediate()
@@ -280,9 +389,12 @@ export class SqliteStore {
       if (error instanceof HarnessError
         || error instanceof SessionPersistenceCorruptionError
         || error instanceof SessionFormatUnsupportedError) throw error
-      if (error !== null && typeof error === 'object' && 'errcode' in error
-        && typeof error.errcode === 'number' && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(error.errcode & 0xff)) {
-        throw this.corruption(`SQLite persistence database "${this.path}" is unreadable`, error)
+      // A lock is never damage: another process may be writing these bytes, so the file is reported and kept.
+      if (isBusy(error)) throw this.lockOutcome(error)
+      // Tagged so the caller replaces exactly this file, and only this file.
+      if (isUnreadable(error)) {
+        const corruption = this.corruption(`SQLite persistence database "${this.path}" is unreadable`, error)
+        throw this.recovery === 'replace' ? new ReplaceDatabase('unreadable', corruption) : corruption
       }
       throw error
     }
@@ -1005,6 +1117,11 @@ export class SqliteStore {
         // Initialization starts the rebuild, so it is joined only after initialization settles.
         await this.rebuilding
         if (db !== undefined) this.derived.release(db)
+        // Write volume during this process changed the tables the analysis sampled at open. `PRAGMA optimize` analyzes
+        // only the tables whose rows changed, so the next open starts with statistics that match the stored data.
+        if (db !== undefined) {
+          try { db.exec(this.sql.text('store/reoptimize')) } catch (error: unknown) { failures.push(error) }
+        }
         try { db?.close() } catch (error: unknown) { failures.push(error) }
       }
       this.statements.clear()

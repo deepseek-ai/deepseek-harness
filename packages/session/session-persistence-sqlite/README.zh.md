@@ -46,6 +46,7 @@ fork 创建先排空本进程中的父写者，再在一个事务内引用已持
 | `root` | 必填 | 包含数据库和现有 JSONL 历史的存储根目录。 |
 | `compression` | `zstd` | 现有 JSONL 历史和新事件行的编码：`zstd` 在事件的 `data` 较大且压缩后更小时压缩它，`none` 存储 JSON 文本。已存的行按各自的 codec 解码。 |
 | `listConcurrency` | `3` | 旧历史元数据及路由记录的并发文件系统读取数。 |
+| `recovery` | `replace` | 数据库无法使用时的打开行为。`replace` 把文件移到一旁并开始一个空数据库，Session 仍然可用；`report` 拒绝打开，把存储根留给人工修复。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-persistence-sqlite)记录了所有可用字段。
 
@@ -68,10 +69,12 @@ DSH 运行期间，可以用任何 SQLite 3.38 及以上的客户端以只读方
 ```sql
 SELECT tool, count(*) AS calls, sum(is_error) AS errors FROM session_tools WHERE session_id = ? GROUP BY tool;
 SELECT sum(input_tokens), sum(output_tokens) FROM session_llm_calls WHERE session_id = ?;
-SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type = 'model/selection';
+SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type = 'model/selection' AND codec = 0;
 ```
 
-时间为 Unix 毫秒。`codec` 为 `0` 时 `data` 是 JSON 文本，SQLite 的 JSON 运算符可以直接读取；`codec` 为 `1` 时是 Zstandard 字节。`llm_calls`、`tool_calls`、`tool_results` 和 `compactions` 表中每个已存事件只出现一次，统计整个存储的总量时请使用这些表；对 `session_*` 视图跨所有 Session 求和，会把共享事件按继承它的 Session 各计一次。token 列是每次调用报告的用量；DSH 显示的数字仍以 `tokenUsage` projection 为准。
+时间为 Unix 毫秒。`codec` 为 `0` 时 `data` 是 JSON 文本，SQLite 的 JSON 运算符可以直接读取；`codec` 为 `1` 时是 Zstandard 字节。存值达到 1,024 个字符且压缩后更小时会被压缩，所以最大的事件正是 JSON 运算符读不了的：从已筛选的查询里 `SELECT` 一个 `data ->> ...` 表达式，因为结果中只要有一行被压缩，整条语句就会以 `malformed JSON` 失败。加 `AND codec = 0` 跳过这些行，或改用派生表。`llm_calls`、`tool_calls`、`tool_results` 和 `compactions` 表中每个已存事件只出现一次，统计整个存储的总量时请使用这些表；对 `session_*` 视图跨所有 Session 求和，会把共享事件按继承它的 Session 各计一次。token 列是每次调用报告的用量；DSH 显示的数字仍以 `tokenUsage` projection 为准。
+
+新建或升级后的数据库在首次打开时会被分析一次，此后每次关闭都会刷新已变更表的统计信息。缺少这些信息时，SQLite 会为每个工具调用读取整个 Segment 的全部结果，而不是查找派生索引：在含 84,000 次工具调用的存储上，`session_tools` 在分析前需要 2.3 秒，分析后为 22 毫秒。
 
 ### 打开现有历史
 
@@ -159,7 +162,8 @@ SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`
 - 其他 SQL 客户端没有 Zstandard 函数时无法读取以 `codec` 1 存储的 `data`；其余各列、派生表和小事件仍可读取。
 - 派生表即内置的四张：没有设置可以关闭它们，也没有服务可供其他插件注册 `Derivation`。
 - 不同构建的进程不得同时写入同一个数据库。较新的构建升级 schema 之后，较早的构建会失败。持有某个 derivation 的构建打开数据库时会补齐对应的派生表；如果此时缺少该 derivation 的构建仍有进程在运行并在此后继续追加，这些事件的派生行会一直缺失，直到该表的版本变化。
-- 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时，然后失败。
+- 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时。在默认的 `recovery: replace` 下，随后会把被锁住的文件移到一旁并开始一个空数据库，因此持锁写者之后的提交会留在被移走的文件里；如果存储根可能被其他进程写入，请设置 `recovery: report`。
+- 恢复是把数据库移到一旁而不是删除，所以每次恢复都会在存储根留下一份完整副本。不再需要其 Session 后，请删除 `*.unreadable-*`、`*.locked-*` 或 `*.orphaned-*` 文件。
 - Session 无法删除，因此 fork 之间共享的存储永远不会回收。
 - `data` 较大的事件会让其最后一个溢出页留有未用空间；实测体积见[决策记录](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md)。
 

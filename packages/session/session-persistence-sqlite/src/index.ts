@@ -4,18 +4,23 @@ import z from '@deepseek-ai/schemastery'
 import { JsonlCompressionSchema, JsonlSessionPersistence } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { Config as JsonlConfigOptions } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { SqliteSessionPersistence } from './persistence.ts'
+import type { Recovery } from './sqlite.ts'
 
 /** Loader label for the SQLite Session persistence provider. */
 export const name = 'session-persistence-sqlite'
 
-/** Storage root and the JSONL settings used when importing legacy Sessions. */
-export type Config = JsonlConfigOptions
+/** Storage root, the JSONL settings used when importing legacy Sessions, and the database recovery mode. */
+export type Config = JsonlConfigOptions & {
+  /** What an open does when the database cannot be used; see {@link Recovery}. */
+  recovery?: Recovery
+}
 
-/** Validate the storage root and legacy JSONL reader settings. */
+/** Validate the storage root, legacy JSONL reader settings, and recovery mode. */
 export const Config: z<Config> = z.object({
   root: z.string().required(),
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(3),
+  recovery: z.union([z.const('replace'), z.const('report')]).default('replace'),
 })
 
 /**

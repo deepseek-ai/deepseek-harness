@@ -72,6 +72,8 @@ export class SqliteSessionPersistence extends SessionPersistence {
         owner.logger.warn(`The Session database upgrade set aside the ${detail}, which holds data that cannot be read; `
           + `reads that reach it are refused: ${String(error)}`)
       },
+      reportRecovery: (detail) => { owner.logger.error(detail) },
+      ...config.recovery === undefined ? {} : { recovery: config.recovery },
       reportUpgrade: (from, to) => {
         owner.logger.info(`Upgrading the Session database from schema version ${from} to ${to}; Sessions open when it finishes`)
       },

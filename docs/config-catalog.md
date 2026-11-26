@@ -3817,11 +3817,17 @@ export type JsonlCompression = 'zstd' | 'none'
 ## `@deepseek-ai/dsh-session-persistence-sqlite`
 
 - `refs`: [`JsonlConfigOptions`](#deepseek-aidsh-session-persistence-jsonl)
-- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:12`](../packages/session/session-persistence-sqlite/src/index.ts)
+- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:13`](../packages/session/session-persistence-sqlite/src/index.ts)
 
 ```ts config-catalog
-/** Storage root and the JSONL settings used when importing legacy Sessions. */
-export type Config = JsonlConfigOptions
+/** Storage root, the JSONL settings used when importing legacy Sessions, and the database recovery mode. */
+export type Config = JsonlConfigOptions & {
+  /** What an open does when the database cannot be used; see {@link Recovery}. */
+  recovery?: Recovery
+}
+
+/** How an open recovers a database it cannot use; see {@link SqliteStoreOptions.recovery}. */
+export type Recovery = 'replace' | 'report'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-sqlite -->
 

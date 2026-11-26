@@ -1,7 +1,7 @@
 /** Initialization retries, automatic rollbacks, and durable parent writes. @module */
 import { randomBytes } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -11,18 +11,18 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
 import { sqliteLogs, forkSession } from './fixtures/store.ts'
 
-async function fixture() {
+async function fixture(recovery?: 'replace' | 'report') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-recovery-'))
   const path = join(root, 'sessions.sqlite')
-  const logs = sqliteLogs(path, root)
+  const logs = sqliteLogs(path, root, recovery === undefined ? {} : { recovery })
   onTestFinished(async () => { try { await logs.close() } finally { await rm(root, { recursive: true, force: true }) } })
   const header = (name: string): SessionHeader => ({ version: SESSION_FORMAT_VERSION, id: SessionId(name), createdAt: 0, isSeeded: false })
   const event = (seq: number): SessionEvent<'turn/start'> => ({ type: 'turn/start', seq: SessionSeq(seq), time: 0, data: { turn: seq + 1 } })
   return { root, path, logs, header, event }
 }
 
-it('retries initialization after a database lock without reporting corruption or repeating the error on close', async () => {
-  const { path, logs, header } = await fixture()
+it('reports a lock as locked, never as corruption, and refuses nothing on close', async () => {
+  const { path, logs, header } = await fixture('report')
   const blocker = new DatabaseSync(path)
   try {
     blocker.exec('BEGIN IMMEDIATE')
@@ -31,7 +31,7 @@ it('retries initialization after a database lock without reporting corruption or
     let failure: unknown
     try { failure = await logs.start().then(() => undefined, (error: unknown) => error) }
     finally { clock.mockRestore() }
-    expect(failure).toMatchObject({ errcode: 5 })
+    expect(failure).toMatchObject({ code: 'SESSION_STORAGE_LOCKED', cause: { errcode: 5 } })
     expect(failure).not.toBeInstanceOf(SessionPersistenceCorruptionError)
     blocker.exec('ROLLBACK')
     await logs.start()
@@ -40,6 +40,29 @@ it('retries initialization after a database lock without reporting corruption or
     expect(await logs.stat(writer.id)).toMatchObject({ eventCount: 0 })
     await expect(logs.close()).resolves.toBeUndefined()
   } finally { blocker.close() }
+})
+
+it('moves a locked database aside under replace recovery and reports the writer it displaced', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-locked-replace-')), path = join(root, 'sessions.sqlite')
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const reportRecovery = vi.fn<(detail: string) => void>()
+  const logs = sqliteLogs(path, root, { reportRecovery })
+  onTestFinished(async () => { await logs.close().catch(() => undefined) })
+  const blocker = new DatabaseSync(path)
+  try {
+    blocker.exec('BEGIN IMMEDIATE')
+    const clock = vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValue(5000)
+    try { await logs.start() } finally { clock.mockRestore() }
+  } finally { blocker.close() }
+  expect(reportRecovery).toHaveBeenCalledOnce()
+  expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/stayed locked/u)
+  const aside = (await readdir(root)).find(name => name.includes('.locked-'))
+  expect(aside).toBeDefined()
+  // The replacement is usable, so the Session service stays available.
+  const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: SessionId('after-lock'), createdAt: 0, isSeeded: false })
+  await writer.append([{ type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }])
+  await writer.close()
+  expect(await logs.stat(writer.id)).toMatchObject({ eventCount: 1 })
 })
 
 it('releases fork creation ownership after a competing SQLite writer blocks its transaction', async () => {
@@ -63,14 +86,72 @@ it('releases fork creation ownership after a competing SQLite writer blocks its 
   } finally { blocker.close() }
 })
 
-it('closes cleanly after invalid database initialization and retries when the file is replaced', async () => {
-  const { path, logs } = await fixture()
+it('refuses an unreadable database under report recovery and retries when the file is replaced', async () => {
+  const { path, logs } = await fixture('report')
   await writeFile(path, 'not a SQLite database')
   await expect(logs.start()).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
   await rm(path)
   await logs.start()
   await expect(logs.close()).resolves.toBeUndefined()
 })
+it('creates an empty database when the file is absent', async () => {
+  const { path, logs } = await fixture()
+  expect(await logs.hasDatabase()).toBe(false)
+  await logs.start()
+  expect(await logs.hasDatabase()).toBe(true)
+  expect(await logs.stat(SessionId('absent'))).toBeUndefined()
+  expect((await stat(path)).isFile()).toBe(true)
+})
+
+it('moves an unreadable database aside under replace recovery and keeps every stored byte', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-unreadable-')), path = join(root, 'sessions.sqlite')
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const bytes = 'not a SQLite database, which the new file replaces'
+  await writeFile(path, bytes)
+  const reportRecovery = vi.fn<(detail: string) => void>()
+  const logs = sqliteLogs(path, root, { reportRecovery })
+  onTestFinished(async () => { await logs.close().catch(() => undefined) })
+  await logs.start()
+  expect(reportRecovery).toHaveBeenCalledOnce()
+  expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/cannot be read; it was moved to "sessions\.sqlite\.unreadable-/u)
+  const [aside] = (await readdir(root)).filter(name => name.includes('.unreadable-'))
+  expect(aside).toBeDefined()
+  expect(await readFile(join(root, aside!), 'utf8')).toBe(bytes)
+  // The replacement is a working empty database.
+  const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: SessionId('fresh'), createdAt: 0, isSeeded: false })
+  await writer.flush(); await writer.close()
+  expect(await logs.stat(SessionId('fresh'))).toMatchObject({ eventCount: 0 })
+})
+
+it('never replaces a database whose schema version is newer than this build', async () => {
+  const { path, logs } = await fixture()
+  const db = new DatabaseSync(path)
+  try { db.exec('PRAGMA application_id = 0x44535043; PRAGMA user_version = 99') } finally { db.close() }
+  await expect(logs.start()).rejects.toMatchObject({ code: 'SESSION_STORAGE_FORMAT', message: /newer than version 2/u })
+  // Its bytes are readable and only a later build can interpret them, so the file stays in place: opening it may
+  // update SQLite's own header, and no other writer may take its place.
+  const reopened = new DatabaseSync(path)
+  try { expect(reopened.prepare('PRAGMA user_version').get()).toEqual({ user_version: 99 }) } finally { reopened.close() }
+  expect((await readdir(join(path, '..'))).some(name => name.includes('.unreadable-'))).toBe(false)
+})
+
+it('recovers a database left locked by a process that has since exited', async () => {
+  const { path, logs, header } = await fixture()
+  const seed = sqliteLogs(path, join(path, '..'))
+  await seed.start()
+  const writer = await seed.create(header('before-crash'))
+  await writer.append([{ type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }]); await writer.close()
+  await seed.close()
+  // SQLite releases its locks when a process exits, so a reopened file is usable without recovery.
+  const reportRecovery = vi.fn<(detail: string) => void>()
+  const reopened = sqliteLogs(path, join(path, '..'), { reportRecovery })
+  onTestFinished(async () => { await reopened.close().catch(() => undefined) })
+  await reopened.start()
+  expect(reportRecovery).not.toHaveBeenCalled()
+  expect(await reopened.stat(SessionId('before-crash'))).toMatchObject({ eventCount: 1 })
+  await logs.close()
+})
+
 it('retains retryable state after SQLite automatically rolls back an append', async () => {
   const { path, logs, header, event } = await fixture()
   const writer = await logs.create(header('source'))
@@ -188,4 +269,27 @@ it('retains unknown outcome when COMMIT ended the transaction before reporting f
   const db = new DatabaseSync(path)
   try { expect(db.prepare('SELECT count(*) AS count FROM events').get()?.count).toBe(1) } finally { db.close() }
   await writer.close()
+})
+
+it.each([
+  ['the connection pragmas', 'PRAGMA foreign_keys = ON'],
+  ['a schema statement inside the open transaction', 'CREATE TABLE IF NOT EXISTS derivations'],
+] as const)('reports a lock raised by %s as locked, never as damage', async (_where, marker) => {
+  const { logs } = await fixture('report')
+  const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
+  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the intercepted member as receiver.
+  const prepare = DatabaseSync.prototype.prepare
+  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the intercepted member as receiver.
+  const exec = DatabaseSync.prototype.exec
+  const execSpy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
+    if (sql.includes(marker)) throw busy
+    exec.call(this, sql)
+  })
+  const prepareSpy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSync, sql) {
+    if (sql.includes(marker)) throw busy
+    return prepare.call(this, sql)
+  })
+  try {
+    await expect(logs.start()).rejects.toMatchObject({ code: 'SESSION_STORAGE_LOCKED', cause: busy })
+  } finally { execSpy.mockRestore(); prepareSpy.mockRestore() }
 })

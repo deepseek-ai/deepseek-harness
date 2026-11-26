@@ -135,14 +135,28 @@ it.each(['{}', '[]', 'null', '4', JSON.stringify({ version: 4.5 }), JSON.stringi
   },
 )
 
-it('classifies a non-database SQLite file', async () => {
+it.each([
+  ['replace', false],
+  ['report', true],
+] as const)('classifies a non-database SQLite file under %s recovery', async (recovery, refuses) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segment-corrupt-db-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const path = join(root, 'sessions.sqlite')
   await writeFile(path, 'not a database')
-  const logs = sqliteLogs(path, root)
+  const reportRecovery = vi.fn<(detail: string) => void>()
+  const logs = sqliteLogs(path, root, { recovery, reportRecovery })
   onTestFinished(async () => { await logs.close().catch(() => undefined) })
-  await expect(logs.stat(header().id)).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
+  if (refuses) {
+    await expect(logs.stat(header().id)).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
+    expect(reportRecovery).not.toHaveBeenCalled()
+    return
+  }
+  // Replacing keeps the unreadable bytes and leaves a database every Session operation can use.
+  await expect(logs.stat(header().id)).resolves.toBeUndefined()
+  expect(reportRecovery).toHaveBeenCalledOnce()
+  const [aside] = (await readdir(root)).filter(name => name.includes('.unreadable-'))
+  expect(aside).toBeDefined()
+  expect(await readFile(join(root, aside!), 'utf8')).toBe('not a database')
 })
 
 it('fails on invalid selected event data while unrelated Session bodies remain readable', async () => {
@@ -387,13 +401,17 @@ it('releases admission claims when durable metadata disappears during write-leas
   } finally { db.close() }
 })
 
-it('does not recreate a missing database while durable routing records remain', async () => {
-  const { logs, root } = await raw()
+it('recreates a missing database while durable routing records remain', async () => {
+  const { logs, root, path } = await raw()
   const directory = join(root, '.segments')
   const { mkdir } = await import('node:fs/promises')
   await mkdir(directory)
   await writeFile(join(directory, 'retained.json'), '{}')
-  await expect(logs.create(header())).rejects.toThrow('database is missing')
+  const writer = await logs.create(header())
+  await writer.append([event(0)]); await writer.close()
+  // The orphaned record is not repaired: its Session is gone, and only a backup can restore it.
+  expect((await readdir(directory)).includes('retained.json')).toBe(true)
+  expect(await stat(path)).toBeDefined()
 })
 
 it('refuses an unrelated existing SQLite database without adding Session tables', async () => {
@@ -566,6 +584,27 @@ it('aggregates failed writer barriers and disposal failures without losing their
     await expect(logs.flush()).rejects.toMatchObject({ message: 'SQLite flush failed', errors: [expect.any(Error)] })
     await expect(logs.close()).rejects.toMatchObject({ message: 'SQLite disposal failed', errors: [expect.any(Error)] })
   } finally { db.close() }
+})
+
+it('reports a failure to refresh planner statistics on close without hiding the close', async () => {
+  // `failedClose` hands this test the only close, so the fixture teardown does not race it.
+  const { logs } = await raw(async () => {}, true)
+  const writer = await logs.create(header()); await writer.flush(); await writer.close()
+  // The refresh runs on the store's own connection, which no fixture handle exposes, so intercept by statement text.
+  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the intercepted connection as receiver.
+  const execute = DatabaseSync.prototype.exec
+  let armed = false
+  const fault = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
+    if (armed && sql.includes('PRAGMA optimize')) throw new Error('statistics refresh failed')
+    execute.call(this, sql)
+  })
+  armed = true
+  try {
+    const failure = await logs.close().then(() => undefined, (error: unknown) => error)
+    // The refresh failure joins the disposal aggregate instead of escaping it, so a caller still sees one report.
+    expect(failure).toMatchObject({ name: 'AggregateError', message: 'SQLite disposal failed' })
+    expect((failure as AggregateError).errors.map(String)).toEqual(['Error: statistics refresh failed'])
+  } finally { fault.mockRestore() }
 })
 
 it('joins an already closing writer during a provider flush', async () => {
@@ -752,8 +791,11 @@ it.each([1, 2])('reports %i owned lease release failures', async (failures) => {
   } finally { fault.mockRestore() }
 })
 
-it('refuses initializing a missing database when Session routing records remain', async () => {
-  const { logs, root, path } = await raw()
+it('refuses initializing a missing database under report recovery', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-report-')), path = join(root, 'events.sqlite')
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const logs = sqliteLogs(path, root, { recovery: 'report' })
+  onTestFinished(async () => { await logs.close().catch(() => undefined) })
   await mkdir(join(root, '.segments'))
   await writeFile(join(root, '.segments/source.json'), JSON.stringify({ id: 'source', database: path }))
   await expect(logs.start()).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })

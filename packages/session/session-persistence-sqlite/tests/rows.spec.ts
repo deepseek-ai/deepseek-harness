@@ -143,12 +143,14 @@ function decoded(value: unknown): object {
 }
 
 describe('plugin configuration', () => {
-  it('applies the defaults and validates the storage root, compression and list concurrency', () => {
-    expect(plugin.Config({ root: 'r' })).toEqual({ root: 'r', compression: 'zstd', listConcurrency: 3 })
-    expect(plugin.Config({ root: 'r', compression: 'none', listConcurrency: 1 })).toEqual({ root: 'r', compression: 'none', listConcurrency: 1 })
+  it('applies the defaults and validates the storage root, compression, list concurrency and recovery', () => {
+    expect(plugin.Config({ root: 'r' })).toEqual({ root: 'r', compression: 'zstd', listConcurrency: 3, recovery: 'replace' })
+    expect(plugin.Config({ root: 'r', compression: 'none', listConcurrency: 1, recovery: 'report' }))
+      .toEqual({ root: 'r', compression: 'none', listConcurrency: 1, recovery: 'report' })
     expect(() => plugin.Config({ compression: 'none' } as never)).toThrow()
     expect(() => plugin.Config({ root: 'r', compression: 'gzip' } as never)).toThrow()
     expect(() => plugin.Config({ root: 'r', listConcurrency: 0 })).toThrow()
+    expect(() => plugin.Config({ root: 'r', recovery: 'ignore' } as never)).toThrow()
   })
 
   it('stores rows by the mounted compression', async () => {

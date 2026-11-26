@@ -18,11 +18,11 @@
   en: e9211101131a5db2
   zh: 0d34955cfaadbbeb
 /deepseek-ai-dsh-session-persistence-sqlite/use-this-package/minimal-configuration:
-  en: 6ee6cf5c9b97db63
-  zh: 2a1172fc3a9f507c
+  en: 2137691811af59e5
+  zh: e41885e8cd967bff
 /deepseek-ai-dsh-session-persistence-sqlite/use-this-package/query-the-database:
-  en: 943efc329ebe5f12
-  zh: 96b53c3416e12cf8
+  en: 716af12a2607bd89
+  zh: 4433e6b52d6956bf
 /deepseek-ai-dsh-session-persistence-sqlite/use-this-package/opening-existing-history:
   en: 3a0476996102dcce
   zh: c0692ddc53045ff2
@@ -51,8 +51,8 @@
   en: 3a849c807fae4040
   zh: cb3a122553040b79
 /deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work:
-  en: 94f2d3feb95c8648
-  zh: d5a93b5d2926db2d
+  en: 33256cc02c705fae
+  zh: 90e42d74833c9267
 /deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

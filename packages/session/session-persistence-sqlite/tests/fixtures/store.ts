@@ -36,7 +36,8 @@ export const STORE_DEFAULTS = { compression: 'zstd', sql: SQL, derivations: DERI
 export function sqliteLogs(path: string, root: string, overrides: Partial<SqliteStoreOptions> = {}): SqliteStore {
   return new SqliteStore({ path, legacyRoot: root, ...STORE_DEFAULTS,
     acquireCreationLease: header => SessionWriteLease.acquire(sessionDir(root, header.cwd, header.id), header.id),
-    publish: async () => {}, report: () => {}, reportUpgrade: () => {}, reportSetAside: () => {}, reportDerivation: () => {},
+    publish: async () => {}, report: () => {}, reportUpgrade: () => {}, reportSetAside: () => {},
+    reportDerivation: () => {}, reportRecovery: () => {},
     ...overrides })
 }
 

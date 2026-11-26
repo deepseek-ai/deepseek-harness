@@ -38,9 +38,9 @@ it('retries WAL activation after a competing initializer releases its lock', asy
   } finally { blocker.close() }
 })
 
-it('preserves the SQLite busy error when the WAL activation wait budget expires', async () => {
+it('reports a lock that outlasts the WAL activation wait budget instead of calling the file damaged', async () => {
   const fixture = await persistenceFixture()
-  const backend = await fixture.mount('sqlite')
+  const backend = await fixture.mount('sqlite', 'none', 'report')
   const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
   let attempts = 0
   const clock = vi.spyOn(performance, 'now').mockImplementation(() => attempts < 2 ? 0 : 5000)
@@ -54,7 +54,8 @@ it('preserves the SQLite busy error when the WAL activation wait budget expires'
     execute.call(this, sql)
   })
   try {
-    await expect(backend.persistence.create(meta('busy-deadline'))).rejects.toBe(busy)
+    await expect(backend.persistence.create(meta('busy-deadline')))
+      .rejects.toMatchObject({ code: 'SESSION_STORAGE_LOCKED', cause: busy })
     expect(attempts).toBe(2)
   } finally { spy.mockRestore(); clock.mockRestore() }
   const writer = await backend.persistence.create(meta('after-contention'))
