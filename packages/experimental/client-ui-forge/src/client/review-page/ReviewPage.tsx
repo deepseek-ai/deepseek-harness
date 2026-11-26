@@ -24,7 +24,7 @@ import { ReviewDetail, type ReviewSummaryFace } from './ReviewDetail.tsx'
 import { ReviewList } from './ReviewList.tsx'
 import type { QuoteCopy, ReviewSelection } from '../review.ts'
 import { reviewListsComplete, reviewRepositories, scopeRepository, type ReviewRepository } from './review-lists.ts'
-import type { createReviewStore, ReviewTab } from './review-store.ts'
+import { changesTabOf, type createReviewStore, type ReviewTab } from './review-store.ts'
 import type { HostStream, StreamSnapshot } from '../source.ts'
 import type { ChangesPanelState } from '../status.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -116,7 +116,7 @@ function ReviewChanges({ frame, visible, changes, useStore, actions, t }: {
     return () => { controller.abort() }
   }, [url])
   const tab = useMemo((): ChangesViewTab | null => lifetime === null ? null : {
-    id: `review:${url}`, visible, navigation: { address: url, params: undefined, revision: 1 }, signal: lifetime.signal,
+    id: changesTabOf(url), visible, navigation: { address: url, params: undefined, revision: 1 }, signal: lifetime.signal,
     actions: { bindCommands: NO_BINDING },
   }, [url, visible, lifetime])
   const source = useMemo(() => ({ kind: 'change' as const, url }), [url])
@@ -182,6 +182,7 @@ function DetailPane({
       read={read}
       tab={tab}
       onTab={(value: ReviewTab) => { actions.tabbed(value) }}
+      onOpenCommit={(sha: string) => { actions.openedCommit(url, sha) }}
       listHidden={listHidden}
       onToggleList={() => { actions.toggledList() }}
       onBack={() => { actions.select(null) }}

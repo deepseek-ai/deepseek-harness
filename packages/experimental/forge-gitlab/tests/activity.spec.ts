@@ -1,6 +1,6 @@
-import type { ChangeRequestActivityItem, ForgeCommentAuthor } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestActivityItem, ForgeCommentAuthor, ForgeCommit } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
-import { ACTIVITY_QUERY, noteEntries, readActivity } from '../src/activity.ts'
+import { ACTIVITY_QUERY, noteEntries, readActivity, withListedCommitNames } from '../src/activity.ts'
 import type { ActivityNote } from '../src/activity.ts'
 import { GitLabApi } from '../src/api.ts'
 import type { GlabOutput } from '../src/glab.ts'
@@ -175,6 +175,20 @@ describe('GitLab activity reads', () => {
     await expect(readActivity(subject, merge(6, { ...app, name: 'a b' }), signal))
       .rejects.toThrow('forge-gitlab: invalid project "group/sub/a b"')
     expect(calls).toEqual([])
+  })
+})
+
+describe('GitLab activity commit names', () => {
+  it('gives an entry the full name of the one listed commit its abbreviation starts, and leaves every other entry', () => {
+    const listed = (sha: string): ForgeCommit => ({ sha, parent: null, title: 'T', author: null, authoredAt: 'D' })
+    const commit = (sha: string): ChangeRequestActivityItem => ({ at: 'D', actor: null, kind: 'commit', sha, title: 'T' })
+    const closed: ChangeRequestActivityItem = { at: 'D', actor: null, kind: 'closed' }
+    const commits = [listed('1a2b3c4d'.padEnd(40, '0')), listed('5e6f0000'.padEnd(40, '1')), listed('5e6f0000'.padEnd(40, '2'))]
+    expect(withListedCommitNames([commit('1a2b3c4d'), closed, commit('5e6f0000'), commit('77777777')], commits)).toEqual([
+      commit('1a2b3c4d'.padEnd(40, '0')), closed,
+      // Two listed commits start with the abbreviation, and none starts with the last one.
+      commit('5e6f0000'), commit('77777777'),
+    ])
   })
 })
 

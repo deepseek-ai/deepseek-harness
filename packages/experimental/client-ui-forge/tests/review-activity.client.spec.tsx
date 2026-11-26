@@ -62,7 +62,7 @@ async function settle(): Promise<void> {
 async function renderActivity(value: ChangeRequestActivity | null, overrides: Partial<ReviewActivityProps> = {}) {
   const props: ReviewActivityProps = {
     url: URL7, revision: 'r1', forge: 'GitHub', read: vi.fn(async () => ok(value)), comment: vi.fn(async () => ok(undefined)),
-    onOpenChanges: vi.fn(), openLink: vi.fn(), now: NOW, markdown: MARKDOWN, t, ...overrides,
+    onOpenChanges: vi.fn(), onOpenCommit: vi.fn(), openLink: vi.fn(), now: NOW, markdown: MARKDOWN, t, ...overrides,
   }
   const view = render(<ReviewActivity {...props} />)
   await settle()
@@ -135,6 +135,22 @@ describe('ReviewActivity', () => {
     expect(b.view.container.querySelectorAll(`.${css.activityNested}`)).toHaveLength(2)
     fireEvent.click(fold)
     expect(b.lines()).toHaveLength(3)
+  })
+
+  it('opens the changes tab on one commit from its line, alone and in an unfolded run', async () => {
+    const b = await renderActivity(activity([
+      commit('a', 'Fix the parser'), { kind: 'reopened', at: at(1), actor: mona }, commit('b', 'Add a test', 2), commit('c', 'Rename it', 3),
+    ]))
+    fireEvent.click(b.view.getByRole('button', { name: 'Fix the parser, View in Changes' }))
+    expect(b.props.onOpenCommit).toHaveBeenLastCalledWith('a'.repeat(40))
+    // The line of a run only folds and unfolds it; each commit under it opens on its own.
+    fireEvent.click(b.view.getByRole('button', { name: 'Commits: 2' }))
+    expect(b.props.onOpenCommit).toHaveBeenCalledTimes(1)
+    const nested = b.view.getByRole('button', { name: 'Rename it, View in Changes' })
+    expect(nested.matches(`.${css.activityNested}`)).toBe(true)
+    fireEvent.click(nested)
+    expect(b.props.onOpenCommit).toHaveBeenLastCalledWith('c'.repeat(40))
+    expect(b.props.onOpenChanges).not.toHaveBeenCalled()
   })
 
   it('shows each review decision, and opens the changes tab from a review that left inline comments', async () => {

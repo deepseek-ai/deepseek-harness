@@ -11,7 +11,7 @@ import {
   descriptionMarkdown, mergeRepositories, pastedUrl, REVIEW_FILTERS, reviewFailures, reviewHint, reviewListsComplete, reviewRepositories,
   reviewSearchKeys, reviewSections, sameScope, scopeRepository, summaryTone,
 } from '../src/client/review-page/review-lists.ts'
-import { createReviewStore } from '../src/client/review-page/review-store.ts'
+import { changesTabOf, createReviewStore } from '../src/client/review-page/review-store.ts'
 import { ref } from './client-fixtures.client.ts'
 import { failedList, frame, host, list, summary } from './review-fixtures.client.ts'
 
@@ -322,6 +322,17 @@ describe('createReviewStore', () => {
     // The same repository on another host is another repository.
     actions.listed([{ ...demo, host: 'ghe.example' }], true)
     expect(store.getSnapshot().repositories).toEqual([{ host: 'ghe.example', owner: 'octo', name: 'demo' }])
+  })
+
+  it('shows the changes tab with one commit chosen in the changes view of a change request', () => {
+    const store = createReviewStore().create()
+    const seven = 'https://github.com/octo/demo/pull/7'
+    expect(changesTabOf(seven)).toBe(`review:${seven}`)
+    // The changes view records its choices when the detail first shows.
+    store.actions.navigated(changesTabOf(seven), 1)
+    store.actions.openedCommit(seven, 'a'.repeat(40))
+    expect(store.getSnapshot().tab).toBe('changes')
+    expect(store.getSnapshot().byTab[changesTabOf(seven)]?.commits).toEqual({ from: 'a'.repeat(40), to: 'a'.repeat(40) })
   })
 
   it('shows the list in the view the reader chose', () => {
