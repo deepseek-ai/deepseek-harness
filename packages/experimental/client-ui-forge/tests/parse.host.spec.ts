@@ -124,8 +124,8 @@ describe('parseBaseBranches', () => {
     '',
   ].join('\r\n')
 
-  it('keeps the listed order, leaving out symbolic refs, the shown branch, and other ref kinds', () => {
-    expect(parseBaseBranches(output, 'refs/heads/feat', '', 10)).toEqual({
+  it('keeps the listed order, leaving out symbolic refs, the hidden branches, and other ref kinds', () => {
+    expect(parseBaseBranches(output, ['refs/heads/feat'], '', 10)).toEqual({
       remote: [
         { ref: 'refs/remotes/origin/main', name: 'origin/main' },
         { ref: 'refs/remotes/upstream/release/2.3', name: 'upstream/release/2.3' },
@@ -135,20 +135,23 @@ describe('parseBaseBranches', () => {
         { ref: 'refs/heads/main', name: 'main' },
       ],
     })
+    // The shown branch and the branch the automatic base stands for are both left out.
+    expect(parseBaseBranches(output, ['refs/heads/feat', 'refs/heads/main'], '', 10).local)
+      .toEqual([{ ref: 'refs/heads/Release/2.4', name: 'Release/2.4' }])
   })
 
   it('leaves out a shown remote-tracking branch and keeps a local branch of the same short name', () => {
-    const listed = parseBaseBranches('refs/remotes/origin/main\0\nrefs/heads/origin/main\0\n', 'refs/remotes/origin/main', '', 10)
+    const listed = parseBaseBranches('refs/remotes/origin/main\0\nrefs/heads/origin/main\0\n', ['refs/remotes/origin/main'], '', 10)
     expect(listed).toEqual({ remote: [], local: [{ ref: 'refs/heads/origin/main', name: 'origin/main' }] })
   })
 
   it('keeps names containing the trimmed query in any case, at most limit in each group', () => {
-    expect(parseBaseBranches(output, null, '  RELEASE ', 1)).toEqual({
+    expect(parseBaseBranches(output, [], '  RELEASE ', 1)).toEqual({
       remote: [{ ref: 'refs/remotes/upstream/release/2.3', name: 'upstream/release/2.3' }],
       local: [{ ref: 'refs/heads/Release/2.4', name: 'Release/2.4' }],
     })
-    expect(parseBaseBranches(output, null, '', 1).local).toEqual([{ ref: 'refs/heads/feat', name: 'feat' }])
-    expect(parseBaseBranches('refs/heads/\0\n', null, '', 10)).toEqual({ remote: [], local: [] })
+    expect(parseBaseBranches(output, [], '', 1).local).toEqual([{ ref: 'refs/heads/feat', name: 'feat' }])
+    expect(parseBaseBranches('refs/heads/\0\n', [], '', 10)).toEqual({ remote: [], local: [] })
   })
 })
 

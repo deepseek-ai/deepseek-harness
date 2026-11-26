@@ -3156,7 +3156,8 @@ it.skipIf(MODE === 'record')('opens the local changes of a clean checkout and sh
   expect(await head.getAttribute('data-forge-head')).toBe('refs/heads/topic')
   expect(await view.locator('[data-forge-scope]').count()).toBe(0)
   expect(await view.getByText('包含未提交的修改', { exact: true }).count()).toBe(0)
-  expect(await view.locator('[data-forge-base]').innerText()).toBe('origin/main')
+  // Without a chosen base, another branch is compared with the Session's own branch.
+  expect(await view.locator('[data-forge-base]').innerText()).toBe('main')
 
   // `cache` is read in its worktree: the branch scope counts the uncommitted files, and the other scopes apply.
   await head.click()
@@ -3164,6 +3165,7 @@ it.skipIf(MODE === 'record')('opens the local changes of a clean checkout and sh
   await view.locator('[data-forge-diff-file="draft.md"]').waitFor()
   expect(await shownPaths(view)).toEqual(['cache.md', 'draft.md'])
   expect(await head.getAttribute('data-forge-head')).toBe('refs/heads/cache')
+  expect(await view.locator('[data-forge-base]').innerText()).toBe('main')
   expect(await view.getByText('包含未提交的修改', { exact: true }).count()).toBe(1)
   await view.getByRole('button', { name: '分支', exact: true }).click()
   await page.getByRole('menuitem', { name: '未暂存', exact: true }).click()

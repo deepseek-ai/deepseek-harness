@@ -71,8 +71,9 @@ describe('forgePanel local changes of a branch no worktree has checked out', () 
     const opened = await open(repo)
     const { forgePanel } = opened.ctx
 
+    // Without a chosen base the branch is compared with the Session's own branch.
     const automatic = await forgePanel.localDiff(opened.session, whole(TOPIC), signal)
-    expect([automatic.base, paths(automatic), automatic.omitted, automatic.worktree]).toEqual(['origin/main', ['more.txt', 'topic.txt'], 0, undefined])
+    expect([automatic.base, paths(automatic), automatic.omitted, automatic.worktree]).toEqual(['main', ['more.txt', 'topic.txt'], 0, undefined])
     const chosen = await forgePanel.localDiff(opened.session, { kind: 'branch', head: TOPIC, base: 'refs/remotes/origin/release', commits: null }, signal)
     expect([chosen.base, paths(chosen)]).toEqual(['origin/release', ['more.txt']])
     const one: ForgeLocalScope = { kind: 'branch', head: TOPIC, base: null, commits: { from: first, to: first } }
@@ -102,19 +103,81 @@ describe('forgePanel local changes of a branch no worktree has checked out', () 
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged', head: TOPIC }, 'topic.txt', signal)).rejects.toMatchObject(refused)
   })
 
-  it('lists the bases of the branch without that branch', async () => {
+  it('lists the bases of the branch without that branch and without the Session\'s branch, which is the automatic base', async () => {
     const { repo } = await project()
     const opened = await open(repo)
     const { forgePanel } = opened.ctx
 
     const local = await forgePanel.diffBases(opened.session, TOPIC, '', signal)
     expect([local.automatic, names(local.remote), names(local.local)])
-      .toEqual([{ name: 'origin/main', worktree: false }, ['origin/main', 'origin/release'], ['main']])
+      .toEqual([{ name: 'main', worktree: false }, ['origin/main', 'origin/release'], []])
     const remote = await forgePanel.diffBases(opened.session, 'refs/remotes/origin/release', '', signal)
-    expect([names(remote.remote), names(remote.local)]).toEqual([['origin/main'], ['main', 'topic']])
-    // The Session's own checkout lists every branch but the one it has checked out.
+    expect([remote.automatic, names(remote.remote), names(remote.local)]).toEqual([{ name: 'main', worktree: false }, ['origin/main'], ['topic']])
+    // The Session's own checkout lists every branch but the one it has checked out, against the remote's default branch.
     const own = await forgePanel.diffBases(opened.session, null, '', signal)
-    expect([names(own.remote), names(own.local)]).toEqual([['origin/main', 'origin/release'], ['topic']])
+    expect([own.automatic, names(own.remote), names(own.local)])
+      .toEqual([{ name: 'origin/main', worktree: false }, ['origin/main', 'origin/release'], ['topic']])
+  })
+
+  it('compares a branch with the Session\'s own HEAD in a repository without a remote', async () => {
+    const { path, remove } = await scratch('dsh-forge-head-')
+    cleanups.push(remove)
+    const repo = await repository(path)
+    await git(repo, 'checkout', '--quiet', '-b', 'feature')
+    await writeFile(join(repo, 'feature.txt'), 'feature\n')
+    await git(repo, 'add', 'feature.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'feature')
+    // `child` leaves `feature` after the Session's own commit there, as a delegated Session's worktree does.
+    await git(repo, 'checkout', '--quiet', '-b', 'child')
+    await writeFile(join(repo, 'child.txt'), 'child\n')
+    await git(repo, 'add', 'child.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'child')
+    await git(repo, 'checkout', '--quiet', 'feature')
+    const opened = await open(repo)
+    const { forgePanel } = opened.ctx
+    const child = 'refs/heads/child'
+
+    // No remote names a default branch, so the Session's own checkout has no automatic fork point.
+    await expect(forgePanel.localDiff(opened.session, { kind: 'branch', base: null, commits: null }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
+    // The other branch shows what it changed since it left the Session's branch, without the Session's own commit.
+    const diff = await forgePanel.localDiff(opened.session, whole(child), signal)
+    expect([diff.base, paths(diff)]).toEqual(['feature', ['child.txt']])
+    await expect(forgePanel.localCommits(opened.session, child, null, signal)).resolves.toMatchObject({ commits: [{ title: 'child' }] })
+    const bases = await forgePanel.diffBases(opened.session, child, '', signal)
+    expect([bases.automatic, names(bases.local)]).toEqual([{ name: 'feature', worktree: false }, ['main']])
+    // A chosen base still replaces the automatic one.
+    const chosen = await forgePanel.localDiff(opened.session, { kind: 'branch', head: child, base: 'refs/heads/main', commits: null }, signal)
+    expect([chosen.base, paths(chosen)]).toEqual(['main', ['child.txt', 'feature.txt']])
+  })
+
+  it('names the automatic base by its commit while the Session\'s HEAD is detached, and has none while its branch has no commit', async () => {
+    const { repo } = await project()
+    await git(repo, 'checkout', '--quiet', '--detach')
+    const commit = (await git(repo, 'rev-parse', 'HEAD')).trim()
+    const opened = await open(repo)
+    const { forgePanel } = opened.ctx
+
+    const detached = await forgePanel.localDiff(opened.session, whole(TOPIC), signal)
+    expect([detached.base, paths(detached)]).toEqual([commit.slice(0, 7), ['more.txt', 'topic.txt']])
+    // Nothing stands for the automatic base in the listing, so every other local branch shows.
+    const bases = await forgePanel.diffBases(opened.session, TOPIC, '', signal)
+    expect([bases.automatic, names(bases.local)]).toEqual([{ name: commit.slice(0, 7), worktree: false }, ['main']])
+
+    // A branch without a commit gives the other branch nothing to be compared with, short of the remote's default branch.
+    await git(repo, 'checkout', '--quiet', '--orphan', 'empty')
+    const unborn = await forgePanel.localDiff(opened.session, whole(TOPIC), signal)
+    expect([unborn.base, paths(unborn)]).toEqual(['origin/main', ['more.txt', 'topic.txt']])
+  })
+
+  it('has no automatic fork point for a branch that shares no history with the Session\'s HEAD', async () => {
+    const { repo } = await project()
+    await git(repo, 'checkout', '--quiet', '--orphan', 'apart')
+    await git(repo, 'commit', '--quiet', '--allow-empty', '-m', 'apart')
+    await git(repo, 'checkout', '--quiet', '--force', 'main')
+    const opened = await open(repo)
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, whole('refs/heads/apart'), signal))
+      .rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
   })
 
   it('lists every local branch as a base while the Session\'s HEAD is detached', async () => {
@@ -180,7 +243,7 @@ describe('forgePanel local changes of a branch a worktree has checked out', () =
 
     // The `branch` scope adds the worktree's uncommitted files to the branch's two commits.
     const branch = await forgePanel.localDiff(opened.session, whole(TOPIC), signal)
-    expect([branch.base, paths(branch), branch.worktree]).toEqual(['origin/main', ['more.txt', 'staged.txt', 'topic.txt', 'tracked.txt', 'new.txt'], tree])
+    expect([branch.base, paths(branch), branch.worktree]).toEqual(['main', ['more.txt', 'staged.txt', 'topic.txt', 'tracked.txt', 'new.txt'], tree])
     await expect(read({ kind: 'uncommitted', head: TOPIC })).resolves.toEqual([['staged.txt', 'tracked.txt', 'new.txt'], tree])
     await expect(read({ kind: 'unstaged', head: TOPIC })).resolves.toEqual([['tracked.txt', 'new.txt'], tree])
     await expect(read({ kind: 'staged', head: TOPIC })).resolves.toEqual([['staged.txt'], tree])
@@ -191,9 +254,9 @@ describe('forgePanel local changes of a branch a worktree has checked out', () =
     // The Session's own working tree is untouched by the worktree.
     await expect(read({ kind: 'uncommitted' })).resolves.toEqual([[], undefined])
 
-    // The bases of the worktree's branch name the Session's checkout as `main`'s worktree; the Session's own listing names the other one.
+    // The bases of the worktree's branch leave out `main`, which the automatic base stands for.
     const bases = await forgePanel.diffBases(opened.session, TOPIC, '', signal)
-    expect(bases.local).toEqual([{ ref: 'refs/heads/main', name: 'main', worktree: repo }])
+    expect([bases.automatic, bases.local]).toEqual([{ name: 'main', worktree: false }, []])
     const own = await forgePanel.diffBases(opened.session, null, '', signal)
     expect(own.local).toEqual([{ ref: TOPIC, name: 'topic', worktree: tree }])
   })

@@ -20,7 +20,8 @@ import type { FileLayers } from './layers.ts'
 import { branchLabel } from './branch-name.ts'
 import { BASE_REF_PREFIXES, parseBaseBranches, parseName, parseWorktrees, remoteOrder } from './parse.ts'
 import type {
-  ForgeCommitRange, ForgeLocalChanges, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeBaseBranches, ForgeSessionWorktree,
+  ForgeBaseBranches, ForgeCheckout, ForgeCommitRange, ForgeLocalChanges, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
+  ForgeSessionWorktree,
 } from './types.ts'
 import type { ForgeCommit } from '@deepseek-ai/dsh-experimental-forge/types'
 
@@ -109,19 +110,50 @@ async function diffFilterOverrides(git: Git): Promise<Readonly<Record<string, st
 const BINARY_PROBE = 8000
 
 /**
- * Find where the `branch` scope forks while no base branch is chosen: the base commit of the worktree the
- * Session created while the checkout is that worktree, else the merge base of
- * HEAD with the default branch of the first remote that names one, in the
- * order the panel recognizes code hosts.
+ * The Session's own HEAD, which a branch shown in place of the Session's checkout is compared with while no base
+ * branch is chosen: a reader of another branch asks what it changed since it left the Session's work.
+ */
+export interface SessionHead {
+  /** Full object name of the commit the Session's HEAD names. */
+  readonly commit: string
+  /** Name the panel shows for it: the checked-out branch, or the abbreviated commit of a detached HEAD. */
+  readonly label: string
+  /** Full ref of the checked-out branch, which the automatic base stands for in a base listing; null when HEAD is detached. */
+  readonly ref: string | null
+}
+
+/**
+ * Read the Session's own HEAD.
+ * @param git - runner bound to the Session's checkout.
+ * @param checkout - that checkout.
+ * @returns the commit and its name, or null while the checked-out branch has no commit.
+ * @throws an Error when Git fails.
+ */
+export async function sessionHead(git: Git, checkout: ForgeCheckout): Promise<SessionHead | null> {
+  const head = await git('session-head', ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}'], [0, 1])
+  const commit = head.exitCode === 0 ? parseName(head.stdout) : null
+  if (commit === null) return null
+  return checkout.branch === null ? { commit, label: commit.slice(0, 7), ref: null }
+    : { commit, label: checkout.branch, ref: `${BASE_REF_PREFIXES[0]}${checkout.branch}` }
+}
+
+/**
+ * Find where the `branch` scope forks while no base branch is chosen. For a branch shown in place of the Session's
+ * checkout: the merge base of the tip with the Session's own HEAD. For the Session's checkout: the base commit of the
+ * worktree the Session created while the checkout is that worktree, else the merge base of HEAD with the default
+ * branch of the first remote that names one, in the order the panel recognizes code hosts.
  * @param git - runner bound to the checkout.
  * @param inspection - the checkout and its remotes.
  * @param created - worktree the checkout's Session created, or null.
  * @param tip - revision the scope shows: HEAD for the checkout, or a branch ref, which no created worktree applies to.
- * @returns the fork point, or null when no remote names a default branch or the tip shares no history with it.
+ * @param against - the Session's own HEAD while the scope shows another branch, or null for the Session's checkout.
+ * @returns the fork point, or null when the tip shares no history with what it is compared with, or no remote names
+ * a default branch for the Session's checkout.
  */
 export async function forkPoint(
-  git: Git, inspection: Inspection, created: ForgeSessionWorktree | null, tip = 'HEAD',
+  git: Git, inspection: Inspection, created: ForgeSessionWorktree | null, tip = 'HEAD', against: SessionHead | null = null,
 ): Promise<ForkPoint | null> {
+  if (against !== null) return await mergeBase(git, tip, against.commit, against.label)
   if (tip === 'HEAD' && created !== null && created.path === inspection.checkout.root) {
     const label = created.from === null ? created.baseCommit.slice(0, 7) : branchLabel(created.from)
     return { commit: created.baseCommit, label, worktree: true }
@@ -130,11 +162,16 @@ export async function forkPoint(
     const head = await git('remote-head', ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote.name}/HEAD`], [0, 1, 128])
     const base = head.exitCode === 0 ? parseName(head.stdout) : null
     if (base === null) continue
-    const merge = await git('merge-base', ['merge-base', tip, base], [0, 1, 128])
-    const commit = merge.exitCode === 0 ? parseName(merge.stdout) : null
-    return commit === null ? null : { commit, label: base, worktree: false }
+    return await mergeBase(git, tip, base, base)
   }
   return null
+}
+
+/** The merge base of the tip with a revision, under the name the panel shows for that revision; null without shared history. */
+async function mergeBase(git: Git, tip: string, revision: string, label: string): Promise<ForkPoint | null> {
+  const merge = await git('merge-base', ['merge-base', tip, revision], [0, 1, 128])
+  const commit = merge.exitCode === 0 ? parseName(merge.stdout) : null
+  return commit === null ? null : { commit, label, worktree: false }
 }
 
 /**
@@ -148,9 +185,7 @@ export async function forkPoint(
 export async function chosenForkPoint(git: Git, ref: string, tip = 'HEAD'): Promise<ForkPoint | null> {
   const { name, present } = await branchOf(git, ref)
   if (!present) throw new BaseMissing(`The base branch ${name} does not exist`)
-  const merge = await git('merge-base', ['merge-base', tip, ref], [0, 1, 128])
-  const commit = merge.exitCode === 0 ? parseName(merge.stdout) : null
-  return commit === null ? null : { commit, label: name, worktree: false }
+  return await mergeBase(git, tip, ref, name)
 }
 
 /**
@@ -183,6 +218,8 @@ async function branchOf(git: Git, ref: string): Promise<{ readonly name: string;
  * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param limit - most branches in each group.
  * @param tip - revision the scope shows: HEAD for the checkout, or a branch ref, which the listing leaves out.
+ * @param against - the Session's own HEAD while the scope shows another branch, or null for the Session's checkout;
+ * the listing leaves its branch out, because the automatic fork point already compares with it.
  * @returns the automatic fork point, then remote-tracking and local branches, most recently committed first; a local
  * branch that a worktree has checked out names the directory Git registered for it.
  * @throws an Error when Git fails or prints more than the runner's output limit.
@@ -194,13 +231,15 @@ export async function baseBranches(
   query: string,
   limit: number,
   tip = 'HEAD',
+  against: SessionHead | null = null,
 ): Promise<ForgeBaseBranches> {
-  const fork = await forkPoint(git, inspection, created, tip)
+  const fork = await forkPoint(git, inspection, created, tip, against)
   const refs = await git('base-branches', [
     'for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(symref)', ...BASE_REF_PREFIXES,
   ])
   const shown = tip !== 'HEAD' ? tip : inspection.checkout.branch === null ? null : `${BASE_REF_PREFIXES[0]}${inspection.checkout.branch}`
-  const { remote, local } = parseBaseBranches(refs.stdout, shown, query, limit)
+  const hidden = [shown, against === null ? null : against.ref].filter(ref => ref !== null)
+  const { remote, local } = parseBaseBranches(refs.stdout, hidden, query, limit)
   const trees = await branchWorktrees(git)
   return {
     automatic: fork === null ? null : { name: fork.label, worktree: fork.worktree },

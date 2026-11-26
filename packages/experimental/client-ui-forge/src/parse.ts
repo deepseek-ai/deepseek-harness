@@ -37,16 +37,16 @@ export const BASE_REF_PREFIXES = ['refs/heads/', 'refs/remotes/'] as const
 
 /**
  * Select the branches the `branch` scope can compare with from `git for-each-ref`
- * output, keeping its order and leaving out symbolic refs and the branch the scope shows.
+ * output, keeping its order and leaving out symbolic refs and the hidden branches.
  * @param output - stdout of `git for-each-ref --format=%(refname)%00%(symref)` over {@link BASE_REF_PREFIXES}.
- * @param shown - full ref of the branch the scope shows, the checked-out one or a branch head, or null when HEAD is detached.
+ * @param hidden - full refs the listing leaves out: the branch the scope shows, and the branch the automatic base stands for.
  * @param query - text the names must contain, ignoring case; empty or blank for every branch.
  * @param limit - most branches in each group.
  * @returns remote-tracking and local branches, at most `limit` of each.
  */
 export function parseBaseBranches(
   output: string,
-  shown: string | null,
+  hidden: readonly string[],
   query: string,
   limit: number,
 ): { readonly remote: ForgeBaseBranch[]; readonly local: ForgeBaseBranch[] } {
@@ -60,7 +60,7 @@ export function parseBaseBranches(
     const group = ref.startsWith(heads) ? local : ref.startsWith(remotes) ? remote : undefined
     if (group === undefined || group.length >= limit) continue
     const name = ref.slice(group === local ? heads.length : remotes.length)
-    if (name.length === 0 || ref === shown || !name.toLowerCase().includes(needle)) continue
+    if (name.length === 0 || hidden.includes(ref) || !name.toLowerCase().includes(needle)) continue
     group.push({ ref, name })
   }
   return { remote, local }

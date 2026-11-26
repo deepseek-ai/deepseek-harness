@@ -1806,7 +1806,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async diffBases(session: Session, head: string | null, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>',
         description: 'List the branches the `branch` scope can compare with, for the Session\'s current checkout or for a head branch read in its place.',
         parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'head', description: 'full ref of the branch the scope reads in place of the checked-out one, or null for the checkout.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the automatic fork point and at most `maxBranches` remote-tracking and local branches each, most recently committed first, without the branch the scope shows; a local branch that a worktree has checked out names that worktree\'s directory.',
+        returns: 'the automatic fork point and at most `maxBranches` remote-tracking and local branches each, most recently committed first, without the branch the scope shows and, for a head, without the Session\'s checked-out branch, which the automatic fork point compares with; a local branch that a worktree has checked out names that worktree\'s directory.',
         throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head does not exist; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {

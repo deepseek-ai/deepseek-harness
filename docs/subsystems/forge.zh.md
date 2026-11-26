@@ -1541,9 +1541,9 @@ interface ForgeCommitRange {
 }
 ```
 
-本地范围读取 Session 当前目录所在的检出，除非它用 `head` 指定一个分支：`refs/heads/` 或 `refs/remotes/` 下的完整引用名，并且 `show-ref --verify` 能在 Session 的仓库里找到它。Host 在检出该分支的地方读取它。`git worktree list` 给出仓库里检出该分支的 worktree、并且检查发现那里是同一个仓库的检出且确实检出了该分支时，Git 以读取方 Session 的沙箱策略在这个 worktree 里运行：每个范围都读取它的工作树，自动分叉点是与代码托管远端默认分支的合并基准，结果在 `worktree` 中给出这个目录。否则（所有远程跟踪分支都是）只有 `branch` 范围可用，它比较已提交的内容，以该引用代替 HEAD，不含未提交和未跟踪的文件；其他范围以 `forgePanel/no-working-tree` 拒绝。`head` 指向 Session 自己检出的分支时，读取的是 Session 的检出。
+本地范围读取 Session 当前目录所在的检出，除非它用 `head` 指定一个分支：`refs/heads/` 或 `refs/remotes/` 下的完整引用名，并且 `show-ref --verify` 能在 Session 的仓库里找到它。Host 在检出该分支的地方读取它。`git worktree list` 给出仓库里检出该分支的 worktree、并且检查发现那里是同一个仓库的检出且确实检出了该分支时，Git 以读取方 Session 的沙箱策略在这个 worktree 里运行：每个范围都读取它的工作树，结果在 `worktree` 中给出这个目录。否则（所有远程跟踪分支都是）只有 `branch` 范围可用，它比较已提交的内容，以该引用代替 HEAD，不含未提交和未跟踪的文件；其他范围以 `forgePanel/no-working-tree` 拒绝。`head` 指向 Session 自己检出的分支时，读取的是 Session 的检出。带 `head` 的范围没有指定 `base` 时，分叉点是 `head` 与 Session 自己的 HEAD 所指提交的合并基准，所以范围覆盖的是该分支离开 Session 的工作之后的改动，没有远端的仓库也一样；结果的 `base` 是 Session 检出的分支名，分离 HEAD 时是缩写提交。
 
-`diffBases(session, head, query)` 与 `localCommits(session, head, base)` 接受同样的 `head`，null 表示 Session 自己的检出。`diffBases` 不列出范围正在查看的分支，并给每个本地分支写上检出它的 worktree 的目录，所以页面用同一个 Remote 方法、以 null 作为 `head` 列出可以查看的分支。`head` 指向的分支不存在时，读取以 `forgePanel/head-missing` 拒绝。`localWrite` 不接受 `head`，只写 Session 自己的检出。
+`diffBases(session, head, query)` 与 `localCommits(session, head, base)` 接受同样的 `head`，null 表示 Session 自己的检出。`diffBases` 不列出范围正在查看的分支；带 `head` 时也不列出 Session 检出的分支，因为自动基准已经是它；并给每个本地分支写上检出它的 worktree 的目录，所以页面用同一个 Remote 方法、以 null 作为 `head` 列出可以查看的分支。`head` 指向的分支不存在时，读取以 `forgePanel/head-missing` 拒绝。`localWrite` 不接受 `head`，只写 Session 自己的检出。
 
 ```ts type-equiv
 /**
@@ -1555,10 +1555,11 @@ interface ForgeCommitRange {
  */
 type ForgeLocalScope =
   /**
-   * The working tree and untracked files against a fork point: the merge base of HEAD with the
-   * `base` ref, or while `base` is null, the base commit of the worktree the Session created when it reads its own
-   * checkout, else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the
-   * changes of those commits between the fork point and HEAD, without uncommitted or untracked files.
+   * The working tree and untracked files against a fork point: the merge base of HEAD with the `base` ref. While
+   * `base` is null, a scope with a `head` uses the merge base with the commit the Session's own HEAD names; a scope
+   * without one uses the base commit of the worktree the Session created, else the merge base of HEAD with the
+   * default branch of the code host remote. With `commits`, only the changes of those commits between the fork
+   * point and HEAD, without uncommitted or untracked files.
    */
   | { readonly kind: 'branch'; readonly head?: string; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
@@ -1587,7 +1588,10 @@ interface ForgeBaseBranch {
 ```ts type-equiv
 /** What the `branch` scope compares with while no base branch is chosen. */
 interface ForgeAutomaticBase {
-  /** The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote. */
+  /**
+   * The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote;
+   * for a scope with a `head`, the Session's checked-out branch, or its abbreviated HEAD commit when detached.
+   */
   readonly name: string
   /** Whether the fork point is the base commit of the worktree the Session created rather than a merge base. */
   readonly worktree: boolean
@@ -2632,7 +2636,8 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param signal - request cancellation.
  * @returns the automatic fork point and at most `maxBranches` remote-tracking and local branches each,
- * most recently committed first, without the branch the scope shows; a local branch that a worktree has checked
+ * most recently committed first, without the branch the scope shows and, for a head, without the Session's
+ * checked-out branch, which the automatic fork point compares with; a local branch that a worktree has checked
  * out names that worktree's directory.
  * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head does not exist; the
  * Git error when Git fails or the listed refs exceed `maxDiffBytes`.
