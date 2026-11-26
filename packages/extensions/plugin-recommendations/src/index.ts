@@ -121,8 +121,8 @@ export class PluginRecommendations extends TypertRemoteService {
    * @param agent - Exact live root resolved by the Gateway from the Session id.
    * @param cardId - The card's id, never a package supplied by the browser.
    * @returns the plugin's title, description and selection, `connector` for an installed official connector,
-   * `installable` with the English and Chinese title and description copied from an official connector the profile
-   * does not hold, or a refusal when the card names no available official plugin.
+   * `installable` with the connector catalog's title and description, in every shipped language, of an official
+   * connector the profile does not hold, or a refusal when the card names no available official plugin.
    */
   @Remote
   async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails> {
@@ -133,7 +133,7 @@ export class PluginRecommendations extends TypertRemoteService {
     if (details?.success !== true) return { status: 'refused', reason: 'unknown' }
     const target = targetOf(await this.ctx.pluginManager.listBundles(), details.data.name)
     if (target === undefined) return { status: 'refused', reason: 'unavailable' }
-    if (target.kind === 'install') return { status: 'installable', title: target.connector.title, description: target.connector.description }
+    if (target.kind === 'install') return { status: 'installable', title: target.connector.meta.title, description: target.connector.meta.description }
     const { bundle, connector } = target
     return { status: 'available', title: bundle.meta?.title ?? bundle.name, description: bundle.meta?.description ?? bundle.description ?? '',
       enabled: bundle.enabled, ...connector === undefined ? {} : { connector: true } }
@@ -196,7 +196,7 @@ export class PluginRecommendations extends TypertRemoteService {
       if (bundle.enabled) return record(previous?.phase === 'unconfirmed' ? 'enabled' : 'already-enabled')
       return this.settle(record, bundle.name, () => this.ctx.pluginManager.setBundleEnabled(bundle.name, true))
     }
-    const { name } = target.connector
+    const { packageName: name } = target.connector
     return this.settle(record, name, async () => {
       // Each release publishes the connectors at the DSH version; any other package or version is undone.
       const version = getDshRuntimeVersion()

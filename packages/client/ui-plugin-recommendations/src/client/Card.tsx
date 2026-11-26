@@ -87,10 +87,10 @@ function primaryKey(installable: boolean, approving: boolean, pending: boolean, 
  * after each action the card looks the plugin up again and keeps its current text until the answer arrives.
  * A refused or lost lookup leaves Not now and a retry of the lookup, but not Enable. A card that names no plugin shows
  * the frame's fallback. An official connector the profile does not hold shows the title and description the Host
- * copies from its package as plain text, since it has no details page before installation, and installs and enables
- * it; a failed installation that reported blocked install scripts lists them and offers to allow them. An enabled
- * official connector offers its account connection beside the card's status, unless the card was dismissed or its
- * last decision failed.
+ * reads from the connector catalog as plain text, since it has no details page before installation, and installs and
+ * enables it; a failed installation that reported blocked install scripts lists them and offers to allow them. An
+ * enabled official connector offers its account connection beside the card's status, unless the card was dismissed or
+ * its last decision failed.
  * @param props - card, state, actions and plugin-lifetime services.
  * @returns the card body.
  */

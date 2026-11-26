@@ -45,13 +45,13 @@ Web 和桌面端组合（[`dsh-web-app`](../../bundle/web-app/README.zh.md)）�
 
 Host 入口是函数插件。它的 `apply` 通过 `ctx.plugin` 组装内部的 `pluginRecommendations` Remote service；该 service 为卡片读取目录文本，并为本卡片种类启用插件。它不是可单独配置或替换的 YAML 条目，也不会向 `dsh-base` 添加 service。关闭功能会移除它的 skill、卡片种类和 Remote，并等待它拥有的启用操作结束。
 
-本插件不添加模型工具，也不添加 system prompt 段。它注册 `official-plugins` skill，加载时追加来自 `pluginManager` 的当前可推荐目录，之后是 [`src/connectors.ts`](src/connectors.ts) 列出的官方连接器，每项带 profile 是否持有（`installed`）和是否选用（`enabled`），分类方式和卡片相同：profile 未持有的连接器两项都是 false，已安装但卡片无法启用的连接器不列出，和不可推荐的插件一样。这个 skill 的目录条目根据一次 `listBundles()` 的结果组成：固定的开头和结尾之间是一个从句，用连接器的英文标题、按 `src/connectors.ts` 里的顺序列出卡片此刻能推荐其连接器的应用，即 profile 未持有该连接器，或者已安装、可用但没有开启；没有这样的连接器时不写这个从句。第一次查询组成条目，之后的查询不论工作目录或作用域都沿用它，直到 Plugin Manager 在每次操作后发出的 `plugin-manager/changed` 把它丢弃，并让缓存的目录失效。`listBundles()` 失败的结果不会保留：这次查询不列出这个 skill，skill 注册表会记日志并把这次结果标为不完整，下一次查询重新读取列表。如果某次查询在共享的读取进行中被取消，这次查询会停下，读取本身照常完成，供其他查询使用。加载得到的定义带的是这次查询列出的条目。
+本插件不添加模型工具，也不添加 system prompt 段。它注册 `official-plugins` skill，加载时追加来自 `pluginManager` 的当前可推荐目录，之后是 [`dsh-official-bundles`](../../util/official-bundles/README.zh.md) 里生成的 `OFFICIAL_CONNECTOR_CATALOG` 中的官方连接器，每项带 profile 是否持有（`installed`）和是否选用（`enabled`），分类方式和卡片相同：profile 未持有的连接器两项都是 false，已安装但卡片无法启用的连接器不列出，和不可推荐的插件一样。这个 skill 的目录条目根据一次 `listBundles()` 的结果组成：固定的开头和结尾之间是一个从句，用连接器的英文标题、按连接器目录里的顺序列出卡片此刻能推荐其连接器的应用，即 profile 未持有该连接器，或者已安装、可用但没有开启；没有这样的连接器时不写这个从句。第一次查询组成条目，之后的查询不论工作目录或作用域都沿用它，直到 Plugin Manager 在每次操作后发出的 `plugin-manager/changed` 把它丢弃，并让缓存的目录失效。`listBundles()` 失败的结果不会保留：这次查询不列出这个 skill，skill 注册表会记日志并把这次结果标为不完整，下一次查询重新读取列表。如果某次查询在共享的读取进行中被取消，这次查询会停下，读取本身照常完成，供其他查询使用。加载得到的定义带的是这次查询列出的条目。
 
 本插件向共享的[操作卡片服务](../../interaction/action-cards/README.zh.md)注册 `enable_official_plugin` 种类：`details` 带插件的 `name`，动作 `enable` 和 `approve` 都需要全局 Remote 权限。卡片投影、「暂不需要」、Remote 操作和状态通知都由共享服务负责。本插件通过 Plugin Manager 启用指定插件；profile 未持有的连接器，则用 `installBundle` 按 `<name>@<DSH 版本>` 安装，保存确切版本，装上别的包或版本会被拒绝。之后记录 `enabled`、`already-enabled`、`failed` 或 `unconfirmed`；Plugin Manager 报告变更失败或已取消时记为 `failed`。只有当卡片最近一次决定是记录了 `pendingBuilds` 的失败时，才接受 `approve`；它只允许记录下来的这些脚本并重新安装，不采用浏览器发来的包名；如果这时 profile 已经持有这个连接器，它像 `enable` 一样启用连接器，不允许任何脚本。在连接器卡片上执行 `enable` 或 `approve` 之前，如果「连接器」标签页的 bundle 在列表里、可推荐且没有开启，本插件会先开启它；开启之后和开启之前一样再检查一次：本插件正在卸载时拒绝操作（`closing`），卡片所在的会话已不是活动的根会话时也拒绝（`not-live-root`）。`unconfirmed` 表示插件重载打断了启用或安装、没有拿到结果。这类卡片在每次操作前（包括「暂不需要」）都会检查 profile，发现插件已开启就记为 `enabled`，不再重试或记为忽略。未处理、失败和未确认的卡片可以记为「暂不需要」。
 
 保存的选择要等重启才生效时，决定数据带 `application: restart-required`；变更失败时带插件管理的 `errorCode`，Plugin Manager 拒绝变更但没有给出代码时带 `operation-error`；pnpm 因安装脚本停止安装时（包失败类型为 `build-blocked`），等待允许的安装脚本记在 `pendingBuilds` 里，其他失败不记录，因为任何一次运行失败后，Plugin Manager 都会列出 profile 里所有尚未决定的脚本。状态通知只报告 `application` 和 `errorCode`。
 
-已随安装提供、可选、官方、可读取、可写且无错误的插件可以推荐，列出的连接器也可以：profile 未持有时安装它，已安装的同样要求可读取、可写且无错误。名字在用户操作时检查，而不是在模型提议时。Remote `describe(sessionId, cardId)` 返回卡片对应插件当前的标题、描述和启用状态，已安装的连接器另带 `connector: true`；profile 未持有的连接器返回 `installable`，并带 `src/connectors.ts` 抄录的中英文标题和描述；其他情况返回拒绝原因。
+已随安装提供、可选、官方、可读取、可写且无错误的插件可以推荐，列出的连接器也可以：profile 未持有时安装它，已安装的同样要求可读取、可写且无错误。名字在用户操作时检查，而不是在模型提议时。Remote `describe(sessionId, cardId)` 返回卡片对应插件当前的标题、描述和启用状态，已安装的连接器另带 `connector: true`；profile 未持有的连接器返回 `installable`，并带连接器目录里所有随附语言的标题和描述；其他情况返回拒绝原因。
 
 同一张卡上的并发操作共用一次执行；卸载时停止本地后续处理，不等待排在自身 HMR 卸载之后的 profile 变更。已接纳的变更由 Plugin Manager 负责完成；结果未确认的卡片再次点击时会重新检查 profile。安装状态由 profile 文件负责，卡片决定只记录历史结果。
 
@@ -95,10 +95,9 @@ Skill 内容和提案代码块追加到对话记录；公共 system prompt 和�
 
 - 只推荐已随安装提供、可选的官方插件和 7 个官方连接器；第三方注册源不在范围内。
 - 只要连接器包已按当前运行的 DSH 版本发布到 npm，就能从卡片安装；运行版本没有发布的构建无法从卡片安装连接器。
-- 连接器安装之前，卡片显示抄录的中文或英文标题和描述，其他界面语言看到的是英文。
 - 账号在插件页里连接器的详情页连接；卡片只负责打开这个页面，不显示连接状态。
 - 组成 skill 的目录条目要读取插件管理器的列表，在装有 28 个 bundle 的安装上需要 65–70 毫秒，每次启动和每次 Plugin Manager 变更后各读一次。不经过 Plugin Manager 的 profile 修改（例如手动编辑或 CLI 补丁）不会发出通知，所以条目要等下一次 Plugin Manager 变更或重启之后才跟上。
-- [`src/connectors.ts`](src/connectors.ts) 抄录了每个连接器的包名和中英文标题、描述。有测试把这份抄录和连接器包自己的语言文件比对，新增连接器或修改标题、描述后测试会失败，直到名单跟着更新。
+- 连接器目录编译进安装，所以新增的连接器要等新的 DSH 版本发布后才会出现在卡片上。连接器包不在目录里时有测试会失败，直到 `CONNECTOR_BUNDLES` 列出它并重新生成目录。
 - 推荐需要会话的精确在线 Agent 实例，且 `origin` 不是 `subagent`；不会主动寻找推荐机会。
 - 历史决定不会持续跟踪之后在插件页做的修改。
 

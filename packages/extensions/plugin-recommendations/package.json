@@ -62,6 +62,7 @@
     "@deepseek-ai/dsh-client-ui-plugin-recommendations": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
     "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "files": [

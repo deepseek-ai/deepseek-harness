@@ -3,7 +3,8 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import { getDshRuntimeVersion } from '@deepseek-ai/dsh-app-boot'
 import type { ActionCardFields } from '@deepseek-ai/dsh-action-cards'
 import type { BundleInfo, ChangeResult, PluginInstallFailureKind } from '@deepseek-ai/dsh-plugin-manager/types'
-import { CONNECTORS, CONNECTORS_TAB_BUNDLE } from '../src/connectors.ts'
+import { OFFICIAL_CONNECTOR_CATALOG } from '@deepseek-ai/dsh-official-bundles'
+import { CONNECTORS_TAB_BUNDLE } from '../src/connectors.ts'
 import * as PluginRecommendations from '../src/index.ts'
 import { ACTION, bundle, cardId, fixture } from './fixture.ts'
 
@@ -49,22 +50,16 @@ function decision(phase: string, data?: ActionCardFields) {
 }
 
 describe('official connector cards', () => {
-  it('names every official connector package with its own English and Chinese title and description', async () => {
+  it('offers every official connector package through the connector catalog', async () => {
     const root = new URL('../../../connector/', import.meta.url)
-    const packages: { name: string; title: Record<string, string>; description: Record<string, string> }[] = []
+    const packages: string[] = []
     for (const entry of await readdir(root, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue
       const manifest = JSON.parse(await readFile(new URL(`${entry.name}/package.json`, root), 'utf8')) as { name: string; dsh?: { bundle?: object } }
       // The account and skill helpers beside the connectors declare no bundle.
-      if (manifest.dsh?.bundle === undefined) continue
-      const meta = async (language: string) => (JSON.parse(await readFile(new URL(`${entry.name}/locale/${language}.json`, root), 'utf8')) as {
-        meta: { title: string; description: string }
-      }).meta
-      const [en, zh] = [await meta('en'), await meta('zh')]
-      packages.push({ name: manifest.name, title: { en: en.title, zh: zh.title }, description: { en: en.description, zh: zh.description } })
+      if (manifest.dsh?.bundle !== undefined) packages.push(manifest.name)
     }
-    const byName = (left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name)
-    expect([...CONNECTORS].sort(byName)).toEqual(packages.sort(byName))
+    expect(OFFICIAL_CONNECTOR_CATALOG.map(entry => entry.packageName).toSorted()).toEqual(packages.toSorted())
   })
 
   it('appends every connector to the catalog with whether the profile holds and selects it', async () => {
@@ -75,7 +70,7 @@ describe('official connector cards', () => {
     expect(catalog).toEqual([
       { name: bundle.name, title: 'Search', description: 'Search past conversations.', enabled: false },
       { name: CONNECTORS_TAB_BUNDLE, title: 'Search', description: 'Search past conversations.', enabled: false },
-      ...CONNECTORS.map(({ name, title, description }) => ({
+      ...OFFICIAL_CONNECTOR_CATALOG.map(({ packageName: name, meta: { title, description } }) => ({
         name, title: title.en, description: description.en, enabled: name === FEISHU, installed: name === FEISHU || name === NOTION,
       })),
     ])
@@ -99,11 +94,12 @@ describe('official connector cards', () => {
 
   it('describes a connector the profile does not hold as installable and an installed one by its own text', async () => {
     const f = await connectorCard()
-    const installable = {
-      status: 'installable', title: { en: 'Feishu', zh: '飞书' },
-      description: { en: 'Use Feishu documents, messages, and other authorized features in conversations.', zh: '在对话中使用飞书文档、消息及其他已授权的功能。' },
-    }
-    expect(await f.ctx.pluginRecommendations.describe(f.agent, cardId)).toEqual(installable)
+    const { meta } = OFFICIAL_CONNECTOR_CATALOG.find(entry => entry.packageName === FEISHU)!
+    const installable = { status: 'installable', title: meta.title, description: meta.description }
+    const described = await f.ctx.pluginRecommendations.describe(f.agent, cardId)
+    expect(described).toEqual(installable)
+    // The card has the connector's text in every shipped language, not only in English and Chinese.
+    expect(described).toHaveProperty('description.ja', meta.description.ja)
     // A selection whose package the profile no longer holds is installed again.
     f.manager.listBundles.mockResolvedValueOnce([{ ...feishu, installed: false, enabled: true, error: { code: 'not-bundle' } }])
     expect(await f.ctx.pluginRecommendations.describe(f.agent, cardId)).toEqual(installable)

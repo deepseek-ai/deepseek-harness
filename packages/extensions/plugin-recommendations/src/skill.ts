@@ -4,7 +4,7 @@ import { bundleCatalogEntry } from '@deepseek-ai/dsh-plugin-manager/catalog'
 import type { Context } from '@deepseek-ai/cordis'
 import { BUNDLED_SKILL_RANK, type SkillCandidate } from '@deepseek-ai/dsh-skill'
 import type { BundleInfo } from '@deepseek-ai/dsh-plugin-manager/types'
-import { CONNECTORS, type Connector } from './connectors.ts'
+import { OFFICIAL_CONNECTOR_CATALOG, type OfficialBundleCatalogEntry } from '@deepseek-ai/dsh-official-bundles'
 
 /** Fixed opening of the skill's catalog entry: the product questions the shipped optional plugins answer. */
 const DESCRIPTION_OPENING = 'Check DSH’s plugins when the user asks how to do something in this app, whether it can, or says a capability is missing or should change: input, thinking or title display, session search, terminals, worktrees, desktop control, automation, access, approvals, badges or signatures, plugin sources'
@@ -29,11 +29,12 @@ export function eligible(bundle: BundleInfo): boolean {
 
 /**
  * What a card's plugin is in the profile now: a bundle the card can enable, which an installed official connector also
- * is, or an official connector to install. `connector` is present exactly for an official connector.
+ * is, or an official connector to install. `connector`, the connector's catalog entry, is present exactly for an
+ * official connector.
  */
 type Target =
-  | { readonly kind: 'enable'; readonly bundle: BundleInfo; readonly connector?: Connector }
-  | { readonly kind: 'install'; readonly connector: Connector }
+  | { readonly kind: 'enable'; readonly bundle: BundleInfo; readonly connector?: OfficialBundleCatalogEntry }
+  | { readonly kind: 'install'; readonly connector: OfficialBundleCatalogEntry }
 
 /**
  * Classify a card's plugin against one plugin manager listing; the catalog and the card share this classification.
@@ -44,7 +45,7 @@ type Target =
  */
 export function targetOf(bundles: readonly BundleInfo[], name: string): Target | undefined {
   const bundle = bundles.find(item => item.name === name)
-  const connector = CONNECTORS.find(item => item.name === name)
+  const connector = OFFICIAL_CONNECTOR_CATALOG.find(item => item.packageName === name)
   if (connector === undefined) return bundle !== undefined && eligible(bundle) ? { kind: 'enable', bundle } : undefined
   if (bundle?.installed !== true) return { kind: 'install', connector }
   return usable(bundle) ? { kind: 'enable', bundle, connector } : undefined
@@ -56,12 +57,13 @@ function offerable(target: Target | undefined): boolean {
 }
 
 /**
- * The skill's catalog entry for one plugin manager listing. It names, in the order `CONNECTORS` lists them, only the
- * apps whose connector a card could offer now, so a task that needs the app of an enabled or unusable connector does
- * not load the skill; without such a connector the entry names no app.
+ * The skill's catalog entry for one plugin manager listing. It names, by English title in the connector catalog's
+ * order, only the apps whose connector a card could offer now, so a task that needs the app of an enabled or unusable
+ * connector does not load the skill; without such a connector the entry names no app.
  */
 function skillDescription(bundles: readonly BundleInfo[]): string {
-  const apps = CONNECTORS.filter(({ name }) => offerable(targetOf(bundles, name))).map(connector => connector.title.en)
+  const apps = OFFICIAL_CONNECTOR_CATALOG.filter(({ packageName }) => offerable(targetOf(bundles, packageName)))
+    .map(connector => connector.meta.title.en)
   const last = apps.pop()
   const needs = last === undefined ? '' : `; or a task needs ${apps.length === 0 ? last : `${apps.join(', ')} or ${last}`}`
   return `${DESCRIPTION_OPENING}${needs}${DESCRIPTION_CLOSING}`
@@ -86,7 +88,7 @@ export function registerOfficialPluginsSkill(ctx: Context): void {
     const policy = await readFile(new URL('../skills/official-plugins.md', import.meta.url), { encoding: 'utf8', signal })
     const bundles = await ctx.pluginManager.listBundles()
     // The connectors follow the eligible plugins in English; one a card cannot enable is left out, as an ineligible plugin is.
-    const connectors = CONNECTORS.flatMap(({ name, title, description }) => {
+    const connectors = OFFICIAL_CONNECTOR_CATALOG.flatMap(({ packageName: name, meta: { title, description } }) => {
       const target = targetOf(bundles, name)
       if (target === undefined) return []
       const installed = target.kind === 'enable'

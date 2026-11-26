@@ -3215,7 +3215,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>',
         description: 'Read the current catalog text for a logged card.',
         parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'cardId', description: 'The card\'s id, never a package supplied by the browser.' }],
-        returns: 'the plugin\'s title, description and selection, `connector` for an installed official connector, `installable` with the English and Chinese title and description copied from an official connector the profile does not hold, or a refusal when the card names no available official plugin.',
+        returns: 'the plugin\'s title, description and selection, `connector` for an installed official connector, `installable` with the connector catalog\'s title and description, in every shipped language, of an official connector the profile does not hold, or a refusal when the card names no available official plugin.',
       },
     ],
   },

@@ -14254,6 +14254,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-plugin-recommendations':
         specifier: workspace:*
         version: link:../../client/ui-plugin-recommendations
+      '@deepseek-ai/dsh-official-bundles':
+        specifier: workspace:*
+        version: link:../../util/official-bundles
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values

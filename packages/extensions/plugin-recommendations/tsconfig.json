@@ -30,6 +30,9 @@
       "path": "../../util/package-manifest"
     },
     {
+      "path": "../../util/official-bundles"
+    },
+    {
       "path": "../../util/values"
     },
     {

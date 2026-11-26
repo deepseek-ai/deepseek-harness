@@ -500,8 +500,8 @@ Catalog lookups for card text and the enabling and connector installation behind
  * @param agent - Exact live root resolved by the Gateway from the Session id.
  * @param cardId - The card's id, never a package supplied by the browser.
  * @returns the plugin's title, description and selection, `connector` for an installed official connector,
- * `installable` with the English and Chinese title and description copied from an official connector the profile
- * does not hold, or a refusal when the card names no available official plugin.
+ * `installable` with the connector catalog's title and description, in every shipped language, of an official
+ * connector the profile does not hold, or a refusal when the card names no available official plugin.
  */
 @Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>
 ```

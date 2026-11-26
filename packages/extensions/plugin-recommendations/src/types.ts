@@ -32,8 +32,9 @@ export interface PluginData {
 
 /**
  * The card's text, read when it is displayed: catalog text of an eligible plugin or an installed official connector,
- * or `installable` with the English and Chinese text this package copies from an official connector the profile does
- * not hold, which has no catalog text or details page yet; any other name gets a refusal.
+ * or `installable` with the text, in every shipped language, that the connector catalog of
+ * `@deepseek-ai/dsh-official-bundles` holds for an official connector the profile does not hold, which has no plugin
+ * manager listing or details page yet; any other name gets a refusal.
  */
 export type RecommendationDetails =
   | {
