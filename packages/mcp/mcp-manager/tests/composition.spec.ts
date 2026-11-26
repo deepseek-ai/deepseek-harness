@@ -264,9 +264,11 @@ describe('mcp-manager server rows in a real profile', () => {
     const saved = await readFile(profile.patchPath, 'utf8')
     const row = profileRow(ctx, 'mcp-server-one')
 
-    await expect(ctx.configEditor.edit(row, current => ({ ...current, startupTimeoutMs: 0 }))).rejects.toThrow()
-    expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
-    // The schema refused the candidate, so the running server was not touched.
+    for (const patch of [{ startupTimeoutMs: 0 }, { enabled: false }]) {
+      await expect(ctx.configEditor.edit(row, current => ({ ...current, ...patch }))).rejects.toThrow('invalid config')
+      expect(await readFile(profile.patchPath, 'utf8')).toBe(saved)
+    }
+    // The schema refused the candidates, so the running server was not touched.
     expect(clients).toHaveLength(1)
     expect(ctx.tools.get('mcp__one__remote')).toBeDefined()
 
@@ -352,7 +354,7 @@ describe('mcp-manager server rows in a real profile', () => {
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__good__remote')).toBeDefined() })
     const warning = await startupWarning(ctx)
     expect(warning).toContain('dsh: warning: 1 entry did not activate\nmcp-server-copied (cordis:mcp-manager-server): ')
-    expect(warning).toContain('mcp-manager-server: a server row takes no "enabled" field; switch the server off with the row\'s "disabled" field')
+    expect(warning).toContain('$.enabled expected nullable but got false')
     expect(names(ctx)).toEqual(['good'])
   })
 })

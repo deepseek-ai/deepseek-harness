@@ -15,7 +15,7 @@
  * The row's `disabled` field switches the server off: the Loader unloads the row, and the manager unmounts the
  * server and withdraws its tools. An edited row restarts alone, and an invalid row fails alone. A row whose
  * `serverName` a `servers` entry or another registration already holds fails, and the earlier declaration keeps
- * serving.
+ * serving. The row's schema refuses a config that sets `enabled`.
  *
  * Function plugin (named exports, no default export).
  *
@@ -39,28 +39,26 @@ export interface Config extends Omit<McpManagedServerEntry, 'enabled'> {
   serverName: string
 }
 
-/** The fields of one `servers` entry that a registration carries. */
-const registrationFields = Object.fromEntries(
-  Object.entries(ServerEntrySchema.dict as Record<string, z>).filter(([field]) => field !== 'enabled'),
-)
-
-/** Schema for {@link Config}: `serverName` beside the fields of one registration. */
-export const Config = z.object({
+/**
+ * The fields of a row: `serverName` beside the fields of one `servers` entry. `enabled` accepts no value: a
+ * registration is enabled while it exists, so an `enabled: false` copied from a `servers` entry would start the server.
+ */
+const rowFields: Record<string, z> = {
   serverName: z.string().required(),
-  ...registrationFields,
-}) as z<McpServerRegistration & Pick<Config, 'serverName'>, Config>
+  ...ServerEntrySchema.dict,
+  enabled: z.never().description('Not accepted on a server row. Switch the server off with the row\'s "disabled" field.'),
+}
+
+/** Schema for {@link Config}. */
+export const Config = z.object(rowFields) as z<McpServerRegistration & Pick<Config, 'serverName'>, Config>
 
 /**
  * Register this row's server with the manager for the row's lifetime.
  * @param ctx - the row's plugin context; its disposal removes the server.
  * @param config - the row's resolved config.
- * @throws when the config carries `enabled` or the manager refuses the registration.
+ * @throws when the manager refuses the registration.
  */
 export function apply(ctx: Context, config: Config): void {
-  // A registration is enabled while it exists, so an `enabled: false` copied from a `servers` entry would start the server.
-  if (Object.hasOwn(config, 'enabled')) {
-    throw new Error('mcp-manager-server: a server row takes no "enabled" field; switch the server off with the row\'s "disabled" field')
-  }
   const { serverName, ...entry } = config
   ctx.mcpManager.register(serverName, entry)
 }

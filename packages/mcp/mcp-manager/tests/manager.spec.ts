@@ -1092,7 +1092,7 @@ describe('mcp-manager', () => {
     const copied = ctx.plugin(McpServerRow, {
       serverName: 'docs', transport: 'stdio', command: 'echo', enabled: false,
     } as Parameters<typeof McpServerRow.Config>[0])
-    await expect(copied.await()).rejects.toThrow('mcp-manager-server: a server row takes no "enabled" field')
+    await expect(copied.await()).rejects.toThrow('$.enabled expected nullable but got false')
     expect(manager.list().map(view => view.name)).toEqual(['base'])
   })
 
@@ -1209,6 +1209,8 @@ describe('server row schema', () => {
   it.each([
     [{ startupTimeoutMs: 0 }],
     [{ startupTimeoutMs: -5 }],
+    [{ enabled: false }],
+    [{ enabled: true }],
   ])('refuses %j when the row loads instead of at mount', (patch) => {
     expect(() => {
       McpServerRow.Config({ serverName: 'a', transport: 'stdio', command: 'echo', ...patch })

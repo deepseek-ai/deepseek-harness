@@ -32,7 +32,7 @@ it('reports each refused MCP server row alone and completes the headless task', 
   expect(stderr).toContain('mcp-server-incomplete (@deepseek-ai/dsh-mcp-manager/server)')
   expect(stderr).toContain('servers.incomplete: a stdio server requires "command"')
   expect(stderr).toContain('mcp-server-copied (@deepseek-ai/dsh-mcp-manager/server)')
-  expect(stderr).toContain('mcp-manager-server: a server row takes no "enabled" field; switch the server off with the row\'s "disabled" field')
+  expect(stderr).toContain('$.enabled expected nullable but got false')
   expect(stderr).toContain('mcp-server-listed (@deepseek-ai/dsh-mcp-manager/server)')
   expect(stderr).toContain('mcp-manager: server "listed" is already configured or registered')
 }, LOADER_SMOKE_TEST_TIMEOUT_MS)
