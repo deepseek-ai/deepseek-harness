@@ -12,7 +12,6 @@
     "src/diff.ts",
     "src/git.ts",
     "src/local-diff.ts",
-    "src/local-head.ts",
     "src/local-write.ts",
     "src/layers.ts",
     "src/lens-version.ts",
@@ -67,9 +66,6 @@
     },
     {
       "path": "../../storage/storage-domain"
-    },
-    {
-      "path": "../../subagent/subagent"
     },
     {
       "path": "../../subprocess/subprocess"

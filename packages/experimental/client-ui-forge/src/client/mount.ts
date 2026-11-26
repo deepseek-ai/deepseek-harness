@@ -393,7 +393,6 @@ function registerUi(ctx: Context): void {
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       localWrite: write => ctx.remote.forgePanel.localWrite(sessionId, write),
       diffBases: (head, query, signal) => ctx.remote.forgePanel.diffBases(sessionId, head, query, signal),
-      relatedCheckouts: signal => ctx.remote.forgePanel.relatedCheckouts(sessionId, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
       localCommits: (head, base, signal) => ctx.remote.forgePanel.localCommits(sessionId, head, base, signal),
       changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),

@@ -7,14 +7,20 @@
  */
 
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { ForgeBaseBranch, ForgeBranchHead, ForgeCommitRange, ForgeFileLayer, ForgeLocalScope, ForgeRelatedHead } from '../types.ts'
+import type { ForgeBaseBranch, ForgeCommitRange, ForgeFileLayer, ForgeLocalScope } from '../types.ts'
 
-/** What local changes show in place of the Session's own checkout, with the name its picker shows. */
-export type ChangesHead =
-  /** A related Session's checkout, with the branch or commit it had when chosen and its top-level directory. */
-  | ForgeRelatedHead & { readonly name: string; readonly root: string }
-  /** A branch's committed content, with the branch name without its ref prefix. */
-  | ForgeBranchHead & { readonly name: string }
+/** The branch local changes show in place of the Session's checked-out one. */
+export interface ChangesHead {
+  /** Full ref name of the branch. */
+  readonly ref: string
+  /** The ref without its prefix, which the picker shows. */
+  readonly name: string
+  /**
+   * Top-level directory of the worktree that has the branch checked out, as last listed or read; null when none has,
+   * so the branch has the `branch` scope alone.
+   */
+  readonly worktree: string | null
+}
 
 /** Files a changes tab shows: every file, or the files of one review layer. */
 export type ChangesLens = 'all' | ForgeFileLayer
@@ -59,6 +65,7 @@ export type ChangesActions = {
   navigated: (draft: ChangesState, tabId: string, revision: number) => void
   scoped: (draft: ChangesState, tabId: string, scope: ForgeLocalScope['kind']) => void
   headed: (draft: ChangesState, tabId: string, head: ChangesHead | null) => void
+  rooted: (draft: ChangesState, tabId: string, worktree: string | null) => void
   based: (draft: ChangesState, tabId: string, base: ForgeBaseBranch | null) => void
   committed: (draft: ChangesState, tabId: string, commits: ForgeCommitRange | null) => void
   lensed: (draft: ChangesState, tabId: string, lens: ChangesLens) => void
@@ -98,18 +105,31 @@ export const changesActions: ChangesActions = {
     tab.commits = null
   },
   /**
-   * Show local changes of another head, compared with its automatic fork point and with all of its commits. A branch
-   * has no working tree, so choosing one shows the `branch` scope.
+   * Show local changes of another branch, compared with its automatic fork point and with all of its commits. A
+   * branch that no worktree has checked out has no working tree, so choosing one shows the `branch` scope.
    * @param d - draft state.
    * @param tabId - the tab being drawn.
-   * @param head - the head, or null for the Session's own checkout.
+   * @param head - the branch, or null for the Session's own checkout.
    */
   headed: (d, tabId: string, head: ChangesHead | null) => {
     const tab = bucket(d, tabId)
     tab.head = head
     tab.base = null
     tab.commits = null
-    if (head?.kind === 'branch') tab.scope = 'branch'
+    if (head !== null && head.worktree === null) tab.scope = 'branch'
+  },
+  /**
+   * Record where the shown branch's worktree is now, as a read found it; without one the tab shows the `branch`
+   * scope. A tab that shows the Session's own checkout is unchanged.
+   * @param d - draft state.
+   * @param tabId - the tab being drawn.
+   * @param worktree - top-level directory of the worktree, or null when no worktree has the branch checked out.
+   */
+  rooted: (d, tabId: string, worktree: string | null) => {
+    const tab = bucket(d, tabId)
+    if (tab.head === null) return
+    tab.head = { ...tab.head, worktree }
+    if (worktree === null) tab.scope = 'branch'
   },
   /**
    * Compare the `branch` scope with another branch, showing all of its commits.

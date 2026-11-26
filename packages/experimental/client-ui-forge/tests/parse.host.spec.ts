@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  parseBaseBranches, parseName, parseRemotes, parseTopLevel, parseWorktreeBases, remoteOrder, remoteRepository, upstreamBranch,
+  parseBaseBranches, parseName, parseRemotes, parseTopLevel, parseWorktreeBases, parseWorktrees, remoteOrder, remoteRepository,
+  upstreamBranch,
 } from '../src/parse.ts'
 import type { GitRemote } from '../src/parse.ts'
 
@@ -148,6 +149,26 @@ describe('parseBaseBranches', () => {
     })
     expect(parseBaseBranches(output, null, '', 1).local).toEqual([{ ref: 'refs/heads/feat', name: 'feat' }])
     expect(parseBaseBranches('refs/heads/\0\n', null, '', 10)).toEqual({ remote: [], local: [] })
+  })
+})
+
+describe('parseWorktrees', () => {
+  /** One `git worktree list --porcelain` entry: its lines, then an empty line. */
+  const listed = (...fields: string[]): string => `${fields.join('\n')}\n\n`
+
+  it('maps each checked-out branch to its worktree, leaving out detached, bare, and prunable entries', () => {
+    const output = [
+      listed('worktree /work/repo', `HEAD ${'a'.repeat(40)}`, 'branch refs/heads/main'),
+      listed('worktree /work/with space', `HEAD ${'b'.repeat(40)}`, 'branch refs/heads/feat/cache', 'locked reason'),
+      listed('worktree /work/detached', `HEAD ${'c'.repeat(40)}`, 'detached'),
+      listed('worktree /work/bare.git', 'bare'),
+      listed('worktree /work/gone', `HEAD ${'d'.repeat(40)}`, 'branch refs/heads/gone', 'prunable gitdir file points to non-existent location'),
+      listed('worktree /work/pruned', `HEAD ${'e'.repeat(40)}`, 'branch refs/heads/pruned', 'prunable'),
+    ].join('')
+    expect([...parseWorktrees(output)]).toEqual([['refs/heads/main', '/work/repo'], ['refs/heads/feat/cache', '/work/with space']])
+    expect(parseWorktrees('').size).toBe(0)
+    // A line break in a directory's name ends the path the listing gives.
+    expect([...parseWorktrees(listed('worktree /work/a\nb', `HEAD ${'f'.repeat(40)}`, 'branch refs/heads/odd'))]).toEqual([['refs/heads/odd', '/work/a']])
   })
 })
 

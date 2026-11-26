@@ -95,7 +95,6 @@ function changesFaces(threads: readonly ForgeReviewThread[] = []): ReviewChanges
     localDiff: vi.fn(local),
     localWrite: vi.fn(local),
     diffBases: vi.fn(local),
-    relatedCheckouts: vi.fn(local),
     localText: vi.fn(local),
     localCommits: vi.fn(local),
     changeRequestDiff: vi.fn(async () => ok(CHANGE)),

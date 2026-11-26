@@ -109,21 +109,6 @@
   white-space: nowrap;
 }
 
-/* A Session's row names its branch first; what the Session does follows and gives way when the menu is narrow. */
-.related .name {
-  flex: 0 1 auto;
-  max-width: 55%;
-}
-
-.who {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--dsw-alias-label-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .tag {
   flex: none;
   padding: 0 5px;

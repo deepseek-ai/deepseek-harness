@@ -10626,9 +10626,6 @@ importers:
       '@deepseek-ai/dsh-session-query':
         specifier: workspace:*
         version: link:../../session-query/session-query
-      '@deepseek-ai/dsh-subagent':
-        specifier: workspace:*
-        version: link:../../subagent/subagent
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess

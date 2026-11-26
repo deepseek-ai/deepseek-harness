@@ -268,8 +268,8 @@ describe('pending reviews', () => {
   it('keeps records of another head apart and restores the head they were written on', () => {
     const queue = new ReviewQueue('review-test')
     const own = { kind: 'local' as const, scope: 'branch', base: 'origin/main', baseRef: null, commits: null }
-    const related = { ...own, head: { key: 'session:child-1', name: 'cache', root: '/work/cache' } }
-    const branch = { ...own, head: { key: 'branch:refs/heads/topic', name: 'topic', root: null } }
+    const related = { ...own, head: { key: 'refs/heads/cache', name: 'cache', root: '/work/cache' } }
+    const branch = { ...own, head: { key: 'refs/heads/topic', name: 'topic', root: null } }
     expect(queue.recordAgent({ ...selection, source: related })).toBe(true)
     expect(queue.fileComments('a.ts', related).threads).toHaveLength(1)
     expect(queue.fileComments('a.ts', own).threads).toHaveLength(0)

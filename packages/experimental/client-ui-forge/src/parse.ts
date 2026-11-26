@@ -67,6 +67,28 @@ export function parseBaseBranches(
 }
 
 /**
+ * Read which worktree has each branch checked out from `git worktree list --porcelain` output: one block of lines for
+ * each worktree, ended by an empty line. The NUL-separated form of the listing needs Git 2.36, so the lines are read
+ * instead; a directory whose name holds a line break is cut at the break, and Git before 2.31 does not mark a worktree
+ * whose directory is gone, so a caller confirms the directory before it reads there.
+ * @param output - stdout of the listing.
+ * @returns the directory of each worktree by the full ref of its branch, without detached, bare, and prunable entries.
+ */
+export function parseWorktrees(output: string): Map<string, string> {
+  const found = new Map<string, string>()
+  for (const entry of output.split('\n\n')) {
+    const fields = entry.split('\n')
+    const value = (name: string): string | undefined => fields.find(field => field.startsWith(`${name} `))?.slice(name.length + 1)
+    const path = value('worktree')
+    const branch = value('branch')
+    // A prunable entry names a directory that is gone; its branch can only be read from its commits.
+    if (path === undefined || branch === undefined || fields.some(field => field === 'prunable' || field.startsWith('prunable '))) continue
+    found.set(branch, path)
+  }
+  return found
+}
+
+/**
  * Select the branches a new worktree can start from out of `git for-each-ref` output, keeping its order within
  * each group: the checked-out branch, each remote's default branch, the other local branches, and the other
  * remote-tracking branches of each remote. A remote's default branch is the branch its `refs/remotes/<remote>/HEAD`

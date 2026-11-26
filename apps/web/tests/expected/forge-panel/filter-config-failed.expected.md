@@ -1,4 +1,4 @@
-- text: main
+- button "查看的分支：main": main
 - button "基准分支：origin/main": origin/main
 - text: 包含未提交的修改
 - button "查看的提交：全部提交": 全部提交

@@ -47,13 +47,13 @@ export interface ReviewSelection {
   readonly comment: ReviewComment
 }
 
-/** What local changes showed in place of the Session's own checkout when a comment was written. */
+/** The branch local changes showed in place of the Session's checked-out one when a comment was written. */
 export interface ReviewHead {
-  /** Identity of the head among the heads of one Session: the related Session's id or the branch's full ref, after its kind. */
+  /** Identity of the head among the heads of one Session: the branch's full ref name. */
   readonly key: string
-  /** Branch the head showed, or the commit of a detached checkout. */
+  /** Branch name without its ref prefix. */
   readonly name: string
-  /** Top-level directory of a related Session's checkout, or null for a branch's committed content. */
+  /** Top-level directory of the worktree the changes were read in, or null for a branch read from its commits. */
   readonly root: string | null
 }
 

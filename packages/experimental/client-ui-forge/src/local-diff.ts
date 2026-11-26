@@ -18,7 +18,7 @@ import type { Git, GitConfig, GitOutput, Inspection } from './git.ts'
 import { ATTRIBUTES_PATH } from './layers.ts'
 import type { FileLayers } from './layers.ts'
 import { branchLabel } from './branch-name.ts'
-import { BASE_REF_PREFIXES, parseBaseBranches, parseName, remoteOrder } from './parse.ts'
+import { BASE_REF_PREFIXES, parseBaseBranches, parseName, parseWorktrees, remoteOrder } from './parse.ts'
 import type {
   ForgeCommitRange, ForgeLocalChanges, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeBaseBranches, ForgeSessionWorktree,
 } from './types.ts'
@@ -62,7 +62,7 @@ export class BaseMissing extends Error {
   override name = 'BaseMissing'
 }
 
-/** Thrown when the branch a scope shows in place of the checkout does not exist. */
+/** Thrown when the branch a scope reads in place of the checked-out one does not exist. */
 export class HeadMissing extends Error {
   override name = 'HeadMissing'
 }
@@ -183,7 +183,8 @@ async function branchOf(git: Git, ref: string): Promise<{ readonly name: string;
  * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param limit - most branches in each group.
  * @param tip - revision the scope shows: HEAD for the checkout, or a branch ref, which the listing leaves out.
- * @returns the automatic fork point, then remote-tracking and local branches, most recently committed first.
+ * @returns the automatic fork point, then remote-tracking and local branches, most recently committed first; a local
+ * branch that a worktree has checked out names the directory Git registered for it.
  * @throws an Error when Git fails or prints more than the runner's output limit.
  */
 export async function baseBranches(
@@ -199,10 +200,27 @@ export async function baseBranches(
     'for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(symref)', ...BASE_REF_PREFIXES,
   ])
   const shown = tip !== 'HEAD' ? tip : inspection.checkout.branch === null ? null : `${BASE_REF_PREFIXES[0]}${inspection.checkout.branch}`
+  const { remote, local } = parseBaseBranches(refs.stdout, shown, query, limit)
+  const trees = await branchWorktrees(git)
   return {
     automatic: fork === null ? null : { name: fork.label, worktree: fork.worktree },
-    ...parseBaseBranches(refs.stdout, shown, query, limit),
+    remote,
+    local: local.map((branch) => {
+      const worktree = trees.get(branch.ref)
+      return worktree === undefined ? branch : { ...branch, worktree }
+    }),
   }
+}
+
+/**
+ * Find the worktree of the repository that has each branch checked out.
+ * @param git - runner bound to a checkout of the repository.
+ * @returns the directory Git registered for each checked-out branch, by full ref name, without a worktree that Git
+ * marks as gone and one without a branch. {@link parseWorktrees} says why a caller confirms the directory.
+ * @throws an Error when Git fails or prints more than the runner's output limit.
+ */
+export async function branchWorktrees(git: Git): Promise<ReadonlyMap<string, string>> {
+  return parseWorktrees((await git('worktrees', ['worktree', 'list', '--porcelain'])).stdout)
 }
 
 /**
@@ -213,12 +231,14 @@ export async function baseBranches(
  * @param ctx - context that provides `fs`, `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - Git and size limits.
  * @param session - Session whose sandbox policy and execution world apply.
- * @param root - top-level directory of the checkout the scope reads, or of the Session's own for a branch head.
+ * @param root - top-level directory of the checkout the scope reads: the Session's own, or the worktree of its `head`.
  * @param fork - fork point of the `branch` scope, or null without one.
- * @param scope - which changes to read; of its `head`, only a branch changes what this function reads.
+ * @param scope - which changes to read; its `head` is already resolved into `root` and `tip`.
  * @param layers - classifier of each file's review layer.
  * @param signal - cancellation of every command and read.
- * @returns tracked files in Git's order, then untracked files unless the scope is `staged` or shows a branch.
+ * @param tip - `HEAD` to read the checkout at `root` with its working tree, or a verified branch ref that the
+ * `branch` scope reads from its commits alone.
+ * @returns tracked files in Git's order, then untracked files unless the scope is `staged` or reads a branch's commits.
  * @throws NoForkPoint for the `branch` scope without `fork`; FilterConfigError when filter configuration
  * cannot be read within `maxDiffBytes`; DiffTooLarge for oversized comparison output or `.gitattributes`;
  * an Error when Git or the `.gitattributes` read fails.
@@ -232,14 +252,15 @@ export async function localDiff(
   scope: ForgeLocalScope,
   layers: FileLayers,
   signal: AbortSignal,
+  tip = 'HEAD',
 ): Promise<ForgeLocalDiff> {
   const git = gitIn(ctx, { ...config, maxOutputBytes: config.maxDiffBytes }, session, root, signal)
   let range: readonly string[]
   switch (scope.kind) {
     case 'branch':
       if (fork === null) throw new NoForkPoint('The checkout has no fork point to compare its branch with')
-      if (scope.commits !== null) return await commitsDiff(git, fork, scope.commits, layers, tipOf(scope))
-      if (scope.head?.kind === 'branch') return await treeDiff(git, fork, fork.commit, scope.head.ref, layers)
+      if (scope.commits !== null) return await commitsDiff(git, fork, scope.commits, layers, tip)
+      if (tip !== 'HEAD') return await treeDiff(git, fork, fork.commit, tip, layers)
       range = [fork.commit]
       break
     case 'uncommitted': range = [await headOrEmptyTree(git)]; break
@@ -271,7 +292,7 @@ export async function localDiff(
 /**
  * Read the new side of one file in a scope, which supplies the unchanged
  * lines between hunks: the index for `staged`, the last chosen commit for
- * chosen commits of the `branch` scope, the branch for a branch head, else the working tree.
+ * chosen commits of the `branch` scope, the branch for a head read from its commits, else the working tree.
  * @param ctx - context that provides `fs`, `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - Git and size limits.
  * @param session - Session whose sandbox policy and execution world apply.
@@ -279,6 +300,7 @@ export async function localDiff(
  * @param scope - the scope whose new side to read.
  * @param path - path relative to `root`, as the diff names it.
  * @param signal - cancellation.
+ * @param tip - `HEAD` for the checkout at `root`, or a verified branch ref whose commits the `branch` scope reads.
  * @returns the text.
  * @throws DiffTooLarge over `maxDiffBytes`; an Error for a path outside the checkout, binary content, or a failed read.
  */
@@ -290,13 +312,13 @@ export async function localText(
   scope: ForgeLocalScope,
   path: string,
   signal: AbortSignal,
+  tip = 'HEAD',
 ): Promise<string> {
   if (!insideCheckout(path)) throw new Error(`forge-panel: ${JSON.stringify(path)} is not a path inside the checkout`)
   let text: string | undefined
   const chosen = scope.kind === 'branch' && scope.commits !== null ? scope.commits.to : undefined
   if (chosen !== undefined && !COMMIT.test(chosen)) throw new CommitsMissing('The chosen commit is not a full object name')
-  // A branch head arrives verified as an existing branch ref.
-  const commit = scope.kind === 'staged' ? '' : chosen ?? (scope.kind === 'branch' && scope.head?.kind === 'branch' ? scope.head.ref : undefined)
+  const commit = scope.kind === 'staged' ? '' : chosen ?? (scope.kind === 'branch' && tip !== 'HEAD' ? tip : undefined)
   if (commit !== undefined) {
     const git = gitIn(ctx, { ...config, maxOutputBytes: config.maxDiffBytes }, session, root, signal)
     const shown = (await bounded(git('show', ['show', `${commit}:${path}`]))).stdout
@@ -436,11 +458,6 @@ async function branchCommits(git: Git, fork: ForkPoint, tip: string, limit?: num
     const [sha, parents, author, authoredAt, title] = fields as [string, string, string, string, string]
     return [{ sha, parent: /^\S+/.exec(parents)?.[0] ?? null, title, author, authoredAt }]
   })
-}
-
-/** The revision the `branch` scope ends at: a branch head's ref, else HEAD of the checkout. */
-function tipOf(scope: Extract<ForgeLocalScope, { kind: 'branch' }>): string {
-  return scope.head?.kind === 'branch' ? scope.head.ref : 'HEAD'
 }
 
 /** The committed changes of consecutive commits of the `branch` scope, from the first commit's first parent to the last. */
