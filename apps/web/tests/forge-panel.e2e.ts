@@ -2329,6 +2329,9 @@ it.skipIf(MODE === 'record')('archives a clean UI worktree and restores its reta
   await page.getByRole('menuitem', { name: '全部对话（显示已归档）', exact: true }).click()
   await row.hover()
   await row.getByRole('button', { name: '取消归档', exact: true }).click()
+  // Unarchiving completes on the Host after the press. Until the Session list receives the change, the row describes
+  // itself as not openable, and a click on it shows that notice instead of opening the Session.
+  await expect.poll(() => row.getAttribute('aria-description'), { timeout: 20_000 }).toBeNull()
   await row.click()
   const missing = page.locator('[data-forge-missing]')
   await missing.getByRole('button', { name: '恢复工作树', exact: true }).waitFor({ timeout: 20_000 })
