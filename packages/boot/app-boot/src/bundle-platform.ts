@@ -7,16 +7,13 @@ const NODE_PLATFORMS: readonly string[] = Object.freeze([
 
 /** A valid bundle declaration excludes the operating system running DSH. */
 export class UnsupportedBundlePlatformError extends Error {
-  /** Node platform names or `wsl` supported by the bundle. */
-  readonly platforms: readonly string[]
   /**
    * @param platforms Node platform names or `wsl` supported by the bundle.
    * @param platform Operating system of the DSH Host.
    */
-  constructor(platforms: readonly string[], platform: string) {
+  constructor(readonly platforms: readonly string[], platform: string) {
     super(`Bundle supports Host platforms ${platforms.join(', ')}; the DSH Host is running ${platform}`)
     this.name = 'UnsupportedBundlePlatformError'
-    this.platforms = [...platforms]
   }
 }
 
