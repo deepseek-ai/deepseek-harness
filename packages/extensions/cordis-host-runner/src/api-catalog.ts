@@ -1234,8 +1234,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'deepseekLlmApiExtensions',
-    summary: 'Registry of independently owned top-level fields for official DeepSeek requests.',
-    description: 'Registry of independently owned top-level fields for official DeepSeek requests.',
+    summary: 'Registry of independently owned top-level fields and request headers for official DeepSeek requests.',
+    description: 'Registry of independently owned top-level fields and request headers for official DeepSeek requests.',
     methods: [
       {
         signature: 'register<K extends keyof DeepSeekLlmApiExtensionMap>( field: K, provider: DeepSeekLlmApiExtensionProvider<DeepSeekLlmApiExtensionMap[K]>, ): () => Promise<void>',
@@ -1248,6 +1248,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Prepare every currently registered field from one immutable base request. A provider whose preparation throws, or whose value cannot be cloned, is omitted from this request; the first such failure per field is logged. Only cancellation rejects. Field values are cloned and frozen; providers retain no mutable alias to the outgoing request.',
         parameters: [{ name: 'request', description: 'exact serialized request facts before extension fields.' }],
         returns: 'detached fields and their idempotent joint acceptance transaction.',
+      },
+      {
+        signature: 'registerHeader<K extends keyof DeepSeekLlmApiHeaderMap>( name: K, provider: DeepSeekLlmApiHeaderProvider<DeepSeekLlmApiHeaderMap[K]>, ): () => Promise<void>',
+        description: 'Register the sole provider of one request header for the calling fiber. The adapter reserves its user-id, session-id, and compact headers.',
+        parameters: [{ name: 'name', description: 'declaration-merged lowercase `x-deepseek-harness-` header of hyphen-separated ASCII letters and digits.' }, { name: 'provider', description: 'synchronous request-time value computation.' }],
+        returns: 'disposer that releases the header.',
+      },
+      {
+        signature: 'headers(request: DeepSeekLlmApiHeaderRequest): Readonly<Record<string, string>>',
+        description: 'Compute every currently registered header for one model request. A provider that returns `undefined` contributes nothing. A provider that throws, or returns a value other than non-empty printable ASCII without leading or trailing whitespace, is omitted from this request; the first such omission per header is logged.',
+        parameters: [{ name: 'request', description: 'request identity and auxiliary purpose.' }],
+        returns: 'frozen header names and values to add to the HTTP request.',
       },
     ],
   },
@@ -7784,7 +7796,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DeepSeekLlmApiExtensionRequest',
-    declaration: 'export interface DeepSeekLlmApiExtensionRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly sessionId?: string;\n    readonly purpose?: string;\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface DeepSeekLlmApiExtensionRequest extends DeepSeekLlmApiHeaderRequest {\n    readonly body: Readonly<Record<string, DeepSeekLlmApiJson>>;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
+    name: 'DeepSeekLlmApiHeaderMap',
+    declaration: 'export interface DeepSeekLlmApiHeaderMap {\n}',
+  },
+  {
+    name: 'DeepSeekLlmApiHeaderProvider',
+    declaration: 'export interface DeepSeekLlmApiHeaderProvider<T extends string> {\n    value(request: DeepSeekLlmApiHeaderRequest): T | undefined;\n}',
+  },
+  {
+    name: 'DeepSeekLlmApiHeaderRequest',
+    declaration: 'export interface DeepSeekLlmApiHeaderRequest {\n    readonly sessionId?: string;\n    readonly purpose?: string;\n}',
   },
   {
     name: 'DeepSeekLlmApiJson',

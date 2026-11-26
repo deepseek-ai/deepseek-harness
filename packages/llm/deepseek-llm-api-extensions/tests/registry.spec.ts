@@ -7,6 +7,12 @@ declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions/types' {
     test_alpha: { readonly value: string }
     test_beta: readonly number[]
   }
+
+  interface DeepSeekLlmApiHeaderMap {
+    'x-deepseek-harness-test-alpha': string
+    'x-deepseek-harness-test-beta': 'beta'
+    'x-deepseek-harness-test-gamma': string
+  }
 }
 
 const contexts: Context[] = []
@@ -178,5 +184,63 @@ describe('DeepSeekLlmApiExtensionRegistry', () => {
     })
     await expect(ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: controller.signal })).rejects.toBe(controller.signal.reason)
     expect(warnings).toEqual([])
+  })
+})
+
+describe('DeepSeekLlmApiExtensionRegistry headers', () => {
+  it('computes registered headers per request and releases ownership with the registering fiber', async () => {
+    const ctx = await harness()
+    const owner = ctx.extend()
+    const dispose = owner.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-alpha', { value: request => request.sessionId })
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-beta', {
+      value: request => request.purpose === 'compaction' ? 'beta' : undefined,
+    })
+    expect(() => ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-alpha', { value: () => 'two' }))
+      .toThrow(/already registered/)
+
+    const headers = ctx.deepseekLlmApiExtensions.headers({ sessionId: 'session 1', purpose: 'compaction' })
+    expect(headers).toEqual({ 'x-deepseek-harness-test-alpha': 'session 1', 'x-deepseek-harness-test-beta': 'beta' })
+    expect(Object.isFrozen(headers)).toBe(true)
+    expect(ctx.deepseekLlmApiExtensions.headers({})).toEqual({})
+
+    await dispose()
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-alpha', { value: () => 'replacement' })
+    expect(ctx.deepseekLlmApiExtensions.headers({ sessionId: 'session 1' })).toEqual({ 'x-deepseek-harness-test-alpha': 'replacement' })
+  })
+
+  it.each([
+    'x-dsh-session-type', 'x-dsh-auth-token', 'x-deepseek-harness-', 'X-Deepseek-Harness-Test',
+    'x-deepseek-harness-test-', 'x-deepseek-harness-test--alpha', 'x-deepseek-harness-test_alpha',
+  ])('rejects the malformed header name %j', async (name) => {
+    const ctx = await harness()
+    expect(() => ctx.deepseekLlmApiExtensions.registerHeader(name as 'x-deepseek-harness-test-alpha', { value: () => 'x' }))
+      .toThrow(/must be a lowercase x-deepseek-harness- name/)
+  })
+
+  it.each([
+    'x-deepseek-harness-user-id', 'x-deepseek-harness-session-id', 'x-deepseek-harness-compact',
+  ])('reserves the built-in header %s at registration', async (name) => {
+    const ctx = await harness()
+    expect(() => ctx.deepseekLlmApiExtensions.registerHeader(name as 'x-deepseek-harness-test-alpha', { value: () => 'x' }))
+      .toThrow(/reserved by the adapter/)
+  })
+
+  it('omits a failing header or a value HTTP cannot carry verbatim, warning once per header', async () => {
+    const ctx = await harness()
+    const warnings: unknown[][] = []
+    ctx.logger.exporter({ levels: { default: LoggerLevel.WARN }, export: (message) => { if (message.type === 'warn') warnings.push(message.args) } })
+    const failure = new Error('header failed')
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-alpha', { value: () => { throw failure } })
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-beta', { value: () => 'beta' })
+    ctx.deepseekLlmApiExtensions.registerHeader('x-deepseek-harness-test-gamma', { value: request => request.sessionId })
+    for (const sessionId of ['', ' leading', 'trailing\t', 'a\r\nb', 'nul\u0000', '父', 'é']) {
+      expect(ctx.deepseekLlmApiExtensions.headers({ sessionId })).toEqual({ 'x-deepseek-harness-test-beta': 'beta' })
+    }
+    expect(ctx.deepseekLlmApiExtensions.headers({ sessionId: 'inner space\tand tab' }))
+      .toEqual({ 'x-deepseek-harness-test-beta': 'beta', 'x-deepseek-harness-test-gamma': 'inner space\tand tab' })
+    expect(warnings).toEqual([
+      ['deepseek-llm-api-extensions: omitting header "x-deepseek-harness-test-alpha" from this request because its provider failed: %o', failure],
+      ['deepseek-llm-api-extensions: omitting header "x-deepseek-harness-test-gamma" from this request because its value cannot be sent verbatim as an HTTP field value'],
+    ])
   })
 })
