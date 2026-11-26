@@ -171,13 +171,16 @@ describe('ReviewActivity', () => {
     const [short, cut] = [...b.view.container.querySelectorAll('[data-forge-review-comment]')] as [HTMLElement, HTMLElement]
     expect(short.textContent).toBe('Cci-botbot1 h agoCoverage is 92%')
     expect(short.querySelector('strong')?.textContent).toBe('92%')
+    // The text sits in the element whose style gives compact Markdown the page's main ink, cut short or not.
+    expect(short.querySelector(`.${css.activityBody} > [data-markdown-variant="compact"]`)).not.toBeNull()
     expect(within(short).queryByRole('button')).toBeNull()
     expect(cut.textContent?.startsWith('?Deleted account59 min agoLine 1')).toBe(true)
-    expect(cut.querySelector(`.${css.activityClamp}`)).not.toBeNull()
+    expect(cut.querySelector(`.${css.activityBody}.${css.activityClamp} > [data-markdown-variant="compact"]`)).not.toBeNull()
     const more = within(cut).getByRole('button', { name: 'Expand' })
     expect(more.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(more)
     expect(cut.querySelector(`.${css.activityClamp}`)).toBeNull()
+    expect(cut.querySelector(`.${css.activityBody} > [data-markdown-variant="compact"]`)).not.toBeNull()
     fireEvent.click(within(cut).getByRole('button', { name: 'Collapse' }))
     expect(cut.querySelector(`.${css.activityClamp}`)).not.toBeNull()
   })

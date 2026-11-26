@@ -935,6 +935,11 @@ it.skipIf(MODE === 'record')('shows the activity of a pull request on the Code r
   const comments = activity.locator('[data-forge-review-comment]')
   await expect.poll(async () => await comments.count()).toBe(1)
   expect(await comments.first().locator('strong').textContent()).toBe('good')
+  // A comment's text has the ink of its author's name, not the dimmer ink of its time.
+  const ink = async (selector: string): Promise<string> =>
+    await comments.first().locator(selector).first().evaluate(element => getComputedStyle(element).color)
+  expect(await ink('[data-markdown-variant="compact"] p')).toBe(await ink('b'))
+  expect(await ink('[data-markdown-variant="compact"] strong')).toBe(await ink('b'))
   await activity.getByRole('button', { name: '2 次提交', exact: true }).click()
   await expect.poll(lines).toEqual(['2 次提交', 'Add the panel', 'Fix the build', 'octo 请求 mona 评审', 'mona 批准了这些更改'])
 

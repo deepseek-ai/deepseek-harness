@@ -196,7 +196,7 @@ function CommentCard({ actor, at, body, now, markdown, t }: {
         {actor?.bot === true && <span className={css.activityTag}>{t('thread.bot')}</span>}
         <span className={css.activityTime}>{formatAgo(at, now, t)}</span>
       </div>
-      <div className={clsx(long && !open && css.activityClamp)}>
+      <div className={clsx(css.activityBody, long && !open && css.activityClamp)}>
         <MarkdownText text={text} labels={markdown} variant="compact" omitHtml />
       </div>
       {long && (
