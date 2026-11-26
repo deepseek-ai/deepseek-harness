@@ -40,7 +40,7 @@ kind: "package-reference"
 
 ### 浏览器加载什么
 
-application combo 脚本只携带每个插件的 `client.js` 入口，并在启动时仅注册一次这些 factory；模块主体仍保持惰性，只在首次 import 或物化时运行。经 tsdown 拆分的源码 `import()` 会编译为 `require.async("./client.<name>.js")`；只有执行该表达式时，对应的带版本同级脚本才会到达。共享 combo URL 的 row 共用一个进行中的脚本任务。`<script>` 加载失败的 combo 会再请求一次；加载成功但没有注册某条 row 的 combo 绝不会重新执行，因为批量脚本按顺序注册各个包，重放会在第一个重复注册处停止。两种情况下，每条仍缺失的 row 随后加载自己的单资源 combo URL，因此一个失败的 batch 对每条缺失 row 最多花费三次请求，且不影响它已经注册的 row。模块系统按 row 记录最后一次 import 失败（传输、注册、依赖级联或 factory 执行）；Web 启动审计按条目报告该文本。传输失败的文本按首次出现的顺序把每个失败的尝试写一次，重复的尝试以次数结尾，例如 `(2 attempts)`；尝试的原因已含其 URL 时，不再以该 URL 开头。HMR（热模块替换）会让一条发生变化的 row 改用带 revision 的单资源 combo URL。`<id>/client` 与裸 id 解析到同一组导出，因为插件 bundle 就是其包的客户端半侧。
+application combo 脚本只携带每个插件的 `client.js` 入口，并在启动时仅注册一次这些 factory；模块主体仍保持惰性，只在首次 import 或物化时运行。经 tsdown 拆分的源码 `import()` 会编译为 `require.async("./client.<name>.js")`；只有执行该表达式时，对应的带版本同级脚本才会到达。同一个包的 chunk 之间可以同步引用：chunk 的登记信息用 `deps` 列出这些 chunk，模块系统会先递归、并行地下载并登记它们，再运行该 chunk。构建会加上 `{ deps }` 选项，列出所请求 chunk 所在分组的其余 chunk，使整组一轮下载完；入口同步引用的 chunk 会被移进入口的 `client.js`，在入口之前登记。共享 combo URL 的 row 共用一个进行中的脚本任务。`<script>` 加载失败的 combo 会再请求一次；加载成功但没有注册某条 row 的 combo 绝不会重新执行，因为批量脚本按顺序注册各个包，重放会在第一个重复注册处停止。两种情况下，每条仍缺失的 row 随后加载自己的单资源 combo URL，因此一个失败的 batch 对每条缺失 row 最多花费三次请求，且不影响它已经注册的 row。模块系统按 row 记录最后一次 import 失败（传输、注册、依赖级联或 factory 执行）；Web 启动审计按条目报告该文本。传输失败的文本按首次出现的顺序把每个失败的尝试写一次，重复的尝试以次数结尾，例如 `(2 attempts)`；尝试的原因已含其 URL 时，不再以该 URL 开头。HMR（热模块替换）会让一条发生变化的 row 改用带 revision 的单资源 combo URL。`<id>/client` 与裸 id 解析到同一组导出，因为插件 bundle 就是其包的客户端半侧。
 
 ### 插件动态组合
 
@@ -82,7 +82,7 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### 惰性 CJS 模型
 
-执行插件 bundle 只登记其 factory 和可选的 `meta`，不调用它们。首次 import 或同步 require 会物化 JavaScript 并缓存导出；递归 require 环会被拒绝。模块记录保留 `ownerId`、所属包的隔离标志、观察到的依赖边和传入的 `meta`，不会为缺失的生产函数补值。Modules 不求值样式元信息，只向消费者提供 `activeRecords()`、`subscribeModules()` 和载体资源解析器。`activeRecords()` 列出所有已物化记录，以及正在实时替换的包的旧记录；旧记录保留到其旧运行时完成卸载。[Renderer](../ui-renderer/README.zh.md) 负责元信息求值与样式安装。包内 `require.async()` 保持惰性到达及所属模块身份。
+执行插件 bundle 只登记其 factory 和可选的 `meta`，不调用它们。首次 import 或同步 require 会物化 JavaScript 并缓存导出；递归 require 环会被拒绝。模块记录保留 `ownerId`、所属包的隔离标志、观察到的依赖边和传入的 `meta`，不会为缺失的生产函数补值。Modules 不求值样式元信息，只向消费者提供 `activeRecords()`、`subscribeModules()` 和载体资源解析器。`activeRecords()` 列出所有已物化记录，以及正在实时替换的包的旧记录；旧记录保留到其旧运行时完成卸载。[Renderer](../ui-renderer/README.zh.md) 负责元信息求值与样式安装。包内 `require.async()` 保持惰性到达及所属模块身份。同步的 `require("./client.<name>.js")` 只能解析同一个包里已由脚本登记的 chunk；未登记的 chunk 会抛错。
 
 ### Main 执行环境
 
@@ -131,6 +131,7 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node 半侧：`ClientModuleRegistry`、扫描、产物快照、可选 combo 路由、结构化 index 行 |
 | [`src/assets.ts`](src/assets.ts) | 包资源的媒体类型、导出、内容 revision、带 revision 的文件名与浏览器引用，由构建预设、资源路由和门禁共用 |
+| [`src/chunks.ts`](src/chunks.ts) | 包内 chunk 的文件名规则，由构建预设、chunk 路由、模块系统、发布闭包检查和 WebWorker 打包器共用 |
 | [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：bootstrap 导出、`ctx.modules` 登记 |
 | [`src/client/system.ts`](src/client/system.ts) | `ClientModuleSystem`：加载／物化／失效机制 |
 | [`src/client/isolated-realms.ts`](src/client/isolated-realms.ts) | 每个脚本隔离包一个 Script Realm，及其创建与销毁 |
@@ -183,6 +184,7 @@ bundle 路由随注入的 `webServer` 生命周期注册：服务就绪时注册
 - **从未请求的上一代 map 会读取当前 map 文件**——combo revision 跟踪可执行 bundle，而不跟踪调试产物。若 HMR 在保留的旧 URL 首次收到 map `GET` 前重建 map，该响应会把当前 authored map 与旧 bundle offset 组合；在重建前请求 map 会固定该 URL 的响应。
 - **仅编辑 manifest 不会被察觉**——Host 在包的 Loader 条目启动或重启时读取包 manifest；只编辑 `package.json` 要到下一次条目重启或 Host 重启时才生效。资源路由经 Node 的包配置缓存解析，因此原地修改的 `./assets/*` 导出要等 boot HMR 让该包的缓存失效、或 Host 重启后才生效。
 - **脚本隔离是不稳定的测试开关**——Realm 是同源 iframe，不是安全边界：隔离 bundle 中的裸 `window`、`document`、计时器与事件目标属于 iframe 自身，因此页面级监听、选区以及针对页面构造器的 `instanceof` 检查观察不到主文档。
+- **入口文件携带的 chunk 没有源码映射**——构建把入口同步引用的 chunk 移进 `client.js`、放在入口之前，这些行在 map 中没有映射，浏览器工具只显示其生成代码。
 - **Desktop 每次显示都重新读取包资源**——Desktop 转发器把每个 `/plugins/` 缓存头改写为 `no-store`，因此不可变的资源响应头到达不了其浏览器缓存。
 
 <a id="dev-note"></a>

@@ -66,7 +66,7 @@ describe('client bundle build faces', () => {
     if (typeof outputOptions !== 'object' || typeof outputOptions.banner !== 'function') {
       throw new Error('client banner missing')
     }
-    expect(outputOptions.banner({ isEntry: true, fileName: 'client.js' } as Rolldown.RenderedChunk))
+    expect(outputOptions.banner({ isEntry: true, fileName: 'client.js', imports: [] as string[] } as Rolldown.RenderedChunk))
       .toBe('window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-client-fixture", factory: (require) => {')
   })
 

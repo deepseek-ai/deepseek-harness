@@ -140,7 +140,7 @@ function browserPlugins(packageDir: string): (name: PluginName) => BundlePlugin 
   return name => ({
     ...configPlugin(client, name),
     stylesheetBundle(code, id) {
-      const chunk = { isEntry: true, fileName: 'client.js', modules: { [id]: {} } }
+      const chunk = { isEntry: true, fileName: 'client.js', imports: [] as string[], modules: { [id]: {} } }
       const body = code.replace(/^export default (.*);$/mu, 'module.exports = $1;').replace(/^export \{\};$/mu, '')
       const prefix = banner(chunk as Rolldown.RenderedChunk)
       if (typeof prefix !== 'string') throw new Error('expected a synchronous manifest banner')

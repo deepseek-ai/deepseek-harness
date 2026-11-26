@@ -11,6 +11,7 @@ import { parseArgs } from 'node:util'
 import { publint, type Message, type PackFile } from 'publint'
 import { formatMessage } from 'publint/utils'
 import ts from 'typescript'
+import { CLIENT_CHUNK_FILE } from '../packages/client/modules/src/chunks.ts'
 import { defaultParallelism } from './parallelism.ts'
 import { isBrowserBundleFormatFalsePositive } from './publint-browser-format.ts'
 
@@ -121,27 +122,70 @@ function addPath(path: string, paths: Set<string>): void {
 interface RelativeImport {
   specifier: string
   line: number
+  /** Whether the request is a synchronous `require` inside the factory of a `__ModuleLoader__.load` registration. */
+  factoryRequire: boolean
 }
 
-/** Return relative imports whose targets are absent from the publication view. */
+/** Relative module requests of one published script and the Client module factories it registers. */
+interface ScriptRequests {
+  imports: RelativeImport[]
+  /** Whether the script registers a package entry: a `__ModuleLoader__.load` call without `chunk`. */
+  registersEntry: boolean
+  /** `chunk` file names the script registers through `__ModuleLoader__.load`. */
+  registeredChunks: string[]
+}
+
+/**
+ * Return relative imports whose targets are absent from the publication view. A synchronous
+ * `require("./client.<name>.js")` inside a registered module factory is also satisfied when a published script in the
+ * requester's directory registers the package entry and that chunk, because the Client build moves the chunks an
+ * entry requires into the entry file and deletes their own files. Every other relative request, such as an ESM
+ * `import` that Node resolves itself, still needs its published file.
+ */
 function publicationClosureViolations(target: PackageTarget, files: readonly PackFile[]): string[] {
   const published = new Set(files.map(file => file.name))
-  const violations: string[] = []
+  const scripts = new Map<string, ScriptRequests>()
   for (const file of files) {
     if (!/\.(?:js|mjs|cjs)$/.test(file.name)) continue
     const bytes = file.data instanceof ArrayBuffer ? new Uint8Array(file.data) : file.data
     const source = typeof bytes === 'string' ? bytes : Buffer.from(bytes).toString('utf8')
-    for (const imported of relativeImports(file.name, source)) {
-      const resolved = posix.normalize(posix.join(posix.dirname(file.name), imported.specifier))
+    scripts.set(file.name, scriptRequests(file.name, source))
+  }
+  /** Chunks registered by entry scripts, by directory. */
+  const entryChunks = new Map<string, Set<string>>()
+  for (const [name, script] of scripts) {
+    if (!script.registersEntry) continue
+    const directory = posix.dirname(name)
+    const chunks = entryChunks.get(directory) ?? new Set<string>()
+    for (const chunk of script.registeredChunks) chunks.add(chunk)
+    entryChunks.set(directory, chunks)
+  }
+  const violations: string[] = []
+  for (const [name, script] of scripts) {
+    const directory = posix.dirname(name)
+    for (const imported of script.imports) {
+      const resolved = posix.normalize(posix.join(directory, imported.specifier))
       if (resolutionCandidates(resolved).some(candidate => published.has(candidate))) continue
+      if (imported.factoryRequire && isEntryCarriedChunk(imported.specifier, entryChunks.get(directory))) continue
       violations.push(
-        `${target.path}/${file.name.slice('package/'.length)}:${String(imported.line)}`
+        `${target.path}/${name.slice('package/'.length)}:${String(imported.line)}`
         + ` imports ${JSON.stringify(imported.specifier)}, but ${target.manifest.name ?? target.path}`
         + ` does not publish ${JSON.stringify(resolved.slice('package/'.length))}`,
       )
     }
   }
   return violations
+}
+
+/**
+ * Whether a relative request names a package-local chunk that an entry script in the requester's directory registers.
+ * @param specifier - Relative module request.
+ * @param entryChunks - Chunk file names the entry scripts of that directory register.
+ * @returns True for a `./client.<name>.js` request whose chunk the entry file carries.
+ */
+function isEntryCarriedChunk(specifier: string, entryChunks: ReadonlySet<string> | undefined): boolean {
+  const chunk = specifier.slice('./'.length)
+  return specifier.startsWith('./') && CLIENT_CHUNK_FILE.test(chunk) && entryChunks?.has(chunk) === true
 }
 
 /** Paths a relative JavaScript module request can resolve to in a published package. */
@@ -153,29 +197,62 @@ function resolutionCandidates(target: string): string[] {
   ]
 }
 
-/** Extract relative static imports, re-exports, dynamic imports, and requires. */
-function relativeImports(file: string, sourceText: string): RelativeImport[] {
+/**
+ * Extract relative static imports, re-exports, dynamic imports, and requires, and the Client module factories the
+ * script registers through `__ModuleLoader__.load({ id, chunk?, factory })`.
+ */
+function scriptRequests(file: string, sourceText: string): ScriptRequests {
   const source = ts.createSourceFile(file, sourceText, ts.ScriptTarget.Latest, false, ts.ScriptKind.JS)
-  const imports: RelativeImport[] = []
-  const record = (node: ts.Node, literal: ts.Expression | undefined): void => {
+  const requests: ScriptRequests = { imports: [], registersEntry: false, registeredChunks: [] }
+  const record = (node: ts.Node, literal: ts.Expression | undefined, factoryRequire: boolean): void => {
     if (literal === undefined || !ts.isStringLiteralLike(literal) || !literal.text.startsWith('.')) return
-    imports.push({
+    requests.imports.push({
       specifier: literal.text,
       line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+      factoryRequire,
     })
   }
-  const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      record(node, node.moduleSpecifier)
-    } else if (ts.isCallExpression(node)
-      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
-        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) {
-      record(node, node.arguments[0])
-    }
-    ts.forEachChild(node, visit)
+  const register = (registration: ts.ObjectLiteralExpression): void => {
+    const chunk = registration.properties.find((property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) && property.name.text === 'chunk')
+    if (chunk === undefined) requests.registersEntry = true
+    else if (ts.isStringLiteralLike(chunk.initializer)) requests.registeredChunks.push(chunk.initializer.text)
   }
-  visit(source)
-  return imports
+  /** @param inFactory - Whether the node lies inside the `factory` of a `__ModuleLoader__.load` registration. */
+  const visit = (node: ts.Node, inFactory: boolean): void => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      record(node, node.moduleSpecifier, false)
+    } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      record(node, node.arguments[0], false)
+    } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+      record(node, node.arguments[0], inFactory)
+    } else if (ts.isCallExpression(node) && isModuleLoaderLoad(node.expression)) {
+      const registration = node.arguments[0]
+      if (registration !== undefined && ts.isObjectLiteralExpression(registration)) {
+        register(registration)
+        for (const property of registration.properties) visit(property, inFactory || isFactoryProperty(property))
+        return
+      }
+    }
+    ts.forEachChild(node, (child) => { visit(child, inFactory) })
+  }
+  visit(source, false)
+  return requests
+}
+
+/** Whether a registration member is its `factory`. */
+function isFactoryProperty(property: ts.ObjectLiteralElementLike): boolean {
+  return (ts.isPropertyAssignment(property) || ts.isMethodDeclaration(property))
+    && ts.isIdentifier(property.name) && property.name.text === 'factory'
+}
+
+/** Whether a callee is `__ModuleLoader__.load`, directly or as a `window` property. */
+function isModuleLoaderLoad(callee: ts.Expression): boolean {
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'load') return false
+  const loader = callee.expression
+  if (ts.isIdentifier(loader)) return loader.text === '__ModuleLoader__'
+  return ts.isPropertyAccessExpression(loader) && loader.name.text === '__ModuleLoader__'
+    && ts.isIdentifier(loader.expression) && loader.expression.text === 'window'
 }
 
 async function runPublint(target: PackageTarget): Promise<PublintResult> {

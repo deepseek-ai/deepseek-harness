@@ -180,4 +180,50 @@ describe('publint package runner', () => {
     expect(result.stderr).toContain('imports "./missing.js"')
     expect(result.stderr).toContain('imports "./missing.css"')
   })
+
+  it('accepts a chunk request that the package entry file registers', async ({ signal }) => {
+    const result = await run(fixture({ files: {
+      'lib/client.js': [
+        clientRegistration('chunk:`client.shared.js`,', 'return {shared:true}'),
+        clientRegistration('deps:[`./client.shared.js`],', 'return require("./client.shared.js")'),
+      ].join('\n'),
+      'lib/client.lazy.js': clientRegistration('chunk:\'client.lazy.js\',deps:["./client.shared.js"],', 'return require("./client.shared.js")'),
+    } }), signal)
+    expect(result.exitCode, result.stderr).toBe(0)
+  })
+
+  it('rejects a chunk request that neither a published file nor an entry registration satisfies', async ({ signal }) => {
+    const result = await run(fixture({ files: {
+      'lib/client.js': clientRegistration('', 'return [require("./client.missing.js"), require("./client.lazy-only.js")]'),
+      // A chunk script's own registrations are not the entry file's, so they satisfy nothing.
+      'lib/client.lazy.js': [
+        clientRegistration('chunk:`client.lazy.js`,', 'return {}'),
+        clientRegistration('chunk:`client.lazy-only.js`,', 'return {}'),
+      ].join('\n'),
+    } }), signal)
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain('imports "./client.missing.js"')
+    expect(result.stderr).toContain('imports "./client.lazy-only.js"')
+  })
+
+  it('checks an entry-carried chunk outside a registered factory like any relative request', async ({ signal }) => {
+    const result = await run(fixture({
+      // Node resolves an ESM import itself, so the entry file's registration does not satisfy it.
+      indexSource: "import './client.shared.js'\nexport const probe = true\n",
+      files: { 'lib/client.js': [
+        clientRegistration('chunk:`client.shared.js`,', 'return {shared:true}'),
+        clientRegistration('', 'return require("./client.shared.js")'),
+        'require("./client.shared.js")',
+      ].join('\n') },
+    }), signal)
+    expect(result.exitCode).toBe(1)
+    expect(result.stderr).toContain('lib/index.js:1 imports "./client.shared.js"')
+    expect(result.stderr).toContain('lib/client.js:3 imports "./client.shared.js"')
+    expect(result.stderr).not.toContain('lib/client.js:2')
+  })
 })
+
+/** One Client module registration in the minified form the dynamic build emits. */
+function clientRegistration(fields: string, body: string): string {
+  return `window.__ModuleLoader__.load({id:\`@deepseek-ai/dsh-probe\`,${fields}factory:require=>{${body}}});`
+}
