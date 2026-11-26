@@ -2,6 +2,7 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -148,7 +149,28 @@ function registerIndependentTool(ctx: Context) {
 }
 
 async function events(root: string) {
-  return (await readFile(join(root, 'events.ndjson'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; pid: number; name?: string; cwd?: string })
+  return (await readFile(join(root, 'events.ndjson'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { event: string; pid: number; endpoint: string; name?: string; cwd?: string })
+}
+
+/** Whether the fixture process that recorded `endpoint` still runs; a later process that received its PID does not count. */
+function listening(endpoint: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(endpoint)
+    socket.once('connect', () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT' || error.code === 'ECONNREFUSED') resolve(false)
+      else reject(error)
+    })
+  })
+}
+
+async function expectEnded(root: string) {
+  for (const { pid, endpoint } of (await events(root)).filter(event => event.event === 'start')) {
+    expect(await listening(endpoint), `fixture process ${pid} still listens at ${endpoint}`).toBe(false)
+  }
 }
 
 it('requires a browser mode and validates launch and attachment settings', () => {
@@ -216,10 +238,7 @@ describe('Session MCP Loader composition', () => {
     expect((await execute(ctx, resumed.agent)).content).toEqual([{ type: 'text', text: 'Visit 1: direct' }])
     await browser.dispose()
     expect(ctx.browserUse.providerName).toBeUndefined()
-    const closed = await events(root)
-    for (const { pid } of closed.filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-    }
+    await expectEnded(root)
   })
 
   it('keeps unrelated and child Sessions running without a busy attachment and admits a later owner', async () => {
@@ -303,37 +322,24 @@ describe('Session MCP Loader composition', () => {
     expect(failed.ctx.agents.get(failedAgent.id)).toBeUndefined()
     expect(failed.ctx.sessions.get(failedAgent.id)).toBeUndefined()
     expect(failed.ctx.tools.schemas(failedAgent)).toEqual([])
-    const failedEvents = await events(failed.root)
-    expect(failedEvents.filter(event => event.event === 'initialize')).toHaveLength(1)
-    for (const { pid } of failedEvents.filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-    }
+    expect((await events(failed.root)).filter(event => event.event === 'initialize')).toHaveLength(1)
+    await expectEnded(failed.root)
     const held = await load(false, 'hold')
     const pendingOwner = observeActivation(held.ctx.agents.create({ sessionId: brandString<SessionId>('pending') }))
     await expect.poll(async () => (await events(held.root)).some(event => event.event === 'probe')).toBe(true)
     await held.browser.dispose()
     await expect(pendingOwner).rejects.toThrow()
     expect(held.ctx.agents.get(brandString<SessionId>('pending'))).toBeUndefined()
-    for (const { pid } of (await events(held.root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-    }
+    await expectEnded(held.root)
   })
 
   it('does not reconnect and silently replace browser state after a process exits', async () => {
     const { ctx, root } = await load()
     const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('disconnect') })
     await warm(ctx, owner.agent)
-    const servingPid = (await events(root)).find(event => event.event === 'initialize')!.pid
+    const serving = (await events(root)).find(event => event.event === 'initialize')!.endpoint
     await execute(ctx, owner.agent, 'mcp__browser-fixture__disconnect')
-    let exitError: unknown
-    await expect.poll(() => {
-      try { process.kill(servingPid, 0) } catch (error) {
-        exitError = error
-        return true
-      }
-      return false
-    }).toBe(true)
-    expect(exitError).toEqual(expect.objectContaining({ code: 'ESRCH' }))
+    await expect.poll(() => listening(serving)).toBe(false)
     await warm(ctx, owner.agent)
     expect((await events(root)).filter(event => event.event === 'initialize')).toHaveLength(1)
     expect((await execute(ctx, owner.agent)).isError).toBe(true)
@@ -492,9 +498,7 @@ describe('Session MCP Loader composition', () => {
     expect(ctx.sessions.get(initializing.id)).toBeUndefined()
     expect(ctx.tools.schemas(initializing)).toEqual([])
     expect((await execute(ctx, initializing)).isError).toBe(true)
-    for (const { pid } of (await events(root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-    }
+    await expectEnded(root)
     await writeFile(join(root, 'release'), '')
     const successor = await ctx.agents.create({ sessionId: initializing.id })
     expect((await execute(ctx, successor.agent)).isError).toBe(false)
@@ -519,9 +523,7 @@ describe('Session MCP Loader composition', () => {
     expect(ctx.sessions.get(initializing.id)).toBeUndefined()
     expect(ctx.tools.schemas(initializing)).toEqual([])
     expect((await execute(ctx, initializing)).isError).toBe(true)
-    for (const { pid } of (await events(root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-    }
+    await expectEnded(root)
   })
 
   it('cancels before browser discovery without starting a process', async () => {
@@ -599,9 +601,7 @@ describe('Session MCP Loader composition', () => {
     await expect(canceledResume).rejects.toThrow('cancel browser resume')
     expect(ctx.agents.get(sessionId)).toBeUndefined()
     expect(ctx.sessions.get(sessionId)).toBeUndefined()
-    for (const { pid } of (await events(root)).filter(event => event.event === 'start')) {
-      expect(() => process.kill(pid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-    }
+    await expectEnded(root)
 
     let resumed = false
     const resuming = observeActivation(ctx.agents.resume({ resumeSessionId: sessionId }).then((handle) => {

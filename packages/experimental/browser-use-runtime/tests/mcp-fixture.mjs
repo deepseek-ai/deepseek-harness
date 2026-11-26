@@ -1,17 +1,30 @@
-/** Private stdio browser fixture; each process owns independent state. */
+/**
+ * Private stdio browser fixture; each process owns independent state.
+ * Every record names an endpoint that accepts connections until this process ends: Windows reuses a PID soon after its
+ * process ends, so a signal probe by PID can reach an unrelated process.
+ */
+import { randomBytes } from 'node:crypto'
 import { appendFileSync, existsSync, watch } from 'node:fs'
+import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
 const [root, mode] = process.argv.slice(2)
-const record = (event, values = {}) => appendFileSync(join(root, 'events.ndjson'), JSON.stringify({ event, pid: process.pid, ...values }) + '\n')
+const token = randomBytes(6).toString('hex')
+const endpoint = process.platform === 'win32' ? `\\\\.\\pipe\\dsh-browser-mcp-${token}` : join(root, `${token}.sock`)
+const record = (event, values = {}) => appendFileSync(join(root, 'events.ndjson'), JSON.stringify({ event, pid: process.pid, endpoint, ...values }) + '\n')
 const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n')
 let counter = 0
-record('start', { cwd: process.cwd() })
-process.once('exit', () => record('exit'))
-const lines = createInterface({ input: process.stdin })
-lines.once('close', () => process.exit(0))
-lines.on('line', line => {
+// Requests are read only once the endpoint listens; the listener itself never keeps the process alive.
+createServer().listen(endpoint, () => {
+  record('start', { cwd: process.cwd() })
+  process.once('exit', () => record('exit'))
+  const lines = createInterface({ input: process.stdin })
+  lines.once('close', () => process.exit(0))
+  lines.on('line', handle)
+}).unref()
+
+function handle(line) {
   const request = JSON.parse(line)
   if (request.id === undefined) return
   switch (request.method) {
@@ -67,4 +80,4 @@ lines.on('line', line => {
     default:
       throw new Error(`Unexpected method ${request.method}`)
   }
-})
+}
