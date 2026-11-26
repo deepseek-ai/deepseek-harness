@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, uti
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/index.ts'
+import { CONNECTOR_BUNDLES, ON_DEMAND_BUNDLES } from '../packages/util/official-bundles/src/index.ts'
 import { generateOfficialBundleCatalog, renderOfficialBundleCatalog, syncOfficialBundleCatalog } from './gen-official-bundle-catalog.ts'
 
 import { SHIPPED_LOCALE_IDS } from './shipped-locales.ts'
@@ -23,7 +23,7 @@ function fixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-official-catalog-'))
   roots.push(root)
   write(root, 'apps/cli/package.json', { name: '@deepseek-ai/dsh' })
-  for (const name of ON_DEMAND_BUNDLES) {
+  for (const name of [...ON_DEMAND_BUNDLES, ...CONNECTOR_BUNDLES]) {
     const dir = directory(name)
     write(root, `${dir}/package.json`, {
       name, type: 'module', version: '1.2.3', icon: './icon.svg', dsh: { bundle: { patch: './cordis.patch.yml' } },
@@ -50,14 +50,25 @@ afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: 
 
 describe('Official bundle catalog generation', () => {
   it('reads package resources without evaluating native provider entries or pinning a version', () => {
-    const entries = generateOfficialBundleCatalog(fixture())
+    const root = fixture()
+    const entries = generateOfficialBundleCatalog(root)
     expect(entries.map(entry => entry.packageName)).toEqual(ON_DEMAND_BUNDLES)
     expect(entries[0]?.meta).toEqual({
       title: { en: 'Native agent', zh: '原生智能体', ja: 'ネイティブエージェント', ...Object.fromEntries(['es', 'fr', 'de', 'ru', 'pt'].map(id => [id, 'Native agent'])) },
       description: { en: 'Delegate a task.', zh: '委派任务。', ja: 'タスクを委派します。', ...Object.fromEntries(['es', 'fr', 'de', 'ru', 'pt'].map(id => [id, 'Delegate a task.'])) },
       icon: `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>').toString('base64')}`,
     })
-    expect(renderOfficialBundleCatalog(entries)).not.toContain('1.2.3')
+    expect(renderOfficialBundleCatalog(entries, generateOfficialBundleCatalog(root, CONNECTOR_BUNDLES))).not.toContain('1.2.3')
+  })
+
+  it('generates the connector catalog after the on-demand catalog, each in its own list order', () => {
+    const root = fixture()
+    syncOfficialBundleCatalog(root, false)
+    const source = readFileSync(join(root, output), 'utf8')
+    const [onDemand, connectors] = source.split('export const OFFICIAL_CONNECTOR_CATALOG')
+    const names = (section = '') => [...section.matchAll(/packageName: '([^']+)'/g)].map(([, name]) => name)
+    expect(names(onDemand)).toEqual(ON_DEMAND_BUNDLES)
+    expect(names(connectors)).toEqual(CONNECTOR_BUNDLES)
   })
 
   it.each(['private', 'not-bundle', 'missing', 'duplicate'])('rejects %s catalog membership', (kind) => {
@@ -114,12 +125,12 @@ describe('Official bundle catalog generation', () => {
     expect(() => generateOfficialBundleCatalog(root)).toThrow(`explicit ${language} title and description`)
   })
 
-  it('rejects stale output when package-owned display text changes', () => {
+  it.each([ON_DEMAND_BUNDLES[0]!, CONNECTOR_BUNDLES[0]!])('rejects stale output when the display text of %s changes', (name) => {
     const root = fixture()
     rmSync(join(root, output))
     syncOfficialBundleCatalog(root, false)
     expect(() => { syncOfficialBundleCatalog(root, true) }).not.toThrow()
-    write(root, `${directory(ON_DEMAND_BUNDLES[0]!)}/locale/en.json`, { meta: { title: 'Changed', description: 'Delegate a task.' } })
+    write(root, `${directory(name)}/locale/en.json`, { meta: { title: 'Changed', description: 'Delegate a task.' } })
     const before = readFileSync(join(root, output), 'utf8')
     expect(() => { syncOfficialBundleCatalog(root, true) }).toThrow('is stale')
     expect(readFileSync(join(root, output), 'utf8')).toBe(before)

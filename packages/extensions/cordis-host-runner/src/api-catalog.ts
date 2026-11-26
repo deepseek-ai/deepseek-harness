@@ -3233,14 +3233,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'pluginRecommendations',
-    summary: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
-    description: 'Catalog lookups for card text and the enabling behind the `enable_official_plugin` card.',
+    summary: 'Catalog lookups for card text and the enabling and connector installation behind the `enable_official_plugin` card.',
+    description: 'Catalog lookups for card text and the enabling and connector installation behind the `enable_official_plugin` card.',
     methods: [
       {
         signature: '@Remote async describe(agent: Agent, cardId: ActionCardId): Promise<RecommendationDetails>',
         description: 'Read the current catalog text for a logged card.',
         parameters: [{ name: 'agent', description: 'Exact live root resolved by the Gateway from the Session id.' }, { name: 'cardId', description: 'The card\'s id, never a package supplied by the browser.' }],
-        returns: 'the plugin\'s title, description and selection, or a refusal when the card names no available official plugin.',
+        returns: 'the plugin\'s title, description and selection, `connector` for an installed official connector, `installable` with the connector catalog\'s title and description, in every shipped language, of an official connector the profile does not hold, or a refusal when the card names no available official plugin.',
       },
     ],
   },
@@ -10108,7 +10108,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RecommendationDetails',
-    declaration: 'export type RecommendationDetails = {\n    readonly status: \'available\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n    readonly enabled: boolean;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'not-live-root\' | \'closing\';\n};',
+    declaration: 'export type RecommendationDetails = {\n    readonly status: \'available\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n    readonly enabled: boolean;\n    readonly connector?: true;\n} | {\n    readonly status: \'installable\';\n    readonly title: LocalizedText;\n    readonly description: LocalizedText;\n} | {\n    readonly status: \'refused\';\n    readonly reason: \'unknown\' | \'unavailable\' | \'not-live-root\' | \'closing\';\n};',
   },
   {
     name: 'ReconnectConfig',

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-plugin-recommendations/README.md
 /:
-  en: 56ef0772b237c7f1
-  zh: 02f3a41d3b778505
+  en: ded260d864fea9d6
+  zh: 0a4aa44acb58c652
 /deepseek-ai-dsh-client-ui-plugin-recommendations:
   en: 387368b852663dd2
   zh: 5752f7031a53aa38
 /deepseek-ai-dsh-client-ui-plugin-recommendations/summary:
-  en: a4484eb034e7311a
-  zh: 34e47149ecf23d67
+  en: e763318cf45b8af9
+  zh: 5fcfc0e0d772c450
 /deepseek-ai-dsh-client-ui-plugin-recommendations/table-of-contents:
   en: d152484eb41ac6b4
   zh: b00dddf4c88f0a45
@@ -18,8 +18,8 @@
   en: 955bea89e67a075f
   zh: 3342fb1c1d0bf6a0
 /deepseek-ai-dsh-client-ui-plugin-recommendations/understand-the-implementation:
-  en: 975ab92bc59782c0
-  zh: 09dd3f1de3fe6ec9
+  en: 8e4fc507bc6d81b7
+  zh: 9b2fcd633e080d58
 /deepseek-ai-dsh-client-ui-plugin-recommendations/further-exploration:
   en: 22ba689ee65462d5
   zh: 64d339b185aa18d2
@@ -27,11 +27,11 @@
   en: d73a452f8bf206b7
   zh: 67db0a1b3a5767cf
 /deepseek-ai-dsh-client-ui-plugin-recommendations/model-experience/kv-cache-effect:
-  en: 4faf0dd1beff482e
-  zh: a2794bbdb956d557
+  en: 9146139c28923f9e
+  zh: 3e66e89eabdc6e9f
 /deepseek-ai-dsh-client-ui-plugin-recommendations/known-limitations-and-deferred-work:
-  en: e3f3f2ef1459fb1b
-  zh: 427dbabb303f6284
+  en: de0e326e73c531c4
+  zh: d36bf8f1a75fe653
 /deepseek-ai-dsh-client-ui-plugin-recommendations/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

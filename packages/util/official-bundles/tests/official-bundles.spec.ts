@@ -1,16 +1,23 @@
-/** Shipped profile templates, and the offline catalog that does not depend on installed provider packages or registry requests. */
+/** Shipped profile templates, and the offline catalogs that do not depend on installed provider packages or registry requests. */
 
 import { describe, expect, it } from 'vitest'
-import { OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES, PROFILE_TEMPLATES } from '../src/index.ts'
+import {
+  CONNECTOR_BUNDLES, OFFICIAL_CONNECTOR_CATALOG, OFFICIAL_ON_DEMAND_CATALOG, ON_DEMAND_BUNDLES, PROFILE_TEMPLATES,
+} from '../src/index.ts'
 
-describe('Official on-demand catalog', () => {
-  it('offers exactly the two native subagent integrations with offline localized metadata', () => {
+describe('Official catalogs', () => {
+  it('offers exactly the two native subagent integrations on demand', () => {
     expect(ON_DEMAND_BUNDLES).toEqual(['@deepseek-ai/dsh-subagent-claude-code', '@deepseek-ai/dsh-subagent-codex'])
-    expect(OFFICIAL_ON_DEMAND_CATALOG.map(entry => entry.packageName)).toEqual(ON_DEMAND_BUNDLES)
-    for (const entry of OFFICIAL_ON_DEMAND_CATALOG) {
+  })
+
+  it.each([
+    ['on-demand', ON_DEMAND_BUNDLES, OFFICIAL_ON_DEMAND_CATALOG],
+    ['connector', CONNECTOR_BUNDLES, OFFICIAL_CONNECTOR_CATALOG],
+  ] as const)('embeds offline localized metadata for each %s bundle in list order', (_list, names, catalog) => {
+    expect(catalog.map(entry => entry.packageName)).toEqual(names)
+    for (const entry of catalog) {
       expect(entry.meta.icon).toMatch(/^data:image\/svg\+xml;base64,/)
       for (const text of [entry.meta.title, entry.meta.description]) {
-        if (typeof text === 'string') throw new Error('Official metadata requires both shipped languages')
         expect(text.en).toMatch(/\S/)
         expect(text.zh).toMatch(/\S/)
       }

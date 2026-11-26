@@ -1,5 +1,5 @@
 ---
-description: "Installation-owned lists of official dsh bundles (shipped profile templates, the default list, and the optional, on-demand, and retired bundles) and the plugin manager's protected and presented packages."
+description: "Installation-owned lists of official dsh bundles (shipped profile templates, the default list, and the optional, on-demand, connector, and retired bundles) and the plugin manager's protected and presented packages."
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-official-bundles` holds the bundle package names the dsh installation decides on: which bundles each shipped profile starts with, which bundles it ships switched off, which official bundles install on request, which bundles earlier releases shipped and profiles drop, and which packages the plugin manager protects, hides, orders, or marks experimental. [`dsh-app-boot`](../../boot/app-boot/README.md) applies these lists when it loads a profile; the plugin manager, the CLI, Desktop, the image packer, and repository checks read them directly. The package holds data only, so changing a list leaves app-boot and the plugin manager untouched. Use it as a direct library dependency, not through `cordis.yml`.
+`@deepseek-ai/dsh-official-bundles` holds the bundle package names the installation decides on: which bundles each shipped profile starts with, which bundles it ships switched off, which official bundles and connectors install on request, which bundles earlier releases shipped and profiles drop, and which packages the plugin manager protects, hides, orders, or marks experimental. [`dsh-app-boot`](../../boot/app-boot/README.md) applies these lists when loading a profile; the plugin manager, the CLI, Desktop, the image packer, and repository checks read them directly. The package holds data only, so changing a list leaves app-boot and the plugin manager untouched. Use it as a direct library dependency, not through `cordis.yml`.
 
 ## Table of Contents
 
@@ -43,6 +43,10 @@ Edit this package when the installation's bundle selection or the plugin manager
 
 `ON_DEMAND_BUNDLES` names the public Official packages installed only on request. `OFFICIAL_ON_DEMAND_CATALOG` embeds their package-owned localized metadata, icons, and optional `dsh.bundle.platforms` declarations for offline discovery and Host platform checks before installation; `pnpm gen-official-bundle-catalog` explicitly updates generated content, and `verify-official-bundle-catalog` checks resource completeness and freshness; builds consume the committed catalog without importing provider code. The catalog contains no install target: the plugin manager derives it from the running version and installation and uses the ordinary bundle installer. The [product-use check](../../../scripts/verify-product-use.ts) composes shipped and on-demand selections against Web without executing providers.
 
+### Connector bundles
+
+`CONNECTOR_BUNDLES` names the official connector packages; the installation does not ship them, and each installs separately at the DSH version. `OFFICIAL_CONNECTOR_CATALOG` embeds their package-owned localized metadata and icons in list order, maintained by the same generator and freshness check as the on-demand catalog. The plugin manager reads neither, so an uninstalled connector stays out of the Plugins page's own lists; [plugin recommendations](../../extensions/plugin-recommendations/README.md) read the catalog to name, describe, and install connectors from conversation cards.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -51,15 +55,15 @@ Edit this package when the installation's bundle selection or the plugin manager
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Repository checks read the lists in `src/bundles.ts` as TypeScript literals without executing them, so each list stays a static array or object literal of package names. `INLINE_SAFE` in [`tsdown.client.ts`](../../client/tsdown.client.ts) lets Client bundles inline this whole package, so every export stays data with no runtime identity to share. `ui-plugin-manager` imports the Web lists from the package root, and tree-shaking keeps the profile templates and the generated catalog out of its bundle while no Client code imports them.
+Repository checks read the lists in `src/bundles.ts` as TypeScript literals without executing them, so each list stays a static array or object literal of package names. `INLINE_SAFE` in [`tsdown.client.ts`](../../client/tsdown.client.ts) lets Client bundles inline this whole package, so every export stays data with no runtime identity to share. `ui-plugin-manager` imports the Web lists from the package root, and tree-shaking keeps the profile templates and the generated catalogs out of its bundle while no Client code imports them.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/bundles.ts`](src/bundles.ts) | Profile templates and the default, installation-owned, retired, optional, and on-demand bundle lists |
+| [`src/bundles.ts`](src/bundles.ts) | Profile templates and the default, installation-owned, retired, optional, on-demand, and connector bundle lists |
 | [`src/plugin-manager.ts`](src/plugin-manager.ts) | Protected plugin packages and the Web plugin page's hidden, ordered, and experimental bundle lists |
-| [`src/catalog.generated.ts`](src/catalog.generated.ts) | Generated offline metadata for the on-demand bundles |
+| [`src/catalog.generated.ts`](src/catalog.generated.ts) | Generated offline metadata for the on-demand and connector bundles |
 | [`src/index.ts`](src/index.ts) | Public exports and the catalog entry type |
 
 </details>
@@ -79,7 +83,7 @@ Repository checks read the lists in `src/bundles.ts` as TypeScript literals with
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Lists are compiled into the installation** — changing a list requires a new dsh release; a profile cannot extend the optional or on-demand lists.
+- **Lists are compiled into the installation** — changing a list requires a new dsh release; a profile cannot extend the optional, on-demand, or connector lists.
 
 <a id="dev-note"></a>
 ### Dev Note
