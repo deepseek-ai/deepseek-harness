@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/session-persistence-sqlite/README.md
 /:
-  en: 45c507cd1be83a49
-  zh: 0892f22bc67f3c2b
+  en: 47a4a4ff4edc9d6c
+  zh: beebb58d51fc9310
 /deepseek-ai-dsh-session-persistence-sqlite:
   en: 22cf683fb8ec6976
   zh: c4c0244b1b7340bd
 /deepseek-ai-dsh-session-persistence-sqlite/summary:
-  en: fe7d7d6b65eb14b8
-  zh: e979ace0de85182b
+  en: 6a6aecf4c61c6453
+  zh: 92cda27f4e80af37
 /deepseek-ai-dsh-session-persistence-sqlite/table-of-contents:
   en: d152484eb41ac6b4
   zh: 3a2f21ff0dc3420d
@@ -18,8 +18,11 @@
   en: e9211101131a5db2
   zh: 0d34955cfaadbbeb
 /deepseek-ai-dsh-session-persistence-sqlite/use-this-package/minimal-configuration:
-  en: edf21925e6b20d77
-  zh: 13719460563497fa
+  en: 8265d40c663dc328
+  zh: c302717248c93671
+/deepseek-ai-dsh-session-persistence-sqlite/use-this-package/query-the-database:
+  en: 257f7dce19e36fa2
+  zh: 3f88a6899aa3c5d0
 /deepseek-ai-dsh-session-persistence-sqlite/use-this-package/opening-existing-history:
   en: 3a0476996102dcce
   zh: c0692ddc53045ff2
@@ -27,8 +30,8 @@
   en: c9adc0dab479e1a6
   zh: 53d323222a1535ea
 /deepseek-ai-dsh-session-persistence-sqlite/understand-the-implementation:
-  en: 61c2c58ba3d83988
-  zh: 9eb1c37d4f7cef38
+  en: 1b4b9cb9f1641cc1
+  zh: acaac66554b54b9e
 /deepseek-ai-dsh-session-persistence-sqlite/further-exploration:
   en: 6c9f517924d25414
   zh: 0a8400a08ec55dbf
@@ -48,8 +51,8 @@
   en: 3a849c807fae4040
   zh: cb3a122553040b79
 /deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work:
-  en: a50bf9d3b012d7c4
-  zh: 880fd4c27465ba5c
+  en: 1de6fc985b657311
+  zh: 4ea31ef239739859
 /deepseek-ai-dsh-session-persistence-sqlite/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

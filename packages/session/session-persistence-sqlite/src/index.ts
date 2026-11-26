@@ -4,33 +4,23 @@ import z from '@deepseek-ai/schemastery'
 import { JsonlCompressionSchema, JsonlSessionPersistence } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { Config as JsonlConfigOptions } from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { SqliteSessionPersistence } from './persistence.ts'
+import type { Recovery } from './sqlite.ts'
 
 /** Loader label for the SQLite Session persistence provider. */
 export const name = 'session-persistence-sqlite'
 
-/**
- * Default events per stored frame. Imported histories reach this cap; a live
- * batch rarely does. Larger frames compress a few percent better and cost
- * proportionally more to decode for a tail read.
- */
-const DEFAULT_FRAME_EVENTS = 64
-
-/** Storage root, JSONL settings used when importing legacy Sessions, and the frame size for new writes. */
-export interface Config extends JsonlConfigOptions {
-  /**
-   * Maximum events stored per frame. One frame is the unit of compression and
-   * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice; stored frames keep the size they were written with.
-   */
-  frameEvents?: number
+/** Storage root, the JSONL settings used when importing legacy Sessions, and the database recovery mode. */
+export type Config = JsonlConfigOptions & {
+  /** What an open does when the database cannot be used; see {@link Recovery}. */
+  recovery?: Recovery
 }
 
-/** Validate the storage root, legacy JSONL reader settings, and frame size. */
+/** Validate the storage root, legacy JSONL reader settings, and recovery mode. */
 export const Config: z<Config> = z.object({
   root: z.string().required(),
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(3),
-  frameEvents: z.natural().min(1).default(DEFAULT_FRAME_EVENTS),
+  recovery: z.union([z.const('replace'), z.const('report')]).default('replace'),
 })
 
 /**

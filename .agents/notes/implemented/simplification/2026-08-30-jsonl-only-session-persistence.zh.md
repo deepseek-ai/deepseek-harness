@@ -29,3 +29,7 @@ SQLite 全文 Session-query provider 不是另一种权威 store。它通过 `ct
 Session persistence 只有一种 first-party 物理格式和一条 first-party durability path。迁移 stack 可以保持逐 Session JSONL generation 的路径、字节与 inode 不变，同时排他发布最终后继，而无需实现并行的数据库 transaction protocol。SQLite search 保持可用，其 integration test 证明它观察 JSONL，而不是共享权威数据库。
 
 删除 provider 是针对其可选数据库文件的明确 compatibility cut。该变更缩小实现与 CI surface，但也移除更强的 database/WAL 存储选项；未来 provider 需要当前 owner、部署需求、完整 shared-contract evidence，以及自身的 format-transition policy。
+
+## 相关记录
+
+- [SQLite 事件行与派生表](../architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md) 记录了再次与 JSONL 并存、需手动启用的 SQLite 提供方。JSONL 仍是内置 profile 选用的格式，本记录为第二个提供方设定的条件同样适用于它。

@@ -78,7 +78,7 @@ it('restarts the drain for a batch queued after the preceding drain has finished
 })
 
 it.each([[512, 512, 1], [1025, 1]])('splits event-capped groups without splitting an admitted batch: %j', async (...sizes) => {
-  const { writers, commits, sql } = await fixture(sizes.length, { frameEvents: 2048 })
+  const { writers, commits, sql } = await fixture(sizes.length)
   await Promise.all(writers.map((writer, index) => writer.append(batch(sizes[index] ?? 0))))
   expect(commits()).toBe(2)
   sql.mockRestore()
@@ -101,13 +101,13 @@ it('rejects a noncontiguous batch while committing its peer and allows a correct
 
 it('rolls back only a refused live batch and retries its retained event at a later checkpoint', async () => {
   const { writers, db, commits, sql } = await fixture(3)
-  db.exec("CREATE TRIGGER refuse_batch BEFORE INSERT ON frames WHEN NEW.segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'writer-1') BEGIN SELECT RAISE(ABORT, 'batch refused'); END")
+  db.exec("CREATE TRIGGER refuse_batch BEFORE INSERT ON events WHEN NEW.segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = 'writer-1') BEGIN SELECT RAISE(ABORT, 'batch refused'); END")
   await Promise.all(writers.map(writer => writer.receive(event(1))))
   const results = await Promise.allSettled(writers.map(writer => writer.flush()))
   expect(results).toMatchObject([{ status: 'fulfilled' }, { status: 'rejected', reason: { message: 'batch refused' } }, { status: 'fulfilled' }])
   expect(commits()).toBe(1)
   sql.mockRestore()
-  expect(db.prepare('SELECT SUM(end_seq - start_seq) AS count FROM frames').get()).toMatchObject({ count: 5 })
+  expect(db.prepare('SELECT count(*) AS count FROM events').get()).toMatchObject({ count: 5 })
   db.exec('DROP TRIGGER refuse_batch')
   await Promise.all(writers.map(writer => writer.flush()))
   for (const writer of writers) expect((await writer.read()).events).toEqual([event(0), event(1)])
@@ -115,13 +115,13 @@ it('rolls back only a refused live batch and retries its retained event at a lat
 
 it('rejects the whole group after SQLite rolls back its transaction and retries every retained live batch', async () => {
   const { writers, db, commits, sql } = await fixture(3)
-  db.exec("CREATE TRIGGER abort_group BEFORE INSERT ON frames WHEN NEW.segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'writer-1') BEGIN SELECT RAISE(ROLLBACK, 'transaction ended'); END")
+  db.exec("CREATE TRIGGER abort_group BEFORE INSERT ON events WHEN NEW.segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = 'writer-1') BEGIN SELECT RAISE(ROLLBACK, 'transaction ended'); END")
   await Promise.all(writers.map(writer => writer.receive(event(1))))
   const results = await Promise.allSettled(writers.map(writer => writer.flush()))
   expect(results).toMatchObject(writers.map(() => ({ status: 'rejected', reason: { message: 'transaction ended' } })))
   expect(commits()).toBe(0)
   sql.mockRestore()
-  expect(db.prepare('SELECT SUM(end_seq - start_seq) AS count FROM frames').get()).toMatchObject({ count: 3 })
+  expect(db.prepare('SELECT count(*) AS count FROM events').get()).toMatchObject({ count: 3 })
   db.exec('DROP TRIGGER abort_group')
   await Promise.all(writers.map(writer => writer.flush()))
   for (const writer of writers) expect((await writer.read()).events).toEqual([event(0), event(1)])
@@ -129,7 +129,7 @@ it('rejects the whole group after SQLite rolls back its transaction and retries 
 
 it('rejects every batch after a savepoint rollback fails and keeps the store usable after transaction rollback', async () => {
   const { writers, db, exec, sql } = await fixture(2)
-  db.exec("CREATE TRIGGER refuse_batch BEFORE INSERT ON frames WHEN NEW.segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'writer-1') BEGIN SELECT RAISE(ABORT, 'batch refused'); END")
+  db.exec("CREATE TRIGGER refuse_batch BEFORE INSERT ON events WHEN NEW.segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = 'writer-1') BEGIN SELECT RAISE(ABORT, 'batch refused'); END")
   sql.mockImplementation((statement) => {
     if (statement === 'ROLLBACK TO batch; RELEASE batch') throw new Error('savepoint rollback refused')
     exec(statement)
@@ -139,14 +139,14 @@ it('rejects every batch after a savepoint rollback fails and keeps the store usa
     errors: [{ message: 'batch refused' }, { message: 'savepoint rollback refused' }],
   } })))
   sql.mockRestore()
-  expect(db.prepare('SELECT SUM(end_seq - start_seq) AS count FROM frames').get()).toMatchObject({ count: 2 })
+  expect(db.prepare('SELECT count(*) AS count FROM events').get()).toMatchObject({ count: 2 })
   db.exec('DROP TRIGGER refuse_batch')
   await Promise.all(writers.map(writer => writer.append([event(1)])))
   for (const writer of writers) expect((await writer.read()).events).toEqual([event(0), event(1)])
 })
 
 it('refuses the failed group and the next queued group with one unknown-outcome error before another transaction starts', async () => {
-  const { writers, logs, headers, exec, sql, db } = await fixture(3, { frameEvents: 2048 })
+  const { writers, logs, headers, exec, sql, db } = await fixture(3)
   let failed = false
   sql.mockImplementation((statement) => {
     if (failed && typeof statement === 'string' && statement.startsWith('BEGIN ')) throw new Error('Started a transaction after an unknown outcome')
@@ -162,7 +162,7 @@ it('refuses the failed group and the next queued group with one unknown-outcome 
     if (result.status === 'rejected') expect(result.reason).toBe(first.reason)
   }
   sql.mockRestore()
-  expect(db.prepare('SELECT SUM(end_seq - start_seq) AS count FROM frames').get()).toMatchObject({ count: 3 })
+  expect(db.prepare('SELECT count(*) AS count FROM events').get()).toMatchObject({ count: 3 })
   for (const header of headers) await expect(logs.stat(header.id)).rejects.toBe(first.reason)
   for (const writer of writers) await expect(writer.flush()).rejects.toBe(first.reason)
 })

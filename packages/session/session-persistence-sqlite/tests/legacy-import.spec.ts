@@ -12,7 +12,7 @@ import { generationLogPath } from '../../session-persistence-jsonl/src/format.ts
 import { SessionWriteLease } from '../src/lease.ts'
 import { meta, oneTurnLog } from '../../session-persistence/tests/contract.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
-import { storedEvents, storedFrames } from './fixtures/store.ts'
+import { storedEvents, storedRows } from './fixtures/store.ts'
 
 type Fixture = Awaited<ReturnType<typeof persistenceFixture>>
 
@@ -89,12 +89,10 @@ describe('JSONL import through the SQLite provider', () => {
     expect((await persistence.list()).map(entry => entry.header.id)).toEqual([header.id])
     const db = new DatabaseSync(join(fixture.root, '.segments', 'sessions.sqlite'), { readOnly: true })
     try {
-      expect(db.prepare('SELECT COUNT(*) AS count FROM traces').get()?.count).toBe(1)
-      expect(db.prepare('SELECT parent_segment_uuid, parent_end_seq, base_seq FROM segments').all()).toEqual([
-        { parent_segment_uuid: null, parent_end_seq: null, base_seq: 0 },
-      ])
-      const segment = z.object({ segment_uuid: z.string() }).parse(db.prepare('SELECT segment_uuid FROM segments').get()).segment_uuid
-      expect(storedFrames(db, segment).map(frame => [frame.start, frame.end])).toEqual([[0, events.length]])
+      expect(db.prepare('SELECT COUNT(*) AS count FROM sessions').get()?.count).toBe(1)
+      expect(db.prepare('SELECT parent_id, base_seq FROM segments').all()).toEqual([{ parent_id: null, base_seq: 0 }])
+      const segment = z.object({ segment_id: z.number() }).parse(db.prepare('SELECT segment_id FROM segments').get()).segment_id
+      expect(storedRows(db, segment).map(row => row.seq)).toEqual(events.map(event => event.seq))
       expect(storedEvents(db, segment)).toEqual(events)
     } finally { db.close() }
   })

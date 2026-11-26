@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { SessionWriteLease } from '../src/lease.ts'
 import { SqliteSessionPersistence } from '../src/persistence.ts'
 import * as plugin from '../src/index.ts'
-import { sharedHistory, forkTrace, insertFrame, routeOf, sqliteLogs, tailSegment } from './fixtures/store.ts'
+import { forkSession, headSegment, insertEvent, routeOf, sharedHistory, sqliteLogs } from './fixtures/store.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
 
 /** A coded refusal or an error class from a durable read. */
@@ -88,7 +88,7 @@ it.each([
   } else if (fault === 'invalid-json') await writeFile(path, 'invalid')
   else {
     const db = new DatabaseSync(join(directory, 'sessions.sqlite'))
-    try { db.prepare('DELETE FROM traces WHERE trace_uuid = ?').run('source') } finally { db.close() }
+    try { db.prepare('DELETE FROM sessions WHERE session_id = ?').run('source') } finally { db.close() }
   }
   await expectRefusal(storage.open(header().id, 'write'), open)
   if (fault === 'missing-row') await expectRefusal(storage.list(), list)
@@ -105,7 +105,7 @@ it.each([
   const healthy = await storage.create(header('healthy')); await healthy.append([event(0)]); await healthy.close()
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    db.prepare('UPDATE traces SET header = ? WHERE trace_uuid = ?').run(stored, header().id)
+    db.prepare('UPDATE sessions SET header = ? WHERE session_id = ?').run(stored, header().id)
   } finally { db.close() }
   await expect(storage.open(header().id, 'read')).rejects.toBeInstanceOf(error)
   await expect(storage.stat(header().id)).rejects.toBeInstanceOf(error)
@@ -117,7 +117,7 @@ it('rejects the listing when a stored SQLite header names another Session', asyn
   const writer = await storage.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    db.prepare('UPDATE traces SET header = ? WHERE trace_uuid = ?').run(JSON.stringify(header('other')), header().id)
+    db.prepare('UPDATE sessions SET header = ? WHERE session_id = ?').run(JSON.stringify(header('other')), header().id)
   } finally { db.close() }
   await expect(storage.list()).rejects.toThrow('identity mismatch')
 })
@@ -129,20 +129,34 @@ it.each(['{}', '[]', 'null', '4', JSON.stringify({ version: 4.5 }), JSON.stringi
     const writer = await storage.create(header()); await writer.append([event(0)]); await writer.close()
     const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
     try {
-      db.prepare('UPDATE traces SET header = ? WHERE trace_uuid = ?').run(storedHeader, header().id)
+      db.prepare('UPDATE sessions SET header = ? WHERE session_id = ?').run(storedHeader, header().id)
     } finally { db.close() }
     await expect(storage.open(header().id, 'read')).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
   },
 )
 
-it('classifies a non-database SQLite file', async () => {
+it.each([
+  ['replace', false],
+  ['report', true],
+] as const)('classifies a non-database SQLite file under %s recovery', async (recovery, refuses) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segment-corrupt-db-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const path = join(root, 'sessions.sqlite')
   await writeFile(path, 'not a database')
-  const logs = sqliteLogs(path, root)
+  const reportRecovery = vi.fn<(detail: string) => void>()
+  const logs = sqliteLogs(path, root, { recovery, reportRecovery })
   onTestFinished(async () => { await logs.close().catch(() => undefined) })
-  await expect(logs.stat(header().id)).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
+  if (refuses) {
+    await expect(logs.stat(header().id)).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
+    expect(reportRecovery).not.toHaveBeenCalled()
+    return
+  }
+  // Replacing keeps the unreadable bytes and leaves a database every Session operation can use.
+  await expect(logs.stat(header().id)).resolves.toBeUndefined()
+  expect(reportRecovery).toHaveBeenCalledOnce()
+  const [aside] = (await readdir(root)).filter(name => name.includes('.unreadable-'))
+  expect(aside).toBeDefined()
+  expect(await readFile(join(root, aside!), 'utf8')).toBe('not a database')
 })
 
 it('fails on invalid selected event data while unrelated Session bodies remain readable', async () => {
@@ -150,8 +164,8 @@ it('fails on invalid selected event data while unrelated Session bodies remain r
   const writer = await storage.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    db.exec('DROP TRIGGER frames_no_update')
-    db.prepare('UPDATE frames SET codec = 0, payload = ?').run(Buffer.from('invalid'))
+    db.exec('DROP TRIGGER events_no_update')
+    db.prepare('UPDATE events SET codec = 0, data = ?').run('invalid')
   } finally { db.close() }
   await expect(storage.open(header().id, 'write')).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
   const replacement = await storage.create(header('healthy')); await replacement.flush(); await replacement.close()
@@ -205,7 +219,7 @@ it('retains a rolled-back live batch and retries it in sequence at the next chec
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'injected write failure'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'injected write failure'); END")
     await writer.receive(event(0))
     await expect(writer.flush()).rejects.toThrow('injected write failure')
     expect((await logs.stat(header().id))?.eventCount).toBe(0)
@@ -244,7 +258,7 @@ it.each([false, true])('retains a committed fork when routing publication fails 
     throw releaseError
   })
   rejectPublication = true
-  const failure = await forkTrace(logs, header().id, SessionId('child'), [event(0), event(1)])
+  const failure = await forkSession(logs, header().id, SessionId('child'), [event(0), event(1)])
     .then(() => undefined, (error: unknown) => error)
   const publicationRefusal = { code: 'SESSION_STORAGE_PUBLICATION', cause: publicationError }
   if (cleanupFails) {
@@ -255,7 +269,7 @@ it.each([false, true])('retains a committed fork when routing publication fails 
   rejectPublication = false
   releasing.mockRestore()
   expect((await logs.stat(SessionId('child')))?.eventCount).toBe(3)
-  await expect(forkTrace(logs, header().id, SessionId('child'), [event(0), event(1)]))
+  await expect(forkSession(logs, header().id, SessionId('child'), [event(0), event(1)]))
     .rejects.toBeInstanceOf(SessionAlreadyExistsError)
   const child = await logs.open(SessionId('child'), 'write')
   try {
@@ -288,12 +302,12 @@ it('reads persisted root history using its original header', async () => {
 
 it.each([
   { fault: 'missing-segment', error: SessionPersistenceCorruptionError },
-  { fault: 'missing-parent', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'Trace references a missing segment' } },
-  { fault: 'cycle', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'Invalid Trace segment chain' } },
+  { fault: 'missing-parent', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'Session references a missing segment' } },
+  { fault: 'cycle', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'Invalid Session segment chain' } },
   { fault: 'missing-prefix', error: SessionPersistenceCorruptionError },
-  { fault: 'offset', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'Invalid segment offset' } },
+  { fault: 'offset', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'Invalid Session segment chain' } },
   { fault: 'event-hole', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'SQLite segment is incomplete' } },
-  { fault: 'identity', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'SQLite Trace identity mismatch' } },
+  { fault: 'identity', error: { code: 'SESSION_STORAGE_CORRUPT', message: 'SQLite Session identity mismatch' } },
 ] as const)(
   'refuses corrupted $fault instead of returning partial history', async ({ fault, error }) => {
     const { logs, path } = await raw()
@@ -302,15 +316,17 @@ it.each([
     const reader = await logs.open(SessionId('child'), 'read')
     const db = new DatabaseSync(path)
     try {
-      db.exec('PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TRIGGER segments_no_reparent; DROP TRIGGER frames_no_delete;')
-      const head = "(SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')"
-      if (fault === 'missing-segment') db.exec(`DELETE FROM segments WHERE segment_uuid = ${head}`)
-      if (fault === 'missing-parent') db.exec(`UPDATE segments SET parent_segment_uuid = 'absent' WHERE segment_uuid = ${head}`)
-      if (fault === 'cycle') db.exec(`UPDATE segments SET parent_segment_uuid = segment_uuid, parent_end_seq = 0 WHERE segment_uuid = ${head}`)
-      if (fault === 'missing-prefix') db.exec(`UPDATE segments SET parent_segment_uuid = NULL, parent_end_seq = NULL WHERE segment_uuid = ${head}`)
-      if (fault === 'offset') db.exec(`UPDATE segments SET parent_end_seq = 0 WHERE segment_uuid = ${head}`)
-      if (fault === 'event-hole') db.exec(`INSERT INTO frames SELECT segment_uuid, 1, 2, codec, payload FROM frames WHERE segment_uuid = ${head}; DELETE FROM frames WHERE segment_uuid = ${head} AND start_seq = 0`)
-      if (fault === 'identity') db.prepare("UPDATE traces SET header = ? WHERE trace_uuid = 'child'").run(JSON.stringify(header('other')))
+      db.exec(`PRAGMA foreign_keys = OFF; PRAGMA ignore_check_constraints = ON; DROP TRIGGER segments_no_reparent;
+        DROP TRIGGER events_no_update; DROP TRIGGER events_no_delete;`)
+      const head = "(SELECT head_segment_id FROM sessions WHERE session_id = 'child')"
+      if (fault === 'missing-segment') db.exec(`DELETE FROM segments WHERE segment_id = ${head}`)
+      if (fault === 'missing-parent') db.exec(`UPDATE segments SET parent_id = 999 WHERE segment_id = ${head}`)
+      if (fault === 'cycle') db.exec(`UPDATE segments SET parent_id = segment_id WHERE segment_id = ${head}`)
+      if (fault === 'missing-prefix') db.exec(`UPDATE segments SET parent_id = NULL WHERE segment_id = ${head}`)
+      // The child and its marker move past the two events its parent holds.
+      if (fault === 'offset') db.exec(`UPDATE segments SET base_seq = 3 WHERE segment_id = ${head}; UPDATE events SET seq = 3 WHERE segment_id = ${head}`)
+      if (fault === 'event-hole') db.exec(`UPDATE events SET seq = 2 WHERE segment_id = ${head}`)
+      if (fault === 'identity') db.prepare("UPDATE sessions SET header = ? WHERE session_id = 'child'").run(JSON.stringify(header('other')))
       await expectRefusal(fault === 'identity' ? logs.open(SessionId('child'), 'read') : reader.read(), error)
     } finally { db.close(); await reader.close() }
   })
@@ -318,12 +334,12 @@ it.each([
 it('forks zero shared events from an existing source and refuses an existing target', async () => {
   const { logs } = await raw()
   const source = await logs.create(header()); await source.append([event(0)]); await source.close()
-  await forkTrace(logs, header().id, SessionId('empty'), [])
+  await forkSession(logs, header().id, SessionId('empty'), [])
   const child = await logs.open(SessionId('empty'), 'read')
   expect((await child.read()).events.map(item => item.type)).toEqual(['session/end-seed'])
   await child.close()
-  await expect(forkTrace(logs, SessionId('absent'), SessionId('new'), [])).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
-  await expect(forkTrace(logs, header().id, SessionId('empty'), [])).rejects.toBeInstanceOf(SessionAlreadyExistsError)
+  await expect(forkSession(logs, SessionId('absent'), SessionId('new'), [])).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+  await expect(forkSession(logs, header().id, SessionId('empty'), [])).rejects.toBeInstanceOf(SessionAlreadyExistsError)
 })
 
 it('refuses a fork when another creator commits the child after its initial metadata read', async () => {
@@ -379,26 +395,30 @@ it('releases admission claims when durable metadata disappears during write-leas
   const writer = await logs.create(header()); await writer.flush(); await writer.close()
   const db = new DatabaseSync(path)
   try {
-    db.prepare('DELETE FROM traces WHERE trace_uuid = ?').run(header().id)
+    db.prepare('DELETE FROM sessions WHERE session_id = ?').run(header().id)
     await expect(logs.open(header().id, 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
     expect(await logs.stat(header().id)).toBeUndefined()
   } finally { db.close() }
 })
 
-it('does not recreate a missing database while durable routing records remain', async () => {
-  const { logs, root } = await raw()
+it('recreates a missing database while durable routing records remain', async () => {
+  const { logs, root, path } = await raw()
   const directory = join(root, '.segments')
   const { mkdir } = await import('node:fs/promises')
   await mkdir(directory)
   await writeFile(join(directory, 'retained.json'), '{}')
-  await expect(logs.create(header())).rejects.toThrow('database is missing')
+  const writer = await logs.create(header())
+  await writer.append([event(0)]); await writer.close()
+  // The orphaned record is not repaired: its Session is gone, and only a backup can restore it.
+  expect((await readdir(directory)).includes('retained.json')).toBe(true)
+  expect(await stat(path)).toBeDefined()
 })
 
 it('refuses an unrelated existing SQLite database without adding Session tables', async () => {
   const { logs, path } = await raw()
   const db = new DatabaseSync(path)
   try { db.exec('CREATE TABLE unrelated (id INTEGER)') } finally { db.close() }
-  await expect(logs.create(header())).rejects.toMatchObject({ code: 'SESSION_STORAGE_FORMAT', message: 'Refusing an unrelated SQLite database' })
+  await expect(logs.create(header())).rejects.toMatchObject({ code: 'SESSION_STORAGE_FORMAT', message: `SQLite persistence database "${path}" is not a Session database; it is left unchanged` })
   await expect(logs.close()).resolves.toBeUndefined()
 })
 
@@ -407,7 +427,7 @@ it('preserves admitted live events when the drain before an explicit append fail
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'rollback'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'rollback'); END")
     await writer.receive(event(0))
     await expect(writer.append([event(1)])).rejects.toThrow('rollback')
     db.exec('DROP TRIGGER fail_append')
@@ -447,7 +467,7 @@ it('reports background failure once, pauses the timer and retries through the ex
   warning.mockImplementation(() => { reported.resolve(undefined) })
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }); onTestFinished(() => { vi.useRealTimers() })
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'background rollback'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'background rollback'); END")
     await writer.receive(event(0)); await vi.advanceTimersByTimeAsync(200)
     await reported.promise
     expect(warning).toHaveBeenCalledOnce()
@@ -516,7 +536,7 @@ it('aggregates drain and release failures on close', async () => {
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_close BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'drain failed'); END")
+    db.exec("CREATE TRIGGER fail_close BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'drain failed'); END")
     await writer.receive(event(0))
     // oxlint-disable-next-line typescript/unbound-method -- Called with the lease instance as receiver.
     const original = SessionWriteLease.prototype.release
@@ -539,7 +559,7 @@ it('marks unknown when an operation, its savepoint rollback, and its transaction
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_operation BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'operation failed'); END")
+    db.exec("CREATE TRIGGER fail_operation BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'operation failed'); END")
     // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
     const exec = DatabaseSync.prototype.exec
     const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
@@ -559,11 +579,32 @@ it('aggregates failed writer barriers and disposal failures without losing their
   const writer = await logs.create(header()); await writer.flush()
   const db = new DatabaseSync(path)
   try {
-    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'persistent failure'); END")
+    db.exec("CREATE TRIGGER fail_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'persistent failure'); END")
     await writer.receive(event(0))
     await expect(logs.flush()).rejects.toMatchObject({ message: 'SQLite flush failed', errors: [expect.any(Error)] })
     await expect(logs.close()).rejects.toMatchObject({ message: 'SQLite disposal failed', errors: [expect.any(Error)] })
   } finally { db.close() }
+})
+
+it('reports a failure to refresh planner statistics on close without hiding the close', async () => {
+  // `failedClose` hands this test the only close, so the fixture teardown does not race it.
+  const { logs } = await raw(async () => {}, true)
+  const writer = await logs.create(header()); await writer.flush(); await writer.close()
+  // The refresh runs on the store's own connection, which no fixture handle exposes, so intercept by statement text.
+  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the intercepted connection as receiver.
+  const execute = DatabaseSync.prototype.exec
+  let armed = false
+  const fault = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSync, sql) {
+    if (armed && sql.includes('PRAGMA optimize')) throw new Error('statistics refresh failed')
+    execute.call(this, sql)
+  })
+  armed = true
+  try {
+    const failure = await logs.close().then(() => undefined, (error: unknown) => error)
+    // The refresh failure joins the disposal aggregate instead of escaping it, so a caller still sees one report.
+    expect(failure).toMatchObject({ name: 'AggregateError', message: 'SQLite disposal failed' })
+    expect((failure as AggregateError).errors.map(String)).toEqual(['Error: statistics refresh failed'])
+  } finally { fault.mockRestore() }
 })
 
 it('joins an already closing writer during a provider flush', async () => {
@@ -600,7 +641,7 @@ it('refuses a missing parent Session row before appending and preserves the comm
   const writer = await logs.create(header()); await writer.append([event(0)])
   const db = new DatabaseSync(path)
   try {
-    db.prepare('DELETE FROM traces WHERE trace_uuid = ?').run(header().id)
+    db.prepare('DELETE FROM sessions WHERE session_id = ?').run(header().id)
     await expect(writer.read()).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
     await expect(writer.append([event(1)])).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
   } finally { db.close(); await writer.close() }
@@ -642,7 +683,7 @@ it('refuses a stale append position after the durable tail grows', async () => {
   const writer = await logs.create(header()); await writer.append([event(0)])
   const db = new DatabaseSync(path)
   try {
-    insertFrame(db, tailSegment(db, header().id), 1, [JSON.stringify(event(1))])
+    insertEvent(db, headSegment(db, header().id), event(1))
     await expect(writer.append([event(1)])).rejects.toThrow('append seq mismatch for "source": expected 2 at index 0, got 1')
   } finally { db.close(); await writer.close() }
 })
@@ -653,9 +694,9 @@ it('rolls back materialization when a database trigger removes its new metadata'
   const writer = await logs.create(header('pending'))
   const db = new DatabaseSync(path)
   try {
-    db.exec('CREATE TRIGGER remove_new_trace AFTER INSERT ON traces BEGIN DELETE FROM traces WHERE trace_uuid = NEW.trace_uuid; END')
+    db.exec('CREATE TRIGGER remove_new_session AFTER INSERT ON sessions BEGIN DELETE FROM sessions WHERE session_id = NEW.session_id; END')
     await expect(writer.flush()).rejects.toMatchObject({ code: 'SESSION_STORAGE_CORRUPT', message: 'Committed Session metadata is unavailable' })
-    db.exec('DROP TRIGGER remove_new_trace')
+    db.exec('DROP TRIGGER remove_new_session')
     await writer.flush()
   } finally { db.close(); await writer.close() }
 })
@@ -664,7 +705,7 @@ it('rejects a corrupt stored header identity during stat', async () => {
   const { logs, path } = await raw()
   const writer = await logs.create(header()); await writer.flush(); await writer.close()
   const db = new DatabaseSync(path)
-  try { db.prepare('UPDATE traces SET header = ?').run(JSON.stringify(header('different'))) } finally { db.close() }
+  try { db.prepare('UPDATE sessions SET header = ?').run(JSON.stringify(header('different'))) } finally { db.close() }
   await expect(logs.stat(header().id)).rejects.toThrow('identity mismatch')
 })
 
@@ -750,8 +791,11 @@ it.each([1, 2])('reports %i owned lease release failures', async (failures) => {
   } finally { fault.mockRestore() }
 })
 
-it('refuses initializing a missing database when Session routing records remain', async () => {
-  const { logs, root, path } = await raw()
+it('refuses initializing a missing database under report recovery', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-sqlite-report-')), path = join(root, 'events.sqlite')
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const logs = sqliteLogs(path, root, { recovery: 'report' })
+  onTestFinished(async () => { await logs.close().catch(() => undefined) })
   await mkdir(join(root, '.segments'))
   await writeFile(join(root, '.segments/source.json'), JSON.stringify({ id: 'source', database: path }))
   await expect(logs.start()).rejects.toMatchObject({ code: 'SESSION_STORAGE_MISSING' })
@@ -775,18 +819,21 @@ it('reports an absent Session in an existing database', async () => {
   await expect(logs.open(SessionId('absent'), 'read')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
 })
 
-it('refuses a non-blob payload in a damaged durable frame table', async () => {
+it('refuses a stored value that is neither text nor bytes in a damaged event row', async () => {
   const { logs, path } = await raw()
   const writer = await logs.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(path)
   try {
-    const head = tailSegment(db, header().id)
-    db.exec('DROP TABLE frames; CREATE TABLE frames (segment_uuid TEXT, start_seq INTEGER, end_seq INTEGER, codec INTEGER, payload ANY) STRICT')
-    db.prepare('INSERT INTO frames VALUES (?, 0, 1, 0, ?)').run(head, JSON.stringify(event(0)))
+    db.exec('PRAGMA ignore_check_constraints = ON; DROP TRIGGER events_no_update')
+    db.prepare('UPDATE events SET data = 7').run()
   } finally { db.close() }
   const reader = await logs.open(header().id, 'read')
-  try { await expect(reader.read()).rejects.toBeInstanceOf(SessionPersistenceCorruptionError) }
-  finally { await reader.close() }
+  try {
+    const failure = await reader.read().then(() => undefined, (error: unknown) => error)
+    expect(failure).toBeInstanceOf(SessionPersistenceCorruptionError)
+    if (!(failure instanceof Error)) throw new Error('expected a corruption refusal')
+    expect(failure.message).toContain('stored SQLite event row is invalid')
+  } finally { await reader.close() }
 })
 
 it('classifies retired V4 events as unsupported when reading durable rows', async () => {
@@ -794,8 +841,8 @@ it('classifies retired V4 events as unsupported when reading durable rows', asyn
   const writer = await logs.create(header()); await writer.append([event(0)]); await writer.close()
   const db = new DatabaseSync(path)
   try {
-    db.exec('DROP TRIGGER frames_no_update')
-    db.prepare('UPDATE frames SET codec = 0, payload = ?').run(Buffer.from(JSON.stringify({ type: 'tool/code-dispatch', seq: 0, time: 0, data: {} })))
+    db.exec('DROP TRIGGER events_no_update')
+    db.prepare("UPDATE events SET type = 'tool/code-dispatch', codec = 0, data = '{}'").run()
   } finally { db.close() }
   const reader = await logs.open(header().id, 'read')
   try { await expect(reader.read()).rejects.toBeInstanceOf(SessionFormatUnsupportedError) }
@@ -809,7 +856,7 @@ it('refuses invalid indexed predecessor metadata before returning inherited even
   const db = new DatabaseSync(path)
   try {
     db.exec('DROP TRIGGER segments_no_reparent; PRAGMA ignore_check_constraints = ON')
-    db.exec('UPDATE segments SET parent_end_seq = -1 WHERE parent_segment_uuid IS NULL')
+    db.exec('UPDATE segments SET base_seq = -1 WHERE parent_id IS NULL')
   } finally { db.close() }
   await expect(sharedHistory(logs, SessionId('child'), SessionId('bad-cut'), [event(0)])).rejects.toThrow('predecessor metadata is invalid')
   const reader = await logs.open(SessionId('child'), 'read')
@@ -827,10 +874,11 @@ it('forks an earlier ancestor prefix and refuses invalid ancestry during cut sel
   finally { await grandchild.close() }
   const db = new DatabaseSync(path)
   try {
-    db.exec('DROP TRIGGER ancestors_no_update; DROP TRIGGER ancestors_no_delete')
-    db.exec("UPDATE segment_ancestors SET end_seq = 0 WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')")
+    db.exec('DROP TRIGGER paths_no_update; DROP TRIGGER paths_no_delete')
+    const ancestors = "segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = 'child') AND member_id != segment_id"
+    db.exec(`UPDATE segment_paths SET end_seq = 0 WHERE ${ancestors}`)
     await expect(sharedHistory(logs, SessionId('child'), SessionId('invalid'), [event(0)])).rejects.toThrow('offset')
-    db.exec("DELETE FROM segment_ancestors WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = 'child')")
+    db.exec(`DELETE FROM segment_paths WHERE ${ancestors}`)
     await expect(sharedHistory(logs, SessionId('child'), SessionId('invalid'), [event(0)])).rejects.toThrow('chain')
   } finally { db.close() }
 })

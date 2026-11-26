@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/sqlite-event-rows/guide.md
+/:
+  en: 3aa0fa07aefa2733
+  zh: 5a7ac6f29169503d
+/sqlite-session-store-with-one-row-per-event:
+  en: 8d27b0336747bfe1
+  zh: 757c034c41a5fb6e
+/sqlite-session-store-with-one-row-per-event/change:
+  en: 66c2e870e72440c7
+  zh: 191e0f8fc6cfa42d
+/sqlite-session-store-with-one-row-per-event/migration:
+  en: 24c1019ec8540b54
+  zh: 9b2d34d4d9cb1e83

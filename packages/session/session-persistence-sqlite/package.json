@@ -25,6 +25,7 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
+    "resources/sql/**/*.sql",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",
@@ -39,7 +40,9 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-session": "workspace:*",
-    "@deepseek-ai/dsh-session-persistence": "workspace:*"
+    "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-loader-smoke": "workspace:*"
   },
   "dependencies": {
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
@@ -51,6 +54,7 @@
     "zod": "4.6.6",
     "@deepseek-ai/node-addon-system": "workspace:~",
     "p-limit": "7.3.3",
-    "koffi": "3.1.1"
+    "koffi": "3.1.1",
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   }
 }

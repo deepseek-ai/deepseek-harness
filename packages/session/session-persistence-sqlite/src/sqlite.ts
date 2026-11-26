@@ -1,12 +1,12 @@
-/** SQLite event lists keyed by trace_uuid, projected through SessionPersistence handles. @module */
+/** SQLite event rows keyed by Session id, projected through SessionPersistence handles. @module */
 import { LiveWriteBuffer } from './buffer.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { DatabaseSync, StatementSync } from 'node:sqlite'
-import { mkdir, open, stat, readdir, realpath } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
-import { setImmediate } from 'node:timers/promises'
+import { mkdir, open, rename, stat, readdir, realpath } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
+import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
@@ -25,19 +25,21 @@ import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session
 import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to-v4'
 import { sessionDir } from './paths.ts'
-import { decodeFrame, encodeFrame } from './frame.ts'
-import type { EncodedFrame, FrameCompression } from './frame.ts'
+import { decodeRow, encodeRow, eventRow } from './row.ts'
+import type { EventCompression, EventRow } from './row.ts'
+import { DerivedTables } from './derive.ts'
+import type { DerivedRows, Derivation, DerivationFailure } from './derive.ts'
+import { prepareSchema } from './migrations/index.ts'
+import type { SqlFiles } from './sql.ts'
+import type { SqlFile } from './sql.ts'
 
-/** Private Segment storage database schema version; incompatible versions are refused, never reset. */
-export const SCHEMA_VERSION = 1
-const APPLICATION_ID = 0x44535043
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
 /**
- * Internal scheduling constant, not deployment configuration: frames decoded
- * concurrently on the thread pool between two event-loop yields of a read.
+ * Internal scheduling constant, not deployment configuration: events encoded or
+ * decoded between two event-loop yields of a long write or read.
  */
-const READ_DECODE_GROUP_FRAMES = 8
+const CODEC_GROUP_EVENTS = 256
 /** SQLite busy handler wait for a locked database before an operation fails; a protocol constant shared by every opener. */
 const BUSY_TIMEOUT_MS = 5000
 /** Maximum intentional wait before a routed live session batch starts writing; matches the JSONL backend. */
@@ -50,29 +52,54 @@ const LIVE_WRITE_BATCH_MAX_EVENTS = 256
  * synchronous transaction that every writer's checkpoint shares.
  */
 const COMMIT_GROUP_MAX_EVENTS = 1024
+/** Internal scheduling constant, not deployment configuration: pause before a derived-table rebuild retries a locked database. */
+const REBUILD_BUSY_RETRY_MS = 1000
+/** Whether a SQLite failure reports a database locked by another connection. */
+function isBusy(error: unknown): boolean {
+  const code = (error as { errcode?: unknown } | null)?.errcode
+  return typeof code === 'number' && (code & 0xff) === SQLITE_BUSY
+}
+/** Whether a SQLite failure reports file bytes that are not a readable database. */
+function isUnreadable(error: unknown): boolean {
+  const code = (error as { errcode?: unknown } | null)?.errcode
+  return typeof code === 'number' && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(code & 0xff)
+}
+/** How an open recovers a database it cannot use; see {@link SqliteStoreOptions.recovery}. */
+export type Recovery = 'replace' | 'report'
+/**
+ * One open that must replace its damaged file. Only damage is recoverable this way: a lock means a live writer, a
+ * refused schema means a file another build can read, and a failed upgrade means bytes to restore, so those keep their
+ * file and report the reason instead.
+ */
+class ReplaceDatabase extends Error {
+  constructor(readonly wrapped: Error) {
+    super(wrapped.message, { cause: wrapped })
+    this.name = 'ReplaceDatabase'
+  }
+}
 type SegmentId = Branded<'SessionSegmentId'>
 const segmentId = (value: string): SegmentId => brandString<SegmentId>(value)
+/** One event encoded before its transaction: its row and the derived rows written beside it. */
+interface EncodedEvent {
+  readonly row: EventRow
+  readonly derived: DerivedRows
+}
 /** One appended batch, encoded before it queued, with the settlement of its caller's append. */
 interface PendingAppend {
   readonly header: SessionHeader
   readonly batch: readonly SessionEvent[]
-  readonly frames: readonly EncodedFrame[]
+  readonly encoded: readonly EncodedEvent[]
   readonly resolve: () => void
   readonly reject: (error: unknown) => void
 }
 const metadata = z.object({ header: z.string(), event_count: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative(),
-  tail_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
-const traceIdentity = z.object({ trace_uuid: z.string().transform(sessionIdentity) })
-const frameRow = z.object({ start_seq: z.number().int().nonnegative(), end_seq: z.number().int().positive(),
-  codec: z.number().int(), payload: z.instanceof(Uint8Array) })
-const TRACE_METADATA_SQL = `SELECT t.trace_uuid, header, tail_segment_uuid, inherited_count, base_seq,
-  base_seq + COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count
-  FROM traces t LEFT JOIN segments s ON s.segment_uuid = t.tail_segment_uuid`
-const segmentFields = { segment_uuid: z.string().transform(segmentId), event_count: z.number().int().nonnegative() }
+  head_segment_id: z.number().int(), head_segment_uuid: z.string().transform(segmentId), inherited_count: z.number().int().nonnegative() })
+const sessionIdentityRow = z.object({ session_id: z.string().transform(sessionIdentity) })
+const segmentFields = { segment_id: z.number().int(), segment_uuid: z.string().transform(segmentId),
+  event_count: z.number().int().nonnegative() }
 const segmentRow = z.union([
-  z.object({ ...segmentFields, parent_segment_uuid: z.null(), parent_end_seq: z.null(), base_seq: z.literal(0) }),
-  z.object({ ...segmentFields, parent_segment_uuid: z.string().transform(segmentId),
-    parent_end_seq: z.number().int().nonnegative(), base_seq: z.number().int().nonnegative() }),
+  z.object({ ...segmentFields, parent_id: z.null(), base_seq: z.literal(0) }),
+  z.object({ ...segmentFields, parent_id: z.number().int(), base_seq: z.number().int().nonnegative() }),
 ])
 type Metadata = z.infer<typeof metadata>
 type Segment = z.infer<typeof segmentRow>
@@ -107,28 +134,52 @@ export interface SqliteStoreOptions {
   readonly path: string
   /** Resolved JSONL root holding the per-Session write-lock directories and `.segments` routing records. */
   readonly legacyRoot: string
-  /** Physical frame encoding for new writes; stored frames decode by their own codec regardless. */
-  readonly compression: FrameCompression
-  /** Maximum events per new frame; stored frames keep their written size. */
-  readonly frameEvents: number
+  /** Physical `data` encoding for new rows; stored rows decode by their own codec regardless. */
+  readonly compression: EventCompression
+  /** Reader of the package's SQL files, shared with whatever built the derivations. */
+  readonly sql: SqlFiles
+  /** Derived tables to maintain beside events. */
+  readonly derivations: readonly Derivation[]
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
   readonly acquireCreationLease: (header: SessionHeader) => Promise<{ release(): Promise<void> }>
   /** Report a background live-write failure; the Session's next durability barrier retries and rejects. */
   readonly report: (id: SessionId, error: unknown) => void
+  /** Report a derived-table failure, the first of each kind and table; events are unaffected. */
+  readonly reportDerivation: (failure: DerivationFailure) => void
+  /** Report a schema upgrade about to rewrite the database from one version to the next; the process blocks until it finishes. */
+  readonly reportUpgrade: (from: number, to: number) => void
+  /** Report stored data a schema upgrade could not carry over and set aside; the Session it belongs to reads as damaged. */
+  readonly reportSetAside: (detail: string, error: unknown) => void
+  /** Report a database moved aside for a new empty one; its stored Sessions are no longer listed. */
+  readonly reportRecovery: (detail: string) => void
+  /**
+   * What an open does when the stored database cannot be used. `replace` keeps every stored byte by moving the file
+   * aside and starts a new empty database, so the Session service stays available. `report` refuses and leaves the
+   * storage root for an operator to repair. Defaults to `replace`.
+   */
+  readonly recovery?: Recovery
 }
 
-/** Trace persistence over private predecessor-linked Segments in one SQLite database. */
+/** Session persistence over private predecessor-linked Segments in one SQLite database. */
 export class SqliteStore {
   /** Absolute database path, recorded in routing records. */
   readonly path: string
   private readonly legacyRoot: string
-  private readonly compression: FrameCompression
-  private readonly frameEvents: number
+  private readonly compression: EventCompression
+  private readonly derived: DerivedTables
+  private rebuilding: Promise<void> | undefined
+  /** Set while an open that ran an upgrade step has not committed, so its failure is kept instead of retried. */
+  private upgrading = false
   private readonly published: (id: SessionId) => Promise<void>
   private readonly acquireCreationLease: SqliteStoreOptions['acquireCreationLease']
   private readonly report: (id: SessionId, error: unknown) => void
+  private readonly reportDerivation: SqliteStoreOptions['reportDerivation']
+  private readonly reportUpgrade: SqliteStoreOptions['reportUpgrade']
+  private readonly reportSetAside: SqliteStoreOptions['reportSetAside']
+  private readonly reportRecovery: SqliteStoreOptions['reportRecovery']
+  private readonly recovery: Recovery
   private readonly pendingCreates = new Map<SessionId, {
     header: SessionHeader
     inheritedCount: number
@@ -136,11 +187,13 @@ export class SqliteStore {
   }>()
   private readonly creating = new Set<SessionId>()
   private readonly directorySyncs = new Set<string>()
-  private readonly statements = new Map<string, StatementSync>()
+  /** SQL text of this store's statements, shared with its derived tables and upgrade steps. */
+  private readonly sql: SqlFiles
+  private readonly statements = new Map<SqlFile, StatementSync>()
   private ready: Promise<DatabaseSync> | undefined
   private closing: Promise<void> | undefined
   private failure: Error | undefined
-  private readonly chains = new Map<SessionId, { head: SegmentId; nodes: Map<SegmentId, Segment> }>()
+  private readonly chains = new Map<SessionId, { head: number; nodes: Map<number, Segment> }>()
   private readonly handles = new Set<SqliteSessionHandle>()
   private readonly writers = new Map<SessionId, SqliteSessionHandle>()
   /** Appended batches awaiting the next group commit, in arrival order. */
@@ -150,7 +203,13 @@ export class SqliteStore {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
     this.compression = options.compression
-    this.frameEvents = options.frameEvents
+    this.sql = options.sql
+    this.derived = new DerivedTables(options.derivations, options.reportDerivation, this.sql)
+    this.reportDerivation = options.reportDerivation
+    this.reportUpgrade = options.reportUpgrade
+    this.reportSetAside = options.reportSetAside
+    this.reportRecovery = options.reportRecovery
+    this.recovery = options.recovery ?? 'replace'
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -183,13 +242,20 @@ export class SqliteStore {
     if (this.failure !== undefined) return Promise.reject(this.failure)
     return this.ready ??= this.initialize().catch((error: unknown) => {
       this.ready = undefined
+      // A failed upgrade fails the same way on unchanged data; retrying would block the process again each time.
+      if (this.upgrading) this.failure = asError(error)
       throw error
     })
   }
 
   /**
    * Refuse to use or create a database while routing records claim one that is missing.
+   *
+   * Routing records name Sessions whose history lived in the database, so an absent database is history an operator
+   * can still restore. Under `replace` the orphaned records are reported and then ignored, and a new empty database
+   * takes their place.
    * @returns resolves when the database file exists or no routing record requires it.
+   * @throws {HarnessError} `SESSION_STORAGE_MISSING` under `report`, with the file left absent for a restore.
    */
   async assertRoutingDatabase(): Promise<void> {
     if (this.ready !== undefined || await this.databaseFileExists()) return
@@ -199,13 +265,101 @@ export class SqliteStore {
       if (isAbsent(error)) return
       throw error
     }
-    if (!records.some(record => record.endsWith('.json'))) return
+    const orphaned = records.filter(record => record.endsWith('.json'))
+    if (orphaned.length === 0) return
     // Another initializer may have created the database while routing records were read.
     if (await this.databaseFileExists()) return
+    if (this.recovery === 'replace') {
+      // The records stay in place: a database an operator restores from a backup finds them again. They are ignored here
+      // only because no database exists to hold their Sessions, and a later run with a restored file reads them normally.
+      this.reportRecovery(`SQLite Session database "${this.path}" is missing while ${orphaned.length} routing record(s) remain; `
+        + 'a new empty database replaces it. The Sessions those records name stay recoverable from a backup, because the '
+        + 'records are kept and a restored database is read through them')
+      return
+    }
     throw new HarnessError('The Segment database is missing but routing records remain; restore the database before using Sessions', 'SESSION_STORAGE_MISSING')
   }
 
+  /**
+   * Prepare the database, which may be absent, locked by another process, or unreadable.
+   *
+   * An absent file becomes a new empty database with the current schema. A lock waits for the busy timeout, because the
+   * writer that holds it may commit meanwhile, and then reports the lock instead of replacing a live writer's file. A
+   * damaged file is moved aside to `<name>.unreadable-<timestamp>` beside it, with the routing records that name its
+   * Sessions, and a new empty database takes its place: the store keeps working and every stored byte stays available,
+   * so nothing is deleted. `report` refuses instead, which leaves the storage root exactly as it was for an operator.
+   * @returns the open database.
+   * @throws {HarnessError} `SESSION_STORAGE_LOCKED` or `SESSION_STORAGE_MISSING` under `report`. A refused schema and a
+   * failed upgrade propagate under either mode, because their file is readable and must not be replaced.
+   */
   private async initialize(): Promise<DatabaseSync> {
+    try { return await this.openDatabase() }
+    catch (error: unknown) {
+      // Anything else is a file this build cannot interpret, which only an operator or another build can resolve.
+      if (!(error instanceof ReplaceDatabase)) throw error
+      // A file that cannot be moved aside is not replaced: its bytes are the only copy of the damaged history.
+      /* v8 ignore next -- reached only when the move of a damaged file fails, which needs an unwritable volume. */
+      if (!await this.setAside()) throw error.wrapped
+      return await this.openDatabase()
+    }
+  }
+
+  /**
+   * Move a damaged database, its journal, and the routing records that name it aside, so the next open creates a new
+   * database and lists Sessions again. Every stored byte and every record stays readable under its new name.
+   * @returns whether the files were moved. A file that cannot be moved is left where it is: replacing it would discard the
+   * only copy of the damaged bytes, so the caller reports the storage fault instead.
+   */
+  private async setAside(): Promise<boolean> {
+    // The suffix keeps the database name first, so a later recovery never overwrites an earlier one.
+    const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+    const aside = `${this.path}.unreadable-${stamp}`
+    // The journal belongs to the bytes being moved, so a new database must not adopt it. A journal is usually absent, and
+    // a move that fails for any other reason means the damaged bytes cannot be preserved.
+    for (const [from, to] of [[this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`]] as const) {
+      try { await rename(from, to) }
+      /* v8 ignore next -- a journal is usually absent, and a volume that refuses the move of a readable file is a
+         storage fault no test can stage without changing the process's own filesystem permissions. */
+      catch (error: unknown) { if (!isAbsent(error)) return false }
+    }
+    // A routing record names a Session whose history was in the moved database. Left under its `.json` name it would make
+    // `list()` refuse every call as a missing Session, so the records move with the bytes they name.
+    const records = join(this.legacyRoot, '.segments')
+    try {
+      for (const name of await readdir(records)) {
+        if (!name.endsWith('.json')) continue
+        try { await rename(join(records, name), join(records, `${name}.unreadable-${stamp}`)) }
+        /* v8 ignore next -- a record vanishes only when another process removes it, which the lease prevents here. */
+        catch (error: unknown) { if (!isAbsent(error)) throw error }
+      }
+    } catch (error: unknown) {
+      /* v8 ignore next -- the routing directory is created before the first commit, so it is absent only on a new root. */
+      if (!isAbsent(error)) throw error
+    }
+    this.reportRecovery(`SQLite Session database "${this.path}" cannot be read; it and the routing records naming its `
+      + `Sessions were moved to "${basename(aside)}". A new empty database replaces it, and the moved files hold every `
+      + 'stored Session')
+    return true
+  }
+
+  /**
+   * Report one lock past the busy timeout.
+   *
+   * SQLite holds its locks as operating-system locks, which the kernel releases when a process exits, so a lock that
+   * outlasts the busy timeout belongs to a live writer. Replacing its file would not stop that writer: it would keep
+   * writing to the moved bytes while the new database started empty, splitting one history in two. Every platform
+   * therefore reports the lock rather than replacing, and only an operator decides that the writer is gone.
+   * @param error - the busy failure.
+   * @returns the error to throw.
+   */
+  private lockOutcome(error: unknown): Error {
+    return new HarnessError(`SQLite Session database "${this.path}" is locked by another process, which may be writing it; `
+      + 'close every other DSH process that uses this storage root and open the Session again',
+    'SESSION_STORAGE_LOCKED', { cause: asError(error) })
+  }
+
+  /** Open, create, and validate the configured database. */
+  private async openDatabase(): Promise<DatabaseSync> {
     await this.assertRoutingDatabase()
     await this.ensureDirectory(dirname(this.path))
     // Retain the routing directory before the first Session commit.
@@ -219,38 +373,45 @@ export class SqliteStore {
     try {
       const opened = new DatabaseSync(this.path, { timeout: BUSY_TIMEOUT_MS })
       db = opened
+      // Connection pragmas stay inline: each is one setting whose meaning is this call site.
       // Readers can acquire a snapshot as soon as schema creation commits.
-      opened.exec('PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL;')
+      // A 16 KiB page cuts the padding that large `data` values leave at the end of a page: 1.3% of a 370 MB store,
+      // against 6% more per-page slack in a small one. WAL requires the change before the first write.
+      opened.exec('PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL; PRAGMA page_size = 16384;')
       const deadline = performance.now() + BUSY_TIMEOUT_MS
       for (;;) {
         try { opened.exec('PRAGMA journal_mode = WAL'); break }
         catch (error: unknown) {
-          const code = (error as { errcode?: unknown } | null)?.errcode
-          if (typeof code !== 'number' || (code & 0xff) !== SQLITE_BUSY || performance.now() >= deadline) throw error
+          if (!isBusy(error)) throw error
+          if (performance.now() >= deadline) throw this.lockOutcome(error)
           // SQLite can bypass its busy handler during the journal-mode lock upgrade.
           // No schema or Session writes have started, so retrying this pragma is safe.
           await setImmediate()
         }
       }
       this.transaction(opened, () => {
-        const current = this.schemaState(opened)
-        if (current.version === 0 && current.application === 0) {
-          const tables = opened.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all()
-          if (tables.length !== 0) throw new HarnessError('Refusing an unrelated SQLite database', 'SESSION_STORAGE_FORMAT')
-          this.createSchema(opened)
-        } else if (current.version !== SCHEMA_VERSION || current.application !== APPLICATION_ID) {
-          throw new HarnessError('Unsupported SQLite persistence schema; database left intact', 'SESSION_STORAGE_FORMAT')
-        }
+        prepareSchema(opened, { path: this.path, compression: this.compression, sql: this.sql,
+          onStep: (step) => {
+            this.upgrading = true
+            this.reportUpgrade(step.from, step.to)
+          },
+          onSetAside: this.reportSetAside })
+        this.derived.install(opened, opened.prepare(this.sql.text('store/any-event')).get() !== undefined)
       })
+      this.upgrading = false
+      this.scheduleRebuild(opened)
       return opened
     } catch (error: unknown) {
       db?.close()
       if (error instanceof HarnessError
         || error instanceof SessionPersistenceCorruptionError
         || error instanceof SessionFormatUnsupportedError) throw error
-      if (error !== null && typeof error === 'object' && 'errcode' in error
-        && typeof error.errcode === 'number' && [SQLITE_CORRUPT, SQLITE_NOTADB].includes(error.errcode & 0xff)) {
-        throw this.corruption(`SQLite persistence database "${this.path}" is unreadable`, error)
+      // A lock is never damage: another process may be writing these bytes, so the file is reported and kept.
+      if (isBusy(error)) throw this.lockOutcome(error)
+      // Tagged so the caller replaces exactly this file, and only this file.
+      if (isUnreadable(error)) {
+        const corruption = this.corruption(`SQLite persistence database "${this.path}" is unreadable`, error)
+        throw this.recovery === 'replace' ? new ReplaceDatabase(corruption) : corruption
       }
       throw error
     }
@@ -277,60 +438,9 @@ export class SqliteStore {
     /* v8 ignore stop */
   }
 
-  private schemaState(db: DatabaseSync): { version: number; application: number } {
-    return {
-      version: z.object({ user_version: z.number() }).parse(db.prepare('PRAGMA user_version').get()).user_version,
-      application: z.object({ application_id: z.number() }).parse(db.prepare('PRAGMA application_id').get()).application_id,
-    }
-  }
-
-  private createSchema(db: DatabaseSync): void {
-    db.exec(`CREATE TABLE segments (
-      segment_uuid TEXT PRIMARY KEY, parent_segment_uuid TEXT REFERENCES segments(segment_uuid), parent_end_seq INTEGER,
-      base_seq INTEGER NOT NULL CHECK(base_seq >= 0),
-      CHECK((parent_segment_uuid IS NULL AND parent_end_seq IS NULL AND base_seq = 0)
-        OR (parent_segment_uuid IS NOT NULL AND parent_end_seq IS NOT NULL AND parent_end_seq >= 0 AND parent_segment_uuid != segment_uuid))
-    ) STRICT;
-    CREATE TABLE traces (
-      trace_uuid TEXT PRIMARY KEY, header TEXT NOT NULL,
-      tail_segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid),
-      inherited_count INTEGER NOT NULL CHECK(inherited_count >= 0)
-    ) STRICT;
-    CREATE UNIQUE INDEX exclusive_trace_head ON traces(tail_segment_uuid);
-    CREATE TABLE frames (
-      segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid),
-      start_seq INTEGER NOT NULL CHECK(start_seq >= 0), end_seq INTEGER NOT NULL CHECK(end_seq > start_seq),
-      codec INTEGER NOT NULL CHECK(codec IN (0, 1)), payload BLOB NOT NULL, PRIMARY KEY(segment_uuid, start_seq)
-    ) STRICT;
-    CREATE TRIGGER frames_no_update BEFORE UPDATE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
-    CREATE TRIGGER frames_no_delete BEFORE DELETE ON frames BEGIN SELECT RAISE(ABORT, 'frames are append-only'); END;
-    CREATE TRIGGER segments_no_reparent BEFORE UPDATE OF parent_segment_uuid, parent_end_seq, base_seq ON segments
-      BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
-    PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = ${SCHEMA_VERSION};`)
-    this.createAncestrySchema(db)
-  }
-
-  /** Maintain immutable ancestor ranges in the same transaction as each new Segment. */
-  private createAncestrySchema(db: DatabaseSync): void {
-    db.exec(`CREATE TABLE segment_ancestors (
-      segment_uuid TEXT NOT NULL REFERENCES segments(segment_uuid),
-      ancestor_uuid TEXT NOT NULL REFERENCES segments(segment_uuid),
-      end_seq INTEGER NOT NULL CHECK(end_seq >= 0),
-      PRIMARY KEY(segment_uuid, ancestor_uuid), CHECK(segment_uuid != ancestor_uuid)
-    ) STRICT, WITHOUT ROWID;
-    CREATE TRIGGER segments_index_ancestors AFTER INSERT ON segments WHEN NEW.parent_segment_uuid IS NOT NULL BEGIN
-      INSERT INTO segment_ancestors VALUES (NEW.segment_uuid, NEW.parent_segment_uuid, NEW.parent_end_seq);
-      INSERT INTO segment_ancestors SELECT NEW.segment_uuid, ancestor_uuid, end_seq
-        FROM segment_ancestors WHERE segment_uuid = NEW.parent_segment_uuid;
-    END;
-    CREATE TRIGGER ancestors_no_update BEFORE UPDATE ON segment_ancestors
-      BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;
-    CREATE TRIGGER ancestors_no_delete BEFORE DELETE ON segment_ancestors
-      BEGIN SELECT RAISE(ABORT, 'segment ancestry is immutable'); END;`)
-  }
-
   private transaction<T>(db: DatabaseSync, operation: () => T, mode: 'IMMEDIATE' | 'DEFERRED' = 'IMMEDIATE'): T {
     this.assertHealthy()
+    // Transaction control stays inline here and in the group commit: each statement is a keyword this code sequences.
     db.exec(`BEGIN ${mode}`)
     let result: T
     try { result = operation() }
@@ -362,95 +472,113 @@ export class SqliteStore {
     this.assertHealthy()
   }
 
-  private statement(db: DatabaseSync, sql: string): StatementSync {
-    let statement = this.statements.get(sql)
+  /** Prepare one SQL file's statement on first use; the store holds a single connection. */
+  private statement(db: DatabaseSync, file: SqlFile): StatementSync {
+    let statement = this.statements.get(file)
     if (statement === undefined) {
-      statement = db.prepare(sql)
-      this.statements.set(sql, statement)
+      statement = db.prepare(this.sql.text(file))
+      this.statements.set(file, statement)
     }
     return statement
   }
 
   private row(db: DatabaseSync, id: SessionId) {
     this.assertHealthy()
-    const raw = this.statement(db, `${TRACE_METADATA_SQL} WHERE t.trace_uuid = ?`).get(id)
+    const raw = this.statement(db, 'store/session-by-id').get(id)
     if (raw === undefined) return undefined
     return this.parseMetadata(raw, id)
   }
 
   private parseMetadata(raw: unknown, id: SessionId): Metadata {
     try { return metadata.parse(raw) }
-    catch (error: unknown) { throw this.corruption(`session "${id}": stored SQLite trace metadata is invalid`, error) }
+    catch (error: unknown) { throw this.corruption(`session "${id}": stored SQLite Session metadata is invalid`, error) }
   }
 
-  private segment(db: DatabaseSync, id: SegmentId): Segment {
-    const row = this.statement(db, 'SELECT s.*, COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count FROM segments s WHERE segment_uuid = ?').get(id)
-    if (row === undefined) throw new HarnessError('Trace references a missing segment', 'SESSION_STORAGE_CORRUPT')
+  private segment(db: DatabaseSync, id: number): Segment {
+    const row = this.statement(db, 'store/segment-by-id').get(id)
+    if (row === undefined) throw new HarnessError('Session references a missing segment', 'SESSION_STORAGE_CORRUPT')
     try { return segmentRow.parse(row) }
-    catch (error: unknown) { throw this.corruption(`stored SQLite segment "${id}" metadata is invalid`, error) }
+    catch (error: unknown) { throw this.corruption(`stored SQLite segment ${id} metadata is invalid`, error) }
   }
 
-  /** Fetch indexed ancestor metadata together, retaining the authoritative chain checks during reads. */
-  private parents(db: DatabaseSync, id: SegmentId, offset: number, nodes: Map<SegmentId, Segment>): void {
-    const rows = this.statement(db, `SELECT s.*, COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
-      JOIN segments s ON s.segment_uuid = a.ancestor_uuid
-      WHERE a.segment_uuid = ? AND (s.base_seq > ? OR s.base_seq + a.end_seq > ?)`).all(id, offset, offset)
+  /** Fetch the metadata of every ancestor on the Segment's path together, retaining the authoritative chain checks during reads. */
+  private parents(db: DatabaseSync, id: number, offset: number, nodes: Map<number, Segment>): void {
+    const rows = this.statement(db, 'store/segment-ancestors').all(id, offset)
     for (const row of rows) {
       let parsed: Segment
       try { parsed = segmentRow.parse(row) }
       catch (error: unknown) { throw this.corruption('Stored SQLite predecessor metadata is invalid', error) }
-      nodes.set(parsed.segment_uuid, parsed)
+      nodes.set(parsed.segment_id, parsed)
     }
   }
 
-  private newSegment(db: DatabaseSync, id: SegmentId, parent: Segment | undefined, end: number): void {
+  /** Insert a Segment whose first sequence is `end` events into `parent`, returning its row id. */
+  private newSegment(db: DatabaseSync, id: SegmentId, parent: Segment | undefined, end: number): number {
     const base = parent === undefined ? 0 : parent.base_seq + end
-    this.statement(db, 'INSERT INTO segments VALUES (?, ?, ?, ?)').run(id, parent?.segment_uuid ?? null, parent === undefined ? null : end, base)
+    return Number(this.statement(db, 'store/insert-segment').run(id, parent?.segment_id ?? null, base).lastInsertRowid)
   }
 
-  private insertTrace(db: DatabaseSync, header: SessionHeader, head: SegmentId,
-    inheritedCount: number, frames: readonly EncodedFrame[]): void {
-    this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(header), head, inheritedCount)
-    this.insertFrames(db, head, 0, frames)
+  private insertSession(db: DatabaseSync, header: SessionHeader, head: number,
+    inheritedCount: number, encoded: readonly EncodedEvent[]): void {
+    this.statement(db, 'store/insert-session').run(header.id, JSON.stringify(header), head, inheritedCount)
+    this.insertEvents(db, head, encoded)
   }
 
-  /** Store consecutive frames from `start`; the last frame's end becomes the Segment's event count. */
-  private insertFrames(db: DatabaseSync, segment: SegmentId, start: number, frames: readonly EncodedFrame[]): void {
-    const insert = this.statement(db, 'INSERT INTO frames (segment_uuid, start_seq, end_seq, codec, payload) VALUES (?, ?, ?, ?, ?)')
-    let seq = start
-    for (const frame of frames) {
-      insert.run(segment, seq, seq + frame.count, frame.codec, frame.bytes)
-      seq += frame.count
+  /** Store consecutive event rows; the last row's sequence fixes the Segment's event count. */
+  private insertEvents(db: DatabaseSync, segment: number, encoded: readonly EncodedEvent[]): void {
+    const insert = this.statement(db, 'store/insert-event')
+    for (const { row, derived } of encoded) {
+      insert.run(segment, row.seq, row.type, row.time, row.surface_op, row.source_seqs, row.ignorable, row.codec, row.data)
+      this.derived.insert(db, segment, row.seq, derived)
     }
   }
 
-  /** Serialize and compress a batch before its transaction: one frame per chunk, yielding between chunks of a long batch. */
-  private async encodeBatch(batch: readonly SessionEvent[]): Promise<EncodedFrame[]> {
-    const frames: EncodedFrame[] = []
-    for (let start = 0; start < batch.length; start += this.frameEvents) {
-      if (start > 0) await setImmediate()
-      frames.push(encodeFrame(batch.slice(start, start + this.frameEvents).map(event => JSON.stringify(event)), this.compression))
+  /** Serialize, compress and derive a batch before its transaction, yielding between groups of a long batch. */
+  private async encodeBatch(batch: readonly SessionEvent[]): Promise<EncodedEvent[]> {
+    const encoded: EncodedEvent[] = []
+    for (const [index, event] of batch.entries()) {
+      if (index > 0 && index % CODEC_GROUP_EVENTS === 0) await setImmediate()
+      encoded.push({ row: encodeRow(event, this.compression), derived: this.derived.rows(event) })
     }
-    return frames
+    return encoded
   }
 
   /**
-   * Locate the Segment a fork of `source` at `end` attaches to, through the ancestor index rather than the parent chain.
+   * Rebuild derived tables that are behind after open, one bounded transaction per event-loop turn so appends
+   * interleave. A locked database is tried again after a pause; any other failure is reported, and the stored
+   * cursor resumes the rebuild at the next start.
+   */
+  private scheduleRebuild(db: DatabaseSync): void {
+    this.rebuilding = (async () => {
+      for (;;) {
+        await setImmediate()
+        if (this.closing !== undefined || this.failure !== undefined) return
+        try {
+          if (!this.transaction(db, () => this.derived.rebuild(db))) return
+        } catch (error: unknown) {
+          // Another writer held the lock past the busy timeout; its release lets the next attempt through.
+          if (!isBusy(error)) throw error
+          await delay(REBUILD_BUSY_RETRY_MS)
+        }
+      }
+    })().catch((error: unknown) => { this.reportDerivation({ kind: 'rebuild', error }) })
+  }
+
+  /**
+   * Locate the Segment a fork of `source` at `end` attaches to, through its Segment paths rather than the parent chain.
    * Fork creation is the consumer; `end` never exceeds the source event count.
    * @param db - open database inside the caller's transaction.
-   * @param source - forked Trace metadata.
+   * @param source - forked Session metadata.
    * @param end - exclusive logical prefix length shared with the source.
    * @returns the attachment Segment and the prefix length within it; no Segment for an empty prefix.
    */
   cut(db: DatabaseSync, source: Metadata, end: number): { parent?: Segment; end: number } {
     if (end === 0) return { end: 0 }
-    const tail = this.segment(db, source.tail_segment_uuid)
+    const tail = this.segment(db, source.head_segment_id)
     if (end >= tail.base_seq) return { parent: tail, end: end - tail.base_seq }
     // Among ancestors starting at or before the cut, the deepest one holds it; an empty-prefix tie is logically equivalent.
-    const raw = this.statement(db, `SELECT s.*, a.end_seq AS visible_end, COALESCE((SELECT end_seq FROM frames WHERE segment_uuid = s.segment_uuid ORDER BY start_seq DESC LIMIT 1), 0) AS event_count FROM segment_ancestors a
-      JOIN segments s ON s.segment_uuid = a.ancestor_uuid
-      WHERE a.segment_uuid = ? AND s.base_seq <= ? ORDER BY s.base_seq DESC, a.end_seq DESC LIMIT 1`).get(tail.segment_uuid, end)
-    if (raw === undefined) throw new HarnessError('Invalid Trace segment chain', 'SESSION_STORAGE_CORRUPT')
+    const raw = this.statement(db, 'store/fork-attachment').get(tail.segment_id, end)
+    if (raw === undefined) throw new HarnessError('Invalid Session segment chain', 'SESSION_STORAGE_CORRUPT')
     let parent: Segment, visible: number
     try {
       parent = segmentRow.parse(raw)
@@ -462,7 +590,7 @@ export class SqliteStore {
   }
 
   /**
-   * Reserve a fresh Trace, or commit fork history and its shared prefix in one transaction.
+   * Reserve a fresh Session, or commit fork history and its shared prefix in one transaction.
    * @param header - loop-owned metadata.
    * @param options - optional cancellation, logical inherited count, and selected fork history.
    * @returns exclusive in-process write handle.
@@ -508,7 +636,7 @@ export class SqliteStore {
     signal?.throwIfAborted()
     const events = materializeAppendBatch(source.events.slice(source.endSeq))
     assertContiguous(header.id, events, source.endSeq)
-    const frames = await this.encodeBatch(events)
+    const encoded = await this.encodeBatch(events)
     const handle = await this.admit(header, 'write', inheritedCount, false,
       await this.acquireWriteLease(header, true))
     try {
@@ -522,9 +650,8 @@ export class SqliteStore {
           throw new HarnessError(`Parent Session "${source.sessionId}" is not persisted through ${source.endSeq} events`, 'SESSION_FORK_PREFIX_NOT_PERSISTED')
         }
         const cut = this.cut(db, parent, source.endSeq)
-        const head = segmentId(randomUUID())
-        this.newSegment(db, head, cut.parent, cut.end)
-        this.insertTrace(db, header, head, inheritedCount, frames)
+        const head = this.newSegment(db, segmentId(randomUUID()), cut.parent, cut.end)
+        this.insertSession(db, header, head, inheritedCount, encoded)
       })
       await this.route(header.id)
       return handle
@@ -537,7 +664,7 @@ export class SqliteStore {
 
   /**
    * Acquire a handle; a write open reads the stored log once to validate it before the restore read.
-   * @param id - trace_uuid identifying the event list.
+   * @param id - Session identity.
    * @param access - read or in-process exclusive write access.
    * @param signal - optional cancellation.
    * @param ownership - optional import lease, transferred only to a successful write open.
@@ -556,7 +683,7 @@ export class SqliteStore {
     const row = this.row(db, id)
     if (row === undefined) throw new SessionPersistenceNotFoundError(id)
     const header = this.parseHeader(id, row.header)
-    if (header.id !== id) throw new HarnessError('SQLite Trace identity mismatch', 'SESSION_STORAGE_CORRUPT')
+    if (header.id !== id) throw new HarnessError('SQLite Session identity mismatch', 'SESSION_STORAGE_CORRUPT')
     const handle = await this.admit(header, access, row.inherited_count, false, ownership)
     try {
       signal?.throwIfAborted()
@@ -594,14 +721,13 @@ export class SqliteStore {
     const storedHeader = materializeHeader(header, inheritedCount)
     const batch = materializeAppendBatch(events)
     assertContiguous(header.id, batch, 0)
-    const frames = await this.encodeBatch(batch)
+    const encoded = await this.encodeBatch(batch)
     const db = await this.database()
     this.check(); signal?.throwIfAborted()
     this.transaction(db, () => {
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
-      const head = segmentId(randomUUID())
-      this.newSegment(db, head, undefined, 0)
-      this.insertTrace(db, storedHeader, head, inheritedCount, frames)
+      const head = this.newSegment(db, segmentId(randomUUID()), undefined, 0)
+      this.insertSession(db, storedHeader, head, inheritedCount, encoded)
     })
     await this.route(header.id)
   }
@@ -683,7 +809,7 @@ export class SqliteStore {
 
   /**
    * Read only the requested indexed list slice, validating the decoded event vocabulary.
-   * @param header - selected Trace metadata.
+   * @param header - selected Session metadata.
    * @param offset - first sequence.
    * @param length - maximum number of events.
    * @returns independently owned event slice.
@@ -696,72 +822,56 @@ export class SqliteStore {
       const meta = this.row(db, header.id)
       if (meta === undefined) throw new SessionPersistenceNotFoundError(header.id)
       let cached = this.chains.get(header.id)
-      if (cached === undefined || cached.head !== meta.tail_segment_uuid) {
-        cached = { head: meta.tail_segment_uuid, nodes: new Map() }
+      if (cached === undefined || cached.head !== meta.head_segment_id) {
+        cached = { head: meta.head_segment_id, nodes: new Map() }
         this.chains.set(header.id, cached)
       }
-      const visited = new Set<SegmentId>(), ranges: { segment: Segment; end: number }[] = []
-      let current = this.segment(db, meta.tail_segment_uuid), end = meta.event_count - current.base_seq
-      cached.nodes.set(current.segment_uuid, current)
+      const visited = new Set<number>(), ranges: { segment: Segment; end: number }[] = []
+      let current = this.segment(db, meta.head_segment_id), end = meta.event_count - current.base_seq
+      cached.nodes.set(current.segment_id, current)
       for (;;) {
-        if (visited.has(current.segment_uuid) || end < 0 || end > current.event_count) {
-          throw new HarnessError('Invalid Trace segment chain', 'SESSION_STORAGE_CORRUPT')
+        if (visited.has(current.segment_id) || end < 0 || end > current.event_count) {
+          throw new HarnessError('Invalid Session segment chain', 'SESSION_STORAGE_CORRUPT')
         }
-        visited.add(current.segment_uuid)
+        visited.add(current.segment_id)
         ranges.push({ segment: current, end })
-        if (current.parent_segment_uuid === null || current.base_seq <= offset) break
+        if (current.parent_id === null || current.base_seq <= offset) break
         const child = current
-        if (!cached.nodes.has(child.parent_segment_uuid)) this.parents(db, child.segment_uuid, offset, cached.nodes)
-        current = cached.nodes.get(child.parent_segment_uuid) ?? this.segment(db, child.parent_segment_uuid)
-        cached.nodes.set(current.segment_uuid, current)
-        end = child.parent_end_seq
-        if (current.base_seq + end !== child.base_seq) throw new HarnessError('Invalid segment offset', 'SESSION_STORAGE_CORRUPT')
+        if (!cached.nodes.has(child.parent_id)) this.parents(db, child.segment_id, offset, cached.nodes)
+        current = cached.nodes.get(child.parent_id) ?? this.segment(db, child.parent_id)
+        cached.nodes.set(current.segment_id, current)
+        // A child's base is the cut in its parent, so the parent contributes the events before it.
+        end = child.base_seq - current.base_seq
       }
-      // Frames overlapping each Segment range, with the slice of their events the read covers.
-      const frames: { codec: number; bytes: Uint8Array; skip: number; take: number }[] = []
+      // Rows of each Segment range, oldest Segment first.
+      const rows: EventRow[] = []
       const stop = offset + Math.min(length, Math.max(0, meta.event_count - offset))
-      const select = this.statement(db, `SELECT start_seq, end_seq, codec, payload FROM frames
-        WHERE segment_uuid = ? AND end_seq > ? AND start_seq < ? ORDER BY start_seq`)
+      const select = this.statement(db, 'store/events-in-range')
       for (const { segment, end } of ranges.reverse()) {
-        const start = Math.max(0, offset - segment.base_seq), finish = Math.min(end, stop - segment.base_seq)
+        const start = Math.max(segment.base_seq, offset), finish = Math.min(segment.base_seq + end, stop)
         if (finish <= start) continue
         let expected = start
-        for (const row of select.all(segment.segment_uuid, start, finish)) {
-          const frame = frameRow.safeParse(row)
-          if (!frame.success) throw this.corruption(`session "${header.id}": stored SQLite frame is invalid`, frame.error)
-          if (frame.data.start_seq > expected) break
-          const until = Math.min(finish, frame.data.end_seq)
-          frames.push({ codec: frame.data.codec, bytes: frame.data.payload, skip: expected - frame.data.start_seq, take: until - expected })
-          expected = until
+        for (const raw of select.all(segment.segment_id, start, finish)) {
+          const row = eventRow.safeParse(raw)
+          if (!row.success) throw this.corruption(`session "${header.id}": stored SQLite event row is invalid`, row.error)
+          if (row.data.seq !== expected) break
+          rows.push(row.data)
+          expected++
         }
         if (expected !== finish) throw new HarnessError('SQLite segment is incomplete', 'SESSION_STORAGE_CORRUPT')
       }
-      return { frames, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
+      return { rows, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
     }, 'DEFERRED')
     const decoded: (SessionFormatEvent & SessionEvent)[] = []
-    // One synchronous transaction fetched the frames; compressed frames decode on the thread pool a group at a
-    // time, and parsing each group yields the event loop before the next, so a long history does not stall it.
-    for (let group = 0; group < stored.frames.length; group += READ_DECODE_GROUP_FRAMES) {
-      if (group > 0) await setImmediate()
-      const frames = stored.frames.slice(group, group + READ_DECODE_GROUP_FRAMES)
-      const texts = await Promise.all(frames.map(async (frame, index) => {
-        try { return await decodeFrame(frame.codec, frame.bytes) } catch (error: unknown) {
-          throw this.corruption(`session "${header.id}": stored frame holding event ${offset + decoded.length + index} cannot be decoded`, error)
-        }
-      }))
-      for (const [index, lines] of texts.entries()) {
-        const frame = frames[index]
-        /* v8 ignore next -- a frame group only holds the frames it was built from. */
-        if (frame === undefined) continue
-        if (lines.length < frame.skip + frame.take) throw new HarnessError('SQLite frame is shorter than its recorded range', 'SESSION_STORAGE_CORRUPT')
-        for (const text of lines.slice(frame.skip, frame.skip + frame.take)) {
-          try {
-            decoded.push(decodeEvent(JSON.parse(text)))
-          } catch (error: unknown) {
-            if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
-            throw this.corruption(`session "${header.id}": stored event at index ${offset + decoded.length} is invalid`, error)
-          }
-        }
+    // One synchronous transaction fetched the rows; decoding yields the event loop between groups,
+    // so a long history does not stall it.
+    for (const [index, row] of stored.rows.entries()) {
+      if (index > 0 && index % CODEC_GROUP_EVENTS === 0) await setImmediate()
+      try {
+        decoded.push(decodeEvent(decodeRow(row)))
+      } catch (error: unknown) {
+        if (error instanceof SessionFormatUnsupportedMigrationError) throw new SessionFormatUnsupportedError(error.message)
+        throw this.corruption(`session "${header.id}": stored event at index ${offset + index} is invalid`, error)
       }
     }
     if (stored.complete) {
@@ -780,14 +890,14 @@ export class SqliteStore {
 
   /**
    * Insert a new suffix atomically; recover the append position through the event index without updating metadata counters.
-   * @param header - selected Trace metadata.
+   * @param header - selected Session metadata.
    * @param batch - independently materialized new events.
    */
   async append(header: SessionHeader, batch: readonly SessionEvent[]): Promise<void> {
     const db = await this.database()
-    const frames = await this.encodeBatch(batch)
+    const encoded = await this.encodeBatch(batch)
     await new Promise<void>((resolve, reject) => {
-      this.commitQueue.push({ header, batch, frames, resolve, reject })
+      this.commitQueue.push({ header, batch, encoded, resolve, reject })
       this.scheduleCommits(db)
     })
   }
@@ -821,7 +931,7 @@ export class SqliteStore {
             try {
               const row = this.ensureRow(db, entry.header)
               assertContiguous(entry.header.id, entry.batch, row.event_count)
-              this.insertFrames(db, row.tail_segment_uuid, row.event_count - row.base_seq, entry.frames)
+              this.insertEvents(db, row.head_segment_id, entry.encoded)
               db.exec('RELEASE batch')
             } catch (error: unknown) {
               if (!db.isTransaction) throw error
@@ -862,12 +972,8 @@ export class SqliteStore {
     }
     const pending = this.pendingCreates.get(header.id)
     if (pending === undefined) throw new SessionPersistenceNotFoundError(header.id)
-    const head = pending.head
-    this.newSegment(db, head, undefined, 0)
-    const storedHeader = materializeHeader(header, SessionLogOffset(pending.inheritedCount))
-    this.statement(db, 'INSERT INTO traces VALUES (?, ?, ?, ?)').run(
-      header.id, JSON.stringify(storedHeader), head, pending.inheritedCount,
-    )
+    const head = this.newSegment(db, pending.head, undefined, 0)
+    this.insertSession(db, materializeHeader(header, SessionLogOffset(pending.inheritedCount)), head, pending.inheritedCount, [])
     row = this.row(db, header.id)
     if (row === undefined) throw new HarnessError('Committed Session metadata is unavailable', 'SESSION_STORAGE_CORRUPT')
     return row
@@ -889,7 +995,7 @@ export class SqliteStore {
 
   /**
    * Observe metadata without querying any event payloads.
-   * @param id - selected trace_uuid.
+   * @param id - selected Session identity.
    * @param signal - optional cancellation.
    * @returns header, exact count and revision, or absence.
    */
@@ -906,10 +1012,10 @@ export class SqliteStore {
   }
 
   private snapshot(id: SessionId, row: Metadata, header: SessionHeader): SessionPersistenceSnapshot {
-    if (header.id !== id) throw new HarnessError('SQLite Trace identity mismatch', 'SESSION_STORAGE_CORRUPT')
+    if (header.id !== id) throw new HarnessError('SQLite Session identity mismatch', 'SESSION_STORAGE_CORRUPT')
     // SQLite rows always hold the current Session format.
     return { header, formatStatus: 'current', eventCount: row.event_count,
-      revision: SessionPersistenceRevision(`${row.tail_segment_uuid}:${row.event_count}`) }
+      revision: SessionPersistenceRevision(`${row.head_segment_uuid}:${row.event_count}`) }
   }
 
   private async databaseFileExists(): Promise<boolean> {
@@ -951,11 +1057,11 @@ export class SqliteStore {
       const db = await this.database()
       // One joined query observes all durable metadata in the same read snapshot.
       this.transaction(db, () => {
-        for (const trace of this.statement(db, `${TRACE_METADATA_SQL} ORDER BY t.trace_uuid`).all()) {
+        for (const stored of this.statement(db, 'store/sessions').all()) {
           signal?.throwIfAborted()
-          const id = traceIdentity.parse(trace).trace_uuid
+          const id = sessionIdentityRow.parse(stored).session_id
           seen.add(id)
-          const row = this.parseMetadata(trace, id)
+          const row = this.parseMetadata(stored, id)
           let header: SessionHeader
           try { header = this.parseHeader(id, row.header) }
           catch (error: unknown) {
@@ -1025,6 +1131,14 @@ export class SqliteStore {
       if (this.ready !== undefined) {
         // Initialization closes its connection before rejecting; disposal only joins that attempt.
         const db = await this.ready.catch((_error: unknown) => undefined)
+        // Initialization starts the rebuild, so it is joined only after initialization settles.
+        await this.rebuilding
+        if (db !== undefined) this.derived.release(db)
+        // Write volume during this process changed the tables the analysis sampled at open. `PRAGMA optimize` analyzes
+        // only the tables whose rows changed, so the next open starts with statistics that match the stored data.
+        if (db !== undefined) {
+          try { db.exec(this.sql.text('store/reoptimize')) } catch (error: unknown) { failures.push(error) }
+        }
         try { db?.close() } catch (error: unknown) { failures.push(error) }
       }
       this.statements.clear()

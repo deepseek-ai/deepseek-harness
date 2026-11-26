@@ -11,7 +11,7 @@ import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistenceCreateOptions } from '@deepseek-ai/dsh-session-persistence'
 import { SqliteStore } from '../src/sqlite.ts'
 import type { SqliteStoreOptions } from '../src/sqlite.ts'
-import { sqliteLogs, storedEvents, tailSegment } from './fixtures/store.ts'
+import { sqliteLogs, storedEvents, headSegment } from './fixtures/store.ts'
 import { SessionWriteLease } from '../src/lease.ts'
 import { sessionDir } from '../src/paths.ts'
 
@@ -162,9 +162,9 @@ it.each(prefixCases)('flushes the selected cut $cut after initially persisting u
   const shared = cut
   const db = new DatabaseSync(path, { readOnly: true })
   try {
-    expect(db.prepare('SELECT base_seq, parent_end_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.id))
-      .toEqual({ base_seq: shared, parent_end_seq: shared === 0 ? null : shared })
-    expect(storedEvents(db, tailSegment(db, child.id))).toEqual(expectedSeed.slice(shared))
+    expect(db.prepare('SELECT base_seq, parent_id IS NOT NULL AS shares FROM segments WHERE segment_id = ?').get(headSegment(db, child.id)))
+      .toEqual({ base_seq: shared, shares: shared === 0 ? 0 : 1 })
+    expect(storedEvents(db, headSegment(db, child.id))).toEqual(expectedSeed.slice(shared))
   } finally { db.close() }
   await parent.append(history.slice(cut))
   const childOwn = event(cut + 1, 'child continues')
@@ -201,9 +201,9 @@ it('keeps a cold-history repair before the inherited marker in the child segment
   await child.close(); await logs.close()
   const db = new DatabaseSync(path, { readOnly: true })
   try {
-    expect(db.prepare('SELECT base_seq, parent_end_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.id))
-      .toEqual({ base_seq: 1, parent_end_seq: 1 })
-    expect(storedEvents(db, tailSegment(db, child.id))).toEqual([interrupted, marker])
+    expect(db.prepare('SELECT base_seq, parent_id IS NOT NULL AS shares FROM segments WHERE segment_id = ?').get(headSegment(db, child.id)))
+      .toEqual({ base_seq: 1, shares: 1 })
+    expect(storedEvents(db, headSegment(db, child.id))).toEqual([interrupted, marker])
   } finally { db.close() }
   const restarted = store()
   const reader = await restarted.open(child.id, 'read')

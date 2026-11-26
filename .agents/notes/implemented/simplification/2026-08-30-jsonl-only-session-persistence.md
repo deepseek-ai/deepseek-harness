@@ -29,3 +29,7 @@ Existing databases written by the removed provider are not opened or migrated by
 Session persistence has one first-party physical format and one first-party durability path. The migration stack can keep one per-Session JSONL generation path, bytes, and inode unchanged while exclusively publishing a final successor, without implementing a parallel database transaction protocol. SQLite search remains available and its integration tests prove that it observes JSONL rather than sharing an authoritative database.
 
 Removing the provider is a deliberate compatibility cut for its opt-in database files. The change reduces implementation and CI surface but also removes the stronger database/WAL storage option; a future provider needs a current owner, deployment need, complete shared-contract evidence, and its own format-transition policy.
+
+## Related
+
+- [SQLite event rows with derived tables](../architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md) records the opt-in SQLite provider that exists again beside JSONL. JSONL remains the format shipped profiles select, and the conditions this note sets for a second provider apply to that one.

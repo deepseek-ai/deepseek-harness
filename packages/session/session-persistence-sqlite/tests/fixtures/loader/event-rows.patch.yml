@@ -1,0 +1,34 @@
+# Test-only patch over the shipped headless profile: the SQLite provider
+# replaces the JSONL one. The production bundle layers own the agent services,
+# tools, and defaults.
+- id: headless-startup
+  disabled: true
+
+- id: headless-runner
+  disabled: true
+
+- id: agent-loop
+  config:
+    agents:
+      - id: main
+        provider: cli-mock
+        model: cli-mock
+        cwd: !!js process.cwd()
+
+- id: session-persistence-jsonl
+  disabled: true
+
+- insert:
+    - id: session-persistence-sqlite
+      name: '@deepseek-ai/dsh-session-persistence-sqlite'
+      config:
+        root: './.sessions'
+
+    - id: cli-mock-llm
+      name: '../../../../../test-support/loader-smoke/tests/fixtures/cli-mock-llm.ts'
+
+- id: sandbox-policy
+  inject: []
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
+    workspaceRoot: !!js process.cwd()

@@ -49,8 +49,8 @@ it.each(['corrupt', 'unsupported'] as const)('omits %s headers whose first commi
     await writer.append([{ type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }])
     const db = new DatabaseSync(join(root, '.segments', 'sessions.sqlite'))
     try {
-      db.prepare('UPDATE traces SET header = ? WHERE trace_uuid = ?')
-        .run(kind === 'corrupt' ? 'invalid' : JSON.stringify({ ...header, version: SESSION_FORMAT_VERSION + 1 }), id)
+      db.prepare('UPDATE sessions SET header = ? WHERE session_id = ?')
+        .run(kind === 'corrupt' ? '{invalid' : JSON.stringify({ ...header, version: SESSION_FORMAT_VERSION + 1 }), id)
     } finally { db.close() }
   })()
   // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted store as receiver below.
@@ -85,14 +85,13 @@ it('lists 201 durable SQLite sessions with one metadata query and no event paylo
   const db = new DatabaseSync(join(root, '.segments', 'sessions.sqlite'))
   try {
     db.exec('BEGIN IMMEDIATE')
-    const segment = db.prepare('INSERT INTO segments VALUES (?, NULL, NULL, 0)')
-    const trace = db.prepare('INSERT INTO traces VALUES (?, ?, ?, 0)')
-    const frame = db.prepare('INSERT INTO frames VALUES (?, 0, 1, 0, ?)')
+    const segment = db.prepare('INSERT INTO segments (segment_uuid, parent_id, base_seq) VALUES (?, NULL, 0)')
+    const session = db.prepare('INSERT INTO sessions (session_id, header, head_segment_id, inherited_count) VALUES (?, ?, ?, 0)')
+    const event = db.prepare("INSERT INTO events (segment_id, seq, type, time, codec, data) VALUES (?, 0, 'turn/start', 0, 0, ?)")
     for (const id of ids.slice(1)) {
-      const head = `fixture-${id}`
-      segment.run(head)
-      trace.run(id, JSON.stringify({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }), head)
-      frame.run(head, Buffer.from('invalid payload must remain unread'))
+      const head = segment.run(`fixture-${id}`).lastInsertRowid
+      session.run(id, JSON.stringify({ version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }), head)
+      event.run(head, 'invalid data must remain unread')
     }
     db.exec('COMMIT')
   } finally { db.close() }
@@ -109,5 +108,5 @@ it('lists 201 durable SQLite sessions with one metadata query and no event paylo
   expect(entries.map(entry => entry.header.id)).toEqual(ids)
   expect(entries.every(entry => entry.eventCount === 1)).toBe(true)
   expect(queries).toHaveLength(1)
-  expect(queries[0]).not.toMatch(/payload/i)
+  expect(queries[0]).not.toMatch(/\bdata\b/i)
 })

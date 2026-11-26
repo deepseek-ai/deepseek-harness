@@ -26,12 +26,13 @@ export async function persistenceFixture() {
     }
     if (failures.length > 0) throw new AggregateError(failures, 'Persistence fixture disposal failed')
   })
-  async function mount(storage: 'sqlite' | 'jsonl', compression: JsonlCompression = 'none', frameEvents?: number) {
+  async function mount(storage: 'sqlite' | 'jsonl', compression: JsonlCompression = 'none',
+    recovery?: 'replace' | 'report') {
     const context = new Context()
     contexts.push(context)
     await context.plugin(SessionStore)
     const provider = storage === 'sqlite'
-      ? await context.plugin(SqlitePersistence, { root, compression, ...(frameEvents === undefined ? {} : { frameEvents }) })
+      ? await context.plugin(SqlitePersistence, { root, compression, ...recovery === undefined ? {} : { recovery } })
       : await context.plugin(JsonlPersistence, { root, compression })
     return { context, persistence: context.sessionPersistence, provider }
   }

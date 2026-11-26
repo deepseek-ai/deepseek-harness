@@ -11,14 +11,15 @@ import { SessionAlreadyOwnedError, SessionPersistenceRevision } from '@deepseek-
 import { SqliteStore } from '../src/sqlite.ts'
 import { LegacySessionMigration } from '../src/migration.ts'
 import type { JsonlBackend } from '../src/migration.ts'
-import { FRAME_DEFAULTS } from './fixtures/store.ts'
+import { STORE_DEFAULTS } from './fixtures/store.ts'
 
 const id = SessionId('migration')
 const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false }
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sqlite-import-sequence-'))
-  const sqlite = new SqliteStore({ path: join(root, 'sessions.sqlite'), legacyRoot: root, ...FRAME_DEFAULTS,
-    acquireCreationLease: async () => ({ release: async () => {} }), publish: async () => {}, report: () => {} })
+  const sqlite = new SqliteStore({ path: join(root, 'sessions.sqlite'), legacyRoot: root, ...STORE_DEFAULTS,
+    acquireCreationLease: async () => ({ release: async () => {} }), publish: async () => {}, report: () => {},
+    reportDerivation: () => {}, reportUpgrade: () => {}, reportSetAside: () => {}, reportRecovery: () => {} })
   const jsonl: JsonlBackend = {
     hasStoredJsonl: async () => true, list: async () => [],
     stat: async () => ({ header, revision: SessionPersistenceRevision('legacy'), eventCount: 0 }),

@@ -5,7 +5,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { meta, oneTurnLog, runPersistenceContract } from '../../session-persistence/tests/contract.ts'
 import { persistenceFixture } from './fixtures/persistence.ts'
-import { storedEvents } from './fixtures/store.ts'
+import { headSegment, storedEvents } from './fixtures/store.ts'
 
 runPersistenceContract('sqlite', async () => {
   const fixture = await persistenceFixture()
@@ -44,11 +44,11 @@ describe('SQLite persistence plugin', () => {
     await context.fiber.dispose()
     const db = new DatabaseSync(join(fixture.root, '.segments', 'sessions.sqlite'))
     try {
-      const thread = db.prepare('SELECT header, tail_segment_uuid FROM traces WHERE trace_uuid = ?').get(header.id)
-      expect(JSON.parse(String(thread?.header))).toEqual({ ...header, delegationDepth: 0 })
-      const segment = db.prepare('SELECT parent_segment_uuid, parent_end_seq, base_seq FROM segments WHERE segment_uuid = ?').get(thread?.tail_segment_uuid as string)
-      expect(segment).toEqual({ parent_segment_uuid: null, parent_end_seq: null, base_seq: 0 })
-      expect(storedEvents(db, thread?.tail_segment_uuid as string)).toEqual(events)
+      const stored = db.prepare('SELECT header FROM sessions WHERE session_id = ?').get(header.id)
+      expect(JSON.parse(String(stored?.header))).toEqual({ ...header, delegationDepth: 0 })
+      const head = headSegment(db, header.id)
+      expect(db.prepare('SELECT parent_id, base_seq FROM segments WHERE segment_id = ?').get(head)).toEqual({ parent_id: null, base_seq: 0 })
+      expect(storedEvents(db, head)).toEqual(events)
     } finally {
       db.close()
     }

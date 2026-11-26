@@ -35,7 +35,7 @@ it.each(['commit', 'rollback'] as const)('isolates every SQLite handle after an 
   const pendingReader = await ctx.sessionPersistence.open(pendingId, 'read')
   if (operation === 'rollback') {
     const db = new DatabaseSync(join(root, '.segments', 'sessions.sqlite'))
-    try { db.exec("CREATE TRIGGER refuse_append BEFORE INSERT ON frames BEGIN SELECT RAISE(ABORT, 'append refused'); END") }
+    try { db.exec("CREATE TRIGGER refuse_append BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'append refused'); END") }
     finally { db.close() }
   }
   // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted database as receiver below.
@@ -129,7 +129,7 @@ it('refuses a queued second Session before its transaction begins and rejects fl
   expect(two).toBe(one)
   expect(laterTransactions).toBe(0)
   const db = new DatabaseSync(path)
-  try { expect(db.prepare('SELECT payload FROM frames').all()).toEqual([]) } finally { db.close() }
+  try { expect(db.prepare('SELECT seq FROM events').all()).toEqual([]) } finally { db.close() }
   await first.close(); await second.close()
   await expect(logs.flush()).rejects.toBe(one)
 })

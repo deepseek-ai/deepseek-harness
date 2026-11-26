@@ -38,9 +38,9 @@ it('retries WAL activation after a competing initializer releases its lock', asy
   } finally { blocker.close() }
 })
 
-it('preserves the SQLite busy error when the WAL activation wait budget expires', async () => {
+it('reports a lock that outlasts the WAL activation wait budget instead of calling the file damaged', async () => {
   const fixture = await persistenceFixture()
-  const backend = await fixture.mount('sqlite')
+  const backend = await fixture.mount('sqlite', 'none', 'report')
   const busy = Object.assign(new Error('database is locked'), { errcode: 5 })
   let attempts = 0
   const clock = vi.spyOn(performance, 'now').mockImplementation(() => attempts < 2 ? 0 : 5000)
@@ -54,7 +54,8 @@ it('preserves the SQLite busy error when the WAL activation wait budget expires'
     execute.call(this, sql)
   })
   try {
-    await expect(backend.persistence.create(meta('busy-deadline'))).rejects.toBe(busy)
+    await expect(backend.persistence.create(meta('busy-deadline')))
+      .rejects.toMatchObject({ code: 'SESSION_STORAGE_LOCKED', cause: busy })
     expect(attempts).toBe(2)
   } finally { spy.mockRestore(); clock.mockRestore() }
   const writer = await backend.persistence.create(meta('after-contention'))
@@ -102,7 +103,7 @@ it('enables WAL before publishing the schema to a concurrent reader', async () =
     if (sql === 'COMMIT' && snapshot === undefined) {
       snapshot = new DatabaseSync(join(fixture.root, '.segments', 'sessions.sqlite'), { readOnly: true })
       execute.call(snapshot, 'BEGIN')
-      expect(snapshot.prepare('SELECT COUNT(*) AS count FROM traces').get()?.count).toBe(0)
+      expect(snapshot.prepare('SELECT COUNT(*) AS count FROM sessions').get()?.count).toBe(0)
     }
   })
   try {
@@ -111,7 +112,7 @@ it('enables WAL before publishing the schema to a concurrent reader', async () =
     await writer.append(oneTurnLog())
     await writer.close()
     expect(snapshot).toBeDefined()
-    expect(snapshot?.prepare('SELECT COUNT(*) AS count FROM traces').get()?.count).toBe(0)
+    expect(snapshot?.prepare('SELECT COUNT(*) AS count FROM sessions').get()?.count).toBe(0)
     expect((await backend.persistence.stat(header.id))?.eventCount).toBe(oneTurnLog().length)
   } finally {
     spy.mockRestore()

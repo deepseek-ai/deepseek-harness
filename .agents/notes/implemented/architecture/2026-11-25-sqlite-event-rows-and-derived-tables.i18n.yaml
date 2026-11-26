@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-11-25-sqlite-event-rows-and-derived-tables.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md
+/agent-note-sqlite-event-rows-with-derived-tables:
+  en: 4a47f4e7accd12fc
+  zh: f7367875349a8ae8
+/agent-note-sqlite-event-rows-with-derived-tables/problem:
+  en: fb5ade9d1f8ce2ec
+  zh: 8ce5a2439ba0f5ec
+/agent-note-sqlite-event-rows-with-derived-tables/decision:
+  en: 1f3749a0846b65d9
+  zh: 174414a89f9be97d
+/agent-note-sqlite-event-rows-with-derived-tables/measurements:
+  en: f8d535c0da22984a
+  zh: 362e9221a906d733
+/agent-note-sqlite-event-rows-with-derived-tables/alternatives-considered:
+  en: 9323e0b413016115
+  zh: 7bdc4f0f82087be9
+/agent-note-sqlite-event-rows-with-derived-tables/consequences:
+  en: 90ae3d430b5802de
+  zh: 227ac5c0308fc740
+/agent-note-sqlite-event-rows-with-derived-tables/related:
+  en: 8fd225f29ca16cc9
+  zh: 446ebc55bf77bc2b

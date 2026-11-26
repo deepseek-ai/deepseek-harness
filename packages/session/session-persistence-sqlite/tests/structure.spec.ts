@@ -8,8 +8,8 @@ import { z } from 'zod'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SCHEMA_VERSION } from '../src/sqlite.ts'
-import { countSqliteReads, sharedHistory, sqliteLogs, storedEvents, storedFrames, tailSegment } from './fixtures/store.ts'
+import { SCHEMA_VERSION } from '../src/schema.ts'
+import { countSqliteReads, headSegment, sharedHistory, sqliteLogs, storedEvents, storedRows } from './fixtures/store.ts'
 import type { SqliteStoreOptions } from '../src/sqlite.ts'
 
 async function fixture(overrides: Partial<SqliteStoreOptions> = {}) {
@@ -45,12 +45,12 @@ it('forks bounded prefixes into private tails without copying historical event r
   await source.append(sourcePrefix)
   const db = new DatabaseSync(path)
   try {
-    const count = (table: 'traces' | 'segments' | 'frames') => z.object({ n: z.number() })
+    const count = (table: 'sessions' | 'segments' | 'events') => z.object({ n: z.number() })
       .parse(db.prepare(`SELECT count(*) AS n FROM ${table}`).get()).n
-    const before = [count('traces'), count('segments'), count('frames')]
+    const before = [count('sessions'), count('segments'), count('events')]
     const branchId = SessionId('branch')
     await sharedHistory(logs, id, branchId, sourcePrefix.slice(0, 2))
-    expect([count('traces'), count('segments'), count('frames')]).toEqual(before.map(value => value + 1))
+    expect([count('sessions'), count('segments'), count('events')]).toEqual(before.map(value => value + 1))
     const branch = await logs.open(branchId, 'write')
     expect(branch.inheritedEventCount).toBe(2)
     expect((await branch.read()).events.map(item => item.seq)).toEqual([0, 1, 2])
@@ -58,18 +58,18 @@ it('forks bounded prefixes into private tails without copying historical event r
     await source.append([event(4, 'source-only')])
     expect(JSON.stringify((await branch.read()).events)).not.toContain('source-only')
     expect(JSON.stringify((await source.read()).events)).not.toContain('branch-only')
-    const beforeForks = [count('traces'), count('segments'), count('frames')]
+    const beforeForks = [count('sessions'), count('segments'), count('events')]
     let current = branchId
     let prefix: SessionEvent[] = (await branch.read()).events
-    const beforeFrames = reads.frameRows()
+    const beforeRows = reads.eventRows()
     for (let index = 0; index < 128; index++) {
       const next = SessionId(`descendant-${index}`)
       await sharedHistory(logs, current, next, prefix)
       prefix = [...prefix, { type: 'session/end-seed', seq: SessionSeq(prefix.length), time: 0, data: { inherited: true } }]
       current = next
     }
-    expect([count('traces'), count('segments'), count('frames')]).toEqual(beforeForks.map(value => value + 128))
-    expect(reads.frameRows() - beforeFrames).toBe(0)
+    expect([count('sessions'), count('segments'), count('events')]).toEqual(beforeForks.map(value => value + 128))
+    expect(reads.eventRows() - beforeRows).toBe(0)
     const last = await logs.open(current, 'read')
     const beforeTail = reads.segmentQueries()
     expect((await last.read(131, 1)).events).toHaveLength(1)
@@ -85,17 +85,17 @@ it('forks bounded prefixes into private tails without copying historical event r
   } finally { db.close() }
 })
 
-it('rolls back the whole appended batch and its cursor when a later frame insert fails', async () => {
-  const { logs, path, id, header, event } = await fixture({ frameEvents: 1 })
+it('rolls back the whole appended batch and its cursor when a later event insert fails', async () => {
+  const { logs, path, id, header, event } = await fixture()
   const handle = await logs.create(header)
   await handle.append([event(0)])
   const db = new DatabaseSync(path)
   try {
-    const before = db.prepare('SELECT * FROM traces WHERE trace_uuid = ?').get(id)
-    db.exec("CREATE TRIGGER reject_fixture BEFORE INSERT ON frames WHEN NEW.start_seq = 2 BEGIN SELECT RAISE(ABORT, 'fixture insert failure'); END")
+    const before = db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(id)
+    db.exec("CREATE TRIGGER reject_fixture BEFORE INSERT ON events WHEN NEW.seq = 2 BEGIN SELECT RAISE(ABORT, 'fixture insert failure'); END")
     await expect(handle.append([event(1), event(2)])).rejects.toThrow('fixture insert failure')
-    expect(storedFrames(db, tailSegment(db, id)).map(frame => [frame.start, frame.end])).toEqual([[0, 1]])
-    expect(db.prepare('SELECT * FROM traces WHERE trace_uuid = ?').get(id)).toEqual(before)
+    expect(storedRows(db, headSegment(db, id)).map(row => row.seq)).toEqual([0])
+    expect(db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(id)).toEqual(before)
     await handle.flush()
     await handle.close()
     db.exec('DROP TRIGGER reject_fixture')
@@ -105,14 +105,14 @@ it('rolls back the whole appended batch and its cursor when a later frame insert
   } finally { db.close() }
 })
 
-it('refuses an incompatible database version while retaining its schema and payloads', async () => {
+it('refuses an incompatible database version while retaining its schema and event rows', async () => {
   const { root, logs, path, header, id, event } = await fixture()
   const handle = await logs.create(header)
   await handle.append([event(0)])
   await handle.close()
   await logs.close()
   const db = new DatabaseSync(path)
-  const before = db.prepare('SELECT payload FROM frames').all()
+  const before = db.prepare('SELECT * FROM events').all()
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`)
   db.close()
   const refused = sqliteLogs(path, root)
@@ -121,17 +121,17 @@ it('refuses an incompatible database version while retaining its schema and payl
   const inspect = new DatabaseSync(path)
   try {
     expect(inspect.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: SCHEMA_VERSION + 1 })
-    expect(inspect.prepare('SELECT payload FROM frames').all()).toEqual(before)
+    expect(inspect.prepare('SELECT * FROM events').all()).toEqual(before)
   } finally { inspect.close() }
 })
 
-it('recovers append positions from the frame index without updating Trace or Segment metadata', async () => {
+it('recovers append positions from the event index without updating Session or Segment metadata', async () => {
   const { root, logs, path, id, header, event } = await fixture()
   const handle = await logs.create(header)
   await handle.flush()
   const db = new DatabaseSync(path)
   try {
-    for (const table of ['traces', 'segments']) {
+    for (const table of ['sessions', 'segments']) {
       const columns = db.prepare(`PRAGMA table_info(${table})`).all().map(column => column.name)
       expect(columns).not.toContain('next_seq')
       expect(columns).not.toContain('revision')
@@ -151,13 +151,13 @@ it('recovers append positions from the frame index without updating Trace or Seg
       await writer.append([event(2)])
       expect((await writer.read()).events.map(item => item.seq)).toEqual([0, 1, 2])
       expect((await reopened.stat(id))?.eventCount).toBe(3)
-      const plan = db.prepare('EXPLAIN QUERY PLAN SELECT end_seq FROM frames WHERE segment_uuid = ? ORDER BY start_seq DESC LIMIT 1').all('unused')
-      expect(plan.map(row => row.detail).join(' ')).toMatch(/SEARCH frames USING (COVERING )?INDEX sqlite_autoindex_frames_1/)
+      const plan = db.prepare('EXPLAIN QUERY PLAN SELECT seq + 1 FROM events WHERE segment_id = ? ORDER BY seq DESC LIMIT 1').all(0)
+      expect(plan.map(row => row.detail).join(' ')).toMatch(/SEARCH events USING (COVERING )?INDEX sqlite_autoindex_events_1/)
     } finally { await reopened.close() }
   } finally { db.close() }
 })
 
-it('stores logical JSON events in frames and reads their source coordinates from an indexed suffix', async () => {
+it('stores logical JSON events in rows and reads their source coordinates from an indexed suffix', async () => {
   const { root, logs, path, header, event } = await fixture()
   const ranged = { ...event(4), sourceEventSeqs: [SessionSeq(0), SessionSeq(1), SessionSeq(2)] }
   const batch = [event(0), event(1), event(2), event(3), ranged]
@@ -167,10 +167,10 @@ it('stores logical JSON events in frames and reads their source coordinates from
   await logs.close()
   const db = new DatabaseSync(path)
   try {
-    const physical = z.object({ sourceEventSeqs: z.unknown() }).loose().parse(storedEvents(db, tailSegment(db, header.id))[4])
+    const physical = z.object({ sourceEventSeqs: z.unknown() }).loose().parse(storedEvents(db, headSegment(db, header.id))[4])
     expect(physical).toEqual(ranged)
     expect(physical.sourceEventSeqs).toEqual([0, 1, 2])
-    const stored = z.object({ header: z.string() }).parse(db.prepare('SELECT header FROM traces').get())
+    const stored = z.object({ header: z.string() }).parse(db.prepare('SELECT header FROM sessions').get())
     expect(JSON.parse(stored.header)).toEqual({ ...header, delegationDepth: 0 })
   } finally { db.close() }
   const reopened = sqliteLogs(path, root)
@@ -191,7 +191,7 @@ it('reads an empty inherited prefix from its independent child Segment', async (
   finally { await child.close(); await writer.close() }
 })
 
-it('reads long histories across frame decode groups and restores headers without an explicit delegation depth', async () => {
+it('reads long histories across row decode groups and restores headers without an explicit delegation depth', async () => {
   const { logs, header, event } = await fixture()
   const events = Array.from({ length: 2050 }, (_, seq) => event(seq))
   const writer = await logs.create(header)

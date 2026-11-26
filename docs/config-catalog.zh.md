@@ -3962,18 +3962,17 @@ export type JsonlCompression = 'zstd' | 'none'
 ## `@deepseek-ai/dsh-session-persistence-sqlite`
 
 - `refs`: [`JsonlConfigOptions`](#deepseek-aidsh-session-persistence-jsonl)
-- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:19`](../packages/session/session-persistence-sqlite/src/index.ts)
+- `source`: [`packages/session/session-persistence-sqlite/src/index.ts:13`](../packages/session/session-persistence-sqlite/src/index.ts)
 
 ```ts config-catalog
-/** Storage root, JSONL settings used when importing legacy Sessions, and the frame size for new writes. */
-export interface Config extends JsonlConfigOptions {
-  /**
-   * Maximum events stored per frame. One frame is the unit of compression and
-   * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice; stored frames keep the size they were written with.
-   */
-  frameEvents?: number
+/** Storage root, the JSONL settings used when importing legacy Sessions, and the database recovery mode. */
+export type Config = JsonlConfigOptions & {
+  /** What an open does when the database cannot be used; see {@link Recovery}. */
+  recovery?: Recovery
 }
+
+/** How an open recovers a database it cannot use; see {@link SqliteStoreOptions.recovery}. */
+export type Recovery = 'replace' | 'report'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-persistence-sqlite -->
 

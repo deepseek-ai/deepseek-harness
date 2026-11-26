@@ -102,7 +102,7 @@ it('waits for parent durability and retains the selected cut while the parent co
     try { expect((await reader.read()).events).toEqual(child.snapshotEvents()) } finally { await reader.close() }
     const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
     try {
-      expect(db.prepare('SELECT base_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(child.id))
+      expect(db.prepare('SELECT base_seq FROM segments WHERE segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = ?)').get(child.id))
         .toEqual({ base_seq: selected.length })
     } finally { db.close() }
   } finally {
@@ -174,7 +174,7 @@ it('keeps cold read repairs in the child segment when the parent continues befor
   try { expect((await reader.read()).events).toEqual(child?.snapshotEvents()) } finally { await reader.close() }
   const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
   try {
-    expect(db.prepare('SELECT base_seq FROM segments WHERE segment_uuid = (SELECT tail_segment_uuid FROM traces WHERE trace_uuid = ?)').get(result.value.sessionId))
+    expect(db.prepare('SELECT base_seq FROM segments WHERE segment_id = (SELECT head_segment_id FROM sessions WHERE session_id = ?)').get(result.value.sessionId))
       .toEqual({ base_seq: 1 })
   } finally { db.close() }
 })

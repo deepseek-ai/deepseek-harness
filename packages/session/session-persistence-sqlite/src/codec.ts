@@ -60,6 +60,19 @@ export function materializeHeader(metadata: SessionHeader, inheritedEventCount?:
   return decodeHeader(metadata)
 }
 
+/** One stored event envelope: the members every event row holds, with `data` left untrusted. */
+export type StoredEnvelope = z.infer<typeof event>
+
+/**
+ * Validate the envelope members of one stored event without judging its type or payload.
+ * @param value - untrusted SQLite event parsed from JSON.
+ * @returns the envelope, for storage code that must carry every event unchanged.
+ * @throws {z.ZodError} for a missing, mistyped, or unknown envelope member.
+ */
+export function decodeEnvelope(value: unknown): StoredEnvelope {
+  return event.parse(value)
+}
+
 /**
  * Read a logical event envelope; native payload validation remains in Session adoption.
  * Source coordinates stay as arrays and are never decoded from JSONL ranges.
@@ -68,5 +81,5 @@ export function materializeHeader(metadata: SessionHeader, inheritedEventCount?:
  */
 export function decodeEvent(value: unknown): SessionFormatEvent & SessionEvent {
   assertV4RowAdmission(value, KNOWN_SESSION_EVENT_TYPES)
-  return event.parse(value) as SessionFormatEvent & SessionEvent
+  return decodeEnvelope(value) as SessionFormatEvent & SessionEvent
 }
