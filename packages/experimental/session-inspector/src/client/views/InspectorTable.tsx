@@ -34,6 +34,8 @@ export type InspectorTableProps = Pick<ConvViewProps, 'useSession'> & InjectFace
   & PropsLocale<'session-inspector'> & {
     readonly title: string
     readonly flash: boolean
+    /** Whether the reader asks for reduced motion; it suppresses every row highlight. */
+    readonly reducedMotion: boolean
     readonly showTime: boolean
     readonly modeSelector?: ReactNode
     readonly objects?: InspectorObjects
@@ -47,7 +49,7 @@ export type InspectorTableProps = Pick<ConvViewProps, 'useSession'> & InjectFace
     readonly Portal: DocumentPortal
   }
 
-interface RowProps extends Pick<InspectorTableProps, 'useRecord' | 't' | 'flash' | 'showTime'> {
+interface RowProps extends Pick<InspectorTableProps, 'useRecord' | 't' | 'flash' | 'reducedMotion' | 'showTime'> {
   readonly row: InspectorRow
   readonly selected: boolean
   readonly branch: boolean
@@ -67,7 +69,7 @@ interface ObjectHistory {
 }
 
 const DataRow = memo(function DataRow({ row, selected, branch, collapsed, added, stickyLevel, pulse,
-  context, select, toggle, useRecord, flash, showTime, t }: RowProps) {
+  context, select, toggle, useRecord, flash, reducedMotion, showTime, t }: RowProps) {
   const record = useRecord(row.key)
   const element = useRef<HTMLTableRowElement>(null)
   const previous = useRef(record)
@@ -78,11 +80,11 @@ const DataRow = memo(function DataRow({ row, selected, branch, collapsed, added,
     const navigated = pulse > 0 && previousPulse.current !== pulse
     previousPulse.current = pulse
     if ((!flash && !navigated) || (!changed && !added && !navigated) || element.current === null
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+      || reducedMotion) return
     const color = getComputedStyle(element.current).getPropertyValue('--dsw-specific-bubble-highlight')
     const animation = element.current.animate([{ backgroundColor: color }, { backgroundColor: 'transparent' }], { duration: 700 })
     return () => { animation.cancel() }
-  }, [record, added, flash, pulse])
+  }, [record, added, flash, reducedMotion, pulse])
   const summary = useMemo(() => (collapsed ? record?.collapsedSummary : undefined)
     ?? record?.summary ?? inspectorPreview(record?.value), [record, collapsed])
   return <tr ref={element} aria-selected={selected} data-inspector-context={context ? '' : undefined}
@@ -108,10 +110,10 @@ const DataRow = memo(function DataRow({ row, selected, branch, collapsed, added,
 
 /**
  * Render a paged hierarchy with stable virtual row keys and live JSON details.
- * @param props - Framework hooks, pagination, locale, the view's highlight policy, and the document portal for the type filter.
+ * @param props - Framework hooks, pagination, locale, the view's highlight and motion policy, and the document portal for the type filter.
  * @returns Virtual table and selected raw data.
  */
-export function InspectorTable({ title, flash, showTime, modeSelector, objects, navigation, pickedRow, notice,
+export function InspectorTable({ title, flash, reducedMotion, showTime, modeSelector, objects, navigation, pickedRow, notice,
   useRows, useRecord, useSession, loadOlder, typeOf, t, Portal }: InspectorTableProps) {
   const allRows = useRows(value => value)
   const hasMore = useSession(value => value.hasMore)
@@ -318,7 +320,8 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
                 stickyLevel={sticky.get(item.index)}
                 pulse={reveal?.key === entry.row.key ? reveal.pulse : 0}
                 added={performance.now() - arrival < 700}
-                useRecord={useRecord} select={select} toggle={toggle} flash={flash} showTime={showTime} t={t} />
+                useRecord={useRecord} select={select} toggle={toggle} flash={flash} reducedMotion={reducedMotion}
+                showTime={showTime} t={t} />
             </Fragment>
           })}
           {bottom > 0 && <tr aria-hidden="true" data-inspector-fold-space={layout.bottomPadding > 0 ? '' : undefined}>

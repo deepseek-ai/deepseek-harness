@@ -5,6 +5,7 @@ import { useId } from 'react'
 import type { MouseEvent, PointerEvent } from 'react'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { ContextMenus, ContextMenuTarget, MenuPoint } from './types.ts'
+import css from './Button.module.css'
 
 /** Menu facts and the per-button toggle, bound by the factory registration. */
 export interface ContextMenuButtonInjected {
@@ -27,14 +28,13 @@ export interface ContextMenuButtonInjected {
  * @param props - Localized owner data and framework-bound menu facts.
  * @returns An available target's menu trigger.
  */
-export function ContextMenuButton({ target, label, className, size, opener, useOpener, useRegisteredKinds, toggle }: FactoryComponentPropsOf<'contextMenu.button'>) {
+export function ContextMenuButton({ target, label, size, opener, useOpener, useRegisteredKinds, toggle }: FactoryComponentPropsOf<'contextMenu.button'>) {
   const ownId = useId()
   const id = opener ?? ownId
   const expanded = useOpener(opener => opener === id)
   const available = useRegisteredKinds(kinds => kinds.includes(target.kind))
   if (!available) return null
   const attributes = {
-    className,
     'data-context-menu-trigger': '',
     'aria-label': label,
     'aria-haspopup': 'menu' as const,
@@ -47,8 +47,10 @@ export function ContextMenuButton({ target, label, className, size, opener, useO
       toggle(id, target, { x: rect.left, y: rect.bottom })
     },
   }
-  if (size !== 'sm') return <button {...attributes} type="button"><IconEllipsisOutlineRegular /></button>
+  if (size !== 'sm') {
+    return <button {...attributes} className={size === 'row' ? css.row : undefined} type="button"><IconEllipsisOutlineRegular /></button>
+  }
   return <Tooltip label={label} side="bottom" align="end" portal>
-    <Button {...attributes} size="sm" icon={<IconEllipsisOutlineRegular />} />
+    <Button {...attributes} size="sm" className={css.toolbar} icon={<IconEllipsisOutlineRegular />} />
   </Tooltip>
 }

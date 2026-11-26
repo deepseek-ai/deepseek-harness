@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from './slots.ts'
+import css from './SessionPanel.module.css'
 
 /**
  * Render the fold control as a panel row whose body is the button: a chevron
@@ -18,7 +19,7 @@ import type {} from './slots.ts'
  */
 export function PanelFold({ expanded, label, name, onToggle }: FactoryComponentPropsOf<'conversation.session.panel.fold'>): ReactNode {
   return (
-    <div data-session-panel-row="fold">
+    <div className={css.fold} data-session-panel-row="fold">
       <button type="button" data-row-part="body" aria-expanded={expanded} aria-label={name} onClick={onToggle}>
         <span data-row-part="icon" aria-hidden="true">
           {expanded ? <IconChevronUpOutlineRegular size={14} /> : <IconChevronDownOutlineRegular size={14} />}

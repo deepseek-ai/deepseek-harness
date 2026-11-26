@@ -27,13 +27,18 @@ function reviewer(login: string, overrides: Partial<ChangeRequestReviewer> = {})
   return { kind: 'user', login, avatarUrl: null, requested: false, codeOwner: false, verdict: null, reviewedSha: null, ...overrides }
 }
 
-/** Render the status column of #7 with the given snapshot and the actions a surface offers besides links. */
-function renderStatus(value: ChangeRequestSnapshot, actions: Partial<ChangeRequestActions> = {}) {
+/**
+ * Render the status column of #7 with the given snapshot, the actions a surface offers besides links, and whether the
+ * primary pointer is coarse.
+ */
+function renderStatus(value: ChangeRequestSnapshot, actions: Partial<ChangeRequestActions> = {}, coarsePointer = false) {
   const openLink = vi.fn<(url: string) => void>()
   const full: ChangeRequestActions = { openLink, copyLink: vi.fn(), retry: vi.fn(), ...actions }
   const frame = reviewed(7, value)
-  const column = (next: ChangeRequestSnapshot): React.ReactNode =>
-    <ReviewStatus frame={reviewed(7, next)} snapshot={next} name="#7" now={NOW} actions={full} locale="en" t={t} />
+  const column = (next: ChangeRequestSnapshot): React.ReactNode => (
+    <ReviewStatus frame={reviewed(7, next)} snapshot={next} name="#7" now={NOW} actions={full} locale="en"
+      coarsePointer={coarsePointer} t={t} />
+  )
   const view = render(column(value))
   const block = (name: 'merge' | 'checks' | 'reviewers' | 'changes' | 'finished'): HTMLElement => {
     const found = view.container.querySelector(`[data-forge-review-${name}]`)
@@ -220,13 +225,12 @@ describe('ReviewStatus reviewers', () => {
   })
 
   it('asks a reviewer again or searches for someone else from the request menu, one request at a time', async () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
     const done = Promise.withResolvers<undefined>()
     const requestReviews = vi.fn<NonNullable<ChangeRequestActions['requestReviews']>>(() => done.promise)
     const candidates: ForgeReviewerCandidate[] = [{ login: 'ada', name: 'Ada', avatarUrl: null, suggested: true }]
     const reviewerCandidates = vi.fn<NonNullable<ChangeRequestActions['reviewerCandidates']>>(async () => candidates)
     const value = snapshot(7, { canRequestReviews: true, reviewers: [reviewer('mona', { verdict: 'commented' })] })
-    const b = renderStatus(value, { requestReviews, reviewerCandidates })
+    const b = renderStatus(value, { requestReviews, reviewerCandidates }, true)
     const request = b.block('reviewers').querySelector('[data-forge-review-request]') as HTMLElement
     expect(request.textContent).toBe('Request a review')
 
@@ -255,13 +259,13 @@ describe('ReviewStatus reviewers', () => {
     expect(screen.getByRole('menuitem', { name: 'Re-request a review from mona' })).toBeTruthy()
   })
 
-  it('opens the search at once when no reviewer can be asked again', async () => {
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+  it('opens the search at once when no reviewer can be asked again, leaving its field unfocused on a coarse pointer', async () => {
     const reviewerCandidates = vi.fn<NonNullable<ChangeRequestActions['reviewerCandidates']>>(async () => [])
-    const b = renderStatus(snapshot(7, { canRequestReviews: true }), { requestReviews: vi.fn(async () => {}), reviewerCandidates })
+    const b = renderStatus(snapshot(7, { canRequestReviews: true }), { requestReviews: vi.fn(async () => {}), reviewerCandidates }, true)
     fireEvent.click(b.block('reviewers').querySelector('[data-forge-review-request]') as HTMLElement)
     await wait()
-    expect(screen.getByRole('textbox', { name: en['reviewers.search'] })).toBeTruthy()
+    const field = screen.getByRole('textbox', { name: en['reviewers.search'] })
+    expect(document.activeElement).not.toBe(field)
     expect(reviewerCandidates).toHaveBeenCalledWith(snapshot(7).url, '', expect.any(AbortSignal))
   })
 })

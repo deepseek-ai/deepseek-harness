@@ -2,7 +2,7 @@
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { AccountSnapshot } from '../src/client/AccountSection.tsx'
 import { DesktopOnboardingEntry } from '../src/client/DesktopOnboardingEntry.tsx'
 import type { DesktopOnboardingState } from '../src/client/onboarding-contract.ts'
@@ -43,7 +43,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function mount(initiallyDone = false, initiallyLoading = false, reducedMotion = false) {
+function mount(initiallyDone = false, initiallyLoading = false, reducedMotion = false, colorScheme: 'light' | 'dark' = 'light') {
   let state: DesktopOnboardingState = {
     creditFunded: false,
     visible: !initiallyDone && !initiallyLoading, status: initiallyLoading ? 'loading' : 'ready', error: null,
@@ -54,11 +54,12 @@ function mount(initiallyDone = false, initiallyLoading = false, reducedMotion = 
     view: { status: 'credential-stored', attempt: null, links: { usageUrl: 'https://example.com/usage', topUpUrl: 'https://example.com/top_up' } },
     failed: false, details: undefined, avatar: undefined,
   }
-  // This entry consumes its injected selectors, the reduced-motion media query, and the document portal;
+  // This entry consumes its injected selectors, the reduced-motion media query, the theme palette, and the document portal;
   // the shell owns the other global hooks.
-  const globals = responsiveHooks({
-    matches: query => reducedMotion && query === '(prefers-reduced-motion: reduce)', portal: Portal,
-  }) as GlobalStandardProps
+  const globals = {
+    ...responsiveHooks({ matches: query => reducedMotion && query === '(prefers-reduced-motion: reduce)', portal: Portal }),
+    ...themeHooks({ colorScheme }),
+  } as GlobalStandardProps
   const setVisible = vi.fn()
   const element = () => <DesktopOnboardingEntry {...globals}
     setVisible={setVisible} useOnboarding={select => select(state)} useAccount={select => select(account)}
@@ -88,6 +89,12 @@ function mount(initiallyDone = false, initiallyLoading = false, reducedMotion = 
     },
   }
 }
+
+it('shows the artwork of the theme palette it reads through useTheme', () => {
+  mount(false, false, false, 'dark')
+  const images = [...document.querySelectorAll<HTMLImageElement>('[data-desktop-onboarding] img')]
+  expect(images.map(image => image.getAttribute('src'))).toEqual([expect.stringMatching(/onboarding-welcome-zh-dark/)])
+})
 
 it('retains the last page while successful completion reveals the workspace', () => {
   const view = mount()

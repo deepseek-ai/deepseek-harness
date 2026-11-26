@@ -254,7 +254,6 @@
 }
 
 .status,
-.failure p,
 .empty {
   margin: 0;
   font-size: 13px;
@@ -262,18 +261,79 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* A failure the page retries in place, with the geometry of `.approval`. */
 .failure {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, transparent);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+/* The 16px glyph is centred on the first row, whose 28px height the retry button sets. */
+.failureIcon {
+  flex: none;
+  margin-block: 6px;
   color: var(--dsw-alias-state-error-primary);
 }
 
-.failure ul {
+/* The sentence, a wrapped retry, and the failure rows start at the same inline position. */
+.failureBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The retry stays at the trailing edge until the sentence would be narrower than 240px, then moves under it. */
+.failureHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 12px;
+}
+
+.failureText {
+  flex: 1 1 240px;
+  min-width: 0;
   margin: 0;
-  padding-left: 16px;
+  padding-block: 4px;
   font-size: 13px;
   line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* The button has a fixed height, so its label stays on one line and the button keeps its own width. */
+.failureRetry {
+  flex: none;
+  white-space: nowrap;
+}
+
+.failureList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.failureName {
+  display: block;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.failureMessage {
+  display: block;
+  color: var(--dsw-alias-label-secondary);
 }
 
 .statusWithDot {

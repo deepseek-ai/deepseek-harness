@@ -1,0 +1,42 @@
+# The manager with one `servers` entry and four server rows: `silent` is valid
+# and its server never answers, `incomplete` lacks its command, `copied` carries
+# the `enabled` field of a dictionary entry, and `listed` declares the server
+# name the dictionary entry holds.
+- insert:
+    - id: mcp-manager
+      name: '@deepseek-ai/dsh-mcp-manager'
+      config:
+        servers:
+          listed:
+            transport: stdio
+            command: !!js process.execPath
+            args: ['-e', 'process.stdin.resume()']
+
+    - id: mcp-server-silent
+      name: '@deepseek-ai/dsh-mcp-manager/server'
+      config:
+        serverName: silent
+        transport: stdio
+        command: !!js process.execPath
+        args: ['-e', 'process.stdin.resume()']
+
+    - id: mcp-server-incomplete
+      name: '@deepseek-ai/dsh-mcp-manager/server'
+      config:
+        serverName: incomplete
+        transport: stdio
+
+    - id: mcp-server-copied
+      name: '@deepseek-ai/dsh-mcp-manager/server'
+      config:
+        serverName: copied
+        transport: stdio
+        command: !!js process.execPath
+        enabled: false
+
+    - id: mcp-server-listed
+      name: '@deepseek-ai/dsh-mcp-manager/server'
+      config:
+        serverName: listed
+        transport: stdio
+        command: !!js process.execPath

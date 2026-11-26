@@ -193,18 +193,6 @@
   display: none;
 }
 
-.headerMenuButton {
-  flex: none;
-  width: 28px;
-  padding: 0;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.headerMenuButton svg {
-  width: 15px;
-  height: 15px;
-}
-
 /* The far-right corner seat reaches 16px into the header's 28px right padding,
    so its control sits past the utilities' edge; it is laid out only while its
    occupant renders something. Its left margin equals the utilities' 8px gap so
@@ -597,14 +585,21 @@
   margin: 2px;
 }
 
-.root[data-phase='active'] .viewArea,
-.embeddedBody[data-content-phase='active'] .viewArea {
+/* Phase rules key on `.root` or `.embeddedBody`, outside the scroll body.
+   Another package's `conversation.hero.frame` layer and a caller's `views`
+   component sit between them, and their outlets start this package's style
+   scope again, so an isolated stylesheet would not see the ancestor. Naming
+   `:scope` lets the ancestor match outside the scope, and `:where()` keeps
+   the specificity; without isolation the compound matches the elements in
+   between. */
+.root[data-phase='active'] :where(:scope, *) .viewArea,
+.embeddedBody[data-content-phase='active'] :where(:scope, *) .viewArea {
   flex: 1 0 auto;
   min-height: auto;
 }
 
-.root[data-phase='active'] .composerSeat,
-.embeddedBody[data-content-phase='active'] .composerSeat {
+.root[data-phase='active'] :where(:scope, *) .composerSeat,
+.embeddedBody[data-content-phase='active'] :where(:scope, *) .composerSeat {
   position: sticky;
   bottom: 0;
   /* Takes the scroll body's free space whenever the transcript is shorter than
@@ -660,7 +655,7 @@
 }
 
 .scrollBody:has([data-conversation-composer-overlay]) > :global([data-slot='conversation.session']) > .viewArea,
-.scrollBody > :where([data-slot-factory-children='conversation.content:views']) > :global([data-slot='conversation.session']) > .viewArea:has([data-conversation-composer-overlay]) {
+.scrollBody > :where([data-slot-factory-children='conversation.content:views']) > :global([data-slot='conversation.session']):where(:scope, *) > .viewArea:has([data-conversation-composer-overlay]) {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
@@ -726,15 +721,15 @@
 
 /* Hero: the composer sits inside the session scroll body; center there so
    the tree seat matches active (sticky footer) without a Root remount. */
-.root[data-phase='hero'] .scrollBody,
-.embeddedBody[data-content-phase='hero'] .scrollBody {
+.root[data-phase='hero'] :where(:scope, *) .scrollBody,
+.embeddedBody[data-content-phase='hero'] :where(:scope, *) .scrollBody {
   justify-content: center;
   overflow-y: auto;
 }
 
 /* Settling (session replaying, hero/docked unknown): keep the composer seat
    mounted but invisible so no wrong layout flashes before the phase lands. */
-.root[data-phase='settling'] .composerSeat,
-.embeddedBody[data-content-phase='settling'] .composerSeat {
+.root[data-phase='settling'] :where(:scope, *) .composerSeat,
+.embeddedBody[data-content-phase='settling'] :where(:scope, *) .composerSeat {
   visibility: hidden;
 }

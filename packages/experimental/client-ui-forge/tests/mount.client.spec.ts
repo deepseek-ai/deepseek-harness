@@ -359,6 +359,7 @@ async function base() {
   ctx.provide('workspaces', workspaces as never)
   const uiWorkspace = { connectWorkspace: vi.fn(async (id: string) => await Promise.resolve(`blank-${id}` as SessionId)), openSession: vi.fn() }
   ctx.provide('uiWorkspace', uiWorkspace as never)
+  ctx.provide('uiResponsive', {} as never)
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({
     name: 'root',
@@ -489,6 +490,7 @@ describe('mountForgePanel registration', () => {
   it('declares the browser services it needs', () => {
     expect(inject).toEqual([
       'remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace',
+      'uiResponsive',
     ])
   })
 

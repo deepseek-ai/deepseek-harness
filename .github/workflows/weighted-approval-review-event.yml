@@ -3,7 +3,8 @@ run-name: weighted-approval-review-event:${{ github.event.pull_request.number }}
 
 on:
   pull_request_review:
-    types: [submitted, edited, dismissed]
+    # A review body edit changes no approval state; only a submission or dismissal does.
+    types: [submitted, dismissed]
 
 permissions: {}
 

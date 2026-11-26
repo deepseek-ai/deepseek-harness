@@ -1,6 +1,7 @@
 # Agent Note: Weighted approval keeps its commit status gate and publishes the decision label from an App
 
 Status: implemented
+Archived: 2026-11-18
 
 English | [中文](2026-10-20-weighted-approval-status-gate-with-check-run-label.zh.md)
 

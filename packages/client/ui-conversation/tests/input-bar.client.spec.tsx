@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 // InputBar behavior over the editor + submit-machine wiring: Enter-send
 // semantics (IME guard, Shift newline, busy Enter policy, Ctrl/Meta steering,
 // repeat suppression), running semantics (input stays free; continuable
@@ -205,7 +205,7 @@ function bench(over?: BenchOptions) {
     })),
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks({ mobile: over?.mobile ?? false }),
+    ...responsiveHooks({ mobile: over?.mobile ?? false }), ...themeHooks(),
     useAccess: endpoint => !(over?.deniedEndpoints ?? []).includes(endpoint),
     useProjection: ((key: string, selector: (v: unknown) => unknown = v => v) =>
       selector(key === 'plan'

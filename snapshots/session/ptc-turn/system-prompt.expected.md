@@ -46,6 +46,7 @@ Inside the program:
 - A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
 - Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
 - Show selected values and images with `inspect(...values)`; every other intermediate result stays out of the conversation, so extract just what you need.
+- Inspecting a tool result directly shows the text that tool call returns; for example, `inspect(await tools.read({ file_path: 'README.md' }))` prints its line-numbered content.
 
 Program-only SDK bindings:
 

@@ -81,3 +81,69 @@ export function watchSummaries(agent: Agent): void {
 ### 检查方式
 
 审查：在包源码中，标记新增或修改的、每次迭代都 await `whenIdle()` 或读取 Agent 或 Session 运行时状态以决定是否行动的循环。
+
+<a id="b2"></a>
+## B.2：通过注册表注册独立条目，不要把它们列在单个插件的配置中
+
+### 原因
+
+- bundle 补丁会整体替换一行的 `config`。另一个 bundle 无法添加、覆盖或删除列表中的单个条目，只能重写整个列表；两个 bundle 各自重写时会互相覆盖。
+- `disabled`（包括其上的 `!!js` 条件）作用于整个 Loader 行。`config` 中的条目没有 `disabled` 字段，无法单独禁用。
+- 修改一个条目会重新加载持有该列表的插件，一个无效条目会让所有条目失败。要避免这些问题，插件必须自行实现逐条目的差异比较、校验、诊断和清理，`dsh-llm-pi-ai` 就为 `providers` 实现了这些逻辑。
+
+### 反例
+
+```yaml
+- id: llm-router
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      openai:
+        apiKeyEnv: OPENAI_API_KEY
+      acme-gateway:
+        api: openai-completions
+        baseURL: https://gateway.acme.example/v1
+        models:
+          - id: acme-large
+```
+
+添加一个网关的 bundle 必须重写 `openai`，而一个无效的 `acme-gateway` 条目会让整个 `providers` 更新被拒绝。
+
+### 示例
+
+```yaml
+- id: agent-preset-registry
+  name: '@deepseek-ai/dsh-agent-preset-registry'
+  config:
+    default: standard
+- id: preset-standard
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: standard
+    plugins: []
+- id: preset-review
+  name: '@deepseek-ai/dsh-agent-preset'
+  config:
+    id: review
+    plugins: []
+```
+
+preset 遵循这条规则。每个 preset 各占一行。bundle 用 `insert` 补丁添加 preset，或用以行 id 为键、只重写该行 `config` 的补丁覆盖某个 preset。每一行通过 `ctx.agentPresets.register()` 注册自己的定义，并从 `[Service.init]` 中 yield disposer，因此删除、禁用某一行或该行失败时只影响对应的 preset。
+
+### 替代方案
+
+声明一个注册表服务，其 `register(entry)` 返回 disposer。提供一个插件，以单个条目作为其 `config`，并把它作为 effect 注册。注册表负责查找、排序、重复标识失败和逐条目诊断；注册表自身的 `config` 只保存针对整个集合的设置，例如默认条目 id。
+
+### 例外
+
+- 没有独立标识、合起来构成一项设置的值，例如一组可重试的失败码或允许的主机列表。
+- 描述单个条目的字段，例如某条提供方路由的 `models` 列表。
+- `group: true` 行的条目列表。每个子项都是独立的 Loader 行，补丁可以按 id 插入、覆盖或禁用单个子项。
+
+### 注解
+
+独立条目是具有自身标识的值，例如提供方路由、preset、服务器或账号，部署、bundle 或用户可以添加、替换或删除它，而不改变其他条目。
+
+### 检查方式
+
+审查：新增或修改的 `Config` 字段若用数组或字典承载独立条目，标记该字段。

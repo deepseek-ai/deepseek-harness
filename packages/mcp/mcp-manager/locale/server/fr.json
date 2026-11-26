@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Serveur MCP",
+    "description": "Connecte un serveur MCP via le gestionnaire de serveurs MCP et rend ses outils disponibles."
+  }
+}

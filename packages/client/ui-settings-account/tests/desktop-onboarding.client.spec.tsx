@@ -8,7 +8,7 @@ import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', balance: 'zero' | 'positive' | 'bonus' | 'failed' | 'loading' = 'positive', status: DesktopOnboardingState['status'] = 'ready', copy: typeof zh = zh, creditFunded = false, reducedMotion = false) {
+function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', balance: 'zero' | 'positive' | 'bonus' | 'failed' | 'loading' = 'positive', status: DesktopOnboardingState['status'] = 'ready', copy: typeof zh = zh, creditFunded = false, reducedMotion = false, colorScheme: 'light' | 'dark' = 'light') {
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   const track = vi.fn()
   const complete = vi.fn(async () => true)
@@ -28,7 +28,7 @@ function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', bal
       progress: { version: 1, step, purpose: null, process: null, completion: null, usage: 'compact', developerTools: false },
     })
     changeStatus = (value) => { setState(current => ({ ...current, status: value })) }
-    return <DesktopOnboarding track={track} locale={copy === zh ? 'zh' : 'en'} state={state} t={key => copy[key]} complete={complete} retry={retry}
+    return <DesktopOnboarding track={track} locale={copy === zh ? 'zh' : 'en'} colorScheme={colorScheme} state={state} t={key => copy[key]} complete={complete} retry={retry}
       reducedMotion={reducedMotion}
       update={async (change) => {
         setState(current => ({ ...current, status: 'saving' }))
@@ -47,6 +47,20 @@ function mount(step: DesktopOnboardingState['progress']['step'] = 'welcome', bal
     back: () => { returnFromPage?.() },
   }
 }
+
+it.each(['light', 'dark'] as const)('renders only the %s artwork for the active palette', (colorScheme) => {
+  mount('welcome', 'positive', 'ready', zh, false, false, colorScheme)
+  const welcome = document.querySelectorAll<HTMLImageElement>('[data-desktop-onboarding] img')
+  expect([...welcome].map(image => image.getAttribute('src'))).toEqual([
+    expect.stringMatching(colorScheme === 'dark' ? /onboarding-welcome-zh-dark/ : /onboarding-welcome-zh\.webp/),
+  ])
+  cleanup()
+  mount('credit', 'positive', 'ready', zh, false, false, colorScheme)
+  const credit = document.querySelectorAll<HTMLImageElement>('[data-desktop-onboarding] img')
+  expect([...credit].map(image => image.getAttribute('src'))).toEqual([
+    expect.stringMatching(colorScheme === 'dark' ? /onboarding-recharge-zh-dark/ : /onboarding-recharge-zh\.webp/),
+  ])
+})
 
 it('keeps welcome mandatory and enters credit only through Start', async () => {
   const operations = mount()

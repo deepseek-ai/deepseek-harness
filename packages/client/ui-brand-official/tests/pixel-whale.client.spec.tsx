@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { createPortal } from 'react-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { WHALE_ARTWORK } from '../src/client/home-whale/artwork.ts'
 import { PixelWhale } from '../src/client/home-whale/PixelWhale.tsx'
 import { attachPixelWhale } from '../src/client/home-whale/renderer.ts'
@@ -9,9 +10,10 @@ import { attachPixelWhale } from '../src/client/home-whale/renderer.ts'
 vi.mock('../src/client/home-whale/renderer.ts', () => ({ attachPixelWhale: vi.fn() }))
 
 const attach = vi.mocked(attachPixelWhale)
+const light = themeHooks()
 
 function handle() {
-  const whale = { play: vi.fn(), dispose: vi.fn() }
+  const whale = { play: vi.fn(), redraw: vi.fn(), dispose: vi.fn() }
   attach.mockReturnValueOnce(whale)
   return whale
 }
@@ -26,12 +28,12 @@ afterEach(() => {
 describe('pixel whale frame layer', () => {
   it('attaches the artwork to a canvas before its content and releases it on unmount', () => {
     const whale = handle()
-    const view = render(<PixelWhale hero><p>content</p></PixelWhale>)
+    const view = render(<PixelWhale {...light} hero><p>content</p></PixelWhale>)
     const canvas = view.container.querySelector('canvas')
     expect(canvas?.getAttribute('aria-hidden')).toBe('true')
     expect(canvas?.nextElementSibling?.textContent).toBe('content')
     expect(attach).toHaveBeenCalledExactlyOnceWith(canvas, WHALE_ARTWORK, expect.stringContaining('breach-atlas'))
-    view.rerender(<PixelWhale hero><p>updated</p></PixelWhale>)
+    view.rerender(<PixelWhale {...light} hero><p>updated</p></PixelWhale>)
     expect(attach).toHaveBeenCalledOnce()
     view.unmount()
     expect(whale.dispose).toHaveBeenCalledOnce()
@@ -39,8 +41,8 @@ describe('pixel whale frame layer', () => {
 
   it('wraps its content without decoration outside the blank home', () => {
     const whale = handle()
-    const view = render(<PixelWhale hero><p>content</p></PixelWhale>)
-    view.rerender(<PixelWhale hero={false}><p>content</p></PixelWhale>)
+    const view = render(<PixelWhale {...light} hero><p>content</p></PixelWhale>)
+    view.rerender(<PixelWhale {...light} hero={false}><p>content</p></PixelWhale>)
     expect(view.container.querySelector('canvas')).toBeNull()
     expect(view.getByText('content')).toBeTruthy()
     expect(whale.dispose).toHaveBeenCalledOnce()
@@ -53,7 +55,7 @@ describe('pixel whale frame layer', () => {
     const overlay = document.createElement('div')
     document.body.append(overlay)
     const view = render(
-      <PixelWhale hero>
+      <PixelWhale {...light} hero>
         <section data-testid="blank">
           <button type="button">control</button>
           <div data-composer-card=""><span>card</span></div>
@@ -75,7 +77,7 @@ describe('pixel whale frame layer', () => {
     const outside = document.createElement('p')
     outside.textContent = 'elsewhere'
     document.body.append(outside)
-    const view = render(<PixelWhale hero><p data-testid="text">selectable headline</p></PixelWhale>)
+    const view = render(<PixelWhale {...light} hero><p data-testid="text">selectable headline</p></PixelWhale>)
     const text = view.getByTestId('text')
     const selection = window.getSelection()!
     selection.selectAllChildren(text)
@@ -93,8 +95,20 @@ describe('pixel whale frame layer', () => {
   it('plays when the document exposes no selection', () => {
     const whale = handle()
     vi.spyOn(window, 'getSelection').mockReturnValue(null)
-    const view = render(<PixelWhale hero><p data-testid="text">headline</p></PixelWhale>)
+    const view = render(<PixelWhale {...light} hero><p data-testid="text">headline</p></PixelWhale>)
     fireEvent.click(view.getByTestId('text'))
     expect(whale.play).toHaveBeenCalledOnce()
+  })
+
+  it('repaints the attached canvas only when the active theme changes', () => {
+    const whale = handle()
+    const view = render(<PixelWhale {...light} hero={false}><p>content</p></PixelWhale>)
+    view.rerender(<PixelWhale {...themeHooks({ colorScheme: 'dark' })} hero={false}><p>content</p></PixelWhale>)
+    view.rerender(<PixelWhale {...themeHooks({ colorScheme: 'dark' })} hero><p>content</p></PixelWhale>)
+    const mounted = whale.redraw.mock.calls.length
+    view.rerender(<PixelWhale {...themeHooks({ colorScheme: 'dark' })} hero><p>updated</p></PixelWhale>)
+    expect(whale.redraw).toHaveBeenCalledTimes(mounted)
+    view.rerender(<PixelWhale {...light} hero><p>updated</p></PixelWhale>)
+    expect(whale.redraw).toHaveBeenCalledTimes(mounted + 1)
   })
 })

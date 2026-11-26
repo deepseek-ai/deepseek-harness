@@ -45,7 +45,6 @@ function scene(options: WhaleArtwork = WHALE_ARTWORK, missingContext = -1) {
   const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
   const disposers: ReturnType<typeof vi.fn>[] = []
   let onResize = () => {}
-  let onTheme = () => {}
   let onVisibility: (entries: { isIntersecting: boolean }[]) => void = () => {}
   vi.spyOn(performance, 'now').mockImplementation(() => now)
   const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
@@ -73,11 +72,6 @@ function scene(options: WhaleArtwork = WHALE_ARTWORK, missingContext = -1) {
     observe() {}
     disconnect = vi.fn()
   })
-  vi.stubGlobal('MutationObserver', class {
-    constructor(callback: () => void) { onTheme = callback; disposers.push(this.disconnect) }
-    observe() {}
-    disconnect = vi.fn()
-  })
   const surface = document.createElement('div')
   const canvas = document.createElement('canvas')
   let width = 1200
@@ -101,7 +95,7 @@ function scene(options: WhaleArtwork = WHALE_ARTWORK, missingContext = -1) {
     canvas, surface, contexts, canvases, image, media, hidden, disposers, frames,
     dispose, click, step, getContext, pixels,
     load: () => image.dispatchEvent(new Event('load')),
-    theme: () => { onTheme() },
+    redraw: whale.redraw,
     width: (value: number) => { width = value; onResize() },
     visibility: (entries: { isIntersecting: boolean }[]) => { onVisibility(entries) },
   }
@@ -227,12 +221,12 @@ describe('official home pixel whale', () => {
     expect(s.frames.size).toBe(1)
   })
 
-  it('redraws for theme and size changes without decoding the atlas again', () => {
+  it('redraws for palette and size changes without decoding the atlas again', () => {
     const s = scene()
     s.click(); s.load(); s.step(100)
     const draws = s.contexts[0]!.arc.mock.calls.length
-    s.theme()
-    s.theme()
+    s.redraw()
+    s.redraw()
     expect(s.contexts[0]!.arc.mock.calls.length).toBe(draws)
     s.step(150)
     expect(s.contexts[0]!.arc.mock.calls.length).toBeGreaterThan(draws)
@@ -277,7 +271,7 @@ describe('official home pixel whale', () => {
     s.dispose()
     lateLoad.call(s.image, new Event('load'))
     lateError.call(s.image, new Event('error'))
-    s.theme()
+    s.redraw()
     s.visibility([{ isIntersecting: true }])
     s.click()
     expect(s.frames.size).toBe(0)
@@ -289,6 +283,7 @@ describe('official home pixel whale', () => {
   it('leaves home usable without Canvas through an inert handle', () => {
     const s = scene(WHALE_ARTWORK, 0)
     s.click()
+    s.redraw()
     s.dispose()
     expect(s.frames.size).toBe(0)
     expect(s.disposers).toHaveLength(0)

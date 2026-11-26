@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 /** Cleanup errors remain reachable after the terminal tab has disappeared. */
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -17,7 +17,7 @@ const standard: Omit<CleanupProps, 'useCloseFailures' | 'retryClose' | 't'> = {
   useSessions: unusedHook, useSessionStatus: unusedHook, useSessionRetainInfo: unusedHook, usePanelInfo: unusedHook,
   useWorkspaces: unusedHook,
   useContextMenu: contextMenuHook(),
-  ...responsiveHooks(),
+  ...responsiveHooks(), ...themeHooks(),
   useResource: unusedHook,
   ...allowAllAccess,
 }

@@ -8,6 +8,28 @@ import { describe, expect, it } from 'vitest'
 const css = readFileSync(fileURLToPath(new URL('../src/client/SidebarRoot.module.css', import.meta.url)), 'utf8')
 
 /**
+ * Split a selector list at its top-level commas, keeping commas inside `:is()`, `:where()` and `:not()`.
+ * @param list - selector list text.
+ * @returns the trimmed complex selectors.
+ */
+function selectorsOf(list: string): string[] {
+  const out: string[] = []
+  let depth = 0
+  let start = 0
+  for (let index = 0; index < list.length; index++) {
+    const char = list[index]
+    if (char === '(') depth++
+    else if (char === ')') depth--
+    else if (char === ',' && depth === 0) {
+      out.push(list.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  out.push(list.slice(start).trim())
+  return out
+}
+
+/**
  * Declarations of one exact selector, keyed by property.
  * @param selector - exact selector text.
  * @returns the normalized declarations, or undefined when absent.
@@ -15,7 +37,7 @@ const css = readFileSync(fileURLToPath(new URL('../src/client/SidebarRoot.module
 function declarations(selector: string): Map<string, string> | undefined {
   const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
   for (const [, selectorList = '', body = ''] of withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    if (!selectorList.split(',').map(value => value.trim()).includes(selector)) continue
+    if (!selectorsOf(selectorList).includes(selector)) continue
     const found = new Map<string, string>()
     for (const part of body.split(';')) {
       const colon = part.indexOf(':')
@@ -172,7 +194,8 @@ describe('SidebarRoot.module.css', () => {
   it('gives shell rail controls the same base anchor for their shared translation', () => {
     expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
     expect(declarations('.collapsed .newSessionRow')?.get('align-items')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
+    // The button sits in the session-action slot's children outlet, so the rule names `:scope` to reach `.collapsed`.
+    expect(declarations('.collapsed :where(:scope, *) .newSession')?.get('width')).toBe('36px')
   })
 
   it('keeps full-size brand artwork with a compact mark-to-name gap', () => {

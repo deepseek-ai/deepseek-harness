@@ -17,7 +17,7 @@ import { TerminalTitle } from './TerminalTitle.tsx'
 import { AgentTerminalOpener, type AgentTerminalOpenerInjected } from './AgentTerminalOpener.tsx'
 // import { TerminalRecovery, type TerminalRecoveryInjected } from './TerminalRecovery.tsx'
 // import { TerminalCleanup, type TerminalCleanupInjected } from './TerminalCleanup.tsx'
-import type { TerminalBodyInjected, TerminalInjected } from './face.ts'
+import type { TerminalInjected } from './face.ts'
 import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
 /** Services needed by the terminal's two sidebar seats. */
@@ -80,10 +80,6 @@ export function apply(ctx: Context): void {
     view: key => view(sessionId, key),
     keyedHooks: { terminal: key => view(sessionId, key).state },
   })
-  const theme: TerminalBodyInjected['hooks']['theme'] = {
-    getSnapshot: () => ctx.theme.getTheme(),
-    subscribe: listener => ctx.on('theme/change', listener),
-  }
   ctx.effect(() => ctx.slots.inject('sidebar.right.tab.guide.entry', () => ctx.slots.register({
     name: 'sidebar.right.tab.guide.entry', key: id, locale: namespace,
     inject: (sessionId): TerminalGuideInjected => ({
@@ -94,7 +90,7 @@ export function apply(ctx: Context): void {
   }, TerminalGuide)), 'ui-sidebar-terminal.guide')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register(
     { name: 'sidebar.right.pane.tab', key: id, locale: namespace,
-      inject: (sessionId): TerminalBodyInjected => ({ ...inject(sessionId), hooks: { theme } }),
+      inject,
     }, LazyTerminalBody,
   )), 'ui-sidebar-terminal.body')
   ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register(

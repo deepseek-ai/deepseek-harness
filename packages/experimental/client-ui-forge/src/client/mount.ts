@@ -60,8 +60,14 @@ import { WorktreeSettings } from './WorktreeSettings.tsx'
 import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from './worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
-/** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace']
+/**
+ * Services required before the Remote contribution mounts, including the `uiResponsive` owner of the `useMediaQuery`
+ * prop that the change requests section and the review page read.
+ */
+export const inject = [
+  'remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace',
+  'uiResponsive',
+]
 
 /** The Forge bundle, whose page on the Plugins page lists the rows below. */
 export const FORGE_BUNDLE = '@deepseek-ai/dsh-experimental-forge-bundle'

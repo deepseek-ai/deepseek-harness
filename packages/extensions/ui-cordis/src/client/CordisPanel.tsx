@@ -117,7 +117,7 @@ function DoubleCheckIcon() {
 /** Render the inventory panel and its unified footer action. */
 export function CordisPanel({
   wide,
-  useSessions, useInventory, useActiveRuns, useRunErrors, useLoaded, useRenderFailures,
+  useSessions, useDocumentViewport, useInventory, useActiveRuns, useRunErrors, useLoaded, useRenderFailures,
   onApprove, onDecline, onRun, onStop, onRemove, onRefresh, t,
 }: CordisPanelProps) {
   const inventory = useInventory(snapshot => snapshot)
@@ -127,6 +127,7 @@ export function CordisPanel({
   const renderFailures = useRenderFailures(snapshot => snapshot)
   const current = useSessions(state => Object.values(state.byId)
     .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id)
+  const viewport = useDocumentViewport()
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<Record<string, CordisDynamicPackageId>>({})
   const [pending, setPending] = useState<ReadonlySet<CordisDynamicPluginId>>(new Set())
@@ -136,19 +137,13 @@ export function CordisPanel({
   const [anchor, setAnchor] = useState<{ left: number; bottom: number }>()
 
   // The panel is position: fixed (the sidebar clips overflow), so it hugs the
-  // trigger through a measured offset instead of document flow.
+  // trigger through a measured offset instead of document flow, measured
+  // again when the application viewport changes size.
   useLayoutEffect(() => {
     if (!open) return
-    const place = (): void => {
-      const rect = rootRef.current?.getBoundingClientRect()
-      if (rect !== undefined) {
-        setAnchor({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
-      }
-    }
-    place()
-    window.addEventListener('resize', place)
-    return () => { window.removeEventListener('resize', place) }
-  }, [open])
+    const rect = rootRef.current?.getBoundingClientRect()
+    if (rect !== undefined) setAnchor({ left: rect.left, bottom: viewport.height - rect.top + 8 })
+  }, [open, viewport])
 
   useDismissOnOutsidePointer(rootRef, open, setOpen)
 

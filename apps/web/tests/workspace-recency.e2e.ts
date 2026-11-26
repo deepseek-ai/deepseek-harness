@@ -185,7 +185,26 @@ describe('web e2e: workspace recency', () => {
     await expect.poll(titles).toEqual(['New Session', ...TITLES])
     await pick('Manual')
     await expect.poll(titles).toEqual(['New Session', ...TITLES])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['sidebar.expected.md', 'manual-blank.expected.md'])
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
+  it('places a Manual fork directly above its source', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-workspace-recency-fork'))
+    const titles = () => page.locator('[role="treeitem"]:not([aria-expanded]) [class*="title"]').allTextContents()
+    await expect.poll(titles).toEqual(['New Session', ...TITLES])
+    const source = page.getByRole('treeitem').filter({ has: page.getByText(TITLES[1]!, { exact: true }) })
+    await source.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Fork session' }).click()
+    const forked = `${TITLES[1]!} (1)`
+    await expect.poll(titles).toEqual(['New Session', TITLES[0], forked, TITLES[1], TITLES[2]])
+    await page.getByRole('button', { name: 'View options' }).hover()
+    await expect.poll(() => page.getByRole('button', { name: /^Session actions for / }).count()).toBe(0)
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'manual-fork.expected.md'),
+      await captureStableAria(page, '[role="tree"][aria-label="Sessions"]', scaffold.workspaceCwd), MODE,
+    )
+    await assertFixtureInventory(SNAPSHOT_DIR, ['sidebar.expected.md', 'manual-blank.expected.md', 'manual-fork.expected.md'])
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })

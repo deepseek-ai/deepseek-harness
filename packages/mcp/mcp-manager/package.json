@@ -30,13 +30,20 @@
       "types": "./lib/typert.remote-client.d.ts",
       "default": "./lib/typert.remote-client.js"
     },
+    "./server": {
+      "types": "./lib/types/server-row.d.ts",
+      "default": "./lib/server-row.js"
+    },
     "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json",
+    "./server/locale/*.json": "./locale/server/*.json",
     "./package.json": "./package.json"
   },
   "files": [
     "locale/*.json",
+    "locale/server/*.json",
     "lib/index.js",
+    "lib/server-row.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",

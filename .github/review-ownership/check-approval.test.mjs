@@ -14,6 +14,13 @@ import {
   runApprovalCheck as runPublisher,
   publishApprovalPhase,
 } from './check-approval.mjs'
+import {
+  HEAD_SHA,
+  comment,
+  delegationApi,
+  evaluateDelegation,
+  pullRequestEvent,
+} from './review-fixtures.mjs'
 
 const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
 const emptyCheckRuns = { total_count: 0, check_runs: [] }
@@ -24,20 +31,8 @@ const withoutComments = api => withoutChecks((path, options) => path.includes('/
 const evaluateApproval = options => evaluateWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
 const runWithHistory = options => runPublisher({ ...options, api: withoutChecks(options.api) })
 const runApprovalCheck = options => runWithHistory({ getMergedCount: async () => 0, ...options, api: withoutComments(options.api) })
-const HEAD_SHA = '1234567890abcdef1234567890abcdef12345678'
 
-const pullRequestEvent = ({ author = 'author', draft = false } = {}) => ({
-  repository: { full_name: 'deepseek-harness/deepseek-harness' },
-  pull_request: {
-    number: 42,
-    state: 'open',
-    draft,
-    user: { login: author, node_id: 'author-id' },
-    head: { sha: HEAD_SHA },
-  },
-})
-
-const review = (login, state, submitted_at = '2026-09-14T00:00:00Z', id = 10) => ({ user: { login }, state, submitted_at, id })
+const review = (login, state, submitted_at = '2026-09-14T00:00:00Z', id = 10) => ({ user: { login, id: 1001 }, state, submitted_at, id })
 
 test('loads the repository approval score policy', () => {
   const policy = parseApprovalPolicy(policySource)
@@ -827,32 +822,6 @@ test('bot authors receive the same history credit', async () => {
   assert.equal(result.state, 'success')
 })
 
-const comment = (login, body, created_at = '2026-09-15T00:00:00Z', id = 1) => ({
-  user: { login, node_id: `account:${login.toLowerCase()}` }, body, created_at, id, node_id: `comment:${login}:${id}:${body}:${created_at}`,
-})
-
-function delegationApi({ comments = [], reviews = [], permissions = {} } = {}) {
-  return async (path, options) => {
-    if (path === '/graphql') return { data: { nodes: options.body.variables.ids.map(id => {
-      const entry = comments.find(comment => comment.node_id === id)
-      return { id, body: entry.body, createdAt: entry.created_at, author: { id: entry.user.node_id }, lastEditedAt: null, editor: null,
-        ...entry.editorMetadata }
-    }) } }
-    if (path.includes('/comments?')) return comments
-    if (path.includes('/reviews?')) return reviews
-    const match = /\/collaborators\/([^/]+)\/permission$/u.exec(path)
-    if (match) return { permission: permissions[decodeURIComponent(match[1]).toLowerCase()] ?? 'write' }
-    throw new Error(`unexpected API path ${path}`)
-  }
-}
-
-const evaluateDelegation = options => evaluateWithHistory({
-  event: pullRequestEvent(), policySource,
-  getMergedCount: async () => 0,
-  getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
-  ...options,
-})
-
 test('delegates the sender fixed points once after the recipient approves, retaining both blockers', async () => {
   for (const senderState of [undefined, 'APPROVED', 'CHANGES_REQUESTED']) {
     for (const recipientState of [undefined, 'APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED']) {
@@ -1189,7 +1158,7 @@ test('reads all comment pages, logs the score owner, and fails closed on missing
     [() => ({}), /comments response is not an array/u],
     [() => [null], /comment is not an object/u],
     [() => [{ user: { login: 'writer' } }], /comment has no body/u],
-    [() => [{ user: {}, body: '/delegate @writer' }], /delegation author has an invalid login/u],
+    [() => [{ user: { id: 1001 }, body: '/delegate @writer' }], /delegation author has an invalid login/u],
     [() => Array.from({ length: 100 }, () => comment('writer', 'text')), /comments exceed 3000/u],
   ]) {
     await assert.rejects(run(comments), message)

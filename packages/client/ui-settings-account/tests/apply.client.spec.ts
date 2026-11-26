@@ -112,16 +112,8 @@ it('shares account actions across seats, publishes dialog ownership, and opens c
   const c = await start()
   const actions = operations(c)
   expect(c.ctx.slots.entries('settings.models.sign-in')[0]!.inject!()).toBe(actions)
-  // The account UI follows the live theme service through the framework hook channel.
-  const theme = c.ctx.get('theme') as ThemeRuntime
-  const onTheme = vi.fn()
-  const offTheme = actions.hooks.theme.subscribe(onTheme)
-  expect(actions.hooks.theme.getSnapshot()).toBe(theme.getTheme())
-  const probe = theme.register({ id: 'probe', colorScheme: 'dark', tokens: {} })
-  expect(onTheme).toHaveBeenCalledOnce()
-  probe()
-  offTheme()
-  expect(theme.getTheme().themes.map(candidate => candidate.id)).toEqual(['light', 'dark'])
+  // The account UI reads the theme through the global `useTheme` standard prop, not an injected source.
+  expect(actions.hooks).not.toHaveProperty('theme')
   await actions.refreshAccount()
   expect(c.mock.remote.account.getProfile).not.toHaveBeenCalled()
   const listener = vi.fn()

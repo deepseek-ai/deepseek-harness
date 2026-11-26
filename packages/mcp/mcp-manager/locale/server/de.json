@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP-Server",
+    "description": "Verbindet einen MCP-Server über die MCP-Serververwaltung und stellt dessen Tools bereit."
+  }
+}

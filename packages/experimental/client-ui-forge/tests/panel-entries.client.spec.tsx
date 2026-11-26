@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, contextMenuHook, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { PanelFoldProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -57,7 +57,9 @@ function rowParts(row: Element): string | null {
 /** One Session's section store, as the registration mints it. */
 type SectionStore = ReturnType<ReturnType<typeof createChangeRequestsSectionStore>['create']>
 
-function section(state: ForgePanelState | null, options: { disconnected?: boolean; store?: SectionStore } = {}) {
+function section(
+  state: ForgePanelState | null, options: { disconnected?: boolean; store?: SectionStore; coarsePointer?: boolean } = {},
+) {
   const panel = panelStore(state, options.disconnected)
   const store = options.store ?? createChangeRequestsSectionStore().create()
   const handlers = {
@@ -66,6 +68,8 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     markReady: vi.fn<(entry: ChangeRequestEntry) => Promise<void>>(async () => {}),
     merge: vi.fn<(entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>>(async () => {}),
     readChecks: vi.fn<ChangeRequestsSectionProps['readChecks']>(async () => snapshot(1)),
+    requestReviews: vi.fn<ChangeRequestsSectionProps['requestReviews']>(async () => {}),
+    reviewerCandidates: vi.fn<ChangeRequestsSectionProps['reviewerCandidates']>(async () => []),
     openLink: vi.fn<(url: string) => void>(),
     copyText: vi.fn<(text: string) => void>(),
     viewChanges: vi.fn<(entry: ChangeRequestEntry) => void>(),
@@ -86,12 +90,13 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
+    ...responsiveHooks({ matches: query => options.coarsePointer === true && query === '(pointer: coarse)' }),
     ...handlers,
     t,
   } as Pick<ChangeRequestsSectionProps,
     'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'refresh'
-    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot' | 'renderFactorySlot'
-    | 't'> as ChangeRequestsSectionProps
+    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'requestReviews' | 'reviewerCandidates' | 'openLink' | 'copyText'
+    | 'viewChanges' | 'renderSlot' | 'renderFactorySlot' | 'useMediaQuery' | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
   return { view, panel, store, ...handlers }
 }
@@ -119,6 +124,15 @@ describe('ChangeRequestsSection', () => {
     const b = section(ready({ changeRequests: [entry(1, snapshot(1))] }), { disconnected: true })
     expect(b.view.queryByRole('status')).toBeNull()
     expect(expansion(b.view)).toEqual([true])
+  })
+
+  it.each([false, true])('focuses the reviewer search when it opens only on a fine primary pointer: coarse %s', async (coarsePointer) => {
+    const b = section(ready({ changeRequests: [entry(1, snapshot(1, { canRequestReviews: true }))] }), { coarsePointer })
+    fireEvent.click(b.view.container.querySelector('[data-forge-review]')!)
+    fireEvent.click(screen.getByRole('menuitem', { name: en['reviewers.requestMore'] }))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+    const field = screen.getByRole('textbox', { name: en['reviewers.search'] })
+    expect(document.activeElement === field).toBe(!coarsePointer)
   })
 
   it.each([

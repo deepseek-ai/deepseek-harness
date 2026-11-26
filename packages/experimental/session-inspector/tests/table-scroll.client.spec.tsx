@@ -31,7 +31,7 @@ function renderTable(initial: readonly InspectorRow[]) {
     type: row.key, identity: row.key, location: '', value: { value: `detail:${row.key}` },
   } satisfies InspectorRecord]))
   const props: InspectorTableProps = {
-    title: 'Session Log', flash: false, showTime: true, useRows: bindSnapshotSelector(rows),
+    title: 'Session Log', flash: false, reducedMotion: false, showTime: true, useRows: bindSnapshotSelector(rows),
     useRecord: ((key: string) => records.get(key)),
     typeOf: key => records.get(key)?.type,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('scroll-session' as SessionId))),

@@ -9,7 +9,7 @@
  * surface. Desktop shortcuts adjust text, code, and terminal font sizes together.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import type { BoundActions, RootStandardSourceContribution, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { NormalizedBinding } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 // Type-only: the ctx.configForms Context merge. Cross-plugin collaboration
@@ -48,6 +48,23 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** The Appearance settings row's copy. */
     'settings.theme': ThemeKey
+  }
+  interface GlobalStandardProps {
+    /**
+     * Select from the current theme snapshot; the component rerenders when the selected value changes. A plugin whose
+     * components read it injects `theme`, so it starts after the prop is published and unloads when it is withdrawn.
+     *
+     * Branch light and dark presentation only on `active.colorScheme` (`'light' | 'dark'`): `preference` may be
+     * `system`, and `active.id` may name a registered custom theme. To follow palette changes, select `s => s.active`:
+     * it is a new object when the theme switches or a token override layer changes. Without override layers a font
+     * size or font list change keeps the same object; while a layer exists every change, including a font change,
+     * yields a new one. Read color values from an element's computed style, not from `active.tokens`, which holds only
+     * a custom theme's overrides.
+     * @param selector - derives the value the component uses from the snapshot.
+     * @param isEqual - optional equality for the selected value; `Object.is` when omitted.
+     * @returns the selected value for the current snapshot.
+     */
+    useTheme: SnapshotSelectorHook<ThemeSnapshot>
   }
 }
 
@@ -595,10 +612,11 @@ function installFontSizeShortcuts(ctx: ClientContext, adjust: (delta: 1 | -1) =>
 export const inject = ['slots', 'locale', 'remote', 'configForms']
 
 /**
- * Client plugin body: provide the theme service and register the
- * feature-owned Appearance and font settings rows into the General section's item
- * slot (a feature owns its settings surface). Desktop font-size shortcuts share
- * all three font-size settings when the keyboard service is available.
+ * Client plugin body: publish the `useTheme` standard prop, provide the theme
+ * service, and register the feature-owned Appearance and font settings rows
+ * into the General section's item slot (a feature owns its settings surface).
+ * Desktop font-size shortcuts share all three font-size settings when the
+ * keyboard service is available.
  * @param ctx - client cordis context.
  */
 export function apply(ctx: ClientContext): void {
@@ -606,6 +624,15 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(SETTINGS_NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-theme: settings row dictionaries')
   const host = ctx.configForms.get<ThemeSettings>(THEME_SETTINGS_NAMESPACE)
   const theme = new ThemeRuntime(ctx, host)
+  // Published before the service, so a plugin that injects `theme` always finds `useTheme`.
+  ctx.slots.provideRoot({
+    hooks: {
+      theme: {
+        getSnapshot: () => theme.getTheme(),
+        subscribe: listener => ctx.on('theme/change', () => { listener() }),
+      },
+    },
+  } satisfies RootStandardSourceContribution)
   ctx.provide('theme', theme)
   installIconSprite(ctx, theme.getTheme().active.icons)
 

@@ -371,6 +371,8 @@ export interface ReviewRowProps {
   readonly requestReviews: OverviewActions['requestReviews']
   readonly reviewerCandidates: OverviewActions['reviewerCandidates']
   readonly openLink: (url: string) => void
+  /** Whether the page's primary pointer is coarse, which keeps the reviewer search from focusing its field. */
+  readonly coarsePointer: boolean
   readonly t: Translate
 }
 
@@ -378,10 +380,13 @@ export interface ReviewRowProps {
  * Render the review decision as a row with the first reviewers' avatars. Its menu lists each reviewer with their
  * latest outcome or that their review is requested, and, when the signed-in user may request reviews, offers to ask a
  * reviewer again and to request a review from someone else through a search.
- * @param props - the change request, its snapshot, the aggregate outcome, the review request actions, and copy.
+ * @param props - the change request, its snapshot, the aggregate outcome, the review request actions, the pointer
+ * accuracy, and copy.
  * @returns the row with its menu.
  */
-export function ReviewRow({ entry, snapshot, value, tone, requestReviews, reviewerCandidates, openLink, t }: ReviewRowProps): ReactNode {
+export function ReviewRow({
+  entry, snapshot, value, tone, requestReviews, reviewerCandidates, openLink, coarsePointer, t,
+}: ReviewRowProps): ReactNode {
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
   const [busy, run] = useBusy()
@@ -420,7 +425,10 @@ export function ReviewRow({ entry, snapshot, value, tone, requestReviews, review
         </button>
       )}>
       {searching && request !== undefined && reviewerCandidates !== undefined
-        ? <ReviewerSearch url={snapshot.url} list={reviewerCandidates} choose={(login) => { request({ kind: 'user', login }) }} t={t} />
+        ? (
+          <ReviewerSearch url={snapshot.url} list={reviewerCandidates} choose={(login) => { request({ kind: 'user', login }) }}
+            coarsePointer={coarsePointer} t={t} />
+        )
         : (
           <>
             {reviewers.length === 0 && <div className={overview.menuStatus}>{t('reviewers.none')}</div>}
@@ -521,14 +529,17 @@ type Listing = { readonly query: string } & (
 
 /**
  * Render the searchable account list of a review request: the host's suggestions first, then accounts matching the
- * search.
- * @param props - the change request URL, the listing, the choice handler, and copy.
+ * search. The search field takes focus when the list opens, unless the primary pointer is coarse, where focus would
+ * raise the soft keyboard.
+ * @param props - the change request URL, the listing, the choice handler, whether the primary pointer is coarse when
+ * the list opens, and copy.
  * @returns the search field and its list.
  */
-export function ReviewerSearch({ url, list, choose, t }: {
+export function ReviewerSearch({ url, list, choose, coarsePointer, t }: {
   readonly url: string
   readonly list: ListCandidates
   readonly choose: (login: string) => void
+  readonly coarsePointer: boolean
   readonly t: Translate
 }): ReactNode {
   const [query, setQuery] = useState('')
@@ -549,7 +560,8 @@ export function ReviewerSearch({ url, list, choose, t }: {
     }
   }, [url, query, attempt, list])
   useEffect(() => {
-    if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) return
+    // Decided once, with the pointer accuracy of the render that opened the list.
+    if (coarsePointer) return
     const frame = requestAnimationFrame(() => { search.current?.focus() })
     return () => { cancelAnimationFrame(frame) }
   }, [])

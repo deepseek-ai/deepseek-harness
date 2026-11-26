@@ -1,0 +1,77 @@
+name: weighted-approval-machine
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_run:
+    workflows: [weighted-approval-review-event]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: Open pull request to re-evaluate
+        type: string
+        required: true
+  workflow_call:
+    secrets:
+      DSH_APPROVAL_BOT_TOKEN:
+        description: Approval credential supplied by the called job's protected environment
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  evaluate:
+    concurrency:
+      # Events this job skips take a run-scoped group so they cannot replace queued evaluations;
+      # a base-branch retarget is not skipped. Review scope is omitted: a run outside the scope
+      # targets a different pull request's group, or no evaluation exists when the scope is unset.
+      group: >-
+        weighted-approval-machine-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' ||
+        (github.event.action == 'edited' && github.event.changes.base.ref == null))) ||
+        (github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success') ||
+        (github.event_name == 'issue_comment' && (!github.event.issue.pull_request || github.event.issue.state != 'open' ||
+        (!contains(github.event.comment.body, '/delegate') && !contains(github.event.changes.body.from, '/delegate'))))) &&
+        format('ignored:{0}', github.run_id) ||
+        ((inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) ||
+        github.event.workflow_run.display_title) }}
+      cancel-in-progress: false
+    if: >-
+      (vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&
+        (github.event_name == 'workflow_run' && github.event.workflow_run.display_title == format('weighted-approval-review-event:{0}', vars.DSH_APPROVAL_REVIEW_SCOPE) ||
+        vars.DSH_APPROVAL_REVIEW_SCOPE == format('{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number)))) &&
+      (github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) &&
+      (github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') &&
+      (github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.base.ref != null) &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+      (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&
+        (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))
+    name: weighted approval review
+    environment: weighted-approval
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Execute policy from the trusted default branch, never from a PR head.
+      - name: Check out trusted approval policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: .github/review-ownership/requirements.txt
+      - name: Install production lexer
+        run: python3 -m pip install -r .github/review-ownership/requirements.txt
+      - name: Evaluate weighted approval
+        env:
+          APPROVAL_TOKEN: ${{ secrets.DSH_APPROVAL_BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DSH_APPROVAL_REVIEW_SCOPE: ${{ vars.DSH_APPROVAL_REVIEW_SCOPE }}
+        run: node .github/review-ownership/publish-approval.mjs

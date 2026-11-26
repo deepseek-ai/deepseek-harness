@@ -371,7 +371,7 @@ describe('Realm provider startup order', () => {
     const b = await page([entry('a', { isolation: 'script' }), entry('plain')], { a: mounting(mounted), plain: mounting(mounted) })
     expect(mounted).toEqual(['+main'])
     expect(b.modules.importError('a')?.message)
-      .toContain(`client-modules: script isolation needs the ${REGISTRY_ID} and ${IFRAME_ID} entries, and the Realm registry is not active`)
+      .toContain(`: script isolation needs the ${REGISTRY_ID} and ${IFRAME_ID} entries, and the Realm registry is not active (2 attempts)`)
     expect(b.provider.created).toEqual([])
   })
 

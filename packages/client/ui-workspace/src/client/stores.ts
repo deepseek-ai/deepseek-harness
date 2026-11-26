@@ -65,6 +65,13 @@ type WorkspaceViewActions = {
     accountKeys: readonly string[],
     source: SessionOrderSource,
   ) => void
+  placeForkOrder: (
+    draft: WorkspaceViewState,
+    childId: string,
+    sourceId: string,
+    accountKeys: readonly string[],
+    source: SessionOrderSource,
+  ) => void
   setArchivedFilter: (draft: WorkspaceViewState, filter: ArchivedFilter) => void
 }
 
@@ -123,6 +130,18 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
           const order = reconcileManualOrder(members, d.sessionOrderByAccount[key], source.summaries, source.rowState)
           return [key, selected.has(key) ? [sessionId, ...order.filter(id => id !== sessionId)] : order]
         }))
+      },
+      placeForkOrder: (d, childId, sourceId, accountKeys, source) => {
+        if (d.orderBy !== 'manual') return
+        const selected = new Set(accountKeys)
+        for (const [key, members] of Object.entries(source.members)) {
+          if (!selected.has(key) || d.sessionOrderByAccount[key]?.includes(childId)) continue
+          const order: string[] = reconcileManualOrder(members, d.sessionOrderByAccount[key], source.summaries, source.rowState)
+            .filter(id => id !== childId)
+          const at = order.indexOf(sourceId)
+          if (at === -1) continue
+          d.sessionOrderByAccount[key] = [...order.slice(0, at), childId, ...order.slice(at)]
+        }
       },
       setArchivedFilter: (d, filter: ArchivedFilter) => { d.archivedFilter = filter },
     },

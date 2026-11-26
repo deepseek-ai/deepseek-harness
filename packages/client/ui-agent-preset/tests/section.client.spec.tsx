@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { allowAllAccess, bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
@@ -26,7 +26,7 @@ function view(partial: Partial<AgentPresetSectionState> = {}, startCreatorDraft?
     useWorkspaces: unusedHook, useResource: unusedHook,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks(), ...themeHooks(),
     useAgentPresetSection: bindSnapshotSelector(store),
     useDeveloperTools: bindSnapshotSelector(developerTools),
     t: key => translations.get(key) ?? key }
