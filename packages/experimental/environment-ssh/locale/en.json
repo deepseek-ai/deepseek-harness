@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Execution environment over SSH",
+    "description": "Reach an execution environment over OpenSSH with strict host-key checking."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ambiente de execução",
+    "description": "Execute funções em ambientes de execução fornecidos por provedores, com callbacks tipados para o dsh de origem."
+  }
+}

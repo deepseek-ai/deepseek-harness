@@ -165,6 +165,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`sherpa-onnx-node`](https://github.com/csukuangfj/sherpa-onnx) | Apache-2.0 |
 | [`shiki`](https://github.com/shikijs/shiki) | MIT |
 | [`simple-icons`](https://github.com/simple-icons/simple-icons) | CC0-1.0 |
+| [`ssh-config`](https://github.com/cyjake/ssh-config) | MIT |
 | [`string_decoder`](https://github.com/nodejs/string_decoder) | MIT |
 | [`supports-color`](https://github.com/chalk/supports-color) | MIT |
 | [`tar`](https://github.com/isaacs/node-tar) | BlueOak-1.0.0 |

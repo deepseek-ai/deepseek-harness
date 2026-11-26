@@ -21,6 +21,7 @@
 | [session.md](session.zh.md) | 完整的 `SessionEventMap` 变体目录、`TurnEndReason`、`deriveMessages()`、执行封闭与独立事件 |
 | [working-directory.md](working-directory.zh.md) | Session 执行目录、持久化变更、恢复与用户上下文 |
 | [worktrees.md](worktrees.zh.md) | 现有权限下的实验性 Git 分支与检出目录创建 |
+| [environment.md](environment.zh.md) | 在另一台机器上的守护进程中运行的工具函数，支持调用 host 端处理函数 |
 | [forge.md](forge.zh.md) | 实验性代码托管变更请求：提供方契约、共享状态轮询与 Session 绑定 |
 | [persistence.md](persistence.zh.md) | 持久性 seam：`SessionPersistence`、JSONL 提供方、`session/flush`、崩溃恢复、`SessionHeader` |
 | [settings.md](settings.zh.md) | 用户设置 seam：`SettingsNamespace` 注册、分层解析（默认值 → 组合 `base` → 用户文档）、owner scope、热提交 |

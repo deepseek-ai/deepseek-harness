@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Local execution environment",
+    "description": "Run self-contained functions in a local Node execution process."
+  }
+}

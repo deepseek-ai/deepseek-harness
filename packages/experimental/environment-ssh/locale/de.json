@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ausführungsumgebung über SSH",
+    "description": "Erreichen Sie eine Ausführungsumgebung über OpenSSH mit strikter Prüfung der Hostschlüssel."
+  }
+}

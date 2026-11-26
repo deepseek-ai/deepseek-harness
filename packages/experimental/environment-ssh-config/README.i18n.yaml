@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/environment-ssh-config/README.md
+/:
+  en: da61533c3dc8709c
+  zh: b5a5958585433358
+/deepseek-ai-dsh-environment-ssh-config:
+  en: 1dd030dcdc5155b9
+  zh: 235c3228b6c679dc
+/deepseek-ai-dsh-environment-ssh-config/summary:
+  en: b9aeb0de668f3077
+  zh: 2296412fb5859e6b
+/deepseek-ai-dsh-environment-ssh-config/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 48ba698e3bec8c5a
+/deepseek-ai-dsh-environment-ssh-config/use-this-package:
+  en: 7df7a083ac220008
+  zh: 940784c7b7745816
+/deepseek-ai-dsh-environment-ssh-config/use-this-package/configuration-changes:
+  en: 41df35918867d4f3
+  zh: 9d849d1cce2608ca
+/deepseek-ai-dsh-environment-ssh-config/understand-the-implementation:
+  en: 7054f6f1d90a52b0
+  zh: 28d60a87506e737f
+/deepseek-ai-dsh-environment-ssh-config/further-exploration:
+  en: 358742663deceef3
+  zh: d9eaf4005bd3abf3
+/deepseek-ai-dsh-environment-ssh-config/model-experience:
+  en: 410cbbeba09354f4
+  zh: dc4a7f9f1853d499
+/deepseek-ai-dsh-environment-ssh-config/model-experience/kv-cache-effect:
+  en: 4f912e6f343086de
+  zh: 9ddc299362df3aba
+/deepseek-ai-dsh-environment-ssh-config/known-limitations-and-deferred-work:
+  en: 0bb7e27d7fe0508f
+  zh: 75aae8c77580ecb9
+/deepseek-ai-dsh-environment-ssh-config/known-limitations-and-deferred-work/dev-note:
+  en: 3f1aeac35aee7b42
+  zh: b7f53528e9c3a9bd

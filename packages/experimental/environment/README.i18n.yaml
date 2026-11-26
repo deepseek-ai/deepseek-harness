@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/environment/README.md
+/:
+  en: a7164eda1a483aec
+  zh: 70bba1f871d3091a
+/deepseek-ai-dsh-environment:
+  en: f40d5a3010e820a6
+  zh: fc8d712b9e53b603
+/deepseek-ai-dsh-environment/summary:
+  en: f2325ee91ed46eaf
+  zh: 786ea2b373a90919
+/deepseek-ai-dsh-environment/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5b6bd00fce5371c3
+/deepseek-ai-dsh-environment/use-this-package:
+  en: 10e895cab507ab56
+  zh: 763a82e22ff3a45b
+/deepseek-ai-dsh-environment/use-this-package/configuration:
+  en: 7f2b67c902c7d4e5
+  zh: ee92cd912f4d8077
+/deepseek-ai-dsh-environment/use-this-package/registry-and-execution:
+  en: cf34c4ae6b6f6dd6
+  zh: 2293428249f16054
+/deepseek-ai-dsh-environment/use-this-package/cancellation-and-failures:
+  en: cee1fa4e6a3d18db
+  zh: 21c17e3017ea9ba9
+/deepseek-ai-dsh-environment/use-this-package/execution-daemon:
+  en: 6eb8992e18a50a2e
+  zh: 280128a0ff32d320
+/deepseek-ai-dsh-environment/understand-the-implementation:
+  en: 9824fe19653c23fa
+  zh: 72d3bd721296b643
+/deepseek-ai-dsh-environment/further-exploration:
+  en: ac899f08b9f65f24
+  zh: 35406a2c95d3b5a8
+/deepseek-ai-dsh-environment/model-experience:
+  en: 94d18c2abf648933
+  zh: 6b140bb05b30d07e
+/deepseek-ai-dsh-environment/model-experience/kv-cache-effect:
+  en: 4f912e6f343086de
+  zh: e47433bfe6f08594
+/deepseek-ai-dsh-environment/known-limitations-and-deferred-work:
+  en: 66f9b4493d45309c
+  zh: 69ffddb6c54a980a
+/deepseek-ai-dsh-environment/known-limitations-and-deferred-work/dev-note:
+  en: 8aa8aa7321f6fdcb
+  zh: b8451422143346a6

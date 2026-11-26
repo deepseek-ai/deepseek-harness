@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ambientes da configuração SSH",
+    "description": "Forneça ambientes de execução a partir dos aliases Host do OpenSSH."
+  }
+}

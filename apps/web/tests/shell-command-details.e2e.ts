@@ -120,11 +120,27 @@ it.each([
             await page.keyboard.press('Tab')
             const focusTarget = background ? inputSection : card.getByRole('button', { name: 'Copy', exact: true })
             expect(await focusTarget.evaluate(element => document.activeElement === element)).toBe(true)
-            await page.keyboard.press('End')
-            await expect.poll(() => inputSection.evaluate(element =>
-              element.scrollTop + element.clientHeight >= element.scrollHeight - 1)).toBe(true)
-            await page.keyboard.press('Home')
-            await expect.poll(() => inputSection.evaluate(element => element.scrollTop)).toBe(0)
+            expect(await inputSection.evaluate(element => element.scrollTop)).toBe(0)
+            for (const key of ['End', 'Home'] as const) {
+              const scrolling = await inputSection.evaluateHandle((element) => {
+                const controller = new AbortController()
+                const state = { ended: false, controller }
+                element.addEventListener('scrollend', (event) => {
+                  if (event.target === element) state.ended = true
+                }, { signal: controller.signal })
+                return state
+              })
+              try {
+                await page.keyboard.press(key)
+                await expect.poll(() => scrolling.evaluate(state => state.ended)).toBe(true)
+                await expect.poll(() => inputSection.evaluate((element, direction) => direction === 'Home'
+                  ? element.scrollTop === 0
+                  : element.scrollTop + element.clientHeight >= element.scrollHeight - 1, key)).toBe(true)
+              } finally {
+                await scrolling.evaluate((state) => { state.controller.abort() })
+                await scrolling.dispose()
+              }
+            }
           }
         }
         await card.evaluate((element) => { element.style.width = '' })

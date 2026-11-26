@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 执行环境",
+    "description": "通过 OpenSSH 连接执行环境，并严格检查主机密钥。"
+  }
+}

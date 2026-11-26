@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-23-environment-transport-process-ownership.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-23-environment-transport-process-ownership.md
+/agent-note-environment-transports-own-execution-processes:
+  en: e750adedc4cf2ef2
+  zh: 5eeec03e2bef6556
+/agent-note-environment-transports-own-execution-processes/problem:
+  en: 31dd9b24bf6b2458
+  zh: 93934b1e3f3da549
+/agent-note-environment-transports-own-execution-processes/decision:
+  en: b4a7862439704a02
+  zh: d2deeb7b7413cdb1
+/agent-note-environment-transports-own-execution-processes/alternatives-considered:
+  en: bacce79496b64d28
+  zh: f2f646257896f4fc
+/agent-note-environment-transports-own-execution-processes/consequences:
+  en: 0e3b8c6d11db9410
+  zh: af023ccf7568b864

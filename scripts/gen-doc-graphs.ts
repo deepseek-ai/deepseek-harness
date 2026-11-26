@@ -273,6 +273,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Explicit experimental creation from a pinned local commit. Existing write permissions govern checkout and shared Git metadata; the working-directory service owns the resulting Session directory.',
   },
   {
+    key: 'environments',
+    pkg: 'environment',
+    title: 'Execution environments',
+    mode: 'seam',
+    implementations: ['environment-ssh', 'environment-ssh-config', 'environment-local'],
+    note: 'Providers contribute stable handles, display names and transports. The registry executes each run through the selected handle with one shared protocol.',
+  },
+  {
     key: 'workingDirectory',
     pkg: 'working-directory',
     title: 'Session working directory',

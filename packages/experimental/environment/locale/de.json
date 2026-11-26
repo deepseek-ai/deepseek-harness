@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ausführungsumgebung",
+    "description": "Führen Sie Funktionen in Ausführungsumgebungen von Anbietern aus, mit typisierten Rückrufen an die ursprüngliche dsh-Instanz."
+  }
+}

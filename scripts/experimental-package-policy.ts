@@ -6,6 +6,10 @@
  * experimental name only through this map.
  */
 export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, string>> = {
+  'packages/experimental/environment-local': '@deepseek-ai/dsh-environment-local',
+  'packages/experimental/environment-ssh-config': '@deepseek-ai/dsh-environment-ssh-config',
+  'packages/experimental/environment': '@deepseek-ai/dsh-environment',
+  'packages/experimental/environment-ssh': '@deepseek-ai/dsh-environment-ssh',
   'packages/experimental/cua': '@deepseek-ai/dsh-cua',
   'packages/experimental/cua-bundle': '@deepseek-ai/dsh-cua-bundle',
   'packages/experimental/cua-macos': '@deepseek-ai/dsh-cua-macos',

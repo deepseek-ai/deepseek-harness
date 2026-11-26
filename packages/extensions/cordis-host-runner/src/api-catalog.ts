@@ -1302,6 +1302,48 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'environments',
+    summary: 'Owner of environment registrations and of one daemon connection per environment.',
+    description: 'Owner of environment registrations and of one daemon connection per environment. A connection opens on the first call and reopens on the next call after it closes; runs in flight when it closes fail and are never replayed. Providers contribute metadata and transports; the registry uses one common execution protocol for all of them.',
+    methods: [
+      {
+        signature: 'readonly limits: EnvironmentLimits',
+        description: 'Bounds of every connection, for sizing arguments, results and origin values; functions read them as `env.limits`.',
+        parameters: [],
+      },
+      {
+        signature: 'handle(value: string): EnvironmentHandle',
+        description: 'Admit a provider identifier without interpreting its format.',
+        parameters: [{ name: 'value', description: 'non-empty stable identifier chosen by the provider.' }],
+        returns: 'the branded registry key.',
+      },
+      {
+        signature: 'register(info: EnvironmentInfo, transport: EnvironmentTransport): () => void',
+        description: 'Contribute an environment and its connection capability. Emits `environments/change` once registered.',
+        parameters: [{ name: 'info', description: 'provider-owned handle and user-facing display name.' }, { name: 'transport', description: 'opens channels to this environment\'s execution process.' }],
+        returns: 'a disposer that removes this registration, closes its connection and emits `environments/change`; later calls do nothing.',
+      },
+      {
+        signature: 'list(): readonly EnvironmentInfo[]',
+        description: 'Snapshot the public metadata of current provider contributions.',
+        parameters: [],
+        returns: 'metadata without connection settings or execution objects.',
+      },
+      {
+        signature: 'get(handle: EnvironmentHandle): EnvironmentInfo',
+        description: 'Read the current registration\'s public metadata.',
+        parameters: [{ name: 'handle', description: 'provider-owned environment identifier.' }],
+        returns: 'its handle and display name; throws when the environment is unavailable.',
+      },
+      {
+        signature: 'define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( handle: EnvironmentHandle, fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>',
+        description: 'Define `fn` for the selected environment\'s execution process. Only its source text and the names of its origin handlers are sent, so `fn` must be a self-contained function or arrow expression without host closures. The type of `fn`\'s first parameter determines the arguments of each call. Arguments, results and origin values are copied by structured clone; values it cannot copy, such as functions, fail their run. The own property names of `options.handlers`, read here once, are the `env.origin` methods; names added to the object later are neither exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers\' types determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only parameters from the function, so host state that belongs to one call, such as a tool call\'s background job, needs a definition made for that call. Defining neither contacts the environment nor requires its registration.',
+        parameters: [{ name: 'handle', description: 'provider-owned identifier selecting the execution environment.' }, { name: 'fn', description: 'daemon-side code receiving each call\'s arguments and the daemon environment.' }, { name: 'options', description: 'result validation and host handlers.' }],
+        returns: 'a function that runs `fn` at most once per call.',
+      },
+    ],
+  },
+  {
     key: 'fileReferences',
     summary: 'Host capability for cancellable file-reference discovery.',
     description: 'Host capability for cancellable file-reference discovery.',
@@ -6131,6 +6173,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'change', description: 'domain, table (`\'\'` for global), key (`\'\'` for global), operation discriminant, and on `put` the new snapshot.' }],
   },
   {
+    name: 'environments/change',
+    mode: 'emit',
+    signature: '\'environments/change\'(): void',
+    summary: 'The set of registered environments changed.',
+    description: 'The set of registered environments changed. Fires once per registration and once per effective unregistration, after `list()` and `get()` reflect the change; a removed registration\'s connection is already detached and closing. Payload-free: listeners re-read `list()`. Listener failures are logged and do not undo the change.',
+    parameters: [],
+  },
+  {
     name: 'feedback/committed',
     mode: 'parallel',
     signature: '\'feedback/committed\'(inspection: SessionInspection): void',
@@ -7953,6 +8003,74 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EnterWorktreeRequest',
     declaration: 'export interface EnterWorktreeRequest {\n    name: string;\n}',
+  },
+  {
+    name: 'EnvironmentChannel',
+    declaration: 'export interface EnvironmentChannel {\n    readonly input: Readable;\n    readonly output: Writable;\n    readonly security: EnvironmentChannelSecurity;\n    readonly ended: Promise<Error>;\n    close(): void;\n}',
+  },
+  {
+    name: 'EnvironmentChannelSecurity',
+    declaration: 'export type EnvironmentChannelSecurity = {\n    readonly kind: \'authenticated-transport\';\n};',
+  },
+  {
+    name: 'EnvironmentConfirmation',
+    declaration: 'export interface EnvironmentConfirmation {\n    readonly hostname: string;\n    readonly port: number;\n    readonly keys: readonly EnvironmentHostKey[];\n    readonly detail: string;\n}',
+  },
+  {
+    name: 'EnvironmentContext',
+    declaration: 'export interface EnvironmentContext<H extends EnvironmentHandlers = Record<never, never>> {\n    readonly fs: typeof fs;\n    readonly path: typeof path;\n    readonly cwd: string;\n    readonly platform: string;\n    readonly signal: AbortSignal;\n    readonly limits: EnvironmentLimits;\n    exec(argv: readonly string[], options?: {\n        readonly cwd?: string;\n        readonly input?: string;\n    }): Promise<EnvironmentExecResult>;\n    readonly origin: {\n        readonly [K in keyof H & string]: (...params: Parameters<H[K]> extends [\n        ] ? [\n        ] : undefined extends Parameters<H[K]>[0] ? [\n            params?: OriginParams<Parameters<H[K]>[0]> | undefined\n        ] : [\n            params: OriginParams<Parameters<H[K]>[0]>\n        ]) => Promise<OriginCallResult<Awaited<ReturnType<H[K]>>>>;\n    };\n}',
+  },
+  {
+    name: 'EnvironmentDefineOptions',
+    declaration: 'export type EnvironmentDefineOptions<T, H extends EnvironmentHandlers = Record<never, never>> = {\n    readonly result: z.ZodType<T>;\n    readonly handlers?: H;\n} & (keyof H extends never ? unknown : {\n    readonly handlers: H;\n});',
+  },
+  {
+    name: 'EnvironmentExecResult',
+    declaration: 'export interface EnvironmentExecResult {\n    readonly exitCode: number | null;\n    readonly signal: string | null;\n    readonly stdout: string;\n    readonly stderr: string;\n}',
+  },
+  {
+    name: 'EnvironmentFunction',
+    declaration: 'export type EnvironmentFunction<A extends EnvironmentValue, H extends EnvironmentHandlers = Record<never, never>> = (args: A, env: EnvironmentContext<H>) => unknown;',
+  },
+  {
+    name: 'EnvironmentHandle',
+    declaration: 'export type EnvironmentHandle = Branded<\'EnvironmentHandle\'>;',
+  },
+  {
+    name: 'EnvironmentHandlers',
+    declaration: 'export type EnvironmentHandlers = Readonly<Record<string, EnvironmentHostHandler<never>>>;',
+  },
+  {
+    name: 'EnvironmentHostHandler',
+    declaration: 'export type EnvironmentHostHandler<P = unknown> = (params: P, signal: AbortSignal) => unknown;',
+  },
+  {
+    name: 'EnvironmentHostKey',
+    declaration: 'export interface EnvironmentHostKey {\n    readonly type: string;\n    readonly fingerprint: string;\n}',
+  },
+  {
+    name: 'EnvironmentInfo',
+    declaration: 'export interface EnvironmentInfo {\n    readonly handle: EnvironmentHandle;\n    readonly displayName: string;\n}',
+  },
+  {
+    name: 'EnvironmentLimits',
+    declaration: 'export interface EnvironmentLimits {\n    readonly maxMessageBytes: number;\n}',
+  },
+  {
+    name: 'EnvironmentOpenContext',
+    declaration: 'export interface EnvironmentOpenContext {\n    readonly signal: AbortSignal;\n    readonly killGraceMs: number;\n    readonly confirm?: (question: EnvironmentConfirmation) => Promise<boolean>;\n}',
+  },
+  {
+    name: 'EnvironmentRunner',
+    declaration: 'export type EnvironmentRunner<A extends EnvironmentValue, T> = (args: A, options: {\n    readonly signal: AbortSignal;\n    readonly confirm?: (question: EnvironmentConfirmation) => Promise<boolean>;\n}) => Promise<T>;',
+  },
+  {
+    name: 'EnvironmentTransport',
+    declaration: 'export interface EnvironmentTransport {\n    open(context: EnvironmentOpenContext): Promise<EnvironmentChannel>;\n}',
+  },
+  {
+    name: 'EnvironmentValue',
+    declaration: 'export type EnvironmentValue = undefined | null | boolean | number | bigint | string | object;',
   },
   {
     name: 'EpochHeader',

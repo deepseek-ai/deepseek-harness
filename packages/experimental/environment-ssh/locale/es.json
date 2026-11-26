@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Entorno de ejecución a través de SSH",
+    "description": "Acceda a un entorno de ejecución mediante OpenSSH con comprobación estricta de claves de host."
+  }
+}

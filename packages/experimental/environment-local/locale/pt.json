@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Ambiente de execução local",
+    "description": "Execute funções autocontidas em um processo de execução local do Node."
+  }
+}

@@ -101,6 +101,10 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`webworker-runtime`](webworker-runtime/README.md) | Runs the harness plugin tree inside a dedicated browser worker | library and worker entry — no ctx key |
 | [`worktree`](worktree/README.md) | Creates a named Git worktree and changes the calling Session directory | `ctx.worktrees` |
 | [`sandbox-policy-git`](sandbox-policy-git/README.md) | Grants a Session in a linked worktree write access to its repository's Git directory | — |
+| [`environment-local`](environment-local/README.md) | Contributes a managed local execution process | registers on `ctx.environments` |
+| [`environment-ssh-config`](environment-ssh-config/README.md) | Contributes concrete OpenSSH aliases through the SSH provider | registers on `ctx.environments` |
+| [`environment`](environment/README.md) | Runs tool-owned functions in a daemon on another machine, with calls back to host handlers | `ctx.environments` |
+| [`environment-ssh`](environment-ssh/README.md) | Reaches the execution environment daemon over OpenSSH with strict host-key checking | registers on `ctx.environments` |
 | [`forge`](forge/README.md) | Code host provider registry with shared change request polling | `ctx.forge` |
 | [`forge-github`](forge-github/README.md) | GitHub provider that reads pull requests through the host GitHub CLI | registers a provider on `ctx.forge` |
 | [`forge-gitlab`](forge-gitlab/README.md) | GitLab provider that reads and writes merge requests through the host GitLab CLI | registers a provider on `ctx.forge` |
@@ -120,6 +124,7 @@ Promotion requires a named product role, documented public behavior and limitati
 - [Browser use](../../docs/subsystems/browser-use.md) — browser provider choices and Session ownership.
 - [Agent Teams subsystem](../../docs/subsystems/agent-team.md) — durable Team types and the `ctx.agentTeams` service API.
 - [Experimental subtree rules](AGENTS.md) — what experimental status does and does not relax.
+- [Execution environment subsystem](../../docs/subsystems/environment.md) — tool functions run in a remote daemon with host handler calls.
 
 -----
 

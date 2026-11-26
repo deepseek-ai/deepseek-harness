@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Environnement d’exécution via SSH",
+    "description": "Accédez à un environnement d’exécution via OpenSSH avec une vérification stricte des clés d’hôte."
+  }
+}

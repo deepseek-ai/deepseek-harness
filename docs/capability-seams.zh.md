@@ -62,6 +62,11 @@ flowchart LR
   pkg_experimental_worktree["experimental-worktree"]
   svc_worktrees["ctx.worktrees<br/>Git worktree creation"]
   pkg_experimental_tool_worktree["experimental-tool-worktree"]
+  pkg_environment["environment"]
+  svc_environments["ctx.environments<br/>Execution environments"]
+  pkg_environment_ssh["environment-ssh"]
+  pkg_environment_ssh_config["environment-ssh-config"]
+  pkg_environment_local["environment-local"]
   pkg_working_directory["working-directory"]
   svc_workingDirectory["ctx.workingDirectory<br/>Session working directory"]
   pkg_tool_fs["tool-fs"]
@@ -405,6 +410,10 @@ flowchart LR
   pkg_deepseek_auth --> svc_deepseekAuth
   pkg_deepseek_chat_import --> svc_deepseekChatImport
   pkg_deepseek_llm_api_extensions --> svc_deepseekLlmApiExtensions
+  pkg_environment --> svc_environments
+  pkg_environment_local --> svc_environments
+  pkg_environment_ssh --> svc_environments
+  pkg_environment_ssh_config --> svc_environments
   pkg_experimental_api_speech_to_text --> svc_speechController
   pkg_experimental_browser_use_chrome_devtools_mcp --> svc_browserUse
   pkg_experimental_browser_use_playwright_mcp --> svc_browserUse
@@ -745,6 +754,7 @@ flowchart LR
 | `ctx.forgeSession` | `service` | [`experimental-forge-session`](../packages/experimental/forge-session) | - | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | Session 投影从 shell 结果与绑定记录派生绑定，并把不含状态的 URL 发布给客户端；推送结果触发按 head 分支的发现，Session 监听方通过 forge 注册表轮询已绑定的变更请求。 |
 | `ctx.forgePanel` | `service` | [`experimental-client-ui-forge`](../packages/experimental/client-ui-forge) | - | - | - | 为每个被跟随的 Session 推送一份面板状态：使用 Session 权限进行的 Git 检查、识别出的代码托管平台及其登录状态，以及带轮询状态的已绑定变更请求。 |
 | `ctx.worktrees` | `seam` | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-worktree`](../packages/experimental/worktree) | [`experimental-tool-worktree`](../packages/experimental/tool-worktree) | - | 显式实验组合从固定的本地提交创建工作树。检出目录与共享 Git 元数据受现有写权限约束；工作目录服务拥有创建后的 Session 目录。 |
+| `ctx.environments` | `seam` | [`environment`](../packages/experimental/environment) | [`environment-ssh`](../packages/experimental/environment-ssh), [`environment-ssh-config`](../packages/experimental/environment-ssh-config), [`environment-local`](../packages/experimental/environment-local) | - | - | 提供方提供稳定的句柄、显示名称和传输方式。注册表通过选定句柄，使用同一套协议执行每次运行。 |
 | `ctx.workingDirectory` | `seam` | [`working-directory`](../packages/session/working-directory) | [`working-directory`](../packages/session/working-directory) | [`tool-fs`](../packages/fs/tool-fs), [`tool-bash`](../packages/shell/tool-bash), [`tool-pwsh`](../packages/shell/tool-pwsh), [`subagent`](../packages/subagent/subagent), [`sdk-jsonrpc-server`](../packages/sdk/server), [`sandbox-policy`](../packages/sandbox/sandbox-policy), [`api-workspace-files`](../packages/api/workspace-files), [`api-terminal-controller`](../packages/api/terminal-controller), [`workspace-changes`](../packages/deliverables/workspace-changes), [`file-reference-local`](../packages/context/file-reference-local), [`tool-skill`](../packages/skill/tool-skill), [`agent-instructions`](../packages/context/agent-instructions), [`tool-lsp`](../packages/lsp/tool-lsp) | - | 一个 Session 投影维护当前执行目录，只有 Host 操作能移动它。文件系统验证变更，用户上下文报告变更。模型工具基于当前目录解析路径，沙箱边界、文件视图和文件发现也随目录更新。原始元数据保持不变。 |
 | `ctx.mcpResources` | `seam` | [`mcp-resources`](../packages/mcp/mcp-resources) | [`mcp-client`](../packages/mcp/mcp-client) | [`mcp-resources`](../packages/mcp/mcp-resources) | - | 连接所有者提供的操作在调用 agent 的作用域内服务于共享资源工具。 |
 | `ctx.browserUse` | `seam` | [`browser-use`](../packages/browser-use/browser-use) | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp), [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp), [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp), [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp), [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | - | 每个服务实例注册一个提供方拥有的名称。提供方按实时 Session 拥有自己的工具与浏览器资源；共享服务不提供浏览器操作 API。 |

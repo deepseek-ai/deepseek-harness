@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/environment-local/README.md
+/:
+  en: 1fad08808577a8b4
+  zh: e11ec74ca16b4273
+/deepseek-ai-dsh-environment-local:
+  en: 92c096eac7fc029a
+  zh: c70f809ff75a19bc
+/deepseek-ai-dsh-environment-local/summary:
+  en: 7de3fdfb107d4a3c
+  zh: 7d634abcd3e8891e
+/deepseek-ai-dsh-environment-local/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 48ba698e3bec8c5a
+/deepseek-ai-dsh-environment-local/use-this-package:
+  en: 84558a227c9bbaf6
+  zh: 15e46c7d72172bcb
+/deepseek-ai-dsh-environment-local/understand-the-implementation:
+  en: 46ea8737e1568e53
+  zh: eb3a057f4cef41dc
+/deepseek-ai-dsh-environment-local/further-exploration:
+  en: 0b701f1fd074957f
+  zh: c165cde91ce4d8fc
+/deepseek-ai-dsh-environment-local/model-experience:
+  en: 720f75fdf763d201
+  zh: 3e002feec9acc990
+/deepseek-ai-dsh-environment-local/model-experience/kv-cache-effect:
+  en: 4f912e6f343086de
+  zh: 617803c558367430
+/deepseek-ai-dsh-environment-local/known-limitations-and-deferred-work:
+  en: 54cc9f18156f3fce
+  zh: 5d429bd61f34bc81
+/deepseek-ai-dsh-environment-local/known-limitations-and-deferred-work/dev-note:
+  en: c4c9d35466ba707f
+  zh: e150ce2c3e0eb63f
