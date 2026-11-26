@@ -15,6 +15,19 @@ import Testing
     }
 }
 
+@Test func systemToggleRequiresEveryUnownedButtonToBeReleased() throws {
+    try WindowPointerInput.requireReleasedButtons(except: [.left], isPressed: { $0 == .left })
+    let conflicts: [([CGMouseButton], CGMouseButton)] = [([], .left), ([.left], .center)]
+    for (owned, external) in conflicts {
+        do {
+            try WindowPointerInput.requireReleasedButtons(except: owned, isPressed: { owned.contains($0) || $0 == external })
+            Issue.record("Admitted a system press while an unowned button was held")
+        } catch let failure as NativeFailure {
+            #expect(failure.code == "INPUT_BUSY")
+        }
+    }
+}
+
 @Test @MainActor func interruptedDragReleasesOnlyAtTheLastPostedPoint() async throws {
     func event(_ type: CGEventType, x: Int) throws -> CGEvent {
         try #require(CGEvent(mouseEventSource: nil, mouseType: type,

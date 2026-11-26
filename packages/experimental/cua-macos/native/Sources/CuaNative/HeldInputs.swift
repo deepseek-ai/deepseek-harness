@@ -118,6 +118,16 @@ final class HeldInputs: @unchecked Sendable {
         }
     }
 
+    func systemButtonsHeld(by owner: Owner, in route: WindowRoute) -> [CGMouseButton] {
+        lock.withLock {
+            pressed.compactMap { press in
+                guard press.owner == owner, press.recipient == route.owner,
+                      case .systemPointer(let button, let window) = press.mode, window == route.windowID else { return nil }
+                return button
+            }
+        }
+    }
+
     func pointerDown(owner: Owner, route: WindowRoute, button: CGMouseButton, system: Bool,
                      down: CGEvent, up: CGEvent, post: @escaping (CGEvent) -> Void,
                      prepareRelease: ((CGEvent) throws -> Void)? = nil) throws {

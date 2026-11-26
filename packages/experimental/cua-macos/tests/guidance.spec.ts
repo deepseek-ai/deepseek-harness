@@ -41,7 +41,7 @@ it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a s
   expect(instructions).toContain('When approval is enabled, the first explicit system input requests permission;')
   expect(instructions).toContain('Omitting the option or passing false uses the provider default.')
   expect(instructions).toContain("direction: 'down' | 'up', options?: { useSystemInput?: boolean }")
-  expect(instructions).toContain('pass useSystemInput: true on down')
+  expect(instructions).toContain('Pass useSystemInput: true on each down')
   const drag = instructions.split('\n').find(line => line.startsWith('- drag('))
   expect(drag).toContain('useSystemInput?: boolean')
   expect(drag).toContain('Omitting useSystemInput or passing false directs the drag to the window without asking for mouse control.')
@@ -85,7 +85,7 @@ it('documents explicit mouse-button events immediately after mouseMove', () => {
 it.each([GUIDANCE, PROGRAM_GUIDANCE])('documents the default window release and the optional system hold', (catalog) => {
   const entry = catalog.split('\n').find(line => line.startsWith('- toggleMouse('))
   expect(entry).toContain('By default the window receives the events, even a release outside it, and the system button stays up.')
-  expect(entry).toContain('pass useSystemInput: true on down')
+  expect(entry).toContain('Pass useSystemInput: true on each down to hold multiple system buttons in the same window.')
 })
 
 it('enumerates every public method once in its catalog entry', () => {

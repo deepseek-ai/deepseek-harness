@@ -126,6 +126,9 @@ func pointerReleaseUsesSavedRouteAfterWindowAndProcessChanges(_ system: Bool) th
     try down(.left, by: owner, in: route)
     let peer = HeldInputs.Owner(connection: UUID(), app: owner.app)
     let otherWindow = WindowRoute(owner: target, windowID: 8, bounds: route.bounds)
+    #expect(held.systemButtonsHeld(by: owner, in: route) == [.left])
+    #expect(held.systemButtonsHeld(by: peer, in: route).isEmpty)
+    #expect(held.systemButtonsHeld(by: owner, in: otherWindow).isEmpty)
     #expect(throws: NativeFailure.self) { try down(.right, by: peer, in: route) }
     #expect(throws: NativeFailure.self) { try down(.right, by: owner, in: otherWindow) }
     #expect(throws: NativeFailure.self) { try down(.left, by: owner, in: route) }
