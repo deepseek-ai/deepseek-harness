@@ -98,8 +98,8 @@ internal static class Applications
     {
         try
         {
-            var description = FileVersionInfo.GetVersionInfo(path).FileDescription;
-            if (!string.IsNullOrWhiteSpace(description)) return description;
+            var product = FileVersionInfo.GetVersionInfo(path).ProductName;
+            if (!string.IsNullOrWhiteSpace(product)) return product;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
