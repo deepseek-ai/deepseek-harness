@@ -71,7 +71,7 @@ const shared = { daemonPath: '/configured/daemon.js', ssh: ['/nonexistent/config
 
 /** Run an empty function once in a registered environment. */
 const ping = (ctx: Context, handle: EnvironmentHandle): Promise<null> =>
-  ctx.environments.define(handle, () => null, { result: z.null() })(null, { signal: new AbortController().signal })
+  ctx.environments.define(() => null, { result: z.null() })(handle, null, { signal: new AbortController().signal })
 
 async function contribute(ctx: Context, config: Record<string, unknown>): Promise<string> {
   const id = await ctx.loader.create({ name: 'cordis:discovery', config })
@@ -161,10 +161,10 @@ async function remote(directory: string): Promise<Record<string, unknown>> {
 }
 
 /** The process id of the execution daemon serving `handle`. */
-const daemonPid = (ctx: Context, handle: string): Promise<string> => ctx.environments.define(ctx.environments.handle(handle),
+const daemonPid = (ctx: Context, handle: string): Promise<string> => ctx.environments.define(
   async (node: string, env) => (await env.exec([node, '-e', 'process.stdout.write(String(process.ppid))'])).stdout,
   { result: z.string() },
-)(process.execPath, { signal: new AbortController().signal })
+)(ctx.environments.handle(handle), process.execPath, { signal: new AbortController().signal })
 
 describe('SSH configuration provider through Loader', () => {
   it('contributes multiple lazy SSH environments and removes them with their provider', async () => {

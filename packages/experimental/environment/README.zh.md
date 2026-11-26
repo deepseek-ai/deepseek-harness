@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-挂载注册表及一个或多个提供方，然后针对由提供方管理的句柄定义每个函数。环境句柄是不透明标识符；显示名称是面向用户的标签，可以重复。
+挂载注册表及一个或多个提供方，然后为每个函数定义一次，并以由提供方管理的句柄运行它。环境句柄是不透明标识符；显示名称是面向用户的标签，可以重复。
 
 ### 配置
 
@@ -57,7 +57,7 @@ kind: "package-reference"
 
 不带载荷的 `environments/change` 事件在每次注册和每次实际生效的注销时各触发一次，触发时 `list()` 和 `get(handle)` 已反映该变化。展示环境的消费方（例如主机选择器）在该事件触发时重新读取 `list()`。监听器同步运行，可以注册或运行环境；监听器失败会被记录日志，且不会撤销该变化。
 
-`ctx.environments.define(handle, fn, options)` 将函数、其结果校验和发起端处理函数绑定到一个环境句柄，并返回 `EnvironmentRunner`。发起端方法名称是定义时 `options.handlers` 的自有属性名；之后添加到该对象上的名称不会成为发起端方法，对这些名称的调用也不会得到处理，而每次发起端调用都在到达时从该对象上查找其处理函数。使用参数和 `{ signal }` 调用该运行器时，函数最多运行一次。定义时不与任何环境通信，也不要求该环境已注册，因此插件加载时创建的定义可用于之后的每次调用。注册表为每个注册项复用一个连接，并独立连接不同环境。注销提供方会移除其元数据并关闭连接。同一定义之后的调用会解析到该句柄的新注册项；已在进行的运行不会切换到替代注册项。
+`ctx.environments.define(fn, options)` 绑定函数、其结果校验和发起端处理函数，并返回 `EnvironmentRunner`。发起端方法名称是定义时 `options.handlers` 的自有属性名；之后添加到该对象上的名称不会成为发起端方法，对这些名称的调用也不会得到处理，而每次发起端调用都在到达时从该对象上查找其处理函数。使用环境句柄、参数和 `{ signal }` 调用该运行器时，函数在该环境中最多运行一次。定义时不与任何环境通信，也不要求环境已注册，因此插件加载时创建的定义可用于之后在任意环境中的每次调用。注册表为每个注册项复用一个连接，并独立连接不同环境。注销提供方会移除其元数据并关闭连接。同一定义之后以同一句柄进行的调用会解析到该句柄的新注册项；已在进行的运行不会切换到替代注册项。
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -69,7 +69,7 @@ export const inject = ['environments', 'tools']
 
 export function apply(ctx: Context): void {
   const readPaths = new Set<string>()
-  const readFile = ctx.environments.define(ctx.environments.handle('ssh-build'), async ({ path }: { path: string }, env) => {
+  const readFile = ctx.environments.define(async ({ path }: { path: string }, env) => {
     const text = await env.fs.readFile(path, 'utf8')
     const first = await env.origin.markRead(path)
     return { text, first }
@@ -91,7 +91,7 @@ export function apply(ctx: Context): void {
       schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true }, first: { type: 'boolean', required: true } } },
       render: (_args, value) => [{ type: 'text', text: value.text }],
     },
-    execute: (args, exec) => readFile({ path: args.path }, { signal: exec.signal }),
+    execute: (args, exec) => readFile(ctx.environments.handle('ssh-build'), { path: args.path }, { signal: exec.signal }),
   })))
 }
 ```

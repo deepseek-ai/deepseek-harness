@@ -44,10 +44,10 @@ describe.skipIf(process.platform === 'win32' || !existsSync(artifact))('SSH boot
     expect(older).not.toBe(bundle.source)
     await writeFile(daemon, older)
     const first = await owner.plugin(SshEnvironment, config)
-    const print = owner.environments.define(owner.environments.handle('built-ssh'), async (node: string, env) => {
+    const print = owner.environments.define(async (node: string, env) => {
       return (await env.exec([node, '-e', 'process.stdout.write("bootstrapped")'])).stdout
     }, { result: z.string() })
-    const execute = () => print(process.execPath, { signal: new AbortController().signal })
+    const execute = () => print(owner.environments.handle('built-ssh'), process.execPath, { signal: new AbortController().signal })
     await expect(execute()).resolves.toBe('bootstrapped')
     expect(await readFile(daemon, 'utf8')).toBe(bundle.source)
     const manifest = z.object({ version: z.string() }).parse(JSON.parse(await readFile(new URL('../../environment/package.json', import.meta.url), 'utf8')))

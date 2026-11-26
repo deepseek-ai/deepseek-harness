@@ -33,7 +33,8 @@ describe.skipIf(!existsSync(daemon))('built daemon bundle (plain node, outside t
     await ctx.plugin(EnvironmentRegistry, {
       maxFrameBytes: 65536, maxMessageBytes: 1024 * 1024, maxPending: 4, cancelGraceMs: 10_000, killGraceMs: 2000, connectTimeoutMs: 10_000,
     })
-    ctx.environments.register({ handle: EnvironmentHandle('built'), displayName: 'Built daemon' }, {
+    const built = EnvironmentHandle('built')
+    ctx.environments.register({ handle: built, displayName: 'Built daemon' }, {
       async open() {
         const handle = ctx.subprocess.spawn({
           argv: [process.execPath, copy, 'serve', '--stdio'], cwd: directory, graceMs: 2000,
@@ -44,19 +45,19 @@ describe.skipIf(!existsSync(daemon))('built daemon bundle (plain node, outside t
         return { input: handle.stdout!, output: handle.stdin!, security: { kind: 'authenticated-transport' }, ended, close: () => { handle.terminate() } }
       },
     })
-    const print = ctx.environments.define(EnvironmentHandle('built'), async (node: string, env) => (await env.exec([node, '-e', 'process.stdout.write("built")'])).stdout,
+    const print = ctx.environments.define(async (node: string, env) => (await env.exec([node, '-e', 'process.stdout.write("built")'])).stdout,
       { result: z.string() })
-    const value = await print(process.execPath, { signal: new AbortController().signal })
+    const value = await print(built, process.execPath, { signal: new AbortController().signal })
     expect(value).toBe('built')
     // The bundled worker supplies base utilities, and a reused definition runs from the connection's definition cache.
-    const encode = ctx.environments.define(EnvironmentHandle('built'), (text: string) => Buffer.from(new TextEncoder().encode(text)).toString('base64'),
+    const encode = ctx.environments.define((text: string) => Buffer.from(new TextEncoder().encode(text)).toString('base64'),
       { result: z.string() })
-    await expect(encode('built', { signal: new AbortController().signal })).resolves.toBe(Buffer.from('built').toString('base64'))
-    await expect(print(process.execPath, { signal: new AbortController().signal })).resolves.toBe('built')
+    await expect(encode(built, 'built', { signal: new AbortController().signal })).resolves.toBe(Buffer.from('built').toString('base64'))
+    await expect(print(built, process.execPath, { signal: new AbortController().signal })).resolves.toBe('built')
     // Binary values over the frame limit travel as several frames in both directions.
-    const reverse = ctx.environments.define(EnvironmentHandle('built'), (bytes: Uint8Array) => bytes.toReversed(), { result: z.instanceof(Uint8Array) })
+    const reverse = ctx.environments.define((bytes: Uint8Array) => bytes.toReversed(), { result: z.instanceof(Uint8Array) })
     const bytes = new Uint8Array(200_000).map((_, index) => index % 251)
-    await expect(reverse(bytes, { signal: new AbortController().signal })).resolves.toEqual(bytes.toReversed())
+    await expect(reverse(built, bytes, { signal: new AbortController().signal })).resolves.toEqual(bytes.toReversed())
     await ctx.fiber.dispose()
     expect(stopped).toHaveLength(1)
     await stopped[0]

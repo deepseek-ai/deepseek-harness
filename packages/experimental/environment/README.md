@@ -25,7 +25,7 @@ Run a tool's file and process operations in a selected execution environment whi
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the registry and one or more providers, then define each function for a provider-owned handle. Environment handles are opaque identifiers; display names are user-facing labels and may repeat.
+Mount the registry and one or more providers, then define each function once and run it with a provider-owned handle. Environment handles are opaque identifiers; display names are user-facing labels and may repeat.
 
 ### Configuration
 
@@ -57,7 +57,7 @@ A provider registers `{ handle, displayName }` together with an `EnvironmentTran
 
 The payload-free `environments/change` event fires once per registration and once per effective unregistration, after `list()` and `get(handle)` reflect the change. Consumers that show environments, such as a host picker, re-read `list()` when it fires. A listener runs synchronously and may register or run environments; a failing listener is logged and does not undo the change.
 
-`ctx.environments.define(handle, fn, options)` binds a function, its result validation and its origin handlers to one environment handle and returns an `EnvironmentRunner`. The origin method names are the own property names of `options.handlers` when defining; names added to that object later are neither exposed nor served, while each origin call looks its handler up on the object when the call arrives. Calling the runner with arguments and `{ signal }` runs the function at most once. Defining contacts no environment and requires no registration, so a definition made when a plugin loads serves every later call. The registry reuses one connection per registration and opens different environments independently. Unregistering a provider removes its metadata and closes its connection. A later call of the same definition resolves the handle's new registration; a run already in progress never switches to a replacement registration.
+`ctx.environments.define(fn, options)` binds a function, its result validation and its origin handlers and returns an `EnvironmentRunner`. The origin method names are the own property names of `options.handlers` when defining; names added to that object later are neither exposed nor served, while each origin call looks its handler up on the object when the call arrives. Calling the runner with an environment handle, arguments and `{ signal }` runs the function at most once in that environment. Defining contacts no environment and requires no registration, so a definition made when a plugin loads serves every later call in every environment. The registry reuses one connection per registration and opens different environments independently. Unregistering a provider removes its metadata and closes its connection. A later call of the same definition with the same handle resolves the handle's new registration; a run already in progress never switches to a replacement registration.
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -69,7 +69,7 @@ export const inject = ['environments', 'tools']
 
 export function apply(ctx: Context): void {
   const readPaths = new Set<string>()
-  const readFile = ctx.environments.define(ctx.environments.handle('ssh-build'), async ({ path }: { path: string }, env) => {
+  const readFile = ctx.environments.define(async ({ path }: { path: string }, env) => {
     const text = await env.fs.readFile(path, 'utf8')
     const first = await env.origin.markRead(path)
     return { text, first }
@@ -91,7 +91,7 @@ export function apply(ctx: Context): void {
       schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true }, first: { type: 'boolean', required: true } } },
       render: (_args, value) => [{ type: 'text', text: value.text }],
     },
-    execute: (args, exec) => readFile({ path: args.path }, { signal: exec.signal }),
+    execute: (args, exec) => readFile(ctx.environments.handle('ssh-build'), { path: args.path }, { signal: exec.signal }),
   })))
 }
 ```

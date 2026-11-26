@@ -18,7 +18,7 @@ let directory: string | undefined
 const daemon = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-environment/src/daemon-entry.ts'))
 /** Run an empty function once in a registered environment. */
 const ping = (ctx: Context, handle: string): Promise<null> =>
-  ctx.environments.define(ctx.environments.handle(handle), () => null, { result: z.null() })(null, { signal: new AbortController().signal })
+  ctx.environments.define(() => null, { result: z.null() })(ctx.environments.handle(handle), null, { signal: new AbortController().signal })
 
 afterEach(async () => {
   await ctx?.fiber.dispose()
@@ -56,7 +56,7 @@ describe('local environment through Loader', () => {
     const ctx = await boot()
     expect(ctx.environments.list()).toEqual([{ handle: 'local-test', displayName: 'Local test' }])
     const seen: string[] = []
-    const write = ctx.environments.define(ctx.environments.handle('local-test'), async (node: string, env) => {
+    const write = ctx.environments.define(async (node: string, env) => {
       const file = env.path.join(env.cwd, 'result.txt')
       await env.fs.writeFile(file, 'local output')
       const recorded = await env.origin.record(file)
@@ -66,7 +66,7 @@ describe('local environment through Loader', () => {
       result: z.object({ file: z.string(), recorded: z.number(), parent: z.number(), cwd: z.string() }),
       handlers: { record: (file: string) => seen.push(file) },
     })
-    const result = await write(process.execPath, { signal: new AbortController().signal })
+    const result = await write(ctx.environments.handle('local-test'), process.execPath, { signal: new AbortController().signal })
     expect(result.parent).not.toBe(process.pid)
     expect(result.cwd).toBe(directory)
     expect(seen).toEqual([result.file])
@@ -77,10 +77,10 @@ describe('local environment through Loader', () => {
   it('ends an active execution process and its exec child when the provider is disposed', async () => {
     const owner = await boot({ killGraceMs: 1000 }, { killGraceMs: 2000 })
     const file = join(directory!, 'active-pid')
-    const hold = owner.environments.define(owner.environments.handle('local-test'), async ({ node, file }: { node: string; file: string }, env) => {
+    const hold = owner.environments.define(async ({ node, file }: { node: string; file: string }, env) => {
       return await env.exec([node, '-e', `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(file)}, String(process.pid)); setInterval(() => {}, 1000)`])
     }, { result: z.unknown() })
-    const pending = hold({ node: process.execPath, file }, { signal: new AbortController().signal })
+    const pending = hold(owner.environments.handle('local-test'), { node: process.execPath, file }, { signal: new AbortController().signal })
     const rejected = expect(pending).rejects.toThrow()
     let pid = 0
     await vi.waitFor(async () => { pid = Number(await readFile(file, 'utf8')); expect(pid).toBeGreaterThan(0) })
@@ -132,7 +132,7 @@ describe('local environment through Loader', () => {
     } })
     await ctx.loader.await()
     const key = ctx.environments.handle('temporary')
-    await expect(ctx.environments.define(key, () => 3, { result: z.number() })(null, { signal: new AbortController().signal }))
+    await expect(ctx.environments.define(() => 3, { result: z.number() })(key, null, { signal: new AbortController().signal }))
       .resolves.toBe(3)
     const fiber = ctx.loader.resolve(id).fiber!
     ctx.loader.remove(id)

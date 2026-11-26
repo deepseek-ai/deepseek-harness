@@ -1336,9 +1336,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'its handle and display name; throws when the environment is unavailable.',
       },
       {
-        signature: 'define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( handle: EnvironmentHandle, fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>',
-        description: 'Define `fn` for the selected environment\'s execution process. Only its source text and the names of its origin handlers are sent, so `fn` must be a self-contained function or arrow expression without host closures. The type of `fn`\'s first parameter determines the arguments of each call. Arguments, results and origin values are copied by structured clone; values it cannot copy, such as functions, fail their run. The own property names of `options.handlers`, read here once, are the `env.origin` methods; names added to the object later are neither exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers\' types determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only parameters from the function, so host state that belongs to one call, such as a tool call\'s background job, needs a definition made for that call. Defining neither contacts the environment nor requires its registration.',
-        parameters: [{ name: 'handle', description: 'provider-owned identifier selecting the execution environment.' }, { name: 'fn', description: 'daemon-side code receiving each call\'s arguments and the daemon environment.' }, { name: 'options', description: 'result validation and host handlers.' }],
+        signature: 'define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>',
+        description: 'Define `fn` for execution processes; each run names its environment. Only its source text and the names of its origin handlers are sent, so `fn` must be a self-contained function or arrow expression without host closures. The type of `fn`\'s first parameter determines the arguments of each call. Arguments, results and origin values are copied by structured clone; values it cannot copy, such as functions, fail their run. The own property names of `options.handlers`, read here once, are the `env.origin` methods; names added to the object later are neither exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers\' types determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only parameters from the function, so host state that belongs to one call, such as a tool call\'s background job, needs a definition made for that call. Defining neither contacts an environment nor requires a registration; each run names its handle.',
+        parameters: [{ name: 'fn', description: 'daemon-side code receiving each call\'s arguments and the daemon environment.' }, { name: 'options', description: 'result validation and host handlers.' }],
         returns: 'a function that runs `fn` at most once per call.',
       },
     ],
@@ -8062,7 +8062,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'EnvironmentRunner',
-    declaration: 'export type EnvironmentRunner<A extends EnvironmentValue, T> = (args: A, options: {\n    readonly signal: AbortSignal;\n    readonly confirm?: (question: EnvironmentConfirmation) => Promise<boolean>;\n}) => Promise<T>;',
+    declaration: 'export type EnvironmentRunner<A extends EnvironmentValue, T> = (handle: EnvironmentHandle, args: A, options: {\n    readonly signal: AbortSignal;\n    readonly confirm?: (question: EnvironmentConfirmation) => Promise<boolean>;\n}) => Promise<T>;',
   },
   {
     name: 'EnvironmentTransport',

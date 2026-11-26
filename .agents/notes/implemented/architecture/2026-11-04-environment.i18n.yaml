@@ -14,15 +14,15 @@
 /agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/decision/registry-changes-carry-no-payload:
   en: 32eb641a81d930db
   zh: 3e47554eb0430723
-/agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/decision/a-definition-binds-everything-except-the-arguments:
-  en: e75b098d1a3c824e
-  zh: ebc80610eb228d3c
+/agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/decision/a-definition-binds-everything-except-the-environment-and-the-arguments:
+  en: 2dc6db37ac287e8a
+  zh: 034d16fe4a1d7a60
 /agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/decision/each-run-occupies-a-worker-thread:
   en: 566a0ba1e325eb39
   zh: da0afd7a70b35f7b
 /agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/decision/transports-are-plugins:
-  en: 7d37a1637c8a0d7f
-  zh: c60f9e3044bb1358
+  en: 1cb952499260c764
+  zh: f116c28ad45311ff
 /agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/decision/trust-comes-from-the-transport-and-the-handshake-leaves-room-for-more:
   en: 6389ffc937259ab5
   zh: 94743bbe851d6887
@@ -33,8 +33,8 @@
   en: 54e22a1638a5ba4a
   zh: 5cdc4c90ee73236c
 /agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/alternatives-considered:
-  en: 2316f75290208ff9
-  zh: fcc65e7718b855ea
+  en: b259b018bbb27f6a
+  zh: a65ed379787076d9
 /agent-note-execution-environment-tool-i-o-and-the-original-resident-daemon-decision/consequences:
   en: 68ce6b1a5f813f9a
   zh: 1fd798c8241448c4
