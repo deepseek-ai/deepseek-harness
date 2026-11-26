@@ -512,6 +512,20 @@ describe('PluginManagerController', () => {
     await vi.waitFor(() => { expect(state().notice).toEqual({ kind: 'overridden', packageName: BUNDLE.name, seq: 2 }) })
   })
 
+  it('keeps a switched bundle busy until the re-read shows its new state', async () => {
+    const reread = deferred<ReturnType<typeof ok<BundleInfo[]>>>()
+    const { plugins, face, state, controller } = bench({ setBundleEnabled: vi.fn(() => Promise.resolve(ok(APPLIED))) })
+    plugins.listBundles.mockResolvedValueOnce(ok([{ ...BUNDLE, enabled: false }])).mockReturnValueOnce(reread.promise)
+    await controller.load()
+    face.setEnabled(BUNDLE.name, true)
+    await vi.waitFor(() => { expect(plugins.listBundles).toHaveBeenCalledTimes(2) })
+    expect(state().busy).toEqual([BUNDLE.name])
+    expect(state().packages[0]?.enabled).toBe(false)
+    reread.resolve(ok([{ ...BUNDLE, enabled: true }]))
+    await vi.waitFor(() => { expect(state().busy).toEqual([]) })
+    expect(state().packages[0]?.enabled).toBe(true)
+  })
+
   it('turns a change the Host could not apply, or a refused answer, into a notice carrying its code and words', async () => {
     const { face, state, controller } = bench({
       setBundleEnabled: vi.fn()
