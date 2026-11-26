@@ -41,6 +41,11 @@ const windowsUnsupportedPackages = process.platform === 'win32'
       'packages/experimental/sandbox-policy-git',
       // OpenSSH multiplexing and Unix-socket helper streams require POSIX endpoints.
       'packages/ssh/*',
+      // Environment fixtures exercise POSIX SSH commands and process-group cleanup.
+      'packages/experimental/environment',
+      'packages/experimental/environment-local',
+      'packages/experimental/environment-ssh-config',
+      'packages/experimental/environment-ssh',
     ]
   : []
 

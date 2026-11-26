@@ -229,6 +229,10 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-cua-mcp` | yes | Computer Use as an MCP stdio server: a dsh profile bundle that exposes cua_run_code to external agent harnesses |
 | `@deepseek-ai/dsh-cua-windows` | yes | Windows C# computer use through shared application and window objects |
 | `@deepseek-ai/dsh-deepseek-chat-import` | yes | Import DeepSeek chat exports as stored Sessions in a chosen Workspace |
+| `@deepseek-ai/dsh-environment` | yes | Runs tool-owned functions in provider-managed execution processes, with calls back to host handlers |
+| `@deepseek-ai/dsh-environment-local` | yes | Local execution environment provider using a managed Node process |
+| `@deepseek-ai/dsh-environment-ssh` | yes | OpenSSH transport for the execution environment, with strict host-key checking |
+| `@deepseek-ai/dsh-environment-ssh-config` | yes | Execution environments contributed from OpenSSH configuration aliases |
 | `@deepseek-ai/dsh-experimental-api-speech-to-text` | yes | Authenticated experimental speech transcription for browser clients |
 | `@deepseek-ai/dsh-experimental-auto-review` | no | Per-tool LLM authorization review for the DeepSeek Harness Auto permission preset |
 | `@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp` | yes | Experimental per-Session Chromium browser tools through chrome-devtools-mcp |

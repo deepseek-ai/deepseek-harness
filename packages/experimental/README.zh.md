@@ -101,6 +101,10 @@ kind: "package-group"
 | [`webworker-runtime`](webworker-runtime/README.zh.md) | 在专用浏览器 worker 中运行 harness 插件树 | 库与 worker 入口，不使用 ctx key |
 | [`worktree`](worktree/README.zh.md) | 创建具名 Git 工作树并改变调用 Session 的当前目录 | `ctx.worktrees` |
 | [`sandbox-policy-git`](sandbox-policy-git/README.zh.md) | 为链接工作树中的 Session 授予仓库 Git 目录的写权限 | — |
+| [`environment-local`](environment-local/README.zh.md) | 通过托管的 Node 进程提供本地执行环境 | 注册到 `ctx.environments` |
+| [`environment-ssh-config`](environment-ssh-config/README.zh.md) | 根据 OpenSSH Host 别名提供执行环境 | 注册到 `ctx.environments` |
+| [`environment`](environment/README.zh.md) | 在另一台机器上的守护进程中运行工具自有的函数，并支持回调 host 端处理函数 | `ctx.environments` |
+| [`environment-ssh`](environment-ssh/README.zh.md) | 通过 OpenSSH 到达执行环境守护进程，并严格检查主机密钥 | 注册到 `ctx.environments` |
 | [`forge`](forge/README.zh.md) | 代码托管提供方注册表，共享变更请求轮询 | `ctx.forge` |
 | [`forge-github`](forge-github/README.zh.md) | 通过宿主 GitHub CLI 读取 pull request 的 GitHub 提供方 | 在 `ctx.forge` 上注册提供方 |
 | [`forge-gitlab`](forge-gitlab/README.zh.md) | 通过宿主 GitLab CLI 读写合并请求的 GitLab 提供方 | 在 `ctx.forge` 上注册提供方 |
@@ -120,6 +124,7 @@ kind: "package-group"
 - [浏览器操作](../../docs/subsystems/browser-use.zh.md)——浏览器提供方选择与 Session 所有权。
 - [Agent Teams 子系统](../../docs/subsystems/agent-team.zh.md)——持久 Team 类型与 `ctx.agentTeams` 服务 API。
 - [实验子树规则](AGENTS.md)——实验状态放宽了什么、不放宽什么。
+- [执行环境子系统](../../docs/subsystems/environment.zh.md)——在远程守护进程中运行工具函数，支持调用 host 端处理函数。
 
 -----
 

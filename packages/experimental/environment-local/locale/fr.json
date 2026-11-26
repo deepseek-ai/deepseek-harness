@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Environnement d’exécution local",
+    "description": "Exécutez des fonctions autonomes dans un processus d’exécution Node local."
+  }
+}

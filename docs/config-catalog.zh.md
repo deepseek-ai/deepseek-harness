@@ -1175,6 +1175,132 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-dingtalk -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-environment -->
+<a id="deepseek-aidsh-environment"></a>
+
+## `@deepseek-ai/dsh-environment`
+
+- `source`: [`packages/experimental/environment/src/index.ts:34`](../packages/experimental/environment/src/index.ts)
+
+```ts config-catalog
+/** Connection and execution bounds shared by registered environments. */
+export interface Config {
+  /** Largest frame in either direction; a larger message travels as several frames. At least 1024 and at most `maxMessageBytes`. */
+  maxFrameBytes: number
+  /**
+   * Largest encoded message in either direction: a run's source, arguments and method names, its result, or one origin
+   * call or result. It also bounds `exec` output. At least 1024.
+   */
+  maxMessageBytes: number
+  /** Largest number of outstanding runs, and of outstanding host calls from the daemon. */
+  maxPending: number
+  /**
+   * Time the daemon has to answer a cancelled run before the connection closes and the next run reconnects. The daemon
+   * terminates the worker thread of a run that has not stopped within half of it.
+   */
+  cancelGraceMs: number
+  /** Time between SIGTERM and SIGKILL for the process groups of a run's remaining `exec` calls. */
+  killGraceMs: number
+  /** Time to open a channel and complete the handshake, excluding time a person spends confirming trust. */
+  connectTimeoutMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-environment -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-environment-local -->
+<a id="deepseek-aidsh-environment-local"></a>
+
+## `@deepseek-ai/dsh-environment-local`
+
+- `inject`: `environments` · `subprocess`
+- `source`: [`packages/experimental/environment-local/src/index.ts:16`](../packages/experimental/environment-local/src/index.ts)
+
+```ts config-catalog
+/** One local execution environment. */
+export interface Config {
+  /** Stable provider-owned registry key. */
+  handle: string
+  /** Name shown to users. */
+  displayName: string
+  /** Absolute working directory of the execution process. */
+  cwd: string
+  /** Node executable used to start the execution process. */
+  node: string
+  /** Daemon entry; omission uses the installed environment package's bundle. */
+  daemon?: string
+  /** Additional daemon termination grace after allowing its exec process groups their negotiated grace. */
+  killGraceMs: number
+  /** Retained bytes of daemon standard error. */
+  maxStderrBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-environment-local -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-environment-ssh -->
+<a id="deepseek-aidsh-environment-ssh"></a>
+
+## `@deepseek-ai/dsh-environment-ssh`
+
+- `inject`: `environments` · `subprocess`
+- `source`: [`packages/experimental/environment-ssh/src/index.ts:31`](../packages/experimental/environment-ssh/src/index.ts)
+
+```ts config-catalog
+/** One SSH environment; no model argument selects these values. */
+export interface Config {
+  /** Provider-owned registry key; omission derives it from the SSH destination. */
+  handle?: string
+  /** User-facing name; omission uses the SSH destination. */
+  displayName?: string
+  /** OpenSSH configuration file; omission uses the normal OpenSSH search. */
+  configFile?: string
+  /** OpenSSH destination or `ssh_config` alias; user, key and proxy settings come from the user's OpenSSH configuration. */
+  host: string
+  /** Absolute daemon destination; omission uses ~/.cache/dsh/environment/daemon.js on the remote machine. */
+  daemonPath?: string
+  /** Node executable on the destination. */
+  node: string
+  /** `SHA256:` host-key fingerprints trusted without confirmation when the host is not yet in known_hosts. */
+  hostKeys: string[]
+  /** Absolute known_hosts file where trusted keys are recorded; read before the user's own files. Omission uses the DSH state directory. */
+  knownHostsFile?: string
+  /** `ssh` argv prefix; it cannot contain options, so the transport's host-key options always apply. Use ssh_config for options. */
+  ssh: string[]
+  /** `ssh-keygen` argv prefix. */
+  sshKeygen: string[]
+  /** Grace between termination and forced kill of OpenSSH processes. */
+  killGraceMs: number
+  /** Retained bytes of OpenSSH standard error and helper output. */
+  maxOutputBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-environment-ssh -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-environment-ssh-config -->
+<a id="deepseek-aidsh-environment-ssh-config"></a>
+
+## `@deepseek-ai/dsh-environment-ssh-config`
+
+- `inject`: `environments`
+- `refs`: [`SshEnvironment`](../packages/experimental/environment-ssh/src/index.ts)
+- `source`: [`packages/experimental/environment-ssh-config/src/index.ts:19`](../packages/experimental/environment-ssh-config/src/index.ts)
+
+```ts config-catalog
+/** Discovery source and common SSH-provider configuration. */
+export interface Config {
+  /** User SSH configuration; Include paths follow OpenSSH's user-directory rules. */
+  file: string
+  /** Stable prefix used before each declared Host alias. */
+  handlePrefix?: string
+  /** Optional alias allowlist; an empty list selects all concrete aliases. */
+  hosts: string[]
+  /** Milliseconds without further changes to the watched files and directories before discovery runs again. */
+  debounceMs: number
+  /** Common daemon and transport settings; each alias supplies host, handle, displayName and configFile. */
+  ssh: Omit<Partial<SshEnvironment.Config>, 'host' | 'handle' | 'displayName' | 'configFile'>
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-environment-ssh-config -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-api-speech-to-text -->
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
 

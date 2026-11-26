@@ -12,59 +12,42 @@
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: DeepSeek API
+      - text: DeepSeek API deepseek-official
       - img "API 密钥已配置"
-      - button "编辑 DeepSeek API (deepseek-official)": 编辑
-      - text: DeepSeek API deepseek-official API 密钥
+      - text: API 密钥
       - button "认证说明": "?"
-      - textbox "API 密钥":
-        - /placeholder: dsh_onboa•••••••••••••••••••••••••••••••test
-      - paragraph: 使用已保存的 API key。
-      - group:
-        - text: 自定义设置 API 地址
-        - textbox "API 地址":
-          - /placeholder: https://api.deepseek.com/anthropic（默认使用环境 DEEPSEEK_BASE_URL）
-        - text: 请填写兼容 Anthropic Messages 协议的 API 地址。
-        - group "重试策略":
-          - text: 重试策略
-          - combobox "重试策略":
-            - option "默认（仅临时错误）" [selected]
-            - option "仅临时错误"
-            - option "所有错误"
-        - region "模型目录":
-          - text: 模型目录 正在使用适配器默认模型
-          - button "调整模型顺序 1"
-          - textbox "模型 ID 1":
-            - /placeholder: 模型 ID
-            - text: deepseek-flash
-          - button "模型选项 1" [expanded]
-          - button "删除模型 1"
-          - textbox "显示名称 1":
-            - /placeholder: 显示名称
-            - text: DeepSeek-V4.1-Flash
-          - text: 上下文窗口
-          - textbox "上下文窗口 1":
-            - /placeholder: 1M
-            - text: "1048576"
-          - text: 最大输出 token 数
-          - textbox "最大输出 token 数 1":
-            - /placeholder: 256K
-          - group "输入类型 1":
-            - text: 输入类型
-            - checkbox "文本" [checked]
-            - text: 文本
-            - checkbox "图片" [checked]
-            - text: 图片
-          - button "调整模型顺序 2"
-          - textbox "模型 ID 2":
-            - /placeholder: 模型 ID
-            - text: deepseek-v4-pro
-          - button "模型选项 2"
-          - button "删除模型 2"
-          - textbox "显示名称 2":
-            - /placeholder: 显示名称
-            - text: DeepSeek-V4-Pro
-          - button "添加模型"
+      - text: dsh_onboa•••••••••••••••••••••••••••••••test
+      - button "更换 API 密钥"
+      - button "清除 API 密钥"
+      - region "模型":
+        - button "模型" [expanded]
+        - textbox "模型 ID 1":
+          - /placeholder: 模型 ID
+          - text: deepseek-flash
+        - textbox "显示名称 1":
+          - /placeholder: 显示名称
+          - text: DeepSeek-V4.1-Flash
+        - button "模型选项 1" [expanded]
+        - button "删除模型 1"
+        - text: 上下文窗口
+        - textbox "上下文窗口 1":
+          - /placeholder: 1M
+          - text: "1048576"
+        - text: 最大输出 token 数
+        - textbox "最大输出 token 数 1":
+          - /placeholder: 256K
+        - group "输入类型 1":
+          - text: 输入类型
+          - checkbox "文本" [checked]
+          - text: 文本
+          - checkbox "图片" [checked]
+          - text: 图片
+        - text: deepseek-v4-pro DeepSeek-V4-Pro
+        - button "模型选项 2"
+        - button "删除模型 2"
+        - button "添加模型"
+      - region "高级设置":
+        - button "高级设置"
       - button "取消"
       - button "保存"
   - button "添加模型提供商"

@@ -7,9 +7,10 @@
 
 import type { ReactNode } from 'react'
 import { AnimatedRows, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { FoldSection } from './FoldSection.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'
-import { useModelRows } from './useModelRows.ts'
+import { shownFailures, useModelRows } from './useModelRows.ts'
 import type { CapacityField } from './useModelRows.ts'
 import styles from './ModelsSection.module.css'
 
@@ -69,6 +70,12 @@ export interface DeepSeekModelsValidationFailure {
   | 'modelMaxTokensInvalid'
 }
 
+/** A model row field a validation failure names. */
+export type ModelFailureField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
+
+/** One row's failures: each refused field with its message key, in the row's reading order. */
+export type ModelRowFailures = ReadonlyMap<ModelFailureField, DeepSeekModelsValidationFailure['key']>
+
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */
 export function modelDrafts(value: unknown): DeepSeekModelDraft[] {
   if (!Array.isArray(value)) return []
@@ -79,37 +86,48 @@ export function modelDrafts(value: unknown): DeepSeekModelDraft[] {
 }
 
 /**
+ * Check every row against the adapter constraints that the serialized schema
+ * cannot express, so a card can mark each refused field where it is.
+ * @param value - `models` value as drafted.
+ * @returns one entry per row, empty for a row the adapter will accept.
+ */
+export function modelRowFailures(value: unknown): ModelRowFailures[] {
+  const seen = new Set<string>()
+  return modelDrafts(value).map((model) => {
+    const failures = new Map<ModelFailureField, DeepSeekModelsValidationFailure['key']>()
+    // Compared trimmed: surrounding whitespace is a paste artifact the adapter
+    // would never match, and an untrimmed compare lets `model ` slip past the
+    // duplicate check against its own twin.
+    const id = model['id']
+    const trimmed = typeof id === 'string' ? id.trim() : ''
+    if (trimmed.length === 0) failures.set('id', 'modelIdRequired')
+    else if (seen.has(trimmed)) failures.set('id', 'modelIdDuplicate')
+    else seen.add(trimmed)
+    const name = model['name']
+    if (name !== undefined && (typeof name !== 'string' || name.length === 0)) failures.set('name', 'modelNameInvalid')
+    const contextWindow = model['contextWindow']
+    if (contextWindow !== undefined
+      && (typeof contextWindow !== 'number' || !Number.isInteger(contextWindow) || contextWindow <= 0)) {
+      failures.set('contextWindow', 'modelContextInvalid')
+    }
+    const maxTokens = model['maxTokens']
+    if (maxTokens !== undefined
+      && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
+      failures.set('maxTokens', 'modelMaxTokensInvalid')
+    }
+    return failures
+  })
+}
+
+/**
  * Validate adapter constraints that the serialized schema cannot express.
  * @param value - user-owned `models` value, or undefined while inherited.
  * @returns the first invalid row, or undefined when the adapter will accept it.
  */
 export function validateDeepSeekModels(value: unknown): DeepSeekModelsValidationFailure | undefined {
   if (value === undefined) return undefined
-  const models = modelDrafts(value)
-  const seen = new Set<string>()
-  for (const [index, model] of models.entries()) {
-    // Compared trimmed: surrounding whitespace is a paste artifact the adapter
-    // would never match, and an untrimmed compare lets `model ` slip past the
-    // duplicate check against its own twin.
-    const id = model['id']
-    const trimmed = typeof id === 'string' ? id.trim() : undefined
-    if (trimmed === undefined || trimmed.length === 0) return { index, key: 'modelIdRequired' }
-    if (seen.has(trimmed)) return { index, key: 'modelIdDuplicate' }
-    seen.add(trimmed)
-    const name = model['name']
-    if (name !== undefined && (typeof name !== 'string' || name.length === 0)) {
-      return { index, key: 'modelNameInvalid' }
-    }
-    const contextWindow = model['contextWindow']
-    if (contextWindow !== undefined
-      && (typeof contextWindow !== 'number' || !Number.isInteger(contextWindow) || contextWindow <= 0)) {
-      return { index, key: 'modelContextInvalid' }
-    }
-    const maxTokens = model['maxTokens']
-    if (maxTokens !== undefined
-      && (typeof maxTokens !== 'number' || !Number.isInteger(maxTokens) || maxTokens <= 0)) {
-      return { index, key: 'modelMaxTokensInvalid' }
-    }
+  for (const [index, failures] of modelRowFailures(value).entries()) {
+    for (const key of failures.values()) return { index, key }
   }
   return undefined
 }
@@ -128,6 +146,8 @@ export interface DeepSeekModelsEditorProps {
   t: (key: keyof typeof en) => string
   /** Disable every mutation. */
   disabled: boolean
+  /** Count of the card's refused saves; each one marks the fields that fail on their rows. */
+  attempt: number
   /** Replace the user-owned array after one visible edit. */
   onChange: (models: DeepSeekModelDraft[]) => void
   /** Remove the user-owned array and return to inheritance. */
@@ -141,7 +161,10 @@ export interface DeepSeekModelsEditorProps {
  * @returns the catalog editor.
  */
 export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNode {
-  const rowState = useModelRows(props.models, props.onChange, props.disabled)
+  const failures = modelRowFailures(props.models)
+  const rowState = useModelRows(props.models, props.onChange, props.disabled, {
+    attempt: props.attempt, failing: failures.map(row => new Set(row.keys())),
+  })
 
   const update = (index: number, key: CatalogField, value: unknown): void => {
     const next = props.models.map((model, at) => {
@@ -195,30 +218,24 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   })
 
   return (
-    <section className={styles['modelCatalog']} aria-label={props.t('models')}>
-      <div className={styles['modelListHead']}>
-        <div className={styles['modelCatalogHeading']}>
-          <span className={styles['modelCatalogTitle']}>{props.t('models')}</span>
-          <span className={styles['modelCatalogMeta']}>
-            {props.overridden ? props.t('modelsCustomized') : props.t('modelsInherited')}
-          </span>
-        </div>
-        {props.overridden
-          ? (
-            <button
-              type="button"
-              className={styles['linkButton']}
-              disabled={props.disabled}
-              onClick={reset}
-            >
+    <FoldSection
+      title={props.t('models')}
+      open={rowState.listOpen}
+      onToggle={rowState.setListOpen}
+      status={props.overridden
+        ? (
+          <>
+            <span className={styles['foldMeta']}>{props.t('modelsCustomized')}</span>
+            <button type="button" className={styles['textAction']} disabled={props.disabled} onClick={reset}>
               {props.t('resetModels')}
             </button>
-          )
-          : null}
-      </div>
+          </>
+        )
+        : undefined}
+    >
       <AnimatedRows className={styles['modelList'] as string} rowKeys={rowState.rows.map(row => String(row.key))} ready resetKey="">
         {props.models.length === 0 ? <p className={styles['modelEmpty']}>{props.t('modelsEmpty')}</p> : null}
-        {rowState.rows.map(({ model, key, expanded, order }, index) => (
+        {rowState.rows.map(({ model, key, expanded, order, marked }, index) => (
           <ModelRow
             key={key}
             rowKey={key}
@@ -227,6 +244,7 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
             position={index + 1}
             inputField="inputModalities"
             expanded={expanded}
+            failures={shownFailures(marked, failures[index] as ModelRowFailures)}
             disabled={props.disabled}
             t={props.t}
             contextWindow={capacityInput(model, index, 'contextWindow', props.defaultContextWindow)}
@@ -251,6 +269,6 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
         <IconPlusOutlineRegular size={14} />
         {props.t('addModel')}
       </button>
-    </section>
+    </FoldSection>
   )
 }

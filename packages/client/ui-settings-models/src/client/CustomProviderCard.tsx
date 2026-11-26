@@ -13,8 +13,9 @@
  * key does.
  *
  * The three fields a hand-declared route cannot default — endpoint, protocol,
- * and at least one model — are required here rather than at load, so the
- * failure names the field while the user is still looking at it.
+ * and at least one model — are required here rather than at load. Create
+ * checks the card: each unmet requirement is marked on its own field, the
+ * keyboard moves to the first one, and nothing is written.
  *
  * There is deliberately no provider-scoped reasoning-effort control, here or
  * on the editor card: effort is a per-MODEL capability, and the models under
@@ -35,6 +36,7 @@ import { ModelListEditor } from './ModelListEditor.tsx'
 import type { ModelDraft } from './ModelListEditor.tsx'
 import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import { deriveKeyRef } from './store.ts'
+import { useInvalidFocus } from './useInvalidFocus.ts'
 import { protocolLabel } from './protocol-label.ts'
 import { protocolNeedsKey, protocolReasoningLevels } from './protocol-rules.ts'
 import type { ModelsOperations } from './operations.ts'
@@ -72,6 +74,9 @@ function isHttpUrl(value: string): boolean {
     return false
   }
 }
+
+/** A requirement of the card that no field reports until a create is refused for it. */
+type Requirement = 'route' | 'baseURL' | 'models' | 'key'
 
 /** Props of {@link CustomProviderCard}. */
 export interface CustomProviderCardProps {
@@ -127,6 +132,9 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
    * the credential alone.
    */
   const [committed, setCommitted] = useState(false)
+  /** Refused creates so far, and the requirements the last one found unmet. */
+  const [refused, setRefused] = useState<{ attempt: number; unmet: ReadonlySet<Requirement> }>({ attempt: 0, unmet: new Set() })
+  const card = useInvalidFocus(refused.attempt)
   const disabled = props.readOnly || busy
   /** Everything but the key stops being editable once the provider exists. */
   const profileDisabled = disabled || committed
@@ -149,26 +157,17 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   // string, which the create path reads as "no key supplied" — a route may
   // legitimately authenticate through the provider's own ambient discovery.
   const keyValue = keyDraft.trim()
-  const ready = route.length > 0 && !routeInvalid && !routeTaken
-    && normalizedBaseURL.length > 0 && !baseUrlInvalid && models.length > 0 && modelFailure === undefined
-    && keyFailure === undefined
-  // The one blocked gate worth a line under the form. A satisfied card says
-  // nothing at all rather than printing an empty paragraph.
-  const hint = failure !== undefined || ready
-    // The key field prints its own failure directly beneath itself, so a card
-    // blocked only by the key stays silent here rather than answering with the
-    // next unmet gate — which is satisfied, and reads as a second, false fault.
-    || keyFailure !== undefined
-    // Same for the route id, and it must be tested rather than assumed: the
-    // fallback arm below reads "no models yet", so an unmet route gate would
-    // fall through to it and contradict the filled-in list right above.
-    || route.length === 0 || routeInvalid || routeTaken || baseUrlInvalid
-    ? undefined
-    : normalizedBaseURL.length === 0
-      ? t('customNeedsBaseUrl')
-      : modelFailure !== undefined
-        ? `${t('model')} ${String(modelFailure.index + 1)}: ${t(modelFailure.key)}`
-        : t('customNeedsModels')
+  /** The requirements a blank or untouched field leaves unmet, which only a refused create reports. */
+  const unmet = new Set<Requirement>([
+    ...route.length === 0 ? ['route' as const] : [],
+    ...normalizedBaseURL.length === 0 ? ['baseURL' as const] : [],
+    ...models.length === 0 ? ['models' as const] : [],
+    ...keyMissing ? ['key' as const] : [],
+  ])
+  const ready = unmet.size === 0 && !routeInvalid && !routeTaken && !baseUrlInvalid
+    && modelFailure === undefined && keyFailure === undefined
+  /** Whether the last refused create found this requirement unmet and it still is. */
+  const reported = (requirement: Requirement): boolean => refused.unmet.has(requirement) && unmet.has(requirement)
 
   /** Perform the create, returning a failure message or undefined. */
   const createOnce = async (): Promise<string | undefined> => {
@@ -228,61 +227,71 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   }
 
   return (
-    <div className={styles['editor']}>
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('customRoute')}</span>
-        <input
-          className={styles['input']}
-          type="text"
-          value={route}
-          placeholder="acme-gateway"
-          aria-label={t('customRoute')}
-          disabled={profileDisabled}
-          onChange={(event) => { setRoute(event.target.value) }}
-        />
+    <div ref={card} className={styles['editor']}>
+      {/* The two names of the route sit side by side, as do the protocol and
+          the endpoint whose example it decides; a narrow card stacks each pair. */}
+      <div className={styles['fieldPair']}>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('customRoute')}</span>
+          <input
+            className={styles['input']}
+            type="text"
+            value={route}
+            placeholder="acme-gateway"
+            aria-label={t('customRoute')}
+            aria-invalid={routeInvalid || routeTaken || reported('route')}
+            disabled={profileDisabled}
+            onChange={(event) => { setRoute(event.target.value) }}
+          />
+          {/* A rejected id reads as a fault, not as guidance — the same split the
+              key field below already makes between its failure and its hint. A
+              blank id is no valid id, so a refused create reports it in the same words. */}
+          {routeInvalid || routeTaken || reported('route')
+            ? <p className={styles['error']}>{t(routeTaken ? 'customRouteTaken' : 'customRouteInvalid')}</p>
+            : <p className={styles['advancedHint']}>{t('customRouteHint')}</p>}
+        </div>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('customDisplayName')}</span>
+          <input
+            className={styles['input']}
+            type="text"
+            value={displayName}
+            placeholder={route.length === 0 ? t('customDisplayName') : route}
+            aria-label={t('customDisplayName')}
+            disabled={profileDisabled}
+            onChange={(event) => { setDisplayName(event.target.value) }}
+          />
+        </div>
       </div>
-      {/* A rejected id reads as a fault, not as guidance — the same split the
-          key field below already makes between its failure and its hint. */}
-      {routeInvalid || routeTaken
-        ? <p className={styles['error']}>{t(routeInvalid ? 'customRouteInvalid' : 'customRouteTaken')}</p>
-        : <p className={styles['advancedHint']}>{t('customRouteHint')}</p>}
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('customDisplayName')}</span>
-        <input
-          className={styles['input']}
-          type="text"
-          value={displayName}
-          placeholder={route.length === 0 ? t('customDisplayName') : route}
-          aria-label={t('customDisplayName')}
-          disabled={profileDisabled}
-          onChange={(event) => { setDisplayName(event.target.value) }}
-        />
-      </div>
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
-        <input
-          className={styles['input']}
-          type="text"
-          value={baseURL}
-          placeholder={t(BASE_URL_PLACEHOLDERS[protocol] ?? 'customBaseUrlPlaceholder')}
-          aria-label={t('baseUrl')}
-          aria-invalid={baseUrlInvalid}
-          disabled={profileDisabled}
-          onChange={(event) => { setBaseURL(event.target.value) }}
-        />
-      </div>
-      {baseUrlInvalid ? <p className={styles['error']}>{t('customBaseUrlInvalid')}</p> : null}
-      <div className={styles['field']}>
-        <span className={styles['fieldLabel']}>{t('customApi')}</span>
-        <select
-          className={`${styles['input']} ${styles['selectInput']}`}
-          value={protocol}
-          aria-label={t('customApi')}
-          disabled={profileDisabled}
-          onChange={(event) => { setProtocol(event.target.value) }}
-        >
-          {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
-        </select>
+      <div className={styles['fieldPair']}>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('customApi')}</span>
+          <select
+            className={`${styles['input']} ${styles['selectInput']}`}
+            value={protocol}
+            aria-label={t('customApi')}
+            disabled={profileDisabled}
+            onChange={(event) => { setProtocol(event.target.value) }}
+          >
+            {protocols.map(choice => <option key={choice} value={choice}>{protocolLabel(t, choice)}</option>)}
+          </select>
+        </div>
+        <div className={styles['field']}>
+          <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
+          <input
+            className={styles['input']}
+            type="text"
+            value={baseURL}
+            placeholder={t(BASE_URL_PLACEHOLDERS[protocol] ?? 'customBaseUrlPlaceholder')}
+            aria-label={t('baseUrl')}
+            aria-invalid={baseUrlInvalid || reported('baseURL')}
+            disabled={profileDisabled}
+            onChange={(event) => { setBaseURL(event.target.value) }}
+          />
+          {baseUrlInvalid ? <p className={styles['error']}>{t('customBaseUrlInvalid')}</p> : null}
+          {/* An address of spaces alone is already reported as no valid URL. */}
+          {reported('baseURL') && !baseUrlInvalid ? <p className={styles['error']}>{t('customNeedsBaseUrl')}</p> : null}
+        </div>
       </div>
       <div className={styles['field']}>
         <span className={styles['fieldLabel']}>{t('keyInput')}</span>
@@ -291,6 +300,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
           value={keyDraft}
           placeholder={t('keyPlaceholder')}
           aria-label={t('keyInput')}
+          invalid={keyFailure !== undefined && (!keyMissing || reported('key'))}
           required={protocolNeedsKey(protocol)}
           disabled={disabled}
           onChange={(event) => { setKeyDraft(event.target.value) }}
@@ -298,14 +308,18 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         {/* A create card has no stored key to keep, so the blank case says
             what a blank field means here instead: this route may authenticate
             through the provider's own ambient discovery or OAuth. A key the
-            protocol requires is a requirement still to meet, not a fault. */}
+            protocol requires is a requirement still to meet, and a fault once
+            a create was refused for it. */}
         {keyFailure === undefined
           ? null
-          : <p className={styles[keyMissing ? 'advancedHint' : 'error']}>{t(keyFailure === 'keyBlank' ? 'keyBlankNew' : keyFailure)}</p>}
+          : <p className={styles[keyMissing && !reported('key') ? 'advancedHint' : 'error']}>{t(keyFailure === 'keyBlank' ? 'keyBlankNew' : keyFailure)}</p>}
       </div>
       <ModelListEditor
         models={models}
         onChange={setModels}
+        collapsible={false}
+        attempt={refused.attempt}
+        listFailure={reported('models') ? t('customNeedsModels') : undefined}
         reasoningLevels={reasoning.levels}
         reasoningLevelsOnly={reasoning.levelsOnly}
         probe={{
@@ -322,19 +336,21 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         disabled={profileDisabled}
         onBusyChange={setListBusy}
       />
-      {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
-      {/* Only the gates with something to say render; the route-id gate has its
-          own field-level hint, so its blocked state would print an empty line. */}
-      {hint === undefined ? null : <p className={styles['advancedHint']}>{hint}</p>}
       <EditorFooter
         t={t}
         busy={busy}
-        submitDisabled={disabled || !ready}
+        sticky
+        submitDisabled={disabled}
         submitLabelKey="create"
         submitBusyLabelKey="creating"
         onCancel={() => { props.onClose(committed) }}
-        onSubmit={() => { void create() }}
-      />
+        onSubmit={() => {
+          if (ready) void create()
+          else setRefused({ attempt: refused.attempt + 1, unmet })
+        }}
+      >
+        {failure !== undefined ? <p className={styles['error']}>{failure}</p> : null}
+      </EditorFooter>
     </div>
   )
 }

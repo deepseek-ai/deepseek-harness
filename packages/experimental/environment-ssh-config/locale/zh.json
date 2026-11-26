@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 配置环境",
+    "description": "根据 OpenSSH Host 别名提供执行环境。"
+  }
+}

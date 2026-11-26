@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Execution environment",
+    "description": "Run functions in provider-contributed execution environments, with typed callbacks to the originating dsh."
+  }
+}

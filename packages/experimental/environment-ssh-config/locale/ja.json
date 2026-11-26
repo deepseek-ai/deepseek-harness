@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "SSH 設定の環境",
+    "description": "OpenSSH の Host エイリアスから実行環境を提供します。"
+  }
+}

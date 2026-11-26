@@ -12,15 +12,22 @@
   - paragraph: 填入各提供商的 API 密钥即可使用其模型。
   - list:
     - listitem:
-      - text: DeepSeek API
+      - text: DeepSeek API deepseek-official
       - img "API 密钥已配置"
-      - button "编辑 DeepSeek API (deepseek-official)": 编辑
-      - text: DeepSeek API deepseek-official API 密钥
+      - text: API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
-      - paragraph: 保存以清除已保存的 API key。之后使用环境认证（DEEPSEEK_API_KEY）。
-      - group: 自定义设置
+      - region "模型":
+        - button "模型" [expanded]
+        - text: 已自定义
+        - button "恢复默认"
+        - text: clear-model
+        - button "模型选项 1"
+        - button "删除模型 1"
+        - button "添加模型"
+      - region "高级设置":
+        - button "高级设置"
       - button "取消"
       - button "保存"
   - button "添加模型提供商"

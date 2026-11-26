@@ -212,8 +212,6 @@ export interface RetryPolicyEditorProps {
   failure: RetryPolicyFailure | undefined
   /** Id of the element showing the failure message. */
   failureId: string
-  /** Show the failure message below the fields; otherwise the owner shows it. */
-  showFailure: boolean
   /** Section copy. */
   t: (key: ModelsKey) => string
   /** Disable edits. */
@@ -409,7 +407,7 @@ export function RetryPolicyEditor(props: RetryPolicyEditorProps): ReactNode {
       </select>
       {hint === undefined ? null : <span className={styles['advancedHint']}>{t(hint)}</span>}
       {branch === undefined ? null : <div className={styles['retryBody']}>{fields(branch, branch, [])}</div>}
-      {failure === undefined || !props.showFailure
+      {failure === undefined
         ? null
         : <p id={props.failureId} className={styles['error']}>{failure.message}</p>}
     </div>

@@ -5,9 +5,10 @@
 // stores it write-only under the derived reference (`MINIMAX_CN_API_KEY`)
 // while the settings document records only that reference. Each saved row
 // appears after route topology invalidation without presenting liveness as
-// provider status. The customized-settings fold writes its curated fields —
-// the endpoint, the retry policy, a declared route's own name and protocol, and
-// the reasoning levels of its models — as merge patches against the stored profile. Zero
+// provider status. The advanced-settings fold writes its curated fields —
+// the endpoint, the retry policy, and a declared route's own name and protocol —
+// and the model list writes the reasoning levels of its models, as merge patches
+// against the stored profile. Zero
 // model calls: configuration is pure settings/credentials/llm-domain traffic,
 // so there is no fixture and a stray stream would fail loud because the
 // adapter registry is empty. The provider under test is
@@ -26,7 +27,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { expectTooltipOnTop, openSettings, ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
+import { openSettings, ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/models-settings', import.meta.url))
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
@@ -152,12 +153,18 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await dialog.getByRole('button', { name: '隐藏密钥', exact: true }).click()
     expect(await key.getAttribute('type')).toBe('password')
     await dialog.getByText('该 API 密钥格式错误，请检查。').waitFor({ timeout: 10_000 })
-    await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(false)
+    // Save is refused: the card stays open on the marked field and nothing is written.
+    const patch = join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml')
+    const before = await readFile(patch, 'utf8')
+    await save.click()
+    await expect.poll(() => key.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
+    expect(await key.getAttribute('aria-invalid')).toBe('true')
+    expect(await readFile(patch, 'utf8')).toBe(before)
 
-    // Clearing it restores submit: an empty field means "keep what is stored",
-    // never a refusal, or editing any other setting would demand the key.
+    // Clearing it lifts the refusal: an empty field means "keep what is stored",
+    // or editing any other setting would demand the key.
     await key.fill('')
-    await expect.poll(async () => save.isEnabled(), { timeout: 10_000 }).toBe(true)
+    expect(await key.getAttribute('aria-invalid')).toBe('false')
     expect(await dialog.getByText('该 API 密钥格式错误，请检查。').count()).toBe(0)
   }, 60_000)
 
@@ -169,7 +176,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await row.waitFor({ timeout: 10_000 })
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByRole('img', { name: 'API 密钥已配置' }).count()).toBe(0)
-    expect(await dialog.getByRole('img', { name: 'API 密钥缺失' }).count()).toBe(0)
+    expect(await dialog.getByText('未配置 API 密钥', { exact: true }).count()).toBe(0)
     const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('minimax-cn: {}')
     expect(document).not.toContain('MINIMAX_CN_API_KEY')
@@ -217,14 +224,14 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await page.content()).not.toContain('sk-e2e-minimax')
   }, 60_000)
 
-  it('applies a customized-settings field as a merge patch', async () => {
+  it('applies an advanced-settings field as a merge patch', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-customized'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-    await dialog.getByPlaceholder('•'.repeat('sk-e2e-minimax'.length), { exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByText('•'.repeat('sk-e2e-minimax'.length), { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.textContent()).not.toContain('API 密钥来源：')
     expect(await dialog.textContent()).not.toMatch(/oauth/i)
-    await dialog.getByText('自定义设置').click()
+    await dialog.getByRole('button', { name: '高级设置', exact: true }).click()
     const url = dialog.getByLabel('API 地址')
     await url.waitFor({ timeout: 10_000 })
     await url.fill('https://gateway.minimax.example/v1')
@@ -248,7 +255,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-picker'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
     await settingsDialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
-    await settingsDialog.getByText('自定义设置').click()
     await settingsDialog.getByRole('button', { name: '获取可用模型' }).click()
 
     const picker = page.getByRole('dialog', { name: '选择模型' })
@@ -302,7 +308,17 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     // The third-party panel stays mounted, hidden, beside this one, so the
     // form is addressed through its own panel.
     const custom = dialog.getByRole('tabpanel', { name: '自定义模型 API' })
-    await custom.getByLabel('Provider ID').fill('acme-gateway')
+    // A refused create writes nothing and marks each unmet requirement where it is.
+    const before = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
+    await custom.getByRole('button', { name: '创建提供商', exact: true }).click()
+    const routeId = custom.getByLabel('Provider ID')
+    await expect.poll(() => routeId.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
+    expect(await custom.locator('[aria-invalid="true"]').evaluateAll(fields => fields.map(field => field.getAttribute('aria-label'))))
+      .toEqual(['Provider ID', 'API 地址'])
+    await custom.getByText('自定义模型 API 至少需要一个模型。', { exact: true }).waitFor()
+    expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toBe(before)
+    await routeId.fill('acme-gateway')
+    expect(await routeId.getAttribute('aria-invalid')).toBe('false')
     await custom.getByLabel('显示名称').fill('Acme Gateway')
     await custom.getByLabel('API 地址').fill('https://gateway.acme.example/v1')
     // No provider-scoped reasoning control: effort is a per-model capability
@@ -311,7 +327,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await dialog.getByLabel('推理强度').count()).toBe(0)
     await custom.getByRole('button', { name: '添加模型', exact: true }).click()
     await custom.getByLabel('模型 ID 1').fill('acme-large')
-    await custom.getByRole('button', { name: '模型选项 1' }).click()
+    // An added row starts unfolded.
+    expect(await custom.getByRole('button', { name: '模型选项 1' }).getAttribute('aria-expanded')).toBe('true')
     const fieldLeft = async (name: string) => custom.getByLabel(name, { exact: true })
       .evaluate(element => element.getBoundingClientRect().left)
     expect(await fieldLeft('上下文窗口 1')).toBe(await fieldLeft('模型 ID 1'))
@@ -352,7 +369,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-declared-identity'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
-    await dialog.getByText('自定义设置').click()
+    await dialog.getByRole('button', { name: '高级设置', exact: true }).click()
     // The create card asked this route for a name and a protocol because
     // nothing can default them; the editor reaches the same two fields rather
     // than sending the user to cordis.patch.yml for what only this route names.
@@ -403,7 +420,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-input-types'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' }).click()
-    await dialog.getByText('自定义设置').click()
     await dialog.getByRole('button', { name: '模型选项 1' }).click()
     expect(await dialog.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     const inputs = dialog.getByRole('group', { name: '输入类型 1' })
@@ -467,7 +483,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       // The saved notice confirms the current joined snapshot after the editor closes.
       await saved.waitFor({ timeout: 10_000 })
       await edit.click()
-      await dialog.getByText('自定义设置').click()
       await dialog.getByRole('button', { name: '模型选项 1' }).click()
       expect(await inputs.getByRole('checkbox', { name: '图片' }).isChecked()).toBe(true)
       expect(await inputs.getByRole('checkbox', { name: '文本' }).isChecked()).toBe(false)
@@ -492,7 +507,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const edit = dialog.getByRole('button', { name: '编辑 openai', exact: true })
     try {
       await edit.click()
-      await dialog.getByText('自定义设置').click()
       await dialog.getByRole('button', { name: '模型选项 1' }).click()
       const types = dialog.getByRole('group', { name: '输入类型 1' })
       const image = types.getByRole('checkbox', { name: '图片', exact: true })
@@ -506,7 +520,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toBe(before)
 
       await edit.click()
-      await dialog.getByText('自定义设置').click()
       await dialog.getByRole('button', { name: '模型选项 1' }).click()
       await expect.poll(() => image.isEnabled()).toBe(true)
       await image.uncheck()
@@ -518,7 +531,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       // checkbox polling cannot correct.
       await dialog.getByText('已保存 openai。', { exact: true }).waitFor({ timeout: 10_000 })
       await edit.click()
-      await dialog.getByText('自定义设置').click()
       await dialog.getByRole('button', { name: '模型选项 1' }).click()
       await expect.poll(() => image.isEnabled()).toBe(true)
       expect(await image.isChecked()).toBe(false)
@@ -555,7 +567,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       (await scaffold.ctx.llm.resolveModelInfo('openai', 'gpt-6-astra')).reasoning?.efforts.map(effort => String(effort.id)) ?? []
     const openModelOptions = async (): Promise<void> => {
       await edit.click()
-      await dialog.getByText('自定义设置').click()
       await dialog.getByRole('button', { name: '模型选项 1' }).click()
     }
     try {
@@ -588,8 +599,10 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const dialog = page.getByRole('dialog', { name: '设置' })
     const edit = dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' })
     const settings = () => scaffold.ctx.settings.describe({ redactSecrets: true }).find(row => row.ns === 'llm-pi-ai')?.value
+    const rows = dialog.locator('[data-row-key]')
+    // A folded row shows its model ID, then its display name when it has one.
+    const rowTexts = () => rows.evaluateAll(rows => rows.map(row => row.textContent))
     await edit.click()
-    await dialog.getByText('自定义设置').click()
     for (const [position, id] of [[2, 'order-second'], [3, 'order-third']] as const) {
       await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
       await dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).fill(id)
@@ -603,14 +616,14 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
 
     for (const save of [false, true]) {
       await edit.click()
-      await dialog.getByText('自定义设置').click()
       // Keep the last insertion gap inside the scrollport before native dragging starts.
       await dialog.getByRole('button', { name: '添加模型', exact: true }).scrollIntoViewIfNeeded()
-      const source = dialog.getByRole('button', { name: '调整模型顺序 1', exact: true })
-      const target = dialog.getByRole('button', { name: `调整模型顺序 ${save ? '3' : '2'}`, exact: true })
+      // A folded row is dragged as a whole, by its text.
+      const source = rows.first().getByText('acme-large', { exact: true })
+      const target = rows.nth(save ? 2 : 1)
       await source.hover()
       const from = await source.boundingBox()
-      if (from === null) throw new Error('Model drag handle is not visible')
+      if (from === null) throw new Error('Folded model row is not visible')
       await page.mouse.down()
       await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 10, { steps: 3 })
       // Native dragging needs an initial motion; the second hover follows any scroll at the dialog edge.
@@ -618,19 +631,21 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       const targetBox = await target.boundingBox()
       if (targetBox === null) throw new Error('Model drop target is not visible')
       await target.hover({ position: { x: targetBox.width / 2, y: targetBox.height * 0.75 } })
-      const insertion = await target.evaluate((button) => {
-        const rect = button.closest('[data-row-key]')!.getBoundingClientRect()
+      const insertion = await target.evaluate((row) => {
+        const rect = row.getBoundingClientRect()
         return { x: rect.left + 20, y: rect.bottom + 4 }
       })
       await page.mouse.move(insertion.x, insertion.y, { steps: 3 })
       expect(await dialog.locator('[data-drop-target]').evaluate(element => getComputedStyle(element).zIndex)).toBe('1')
       await page.mouse.up()
-      await page.locator('body > div[inert][aria-hidden="true"]:has(button[aria-label^="调整模型顺序 "])').waitFor({ state: 'detached' })
-      await expect.poll(() => dialog.getByLabel(`模型 ID ${save ? '3' : '2'}`, { exact: true }).inputValue()).toBe('acme-large')
-      await expect.poll(() => dialog.locator('[data-row-key]').evaluateAll(rows => rows.flatMap(row => row.getAnimations()).length)).toBe(0)
+      await page.locator('body > div[inert][aria-hidden="true"]:has(button[aria-label^="模型选项 "])').waitFor({ state: 'detached' })
+      await expect.poll(rowTexts).toEqual(save
+        ? ['order-second order-second', 'order-third order-third', 'acme-large']
+        : ['order-second order-second', 'acme-large', 'order-third order-third'])
+      await expect.poll(() => rows.evaluateAll(rows => rows.flatMap(row => row.getAnimations()).length)).toBe(0)
       expect(await readFile(path, 'utf8')).toBe(document)
       await dialog.getByRole('button', { name: save ? '保存' : '取消', exact: true }).click()
-      await dialog.getByLabel('模型 ID 1', { exact: true }).waitFor({ state: 'detached' })
+      await rows.first().waitFor({ state: 'detached' })
       if (!save) expect(settings()).toEqual(before)
     }
 
@@ -644,16 +659,14 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       'minimax-cn': { apiKeyEnv: 'MINIMAX_CN_API_KEY', baseURL: 'https://gateway.minimax.example/v1' },
     } })
     await edit.click()
-    await dialog.getByText('自定义设置').click()
-    expect(await Promise.all([1, 2, 3].map(position =>
-      dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).inputValue(),
-    ))).toEqual(['order-second', 'order-third', 'acme-large'])
+    expect(await rowTexts()).toEqual(['order-second order-second', 'order-third order-third', 'acme-large'])
     const viewport = page.viewportSize()
     if (viewport === null) throw new Error('Model ordering checks require an explicit viewport')
     try {
       const id = dialog.getByRole('textbox', { name: '模型 ID 1', exact: true })
       const name = dialog.getByRole('textbox', { name: '显示名称 1', exact: true })
       const toggle = dialog.getByRole('button', { name: '模型选项 1', exact: true })
+      await toggle.click()
       const desktopId = await id.boundingBox()
       const desktopName = await name.boundingBox()
       if (desktopId === null || desktopName === null) throw new Error('Wide model identity fields are not visible')
@@ -666,21 +679,21 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       await name.waitFor({ state: 'hidden' })
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'mobile-collapsed.expected.md'),
         await captureStableAria(page, '[data-shortcut-modal="settings"]', scaffold.workspaceCwd), MODE)
-      for (const name of ['调整模型顺序 1', '模型选项 1', '删除模型 1']) {
+      for (const name of ['模型选项 1', '删除模型 1']) {
         const box = await dialog.getByRole('button', { name, exact: true }).boundingBox()
         expect(box).not.toBeNull()
         if (box === null) throw new Error(`Model control is not visible: ${name}`)
         expect(box.x).toBeGreaterThanOrEqual(0)
         expect(box.x + box.width).toBeLessThanOrEqual(390)
       }
-      const compactId = await id.boundingBox()
-      if (compactId === null) throw new Error('Narrow model ID is not visible')
       await toggle.click()
       await name.waitFor({ state: 'visible' })
       await name.fill('手机上的完整显示名称')
       await toggle.click()
       await name.waitFor({ state: 'hidden' })
-      expect(await id.inputValue()).toBe('order-second')
+      // The folded row keeps the drafted name; a narrow row shows only the ID.
+      expect((await rowTexts())[0]).toBe('order-second 手机上的完整显示名称')
+      expect(await rows.first().getByText('手机上的完整显示名称', { exact: true }).isVisible()).toBe(false)
       await toggle.click()
       expect(await name.inputValue()).toBe('手机上的完整显示名称')
       const expandedName = await name.boundingBox()
@@ -688,8 +701,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       const expandedId = await id.boundingBox()
       if (expandedName === null || expandedId === null) throw new Error('Expanded model fields are not visible')
       expect(expandedName.y).toBeGreaterThanOrEqual(expandedId.y + expandedId.height)
-      expect(expandedName.width).toBeGreaterThan(compactId.width)
-      expect(await dialog.getByRole('region', { name: '模型目录', exact: true })
+      expect(expandedName.width).toBeGreaterThan(expandedId.width)
+      expect(await dialog.getByRole('region', { name: '模型', exact: true })
         .evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'mobile-expanded.expected.md'),
         await captureStableAria(page, '[data-shortcut-modal="settings"]', scaffold.workspaceCwd), MODE)
@@ -721,21 +734,12 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
         await dialog.getByRole('button', { name: '模型', exact: true }).click()
         const edit = dialog.getByRole('button', { name: `编辑 ${provider}`, exact: true })
         await edit.click()
-        await dialog.getByText('自定义设置').click()
         const id = dialog.getByRole('textbox', { name: '模型 ID 1', exact: true })
         const name = dialog.getByRole('textbox', { name: '显示名称 1', exact: true })
         const toggle = dialog.getByRole('button', { name: '模型选项 1', exact: true })
         const nextToggle = dialog.getByRole('button', { name: '模型选项 2', exact: true })
         await toggle.click()
         await assertModelInputLayout(mobilePage, dialog)
-        await dialog.getByRole('button', { name: '调整模型顺序 1', exact: true }).hover()
-        const tooltip = mobilePage.getByRole('tooltip')
-        await tooltip.waitFor()
-        expect(await tooltip.evaluate(element => element.parentElement === element.ownerDocument.body)).toBe(true)
-        await expectTooltipOnTop(tooltip)
-        await id.hover()
-        await tooltip.waitFor({ state: 'hidden' })
-        await toggle.click()
         await name.fill('缩窄后继续编辑')
         const input = await name.elementHandle()
         if (input === null) throw new Error('Model name input is missing')
@@ -753,7 +757,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
         })
         await dialog.getByText(`已保存 ${provider}。`, { exact: true }).waitFor()
         await edit.click()
-        await dialog.getByText('自定义设置').click()
         await name.waitFor({ state: 'hidden' })
         await toggle.focus()
         await mobilePage.keyboard.press('Enter')
@@ -762,7 +765,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
         expect(await dialog.getByRole('button', { name: '删除模型 1', exact: true })
           .evaluate(button => button.ownerDocument.activeElement === button)).toBe(true)
         await mobilePage.keyboard.press(tab)
-        expect(await name.evaluate(element => element.ownerDocument.activeElement === element)).toBe(true)
+        expect(await dialog.getByLabel('上下文窗口 1', { exact: true })
+          .evaluate(element => element.ownerDocument.activeElement === element)).toBe(true)
         await name.fill('直接点击收起后保留')
         await toggle.click()
         await name.waitFor({ state: 'hidden' })
@@ -770,7 +774,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
         expect(await toggle.evaluate(button => button.ownerDocument.activeElement === button)).toBe(true)
         await toggle.click()
         expect(await name.inputValue()).toBe('直接点击收起后保留')
-        const region = dialog.getByRole('region', { name: '模型目录', exact: true })
+        const region = dialog.getByRole('region', { name: '模型', exact: true })
         expect(await region.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
         await dialog.getByRole('button', { name: '取消', exact: true }).click()
         expect(errors.pageErrors).toEqual([])
@@ -784,7 +788,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
         const touchDialog = touchPage.getByRole('dialog', { name: '设置' })
         await touchDialog.getByRole('button', { name: '模型', exact: true }).tap()
         await touchDialog.getByRole('button', { name: `编辑 ${provider}`, exact: true }).tap()
-        await touchDialog.getByText('自定义设置').tap()
         const touchToggle = touchDialog.getByRole('button', { name: '模型选项 1', exact: true })
         const touchName = touchDialog.getByRole('textbox', { name: '显示名称 1', exact: true })
         await touchToggle.tap()
@@ -808,54 +811,6 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       } finally {
         await mobileBrowser?.close()
         await scaffold.ctx.settings.mutate('llm-pi-ai', [{ op: 'unset', path: ['providers', provider] }])
-      }
-    }, 60_000,
-  )
-
-  it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webkit }])(
-    'keeps keyboard reorder focus and visibility in $name', async ({ engine }) => {
-      const keyboardBrowser = await engine.launch()
-      try {
-        const keyboardPage = await keyboardBrowser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
-        await keyboardPage.goto(scaffold.authenticatedUrl)
-        await openSettings(keyboardPage, 'zh')
-        await keyboardPage.getByRole('button', { name: '模型', exact: true }).click()
-        const dialog = keyboardPage.getByRole('dialog', { name: '设置' })
-        await dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' }).click()
-        await dialog.getByText('自定义设置').click()
-        const initialFirst = await dialog.getByLabel('模型 ID 1', { exact: true }).inputValue()
-        for (let position = 4; position <= 9; position++) {
-          await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
-          await dialog.getByLabel(`模型 ID ${String(position)}`, { exact: true }).fill(`keyboard-${String(position)}`)
-        }
-        const source = await dialog.getByRole('button', { name: '调整模型顺序 1', exact: true }).elementHandle()
-        if (source === null) throw new Error('Keyboard reorder handle is missing')
-        await source.focus()
-        for (let position = 2; position <= 9; position++) {
-          await keyboardPage.keyboard.press('ArrowDown')
-          await expect.poll(() => source.evaluate(button => document.activeElement === button)).toBe(true)
-          expect(await source.getAttribute('aria-label')).toBe(`调整模型顺序 ${String(position)}`)
-          await expect.poll(() => source.evaluate(button => button.closest('[data-row-key]')!.getAnimations().length)).toBe(0)
-          expect(await source.evaluate((button) => {
-            const rect = button.getBoundingClientRect()
-            let top = 0
-            let bottom = innerHeight
-            for (let parent = button.parentElement; parent !== null; parent = parent.parentElement) {
-              if (getComputedStyle(parent).overflowY === 'visible') continue
-              const clip = parent.getBoundingClientRect()
-              top = Math.max(top, clip.top)
-              bottom = Math.min(bottom, clip.bottom)
-            }
-            return rect.top >= top && rect.bottom <= bottom
-          })).toBe(true)
-        }
-        expect(await dialog.getByLabel('模型 ID 9', { exact: true }).inputValue()).toBe(initialFirst)
-        await keyboardPage.keyboard.press('ArrowUp')
-        await expect.poll(() => source.evaluate(button => document.activeElement === button)).toBe(true)
-        expect(await source.getAttribute('aria-label')).toBe('调整模型顺序 8')
-        await dialog.getByRole('button', { name: '取消', exact: true }).click()
-      } finally {
-        await keyboardBrowser.close()
       }
     }, 60_000,
   )

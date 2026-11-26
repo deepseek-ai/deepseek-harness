@@ -1,0 +1,13 @@
+# Bilingual-pair consistency record for environment.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/environment.md
+/execution-environments:
+  en: ad606a775100f24f
+  zh: 91979f99b9a94d6e
+/execution-environments/registry:
+  en: 7a4da3332403b9cf
+  zh: 5f57255873af1802
+/execution-environments/definitions-and-runs:
+  en: 8fc1d2dae4987956
+  zh: 0d8d0b53bc4e730a

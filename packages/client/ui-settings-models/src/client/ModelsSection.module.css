@@ -60,16 +60,27 @@
   gap: 16px;
 }
 
+/* A row whose editor is open is the editing surface: the module fill of the
+   add and setup cards, under the row's own name. The hairline stays, cleared,
+   so opening a row does not move its content. */
+.rowCardOpen {
+  border-color: transparent;
+  background: var(--dsw-alias-bg-module-platform);
+  padding: 14px 16px;
+}
+
 .rowHead {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 28px;
 }
 
 .rowIdentity {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
   min-width: 0;
 }
 
@@ -110,6 +121,17 @@
 
 .credentialDotMissing {
   background: var(--dsw-alias-state-error-primary);
+}
+
+/* The missing-key state in words beside its dot, at caption size like the row tag. */
+.credentialMissing {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
 }
 
 .accountStatus {
@@ -216,7 +238,7 @@
 .secondaryButton:disabled,
 .dangerButton:disabled,
 .addButton:disabled,
-.linkButton:disabled,
+.textAction:disabled,
 .addModelButton:disabled {
   opacity: 0.4;
   cursor: default;
@@ -226,9 +248,10 @@
 .secondaryButton:focus-visible,
 .dangerButton:focus-visible,
 .addButton:focus-visible,
-.linkButton:focus-visible,
+.textAction:focus-visible,
 .addModelButton:focus-visible,
 .iconButton:focus-visible,
+.foldToggle:focus-visible,
 .customizedSummary:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
@@ -237,12 +260,32 @@
 /* Editing surface: a filled module on the panel, matching the settings
    selector fill rather than adding another outline inside the row. */
 .editor {
+  --editor-inset: 16px;
+  --editor-end: 14px;
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-module-platform);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Two fields that describe one thing sit side by side while the card has room. */
+.fieldPair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.fieldPair select.input {
+  max-width: none;
+}
+
+@media (width <= 560px) {
+  .fieldPair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .editorHeader {
@@ -308,26 +351,25 @@
   }
 }
 
-.linkButton {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 10px;
+/* An action that answers the state text before it: text weight, underlined,
+   so it reads as part of that line rather than as a second button. */
+.textAction {
+  padding: 0 2px;
   border: none;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-xs);
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: inherit;
   font-size: 12px;
   line-height: 18px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   cursor: pointer;
 }
 
 @media (hover: hover) {
-  .linkButton:hover:not(:disabled) {
-    background: var(--dsw-alias-interactive-bg-hover);
-    color: var(--dsw-alias-label-secondary);
+  .textAction:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
   }
 }
 
@@ -338,14 +380,74 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* Notes, then the actions. In an onboarding step the two stack; in a card they
+   share one row that stays at the page's scroll edge. */
+.editorFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editorNotes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editorNotes:empty {
+  display: none;
+}
+
 .editorActions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
 }
 
-.addBlock > .editorActions {
+.addBlock > .editorFooter {
   margin-top: 12px;
+}
+
+/* The row spans the card's width and ends at the card's own edge, whatever
+   padding the card has. */
+.editorFooterSticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 calc(-1 * var(--editor-inset)) calc(-1 * var(--editor-end));
+  padding: 12px var(--editor-inset);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+/* The page's scroll area ends with padding, which leaves the stuck row short
+   of the edge; the same fill covers what would scroll past below it. The card
+   clips it once the row rests at the card's end. */
+.editorFooterSticky::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  background: inherit;
+}
+
+.editorFooterSticky > .editorNotes {
+  flex: 1 1 200px;
+}
+
+.editorFooterSticky > .editorActions {
+  margin-left: auto;
+}
+
+/* A field focused from the keyboard scrolls clear of the stuck row. */
+.editor :is(input, select, button) {
+  scroll-margin-bottom: 84px;
 }
 
 .addBlock {
@@ -369,7 +471,7 @@
   gap: 6px;
   height: 44px;
   border: 1px dashed var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-lg);
+  border-radius: var(--dsw-radius-xl);
 }
 
 /* The add card's mode switch with the one-line purpose of the chosen mode
@@ -396,7 +498,7 @@
 
 .addCard,
 .setupCard {
-  border-radius: var(--dsw-radius-lg);
+  border-radius: var(--dsw-radius-xl);
   background: var(--dsw-alias-bg-module-platform);
   padding: 14px 16px;
   display: flex;
@@ -405,16 +507,90 @@
   list-style: none;
 }
 
+/* The three editing surfaces. Each tells the editor's action row how far its
+   edges are, and clips what that row paints past the card's end. */
+.rowCardOpen,
+.addCard,
+.setupCard {
+  --editor-inset: 16px;
+  --editor-end: 14px;
+  overflow: clip;
+}
+
 /* Nested in a card that already carries the module chrome. */
+.rowCardOpen .editor,
 .addCard .editor,
 .setupCard .editor {
   background: none;
   padding: 0;
 }
 
-.customized {
+/* A titled part of an editor: the model catalog and the advanced settings. */
+.fold {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
-  padding-top: 10px;
+}
+
+.foldHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: 28px;
+}
+
+/* One step above a field label: the heading of a group of fields. */
+.foldToggle,
+.foldTitle {
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.foldToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: -4px;
+  padding: 2px 2px 2px 4px;
+  border: none;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .foldToggle:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.foldMeta {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.foldActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.foldBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.foldBody[hidden] {
+  display: none;
 }
 
 /* Native disclosure marker replaced by a rotating chevron: the built-in
@@ -449,7 +625,6 @@
   transition: transform 120ms ease;
 }
 
-.customized[open] > .customizedSummary::before,
 .retryFold[open] > .customizedSummary::before {
   transform: rotate(45deg) translate(-1px, -1px);
 }
@@ -466,38 +641,11 @@
   }
 }
 
-.customizedBody {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 12px;
-}
-
-.modelCatalog {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.modelCatalogHeading {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.modelCatalogTitle {
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 500;
-  color: var(--dsw-alias-label-secondary);
-}
-
-.modelCatalogMeta,
 .modelEmpty {
   margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-lg);
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
@@ -511,22 +659,73 @@
   gap: var(--model-row-gap);
 }
 
-.modelListHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+/* A list with no rows takes no room between the notice above it and the action below. */
+.modelList:empty {
+  display: none;
 }
 
+/* The start padding is wider than the rest: the row's fields begin at the
+   card's edge, while its end holds icon buttons whose glyphs sit inside their
+   own boxes. */
 .modelEntry {
   container: model-row / inline-size;
   display: grid;
-  grid-template-columns: 28px minmax(0, 1.4fr) minmax(0, 1fr) 28px 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px 28px;
   column-gap: 6px;
   position: relative;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-lg);
-  padding: 6px;
+  padding: 6px 6px 6px 12px;
+}
+
+/* A row with a field the last save refused: its head aligns to the top, so the
+   reason under one field does not move the other controls of the head. Folded,
+   the row hides the marked field, so its own outline carries the mark. */
+.modelEntry[data-invalid]:not(:has(> .modelRow[data-expanded])) {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
+.modelEntry[data-invalid] > .modelRow {
+  align-items: start;
+}
+
+.modelEntry[data-invalid] > .modelRow > .iconButton {
+  margin-top: 2px;
+}
+
+/* A folded row is the drag source for reordering, as the Session panel's
+   section titles are; its two buttons keep the pointer. */
+.modelEntry[draggable='true'] {
+  cursor: grab;
+}
+
+.modelEntry[draggable='true'] .iconButton {
+  cursor: pointer;
+}
+
+/* The drag mark sits in the row's start inset, between its edge and its text,
+   and takes no room of its own. It shows while the pointer is on the row,
+   during the drag, and in the drag preview. */
+.modelGrip {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  display: inline-flex;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.modelEntry[data-dragging] > .modelGrip,
+.modelDragPreview .modelGrip {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .modelEntry:hover > .modelGrip {
+    opacity: 1;
+  }
 }
 
 .modelRow {
@@ -537,9 +736,51 @@
   gap: 6px;
 }
 
-.modelName {
-  grid-column: 3;
-  grid-row: 1;
+/* The folded row's text: the model ID, then the display name. It starts where
+   the ID field's text starts, so unfolding does not move the ID. */
+.modelSummary {
+  grid-column: 1 / 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  padding-left: 10px;
+}
+
+.modelEntry:not([draggable='true']) .modelSummary {
+  cursor: pointer;
+}
+
+.modelSummaryId,
+.modelSummaryName {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelSummaryId {
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.modelSummaryId[data-unnamed] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.modelSummaryName {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (hover: hover) {
+  .modelEntry:has(.modelSummary:hover) {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
 }
 
 .modelNameLabel {
@@ -547,33 +788,33 @@
 }
 
 @container model-row (max-width: 440px) {
-  .modelRow > .modelAdvanced {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .modelRow {
+    grid-template-columns: minmax(0, 1fr) 28px 28px;
   }
 
-  .modelRow {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  .modelSummary {
+    grid-column: 1;
+  }
+
+  .modelSummaryName {
+    display: none;
   }
 
   .modelRow .modelName {
-    display: none;
     grid-column: 1 / -1;
     grid-row: 2;
-    padding: 2px 4px 0;
-  }
-
-  .modelRow[data-expanded] .modelName {
-    display: flex;
+    padding-top: 6px;
   }
 
   .modelNameLabel {
     display: block;
   }
-}
 
-.modelDragHandle:not(:disabled) {
-  cursor: grab;
+  .modelRow > .modelAdvanced {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 8px;
+  }
 }
 
 .modelEntry[data-dragging] {
@@ -674,7 +915,7 @@
 
 .modelAdvanced {
   display: grid;
-  grid-column: 2 / 4;
+  grid-column: 1 / 3;
   grid-template-columns: subgrid;
   row-gap: 16px;
   padding: 16px 0 6px;
@@ -788,13 +1029,6 @@
   font-size: 13px;
 }
 
-.modelEmpty {
-  padding: 12px;
-  border: 1px dashed var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-lg);
-  text-align: center;
-}
-
 .addModelButton {
   box-sizing: border-box;
   align-self: flex-start;
@@ -846,6 +1080,11 @@ select.input {
   border-color: var(--dsw-alias-state-business-primary);
 }
 
+/* A field a save refused keeps its mark while it has the keyboard. */
+.input[aria-invalid='true'] {
+  border-color: var(--dsw-alias-state-error-primary);
+}
+
 .input::placeholder {
   color: var(--dsw-alias-label-tertiary);
 }
@@ -859,9 +1098,27 @@ select.input {
   position: relative;
 }
 
-.savedKeyInput .input::placeholder {
+/* Read-only saved key: as tall as the input it alternates with, so entering
+   and leaving the input moves nothing below the field. */
+.keyDisplay {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+
+.keyDisplay .iconButton {
+  flex: none;
+}
+
+.keyDisplayValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 22px;
   color: var(--dsw-alias-label-primary);
-  opacity: 1;
 }
 
 .keyInputFilled {

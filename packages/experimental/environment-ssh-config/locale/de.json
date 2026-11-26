@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Umgebungen aus der SSH-Konfiguration",
+    "description": "Stellen Sie Ausführungsumgebungen aus Host-Aliasen von OpenSSH bereit."
+  }
+}
