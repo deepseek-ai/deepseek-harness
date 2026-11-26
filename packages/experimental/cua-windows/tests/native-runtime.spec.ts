@@ -1,5 +1,5 @@
 /** Real local pipes exercise Host ownership, Agent isolation, cancellation, and startup admission. */
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection, createServer, type Socket } from 'node:net'
@@ -202,27 +202,6 @@ it('starts a fresh helper after process loss and makes the old client unusable',
   const next = f.client()
   expect(await next.request('fresh', {}, signal)).toMatchObject({ pid: 101, connection: 1 })
   expect(f.spawn).toHaveBeenCalledTimes(2)
-})
-
-it('changes the shared runtime identity when a managed DLL changes without replacing the EXE', async () => {
-  const f = await fixture(), signal = new AbortController().signal
-  await writeFile(join(f.directory, 'dsh-cua-windows.dll'), 'first implementation')
-  const first = f.client()
-  await first.request('first', {}, signal)
-  const key = (request: SubprocessSpawnSpec) => request.argv[request.argv.indexOf('--runtime-key') + 1]
-  const before = key(f.spawn.mock.calls[0]![0])
-  await first.dispose()
-  await f.generations[0]!.stop()
-  await writeFile(join(f.directory, 'dsh-cua-windows.dll'), 'second implementation')
-  await f.client().request('updated', {}, signal)
-  expect(key(f.spawn.mock.calls[1]![0])).not.toBe(before)
-})
-
-it('refuses startup when an existing managed artifact cannot be read', async () => {
-  const f = await fixture()
-  await mkdir(join(f.directory, 'dsh-cua-windows.dll'))
-  await expect(f.client().request('input', {}, new AbortController().signal)).rejects.toThrow()
-  expect(f.spawn).not.toHaveBeenCalled()
 })
 
 it.each(['wrong-runtime', 'wrong-instance', 'extra', 'malformed', 'oversized', 'invalid-utf8', 'exit'] as const)(

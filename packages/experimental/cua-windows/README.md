@@ -104,7 +104,7 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - Held-input reminders and cleanup use the helper's own dispatches. If you press the same key or button while the helper holds it, its next up can also interrupt your press.
 - Windows routes input through the desktop. After focus changes or the original window closes, a confirmed release means the desktop accepted the up. The original window may not receive the event. Releasing a held input does not check the current foreground window or lock state. The release uses the saved up event and reports `foregroundChanged: null` for an explicit up. If Windows refuses an explicit cleanup request, further CUA input for the task is blocked. Inspect the desktop before starting another task.
 - Cleanup of temporary input inside complete actions does not check each key or button release. If an input remains held after a failure, release it manually before continuing.
-- Stop Hosts using the same output directory before rebuilding to avoid locked files. Shared service identity includes the apphost, application and protocol DLLs, and runtime manifests, so a changed implementation starts a separate service.
+- Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.
 - The Windows handshake requires a positive `maxClickHoldMs`. With zero, it fails with `INVALID_CONFIG` before ordinary clicks or status queries can run.
 - App-level accessibility is unavailable; select an explicit window before reading its tree.
 - If `getWindows()` is empty after launch, ask the user to open the required window.

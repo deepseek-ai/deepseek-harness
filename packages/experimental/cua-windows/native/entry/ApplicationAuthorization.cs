@@ -12,15 +12,32 @@ internal sealed record ApplicationAuthorization(string Id, string Name, string I
     internal static ApplicationAuthorization Create(string appId, string name, string iconPath,
         IEnumerable<string?>? aumids = null, IEnumerable<string?>? executablePaths = null)
     {
-        var isPath = Path.IsPathFullyQualified(appId);
-        var ids = (aumids ?? []).Append(isPath ? null : appId)
-            .Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).Distinct(StringComparer.Ordinal).ToArray();
-        var paths = (executablePaths ?? []).Append(isPath ? appId : null)
-            .Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!.ToUpperInvariant()).Distinct(StringComparer.Ordinal).ToArray();
+        var ids = new List<string>();
+        var paths = new List<string>();
+        if (Path.IsPathFullyQualified(appId)) AddPath(paths, appId);
+        else AddId(ids, appId);
+        if (aumids is not null) foreach (var aumid in aumids) AddId(ids, aumid);
+        if (executablePaths is not null) foreach (var path in executablePaths) AddPath(paths, path);
         var attributes = new Dictionary<string, string[]>();
-        if (ids.Length != 0) attributes.Add("windows.aumid", ids);
-        if (paths.Length != 0) attributes.Add("windows.executablePath", paths);
+        if (ids.Count != 0) attributes.Add("windows.aumid", ids.ToArray());
+        if (paths.Count != 0) attributes.Add("windows.executablePath", paths.ToArray());
         return new(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("windows-aumid\0" + appId))),
             name, iconPath, attributes);
+    }
+
+    // List<string>.Contains uses ordinal equality: AUMIDs stay case-sensitive; paths compare by their upper-case form.
+    private static void AddId(List<string> ids, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        if (ids.Contains(value)) return;
+        ids.Add(value);
+    }
+
+    private static void AddPath(List<string> paths, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var normalized = value.ToUpperInvariant();
+        if (paths.Contains(normalized)) return;
+        paths.Add(normalized);
     }
 }

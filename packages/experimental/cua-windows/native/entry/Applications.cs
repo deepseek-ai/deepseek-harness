@@ -111,22 +111,7 @@ internal static class Applications
     internal static string Digest(string path)
     {
         using var file = File.OpenRead(path);
-        using var digest = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[65536];
-        int count;
-        while ((count = file.Read(buffer)) != 0) digest.AppendData(buffer, 0, count);
-        foreach (var name in new[] { "dsh-cua-windows.dll", "CuaProtocol.dll", "dsh-cua-windows.deps.json", "dsh-cua-windows.runtimeconfig.json" })
-        {
-            var hash = "-";
-            try
-            {
-                using var assembly = File.OpenRead(Path.Combine(Path.GetDirectoryName(path)!, name));
-                hash = Convert.ToHexStringLower(SHA256.HashData(assembly));
-            }
-            catch (FileNotFoundException) { /* Single-file helpers have no managed sidecars. */ }
-            digest.AppendData(Encoding.UTF8.GetBytes($"\0{name}\0{hash}"));
-        }
-        return Convert.ToHexStringLower(digest.GetHashAndReset());
+        return Convert.ToHexStringLower(SHA256.HashData(file));
     }
 
     internal static string RunningExecutable(int pid)

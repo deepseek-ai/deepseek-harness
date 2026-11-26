@@ -1,6 +1,7 @@
 // The per-user service serves isolated Agent connections and Host leases on a private named pipe.
 using System.Collections.Concurrent;
 using System.IO.Pipes;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows.Automation;
 using DeepSeek.Cua.Protocol;
@@ -13,7 +14,8 @@ internal static class NativeServer
     {
         if (!Guid.TryParseExact(instance, "N", out _)) throw new NativeFailure("INVALID_ARGUMENT", "A Host instance identifier is required");
         var executable = Environment.ProcessPath ?? throw new NativeFailure("NATIVE_STARTUP", "The executable identity is unavailable");
-        var runtime = Applications.Digest(executable);
+        using var source = File.OpenRead(executable);
+        var runtime = Convert.ToHexStringLower(SHA256.HashData(source));
         if (runtime != expectedRuntime) throw new NativeFailure("NATIVE_STARTUP", "The helper executable changed before startup");
         var pipeName = SharedRuntime.PipeName(runtime);
         using var lifetime = new CancellationTokenSource();
