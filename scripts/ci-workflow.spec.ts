@@ -1768,9 +1768,9 @@ describe('Weighted approval workflow', () => {
       needs: 'publish-status',
       // The called workflow owns the review scope and the event filters.
       if: "always() && needs.publish-status.outputs.dismissed == 'true'",
-      permissions: { contents: 'read', 'pull-requests': 'read' },
       uses: './.github/workflows/weighted-approval-machine.yml',
     })
+    expect(machineJob.permissions).toEqual({ contents: 'read', issues: 'write', 'pull-requests': 'read' })
     expect(machineJob.secrets).toEqual({ DSH_APPROVAL_BOT_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}' })
     expect(recordJob).toMatchObject({
       if: "github.event.pull_request.state == 'open'",
@@ -1893,7 +1893,8 @@ describe('Weighted approval machine workflow', () => {
     expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
     expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft', 'edited'])
     expect(workflowRun).toEqual({ workflows: ['weighted-approval-review-event'], types: ['completed'] })
-    expect(publisher.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' })
+    expect(publisher.permissions).toEqual({ contents: 'read', issues: 'write', 'pull-requests': 'read' })
+    expect(job.permissions).toBeUndefined()
     expect(publisher.concurrency).toBeUndefined()
     expect(job.concurrency).toEqual({
       group: "weighted-approval-machine-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' || "

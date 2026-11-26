@@ -16,8 +16,14 @@ const STATUS_MARKER = '<!-- weighted-approval -->'
 const CANONICAL_PULL_NUMBER = /^[1-9][0-9]*$/u
 
 /**
- * Prove that the write token belongs to the expected machine user before any mutation.
- * @param {(path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>} api Write-capable API caller.
+ * Pinned numeric ID of the GitHub Actions bot that authors status comments with the workflow token.
+ * Other repository workflows share the account, so a status comment also needs the marker on its first line.
+ */
+export const ACTIONS_BOT_USER_ID = 41_898_282
+
+/**
+ * Prove that the machine-user PAT belongs to the expected account before any review write.
+ * @param {(path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>} api Review-write API caller.
  * @returns {Promise<{id: number, login: string}>} Pinned machine-user identity.
  */
 export async function verifyPublisherIdentity(api) {
@@ -30,19 +36,39 @@ export async function verifyPublisherIdentity(api) {
 }
 
 /**
- * Evaluate the approval policy and publish its outcome as a status comment or an approving review.
- * @param {{event: unknown, policySource: string, api: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, readApi?: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, write?: (line: string) => void, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls}} options Runtime inputs; api owns writes and readApi supplies repository history when the write token is restricted.
+ * Identify a status comment by its first line and the Actions bot account.
+ * @param {unknown} record Pull-request comment record.
+ * @returns {boolean} Whether the record is a status comment this publisher maintains.
+ */
+export function isActionsBotComment(record) {
+  return isRecord(record) && isRecord(record.user) && record.user.id === ACTIONS_BOT_USER_ID
+    && typeof record.body === 'string' && record.body.split('\n', 1)[0] === STATUS_MARKER
+}
+
+/**
+ * Identify a marked review authored by the machine user.
+ * @param {unknown} record Pull-request review record.
+ * @returns {boolean} Whether the review belongs to the approval publisher.
+ */
+export function isPublisherReview(record) {
+  return isPublisherAuthored(record) && typeof record.body === 'string' && record.body.includes(STATUS_MARKER)
+}
+
+/**
+ * Evaluate the approval policy with the Actions App token and publish its outcome, using the machine-user PAT only for a review write.
+ * @param {{event: unknown, policySource: string, readApi: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, reviewApi?: (path: string, options?: {method?: string, body?: unknown}) => Promise<unknown>, getOwnership?: typeof productionOwnership, getMergedCount?: typeof countMergedAuthorPulls, write?: (line: string) => void}} options Runtime inputs; readApi owns every repository read and status comment, reviewApi is optional until an approval submit or dismissal.
  * @returns {Promise<Awaited<ReturnType<typeof evaluateApproval>>>} Evaluated approval decision.
  */
-export async function runApprovalCheck({ event, policySource, api, readApi = api, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
+export async function runApprovalCheck({ event, policySource, readApi, reviewApi, getOwnership = productionOwnership, getMergedCount = countMergedAuthorPulls, write = line => process.stdout.write(`${line}\n`) }) {
+  if (typeof readApi !== 'function') throw new Error('runApprovalCheck requires the Actions App token API as readApi')
   const pull = pullRequestFromEvent(event)
-  await verifyPublisherIdentity(api)
+  const reviewWrite = lazyReviewWrite(reviewApi)
   let result
   try {
-    result = await evaluateApproval({ event, policySource, api, readApi, getOwnership, getMergedCount })
+    result = await evaluateApproval({ event, policySource, api: readApi, getOwnership, getMergedCount })
   } catch (error) {
     try {
-      await retractApprovalOnScoringFailure(api, pull, write)
+      await retractApprovalOnScoringFailure({ readApi, reviewWrite, pull, write })
     } catch (retractionError) {
       throw new Error(
         `${errorMessage(error)}; retracting the previous weighted approval also failed: ${errorMessage(retractionError)}`,
@@ -60,16 +86,16 @@ export async function runApprovalCheck({ event, policySource, api, readApi = api
   writeList(write, 'Blocking change requests', result.blockers.map(login => `@${login}`))
   writeList(write, 'Ignored reviewers without write access', result.ignoredReviewers.map(login => `@${login}`))
 
-  const reviews = await listPullRequestReviews(api, pull.repository, pull.number)
+  const reviews = await listPullRequestReviews(readApi, pull.repository, pull.number)
   const approvalReviews = reviews.filter(isApprovalReview)
   if (pull.draft) {
-    await retractApprovalReviews(api, pull, approvalReviews, write)
-    await removeStatusComment(api, pull, write)
+    await retractApprovalReviews({ reviewWrite, pull, reviews: approvalReviews, write })
+    await removeStatusComment(readApi, pull, write)
   } else if (result.state === 'success') {
     // A pushed head between evaluation and publication must not receive an approval for older code.
     await requireEvaluatedHead(readApi, pull)
     if (latestReviewState(approvalReviews, pull.headSha) !== 'APPROVED') {
-      const submitted = await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews`, {
+      const submitted = await reviewWrite(`/repos/${pull.repository}/pulls/${pull.number}/reviews`, {
         method: 'POST',
         body: { event: 'APPROVE', commit_id: pull.headSha, body: approvalReviewBody(result) },
       })
@@ -82,20 +108,20 @@ export async function runApprovalCheck({ event, policySource, api, readApi = api
     }
     // Keep the pending comment until the approval is confirmed, so a failed review leaves the
     // previous, still-accurate status visible.
-    await removeStatusComment(api, pull, write)
+    await removeStatusComment(readApi, pull, write)
   } else {
-    await retractApprovalReviews(api, pull, approvalReviews, write)
-    await upsertStatusComment(api, pull, result, write)
+    await retractApprovalReviews({ reviewWrite, pull, reviews: approvalReviews, write })
+    await upsertStatusComment(readApi, pull, result, write)
   }
   return result
 }
 
 /**
  * Resolve a manual refresh dispatch from its canonical pull-request number, ignoring payload state.
- * @param {{event: unknown, api: (path: string) => Promise<unknown>}} options Workflow-dispatch event and API caller.
+ * @param {{event: unknown, readApi: (path: string) => Promise<unknown>}} options Workflow-dispatch event and read API caller.
  * @returns {Promise<Record<string, unknown> | null>} Current PR event, or null for a closed PR.
  */
-export async function approvalEventFromWorkflowDispatch({ event, api }) {
+export async function approvalEventFromWorkflowDispatch({ event, readApi }) {
   if (!isRecord(event.inputs) || typeof event.inputs.pull_number !== 'string'
     || !/^[1-9][0-9]*$/u.test(event.inputs.pull_number)) {
     throw new Error('workflow dispatch has no valid pull-request number')
@@ -104,20 +130,26 @@ export async function approvalEventFromWorkflowDispatch({ event, api }) {
   if (!Number.isSafeInteger(number)) throw new Error('workflow dispatch pull-request number is not a safe integer')
   return approvalEventFromComment({
     event: { repository: event.repository, issue: { number, pull_request: {} } },
-    api,
+    api: readApi,
   })
 }
 
-function isPublisherPublication(record) {
-  return isPublisherAuthored(record) && typeof record.body === 'string' && record.body.includes(STATUS_MARKER)
+function lazyReviewWrite(reviewApi) {
+  let verified = false
+  return async (path, options) => {
+    if (typeof reviewApi !== 'function') {
+      throw new Error('APPROVAL_TOKEN is not set; submitting or dismissing a machine review requires the machine-user PAT')
+    }
+    if (!verified) {
+      await verifyPublisherIdentity(reviewApi)
+      verified = true
+    }
+    return reviewApi(path, options)
+  }
 }
 
 function isApprovalReview(review) {
-  return isPublisherPublication(review) && typeof review.state === 'string'
-}
-
-function isStatusComment(comment) {
-  return isPublisherPublication(comment)
+  return isPublisherReview(review) && typeof review.state === 'string'
 }
 
 // An approval for an older commit does not publish the decision for the evaluated head.
@@ -126,19 +158,19 @@ function latestReviewState(reviews, headSha) {
   return typeof latest?.state === 'string' && latest.commit_id === headSha ? latest.state.toUpperCase() : undefined
 }
 
-async function requireEvaluatedHead(api, pull) {
-  const current = await api(`/repos/${pull.repository}/pulls/${pull.number}`)
+async function requireEvaluatedHead(readApi, pull) {
+  const current = await readApi(`/repos/${pull.repository}/pulls/${pull.number}`)
   if (!isRecord(current) || current.state !== 'open' || current.draft !== false
     || !isRecord(current.head) || current.head.sha !== pull.headSha) {
     throw new Error('pull request closed, became a draft, or changed head before approval publication')
   }
 }
 
-async function retractApprovalReviews(api, pull, reviews, write) {
+async function retractApprovalReviews({ reviewWrite, pull, reviews, write }) {
   for (const review of reviews) {
     if (review.state.toUpperCase() !== 'APPROVED') continue
     const reviewId = positiveInteger(review.id, 'approval review ID')
-    const dismissed = await api(`/repos/${pull.repository}/pulls/${pull.number}/reviews/${reviewId}/dismissals`, {
+    const dismissed = await reviewWrite(`/repos/${pull.repository}/pulls/${pull.number}/reviews/${reviewId}/dismissals`, {
       method: 'PUT',
       body: { message: 'Weighted approval no longer holds.', event: 'DISMISS' },
     })
@@ -149,35 +181,35 @@ async function retractApprovalReviews(api, pull, reviews, write) {
   }
 }
 
-async function retractApprovalOnScoringFailure(api, pull, write) {
-  const reviews = await listPullRequestReviews(api, pull.repository, pull.number)
-  await retractApprovalReviews(api, pull, reviews.filter(isApprovalReview), write)
+async function retractApprovalOnScoringFailure({ readApi, reviewWrite, pull, write }) {
+  const reviews = await listPullRequestReviews(readApi, pull.repository, pull.number)
+  await retractApprovalReviews({ reviewWrite, pull, reviews: reviews.filter(isApprovalReview), write })
 }
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error)
 }
 
-async function upsertStatusComment(api, pull, result, write) {
-  const comments = await listRecords(api, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
-  const existing = comments.find(isStatusComment)
+async function upsertStatusComment(readApi, pull, result, write) {
+  const comments = await listRecords(readApi, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
+  const existing = comments.find(isActionsBotComment)
   const body = statusCommentBody(result)
   if (!existing) {
-    await api(`/repos/${pull.repository}/issues/${pull.number}/comments`, { method: 'POST', body: { body } })
+    await readApi(`/repos/${pull.repository}/issues/${pull.number}/comments`, { method: 'POST', body: { body } })
     write('Created the weighted approval comment.')
     return
   }
   const commentId = positiveInteger(existing.id, 'approval comment ID')
   if (existing.body === body) return
-  await api(`/repos/${pull.repository}/issues/comments/${commentId}`, { method: 'PATCH', body: { body } })
+  await readApi(`/repos/${pull.repository}/issues/comments/${commentId}`, { method: 'PATCH', body: { body } })
   write(`Updated the weighted approval comment ${commentId}.`)
 }
 
-async function removeStatusComment(api, pull, write) {
-  const comments = await listRecords(api, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
-  for (const comment of comments.filter(isStatusComment)) {
+async function removeStatusComment(readApi, pull, write) {
+  const comments = await listRecords(readApi, `/repos/${pull.repository}/issues/${pull.number}/comments`, 'pull-request comments')
+  for (const comment of comments.filter(isActionsBotComment)) {
     const commentId = positiveInteger(comment.id, 'approval comment ID')
-    await api(`/repos/${pull.repository}/issues/comments/${commentId}`, { method: 'DELETE' })
+    await readApi(`/repos/${pull.repository}/issues/comments/${commentId}`, { method: 'DELETE' })
     write(`Deleted the weighted approval comment ${commentId}.`)
   }
 }
@@ -262,25 +294,24 @@ async function main() {
   if (!eventPath) throw new Error('GITHUB_EVENT_PATH is not set')
   let event = JSON.parse(readFileSync(eventPath, 'utf8'))
   const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
-  // The machine-user PAT owns every write: the status comment, the approving review, and the
-  // dismissal that takes it back. GITHUB_TOKEN reads repository history and PR contents because a
-  // restricted PAT need not have Contents read.
-  const token = process.env.APPROVAL_TOKEN
-  if (!token) throw new Error('APPROVAL_TOKEN is not set')
+  const apiUrl = process.env.GITHUB_API_URL
+  // The workflow token owns every repository read and every status comment. The machine-user PAT is
+  // captured for review writes, verified only when one is needed, and removed before ownership or
+  // classifier child processes run, so those processes never inherit it.
   const readToken = process.env.GITHUB_TOKEN
   if (!readToken) throw new Error('GITHUB_TOKEN is not set')
-  const api = createGitHubApi({ token, apiUrl: process.env.GITHUB_API_URL })
-  // The client has captured the PAT; do not pass it to git or Python child processes.
+  const readApi = createGitHubApi({ token: readToken, apiUrl })
+  const reviewToken = process.env.APPROVAL_TOKEN
+  const reviewApi = reviewToken ? createGitHubApi({ token: reviewToken, apiUrl }) : undefined
   delete process.env.APPROVAL_TOKEN
-  const readApi = createGitHubApi({ token: readToken, apiUrl: process.env.GITHUB_API_URL })
   if (isRecord(event) && Object.hasOwn(event, 'inputs')) {
-    event = await approvalEventFromWorkflowDispatch({ event, api })
+    event = await approvalEventFromWorkflowDispatch({ event, readApi })
   } else if (isRecord(event) && isRecord(event.issue)) {
-    event = await approvalEventFromComment({ event, api })
+    event = await approvalEventFromComment({ event, api: readApi })
   } else if (isRecord(event) && isRecord(event.workflow_run)) {
-    event = await approvalEventFromWorkflowRun({ event, api })
+    event = await approvalEventFromWorkflowRun({ event, api: readApi })
   } else {
-    event = await approvalEventFromPullRequest({ event, api })
+    event = await approvalEventFromPullRequest({ event, api: readApi })
   }
   if (event === null) {
     process.stdout.write('Skipped an issue, closed pull request, or superseded pull-request head.\n')
@@ -290,8 +321,8 @@ async function main() {
   await runApprovalCheck({
     event,
     policySource,
-    api,
     readApi,
+    reviewApi,
   })
 }
 

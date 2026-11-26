@@ -7,7 +7,9 @@ import test from 'node:test'
 
 import { approvalEventFromWorkflowRun, runApprovalCheck } from './check-approval.mjs'
 import { runApprovalCheck as runPilot } from './publish-approval.mjs'
-import { HEAD_SHA, PUBLISHER, accountUser, comment, delegationApi, pullRequestEvent } from './review-fixtures.mjs'
+import {
+  ACTIONS_BOT, HEAD_SHA, PUBLISHER, STATUS_MARKER, accountUser, comment, delegationApi, pullRequestEvent,
+} from './review-fixtures.mjs'
 
 const policySource = readFileSync(new URL('approval-policy.json', import.meta.url), 'utf8')
 const review = (login, state, id = 10) => ({
@@ -50,12 +52,15 @@ function approvalApi({ comments = [], reviews = [], dismiss = async () => undefi
 // Records the writes each publisher makes against one shared review/comment state.
 // No review event is synthesized: the called pilot receives the same issue_comment event
 // that the reusable workflow passes to it after the legacy publisher completes.
-function statefulApprovalApi({ comments, reviews }) {
+// The workflow token owns reads and status comments; the machine PAT owns identity and reviews.
+function statefulApprovalApis({ comments, reviews }) {
   const read = delegationApi({ comments, reviews })
   const pull = pullRequestEvent().pull_request
+  const readCalls = []
+  const reviewCalls = []
   let nextCommentId = 100
   let nextReviewId = 200
-  return async (path, options = {}) => {
+  const api = async (path, options = {}) => {
     if (path === '/user') return { ...PUBLISHER }
     if (path.includes('/statuses/')) return {}
     if (path.includes('/commits/') && path.includes('/check-runs?')) return { total_count: 0, check_runs: [] }
@@ -82,7 +87,7 @@ function statefulApprovalApi({ comments, reviews }) {
     if (path.endsWith('/issues/42/comments') && options.method === 'POST') {
       const record = {
         id: nextCommentId++,
-        user: { ...PUBLISHER },
+        user: { ...ACTIONS_BOT },
         body: options.body.body,
         created_at: '2026-11-20T00:00:00Z',
       }
@@ -98,6 +103,23 @@ function statefulApprovalApi({ comments, reviews }) {
     if (path.endsWith('/requested_reviewers')) return { users: [] }
     return read(path, options)
   }
+  const readApi = async (path, options = {}) => {
+    const method = options.method ?? 'GET'
+    readCalls.push({ path, method })
+    assert.notEqual(path, '/user')
+    assert.ok(!path.endsWith('/dismissals'))
+    assert.ok(!(path.endsWith('/pulls/42/reviews') && method === 'POST'))
+    return api(path, options)
+  }
+  const reviewApi = async (path, options = {}) => {
+    const method = options.method ?? 'GET'
+    reviewCalls.push({ path, method })
+    if (path === '/user') return { ...PUBLISHER }
+    if (path.endsWith('/pulls/42/reviews') && method === 'POST') return api(path, options)
+    if (path.endsWith('/dismissals') && method === 'PUT') return api(path, options)
+    throw new Error(`unexpected review API path ${path}`)
+  }
+  return { api, readApi, reviewApi, readCalls, reviewCalls }
 }
 
 const delegationEvent = () => ({
@@ -253,13 +275,15 @@ test('standalone pending, legacy dismissal, called pilot approval in one statefu
     { user: accountUser('turtle1999'), state: 'CHANGES_REQUESTED', submitted_at: '2026-09-14T00:00:00Z', id: 10 },
     { user: accountUser('writer'), state: 'APPROVED', submitted_at: '2026-09-14T00:00:00Z', id: 20 },
   ]
-  const api = statefulApprovalApi({ comments, reviews })
+  const stateful = statefulApprovalApis({ comments, reviews })
+  const { readApi, reviewApi, readCalls, reviewCalls } = stateful
   const event = delegationEvent()
   const options = {
     event,
     policySource,
-    api,
-    readApi: api,
+    api: stateful.api,
+    readApi,
+    reviewApi,
     runUrl: 'https://github.example/run/1',
     getMergedCount: async () => 0,
     getOwnership: async () => ({ totalLines: 0, reviewerLines: {} }),
@@ -270,10 +294,13 @@ test('standalone pending, legacy dismissal, called pilot approval in one statefu
   assert.equal(standalone.state, 'pending')
   assert.deepEqual(standalone.blockers, ['turtle1999'])
   assert.equal(comments.length, 2)
+  assert.equal(comments[1].user.id, ACTIONS_BOT.id)
+  assert.equal(comments[1].user.login, ACTIONS_BOT.login)
+  assert.equal(comments[1].body.split('\n', 1)[0], STATUS_MARKER)
   assert.match(comments[1].body, /Blocking change requests/u)
   assert.equal(reviews.filter(entry => entry.user.id === PUBLISHER.id && entry.state === 'APPROVED').length, 0)
 
-  const legacy = await runApprovalCheck({ ...options, checkApi: api, checkAppSlug: 'github-actions' })
+  const legacy = await runApprovalCheck({ ...options, checkApi: stateful.api, checkAppSlug: 'github-actions' })
   assert.equal(legacy.state, 'success')
   assert.deepEqual(legacy.blockers, [])
   assert.equal(reviews.find(entry => entry.id === 10).state, 'DISMISSED')
@@ -287,6 +314,17 @@ test('standalone pending, legacy dismissal, called pilot approval in one statefu
   const approvals = reviews.filter(entry => entry.user.id === PUBLISHER.id && entry.state === 'APPROVED')
   assert.equal(approvals.length, 1)
   assert.equal(approvals[0].commit_id, HEAD_SHA)
+
+  // The workflow token never identifies the machine user or writes a review; the PAT never touches
+  // repository reads or the status comment.
+  assert.ok(readCalls.every(call => call.path !== '/user'))
+  assert.ok(readCalls.every(call => !call.path.endsWith('/dismissals')))
+  assert.ok(readCalls.every(call => !(call.path.endsWith('/pulls/42/reviews') && call.method === 'POST')))
+  assert.ok(reviewCalls.every(call => call.path === '/user'
+    || (call.path.endsWith('/pulls/42/reviews') && call.method === 'POST')
+    || (call.path.endsWith('/dismissals') && call.method === 'PUT')))
+  assert.ok(reviewCalls.some(call => call.path === '/user'))
+  assert.ok(reviewCalls.some(call => call.method === 'POST' && call.path.endsWith('/pulls/42/reviews')))
 })
 
 test('does not record dismissed=true without a delegated dismissal', async t => {
