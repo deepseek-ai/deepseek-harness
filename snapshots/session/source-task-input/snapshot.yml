@@ -1,0 +1,8 @@
+version: 1
+scenario: source-task-input
+profile: headless
+composition: source-task-input
+recording: live
+header:
+  class: source-task-input
+  pin: true

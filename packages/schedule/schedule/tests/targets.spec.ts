@@ -53,7 +53,7 @@ async function setup(tasks: ScheduleTask[], limits = LIMITS, options: Parameters
     const index = tasks.findIndex(item => item.record.id === next.record.id)
     tasks[index] = next
   })
-  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, () => {}, limits, test.resolveAgent)
+  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, () => {}, limits, test.resolveAgent, () => test.ctx.get('sessionController'))
   runtimes.push(runtime)
   return { ...test, agents, commit, runtime }
 }

@@ -3537,6 +3537,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Shared management service; reads and management writes never activate a Session, and only delivery creates or resumes one.\n\n`sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.',
     methods: [
       {
+        signature: 'async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>',
+        description: 'Deliver an observation to an existing task without consuming its scheduled occurrence.',
+        parameters: [{ name: 'id', description: 'Task to deliver to.' }, { name: 'candidate', description: 'Observed text to send alongside the stored instruction; its JSON string must fit in 10 MiB of UTF-8.' }],
+        returns: 'Resolves when the Session inbox and task receipt are both persisted, not when the model responds.',
+        throws: ['SOURCE_INPUT_TOO_LARGE before delivery if the encoded text exceeds the limit. Submission also rejects if the caller is disposed, the runtime or task is unavailable, or delivery fails. A receipt write can fail after the inbox is persisted; submission does not retry.'],
+      },
+      {
         signature: '@Remote(\'deliveryLimits\') deliveryLimits(): { readonly newSessionIntervalSeconds: number }',
         description: 'Read effective delivery limits without loading or activating a task.',
         parameters: [],
@@ -7082,6 +7089,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AuthorizationStatus',
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
+  },
+  {
+    name: 'AutomationCandidate',
+    declaration: 'export interface AutomationCandidate {\n    readonly text: string;\n}',
   },
   {
     name: 'AutoMergeRequest',

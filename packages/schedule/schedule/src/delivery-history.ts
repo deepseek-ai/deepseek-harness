@@ -11,7 +11,7 @@ const DAY_MS = 86_400_000
  * Prepare one real inbox acknowledgment for the same task write as its status and target.
  * Prunes to the configured window and record cap here, on the only write path, so a task record does not grow
  * with every acknowledgment.
- * @param task - Task supplying the immutable sent prompt and retained history.
+ * @param task - Task supplying the stored instruction snapshot and retained history.
  * @param receipt - Acknowledgment obtained after successful Session flush.
  * @param bounds - Configured retention window and record cap for the appended history.
  * @returns Receipt and retained history; the caller publishes them only after task persistence.
