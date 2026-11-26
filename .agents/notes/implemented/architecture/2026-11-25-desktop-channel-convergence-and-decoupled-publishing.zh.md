@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-保留 `stable` 与 `nightly` 双渠道。本地构建与 CI 打包工作流默认将 `DSH_DESKTOP_UPDATE_CHANNEL` 设为 `stable`。`Publish Desktop · COS` 与 `Publish Desktop · Rollout & Website` 通过独立的布尔复选框在同一份留存签名包上选择发布目标渠道（`stable`、`nightly` 或双渠道）及官网安装包上传，按渠道独立加锁与记录审计，并在生产环境按打包源码提交创建一次 `desktop-v<version>` tag。仅发布官网的放量运行直接校验并上传留存生产安装包与刷新缓存，不要求先完成渠道首发；`rollback-desktop-channel.ts` 依据 `DESKTOP_PUBLISH_ROUTE.channel` 而非 `manifest.source.channel` 重建回滚目标。
+保留 `stable` 与 `nightly` 双渠道。本地构建与 CI 打包工作流默认将 `DSH_DESKTOP_UPDATE_CHANNEL` 设为 `stable`。`Publish Desktop · COS` 与 `Publish Desktop · Rollout & Website` 通过独立的布尔复选框在同一份留存签名包上选择发布目标渠道（`stable`、`nightly` 或双渠道）及官网安装包上传，按渠道独立加锁与记录审计，并在生产环境按打包源码提交创建一次 `desktop-v<version>` tag。仅发布官网的放量运行直接校验并上传留存生产安装包与刷新缓存，不要求先完成渠道首次发布；`rollback-desktop-channel.ts` 依据 `DESKTOP_PUBLISH_ROUTE.channel` 而非 `manifest.source.channel` 重建回滚目标。
 
 `userData/desktop/settings.json` 引入 `"version": "1"`。启动初始化在文件缺失时创建 `"version": "1"`，并将有效的无版本文件原地迁移为 `"version": "1"`，同时移除无版本的 `updates.channelUnlocked` 字段并将无版本的 `"nightly"` 渠道重置为 `"stable"`，绝不覆盖损坏的 JSON、无效结构、不支持的 `version` 值或无效字段。只要未同时具备 `"version": "1"` 与 `updates.channelUnlocked: true`，客户端即隐藏**更新渠道**（除非存在需恢复的配置错误），并将运行时有效渠道强制锁定为 `stable`，忽略包内 `dshDesktopUpdateChannel` 或未解锁字段。在桌面版**设置 → 通用设置**中连续点击五次**当前版本**会弹出风险确认对话框（初始焦点位于**取消**）；确认后写入 `"version": "1"`、`updates.channel: "nightly"` 与 `updates.channelUnlocked: true`，立即切换至 `nightly`，并在后续切回 `stable` 后继续显示**更新渠道**。
 
@@ -20,7 +20,7 @@ Status: implemented
 
 ## 渠道术语与清单路由
 
-包内渠道标记（`dshDesktopUpdateChannel`）、发布目标渠道（`stable` / `nightly`）、客户端有效更新渠道（未解锁固定为 `stable`，解锁后按用户选择）与公开更新查询入口（`stable[-mac].yml` / `nightly[-mac].yml`）相互独立：包内标记为 `stable` 的产物可投递到 `nightly`，`stable` 渠道也可发布 RC 或 alpha 预发布版本。由于客户端禁用自动降级，已安装更高预发布版本的设备在 `stable` 尚未发布更高版本前保持当前版本，待更高版本发布后随常规升级完成迁移归位。
+包内渠道标记（`dshDesktopUpdateChannel`）、发布目标渠道（`stable` / `nightly`）、客户端有效更新渠道（未解锁固定为 `stable`，解锁后按用户选择）与公开更新查询入口（`stable[-mac].yml` / `nightly[-mac].yml`）相互独立：包内标记为 `stable` 的产物可投递到 `nightly`，`stable` 渠道也可发布 RC 或 alpha 预发布版本。由于客户端禁用自动降级，已安装更高预发布版本的设备在 `stable` 尚未发布更高版本前保持当前版本，待更高版本发布后随常规升级回到 `stable` 渠道。
 
 | 公开更新查询入口 | 请求条件 | 返回内容 |
 |---|---|---|
@@ -33,7 +33,7 @@ Status: implemented
 ## 后续推进项
 
 - **外部更新网关分流配置（#9204）**：在停止向 `nightly` 同步投递稳妥版本前，由网关或动态更新服务对 `/dsh-desk/feeds/<target>/<feed>.yml` 按上表规则启用请求头分流；客户端启动、迁移与渠道切换不依赖网关切换时机。
-- **官网安装包包内渠道门禁收口（#9204）**：在留存的 `nightly` 标记包逐步退役期间，`desktop-website-installer.ts` 允许任一 `manifest.source.channel` 上传官网，后续收紧为仅允许 `manifest.source.channel === 'stable'`。
+- **收紧官网安装包的包内渠道检查（#9204）**：在留存的 `nightly` 标记包逐步退役期间，`desktop-website-installer.ts` 允许任一 `manifest.source.channel` 上传官网，后续收紧为仅允许 `manifest.source.channel === 'stable'`。
 - **登录账号维度灰度请求头（#9204）**：向清单请求补充已登录账号标识请求头的工作留待动态更新分发后端消费该字段时一并接入。
 
 ## 考虑过的替代方案

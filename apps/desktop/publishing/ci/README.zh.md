@@ -85,11 +85,11 @@ Windows 打包运行会展示中文参数摘要，列出请求的源码、环境
 
 ## 放量与官网发布
 
-按 10% → 30% → 100% 放量时，先通过 COS 流程勾选目标渠道复选框（`publish_stable` 及／或 `publish_nightly`），以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID、选择 attempt（默认 1，请与原打包 run 核对），并勾选布尔复选框 `rollout_stable`、`rollout_nightly`、`upload_website`（默认均为 `false`，至少勾选一项）。勾选 `rollout_stable` 或 `rollout_nightly` 时必须填写 `rollout_percentage`（`1`–`100`，如依次填 `30`、`100`）；未勾选任何放量渠道（仅 `upload_website=true`）时必须将 `rollout_percentage` 留空。官网发布独立于放量比例与渠道首发：官网安装包面向所有下载用户。修改放量比例前审批一次，官网上传前另行审批一次；上传成功后自动刷新缓存，上传失败或取消时不执行刷新。仅发布官网时跳过渠道首发校验和放量 job，只需官网审批。每个平台使用各自的打包 run。
+按 10% → 30% → 100% 放量时，先通过 COS 流程勾选目标渠道复选框（`publish_stable` 及／或 `publish_nightly`），以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID、选择 attempt（默认 1，请与原打包 run 核对），并勾选布尔复选框 `rollout_stable`、`rollout_nightly`、`upload_website`（默认均为 `false`，至少勾选一项）。勾选 `rollout_stable` 或 `rollout_nightly` 时必须填写 `rollout_percentage`（`0`–`100`，如依次填 `30`、`100`）；未勾选任何放量渠道（仅 `upload_website=true`）时必须将 `rollout_percentage` 留空。官网发布独立于放量比例与渠道首次发布：官网安装包面向所有下载用户。修改放量比例前审批一次，官网上传前另行审批一次；上传成功后自动刷新缓存，上传失败或取消时不执行刷新。仅发布官网时跳过渠道首次发布记录校验和放量 job，只需官网审批。每个平台使用各自的打包 run。
 
 勾选一个或两个放量渠道时，准备阶段检查 GitHub 身份、保留清单、小体积更新 YAML 和各所选目标渠道（`stable` 或 `nightly`）已完成的首次发布记录，不重新计算安装包哈希，也不重复检查签名或公证。Environment 审批后，执行阶段按序读取各所选渠道的当前 COS 更新清单，核对版本、安装包 URL、大小、哈希和其他元数据仍对应已发布包，只修改 `stagingPercentage`。更新清单缺失或已被其他包替换时拒绝执行。同一比例重复执行不写入；不允许降低比例。审批展示目标比例，当前比例在执行时从 COS 读取。
 
-官网上传复用原机保留的安装器，只校验该安装器的哈希，在校验与上传期间持有官网目标锁（`website-<target>`），并沿用已有上传与刷新恢复记录。Rollout 仅重试缓存刷新时校验准备阶段生成的官网审批摘要和上传记录，不再要求 Environment 审批、原更新 YAML 或首次 feed 发布记录。纯放量不需要安装器文件；未勾选 `rollout_stable` 与 `rollout_nightly` 时，官网发布只需安装器文件与 manifest，不依赖已完成渠道首发。比例变更前后的 YAML 按渠道分别写入放量审计记录；此工作流不构建安装包、不上传版本化安装包，也不创建 release tag。
+官网上传复用原机保留的安装器，只校验该安装器的哈希，在校验与上传期间持有官网安装包目标对象锁（`<bucket>/desktop/<installer-filename>`），并沿用已有上传与刷新恢复记录。Rollout 仅重试缓存刷新时校验准备阶段生成的官网审批摘要和上传记录，不再要求 Environment 审批、原更新 YAML 或首次 feed 发布记录。纯放量不需要安装器文件；未勾选 `rollout_stable` 与 `rollout_nightly` 时，官网发布只需安装器文件与 manifest，不要求先完成渠道首次发布。比例变更前后的 YAML 按渠道分别写入放量审计记录；此工作流不构建安装包、不上传版本化安装包，也不创建 release tag。
 
 <a id="recovery-and-records"></a>
 
@@ -99,7 +99,7 @@ Windows 打包运行会展示中文参数摘要，列出请求的源码、环境
 
 打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。归档重跑若一直排队且未分配 runner，应先检查解析出的 runner 标签和上游 package 输出，不能直接认定机器离线。输出缺失时需由操作者从原留存目录和 manifest 恢复文件；重跑整个 workflow 会重新构建，不属于仅归档恢复。Actions 验收须验证输出复用。
 
-两个发布工作流的官网安装包上传均为显式勾选项（默认 `upload_website=false`）；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。在旧的 `nightly` 标记留存包逐步退役期间，两种包内 `source.channel` 标记的生产安装包均可替换官网固定安装包；将官网上传校验收口为仅允许 `source.channel === 'stable'` 由 #9204 跟踪。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
+两个发布工作流的官网安装包上传均为显式勾选项（默认 `upload_website=false`）；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。在旧的 `nightly` 标记留存包逐步退役期间，两种包内 `source.channel` 标记的生产安装包均可替换官网固定安装包；将官网上传校验收紧为仅允许 `source.channel === 'stable'` 由 #9204 跟踪。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
 
 在每台发布 runner 的 `publishing/production.json` 中将 `edgeOneZoneId` 配置为生产 EdgeOne 站点（例如 `"edgeOneZoneId": "zone-example"`）。官网发布在审批前要求该字段；仅 COS 发布和放量不需要。Actions 不读取仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID`。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。COS 工作流的版本发布、官网上传和缓存刷新分别使用生产审批 Environment。Rollout 工作流仅在放量修改和官网上传时使用它；缓存刷新跟随已批准的上传执行，不再要求 Environment 审批。重跑带 Environment 的 job 可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
 
