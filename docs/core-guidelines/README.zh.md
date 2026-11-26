@@ -14,6 +14,7 @@
 - [F：前端](frontend.zh.md)
 - [B：后端](backend.zh.md)
   - [B.1：用生命周期事件驱动插件工作，而不是用轮询 Agent 状态的循环](backend.zh.md#b1)
+  - [B.2：通过注册表注册独立条目，不要把它们列在单个插件的配置中](backend.zh.md#b2)
 - [D：数据交换](data-exchange.zh.md)
 
 ## 地位与范围
