@@ -126,13 +126,11 @@ export class DesktopUpdateCoordinator {
    * suspends updates until another explicit switch successfully retires the target.
    * @param channel - Validated UI choice.
    * @param persist - Atomic settings save; rejects before a choice is applied on failure.
-   * @param forcePersist - Persist and apply even when the channel matches, such as unlocking stable.
    * @returns Whether the selection changed; healthy repeated choices preserve the current operation.
    */
   switchChannel(
     channel: DesktopUpdateChannel,
     persist: () => Promise<void>,
-    forcePersist = false,
   ): Promise<'applied' | 'unchanged'> {
     this.assertLive()
     if (this.installOperation !== undefined || this.current.phase === 'installing' || this.release.kind === 'handed-off') {
@@ -141,7 +139,7 @@ export class DesktopUpdateCoordinator {
     this.switching++
     const operation = this.switchTail.then(async () => {
       this.assertLive()
-      if (channel === this.channel && this.configurationError === undefined && !forcePersist) return 'unchanged' as const
+      if (channel === this.channel && this.configurationError === undefined) return 'unchanged' as const
       await persist()
       this.generation++
       this.cancellation?.cancel()

@@ -32,15 +32,11 @@ function selectedRolloutChannels(
   env: NodeJS.ProcessEnv,
   target: number | undefined,
   website: boolean,
-  fallbackChannel: 'nightly' | 'stable',
 ): readonly ('nightly' | 'stable')[] {
-  const explicit = env.DESKTOP_ROLLOUT_STABLE !== undefined || env.DESKTOP_ROLLOUT_NIGHTLY !== undefined
-  const channels = explicit
-    ? [
-      ...(booleanEnv(env, 'DESKTOP_ROLLOUT_STABLE') ? ['stable' as const] : []),
-      ...(booleanEnv(env, 'DESKTOP_ROLLOUT_NIGHTLY') ? ['nightly' as const] : []),
-    ]
-    : (target === undefined ? [] : [fallbackChannel])
+  const channels = [
+    ...(booleanEnv(env, 'DESKTOP_ROLLOUT_STABLE') ? ['stable' as const] : []),
+    ...(booleanEnv(env, 'DESKTOP_ROLLOUT_NIGHTLY') ? ['nightly' as const] : []),
+  ]
   if (channels.length === 0 && !website) {
     throw new Error('desktop rollout: select rollout_stable, rollout_nightly, or upload_website')
   }
@@ -67,7 +63,7 @@ export async function prepareDesktopRolloutCi(env: NodeJS.ProcessEnv) {
   }
   const target = input === '' ? undefined : Number(input)
   const website = booleanEnv(env, 'DESKTOP_UPLOAD_WEBSITE')
-  const channels = selectedRolloutChannels(env, target, website, route.channel)
+  const channels = selectedRolloutChannels(env, target, website)
   if (website && route.preset !== 'production') {
     throw new Error('desktop rollout: website publication requires production')
   }

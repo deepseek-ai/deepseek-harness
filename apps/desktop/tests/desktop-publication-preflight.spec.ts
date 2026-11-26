@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { retainDesktopCi } from '../scripts/retain-desktop-ci.ts'
 import { desktopPublicationSummary } from '../scripts/desktop-publication-summary.ts'
-import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
+import { executeDesktopChannelPublications, prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 
 it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s build without credentials or source checkout manifests', async (target) => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-preflight-'))
@@ -40,6 +40,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     }))
     const env = {
       DSH_PACKAGING_CONFIG_DIR: configRoot, DSH_PACKAGING_PRESET: 'test', DSH_DESKTOP_UPDATE_CHANNEL: 'nightly',
+      DESKTOP_PUBLISH_NIGHTLY: 'true',
       DESKTOP_PUBLISH_RUNNERS: JSON.stringify({ 'fixture-runner': { label: 'dsh-fixture', target: [target] } }),
       DSH_DESKTOP_TARGET_PLATFORM: target === 'win-x64' ? 'win32' : 'darwin', DSH_DESKTOP_TARGET_ARCH: target === 'win-x64' ? 'x64' : 'arm64',
       PACKAGE_SOURCE_REF: 'master', PACKAGE_SOURCE_SHA: 'b'.repeat(40), PACKAGE_VERSION: '1.0.0', PACKAGE_SIGNING: 'signed', PACKAGE_SKIP_NOTARIZATION: 'false',
@@ -57,7 +58,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
     expect(preparedPlan.version).toBe('1.0.0')
     expect(preparedPlan.artifacts.every(file => file.path.startsWith(retained))).toBe(true)
     expect(signatureChecks).toBe(1)
-    const summary = await desktopPublicationSummary(prepared.manifest.source, preparedPlan, 'c'.repeat(64), false)
+    const summary = await desktopPublicationSummary(prepared.manifest.source, prepared.plans, 'c'.repeat(64), false)
     await expect(summary).toMatchFileSnapshot(`./expected/publication-${target}.md`)
     const feed = preparedPlan.artifacts.find(file => file.channelMetadata)!
     expect(summary).toContain(createHash('sha256').update(feed.contents!).digest('hex'))
@@ -71,7 +72,7 @@ it.each(['mac-arm64', 'win-x64'] as const)('preflights a complete retained %s bu
       const stagedFeed = stagedPlan.artifacts.find(file => file.channelMetadata)!
       expect(load(stagedFeed.contents!)).toMatchObject({ stagingPercentage: Number(percentage) })
       expect(staged.approval).not.toBe(prepared.approval)
-      expect(await desktopPublicationSummary(staged.manifest.source, stagedPlan, staged.approval, false)).toContain(`${percentage}%`)
+      expect(await desktopPublicationSummary(staged.manifest.source, staged.plans, staged.approval, false)).toContain(`${percentage}%`)
       await expect(prepareDesktopPublication({ ...env, DESKTOP_STAGING_PERCENTAGE: percentage,
         DESKTOP_APPROVED_PACKAGE: prepared.approval }, signature)).rejects.toThrow(/changed after approval/u)
     }
@@ -138,7 +139,7 @@ it('verifies signatures once when publishing a stable-marked build to both chann
     expect(dual.plans.map(entry => entry.plan.artifacts.find(file => file.channelMetadata)!.filename))
       .toEqual(['stable-mac.yml', 'nightly-mac.yml'])
     const dualSummary = await desktopPublicationSummary(
-      dual.manifest.source, dual.plans.map(entry => entry.plan), dual.approval, true, dual.config.bucket,
+      dual.manifest.source, dual.plans, dual.approval, true, dual.config.bucket,
     )
     expect(dualSummary).toContain('<code>stable</code>、<code>nightly</code>')
     expect(dualSummary).toContain('更新灰度比例（stable）')
@@ -152,5 +153,34 @@ it('verifies signatures once when publishing a stable-marked build to both chann
     await expect(prepareDesktopPublication({
       ...env, DESKTOP_PUBLISH_STABLE: 'false', DESKTOP_PUBLISH_NIGHTLY: 'false', DESKTOP_UPLOAD_WEBSITE: 'false',
     }, async () => {})).rejects.toThrow('select publish_stable, publish_nightly, or upload_website')
+    await expect(prepareDesktopPublication(env, async () => {}))
+      .rejects.toThrow('select publish_stable, publish_nightly, or upload_website')
+
+    // Dual-channel publish creates desktop-v<version> as soon as stable finishes even if nightly is superseded.
+    const objects = new Map<string, { contents: string; size: number; sha512: string }>([
+      ['dsh-desk/feeds/mac-arm64/nightly-mac.yml', {
+        contents: 'version: 2.0.0\n',
+        size: Buffer.byteLength('version: 2.0.0\n'),
+        sha512: createHash('sha512').update('version: 2.0.0\n').digest('base64'),
+      }],
+    ])
+    const tagCalls: string[] = []
+    await expect(executeDesktopChannelPublications(dual, {
+      ...env, DESKTOP_TAG_TOKEN: 'fixture-app-token',
+    }, {
+      createTransport: () => ({
+        async read(key) { return objects.get(key) ?? null },
+        async put(artifact, digest) {
+          const text = artifact.contents ?? 'uploaded'
+          objects.set(artifact.key, { contents: text, ...digest })
+        },
+      }),
+      createTag: async (repository, version, recordedCommit, token) => {
+        tagCalls.push(`${repository}@${version}#${recordedCommit}:${token}`)
+        return tagCalls.length === 1 ? 'created' : 'present'
+      },
+    })).rejects.toThrow(/newer version/u)
+    expect(tagCalls).toEqual([`owner/repo@1.0.0#${commit}:fixture-app-token`])
+    expect(objects.get('dsh-desk/feeds/mac-arm64/stable-mac.yml')?.contents).toContain('version: 1.0.0')
   } finally { await rm(root, { recursive: true, force: true }) }
 })

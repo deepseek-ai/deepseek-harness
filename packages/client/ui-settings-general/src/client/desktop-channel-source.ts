@@ -51,7 +51,7 @@ export class DesktopChannelSource {
   async select(channel: DesktopUpdateChannel): Promise<void> {
     if (!this.isLive() || this.store.getSnapshot().pending !== undefined) return
     const state = this.store.getSnapshot().state
-    if (state?.unlocked && state.channel === channel && state.error === undefined && !state.changing) return
+    if (state?.channel === channel && state.error === undefined && !state.changing) return
     const revision = this.revision
     const { notice: _notice, ...previous } = this.store.getSnapshot()
     this.store.set({ ...previous, pending: channel })

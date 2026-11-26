@@ -26,7 +26,6 @@ function metadata(contents: string) {
 
 /** Validated immutable update identity; no installer bytes are read. */
 export interface DesktopRolloutPlan {
-  readonly channel: 'nightly' | 'stable'
   readonly upload: DesktopSingleUploadPlan
   readonly expected: string
 }
@@ -69,7 +68,7 @@ export async function prepareDesktopRollout(directory: string, manifest: Desktop
   const url = `${update.origin}/${update.binaryKeyPrefix}/${payload}`
   const expected = dump({ ...parsed, files: [{ ...entry, url }],
     ...(parsed.path === undefined ? {} : { path: url }) })
-  return { channel: targetChannel, expected, upload: {
+  return { expected, upload: {
     environment: source.preset, target: source.target, version: source.version, commit: source.commit, dirty: false,
     publicUrl: update.publicUrl, bucket: update.bucket,
     secretIdEnvName: update.secretIdEnvName, secretKeyEnvName: update.secretKeyEnvName,

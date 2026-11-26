@@ -701,13 +701,12 @@ async function main(): Promise<void> {
   }
 
   const manifest: unknown = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'))
-  const packagedChannel = desktopUpdateChannel(manifest)
+  desktopUpdateChannel(manifest)
   const channelSettings = new DesktopUpdateSettings(app.getPath('userData'))
   const initialChannel = await channelSettings.load()
   let configVersion: DesktopUpdateConfigVersion = initialChannel.kind === 'ready' ? initialChannel.configVersion : '0'
   channelState = {
     channel: initialChannel.kind === 'ready' ? initialChannel.channel : null,
-    packagedChannel,
     unlocked: initialChannel.kind === 'ready' ? initialChannel.unlocked : false,
     changing: false,
     ...(initialChannel.kind === 'error' ? { error: configurationFailure(initialChannel.error) } : {}),
@@ -941,7 +940,6 @@ async function main(): Promise<void> {
             updates.suspendConfiguration('desktop update: settings save outcome is unknown')
             publishChannel({
               channel: updates.selectedChannel,
-              packagedChannel,
               unlocked: channelState?.unlocked ?? false,
               changing: true,
               error: 'read',
@@ -949,13 +947,12 @@ async function main(): Promise<void> {
           }
           throw error
         }
-      }, !channelState.unlocked)
+      })
       if (kind === 'applied') void mandatoryPolicy?.check('channel-change', true).catch((error: unknown) => { console.error(error) })
       return {
         kind,
         state: publishChannel({
           channel: updates.selectedChannel,
-          packagedChannel,
           unlocked: channelState.unlocked,
           changing: --channelRequests > 0,
         }),
@@ -1017,10 +1014,10 @@ async function main(): Promise<void> {
                   return false
                 }
                 configVersion = loaded.configVersion
+                channelState = { ...channelState, unlocked: loaded.unlocked }
                 await updates.switchChannel(loaded.channel, async () => {})
                 publishChannel({
                   channel: updates.selectedChannel,
-                  packagedChannel,
                   unlocked: loaded.unlocked,
                   changing: true,
                 })

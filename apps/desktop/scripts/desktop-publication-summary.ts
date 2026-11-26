@@ -15,39 +15,35 @@ function code(value: string): string { return `<code>${text(value)}</code>` }
 function row(label: string, value: string): string { return `| ${label} | ${value} |` }
 function link(url: string, label = url): string { return `<a href="${text(url)}">${text(label)}</a>` }
 
-function planChannel(plan: DesktopUploadPlan): 'nightly' | 'stable' {
-  const feed = plan.artifacts.find(file => file.channelMetadata)
-  return feed?.filename.startsWith('stable') ? 'stable' : 'nightly'
-}
-
 /**
  * Render Chinese approval details after package, destination and signature verification succeeds.
  * @param source Verified retained packaging identity; a test plan requires its validated release ID.
- * @param planOrPlans Validated upload plan or per-channel plans; YAML contents are the bytes that will be uploaded.
+ * @param plans Validated per-channel upload plans; YAML contents are the bytes that will be uploaded.
  * @param approval Digest bound to the approved manifest and upload plans.
  * File SHA-256 hex supports `shasum -a 256` on downloads; upload reconciliation separately uses SHA-512 base64.
  * @param uploadWebsite Whether the selected operation also replaces the production website installer.
+ * @param bucketOverride Bucket name used when website-only publication has no channel upload plan.
  * @returns GitHub-flavored Markdown with final URLs and upload-byte fingerprints, without credentials or local paths.
  */
 export async function desktopPublicationSummary(
   source: DesktopRetainedSource,
-  planOrPlans: DesktopUploadPlan | readonly DesktopUploadPlan[],
+  plans: readonly { readonly channel: 'nightly' | 'stable'; readonly plan: DesktopUploadPlan }[],
   approval: string,
   uploadWebsite: boolean,
   bucketOverride?: string,
 ): Promise<string> {
-  const plans = Array.isArray(planOrPlans) ? planOrPlans : [planOrPlans]
-  const environmentName = plans[0]?.environment ?? source.preset
-  const target = plans[0]?.target ?? source.target
-  const version = plans[0]?.version ?? source.version
-  const bucket = plans[0]?.bucket ?? bucketOverride ?? ''
-  const targetChannels = plans.map(planChannel)
+  const first = plans[0]?.plan
+  const environmentName = first?.environment ?? source.preset
+  const target = first?.target ?? source.target
+  const version = first?.version ?? source.version
+  const bucket = first?.bucket ?? bucketOverride ?? ''
+  const targetChannels = plans.map(entry => entry.channel)
   const files: string[] = []
   const installers: string[] = []
   const feeds: string[] = []
   const percentageRows: string[] = []
   const installerExtension = target === 'win-x64' ? '.exe' : '.dmg'
-  for (const plan of plans) {
+  for (const { channel, plan } of plans) {
     const origin = new URL(plan.publicUrl).origin
     const url = (key: string) => `${origin}/${key.split('/').map(encodeURIComponent).join('/')}`
     for (const file of plan.artifacts) {
@@ -60,7 +56,7 @@ export async function desktopPublicationSummary(
       if (file.channelMetadata) {
         feeds.push(link(url(file.key)))
         const metadata = z.object({ stagingPercentage: z.number().optional() }).parse(load(file.contents!))
-        const label = plans.length > 1 ? `更新灰度比例（${planChannel(plan)}）` : '更新灰度比例'
+        const label = plans.length > 1 ? `更新灰度比例（${channel}）` : '更新灰度比例'
         percentageRows.push(row(label, metadata.stagingPercentage === undefined ? '全量（未设置）' : `${metadata.stagingPercentage}%`))
       }
     }

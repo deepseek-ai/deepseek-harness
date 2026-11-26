@@ -180,6 +180,10 @@ it('requires initial publication evidence and prepares approval without installe
       .rejects.toThrow(/select rollout_stable, rollout_nightly, or upload_website/u)
     await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_NIGHTLY: 'false', DESKTOP_ROLLOUT_PERCENTAGE: '30', DESKTOP_UPLOAD_WEBSITE: 'true' }))
       .rejects.toThrow(/select rollout_stable or rollout_nightly/u)
+    await expect(prepareDesktopRolloutCi({
+      RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: config,
+      DESKTOP_PUBLISH_ROUTE: JSON.stringify(route), DESKTOP_ROLLOUT_PERCENTAGE: '30',
+    })).rejects.toThrow(/select rollout_stable, rollout_nightly, or upload_website/u)
     await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: 'NaN' })).rejects.toThrow(/integer/u)
     await expect(prepareDesktopRolloutCi({ ...env, RUNNER_NAME: 'other' })).rejects.toThrow(/original machine/u)
   } finally { await rm(f.root, { recursive: true, force: true }) }

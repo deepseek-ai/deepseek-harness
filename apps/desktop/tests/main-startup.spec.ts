@@ -52,6 +52,7 @@ const harness = await vi.hoisted(async () => {
   let pluginsEnabled = false
   let prepareUpdate: (() => Promise<boolean>) | undefined
   let publishUpdate: ((state: DesktopUpdateState) => DesktopUpdateState) | undefined
+  let feedStateOnSwitch: { readonly configVersion: string; readonly unlocked: boolean } | undefined
   let preparing = deferred()
   let prepared = deferred()
   let hostStarted = deferred()
@@ -251,6 +252,8 @@ const harness = await vi.hoisted(async () => {
     set prepareUpdate(value: () => Promise<boolean>) { prepareUpdate = value },
     get publishUpdate() { return publishUpdate! },
     set publishUpdate(value: (state: DesktopUpdateState) => DesktopUpdateState) { publishUpdate = value },
+    get feedStateOnSwitch() { return feedStateOnSwitch },
+    set feedStateOnSwitch(value: { readonly configVersion: string; readonly unlocked: boolean } | undefined) { feedStateOnSwitch = value },
     dialog: { showOpenDialog: vi.fn(), showErrorBox: vi.fn(), showMessageBox: vi.fn() },
     openExternal: vi.fn(async () => {}),
     showItemInFolder: vi.fn(),
@@ -287,6 +290,7 @@ const harness = await vi.hoisted(async () => {
       closeWindowsOnQuit = false
       prepareUpdate = undefined
       publishUpdate = undefined
+      feedStateOnSwitch = undefined
       updateState = { phase: 'idle' }
       updateCheck.mockReset().mockImplementation(async () => updateState)
       loginShell.mockReset().mockImplementation(base => readLoginShell(base))
@@ -385,13 +389,17 @@ vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: class
   selectedChannel: 'nightly' | 'stable' = 'nightly'
   revision = 0
   configurationFailure: 'startup' | 'cleanup' | undefined
+  feedState: (() => { readonly configVersion: string; readonly unlocked: boolean }) | undefined
   constructor(publish: (state: DesktopUpdateState) => DesktopUpdateState, beforeRestart: () => Promise<boolean>,
-    _updater: unknown, _enabled: unknown, _version: unknown, _downloadResult: unknown, channel: 'nightly' | 'stable') {
+    _updater: unknown, _enabled: unknown, _version: unknown, _downloadResult: unknown, channel: 'nightly' | 'stable',
+    _discard?: unknown, feedState?: () => { readonly configVersion: string; readonly unlocked: boolean }) {
     this.selectedChannel = channel
+    this.feedState = feedState
     harness.prepareUpdate = beforeRestart
     harness.publishUpdate = publish
   }
   async switchChannel(channel: 'nightly' | 'stable', persist: () => Promise<void>) {
+    harness.feedStateOnSwitch = this.feedState?.()
     await persist()
     this.selectedChannel = channel
     this.configurationFailure = undefined
@@ -535,11 +543,11 @@ describe('desktop main startup', () => {
       updates: { allowTestAuthPopupWindow: true, channel: 'stable' },
     })
     expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toEqual({
-      channel: 'stable', packagedChannel: 'nightly', unlocked: false, changing: false,
+      channel: 'stable', unlocked: false, changing: false,
     })
     expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'nightly')).toEqual({
       kind: 'applied',
-      state: { channel: 'nightly', packagedChannel: 'nightly', unlocked: true, changing: false },
+      state: { channel: 'nightly', unlocked: true, changing: false },
     })
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
       version: '1',
@@ -547,7 +555,7 @@ describe('desktop main startup', () => {
     })
     expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')).toEqual({
       kind: 'applied',
-      state: { channel: 'stable', packagedChannel: 'nightly', unlocked: true, changing: false },
+      state: { channel: 'stable', unlocked: true, changing: false },
     })
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
       version: '1',
@@ -557,7 +565,7 @@ describe('desktop main startup', () => {
     expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'stable', unlocked: true })
     expect(harness.windows[0]!.webContents.send).toHaveBeenCalledWith(
       DESKTOP_IPC.updatesChannelChanged,
-      { channel: 'stable', packagedChannel: 'nightly', unlocked: true, changing: false },
+      { channel: 'stable', unlocked: true, changing: false },
     )
     await expect(invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'alpha')).rejects.toThrow('unsupported channel')
     expect(await invoke(DESKTOP_IPC.updatesChannelGet, 'app')).toMatchObject({ channel: 'stable', unlocked: true })
@@ -609,6 +617,7 @@ describe('desktop main startup', () => {
         return { response: 0 }
       })
       await invoke(DESKTOP_IPC.updatesOpen, 'app')
+      expect(harness.feedStateOnSwitch).toEqual({ configVersion: '1', unlocked: true })
       const recovered = await invoke(DESKTOP_IPC.updatesChannelGet, 'app')
       expect(recovered).toMatchObject({ channel: 'nightly', unlocked: true, changing: false })
       expect(recovered).not.toHaveProperty('error')
@@ -635,7 +644,7 @@ describe('desktop main startup', () => {
     expect(harness.hosts).toHaveLength(1)
     expect(await invoke(DESKTOP_IPC.updatesChannelSet, 'app', 'stable')).toEqual({
       kind: 'applied',
-      state: { channel: 'stable', packagedChannel: 'nightly', unlocked: true, changing: false },
+      state: { channel: 'stable', unlocked: true, changing: false },
     })
   })
 

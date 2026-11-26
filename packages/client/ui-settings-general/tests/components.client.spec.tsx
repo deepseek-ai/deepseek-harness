@@ -332,12 +332,12 @@ describe('current version', () => {
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
       failed: false,
-      state: { channel: 'stable', packagedChannel: 'stable', unlocked: false, changing: false },
+      state: { channel: 'stable', unlocked: false, changing: false },
     })
     const unlock = vi.fn(async () => {
       store.set({
         failed: false,
-        state: { channel: 'nightly', packagedChannel: 'stable', unlocked: true, changing: false },
+        state: { channel: 'nightly', unlocked: true, changing: false },
       })
     })
     const useChannel = bindSnapshotSelector(store)
@@ -442,14 +442,14 @@ it('hides the channel row while locked, shows load errors, and waits for an expl
   const props = { ...kit, t, select, useChannel: bindSnapshotSelector(createSnapshotStore(state)) }
   const view = render(<DesktopChannelRow {...props} />)
   expect(screen.queryByRole('button', { name: 'Update channel' })).toBeNull()
-  state = { failed: false, state: { channel: 'stable', packagedChannel: 'stable', unlocked: false, changing: false } }
+  state = { failed: false, state: { channel: 'stable', unlocked: false, changing: false } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(screen.queryByRole('button', { name: 'Update channel' })).toBeNull()
   state = { failed: true }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(screen.getByRole('alert').textContent).toBe(en['desktop.channel.readError'])
   expect(screen.getByRole('button', { name: 'Update channel' }).hasAttribute('disabled')).toBe(true)
-  state = { failed: false, state: { channel: null, packagedChannel: 'nightly', unlocked: false, changing: false, error: 'format' } }
+  state = { failed: false, state: { channel: null, unlocked: false, changing: false, error: 'format' } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   const control = screen.getByRole('button', { name: 'Update channel' })
   expect(control.textContent).toContain('Configuration unavailable')
@@ -461,7 +461,7 @@ it('hides the channel row while locked, shows load errors, and waits for an expl
   expect(control.textContent).toBe('Stable')
   expect(control.getAttribute('aria-busy')).toBe('true')
   pending.resolve(undefined)
-  state = { failed: false, state: { channel: 'stable', packagedChannel: 'nightly', unlocked: true, changing: false } }
+  state = { failed: false, state: { channel: 'stable', unlocked: true, changing: false } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.textContent).toBe('Stable')
   fireEvent.click(control)
@@ -470,7 +470,7 @@ it('hides the channel row while locked, shows load errors, and waits for an expl
   fireEvent.click(control)
   fireEvent.click(screen.getByRole('menuitem', { name: 'Development' }))
   await waitFor(() => { expect(select).toHaveBeenLastCalledWith('nightly') })
-  state = { failed: false, state: { channel: 'nightly', packagedChannel: 'nightly', unlocked: true, changing: true } }
+  state = { failed: false, state: { channel: 'nightly', unlocked: true, changing: true } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.hasAttribute('disabled')).toBe(true)
   state = { ...state, state: { ...state.state!, changing: false } }
@@ -479,7 +479,7 @@ it('hides the channel row while locked, shows load errors, and waits for an expl
 })
 
 it('keeps the failure toast after Settings unmounts and rolls back the remounted selector', async () => {
-  const state: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', unlocked: true, changing: false }
+  const state: DesktopChannelState = { channel: 'nightly', unlocked: true, changing: false }
   const reply = Promise.withResolvers<DesktopChannelChangeResult>()
   const source = new DesktopChannelSource({ get: async () => state, set: () => reply.promise, subscribe: () => () => {} })
   const useChannel = bindSnapshotSelector(source.store)

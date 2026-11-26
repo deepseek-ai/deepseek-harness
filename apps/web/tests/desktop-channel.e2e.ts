@@ -15,7 +15,7 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
     const browser = await chromium.launch()
     try {
       const settings = new DesktopUpdateSettings(join(scaffold.harnessHome, 'shell'))
-      let state: DesktopChannelState = { channel: 'stable', packagedChannel: 'stable', unlocked: false, changing: false }
+      let state: DesktopChannelState = { channel: 'stable', unlocked: false, changing: false }
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en-US' })
       const tripwire = watchConsole(page)
       let detailOpens = 0

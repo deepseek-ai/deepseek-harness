@@ -10,7 +10,7 @@ import { verifyRetainedDesktopSignatures } from './verify-retained-desktop.ts'
 import { createDesktopUploadPlan } from './desktop-upload-plan.ts'
 import { desktopPublishCos } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-cos.ts'
 import { createDesktopPublicationRecord, wasDesktopAttemptPublished, withDesktopChannelLock } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-record.ts'
-import { publishDesktopRelease } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
+import { publishDesktopRelease, type DesktopPublishTransport } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
 import { desktopPublicationFailure } from '@deepseek-ai/dsh-desktop-publisher/desktop-publication-failure.ts'
 import { desktopPublicationSummary } from './desktop-publication-summary.ts'
 import { publishDesktopTag } from './desktop-publish-tag.ts'
@@ -30,14 +30,10 @@ function booleanEnv(env: NodeJS.ProcessEnv, name: string): boolean {
 
 function selectedPublishChannels(
   env: NodeJS.ProcessEnv,
-  routeChannel: 'nightly' | 'stable',
   uploadWebsite: boolean,
   rollbackChannel: 'nightly' | 'stable' | undefined,
 ): readonly ('nightly' | 'stable')[] {
   if (rollbackChannel !== undefined) return [rollbackChannel]
-  if (env.DESKTOP_PUBLISH_STABLE === undefined && env.DESKTOP_PUBLISH_NIGHTLY === undefined) {
-    return [routeChannel]
-  }
   const channels = [
     ...(booleanEnv(env, 'DESKTOP_PUBLISH_STABLE') ? ['stable' as const] : []),
     ...(booleanEnv(env, 'DESKTOP_PUBLISH_NIGHTLY') ? ['nightly' as const] : []),
@@ -68,7 +64,7 @@ export async function prepareDesktopPublication(
   const uploadWebsite = booleanEnv(env, 'DESKTOP_UPLOAD_WEBSITE')
   const route = routeSchema.parse(JSON.parse(env.DESKTOP_PUBLISH_ROUTE || '{}'))
   if (route.runnerName !== env.RUNNER_NAME) throw new Error('desktop publish: task was dispatched to a different machine')
-  const channels = selectedPublishChannels(env, route.channel, uploadWebsite, options.rollbackChannel)
+  const channels = selectedPublishChannels(env, uploadWebsite, options.rollbackChannel)
   if (channels.length === 0 && uploadWebsite && route.preset !== 'production') {
     throw new Error('desktop publish: website publication requires production')
   }
@@ -112,6 +108,88 @@ export async function prepareDesktopPublication(
   return { route, manifest, config, channels, plans, plan: plans[0]?.plan, root, approval, stagingPercentage, uploadWebsite }
 }
 
+/**
+ * Publish each selected target channel sequentially under its own lock, journal, and production tag check.
+ * @param prepared Validated publication context from {@link prepareDesktopPublication}.
+ * @param env Actions environment providing actor, summary, output, and tag token settings.
+ * @param dependencies COS transport factory, tag publisher, and phase tracker; tests inject local doubles.
+ * @returns Nothing after all selected channels complete; sets exitCode 1 when a published channel leaves a tag pending.
+ */
+export async function executeDesktopChannelPublications(
+  prepared: Awaited<ReturnType<typeof prepareDesktopPublication>>,
+  env: NodeJS.ProcessEnv,
+  dependencies: {
+    readonly createTransport: (plan: typeof prepared.plans[number]['plan']) => DesktopPublishTransport
+    readonly createTag?: typeof publishDesktopTag
+    readonly onPhase?: (phase: string) => void
+  },
+): Promise<void> {
+  const { route, manifest, plans, root, stagingPercentage } = prepared
+  const createTag = dependencies.createTag ?? publishDesktopTag
+  const setPhase = dependencies.onPhase ?? (() => {})
+  const recordsRoot = join(dirname(root), 'upload-records')
+  const directories: string[] = []
+  try {
+    for (const { channel, plan } of plans) {
+      const destination = `${plan.bucket}/${plan.publicUrl}${channel}`
+      let phase = `channel lock and publication journal acquisition (${channel})`
+      setPhase(phase)
+      await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
+        const published = await wasDesktopAttemptPublished(recordsRoot,
+          { repository: manifest.source.repository, runId: route.runId, attempt: route.attempt, destination, stagingPercentage })
+        const journal = await createDesktopPublicationRecord(recordsRoot, {
+          repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
+          actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown',
+          destination, stagingPercentage, operation: 'publish', reason: `Actions publication (${channel})`,
+        })
+        directories.push(journal.directory)
+        let status: 'complete' | 'failed' | 'published-tag-pending' = 'failed'
+        try {
+          phase = `remote object reconciliation and publication (${channel})`
+          setPhase(phase)
+          const tag = async () => {
+            await createTag(manifest.source.repository, plan.version, route.commit, env.DESKTOP_TAG_TOKEN || '')
+          }
+          const result = published
+            ? await (async () => {
+              await journal.record({ type: 'feeds-complete' })
+              if (plan.environment === 'production') {
+                try { await tag() } catch (cause) {
+                  await journal.record({ type: 'tag-pending' })
+                  return { status: 'published-tag-pending' as const, cause }
+                }
+              }
+              await journal.record({ type: 'complete' })
+              return { status: 'complete' as const }
+            })()
+            : await publishDesktopRelease(plan, {
+              transport: dependencies.createTransport(plan), record: event => journal.record(event),
+              tag,
+            })
+          status = result.status
+          if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
+            `\nDesktop publication (${channel}): **${status}**\n\n${plan.target} ${plan.version}\n\nSource: ${route.runId}, attempt ${route.attempt}\n`)
+          if (result.status === 'published-tag-pending') {
+            const failure = desktopPublicationFailure(result.cause, 'release tag creation')
+            await journal.record({ type: 'failed', failure })
+            process.stderr.write(`${JSON.stringify(failure)}\n`)
+            process.exitCode = 1
+          }
+        } catch (error) {
+          await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, phase) })
+          throw error
+        } finally { await journal.finish(status) }
+      })
+    }
+  } finally {
+    const last = directories.at(-1)
+    if (env.GITHUB_OUTPUT && last !== undefined) {
+      await appendFile(env.GITHUB_OUTPUT,
+        `record=${last}\nrecords<<EOF\n${directories.map(dir => `${dir}/`).join('\n')}\nEOF\n`)
+    }
+  }
+}
+
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.filename) {
   let phase = 'local package, destination and signature verification'
   try {
@@ -120,9 +198,8 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
       throw new Error('Usage: publish-desktop-ci.ts --check|--publish')
     }
     const env = process.env
-    const {
-      route, manifest, config, channels, plans, root, approval, stagingPercentage, uploadWebsite,
-    } = await prepareDesktopPublication(env)
+    const prepared = await prepareDesktopPublication(env)
+    const { route, manifest, config, channels, plans, approval, uploadWebsite } = prepared
     if (mode === '--publish' && !env.DESKTOP_APPROVED_PACKAGE) throw new Error('desktop publish: approved package digest is required')
     if (uploadWebsite && route.preset === 'production') requireDesktopEdgeOneZoneId(config)
     const channelsRequested = plans.length > 0
@@ -140,7 +217,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
         ].join('\n'))
       }
       if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_APPROVED_PACKAGE) await appendFile(env.GITHUB_STEP_SUMMARY,
-        await desktopPublicationSummary(manifest.source, plans.map(entry => entry.plan), approval, uploadWebsite, config.bucket))
+        await desktopPublicationSummary(manifest.source, plans, approval, uploadWebsite, config.bucket))
       if (env.GITHUB_OUTPUT && config.githubApp) await appendFile(env.GITHUB_OUTPUT,
         `app-client-id=${config.githubApp.clientId}\napp-key-file=${config.githubApp.privateKeyFile}\n`)
       process.stdout.write(`desktop publish: verified ${route.target} ${manifest.source.version}; no credentials read or COS requests made\n`)
@@ -149,69 +226,10 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
       if (route.preset === 'production' && !env.DESKTOP_TAG_TOKEN) throw new Error('desktop publish: GitHub App token is required before production upload')
       phase = 'upload credential loading'
       const credentials = await readDesktopUploadCredentials(config)
-      const recordsRoot = join(dirname(root), 'upload-records')
-      const directories: string[] = []
-      try {
-        for (const [index, { channel, plan }] of plans.entries()) {
-          const isFinalChannel = index === plans.length - 1
-          const destination = `${plan.bucket}/${plan.publicUrl}${channel}`
-          phase = `channel lock and publication journal acquisition (${channel})`
-          await withDesktopChannelLock(join(dirname(root), 'publish-locks'), destination, async () => {
-            const published = await wasDesktopAttemptPublished(recordsRoot,
-              { repository: manifest.source.repository, runId: route.runId, attempt: route.attempt, destination, stagingPercentage })
-            const journal = await createDesktopPublicationRecord(recordsRoot, {
-              repository: manifest.source.repository, runId: route.runId, attempt: route.attempt,
-              actor: env.GITHUB_TRIGGERING_ACTOR || env.GITHUB_ACTOR || 'unknown',
-              destination, stagingPercentage, operation: 'publish', reason: `Actions publication (${channel})`,
-            })
-            directories.push(journal.directory)
-            let status: 'complete' | 'failed' | 'published-tag-pending' = 'failed'
-            try {
-              phase = `remote object reconciliation and publication (${channel})`
-              const tag = isFinalChannel
-                ? async () => {
-                  await publishDesktopTag(manifest.source.repository,
-                    plan.version, route.commit, env.DESKTOP_TAG_TOKEN || '')
-                }
-                : async () => {}
-              const result = published
-                ? await (async () => {
-                  await journal.record({ type: 'feeds-complete' })
-                  if (plan.environment === 'production' && isFinalChannel) {
-                    try { await tag() } catch (cause) {
-                      await journal.record({ type: 'tag-pending' })
-                      return { status: 'published-tag-pending' as const, cause }
-                    }
-                  }
-                  await journal.record({ type: 'complete' })
-                  return { status: 'complete' as const }
-                })()
-                : await publishDesktopRelease(plan, {
-                  transport: desktopPublishCos(plan, credentials), record: event => journal.record(event),
-                  tag,
-                })
-              status = result.status
-              if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY,
-                `\nDesktop publication (${channel}): **${status}**\n\n${plan.target} ${plan.version}\n\nSource: ${route.runId}, attempt ${route.attempt}\n`)
-              if (result.status === 'published-tag-pending') {
-                const failure = desktopPublicationFailure(result.cause, 'release tag creation')
-                await journal.record({ type: 'failed', failure })
-                process.stderr.write(`${JSON.stringify(failure)}\n`)
-                process.exitCode = 1
-              }
-            } catch (error) {
-              await journal.record({ type: 'failed', failure: desktopPublicationFailure(error, phase) })
-              throw error
-            } finally { await journal.finish(status) }
-          })
-        }
-      } finally {
-        const last = directories.at(-1)
-        if (env.GITHUB_OUTPUT && last !== undefined) {
-          await appendFile(env.GITHUB_OUTPUT,
-            `record=${last}\nrecords<<EOF\n${directories.map(dir => `${dir}/`).join('\n')}\nEOF\n`)
-        }
-      }
+      await executeDesktopChannelPublications(prepared, env, {
+        createTransport: plan => desktopPublishCos(plan, credentials),
+        onPhase: (next) => { phase = next },
+      })
     }
   } catch (error) {
     process.stderr.write(`${JSON.stringify(desktopPublicationFailure(error, phase))}\n`)

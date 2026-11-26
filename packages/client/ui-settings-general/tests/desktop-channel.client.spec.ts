@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest'
 import { DesktopChannelSource } from '../src/client/desktop-channel-source.ts'
 import type { DesktopChannelState, DesktopChannelChangeResult } from '../src/types.ts'
 
-const nightly: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', unlocked: true, changing: false }
+const nightly: DesktopChannelState = { channel: 'nightly', unlocked: true, changing: false }
 const stable: DesktopChannelState = { ...nightly, channel: 'stable' }
 
 function fixture() {
@@ -122,18 +122,20 @@ it('does not let a late initial read overwrite an accepted selection', async () 
 })
 
 
-it('submits when locked on stable, then skips redundant submits once unlocked', async () => {
+it('skips redundant healthy submits and unlocks from locked stable to nightly', async () => {
   const f = fixture()
   const lockedStable: DesktopChannelState = { ...stable, unlocked: false }
   f.get.resolve(lockedStable)
   await f.get.promise
-  const unlocking = f.source.select('stable')
-  expect(f.select).toHaveBeenCalledExactlyOnceWith('stable')
-  f.set.resolve({ kind: 'applied', state: stable })
-  await unlocking
   await f.source.select('stable')
+  expect(f.select).not.toHaveBeenCalled()
+  const unlocking = f.source.select('nightly')
+  expect(f.select).toHaveBeenCalledExactlyOnceWith('nightly')
+  f.set.resolve({ kind: 'applied', state: nightly })
+  await unlocking
+  await f.source.select('nightly')
   expect(f.select).toHaveBeenCalledOnce()
-  expect(f.source.store.getSnapshot().state).toEqual(stable)
+  expect(f.source.store.getSnapshot().state).toEqual(nightly)
   f.source.dispose()
 })
 

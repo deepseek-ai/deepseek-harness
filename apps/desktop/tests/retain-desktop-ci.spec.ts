@@ -110,7 +110,7 @@ it.each([
   if (debug) {
     expect(summary).toContain('不能发布到 test 或 production')
     expect(summary).not.toContain('Publish separately')
-    await expect(prepareDesktopPublication({ ...env, DESKTOP_PUBLISH_ROUTE: JSON.stringify({
+    await expect(prepareDesktopPublication({ ...env, DESKTOP_PUBLISH_STABLE: 'true', DESKTOP_PUBLISH_ROUTE: JSON.stringify({
       runId: '123', attempt: '2', commit: env.GITHUB_SHA, runnerName: env.RUNNER_NAME, target, preset: 'test', sourceRef: 'master', channel: 'stable',
     }) })).rejects.toThrow('重跑当前发布任务无效')
     await expect(summary).toMatchFileSnapshot(`./expected/retained-${qualification}.md`)
