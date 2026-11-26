@@ -1,6 +1,7 @@
 # Agent Note: Weighted approval 保留 commit status 门禁，并由 App 发布决策标签
 
 Status: implemented
+Archived: 2026-11-18
 
 [English](2026-10-20-weighted-approval-status-gate-with-check-run-label.md) | 中文
 

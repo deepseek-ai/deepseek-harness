@@ -1656,6 +1656,7 @@ describe('Weighted approval workflow', () => {
     const workflowRun = workflowEvent(publisher, 'workflow_run')
     const review = workflowEvent(reviewEvent, 'pull_request_review')
     const job = workflowJob(publisher, 'publish-status')
+    const machineJob = workflowJob(publisher, 'evaluate-machine')
     const recordJob = workflowJob(reviewEvent, 'record-review-event')
     if (!isRecord(publisher.on)) throw new TypeError('weighted-approval workflow must define events')
     if (!isRecord(reviewEvent.on)) throw new TypeError('weighted-approval review event workflow must define events')
@@ -1675,7 +1676,8 @@ describe('Weighted approval workflow', () => {
     expect(reviewEvent.name).toBe('weighted-approval-review-event')
     expect(reviewEvent['run-name']).toBe('weighted-approval-review-event:${{ github.event.pull_request.number }}')
     expect(Object.keys(reviewEvent.on)).toEqual(['pull_request_review'])
-    expect(review.types).toEqual(['submitted', 'edited', 'dismissed'])
+    // A review body edit changes no approval state; only a submission or dismissal re-evaluates.
+    expect(review.types).toEqual(['submitted', 'dismissed'])
     expect(reviewEvent.permissions).toEqual({})
     expect(publisher.permissions).toEqual({
       checks: 'write',
@@ -1684,15 +1686,24 @@ describe('Weighted approval workflow', () => {
       statuses: 'write',
     })
     expect(publisher.concurrency).toEqual({
-      group: "weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}",
+      group: "weighted-approval-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' || "
+        + "(github.event.action == 'edited' && github.event.changes.base.ref == null))) || "
+        + "(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success') || "
+        + "(github.event_name == 'issue_comment' && (!github.event.issue.pull_request || github.event.issue.state != 'open' || "
+        + "(!contains(github.event.comment.body, '/delegate') && !contains(github.event.changes.body.from, '/delegate'))))) && "
+        + "format('ignored:{0}', github.run_id) || "
+        + "((github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || "
+        + 'github.event.workflow_run.display_title) }}',
       'cancel-in-progress': false,
     })
     expect(job).toMatchObject({
       if: "(github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') && "
+        + "(github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.base.ref != null) && "
         + "(github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && "
         + "(github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&\n"
         + "  (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))",
       name: 'weighted approval publisher',
+      outputs: { dismissed: '${{ steps.publish.outputs.dismissed }}' },
       'runs-on': 'ubuntu-latest',
       'timeout-minutes': 5,
     })
@@ -1745,6 +1756,7 @@ describe('Weighted approval workflow', () => {
       run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
     })
     expect(publish).toMatchObject({
+      id: 'publish',
       if: "steps.revoke.outputs.active == 'true'",
       env: {
         GITHUB_TOKEN: '${{ github.token }}',
@@ -1752,6 +1764,14 @@ describe('Weighted approval workflow', () => {
       },
       run: 'node .github/review-ownership/check-approval.mjs',
     })
+    expect(machineJob).toMatchObject({
+      needs: 'publish-status',
+      // The called workflow owns the review scope and the event filters.
+      if: "always() && needs.publish-status.outputs.dismissed == 'true'",
+      permissions: { contents: 'read', 'pull-requests': 'read' },
+      uses: './.github/workflows/weighted-approval-machine.yml',
+    })
+    expect(machineJob.secrets).toEqual({ DSH_APPROVAL_BOT_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}' })
     expect(recordJob).toMatchObject({
       if: "github.event.pull_request.state == 'open'",
       name: 'record weighted approval review event',
@@ -1762,9 +1782,177 @@ describe('Weighted approval workflow', () => {
     expect(record?.run).toBe("echo 'Recorded a weighted approval review event.'")
     expect(recordSteps).toHaveLength(1)
     expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
-    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY'])
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_APP_PRIVATE_KEY', 'secrets.DSH_APPROVAL_BOT_TOKEN'])
     expect(JSON.stringify(reviewEvent)).not.toContain('github.token')
     expect(JSON.stringify(reviewEvent)).not.toContain('secrets.')
+  })
+
+  it('re-evaluates head, base, lifecycle, draft, delegated comments, and successful signal runs', () => {
+    const publisher = loadWorkflow('.github/workflows/weighted-approval.yml')
+    const machine = loadWorkflow('.github/workflows/weighted-approval-machine.yml')
+    const publishCondition = workflowJob(publisher, 'publish-status').if
+    const machineJob = workflowJob(machine, 'evaluate')
+    const machineCondition = machineJob.if
+    if (typeof publishCondition !== 'string' || typeof machineCondition !== 'string') {
+      throw new TypeError('weighted approval jobs must define trigger conditions')
+    }
+    const format = (template: string, ...values: unknown[]): string =>
+      template.replace(/\{(\d+)\}/gu, (_placeholder: string, index: string) => String(values[Number(index)]))
+    const contains = (value: unknown, search: unknown): boolean =>
+      typeof value === 'string' && typeof search === 'string' && value.includes(search)
+    const context = (github: Record<string, unknown>): Record<string, unknown> => ({
+      github,
+      contains,
+      format,
+      inputs: {},
+      vars: { DSH_APPROVAL_REVIEW_SCOPE: 'all' },
+    })
+    // issue_comment and workflow_run payloads have no top-level pull_request. The group expression
+    // reads its number with GitHub's null-safe access, so the fixtures supply it for the
+    // JavaScript evaluation.
+    const pullRequest = { number: 42 }
+    const pullRequestEvent = (action: string, changes: Record<string, unknown>): Record<string, unknown> => ({
+      event_name: 'pull_request_target',
+      run_id: '9001',
+      event: { action, changes, pull_request: { ...pullRequest, state: 'open' } },
+    })
+    const comment = (body: string, previous: string | null = null): Record<string, unknown> => ({
+      event_name: 'issue_comment',
+      run_id: '9001',
+      event: {
+        issue: { number: 42, pull_request: {}, state: 'open' },
+        comment: { body },
+        changes: { body: { from: previous } },
+        pull_request: pullRequest,
+      },
+    })
+    const workflowRun = (conclusion: string): Record<string, unknown> => ({
+      event_name: 'workflow_run',
+      run_id: '9001',
+      event: {
+        workflow_run: { conclusion, display_title: 'weighted-approval-review-event:42' },
+        pull_request: pullRequest,
+      },
+    })
+    const condition = (value: string, github: Record<string, unknown>): unknown =>
+      runInNewContext(value, context(github), { timeout: 1000 })
+    const group = (value: unknown, github: Record<string, unknown>): string => {
+      if (!isRecord(value) || typeof value.group !== 'string') {
+        throw new TypeError('weighted approval jobs must define a concurrency group')
+      }
+      const match = /\$\{\{([\s\S]+?)\}\}/u.exec(value.group)
+      if (match === null) throw new TypeError('weighted approval concurrency group must contain an expression')
+      const expression = match[1]
+      if (expression === undefined) throw new TypeError('weighted approval concurrency group must contain an expression')
+      return value.group.replace(match[0], String(runInNewContext(expression, { github, contains, inputs: {}, format }, { timeout: 1000 })))
+    }
+    const cases: Array<[string, Record<string, unknown>, boolean]> = [
+      ['title edit', pullRequestEvent('edited', { base: {}, title: { from: 'Old title' } }), false],
+      ['body edit', pullRequestEvent('edited', { base: {}, body: { from: 'Old body' } }), false],
+      ['base retarget', pullRequestEvent('edited', { base: { ref: { from: '0' } } }), true],
+      ['current /delegate', comment('/delegate @reviewer'), true],
+      ['previous /delegate', comment('plain text', '/delegate @reviewer'), true],
+      ['status comment', comment('<!-- weighted-approval -->\nApproval score: 1/2'), false],
+      ['plain chat', comment('plain text'), false],
+      ['failed review signal', workflowRun('failure'), false],
+      ['successful review signal', workflowRun('success'), true],
+    ]
+    for (const action of ['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft']) {
+      cases.push([action, pullRequestEvent(action, {}), true])
+    }
+    for (const [label, github, scores] of cases) {
+      const suffix = scores ? 'weighted-approval-review-event:42' : 'ignored:9001'
+      expect(condition(publishCondition, github), label).toBe(scores)
+      expect(condition(machineCondition, github), label).toBe(scores)
+      expect(group(publisher.concurrency, github), label).toBe(`weighted-approval-${suffix}`)
+      expect(group(machineJob.concurrency, github), label).toBe(`weighted-approval-machine-${suffix}`)
+    }
+  })
+})
+
+describe('Weighted approval machine workflow', () => {
+  it('comments and approves from the trusted default branch after pull request and review updates', () => {
+    const publisher = loadWorkflow('.github/workflows/weighted-approval-machine.yml')
+    const pullRequest = workflowEvent(publisher, 'pull_request_target')
+    const workflowRun = workflowEvent(publisher, 'workflow_run')
+    const job = workflowJob(publisher, 'evaluate')
+    if (!isRecord(publisher.on)) throw new TypeError('weighted-approval workflow must define events')
+    if (!Array.isArray(job.steps)) throw new TypeError('weighted-approval job must define steps')
+    const steps = job.steps.filter(isRecord)
+    const checkout = steps.find(step => step.name === 'Check out trusted approval policy')
+
+    expect(publisher.name).toBe('weighted-approval-machine')
+    expect(Object.keys(publisher.on)).toEqual(['pull_request_target', 'issue_comment', 'workflow_run', 'workflow_dispatch', 'workflow_call'])
+    expect(workflowEvent(publisher, 'workflow_dispatch').inputs).toEqual({
+      pull_number: { description: 'Open pull request to re-evaluate', type: 'string', required: true },
+    })
+    expect(publisher.on.workflow_call).toEqual({
+      secrets: { DSH_APPROVAL_BOT_TOKEN: { description: "Approval credential supplied by the called job's protected environment", required: true } },
+    })
+    expect(job.environment).toBe('weighted-approval')
+    expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
+    expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft', 'edited'])
+    expect(workflowRun).toEqual({ workflows: ['weighted-approval-review-event'], types: ['completed'] })
+    expect(publisher.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' })
+    expect(publisher.concurrency).toBeUndefined()
+    expect(job.concurrency).toEqual({
+      group: "weighted-approval-machine-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' || "
+        + "(github.event.action == 'edited' && github.event.changes.base.ref == null))) || "
+        + "(github.event_name == 'workflow_dispatch' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) || "
+        + "(github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success') || "
+        + "(github.event_name == 'issue_comment' && (!github.event.issue.pull_request || github.event.issue.state != 'open' || "
+        + "(!contains(github.event.comment.body, '/delegate') && !contains(github.event.changes.body.from, '/delegate'))))) && "
+        + "format('ignored:{0}', github.run_id) || "
+        + "((inputs.pull_number || github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number) || "
+        + 'github.event.workflow_run.display_title) }}',
+      'cancel-in-progress': false,
+    })
+    expect(job).toMatchObject({
+      if: "(vars.DSH_APPROVAL_REVIEW_SCOPE == 'all' || (vars.DSH_APPROVAL_REVIEW_SCOPE != '' &&\n"
+        + "  (github.event_name == 'workflow_run' && github.event.workflow_run.display_title == format('weighted-approval-review-event:{0}', vars.DSH_APPROVAL_REVIEW_SCOPE) ||\n"
+        + "  vars.DSH_APPROVAL_REVIEW_SCOPE == format('{0}', inputs.pull_number || github.event.pull_request.number || github.event.issue.number)))) &&\n"
+        + "(github.event_name != 'workflow_dispatch' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && "
+        + "(github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') && "
+        + "(github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.base.ref != null) && "
+        + "(github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && "
+        + "(github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&\n"
+        + "  (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))",
+      name: 'weighted approval review',
+      'runs-on': 'ubuntu-latest',
+      'timeout-minutes': 5,
+    })
+    expect(checkout).toMatchObject({
+      uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+      with: {
+        ref: '${{ github.event.repository.default_branch }}',
+        'persist-credentials': false,
+      },
+    })
+    expect(JSON.stringify(steps)).not.toContain('create-github-app-token')
+    const setupIndex = steps.findIndex(step => typeof step.uses === 'string' && step.uses.startsWith('actions/setup-python@'))
+    expect(setupIndex).toBeGreaterThan(steps.indexOf(checkout!))
+    expect(steps[setupIndex]?.if).toBeUndefined()
+    expect(steps[setupIndex]?.uses).toBe('actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1')
+    expect(steps.find(step => step.name === 'Install production lexer')).toMatchObject({
+      run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
+    })
+    expect(steps.at(-1)).toMatchObject({
+      name: 'Evaluate weighted approval',
+      run: 'node .github/review-ownership/publish-approval.mjs',
+    })
+    // The final step receives the configured scope verbatim; an unset variable stays unset.
+    expect(steps.at(-1)?.env).toEqual({
+      APPROVAL_TOKEN: '${{ secrets.DSH_APPROVAL_BOT_TOKEN }}',
+      GITHUB_TOKEN: '${{ github.token }}',
+      DSH_APPROVAL_REVIEW_SCOPE: '${{ vars.DSH_APPROVAL_REVIEW_SCOPE }}',
+    })
+    expect(steps.filter(step => typeof step.run === 'string' && step.run.startsWith('node .github/review-ownership/publish-approval.mjs'))).toHaveLength(1)
+    expect(JSON.stringify(publisher)).not.toContain('GITHUB_RUN_URL')
+    expect(JSON.stringify(steps.slice(0, -1))).not.toContain('DSH_APPROVAL_BOT_TOKEN')
+    expect(JSON.stringify(publisher)).not.toContain('statuses')
+    expect(JSON.stringify(publisher)).not.toContain('checks')
+    expect(JSON.stringify(publisher)).not.toContain('github.event.pull_request.head')
+    expect(JSON.stringify(publisher).match(/secrets\.[A-Za-z0-9_]+/gu)).toEqual(['secrets.DSH_APPROVAL_BOT_TOKEN'])
   })
 })
 
