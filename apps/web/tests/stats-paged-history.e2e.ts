@@ -126,8 +126,12 @@ describe('web e2e: whole-session stats survive history paging', () => {
     const stripBeforePaging = await strip.textContent()
 
     // 加载更早: prepending the older page must not move ANY strip figure —
-    // counts, wall times, or token groups.
-    await page.getByRole('button', { name: 'Load earlier' }).click()
+    // counts, wall times, or token groups. A pointer click first scrolls the
+    // control into view; that reading movement starts automatic loading, which
+    // can consume the final page and disable the control before the click
+    // lands. The dispatched click keeps the reader at the tail, so the manual
+    // intent alone loads the page.
+    await page.getByRole('button', { name: 'Load earlier' }).dispatchEvent('click')
     await expect.poll(() => page.getByText('m1', { exact: true }).count(), { timeout: 10_000 }).toBe(1)
     const history = page.locator('[data-chat-history]')
     await expect.poll(() => history.getAttribute('data-chat-history'), { timeout: 10_000 }).toBe('idle')
