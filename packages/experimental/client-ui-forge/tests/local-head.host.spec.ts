@@ -285,6 +285,25 @@ describe('forgePanel local changes of a branch a worktree has checked out', () =
     expect((await forgePanel.diffBases(opened.session, null, '', signal)).local).toEqual([{ ref: TOPIC, name: 'topic' }])
   })
 
+  it('reads the branch from its commits when another repository took the place of its worktree', async () => {
+    const { root, repo } = await project()
+    const tree = await worktree(root, repo, 'topic')
+    // Git keeps listing a worktree while its directory holds a `.git`, whichever repository that belongs to.
+    await rm(tree, { recursive: true })
+    const other = await repository(root, 'tree-topic')
+    await git(other, 'checkout', '--quiet', '-b', 'topic')
+    await writeFile(join(other, 'elsewhere.txt'), 'elsewhere\n')
+    const opened = await open(repo)
+    const { forgePanel } = opened.ctx
+
+    expect((await forgePanel.diffBases(opened.session, null, '', signal)).local)
+      .toEqual([{ ref: TOPIC, name: 'topic', worktree: tree.replaceAll('\\', '/') }])
+    // The read finds a checkout of `topic` there, but of another repository, and leaves its files out.
+    const diff = await forgePanel.localDiff(opened.session, whole(TOPIC), signal)
+    expect([paths(diff), diff.worktree]).toEqual([['more.txt', 'topic.txt'], undefined])
+    await expect(forgePanel.localDiff(opened.session, { kind: 'unstaged', head: TOPIC }, signal)).rejects.toMatchObject({ code: 'forgePanel/no-working-tree' })
+  })
+
   // A directory's name cannot hold a line break on Windows.
   it.skipIf(process.platform === 'win32')('reads the branch from its commits unless the listed directory holds a checkout of it', async () => {
     const { root, repo } = await project()
