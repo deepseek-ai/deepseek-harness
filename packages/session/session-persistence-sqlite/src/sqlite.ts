@@ -298,7 +298,10 @@ export class SqliteStore {
     catch (error: unknown) {
       // Anything else is a file this build cannot interpret, which only an operator or another build can resolve.
       if (!(error instanceof ReplaceDatabase)) throw error
-      await this.setAside(error.reason)
+      /* v8 ignore next 3 -- POSIX moves a locked file, so a refused move happens only on Windows under a live writer. */
+      try { await this.setAside(error.reason) }
+      // A file that cannot be moved aside must not replace itself: report why, never the internal tag.
+      catch (aside: unknown) { throw aside instanceof ReplaceDatabase ? aside.wrapped : aside }
       return await this.openDatabase()
     }
   }
