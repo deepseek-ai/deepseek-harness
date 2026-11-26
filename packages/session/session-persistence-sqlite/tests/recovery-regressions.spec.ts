@@ -55,8 +55,15 @@ it('moves a locked database aside under replace recovery and reports the writer 
     try { await logs.start() } finally { clock.mockRestore() }
   } finally { blocker.close() }
   expect(reportRecovery).toHaveBeenCalledOnce()
-  expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/stayed locked/u)
   const aside = (await readdir(root)).find(name => name.includes('.locked-'))
+  if (process.platform === 'win32') {
+    // Windows refuses to move a file another handle holds open, so the database stays in place and the lock is
+    // reported instead. Replacing it would need the writer gone, which is exactly what `recovery: report` assumes.
+    expect(aside).toBeUndefined()
+    expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/is locked by another process/u)
+    return
+  }
+  expect(reportRecovery.mock.calls[0]?.[0]).toMatch(/stayed locked/u)
   expect(aside).toBeDefined()
   // The replacement is usable, so the Session service stays available.
   const writer = await logs.create({ version: SESSION_FORMAT_VERSION, id: SessionId('after-lock'), createdAt: 0, isSeeded: false })
