@@ -1,11 +1,18 @@
-/** Shared model fields and actions for both adapter catalog editors. */
+/**
+ * One model of either adapter catalog editor. A folded row is a line of text
+ * that names the model and is the drag source for reordering, marked by six
+ * dots at its start while the pointer is on it; unfolding it replaces the
+ * text with the fields, and an unfolded row is not dragged. A field the card's
+ * last save refused is marked invalid with the reason under it.
+ */
 
+import { useId } from 'react'
 import type { DragEvent, ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragHandleOutlineRegular,
-  IconTrashOutlineRegular, Tooltip, useRowDragPreview,
+  IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconDragDotsFillRegular, IconTrashOutlineRegular,
+  useRowDragPreview,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import type { DeepSeekModelDraft, ModelFailureField } from './DeepSeekModelsEditor.tsx'
 import type { ModelsKey } from './locales.ts'
 import { ModelInputTypes } from './ModelInputTypes.tsx'
 import { ModelReasoningEfforts } from './ModelReasoningEfforts.tsx'
@@ -34,6 +41,8 @@ interface ModelRowProps {
   /** Whether the route's protocol accepts only {@link reasoningLevels}, each sent under its own name. */
   reasoningLevelsOnly?: boolean | undefined
   expanded: boolean
+  /** The fields the card's last save refused that still fail, each with its message key. */
+  failures: ReadonlyMap<ModelFailureField, ModelsKey>
   disabled: boolean
   t: (key: ModelsKey) => string
   contextWindow: CapacityInput
@@ -50,14 +59,30 @@ function rowHalf(event: DragEvent<HTMLElement>): 'before' | 'after' {
   return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
+/** A row's text field, or the empty string while unset or not a string. */
+function textOf(model: DeepSeekModelDraft, field: 'id' | 'name'): string {
+  const value = model[field]
+  return typeof value === 'string' ? value : ''
+}
+
 /**
- * Render model fields with the display name in the expanded area of narrow rows.
+ * Render one model row, folded or unfolded.
  * @param props - drafted fields and their owning editor's actions.
  * @returns one expandable model entry.
  */
 export function ModelRow(props: ModelRowProps): ReactNode {
-  const { model, position, t, disabled } = props
+  const { model, position, t, disabled, failures } = props
   const preview = useRowDragPreview(styles['modelDragPreview'] as string)
+  const rowId = useId()
+  /** The invalid state of one field's input, and the reason shown under it. */
+  const refusal = (field: ModelFailureField): { input: { 'aria-invalid'?: true; 'aria-describedby'?: string }; reason: ReactNode } => {
+    const key = failures.get(field)
+    if (key === undefined) return { input: {}, reason: null }
+    const id = `${rowId}-${field}`
+    return { input: { 'aria-invalid': true, 'aria-describedby': id }, reason: <span id={id} className={styles['error']}>{t(key)}</span> }
+  }
+  // Only a folded row moves: its text carries no caret or selection for a drag to interrupt.
+  const draggable = !props.expanded && !disabled
   const modelField = (field: 'id' | 'name') => (
     <label className={`${styles['modelField']} ${field === 'name' ? styles['modelName'] : ''}`}>
       {field === 'name'
@@ -66,25 +91,39 @@ export function ModelRow(props: ModelRowProps): ReactNode {
       <input
         className={styles['input']}
         type="text"
-        value={typeof model[field] === 'string' ? model[field] : ''}
+        value={textOf(model, field)}
         placeholder={t(field === 'id' ? 'modelId' : 'modelName')}
         aria-label={`${t(field === 'id' ? 'modelId' : 'modelName')} ${String(position)}`}
         disabled={disabled}
-        onFocus={field === 'name' && !props.expanded ? props.onToggle : undefined}
+        {...refusal(field).input}
         onChange={(event) => {
           const value = event.target.value
           props.onFieldChange(field, field === 'name' && value === '' ? undefined : value)
         }}
         onBlur={field === 'id' ? event => props.onIdBlur?.(event.target.value) : undefined}
       />
+      {refusal(field).reason}
     </label>
   )
+  const id = textOf(model, 'id')
+  const name = textOf(model, 'name')
   return (
     <div
       className={styles['modelEntry']}
       data-row-key={props.rowKey}
+      data-invalid={failures.size > 0 || undefined}
       data-dragging={props.order.dragging || undefined}
       data-drop-target={props.order.dragging ? undefined : props.order.target}
+      draggable={draggable || undefined}
+      onDragStart={draggable
+        ? (event) => {
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('application/x-dsh-model-order', String(position))
+          props.order.onStart()
+          preview.start(event)
+        }
+        : undefined}
+      onDragEnd={() => { if (preview.clear()) props.order.onEnd() }}
       onDragOver={(event) => {
         if (!props.order.canDrop) return
         event.preventDefault()
@@ -101,34 +140,29 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         props.order.onDrop(rowHalf(event))
       }}
     >
+      {/* A mark, not a control: the row is the drag source, and the mark lets pointer events through to it. */}
+      {draggable
+        ? <span className={styles['modelGrip']} aria-hidden="true"><IconDragDotsFillRegular /></span>
+        : null}
       <div className={styles['modelRow']} data-expanded={props.expanded || undefined}>
-        <Tooltip label={t('reorderModelHelp')} portal>
-          <button
-            type="button"
-            className={`${styles['iconButton']} ${styles['modelDragHandle']}`}
-            aria-label={`${t('reorderModel')} ${String(position)}`}
-            aria-keyshortcuts="ArrowUp ArrowDown"
-            aria-description={t('reorderModelHelp')}
-            disabled={disabled}
-            draggable={!disabled}
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = 'move'
-              event.dataTransfer.setData('application/x-dsh-model-order', String(position))
-              props.order.onStart()
-              preview.start(event, event.currentTarget.closest('[data-row-key]') as HTMLElement)
-            }}
-            onDragEnd={() => { if (preview.clear()) props.order.onEnd() }}
-            onKeyDown={(event) => {
-              if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-              event.preventDefault()
-              event.stopPropagation()
-              props.order.onMove(event.key === 'ArrowUp' ? -1 : 1)
-            }}
-          >
-            <IconDragHandleOutlineRegular size={14} />
-          </button>
-        </Tooltip>
-        {modelField('id')}
+        {props.expanded
+          ? (
+            <>
+              {modelField('id')}
+              {modelField('name')}
+            </>
+          )
+          : (
+            // A pointer shortcut for the button beside it, which is the control
+            // keyboards and assistive technology unfold the row through.
+            <div className={styles['modelSummary']} onClick={props.onToggle}>
+              <span className={styles['modelSummaryId']} data-unnamed={id.length === 0 || undefined}>
+                {id.length === 0 ? t('modelId') : id}
+              </span>
+              {/* The space separates the two values as text; the flex gap alone spaces them on screen. */}
+              {name.length === 0 ? null : <>{' '}<span className={styles['modelSummaryName']}>{name}</span></>}
+            </div>
+          )}
         <button
           type="button"
           className={styles['iconButton']}
@@ -149,7 +183,6 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         >
           <IconTrashOutlineRegular size={14} />
         </button>
-        {modelField('name')}
         {props.expanded
           ? (
             <div className={styles['modelAdvanced']}>
@@ -164,9 +197,11 @@ export function ModelRow(props: ModelRowProps): ReactNode {
                     placeholder={props[field].placeholder}
                     aria-label={`${t(field)} ${String(position)}`}
                     disabled={disabled}
+                    {...refusal(field).input}
                     onChange={(event) => { props[field].onChange(event.target.value) }}
                     onBlur={props[field].onBlur}
                   />
+                  {refusal(field).reason}
                 </label>
               ))}
               <ModelInputTypes

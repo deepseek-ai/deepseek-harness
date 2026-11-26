@@ -18,55 +18,46 @@
       - button "删除 minimax-cn": 删除
     - listitem:
       - text: openai
-      - button "编辑 openai": 编辑
       - button "删除 openai": 删除
-      - text: openai API 密钥
+      - text: API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: 留空使用环境认证（OPENAI_API_KEY）
       - paragraph: 已检测到环境变量（OPENAI_API_KEY）
-      - group:
-        - text: 自定义设置 API 地址
-        - textbox "API 地址":
-          - /placeholder: https://api.openai.com/v1
-        - group "重试策略":
-          - text: 重试策略
-          - combobox "重试策略":
-            - option "默认（仅临时错误）" [selected]
-            - option "仅临时错误"
-            - option "所有错误"
-        - region "模型目录":
-          - text: 模型目录 已自定义模型目录
-          - button "恢复默认模型"
-          - button "获取可用模型"
-          - button "调整模型顺序 1"
-          - textbox "模型 ID 1":
-            - /placeholder: 模型 ID
-            - text: gpt-6-astra
-          - button "模型选项 1" [expanded]
-          - button "删除模型 1"
-          - textbox "显示名称 1":
-            - /placeholder: 显示名称
-            - text: GPT-6 Astra
-          - text: 上下文窗口
-          - textbox "上下文窗口 1":
-            - /placeholder: 1M
-            - text: 272K
-          - text: 最大输出 token 数
-          - textbox "最大输出 token 数 1":
-            - /placeholder: 128K
-            - text: 128K
-          - group "输入类型 1":
-            - text: 输入类型
-            - checkbox "文本" [checked]
-            - text: 文本
-            - checkbox "图片" [checked]
-            - text: 图片
-          - group "推理等级 1":
-            - text: 推理等级
-            - button "推理等级说明": "?"
-            - switch "推理等级 1"
-          - button "添加模型"
+      - region "模型":
+        - button "模型" [expanded]
+        - text: 已自定义
+        - button "恢复默认"
+        - button "获取可用模型"
+        - textbox "模型 ID 1":
+          - /placeholder: 模型 ID
+          - text: gpt-6-astra
+        - textbox "显示名称 1":
+          - /placeholder: 显示名称
+          - text: GPT-6 Astra
+        - button "模型选项 1" [expanded]
+        - button "删除模型 1"
+        - text: 上下文窗口
+        - textbox "上下文窗口 1":
+          - /placeholder: 1M
+          - text: 272K
+        - text: 最大输出 token 数
+        - textbox "最大输出 token 数 1":
+          - /placeholder: 128K
+          - text: 128K
+        - group "输入类型 1":
+          - text: 输入类型
+          - checkbox "文本" [checked]
+          - text: 文本
+          - checkbox "图片" [checked]
+          - text: 图片
+        - group "推理等级 1":
+          - text: 推理等级
+          - button "推理等级说明": "?"
+          - switch "推理等级 1"
+        - button "添加模型"
+      - region "高级设置":
+        - button "高级设置"
       - button "取消"
       - button "保存"
     - listitem:

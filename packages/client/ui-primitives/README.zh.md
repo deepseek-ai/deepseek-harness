@@ -83,7 +83,7 @@ kind: "package-library"
 | `UserTextRun`、`ReferenceChip` | 不做解析的行内文本，以及业务已解析的引用标签或激活按钮。 |
 | `CommandText` | 可选中的命令或参数文本；仅横向溢出时添加具名的键盘聚焦目标。 |
 | `TerminalBlock`、`ReadBlock`、`DiffBlock`、`SearchBlock`、`WebBlock` | 与各类工具结果意图对应的 agent 输出卡片。 |
-| `icons/*`、`FishLogo`、`BrandWordmark`、`ReferenceIconRegular`/`ReferenceIconMedium`、`LinkIconRegular`/`LinkIconMedium` | 字形与品牌标识。`IconDragHandleOutlineRegular`/`Medium` 以三条横线表示可拖动的排序手柄。`IconFilesDiffOutlineRegular`/`Medium` 画两页叠放的文件，前页带上加下减，表示一组文件的变更。思考图标的轨道在 16px 视口内保留内边距。“更多”入口使用的 `IconAppsAddOutlineRegular`/`Medium` 接受 `compact`，在卡片尺寸下让方块更靠近。`LinkIconMedium` 用于 14px 的可点击链接分类及已知站点标记。 |
+| `icons/*`、`FishLogo`、`BrandWordmark`、`ReferenceIconRegular`/`ReferenceIconMedium`、`LinkIconRegular`/`LinkIconMedium` | 字形与品牌标识。`IconDragHandleOutlineRegular`/`Medium` 以三条横线表示可拖动的排序手柄；`IconDragDotsFillRegular`/`Medium` 在 8×14 的框内绘制六个圆点，用作整行可拖动的行旁的拖动标记。`IconFilesDiffOutlineRegular`/`Medium` 画两页叠放的文件，前页带上加下减，表示一组文件的变更。思考图标的轨道在 16px 视口内保留内边距。“更多”入口使用的 `IconAppsAddOutlineRegular`/`Medium` 接受 `compact`，在卡片尺寸下让方块更靠近。`LinkIconMedium` 用于 14px 的可点击链接分类及已知站点标记。 |
 | `PermissionIconReadOnlyRegular`/`Medium`、`PermissionIconWorkspaceWriteRegular`/`Medium`、`PermissionIconFullAccessRegular`/`Medium`、`PermissionIconAutoReviewRegular`/`Medium` | 只读、工作区写入、完全访问与自动审查选项使用的权限模式图形。 |
 | `PluginArtworkTerminal`/`Loop`/`Subagent`/`Search`/`Default` | 固定配色的 36×36 插件插画；`Terminal` 为插件卡片和侧边栏开始页入口提供浅蓝色提示符。`Default` 用于没有自有插画的插件。def id 按实例生成，同一插画可在一页中安全重复。 |
 | `GuideArtworkBrowser`/`Files` | 固定配色的 36×36 浏览器与文件夹插画，用于侧栏引导入口。 |
