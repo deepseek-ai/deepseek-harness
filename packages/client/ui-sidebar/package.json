@@ -60,7 +60,7 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "clsx": "^2.0.0",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*"

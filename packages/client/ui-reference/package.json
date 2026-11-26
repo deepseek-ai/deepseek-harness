@@ -58,7 +58,7 @@
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",

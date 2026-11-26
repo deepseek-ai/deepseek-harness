@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",

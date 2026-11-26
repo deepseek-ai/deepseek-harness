@@ -44,8 +44,8 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "clsx": "^2.1.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "@testing-library/react": "^16.3.3"
   },
   "dsh": {

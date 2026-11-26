@@ -49,7 +49,7 @@
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-settings": "workspace:*",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "files": [

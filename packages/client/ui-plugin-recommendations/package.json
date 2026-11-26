@@ -49,7 +49,7 @@
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:*",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "@deepseek-ai/dsh-plugin-recommendations": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-plugin-manager": "workspace:*",

@@ -75,6 +75,6 @@
     "@deepseek-ai/dsh-tool-workflow": "workspace:*",
     "@deepseek-ai/dsh-workflow": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "react": "^18.2.0"
+    "react": "^19.3.1"
   }
 }

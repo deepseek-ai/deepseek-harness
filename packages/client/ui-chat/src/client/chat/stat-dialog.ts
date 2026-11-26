@@ -2,15 +2,15 @@
 // (TurnUsagePanel) and the composer-dock session stats pills (StatsPills.tsx);
 // the matching dialog surface skin lives in stat-dialog.module.css.
 
-import { useEffect, useId, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 import { useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** Open state, refs, and CSS anchor identity for one stat dialog. */
 export interface StatDialogSeat {
   open: boolean
   setOpen: (open: boolean) => void
-  rootRef: MutableRefObject<HTMLSpanElement | null>
-  panelRef: MutableRefObject<HTMLDivElement | null>
+  rootRef: RefObject<HTMLSpanElement | null>
+  panelRef: RefObject<HTMLDivElement | null>
   anchorName: string
 }
 

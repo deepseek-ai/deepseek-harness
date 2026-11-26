@@ -59,7 +59,7 @@
   "devDependencies": {
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@testing-library/react": "^16.3.3",
-    "react-dom": "^18.2.0",
+    "react-dom": "^19.3.1",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-ui-chat": "workspace:*",
@@ -69,7 +69,7 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@tanstack/react-virtual": "^3.14.10",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-client-locale": "workspace:*",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",

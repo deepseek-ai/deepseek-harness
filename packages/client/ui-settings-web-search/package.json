@@ -57,7 +57,7 @@
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-web": "workspace:*",
-    "react": "^18.2.0"
+    "react": "^19.3.1"
   },
   "files": [
     "locale/*.json",

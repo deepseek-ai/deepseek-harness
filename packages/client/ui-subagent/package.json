@@ -74,8 +74,8 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-token-meter": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "files": [
     "locale/*.json",

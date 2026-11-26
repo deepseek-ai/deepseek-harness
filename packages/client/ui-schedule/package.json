@@ -80,8 +80,8 @@
     "@testing-library/react": "^16.3.3",
     "clsx": "^2.1.1",
     "@deepseek-ai/cordis": "workspace:~",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "@deepseek-ai/dsh-util-text-search": "workspace:*"
   },
   "files": [

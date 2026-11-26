@@ -557,7 +557,8 @@ describe('DirectoryBrowser', () => {
     // re-parks on the crumb edit zone.
     await screen.findByRole('alert')
     expect(screen.queryByText('.config')).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'browser.editPath' }))
+    // The refocus effect is passive, so it can run after the commit that shows the alert.
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('button', { name: 'browser.editPath' })) })
   })
 
   it('leaves focus on a surviving row when its pick fails', async () => {

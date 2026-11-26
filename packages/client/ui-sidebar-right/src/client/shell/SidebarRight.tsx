@@ -30,7 +30,7 @@
  * domain follows each session's store commits, including sessions off screen.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, MutableRefObject, ReactNode } from 'react'
+import type { CSSProperties, RefObject, ReactNode } from 'react'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -313,7 +313,7 @@ function PanelChrome({ sessionId, fullscreen, actions, t, shortcuts, toggleFulls
  * The panel: the docked surface with the two controls in its top-right strip,
  * anchored to the frame's right edge and slid off it while collapsed.
  */
-function SidebarPanel(panel: PanelProps & { width: number; panelRef: MutableRefObject<HTMLDivElement | null> }): ReactNode {
+function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<HTMLDivElement | null> }): ReactNode {
   const { sessionId, surface, actions, t, openTab, width, reportRoom, fullscreen, panelRef } = panel
   const { expanded } = surface.layout
   const types = panel.useTabTypes(value => value)

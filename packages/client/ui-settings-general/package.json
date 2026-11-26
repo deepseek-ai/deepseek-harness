@@ -75,9 +75,9 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
     "clsx": "^2.0.0",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "@deepseek-ai/dsh-settings": "workspace:*",
-    "react-dom": "^18.2.0",
+    "react-dom": "^19.3.1",
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*"
   },
   "files": [

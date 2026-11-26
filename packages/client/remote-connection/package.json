@@ -95,7 +95,7 @@
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
     "@deepseek-ai/dsh-credentials": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
-    "react": "^18.2.0",
+    "react": "^19.3.1",
     "qrcode.react": "^4.2.0",
     "@deepseek-ai/dsh-client-ui-settings": "workspace:*",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",

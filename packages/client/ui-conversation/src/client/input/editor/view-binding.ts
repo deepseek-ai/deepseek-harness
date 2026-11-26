@@ -1,5 +1,5 @@
 /** DOM and keymap bindings installed by the InputBar's existing effects. */
-import type { MouseEvent, MutableRefObject, RefObject } from 'react'
+import type { MouseEvent, RefObject } from 'react'
 import type { LexicalEditor } from 'lexical'
 import { $getRoot } from 'lexical'
 import { focusWithoutRing, isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -109,7 +109,7 @@ export function installDraftWheel(scrollRef: RefObject<HTMLDivElement | null>): 
  */
 export function installDraftFilePicker(
   keyboard: ComposerKeyboard,
-  gate: MutableRefObject<Pick<DraftViewGate, 'canAcceptDrop'>>,
+  gate: RefObject<Pick<DraftViewGate, 'canAcceptDrop'>>,
   fileInputRef: RefObject<HTMLInputElement | null>,
 ): () => void {
   return keyboard.bindFilePicker({
@@ -128,7 +128,7 @@ export function installDraftFilePicker(
 export function installDraftKeymap(
   editor: LexicalEditor,
   keyboard: ComposerKeyboard,
-  gate: MutableRefObject<DraftViewGate>,
+  gate: RefObject<DraftViewGate>,
 ): () => void {
   return registerComposerKeymap(editor, {
     arbitrate: (key, composing) => keyboard.arbitrate(key, composing),

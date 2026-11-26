@@ -153,8 +153,8 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`picomatch`](https://github.com/micromatch/picomatch) | MIT |
 | [`protobufjs`](https://github.com/protobufjs/protobuf.js) | BSD-3-Clause |
 | [`qrcode.react`](https://github.com/zpao/qrcode.react) | ISC |
-| [`react`](https://github.com/facebook/react) | MIT |
-| [`react-dom`](https://github.com/facebook/react) | MIT |
+| [`react`](https://github.com/react/react) | MIT |
+| [`react-dom`](https://github.com/react/react) | MIT |
 | [`readable-stream`](https://github.com/nodejs/readable-stream) | MIT |
 | [`resolve.exports`](https://github.com/lukeed/resolve.exports) | MIT |
 | [`rrule`](https://github.com/jakubroztocil/rrule) | BSD-3-Clause |

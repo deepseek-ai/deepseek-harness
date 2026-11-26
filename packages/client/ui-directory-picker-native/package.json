@@ -50,8 +50,8 @@
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:*",
     "@testing-library/react": "^16.3.3",
     "@deepseek-ai/cordis": "workspace:~",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "files": [
     "locale/*.json",

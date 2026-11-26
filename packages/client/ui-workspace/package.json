@@ -92,7 +92,7 @@
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "clsx": "^2.0.0",
-    "react": "^18.2.0"
+    "react": "^19.3.1"
   },
   "files": [
     "locale/*.json",

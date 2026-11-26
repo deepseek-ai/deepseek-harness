@@ -154,8 +154,8 @@
     "@deepseek-ai/dsh-typert-registry": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@types/ws": "^8.18.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "@deepseek-ai/dsh-error": "workspace:*"
   },
   "dsh": {

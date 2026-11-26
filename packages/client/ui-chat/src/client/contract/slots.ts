@@ -1,5 +1,5 @@
 /** Chat-owned Slot declarations and composed component props. */
-import type { MutableRefObject, RefObject } from 'react'
+import type { RefObject } from 'react'
 import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -182,7 +182,7 @@ export type UseDisclosure = () => {
  * @param reveal - browser-find and focus-protection callback.
  * @returns the stable process-container ref.
  */
-export type UseGroupAction = (hidden: boolean, reveal: () => void) => MutableRefObject<HTMLDivElement | null>
+export type UseGroupAction = (hidden: boolean, reveal: () => void) => RefObject<HTMLDivElement | null>
 
 /**
  * Plain header visibility bound to the flow's viewport, including growth on reveal.
