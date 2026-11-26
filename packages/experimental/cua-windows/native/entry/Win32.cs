@@ -90,7 +90,6 @@ internal static class Win32
     [DllImport("kernel32.dll")] internal static extern nint GlobalFree(nint memory);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern uint GetFinalPathNameByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, StringBuilder path, uint length, uint flags);
-    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetProcessTimes(Microsoft.Win32.SafeHandles.SafeProcessHandle process, out long created, out long exited, out long kernel, out long user);
 
     [DllImport("shell32.dll", PreserveSig = true)]
     internal static extern int SHGetPropertyStoreForWindow(nint window, ref Guid id,

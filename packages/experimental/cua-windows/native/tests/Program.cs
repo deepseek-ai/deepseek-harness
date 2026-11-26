@@ -19,6 +19,28 @@ void Refuses(Action action, string code)
     catch (NativeFailure failure) { Check(failure.Code == code, "Unexpected refusal: " + failure.Code); }
 }
 
+var editorId = "Fixture.Editor!App";
+var originalPath = Path.GetFullPath("Editor.exe");
+var movedPath = Path.GetFullPath(Path.Combine("moved", "Editor.exe"));
+var original = ApplicationAuthorization.Create(editorId, "Editor", originalPath);
+var updated = ApplicationAuthorization.Create(editorId, "Updated Editor", movedPath);
+Check(original.Persistable, "Application consent can be saved");
+Check(original.Id == updated.Id, "Versions and copies declaring the same AUMID share consent");
+Check(original.Id != ApplicationAuthorization.Create("Fixture.Editor!Other", "Other", originalPath).Id,
+    "Distinct application identifiers do not share consent even at the same executable path");
+Check(original.Id == Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+    System.Text.Encoding.UTF8.GetBytes("windows-aumid\0" + editorId))), "Existing AUMID authorization keys remain stable");
+Check(ApplicationAuthorization.Create(originalPath, "Editor", originalPath).Id
+    != ApplicationAuthorization.Create(movedPath, "Editor", movedPath).Id,
+    "Unidentified applications use separate canonical paths");
+var observed = ApplicationAuthorization.Create(originalPath, "Editor", originalPath,
+    [editorId, null, "", editorId, "Shell.Editor"], [originalPath, originalPath.ToUpperInvariant(), movedPath]);
+Check(observed.Attributes["windows.aumid"].SequenceEqual(new[] { editorId, "Shell.Editor" }),
+    "Window, package and Shell AUMIDs contribute nonempty distinct permission attributes");
+Check(observed.Attributes["windows.executablePath"].Length == 2, "Permission paths ignore case and retain distinct locations");
+Check(observed.Id == ApplicationAuthorization.Create(originalPath, "Editor", originalPath).Id,
+    "Additional permission attributes do not replace the native application identifier");
+
 var handshakeConfig = new JsonObject
 {
     ["maxRequestBytes"] = 8192, ["maxResponseBytes"] = 8192, ["axTimeoutMs"] = 10, ["textEventIntervalMs"] = 0,

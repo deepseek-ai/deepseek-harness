@@ -75,8 +75,8 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Read fresh stored application decisions without issuing a native request.
-   * @returns Saved grants, refused applications and durable-storage availability.
+   * Read current saved decisions without waiting for native discovery, system checks, or icons.
+   * @returns Current grants, refusals, and durable-storage availability.
    */
   @Remote
   applications(): Promise<CuaApplicationState> { return this.policy.status() }
@@ -92,13 +92,13 @@ export class CuaAccess extends TypertRemoteService {
 
   /**
    * Load presentation icons separately from application decisions.
-   * @returns Optional native PNG icons keyed by executable path; applications without paths are skipped.
+   * @returns Optional native PNG icons keyed by saved icon target or executable path; applications without either are skipped.
    */
   @Remote
   async applicationIcons(): Promise<Record<string, string>> {
     const state = await this.policy.status()
     const paths = [...new Set([...state.allowedApps, ...state.blockedApps]
-      .flatMap(app => app.executablePath === undefined ? [] : [app.executablePath]))]
+      .flatMap(app => app.iconPath !== undefined ? [app.iconPath] : app.executablePath === undefined ? [] : [app.executablePath]))]
     return paths.length === 0 ? {} : z.record(z.string(), ApplicationIcon).parse(await this.control('applicationIcons', { paths }))
   }
 

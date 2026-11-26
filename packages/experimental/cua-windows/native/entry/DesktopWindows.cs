@@ -85,8 +85,9 @@ internal static class DesktopWindows
         string path;
         try { path = Applications.ResolveExecutable(query); }
         catch (NativeFailure error) when (error.Code is "APP_NOT_FOUND" or "INVALID_ARGUMENT") { return null; }
-        return new(path, Path.GetFileName(path), path,
-            windows.Any(window => string.Equals(window.AppId, path, StringComparison.Ordinal)));
+        var appId = path;
+        return new(appId, Applications.DisplayName(path), path,
+            windows.Any(window => string.Equals(window.AppId, appId, StringComparison.Ordinal)));
     }
 
     internal static async Task<AppState> Select(string selector, RequestContext context)
@@ -95,18 +96,20 @@ internal static class DesktopWindows
         if (Path.IsPathFullyQualified(selector))
         {
             var path = Applications.ResolveExecutable(selector);
+            var appId = path;
+            var name = Applications.DisplayName(path);
             var windows = Observe(context).Windows;
             context.Check();
-            // An unlisted executable discloses its full path in the consent question.
-            return new AppState(Guid.NewGuid().ToString("N"), path, Path.GetFileName(path),
-                ApplicationAuthorization.Create(path, path, path), windows.Any(window => string.Equals(window.AppId, path, StringComparison.Ordinal)));
+            return new AppState(Guid.NewGuid().ToString("N"), appId, name,
+                ApplicationAuthorization.Create(appId, name, path),
+                windows.Any(window => string.Equals(window.AppId, appId, StringComparison.Ordinal)), path);
         }
         var applications = await Discover(context, includeWindowOnly: true);
         var application = SelectApplication(applications, selector);
         context.Check();
         return new AppState(Guid.NewGuid().ToString("N"), application.AppId, application.DisplayName,
-            ApplicationAuthorization.Create(application.AppId, application.DisplayName, application.ExecutablePath),
-            application.IsRunning);
+            ApplicationAuthorization.Create(application.AppId, application.DisplayName, @"shell:AppsFolder\" + application.AppId),
+            application.IsRunning, @"shell:AppsFolder\" + application.AppId);
     }
 
     private static async Task<CatalogApplication[]> Discover(RequestContext context, bool includeWindowOnly)
@@ -310,6 +313,44 @@ internal static class DesktopWindows
             return new(handle, appId, executablePath, processName);
         }
         finally { Win32.CloseHandle(process); }
+    }
+
+    internal static ApplicationAuthorization ReadAuthorization(AppState app, RequestContext context)
+    {
+        var aumids = new List<string?>();
+        var paths = new List<string?>();
+        if (Path.IsPathFullyQualified(app.AppId))
+            aumids.Add(context.Sta.InvokeSync(_ => ApplicationResolver.ForPath(app.AppId), context.Cancellation));
+        ResolvedWindow[] windows;
+        try { windows = Observe(context).Windows; }
+        catch (NativeFailure error) when (error.Code is "APP_IDENTITY_UNAVAILABLE" or "APP_DISCOVERY_FAILED")
+        {
+            // Selection already succeeded; a failed second observation only omits window attributes.
+            windows = [];
+        }
+        foreach (var window in windows.Where(window => window.AppId == app.AppId))
+        {
+            context.Check();
+            aumids.Add(Optional(() => ReadWindowAumid(window.Handle, context)));
+            aumids.Add(context.Sta.InvokeSync(_ => ApplicationResolver.ForWindow(window.Handle), context.Cancellation));
+            Win32.GetWindowThreadProcessId(window.Handle, out var processId);
+            var process = Win32.OpenProcess(ProcessQueryLimitedInformation, false, processId);
+            if (process == 0) continue;
+            try
+            {
+                aumids.Add(Optional(() => ReadProcessAumid(process, context)));
+                paths.Add(Optional(() => ReadExecutablePath(process, context)));
+            }
+            finally { Win32.CloseHandle(process); }
+        }
+        context.Check();
+        return ApplicationAuthorization.Create(app.AppId, app.Name, app.Authorization.IconPath, aumids, paths);
+    }
+
+    private static string? Optional(Func<string?> read)
+    {
+        try { return read(); }
+        catch (NativeFailure error) when (error.Code is "APP_IDENTITY_UNAVAILABLE" or "PERMISSION_DENIED") { return null; }
     }
 
     private static ResolvedWindow? OpenFailure() => Marshal.GetLastPInvokeError() switch

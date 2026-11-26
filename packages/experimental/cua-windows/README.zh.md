@@ -1,5 +1,5 @@
 ---
-description: "按 AUMID 发现 Windows 应用，并观察或操作明确选择的窗口。"
+description: "发现 Windows 应用、管理应用授权，并观察或操作明确选择的窗口。"
 kind: "package-reference"
 ---
 
@@ -33,23 +33,38 @@ kind: "package-reference"
 
 `cua.listApps()` 从当前 Windows 会话中符合条件的可见顶层窗口聚合应用。名称搜索和空查询的 `cua.findApps` 返回通过 AppsFolder 枚举的 StartApps 目录中的已安装应用。窗口观察用于补充这些目录条目的运行状态和已知可执行文件路径。目录可能不完整；找不到应用时，可以询问用户其位置。
 
-每条结果包含 `id`、`displayName`、`identity: null` 和 `isRunning`。ID 是 AUMID；Windows 没有提供窗口或进程 AUMID 时，使用完整可执行文件路径。只有完全相同的 ID 字符串才按区分大小写的相等关系合并。将返回的 ID 原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。
+发现结果包含 `id`、`identity: null` 和 `isRunning`；`listApps` 使用 `name`，`findApps` 使用 `displayName`。窗口 ID 依次取其显式 AUMID、打包应用的进程 AUMID、可执行文件路径。只有完全相同的 ID 字符串才合并，比较区分大小写。将返回的 ID 原样传给 `cua.getApp`，也可以传入现有 `.exe` 文件的绝对路径。Shell 名称、进程名和可执行文件元数据提供显示名称；显示名称不决定身份。
 
-`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，`findApps` 请求失败。`cua.getState().apps` 来自 `listApps()`。
+`listApps` 结果中的 `isRunning` 为 `true`。在 `findApps` 结果中，`isRunning` 表示存在关联窗口；目录中的应用没有窗口时返回 `false`。无法访问的窗口或进程会被忽略。应用目录读取失败时，按名称或空查询调用的 `findApps` 请求失败。`listApps` 和显式路径选择不读取应用目录。`cua.getState().apps` 来自 `listApps()`。
 
 `cua.findApps(query)` 对显示名称、ID 和已知可执行文件路径做不区分大小写的字面子串匹配，或直接检查 `.exe` 绝对路径。`""` 和 `null` 返回目录中的全部应用。非空查询须包含非空白字符，并受 `maxAppMatches` 限制，默认 20；匹配过多时返回 `AMBIGUOUS_APP`。响应大小和时间限制适用于所有查询。
 
 ### 应用与窗口选择
 
+在当前会话中首次选择尚未授权的应用时，审批窗口提供“拒绝”和“本会话允许”。如果当前 profile 可以保存授权，窗口还会显示“始终允许”，并将它作为主按钮高亮。选择“始终允许”后，同一 profile 的其他会话可以访问该应用，直到用户在自动电脑操作插件页撤销授权。在审批详情区按 Enter 只允许当前会话访问。
+
+应用授权依据选择时读到的[权限属性](#permission-attributes)。拥有共同属性的不同版本和副本可以共享授权，不区分可执行文件位置或签名。权限判等不合并发现 ID、不改变启动目标，也不关联额外窗口。启动器与实际运行程序可以共享授权，同时保留各自的原生应用对象。
+
+审批卡片和权限列表使用共用的自动电脑操作界面和文案，展示应用名称与图标。在同一会话内复用应用授权时，保留已保存的名称和图标查询目标。只有明确选择“始终允许”才保存跨会话授权，已有会话授权不会升级。选择可执行文件路径时保留该启动目标，即使它与其他副本共享授权。
+
 - `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。尚未运行的应用在授权后通过 Explorer 启动。
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口。已接纳的 HWND 在有效期间保留在列表中，包括隐藏窗口。
-- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。Windows 首次接纳窗口时检查应用归属，此后只要 HWND 有效就信任它。
+- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。Windows 在首次接纳时检查应用关联，之后在 HWND 有效期间信任该句柄；后续观察和输入不比较目标 PID、进程启动时间或应用身份。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
 - 连续读取同一窗口时传入 `showDiff: true`，可查看 UI Automation 的结构、属性和文本通知。首次读取、取消读取后的下一次观察、更换窗口或读取选项、树被截断时，返回本次读到的树。Windows 提供方配置 `maxDiffNotifications` 限制两次读取之间的通知条数，默认 50 条，相同事件类型和 RuntimeId 只计一次。超过条数上限，或非空摘要的 UTF-8 字节数达到当前树的大小时，首行显示 `Diff too large. Showing the current tree instead.`，下一行起返回本次读取范围内的树。能定位到当前元素的通知会附上元素信息，删除通知可能带有旧元素的 ID。控件可能漏报变化，也可能只报告整个容器。省略该参数或传 `false` 可读取当前树并停止监听。关闭连接时，退订仍在 UIA 线程上排队也能收到关闭应答。退订抛错时，helper 记录一次诊断。
 - 通过 `getActionSchema(action)` 查询动作的参数 JSON Schema。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
 - `app.launch()` 请求启动应用的新实例，等待所选应用的 HWND 集合变化或启动等待时限到达。单例程序可能仅激活已有实例，启动的实例也可能归属于另一个应用 ID。
 - `app.activate()` 显式请求前台激活。`app.show()` 恢复默认窗口而不请求激活；`window.show()` 恢复指定窗口。没有默认窗口时返回 `WINDOW_NOT_FOUND`，无法唯一确定默认窗口时返回 `AMBIGUOUS_WINDOW`。
+
+<a id="permission-attributes"></a>
+### 权限属性
+
+选择应用时，向共享[授权匹配器](../cua/README.zh.md#permission-controls)提供现有授权摘要和可选的 AUMID、可执行文件路径。窗口、打包应用和 Shell 解析的 AUMID 放在同一种属性集合中，比较区分大小写；可执行文件路径放在另一种集合中，比较不区分大小写。空值或不可用值不参与匹配。名称、图标、发布者签名、安装目录和进程祖先均不参与。
+
+可选的 [Shell 解析器](native/entry/ApplicationResolver.cs)在 STA 线程查询所选可执行文件路径的注册快捷方式和所选应用的窗口。它使用未公开的 Windows 8+ 接口，接口可能不可用；查询失败不提供属性值，其他属性仍可使用。应用枚举和窗口归属不调用它。不维护产品特判名单。
+
+这些属性用于权限分组，不认证发布者。声明了已授权 AUMID 的应用可以共享该授权。没有共同属性时仍需分别授权。参见[权限匹配决策](../../../.agents/notes/implemented/architecture/2026-11-26-cua-permission-attributes.zh.md)和[升级指南](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.zh.md)。
 
 <a id="interaction-rules"></a>
 ## 交互规范
@@ -58,7 +73,7 @@ kind: "package-reference"
 2. 使用元素 ID 前先读取辅助功能树。绝对指针坐标采用最近一次返回的截图像素，以该窗口为原点。`relative: true` 在相应的 AX 观察或截图之后使用 0 到 999 的整数千分比坐标。窗口尺寸变化后重新截图。
 3. `pressKey`、`click` 和 `drag` 都接受 `ctrl`（别名 `control`）、`alt` 和 `shift`。只有 `click` 和 `drag` 接受 `win`。系统键盘和指针输入要求目标窗口位于前台。解释必要的焦点切换，显式激活应用或让用户聚焦目标窗口，再重新观察。不要假定选择 App 或 Window 会改变焦点。
 4. `dispatched` 只表示分派情况，不证明预期效果已经发生。继续操作前先观察结果。窗口变化、快照过期、超时或取消后，不要盲目重放输入，也不要自动切换目标窗口。
-5. 授权针对当前会话中的应用。尊重拒绝和撤销，不使用其他工具绕过。重新连接会使已保留的句柄失效，继续操作前必须重新选择应用。
+5. 用户拒绝或撤销授权后，应停止访问该应用。重新连接后需要重新选择应用以取得新句柄。
 
 `win.toggleMouse(button, direction)` 在当前指针位置发送一次系统按键事件。按下时，所选窗口必须在前台，指针也必须命中该窗口。请通过原 Window 对象松开；松开只释放桌面按钮，不切换焦点，也不移动指针。
 
@@ -94,7 +109,6 @@ kind: "package-reference"
 - 不支持应用级辅助功能；读取树前必须明确选择窗口。
 - 如果启动后 `getWindows()` 仍为空，请让用户打开所需窗口。
 - 观察和输入需要可访问、未锁定的交互式 Windows 会话。截图需要 Windows Graphics Capture 支持；列出的窗口仍可能无法截图或接收输入。
-- 应用授权不提供 **Always allow（始终允许）** 选项。其他会话需要分别获得授权。
 
 <a id="dev-note"></a>
 ### 开发备注

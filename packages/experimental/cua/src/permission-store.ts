@@ -8,15 +8,18 @@ import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import { z } from 'zod'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
+import { ApplicationAttributes } from './application-identity.ts'
 
 const identity = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId),
   name: z.string(), executablePath: z.string().min(1).optional(),
+  iconPath: z.string().min(1).optional(),
 })
 const sessionDecision = z.object({
   identity, decision: z.enum(['allow', 'deny', 'ask']), revision: z.number().int().nonnegative(),
 })
 const application = z.object({
+  attributes: ApplicationAttributes.optional(),
   revoked: z.number().int().nonnegative(), always: identity.optional(),
   sessions: z.record(z.string(), sessionDecision),
 })

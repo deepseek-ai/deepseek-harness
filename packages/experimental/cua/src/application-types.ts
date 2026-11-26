@@ -11,4 +11,6 @@ export interface CuaApplicationGrant {
   name: string
   /** Canonical executable path for display and icons; absent when the operating system cannot provide it. */
   executablePath?: string | undefined
+  /** Native icon lookup target; a Windows Shell parsing name or file path. Absent providers use executablePath. */
+  iconPath?: string | undefined
 }

@@ -6,7 +6,7 @@ Call inspect(...values) to display selected observation results.
 
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: string and the methods listed below for window level. Window IDs are opaque provider-issued strings; preserve them verbatim.
 
-CuaAppInfo = { id: string, displayName: string, identity: string | null, isRunning: boolean, pid?: number }. Pass id unchanged to cua.getApp. For entries sharing the same id, pass identity unchanged or String(pid), when available, to select the intended entry. Windows application IDs are AppUserModelIDs (AUMIDs), with full executable paths used as fallback IDs. Windows records have identity: null.
+CuaAppInfo = { id: string, displayName: string, identity: string | null, isRunning: boolean, pid?: number }. Pass id unchanged to cua.getApp. For entries sharing the same id, pass identity unchanged or String(pid), when available, to select the intended entry. Windows application IDs are opaque selectors. Copy the returned id unchanged; do not construct an ID from an application name or executable. An executable hosting multiple applications requires a specific returned id. Windows records have identity: null.
 
 Supported modifier names depend on the platform and the operation; see the platform guidance.
 
