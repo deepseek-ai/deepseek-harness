@@ -31,12 +31,19 @@ import { relayFetch, type RelayFetch } from './relay-fetch.ts'
  * because a timeout or a restart of the Relay says nothing about the owner's own Session. A refusal —
  * 401 or 403 — does end admission without ending the owner's turn: the Relay will not admit anything
  * else through this share, while the turn the owner started runs against the owner's own tools.
- * Every failure reports `ok: false`; the difference is what this host already did about it, not a
- * caller's decision.
+ * Every failure reports `ok: false`; `failure` states which one, so a caller acting on the read
+ * can tell a share the Relay no longer serves from a read that reached no answer.
  */
 export type RelayAuthorityRead =
   | { readonly ok: true; readonly accessState: ShareAccessStateFrame }
-  | { readonly ok: false }
+  | {
+    readonly ok: false
+    /**
+     * What ended admission: the Relay has no such share, it refuses this host's credential or the
+     * share, this host no longer holds the share the read started on, or the read reached no answer.
+     */
+    readonly failure: 'missing' | 'refused' | 'superseded' | 'unavailable'
+  }
 
 /**
  * Whether one requester still holds access to one share this host publishes.
@@ -368,10 +375,10 @@ export function createRelayAuthority(deps: RelayAuthorityDeps): RelayAuthority {
     signal?.throwIfAborted()
     const current = deps.ownerShares.get(share.shareId)
     if (deps.disposed() || generation !== generationOf(share.shareId) || current?.gatewayToken !== share.gatewayToken
-      || current.relay !== share.relay) return { ok: false }
+      || current.relay !== share.relay) return { ok: false, failure: 'superseded' }
     if (answer.kind === 'missing') {
       invalidateRelayAccess(share.shareId)
-      return { ok: false }
+      return { ok: false, failure: 'missing' }
     }
     // A refusal ends admission while the owner's turn keeps running: the Relay would not serve this
     // host for the share, so it admits no further viewer input there. Calls and streams already open
@@ -381,11 +388,11 @@ export function createRelayAuthority(deps: RelayAuthorityDeps): RelayAuthority {
       for (const child of deps.forks.listForShare(share.shareId)) {
         deps.viewerRead().closeViewerStreams(share.shareId, child.creator)
       }
-      return { ok: false }
+      return { ok: false, failure: 'refused' }
     }
     // An unavailable Relay read ends nothing here: the held statement stays, and every viewer path
     // that needs a fresh admission is refused by refreshRelayAccess until a read succeeds again.
-    if (answer.kind === 'unavailable') return { ok: false }
+    if (answer.kind === 'unavailable') return { ok: false, failure: 'unavailable' }
     applyRelayAccess(share.shareId, answer.accessState)
     return { ok: true, accessState: answer.accessState }
   }

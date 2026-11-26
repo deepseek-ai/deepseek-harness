@@ -10,7 +10,7 @@ import { CODE_FILE_ARTWORK, CODE_FILE_ICON_ID_TOKEN } from './code-file-icon-art
  * @returns The selected decorative SVG with its identifying palette intact.
  */
 export function CodeFileIcon({ type, size = 20, className }: IconProps & { readonly type: CodeFileType }): ReactNode {
-  const instanceId = `dsh-code-icon-${useId().replaceAll(':', '')}`
+  const instanceId = `dsh-code-icon-${useId().replace(/[^\w-]/g, '')}`
   const artwork = CODE_FILE_ARTWORK[type].replaceAll(CODE_FILE_ICON_ID_TOKEN, instanceId)
   // Package tests reject unsafe markup and invalid local references in this
   // static table. Per-instance ids keep gradients and clip paths independent.

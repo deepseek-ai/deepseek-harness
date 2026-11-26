@@ -147,7 +147,8 @@ export interface ISessions {
    *   turn is balanced Host-side with synthetic closers, and omission selects
    *   the latest completed-turn prefix), and whether to increment an
    *   inherited durable title, skipping numbers Host-listed titles already use,
-   *   before resolving. `onCreated` observes the catalogued child before that optional rename.
+   *   before resolving. `onCreated` observes the catalogued child before that optional rename,
+   *   including a child published before Workspace attachment failed.
    * @returns the child session id.
    * @throws when the fork fails, or when a requested child-title rename fails after creation.
    */
@@ -158,6 +159,8 @@ export interface ISessions {
     onCreated?: (childId: SessionId) => void
     /** False refuses source migration; omission preserves the Host default. */
     allowMigration?: boolean
+    /** `side` records the child as a side conversation; omission creates an ordinary Session. */
+    origin?: 'side'
   }): Promise<SessionId>
   /**
    * Borrow an already-retained Agent-scoped Context without extending its lifetime.

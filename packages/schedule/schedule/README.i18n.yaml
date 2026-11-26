@@ -24,8 +24,8 @@
   en: 27110a754a4e6b96
   zh: f9680531aef71650
 /deepseek-ai-dsh-schedule/understand-the-implementation/storage-format-and-upgrades:
-  en: b82a5f8e27a0adaa
-  zh: 3b7f212b7852ccea
+  en: ef3d3bc02b5edb29
+  zh: 820b13f2d28e4df6
 /deepseek-ai-dsh-schedule/understand-the-implementation/storage-format-and-upgrades/timing-record-fields:
   en: 93d9eb94a142fc0c
   zh: c997efbe182ab062
@@ -36,8 +36,11 @@
   en: 3f70e357501fad06
   zh: 430d24e125268650
 /deepseek-ai-dsh-schedule/understand-the-implementation/dispatch-and-lifecycle:
-  en: fdf1d2e347420fab
-  zh: fd7257b8e843fc83
+  en: f47adc80c003cd44
+  zh: 44ccf60741ef2604
+/deepseek-ai-dsh-schedule/understand-the-implementation/source-delivery:
+  en: abadb5b03969d038
+  zh: c4ba34710df23151
 /deepseek-ai-dsh-schedule/further-exploration:
   en: 5c98e7a8bd720560
   zh: dc1d41e7762b067a
@@ -85,7 +88,19 @@
   zh: 7b518b4fcdc3ad0b
 /deepseek-ai-dsh-schedule/model-experience/due-reminders-in-the-target-session/kv-cache-effect:
   en: 7f75bfa484baaa5f
-  zh: f60e81285e2228e7
+  zh: 1bef5e75aeb4c731
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session:
+  en: 1dd9c7bbe4e5fa35
+  zh: d0bf99647f26e523
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session/what-the-model-sees:
+  en: eeec11818f3e7373
+  zh: cf04343a7573b5bb
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session/token-effect:
+  en: 9223a6de10b1d5fb
+  zh: 8814c97228796288
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session/kv-cache-effect:
+  en: aaef9758ec0dff30
+  zh: 972f37c55f3924d3
 /deepseek-ai-dsh-schedule/model-experience/change-notices-in-involved-sessions:
   en: 4c6fcd0b338a4fc7
   zh: 77a94c6c6f77d38d
@@ -102,8 +117,8 @@
   en: ded4518f433d2ed9
   zh: 8a9fb97f9926189c
 /deepseek-ai-dsh-schedule/known-limitations-and-deferred-work:
-  en: 86e89ea7b6abaa5d
-  zh: d2ec559c625a370d
+  en: 04c9146348ff703d
+  zh: c2e6775c965d8548
 /deepseek-ai-dsh-schedule/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

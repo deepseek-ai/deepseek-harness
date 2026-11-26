@@ -947,6 +947,29 @@ describe('fork', () => {
     expect(b.mock.log.requests(FOLLOW)).toHaveLength(0)
   })
 
+  it('reports a child published before Workspace attachment fails, then rejects', async ({ bench }) => {
+    const b = bench()
+    b.mock.remote.session.fork.mockResolvedValueOnce(err(new RemoteError(
+      'session/workspace-attach-failed', 'ledger unavailable', { sessionId: sid('child'), workspaceId: 'ws' },
+    )))
+    const onCreated = vi.fn<(childId: SessionId) => void>()
+
+    const failure = await b.svc.fork({ sessionId: sid('source'), origin: 'side', onCreated }).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(SessionForkError)
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(sid('child'))
+    expect(b.svc.list.getSnapshot().byId[sid('child')]).toMatchObject({ id: 'child', origin: 'side' })
+  })
+
+  it('forwards a side origin to the Remote request', async ({ bench }) => {
+    const b = bench()
+    b.mock.remote.session.fork.mockResolvedValueOnce(ok({ sessionId: sid('child') }))
+
+    await expect(b.svc.fork({ sessionId: sid('source'), origin: 'side' })).resolves.toBe(sid('child'))
+
+    expect(b.mock.remote.session.fork).toHaveBeenCalledExactlyOnceWith({ sessionId: sid('source'), origin: 'side' })
+  })
+
   it('preserves the Host migration refusal without creating or opening a Session', async ({ bench }) => {
     const b = bench()
     const source = sid('source')

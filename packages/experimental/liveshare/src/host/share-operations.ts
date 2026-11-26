@@ -16,6 +16,7 @@ import type {
   OwnerIdentityStatus,
   OwnerRelayState,
   OwnerShareList,
+  ReconnectShareRequest,
   RelayConnectivityView,
   RelayPublishView,
   SetRelayRequest,
@@ -33,7 +34,7 @@ import type {
 } from '../share-api-types.ts'
 
 /**
- * The twelve owner operations behind the share-management surface.
+ * The owner operations behind the share-management surface.
  *
  * Each method owns one operation's business order. Failures are thrown as `RemoteError` values with
  * a `liveshareShares/` code, which the Gateway carries to the Client unchanged.
@@ -58,6 +59,13 @@ export interface OwnerShareOperations {
    * @returns Every share this host publishes.
    */
   list(): Promise<OwnerShareList>
+
+  /**
+   * Reconnect an unexpired owner share at its original address. An online share needs no registration.
+   * @param request - Share whose existing link is to be reconnected.
+   * @returns Completion when connected; rejects if the share is gone, expired, or cannot reconnect.
+   */
+  reconnect(request: ReconnectShareRequest): Promise<void>
 
   /**
    * Stop one share locally, revoke its forks, and delete its Relay row when reachable.

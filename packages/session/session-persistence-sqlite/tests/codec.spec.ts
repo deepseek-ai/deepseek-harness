@@ -11,9 +11,11 @@ describe('SQLite header decoding', () => {
     expect(decodeHeader(header)).toEqual({ ...header, delegationDepth: 0 })
     const parent = { ...header, cwd: '/work', parentSession: SessionId('parent'), origin: 'subagent' as const, delegationDepth: 1, agentPreset: 'worker' }
     expect(decodeHeader(parent)).toEqual(parent)
+    const side = { ...header, isSeeded: true, origin: 'side' as const, delegationDepth: 0 }
+    expect(decodeHeader(side)).toEqual(side)
   })
 
-  it.each([null, { ...header, version: 100 }, { ...header, version: 3 }, { ...header, delegationDepth: -1 }])(
+  it.each([null, { ...header, version: 100 }, { ...header, version: 3 }, { ...header, delegationDepth: -1 }, { ...header, origin: 'parent' }])(
     'refuses malformed or unsupported logical metadata %j', (value) => {
       expect(() => decodeHeader(value)).toThrow()
     },

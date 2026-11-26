@@ -28,6 +28,26 @@ const TRANSCRIPT = 880
 /** The gutter that holds the docked panel: 40px clear of the transcript, its 300px minimum width, and the 8px edge inset. */
 const DOCK_GUTTER = 348
 
+/** What a frame or a sought moment of the panel's motion shows; the panel's fields are null while it does not render. */
+interface MotionFrame {
+  /** The scrollport's end inset. */
+  readonly inset: number
+  /** The panel's motion mark, `none` at rest. */
+  readonly motion: string | null
+  readonly opacity: number | null
+  /** The distance from the panel's end edge to the scrollport's. */
+  readonly edge: number | null
+  /** The scrollport's sideways scroll range. */
+  readonly sideways: number
+}
+
+/** What the motion page's window carries for the test: its init script's frame reader, the sampled frames, and the held animations. */
+interface MotionWindow {
+  readonly motionFrame: () => MotionFrame | null
+  sampled: MotionFrame[]
+  held: Animation[]
+}
+
 /**
  * A page at the lane's baseline size whose origin stores no docking choice.
  * The lane's standard page starts with docking off; this file measures the
@@ -373,6 +393,22 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
     onTestFinished(() => moving.close())
     onTestFailed(() => saveFailureShot(moving, 'web-e2e-session-panel-motion'))
     const errors = watchConsole(moving)
+    await moving.addInitScript(() => {
+      Object.assign(window, {
+        motionFrame: (): MotionFrame | null => {
+          const scroll = document.querySelector<HTMLElement>('[data-conversation-scroll]')
+          const panel = document.querySelector<HTMLElement>('[data-session-panel]')
+          if (scroll === null) return null
+          return {
+            inset: Number.parseFloat(getComputedStyle(scroll).paddingInlineEnd),
+            motion: panel === null ? null : panel.dataset['sessionPanelMotion'] ?? 'none',
+            opacity: panel === null ? null : Number(getComputedStyle(panel).opacity),
+            edge: panel === null ? null : scroll.getBoundingClientRect().left + scroll.clientWidth - panel.getBoundingClientRect().right,
+            sideways: scroll.scrollWidth - scroll.clientWidth,
+          }
+        },
+      })
+    })
     // A 260px gutter: the panel docks by the transcript moving 88px, an end inset of 176px.
     await moving.setViewportSize({ width: TRANSCRIPT + 2 * 260 + chrome, height: 1000 })
     await moving.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -383,67 +419,113 @@ describe.skipIf(MODE === 'record')('web e2e: Session panel layout', () => {
      * that frame's style, layout, size observers, and paint, so a state a size observer replaces is not reported.
      */
     const startSampling = () => moving.evaluate(() => {
-      const frames: { inset: number; motion: string | null; opacity: number | null; edge: number | null; sideways: number }[] = []
-      Object.assign(window, { sampled: frames })
+      const recorder = window as never as MotionWindow
+      recorder.sampled = []
       const channel = new MessageChannel()
       channel.port1.onmessage = (): void => {
-        const scroll = document.querySelector<HTMLElement>('[data-conversation-scroll]')
-        const panel = document.querySelector<HTMLElement>('[data-session-panel]')
-        if (scroll !== null) {
-          frames.push({
-            inset: Number.parseFloat(getComputedStyle(scroll).paddingInlineEnd),
-            motion: panel === null ? null : panel.dataset['sessionPanelMotion'] ?? 'none',
-            opacity: panel === null ? null : Number(getComputedStyle(panel).opacity),
-            edge: panel === null ? null : scroll.getBoundingClientRect().left + scroll.clientWidth - panel.getBoundingClientRect().right,
-            sideways: scroll.scrollWidth - scroll.clientWidth,
-          })
-        }
+        const frame = recorder.motionFrame()
+        if (frame !== null) recorder.sampled.push(frame)
         requestAnimationFrame(() => { channel.port2.postMessage(0) })
       }
       requestAnimationFrame(() => { channel.port2.postMessage(0) })
     })
-    const sampled = () => moving.evaluate(() => (window as never as { sampled: {
-      inset: number
-      motion: string | null
-      opacity: number | null
-      edge: number | null
-      sideways: number
-    }[] }).sampled.splice(0))
+    const sampled = () => moving.evaluate(() => (window as never as MotionWindow).sampled.splice(0))
+    /**
+     * Pause the motion of the next press before any frame shows it: in the task of the press, once the dock probe
+     * takes its moving mark, hold every animation that this style change started on the panel, the scrollport, and
+     * the aside layer. A part that would start moving in a later frame has no animation yet and is missing.
+     */
+    const holdMotion = () => moving.evaluate(() => {
+      const recorder = window as never as MotionWindow
+      recorder.held = []
+      const probe = document.querySelector('[data-session-panel-probe]')!
+      const observer = new MutationObserver(() => {
+        if (!probe.hasAttribute('data-session-panel-moving')) return
+        observer.disconnect()
+        for (const animation of document.getAnimations()) {
+          const target = animation.effect instanceof KeyframeEffect ? animation.effect.target : null
+          if (target?.matches('[data-session-panel], [data-conversation-scroll], [data-chat-aside]') !== true) continue
+          animation.pause()
+          recorder.held.push(animation)
+        }
+      })
+      observer.observe(probe, { attributeFilter: ['data-session-panel-moving'] })
+    })
+    /**
+     * Seek the held animations together to each sixteenth of their duration, report what every moment shows and
+     * how long each part moves, then play them from the start, so the press ends as it would have. The end itself is
+     * left to that playback: the panel's animation sought to its end fires its end event, which ends the motion.
+     */
+    const seekHeld = async () => {
+      await expect.poll(() => moving.evaluate(() => (window as never as MotionWindow).held.length), { timeout: 10_000 }).toBe(3)
+      return moving.evaluate(() => {
+        const { held, motionFrame } = window as never as MotionWindow
+        const parts = held.map((animation) => {
+          const target = (animation.effect as KeyframeEffect).target!
+          return {
+            part: target.matches('[data-session-panel]') ? 'panel' : target.matches('[data-chat-aside]') ? 'aside' : 'scroll',
+            end: Number(animation.effect!.getComputedTiming().endTime),
+          }
+        }).sort((a, b) => a.part.localeCompare(b.part))
+        const end = Math.max(...parts.map(part => part.end))
+        const moments: MotionFrame[] = []
+        for (let step = 0; step < 16; step += 1) {
+          for (const animation of held) animation.currentTime = end * step / 16
+          moments.push(motionFrame()!)
+        }
+        for (const animation of held) {
+          animation.currentTime = 0
+          animation.play()
+        }
+        return { parts, moments }
+      })
+    }
+    /** All three parts move for the panel's 160ms. */
+    const together = [{ part: 'aside', end: 160 }, { part: 'panel', end: 160 }, { part: 'scroll', end: 160 }]
+    /**
+     * One time and one curve: in every frame or moment of the motion, the panel's opacity and its slide across its
+     * 8px edge inset follow the end inset's progress, and the inset moves one way only. The slide stays inside the
+     * scrollport: a panel past its end edge would give the body a sideways scroll range, whose bar lifts the composer
+     * for as long as it shows.
+     */
+    const followsInset = (frames: readonly MotionFrame[], motion: 'enter' | 'exit'): void => {
+      for (const frame of frames.filter(frame => frame.motion === motion)) {
+        expect(Math.abs(frame.opacity! - frame.inset / 176)).toBeLessThan(0.06)
+        expect(Math.abs(frame.edge! - 8 * frame.inset / 176)).toBeLessThan(0.8)
+      }
+      const ordered = (before: number, after: number): boolean => motion === 'exit' ? after <= before : after >= before
+      expect(frames.every((frame, index) => index === 0 || ordered(frames[index - 1]!.inset, frame.inset))).toBe(true)
+      expect(frames.map(frame => frame.sideways).filter(range => range !== 0)).toEqual([])
+    }
     const toggle = moving.locator('[data-session-panel-toggle]')
     await startSampling()
 
-    // The toggle hides the panel: it leaves over the same frames the transcript takes its room back.
+    // The toggle hides the panel: it leaves over the same time and curve the transcript takes its room back in.
+    await holdMotion()
     await toggle.click()
+    const exit = await seekHeld()
+    expect(exit.parts).toEqual(together)
+    expect(exit.moments[0]).toMatchObject({ inset: 176, motion: 'exit', opacity: 1 })
+    // The transcript is on its way at every later moment, not at once at either end.
+    expect(exit.moments.slice(1).filter(moment => moment.motion !== 'exit' || moment.inset <= 0 || moment.inset >= 176)).toEqual([])
+    followsInset(exit.moments, 'exit')
     await shows(moving, null)
     const leaving = await sampled()
-    const exit = leaving.filter(frame => frame.motion === 'exit')
-    expect(exit.length).toBeGreaterThan(4)
-    expect(leaving.every((frame, index) => index === 0 || frame.inset <= leaving[index - 1]!.inset)).toBe(true)
-    expect(exit.some(frame => frame.inset > 20 && frame.inset < 156)).toBe(true)
-    // The slide stays inside the scrollport: a panel past its end edge would give the body a sideways scroll range,
-    // whose bar lifts the composer for as long as it shows.
-    expect(leaving.map(frame => frame.sideways).filter(range => range !== 0)).toEqual([])
-    // One time and one curve: the panel's opacity and its slide across its 8px edge follow the inset's progress.
-    for (const frame of exit) {
-      expect(Math.abs(frame.opacity! - frame.inset / 176)).toBeLessThan(0.06)
-      expect(Math.abs(frame.edge! - 8 * frame.inset / 176)).toBeLessThan(0.8)
-    }
+    followsInset(leaving, 'exit')
     expect(leaving.at(-1)).toEqual({ inset: 0, motion: null, opacity: null, edge: null, sideways: 0 })
 
     // The toggle shows it again: the same motion in reverse.
+    await holdMotion()
     await toggle.click()
+    const enter = await seekHeld()
+    expect(enter.parts).toEqual(together)
+    expect(enter.moments[0]).toMatchObject({ inset: 0, motion: 'enter', opacity: 0 })
+    expect(enter.moments.slice(1).filter(moment => moment.motion !== 'enter' || moment.inset <= 0 || moment.inset >= 176)).toEqual([])
+    followsInset(enter.moments, 'enter')
     await shows(moving, 'docked')
     await expect.poll(() => moving.locator('[data-session-panel]').getAttribute('data-session-panel-motion')).toBeNull()
     const entering = await sampled()
-    const enter = entering.filter(frame => frame.motion === 'enter')
-    expect(enter.length).toBeGreaterThan(4)
-    expect(entering.every((frame, index) => index === 0 || frame.inset >= entering[index - 1]!.inset)).toBe(true)
-    expect(enter.some(frame => frame.inset > 20 && frame.inset < 156)).toBe(true)
-    expect(entering.map(frame => frame.sideways).filter(range => range !== 0)).toEqual([])
-    for (const frame of enter) {
-      expect(Math.abs(frame.opacity! - frame.inset / 176)).toBeLessThan(0.06)
-      expect(Math.abs(frame.edge! - 8 * frame.inset / 176)).toBeLessThan(0.8)
-    }
+    followsInset(entering, 'enter')
     expect(entering.at(-1)).toEqual({ inset: 176, motion: 'none', opacity: 1, edge: 8, sideways: 0 })
 
     // A window resized past the room and back shows and hides the panel at once: no frame is in between.

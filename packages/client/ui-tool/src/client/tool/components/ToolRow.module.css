@@ -178,58 +178,16 @@
   flex-direction: column;
 }
 
-/* Hover-revealed jump to the trajectory record: a small pill in real flow
-   under the expanded body's bottom-left corner (it reserves its line, so
-   revealing never shifts layout); revealed by hovering anywhere on the tool
-   call — title row included — or by keyboard focus. */
-.inspectButton {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  margin: 4px 0 2px 4px;
-  padding: 2px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l3);
-  border-radius: 999px;
-  corner-shape: round;
-  /* Base background, not bg-overlay: the overlay token is a raised dark
-     surface and reads too heavy for a quiet in-flow affordance. */
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.inspectButton:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: hover) {
-  .root:hover .inspectButton {
-    opacity: 1;
-  }
-}
-
 .detailsBodyWrap {
   position: relative;
 }
 
-.detailsBodyWrap .inspectButton {
+/* The details card pins its Inspect pill inside its top-right corner. */
+.detailsBodyWrap .detailsInspect {
   position: absolute;
   top: 12px;
   right: 12px;
   margin: 0;
-}
-
-/* Solid hover fill (a translucent token would let content bleed through). */
-@media (hover: hover) {
-  .inspectButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover-solid);
-    color: var(--dsw-alias-label-primary);
-  }
 }
 
 /* Expanded-body scroll wrapper for the run_code CodeBlock; the IN/OUT card
@@ -386,8 +344,4 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-@media (hover: none) {
-  .inspectButton { opacity: 1; }
 }

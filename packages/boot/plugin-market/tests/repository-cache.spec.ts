@@ -1,7 +1,7 @@
 /** Partial clones of real local repositories: reads, README lookup, limits, eviction, and Git failures, including a stalled Git fixture. */
 import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -24,7 +24,11 @@ const signal = new AbortController().signal
 const text = (bytes: Uint8Array | undefined): string => new TextDecoder().decode(bytes)
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'dsh-plugin-market-repositories-'))
+  // Git quotes fixture paths in the refusals the cache classifies, and the cache reads a network failure word such as
+  // `SSL` or `TLS` anywhere in that output (#9255). The random part of the root is hexadecimal, which spells none of
+  // these words; the letters `mkdtemp` draws can.
+  root = join(tmpdir(), `dsh-plugin-market-repositories-${randomBytes(8).toString('hex')}`)
+  mkdirSync(root)
   // Git reads no configuration of the developer running the tests.
   mkdirSync(join(root, 'home'))
   vi.stubEnv('HOME', join(root, 'home'))

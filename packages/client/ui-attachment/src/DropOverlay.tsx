@@ -1,4 +1,4 @@
-import { createPortal } from 'react-dom'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './DropOverlay.module.css'
 
 /** Drop-overlay strings the owner resolves from its own locale namespace. */
@@ -14,18 +14,21 @@ export interface DropOverlayLabels {
  * (DeepSeek Chat's DragMask). Decoration only: `pointer-events: none` keeps
  * drag targeting on the page below, so the owner's document-level listeners
  * keep an accurate enter/leave count and own accept/reject. Rendered through
- * a body portal for the same transformed-ancestor reason as the lightbox.
+ * the application document's body portal for the same transformed-ancestor
+ * reason as the lightbox.
  *
  * @param props.disabled - drops are currently refused; renders the blocked
  * illustration and drops the desc line.
  * @param props.labels - resolved title and limits strings.
+ * @param props.Portal - the owner's portal into the application document's body.
  * @returns the overlay layer.
  */
-export function DropOverlay({ disabled, labels }: {
+export function DropOverlay({ disabled, labels, Portal }: {
   disabled: boolean
   labels: DropOverlayLabels
+  Portal: ReturnType<GlobalStandardProps['useDocumentPortal']>
 }) {
-  return createPortal(
+  return <Portal>
     <div className={css.mask} role="status">
       <div className={css.wrap}>
         <div className={css.illustration} aria-hidden="true">
@@ -34,9 +37,8 @@ export function DropOverlay({ disabled, labels }: {
         <div className={css.title}>{labels.title}</div>
         {!disabled && labels.desc !== undefined && <div className={css.desc}>{labels.desc}</div>}
       </div>
-    </div>,
-    document.body,
-  )
+    </div>
+  </Portal>
 }
 
 /** Tilted photo-and-note cards (DeepSeek Chat upload illustration). */

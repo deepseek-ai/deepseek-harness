@@ -3,6 +3,7 @@
 
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -16,6 +17,9 @@ import { installInspectorTableGeometry } from './table-geometry.client.ts'
 
 beforeEach(() => { installInspectorTableGeometry() })
 afterEach(cleanup)
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 it('switches presentation in one table and follows a linked node through its collapsed parent', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: true }))
@@ -55,7 +59,7 @@ it('switches presentation in one table and follows a linked node through its col
       if (!picker.start()) return undefined
       return () => { picker.dispose() }
     },
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), useDocumentPortal: () => Portal, useMediaQuery: () => true,
   }
   const ui = render(<SessionInspectorView {...props} />)
   expect(ui.getAllByRole('table')).toHaveLength(1)

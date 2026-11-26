@@ -16,7 +16,7 @@ import { DRAFT_SUBMITTED_TAG } from './runtime.ts'
  * @param destination - stable, focusable non-text element that retains the composer's keyboard position.
  * @returns the update-listener cleanup.
  */
-export function installDraftKeyboardDismissal(editor: LexicalEditor, destination: RefObject<HTMLElement>): () => void {
+export function installDraftKeyboardDismissal(editor: LexicalEditor, destination: RefObject<HTMLElement | null>): () => void {
   return editor.registerUpdateListener(({ editorState, tags }) => {
     if (!tags.has(DRAFT_SUBMITTED_TAG) || !isMobileDevice()) return
     const input = editor.getRootElement()
@@ -46,7 +46,7 @@ interface DraftViewGate {
  * Reveal the DOM selection within the draft's own scrollport.
  * @param scrollRef - the InputBar-owned scrollport reference.
  */
-export function revealDraftSelection(scrollRef: RefObject<HTMLDivElement>): void {
+export function revealDraftSelection(scrollRef: RefObject<HTMLDivElement | null>): void {
   const scrollEl = scrollRef.current
   if (scrollEl === null || scrollEl.scrollHeight <= scrollEl.clientHeight) return
   const selection = window.getSelection()
@@ -55,11 +55,12 @@ export function revealDraftSelection(scrollRef: RefObject<HTMLDivElement>): void
   let rect = range.getBoundingClientRect()
   if (rect.height === 0 && rect.width === 0) {
     // A collapsed caret at an empty line reports a zero rect in some
-    // engines; the anchor's element box is the line the caret sits on.
+    // engines; the anchor's element box is the line the caret sits on. A
+    // text anchor has no box of its own, so its parent element's box is used.
     const anchor = selection.anchorNode
-    const el = anchor instanceof HTMLElement ? anchor : anchor?.parentElement
-    if (el === undefined || el === null) return
-    rect = el.getBoundingClientRect()
+    const line = (anchor as Partial<Element> | null)?.getBoundingClientRect?.() ?? anchor?.parentElement?.getBoundingClientRect()
+    if (line === undefined) return
+    rect = line
   }
   const box = scrollEl.getBoundingClientRect()
   if (rect.bottom > box.bottom) scrollEl.scrollTop += rect.bottom - box.bottom
@@ -83,12 +84,12 @@ export function focusDraftEditor(editor: LexicalEditor, revealSelection: () => v
  * @param scrollRef - the InputBar-owned scrollport reference.
  * @returns the listener cleanup, or undefined when the element is absent.
  */
-export function installDraftWheel(scrollRef: RefObject<HTMLDivElement>): (() => void) | undefined {
+export function installDraftWheel(scrollRef: RefObject<HTMLDivElement | null>): (() => void) | undefined {
   const el = scrollRef.current
   if (el === null) return
   const onWheel = (e: WheelEvent): void => {
     const host = el.closest('[data-conversation-scroll]')
-    if (!(host instanceof HTMLElement) || e.deltaY === 0) return
+    if (host === null || e.deltaY === 0) return
     const atTop = el.scrollTop <= 0
     const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1
     if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atEnd)) return
@@ -109,7 +110,7 @@ export function installDraftWheel(scrollRef: RefObject<HTMLDivElement>): (() => 
 export function installDraftFilePicker(
   keyboard: ComposerKeyboard,
   gate: MutableRefObject<Pick<DraftViewGate, 'canAcceptDrop'>>,
-  fileInputRef: RefObject<HTMLInputElement>,
+  fileInputRef: RefObject<HTMLInputElement | null>,
 ): () => void {
   return keyboard.bindFilePicker({
     available: () => gate.current.canAcceptDrop && fileInputRef.current !== null && !fileInputRef.current.disabled,

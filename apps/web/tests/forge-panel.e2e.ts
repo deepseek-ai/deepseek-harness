@@ -1739,6 +1739,94 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
 })
 
 
+it.skipIf(MODE === 'record')('stages, unstages, and restores files of the local changes, and undoes a staged file from its notice', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-panel-local-writes', 'normal', { branch: 'feat' })
+  await writeFile(join(project, 'README.md'), 'line 1\nline 2\n')
+  await git(project, 'commit', '--quiet', '-am', 'readme')
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  // One edit of the README is staged before the view opens, a later one is not, and a new file is untracked.
+  await writeFile(join(project, 'README.md'), 'line 1\nline 2\nstaged\n')
+  await git(project, 'add', 'README.md')
+  await writeFile(join(project, 'README.md'), 'line 1\nline 2\nstaged\nlater\n')
+  await writeFile(join(project, 'notes.md'), 'note\n')
+
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
+  await showSessionPanel(page)
+  await page.locator('[data-forge-local]').getByRole('button', { name: /^本地变更 · / }).click({ timeout: 20_000 })
+  const local = page.locator('[data-forge-changes="local"]')
+  const files = local.locator('[data-forge-diff-file]')
+  const listed = (): Promise<(string | null)[]> => files.evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file')))
+  // The branch line keeps the first entry's status column, which the helper would trim. A plain `git status` holds the
+  // index lock while it refreshes the index, and a write of the view that needs the lock at that moment fails.
+  const status = async (): Promise<string[]> => (await git(project, '--no-optional-locks', 'status', '--short', '--branch')).split('\n').slice(1)
+  const scope = async (from: string, to: string): Promise<void> => {
+    await local.getByRole('button', { name: from, exact: true }).click()
+    await page.getByRole('menuitem', { name: to, exact: true }).click()
+  }
+
+  // The branch scope offers no write: staging there would leave the shown changes as they are.
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['README.md', 'notes.md'])
+  expect(await local.locator('[data-forge-write]').count()).toBe(0)
+
+  await scope('分支', '未暂存')
+  await local.getByRole('button', { name: '暂存 README.md', exact: true }).click({ timeout: 20_000 })
+  const staged = page.getByRole('alert').filter({ hasText: '已暂存 README.md' })
+  await staged.waitFor()
+  // A settled write and a scope change each read the scope again through the Host, which runs Git several times; the
+  // list waits for that read as long as for the first one.
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['notes.md'])
+  expect(await status()).toEqual(['M  README.md', '?? notes.md'])
+  // Undoing returns the index to the edit staged before the write, not to HEAD. The view reads the scope again only
+  // after the Host answers the undo, so a listed README means Git has written the index.
+  await staged.getByRole('button', { name: '撤销', exact: true }).click()
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['README.md', 'notes.md'])
+  expect(await status()).toEqual(['MM README.md', '?? notes.md'])
+  expect(await git(project, 'show', ':README.md')).toBe('line 1\nline 2\nstaged')
+
+  await local.getByRole('button', { name: '全部暂存', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已暂存 2 个文件' }).waitFor()
+  await local.getByText('没有变更', { exact: true }).waitFor()
+  expect(await status()).toEqual(['M  README.md', 'A  notes.md'])
+
+  await scope('未暂存', '已暂存')
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['README.md', 'notes.md'])
+  await local.getByRole('button', { name: '取消暂存 notes.md', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已取消暂存 notes.md' }).waitFor()
+  await expect.poll(status).toEqual(['M  README.md', '?? notes.md'])
+
+  await scope('已暂存', '未暂存')
+  await expect.poll(listed, { timeout: 20_000 }).toEqual(['notes.md'])
+  // A narrow pane shows a file's writes only under the pointer, keeps the viewed mark and the menu in place, and offers
+  // the writes in the menu.
+  await page.setViewportSize({ width: 360, height: 780 })
+  const notes = local.locator('[data-forge-diff-file="notes.md"]')
+  const writes = notes.locator('[data-forge-file-actions]')
+  const width = async (): Promise<number> => (await writes.evaluate(element => element.getBoundingClientRect().width))
+  const marked = async (): Promise<number | undefined> => (await notes.getByRole('checkbox', { name: '将 notes.md 标记为已审阅', exact: true }).boundingBox())?.x
+  await expect.poll(width).toBe(0)
+  const markAt = await marked()
+  await notes.locator('[data-forge-file-label]').hover()
+  await expect.poll(width).toBe(56)
+  expect(await marked()).toBe(markAt)
+  await page.mouse.move(0, 0)
+  await expect.poll(width).toBe(0)
+  await notes.getByRole('button', { name: 'notes.md 的更多操作', exact: true }).click()
+  await expect.poll(() => page.getByRole('menuitem').allTextContents()).toEqual(['复制路径', '在侧边栏打开整个文件', '暂存文件', '还原文件…'])
+  await page.getByRole('menuitem', { name: '还原文件…', exact: true }).click()
+  const asked = page.getByRole('dialog', { name: '还原文件？', exact: true })
+  await asked.getByText('notes.md 是未跟踪的新文件，还原会删除它。此操作无法撤销。', { exact: true }).waitFor()
+  await asked.getByRole('button', { name: '还原', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已删除 notes.md' }).waitFor()
+  await local.getByText('没有变更', { exact: true }).waitFor()
+  expect(existsSync(join(project, 'notes.md'))).toBe(false)
+  expect(await status()).toEqual(['M  README.md'])
+  expect(tripwire.pageErrors).toEqual([])
+  expect(tripwire.warnings).toEqual([])
+})
+
 it.skipIf(MODE === 'record')('retains a wrapped code line and tree width across tab and Session switches', async () => {
   const { page, scaffold, root, tripwire } = await launchPanel('web-e2e-forge-reading-position')
   const paths = ['src/before-0.ts', 'src/before-1.ts', 'src/before-2.ts', 'src/server.ts', 'src/after.ts']
@@ -1856,8 +1944,10 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await scroll.evaluate(element => document.activeElement === element)).toBe(true)
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
-  // The last file draws its lines after the jump, and scroll anchoring adjusts the position at the next layout.
+  // The last file draws its lines after the jump, with a row for the lines after its last hunk until the Host answers the
+  // read of its text. The row leaves then, and scroll anchoring adjusts the position at the next layout.
   await c.locator('[data-review-code]').first().waitFor()
+  await expect.poll(() => c.locator('[data-forge-diff-gap]').count(), { timeout: 20_000 }).toBe(0)
   await scroll.evaluate(() => new Promise<void>((resolve) => {
     requestAnimationFrame(() => { requestAnimationFrame(() => { resolve() }) })
   }))
@@ -2239,6 +2329,9 @@ it.skipIf(MODE === 'record')('archives a clean UI worktree and restores its reta
   await page.getByRole('menuitem', { name: '全部对话（显示已归档）', exact: true }).click()
   await row.hover()
   await row.getByRole('button', { name: '取消归档', exact: true }).click()
+  // Unarchiving completes on the Host after the press. Until the Session list receives the change, the row describes
+  // itself as not openable, and a click on it shows that notice instead of opening the Session.
+  await expect.poll(() => row.getAttribute('aria-description'), { timeout: 20_000 }).toBeNull()
   await row.click()
   const missing = page.locator('[data-forge-missing]')
   await missing.getByRole('button', { name: '恢复工作树', exact: true }).waitFor({ timeout: 20_000 })
@@ -3019,5 +3112,80 @@ it.skipIf(MODE === 'record')('writes a left and a right comment at once, each in
   await left.getByRole('button', { name: '取消', exact: true }).click()
   expect(await left.count()).toBe(0)
   expect(await right.getByRole('textbox').inputValue()).toBe('右侧的评论')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('opens the local changes of a clean checkout and shows other branches: a worktree\'s with every scope, another\'s from its commits', async () => {
+  const { scaffold, page, project, root, tripwire } = await launchPanel('web-e2e-forge-head-picker')
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await git(project, 'checkout', '--quiet', '-b', 'topic')
+  await writeFile(join(project, 'topic.md'), 'topic\n')
+  await git(project, 'add', 'topic.md')
+  await git(project, 'commit', '--quiet', '-m', 'topic')
+  await git(project, 'checkout', '--quiet', 'main')
+  // A worktree of the repository holds `cache` with one committed, one modified, and one untracked file.
+  const cache = join(root, 'cache-tree')
+  await git(project, 'worktree', 'add', '--quiet', '-b', 'cache', cache)
+  await writeFile(join(cache, 'cache.md'), 'cache\n')
+  await git(cache, 'add', 'cache.md')
+  await git(cache, 'commit', '--quiet', '-m', 'cache')
+  await writeFile(join(cache, 'cache.md'), 'cache\nedited\n')
+  await writeFile(join(cache, 'draft.md'), 'draft\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await showSessionPanel(page)
+
+  // The Session's own checkout changes nothing, and its row still opens the view.
+  const row = page.locator('[data-forge-local]')
+  const open = row.getByRole('button', { name: '本地变更 · 0 个文件，新增 0 行，删除 0 行', exact: true })
+  await open.waitFor({ timeout: 20_000 })
+  expect(await row.locator('[data-row-part="trailing"]').textContent()).toBe('+0−0')
+  await open.click()
+  const view = page.locator('[data-forge-changes="local"]')
+  const head = view.locator('[data-forge-head]')
+  await expect.poll(async () => [await head.innerText(), await head.getAttribute('data-forge-head')], { timeout: 20_000 }).toEqual(['main', ''])
+  expect(await shownPaths(view)).toEqual([])
+
+  await head.click()
+  const menu = page.locator('[data-forge-head-menu]')
+  await menu.getByRole('menuitem', { name: 'topic', exact: true }).waitFor()
+  expect(await menu.getByRole('group').evaluateAll(groups => groups.map(group => group.getAttribute('aria-label')))).toEqual(['当前会话', '本地分支', '远程分支'])
+  // The branch a worktree has checked out carries the mark; the Session's checked-out branch is its own row.
+  // Branches committed within one second list in either order.
+  expect((await menu.getByRole('menuitem').allTextContents()).sort()).toEqual(['cache工作树', 'main当前会话', 'origin/main', 'release', 'topic'])
+  await page.getByRole('searchbox', { name: '搜索分支', exact: true }).fill('top')
+  await expect.poll(async () => await menu.getByRole('menuitem').allTextContents()).toEqual(['topic'])
+  await menu.getByRole('menuitem', { name: 'topic', exact: true }).click()
+  await view.locator('[data-forge-diff-file="topic.md"]').waitFor()
+  // No worktree has `topic`, so its committed content shows in the branch scope alone.
+  expect(await shownPaths(view)).toEqual(['topic.md'])
+  expect(await head.getAttribute('data-forge-head')).toBe('refs/heads/topic')
+  expect(await view.locator('[data-forge-scope]').count()).toBe(0)
+  expect(await view.getByText('包含未提交的修改', { exact: true }).count()).toBe(0)
+  // Without a chosen base, another branch is compared with the Session's own branch.
+  expect(await view.locator('[data-forge-base]').innerText()).toBe('main')
+
+  // `cache` is read in its worktree: the branch scope counts the uncommitted files, and the other scopes apply.
+  await head.click()
+  await menu.getByRole('menuitem', { name: /^cache/ }).click()
+  await view.locator('[data-forge-diff-file="draft.md"]').waitFor()
+  expect(await shownPaths(view)).toEqual(['cache.md', 'draft.md'])
+  expect(await head.getAttribute('data-forge-head')).toBe('refs/heads/cache')
+  expect(await view.locator('[data-forge-base]').innerText()).toBe('main')
+  expect(await view.getByText('包含未提交的修改', { exact: true }).count()).toBe(1)
+  await view.getByRole('button', { name: '分支', exact: true }).click()
+  await page.getByRole('menuitem', { name: '未暂存', exact: true }).click()
+  await view.locator('[data-forge-diff-file="draft.md"]').waitFor()
+  expect(await shownPaths(view)).toEqual(['cache.md', 'draft.md'])
+  // The one line edited in the worktree after the commit.
+  expect(await view.locator('[data-forge-diff-file="cache.md"]').innerText()).toContain('+1\n−0')
+  // Another worktree is read-only.
+  expect(await view.locator('[data-forge-write], [data-forge-write-all]').count()).toBe(0)
+
+  await head.click()
+  await menu.getByRole('menuitem', { name: /^main/ }).click()
+  await expect.poll(async () => await head.getAttribute('data-forge-head')).toBe('')
+  expect(await view.locator('[data-forge-scope]').count()).toBe(1)
   expect(tripwire.pageErrors).toEqual([])
 })

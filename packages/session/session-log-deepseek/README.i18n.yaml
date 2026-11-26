@@ -9,11 +9,11 @@
   en: 6d991785cbfd70ae
   zh: 0918e2462821cde4
 /deepseek-ai-dsh-session-log-deepseek/summary:
-  en: 19c182dbd7d8e064
-  zh: 51c043d6ea52db0d
+  en: 13c339bcf4345988
+  zh: 67c55e9e6f25a9ae
 /deepseek-ai-dsh-session-log-deepseek/table-of-contents:
-  en: eb945093933ee19b
-  zh: 7a40fe2e98a491c5
+  en: 56e52c8092ac5e04
+  zh: 1365221a3cdca854
 /deepseek-ai-dsh-session-log-deepseek/configuration:
   en: 01e38210905d95bf
   zh: d489461bbb618b5d
@@ -24,8 +24,11 @@
   en: 9d303e05a05a8737
   zh: 8b12d1e7a2d04060
 /deepseek-ai-dsh-session-log-deepseek/acceptance-and-retry:
-  en: 6997969916bb1b42
-  zh: 929fd0485278ff8b
+  en: bc2fa82f407ad296
+  zh: e3f088b78a687d6b
+/deepseek-ai-dsh-session-log-deepseek/subagent-headers:
+  en: fd0de0461efcaa3a
+  zh: 67a96d6607496687
 /deepseek-ai-dsh-session-log-deepseek/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -41,9 +44,21 @@
 /deepseek-ai-dsh-session-log-deepseek/model-experience/session-log-metadata/kv-cache-effect:
   en: dcf00aa1af688f09
   zh: df5851d66c3a6b4f
+/deepseek-ai-dsh-session-log-deepseek/model-experience/subagent-headers:
+  en: 9df89ba472a65f17
+  zh: 374a61c978934ad4
+/deepseek-ai-dsh-session-log-deepseek/model-experience/subagent-headers/what-the-model-sees:
+  en: 99a4542bb791b927
+  zh: c1ffcdb323979320
+/deepseek-ai-dsh-session-log-deepseek/model-experience/subagent-headers/token-effect:
+  en: a013bd1af16624a1
+  zh: fceb63797c7e7063
+/deepseek-ai-dsh-session-log-deepseek/model-experience/subagent-headers/kv-cache-effect:
+  en: dcf00aa1af688f09
+  zh: df5851d66c3a6b4f
 /deepseek-ai-dsh-session-log-deepseek/known-limitations-and-deferred-work:
-  en: 249ef8dbc237a0c2
-  zh: c169d64ce9ab984c
+  en: db6c5f7c9f18d735
+  zh: 6517367b115f3b40
 /deepseek-ai-dsh-session-log-deepseek/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

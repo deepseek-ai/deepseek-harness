@@ -114,8 +114,8 @@ export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): vo
   }
   function show(target: ContextMenuTarget, point: MenuPoint): void {
     const focused = document.activeElement
-    if (!(focused instanceof Element) || focused.closest('[data-context-menu]') === null) {
-      returnFocus = focused instanceof HTMLElement ? focused : null
+    if (focused === null || focused.closest('[data-context-menu]') === null) {
+      returnFocus = focused as HTMLElement | null
     }
     dismiss(true)
     const resolution = registry.resolve(target)
@@ -151,8 +151,8 @@ export function apply(ctx: Context, config: SyncedConfig<ContextMenuConfig>): vo
   ctx.slots.provideRoot({ props: { useContextMenu: () => bindings } })
   ctx.effect(() => {
     const outside = (event: PointerEvent): void => {
-      if (event.button === 2 || (event.target instanceof Node && isContextMenuTrigger(event.target))
-        || (event.target instanceof Element && event.target.closest('[role="menu"]'))) return
+      const target = event.target as Node
+      if (event.button === 2 || isContextMenuTrigger(target) || (target as Partial<Element>).closest?.('[role="menu"]')) return
       close()
     }
     const context = (event: MouseEvent): void => { if (!event.defaultPrevented) close() }

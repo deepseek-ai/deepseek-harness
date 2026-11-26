@@ -17,7 +17,7 @@ import {
   WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_COPY, WELCOME_NOTICE_SETTINGS_NAMESPACE,
   WELCOME_NOTICE_VERSION,
 } from './scaffold.ts'
-import { openSettings, ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
+import { credentialOnboardingStarted, openSettings, ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/onboarding-deepseek-config', import.meta.url))
 const WELCOME_EXPECTED = join(SNAPSHOT_DIR, 'welcome.expected.md')
@@ -186,10 +186,16 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     })
     const warningsBefore = tripwire.warnings.length
     await page.reload({ waitUntil: 'commit' })
+    // Armed after the commit, so a read from the previous document, whose Models
+    // page loaded in the first scenario, cannot satisfy it. The credential step
+    // mounts once the welcome step has decided; the next scenario opens Settings
+    // on this page without reloading it.
+    const credentialStep = credentialOnboardingStarted(page)
     await page.waitForSelector('[class*="frame"]', { timeout: 15_000 })
     // The app is painted and interactive while the steps are still deciding.
     await page.waitForTimeout(600)
     releaseDescribe()
+    await credentialStep
     await page.waitForTimeout(400)
     await page.unroute('**/api/settings/describe')
     acknowledgeReloadConnectionLoss(tripwire, warningsBefore)

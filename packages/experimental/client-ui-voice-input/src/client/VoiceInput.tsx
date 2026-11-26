@@ -90,7 +90,7 @@ export function VoiceInput({ sessionId, inputActions, locked, onActiveChange, cr
   const [action, setAction] = useState<FeedbackAction>()
   const [setupOpen, setSetupOpen] = useState(false)
   useEffect(() => { if (usable) setSetupOpen(false) }, [usable])
-  const current = useRef<ActiveRecording>(), generation = useRef(0)
+  const current = useRef<ActiveRecording>(undefined), generation = useRef(0)
   const expanded = phase !== 'idle'
   useLayoutEffect(() => { onActiveChange(expanded); return () => { onActiveChange(false) } }, [expanded, onActiveChange])
 

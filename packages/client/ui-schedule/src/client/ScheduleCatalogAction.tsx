@@ -54,7 +54,7 @@ function SessionScheduleCatalog({
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const catalogRef = useRef<HTMLUListElement>(null)
-  const anchorName = `--dsh-schedule-catalog-${useId().replaceAll(':', '')}`
+  const anchorName = `--dsh-schedule-catalog-${useId().replace(/[^\w-]/g, '')}`
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, catalogRef)
 

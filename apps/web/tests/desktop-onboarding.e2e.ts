@@ -140,7 +140,8 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
         }
       })))
     expect(images.filter(image => !image.loaded || !ACCOUNT_ASSET.test(image.source)), `${name}: images outside loaded package assets`).toEqual([])
-    expect(images.filter(image => image.illustration), `${name}: illustration images`).toHaveLength(hasIllustration ? 2 : 0)
+    // The step renders only the artwork for the active palette.
+    expect(images.filter(image => image.illustration), `${name}: illustration images`).toHaveLength(hasIllustration ? 1 : 0)
     const aria = await captureStableAria(page, '[data-desktop-onboarding]', scaffold.workspaceCwd)
     await mkdir(EXPECTED, { recursive: true })
     await compareOrRefreshGolden(join(EXPECTED, `${name}.expected.md`), aria, MODE)

@@ -1172,7 +1172,7 @@ export function WorkspaceBrowser({
   useEffect(() => {
     if (!wide || !searchExpanded || searchOnExpand) return
     const onClick = (event: MouseEvent): void => {
-      if (!(event.target instanceof Node) || searchRoot.current?.contains(event.target) === true) return
+      if (searchRoot.current?.contains(event.target as Node) === true) return
       searchInput.current?.blur()
       if (normalizedQuery !== '') return
       changeSearchExpanded(false)

@@ -364,7 +364,7 @@ describe('Conversation inject API', () => {
     expect(source.getSnapshot()).toBeUndefined()
     const removeDefinition = b.runtime.ctx.uiConversation.views.register({
       target: 'trajectory',
-      toolCallFocus: callId => `tool:${callId}`,
+      accepts: ['tool-call'],
       create: () => ({ empty: null, replace: () => null, apply: () => null }),
     })
     expect(source.getSnapshot()).toBeUndefined()
@@ -376,7 +376,7 @@ describe('Conversation inject API', () => {
     expect(inspect).toBeTypeOf('function')
     expect(source.getSnapshot()).toBe(inspect)
     inspect('call-1')
-    expect(body.instance.store.getSnapshot().viewRequest).toEqual({ view: 'trajectory', focus: 'tool:call-1' })
+    expect(body.instance.store.getSnapshot().viewRequest).toEqual({ view: 'trajectory', focus: { kind: 'tool-call', callId: 'call-1' } })
     await b.runtime.ctx.configForms.developerTools.setEnabled(false)
     expect(source.getSnapshot()).toBeUndefined()
     await b.runtime.ctx.configForms.developerTools.setEnabled(true)
@@ -385,7 +385,7 @@ describe('Conversation inject API', () => {
     // it must leave a third-party View's inspection capability reachable.
     const removePipelineDefinition = b.runtime.ctx.uiConversation.views.register({
       target: 'pipeline',
-      toolCallFocus: callId => `stage:${callId}`,
+      accepts: ['tool-call'],
       create: () => ({ empty: null, replace: () => null, apply: () => null }),
     })
     const removePipelineView = b.slots.register(
@@ -397,7 +397,7 @@ describe('Conversation inject API', () => {
     const pipelineInspect = source.getSnapshot()!
     expect(pipelineInspect).toBeTypeOf('function')
     pipelineInspect('call-2')
-    expect(body.instance.store.getSnapshot().viewRequest).toEqual({ view: 'pipeline', focus: 'stage:call-2' })
+    expect(body.instance.store.getSnapshot().viewRequest).toEqual({ view: 'pipeline', focus: { kind: 'tool-call', callId: 'call-2' } })
     await b.runtime.ctx.configForms.developerTools.setEnabled(true)
     removePipelineView()
     removePipelineDefinition()
@@ -407,12 +407,38 @@ describe('Conversation inject API', () => {
     await b.runtime.flush()
     expect(source.getSnapshot()).toBeUndefined()
     inspect('stale-call')
-    expect(body.instance.store.getSnapshot().viewRequest?.focus).not.toBe('tool:stale-call')
+    expect(body.instance.store.getSnapshot().viewRequest?.focus).not.toEqual({ kind: 'tool-call', callId: 'stale-call' })
     expect(changed).toHaveBeenCalled()
     unsubscribe()
     changed.mockClear()
     removeDefinition()
     expect(changed).not.toHaveBeenCalled()
+    await b.runtime.dispose()
+  })
+
+  it('offers request inspection independently of tool-call inspection', async () => {
+    const b = await bench()
+    const body = b.conversationApi(ROOT)
+    const source = body.injected.hooks.inspectRequest
+    expect(source.getSnapshot()).toBeUndefined()
+    const removeDefinition = b.runtime.ctx.uiConversation.views.register({
+      target: 'trajectory',
+      accepts: ['request'],
+      create: () => ({ empty: null, replace: () => null, apply: () => null }),
+    })
+    expect(source.getSnapshot()).toBeUndefined()
+    const removeView = b.slots.register(
+      { name: 'conversation.view', id: 'trajectory' }, (() => null) as never,
+    )
+    await b.runtime.flush()
+    const inspect = source.getSnapshot()
+    expect(inspect).toBeTypeOf('function')
+    inspect?.(3, 2)
+    expect(body.instance.store.getSnapshot().viewRequest).toEqual({ view: 'trajectory', focus: { kind: 'request', turn: 3, step: 2 } })
+    // A tool-call-only target does not answer request inspection.
+    expect(body.injected.hooks.inspectCall.getSnapshot()).toBeUndefined()
+    removeView()
+    removeDefinition()
     await b.runtime.dispose()
   })
 
@@ -428,15 +454,25 @@ describe('Conversation inject API', () => {
       { name: 'conversation.view', id: 'trajectory', order: 10 },
       (() => null) as never,
     )
-    await Promise.resolve()
+    const removeDefinition = b.runtime.ctx.uiConversation.views.register({
+      target: 'trajectory',
+      accepts: ['tool-call'],
+      create: () => ({ empty: null, replace: () => null, apply: () => null }),
+    })
+    await b.runtime.flush()
     activate.mockClear()
 
     const body = b.conversationApi(ROOT)
-    body.injected.openView('trajectory', 'call-1')
+    // A focus kind the target does not accept neither selects it nor queues a request.
+    const before = body.instance.store.getSnapshot()
+    body.injected.openView('trajectory', { kind: 'request', turn: 1, step: 1 })
+    expect(body.instance.store.getSnapshot()).toBe(before)
+    expect(before.viewRequest).toBeNull()
+    body.injected.openView('trajectory', { kind: 'tool-call', callId: 'call-1' })
     expect(activate).toHaveBeenLastCalledWith('trajectory')
     expect(body.instance.store.getSnapshot()).toMatchObject({
       view: 'trajectory',
-      viewRequest: { view: 'trajectory', focus: 'call-1' },
+      viewRequest: { view: 'trajectory', focus: { kind: 'tool-call', callId: 'call-1' } },
     })
 
     const header = b.headerApi(ROOT)
@@ -447,9 +483,10 @@ describe('Conversation inject API', () => {
     removeTrajectory()
     await b.runtime.flush()
     activate.mockClear()
-    body.injected.openView('trajectory', 'hidden-call')
+    body.injected.openView('trajectory', { kind: 'tool-call', callId: 'hidden-call' })
     expect(activate).not.toHaveBeenCalled()
     expect(body.instance.store.getSnapshot().view).toBe('chat')
+    removeDefinition()
     removeChat()
     await b.runtime.dispose()
   })

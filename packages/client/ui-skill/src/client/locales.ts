@@ -38,7 +38,7 @@ export const ja = {
   'row.failed': 'スキルの読み込みに失敗しました',
   'row.stopped': 'スキルの読み込みが停止しました',
   'row.instructions': '手順',
-  'row.inspect': '詳細を確認',
+  'row.inspect': '検査',
   'menu.userOnly': 'ユーザー専用',
 } satisfies Record<keyof typeof en, string>
 
@@ -50,7 +50,7 @@ export const es = {
   'row.failed': 'La carga de habilidades falló',
   'row.stopped': 'Carga de habilidades detenida',
   'row.instructions': 'Instrucciones',
-  'row.inspect': 'inspeccionar',
+  'row.inspect': 'Inspeccionar',
   'menu.userOnly': 'solo usuario',
 } satisfies Record<keyof typeof en, string>
 

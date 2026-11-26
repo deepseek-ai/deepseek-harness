@@ -693,7 +693,7 @@ export class ChatViewport {
       const left = Math.max(viewport.left, content.left)
       const right = Math.min(viewport.right, content.right)
       for (const element of document.elementsFromPoint(left + Math.max(0, right - left) / 2, viewport.top + 1)) {
-        const row = element instanceof HTMLElement ? element.closest<HTMLElement>('[data-chat-anchor-key]') : null
+        const row = element.closest<HTMLElement>('[data-chat-anchor-key]')
         if (row !== null && row.dataset.chatFlowKind !== 'turn-process' && list.contains(row)) {
           // An open group's header stays put while older members enter above its body content.
           anchor = row.dataset.chatGroupKey === undefined ? row
@@ -989,7 +989,7 @@ export class ChatViewport {
 
   private pruneHistoryScrolling(): void {
     for (const target of this.historyScrolling) {
-      if (!(target instanceof HTMLElement) || this.elements?.scroller.contains(target) !== true) {
+      if (this.elements?.scroller.contains(target as Node) !== true) {
         this.historyScrolling.delete(target)
       }
     }
@@ -1054,9 +1054,10 @@ export class ChatViewport {
   }
 
   private readonly onHistoryScroll = (event: Event): void => {
-    if (event.target === this.elements?.scroller || event.target instanceof HTMLElement
-      && event.target.hasAttribute('data-step-process-body')) {
-      this.historyScrolling.add(event.target)
+    // A scroll event captured on the scroller targets the scroller or a scrolled descendant element.
+    const target = event.target as Element
+    if (target === this.elements?.scroller || target.hasAttribute('data-step-process-body')) {
+      this.historyScrolling.add(target)
     }
   }
 
@@ -1071,7 +1072,7 @@ export class ChatViewport {
   private readonly onHistoryRelease = (event: Event): void => {
     if (event.type === 'pointerup' || event.type === 'pointercancel') this.historyPointer = false
     if (event.type === 'touchend' || event.type === 'touchcancel') {
-      this.historyTouch = typeof TouchEvent !== 'undefined' && event instanceof TouchEvent && event.touches.length > 0
+      this.historyTouch = 'touches' in event && (event as TouchEvent).touches.length > 0
     }
     this.events?.history?.()
   }
@@ -1094,13 +1095,13 @@ export class ChatViewport {
     if (event.target === this.elements?.scroller) {
       this.events?.scrollEnd(true)
       this.reclaimBelow()
-    } else if (event.target instanceof HTMLElement && event.target.hasAttribute('data-step-process-body')) this.events?.scrollEnd(false)
+    } else if ((event.target as Element).hasAttribute('data-step-process-body')) this.events?.scrollEnd(false)
   }
 
   private readonly onIntent = (event: Event): void => {
     if (event.type === 'keydown' || event.type === 'pointerdown') {
-      if (event.target instanceof Element && event.target.closest('[data-composer-seat]') !== null) return
-      if (event.type === 'keydown' && (!(event instanceof KeyboardEvent) || !SCROLL_KEYS.has(event.key))) return
+      if ((event.target as Partial<Element>).closest?.('[data-composer-seat]') != null) return
+      if (event.type === 'keydown' && !SCROLL_KEYS.has((event as KeyboardEvent).key)) return
     }
     this.events?.intent?.()
     if (this.paging === null) return
@@ -1115,8 +1116,8 @@ export class ChatViewport {
  */
 export function useChatViewport(): {
   viewport: ChatViewport
-  listRef: RefObject<HTMLDivElement>
-  columnRef: RefObject<HTMLDivElement>
+  listRef: RefObject<HTMLDivElement | null>
+  columnRef: RefObject<HTMLDivElement | null>
 } {
   const listRef = useRef<HTMLDivElement | null>(null)
   const columnRef = useRef<HTMLDivElement | null>(null)

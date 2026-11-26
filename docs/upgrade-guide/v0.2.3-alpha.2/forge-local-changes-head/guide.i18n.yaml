@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/forge-local-changes-head/guide.md
+/:
+  en: be9180e666c44188
+  zh: b0bc959914784b4d
+/the-local-changes-reads-of-the-forge-panel-name-the-branch-they-show:
+  en: 9f7fa5536bb1850e
+  zh: 7ea6ea1368e72c19
+/the-local-changes-reads-of-the-forge-panel-name-the-branch-they-show/change:
+  en: ff21fa32d21a459b
+  zh: b6a78dd898a6aba4
+/the-local-changes-reads-of-the-forge-panel-name-the-branch-they-show/migration:
+  en: 5b17c0009ec9e947
+  zh: 9936f5e00cb01a16

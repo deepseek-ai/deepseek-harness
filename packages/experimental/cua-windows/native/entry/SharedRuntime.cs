@@ -87,8 +87,8 @@ internal static class SharedRuntime
     {
         if (!GetNamedPipeServerProcessId(pipe.SafePipeHandle, out var pid))
             throw new NativeFailure("NATIVE_PROTOCOL", "The Windows pipe server identity is unavailable");
-        var server = Applications.Running(checked((int)pid));
-        if (Applications.Digest(server.Path) != runtime)
+        var path = Applications.RunningExecutable(checked((int)pid));
+        if (Applications.Digest(path) != runtime)
             throw new NativeFailure("NATIVE_PROTOCOL", "The Windows pipe belongs to another executable");
         return pid;
     }

@@ -190,6 +190,7 @@ describe('DetailsRow', () => {
     expect(screen.getByText('Rounds')).toBeTruthy()
     expect(screen.getByText('2 / 8')).toBeTruthy()
     expect(screen.queryByText('Output')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Inspect' }).closest('[data-inspect-scope]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Inspect' }))
     expect(inspect).toHaveBeenCalledOnce()
   })

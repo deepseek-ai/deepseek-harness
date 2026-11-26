@@ -187,12 +187,12 @@ export function ConnectionRow({ usePanel, reconnect, t }: ConnectionRowProps): R
 }
 
 /**
- * Render the size of the branch's changes; the row opens the local changes
- * view, and its menu offers the view and, without an open change request for
- * the branch, asking the Agent to create one. Opening the view closes the
- * panel's overlay.
+ * Render the size of the branch's changes, zero included, or the row's name alone while the `branch` scope has no fork
+ * point; the row opens the local changes view, where another scope or branch can be shown, and its menu offers the
+ * view and, without an open change request for the branch, asking the Agent to create one. Opening the view closes
+ * the panel's overlay.
  * @param props - panel snapshot hook, view and create actions, panel owner values, and copy.
- * @returns the row, or null while the branch changes no files.
+ * @returns the row, or null outside a Git checkout and before the first inspection ends.
  */
 export function LocalChangesRow({
   usePanel, dismissOverlay, viewLocalChanges, createChangeRequest, t,
@@ -200,15 +200,16 @@ export function LocalChangesRow({
   const local = usePanel(snapshot => snapshot.state?.local ?? null)
   const creatable = usePanel(snapshot => snapshot.state !== null && snapshot.state.repository !== null
     && openChangeRequestOf(snapshot.state) === undefined)
+  const inCheckout = usePanel(snapshot => snapshot.state?.checkout.state === 'ready')
   const [open, setOpen] = useState(false)
-  if (local === null || local.files.length === 0) return null
+  if (!inCheckout) return null
   let additions = 0
   let deletions = 0
-  for (const file of local.files) {
+  for (const file of local?.files ?? []) {
     additions += file.additions
     deletions += file.deletions
   }
-  const count = local.files.length
+  const count = local?.files.length ?? 0
   const view = (): void => {
     viewLocalChanges()
     dismissOverlay()
@@ -218,18 +219,21 @@ export function LocalChangesRow({
       <button
         type="button"
         data-row-part="body"
-        aria-label={t('changes.local.viewAria', { count, added: additions, deleted: deletions })}
+        aria-label={local === null ? t('changes.local.title') : t('changes.local.viewAria', { count, added: additions, deleted: deletions })}
         onClick={view}
       >
         <span data-row-part="icon" aria-hidden="true"><IconFilesDiffOutlineRegular size={16} /></span>
-        <span data-row-part="content">{t('changes.local.summary', { count })}</span>
+        <span data-row-part="content">{count === 0 ? t('changes.local.title') : t('changes.local.summary', { count })}</span>
       </button>
-      <span data-row-part="trailing">
-        <span className={css.diff}>
-          <span className={css.added}>{`+${String(additions)}`}</span>
-          <span className={css.deleted}>{`−${String(deletions)}`}</span>
+      {/* Without a fork point the `branch` scope has no size; the view still shows the other scopes and takes a base. */}
+      {local !== null && (
+        <span data-row-part="trailing">
+          <span className={css.diff}>
+            <span className={css.added}>{`+${String(additions)}`}</span>
+            <span className={css.deleted}>{`−${String(deletions)}`}</span>
+          </span>
         </span>
-      </span>
+      )}
       <span data-row-part="menu">
         <Menu
           open={open}

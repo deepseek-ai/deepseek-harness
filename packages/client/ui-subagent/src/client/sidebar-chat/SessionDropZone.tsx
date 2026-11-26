@@ -1,6 +1,5 @@
 /** Drop target that opens a Session dragged from the Session list in the right Sidebar. */
 import { useState, type DragEvent } from 'react'
-import { createPortal } from 'react-dom'
 import { IconPanelLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -47,20 +46,18 @@ export type SessionDropZoneProps =
  * @param props - tracked drag, open operation, and copy.
  * @returns the drop target, or nothing outside a Session drag.
  */
-export function SessionDropZone({ useSessionDrag, openAside, t }: SessionDropZoneProps) {
+export function SessionDropZone({ useSessionDrag, openAside, t, useDocumentPortal }: SessionDropZoneProps) {
+  const Portal = useDocumentPortal()
   const drag = useSessionDrag(value => value)
   if (drag === undefined) return null
   const { sessionId, targets } = drag
   // A body portal stacks above the narrow-window drawer mask, which covers the frame's overlay layer.
-  return createPortal(
-    <>
-      {targets.map(target => (
-        <DropTarget key={`${sessionId}:${target.paneId ?? ''}`} target={target} quiet={targets.length > 1} label={t('open.sidebar')}
-          onDrop={() => { openAside(sessionId, target.paneId) }} />
-      ))}
-    </>,
-    document.body,
-  )
+  return <Portal>
+    {targets.map(target => (
+      <DropTarget key={`${sessionId}:${target.paneId ?? ''}`} target={target} quiet={targets.length > 1} label={t('open.sidebar')}
+        onDrop={() => { openAside(sessionId, target.paneId) }} />
+    ))}
+  </Portal>
 }
 
 function DropTarget({ target, quiet, label, onDrop }: {
@@ -89,7 +86,7 @@ function DropTarget({ target, quiet, label, onDrop }: {
       onDragEnter={accept}
       onDragOver={accept}
       onDragLeave={(event) => {
-        if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) setOver(false)
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOver(false)
       }}
       onDrop={(event) => {
         event.preventDefault()

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -55,10 +55,19 @@ interface MessageItemProps {
   readonly openCompaction?: React.ComponentProps<typeof CompactionNodeView>['openCompaction']
   readonly referenceLabels?: readonly string[]
   readonly skillNames?: readonly string[]
+  /** Whether the retry chain's owning turn ended with an error. */
+  readonly retryFailed?: boolean
+  /** Whether the latest retried request is still in flight. */
+  readonly retryInFlight?: boolean
+  /** Whether the Turn shows its step runs behind group headers. */
+  readonly stepRunsGrouped?: boolean
 }
 
 /** Legacy-node fixture adapter for the independently registered renderers. */
-function MessageItem({ node, t: translate, openCompaction, referenceLabels, skillNames }: MessageItemProps) {
+function MessageItem({
+  node, t: translate, openCompaction, referenceLabels, skillNames,
+  retryFailed = false, retryInFlight = false, stepRunsGrouped = false,
+}: MessageItemProps) {
   const kind = node.kind === 'assistant' ? 'assistant-step' : node.kind
   const viewNode: ChatConversationViewNode = {
     key: `fixture:${node.kind}:${node.seq}`,
@@ -69,7 +78,7 @@ function MessageItem({ node, t: translate, openCompaction, referenceLabels, skil
     location: { kind: 'session' },
     visibility: 'visible',
     data: node.kind === 'model-retry'
-      ? { attempts: [node], current: node }
+      ? { attempts: [node], current: node, inFlight: retryInFlight, failed: retryFailed }
       : (node.kind === 'user' || node.kind === 'steering') && (referenceLabels !== undefined || skillNames !== undefined)
         ? {
           ...node,
@@ -84,7 +93,7 @@ function MessageItem({ node, t: translate, openCompaction, referenceLabels, skil
   }
   const props: Partial<Omit<ChatNodeViewProps, 'node'>> & { node: ChatConversationViewNode } = {
     node: viewNode, t: translate, loadImage: unusedImageLoader, renderFactorySlot: renderUserFactory,
-    openFile: vi.fn(), useChat: useDetachedChat,
+    openFile: vi.fn(), useChat: useDetachedChat, stepRunsGrouped,
   }
   switch (node.kind) {
     case 'user':
@@ -938,13 +947,15 @@ describe('MessageItem arms', () => {
         }}
       />,
     )
-    const details = view.container.querySelector('details')
-    const summary = view.container.querySelector('summary')
-    expect(details?.open).toBe(false)
-    expect(details?.dataset.active).toBe('true')
+    const row = view.container.querySelector('[data-retry-row]') as HTMLElement
+    const summary = row.querySelector('[data-disclosure-row]') as HTMLElement
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(row.dataset.active).toBe('true')
+    expect(row.dataset.failed).toBeUndefined()
     expect(view.getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 3s')
-    expect(view.getByText('重试延迟：').parentElement?.textContent).toBe('重试延迟：2500毫秒')
-    expect(view.getByText('失败原因：').parentElement?.textContent).toBe('失败原因：连接被重置')
+    expect(within(summary).getAllByText('正在重试模型请求（1/2）').length).toBeGreaterThan(0)
+    expect(within(summary).getAllByText('3s').length).toBeGreaterThan(0)
+    expect(view.queryByText('重试延迟：')).toBeNull()
 
     act(() => { vi.advanceTimersByTime(1_100) })
     expect(view.getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 2s')
@@ -974,9 +985,10 @@ describe('MessageItem arms', () => {
     )
     expect(view.getByRole('status').textContent).toBe('正在重试模型请求（2/2） · 4s')
 
-    if (summary === null) throw new Error('retry summary missing')
     fireEvent.click(summary)
-    expect(details?.open).toBe(true)
+    expect(summary.getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByText('重试延迟：').parentElement?.textContent).toBe('重试延迟：3500毫秒')
+    expect(view.getByText('失败原因：').parentElement?.textContent).toBe('失败原因：再次断开')
 
     view.rerender(
       <MessageItem t={t} node={{
@@ -997,7 +1009,7 @@ describe('MessageItem arms', () => {
       }}
       />,
     )
-    expect(details?.dataset.active).toBeUndefined()
+    expect(row.dataset.active).toBeUndefined()
     expect(view.getByRole('status').textContent).toBe('已重试模型请求（2/2） · 4s')
 
     view.rerender(
@@ -1040,6 +1052,73 @@ describe('MessageItem arms', () => {
       />,
     )
     expect(view.getByRole('status').textContent).toBe('模型请求重试已取消（1/2） · 4s')
+  })
+
+  it('keeps the retrying label while the retried request is in flight', () => {
+    const node = {
+      kind: 'model-retry', retryId: RETRY_ID, seq: 9, time: 20_000, retryState: 'started', turn: 1, step: 1,
+      provider: 'mock', mode: 'normal', policyKey: 'mock-normal', retry: 1, maxRetries: 2, delayMs: 1_000,
+      failure: { code: 'SERVER', message: 'unavailable' },
+    } as const satisfies ConversationNode
+    const view = render(<MessageItem t={t} node={node} retryInFlight />)
+    const row = view.container.querySelector('[data-retry-row]') as HTMLElement
+    expect(row.dataset.active).toBe('true')
+    expect(view.getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 1s')
+    view.rerender(<MessageItem t={t} node={node} />)
+    expect(row.dataset.active).toBeUndefined()
+    expect(view.getByRole('status').textContent).toBe('已重试模型请求（1/2） · 1s')
+  })
+
+  it('marks an empty model answer with the warning glyph', () => {
+    const node = {
+      kind: 'model-retry', retryId: RETRY_ID, seq: 9, time: 20_000, retryState: 'started', turn: 1, step: 1,
+      provider: 'mock', mode: 'normal', policyKey: 'mock-normal', retry: 1, maxRetries: 1, delayMs: 1_000,
+      failure: { code: 'EMPTY_RESPONSE', message: 'empty' },
+    } as const satisfies ConversationNode
+    const view = render(<MessageItem t={t} node={node} retryFailed />)
+    expect(view.container.querySelector('[data-retry-row] svg')?.getAttribute('data-icon'))
+      .toBe('dsw-icon-warning-outline-regular')
+  })
+
+  it('marks a retry row beside step-group headers for the header type size', () => {
+    const node = {
+      kind: 'model-retry', retryId: RETRY_ID, seq: 9, time: 20_000, retryState: 'started', turn: 1, step: 1,
+      provider: 'mock', mode: 'normal', policyKey: 'mock-normal', retry: 1, maxRetries: 2, delayMs: 1_000,
+      failure: { code: 'SERVER', message: 'unavailable' },
+    } as const satisfies ConversationNode
+    const flat = render(<MessageItem t={t} node={node} />)
+    const flatClass = (flat.container.querySelector('[data-retry-row]') as HTMLElement).className
+    flat.unmount()
+    const grouped = render(<MessageItem t={t} node={node} stepRunsGrouped />)
+    expect((grouped.container.querySelector('[data-retry-row]') as HTMLElement).className).not.toBe(flatClass)
+  })
+
+  it('swaps the retry glyph for the alert variant once the chain finally fails', () => {
+    const node = {
+      kind: 'model-retry',
+      retryId: RETRY_ID,
+      seq: 9,
+      time: 20_000,
+      retryState: 'started',
+      turn: 1,
+      step: 1,
+      provider: 'mock',
+      mode: 'normal',
+      policyKey: 'mock-normal',
+      retry: 1,
+      maxRetries: 1,
+      delayMs: 1_000,
+      failure: { code: 'TRANSPORT', message: '连接被重置' },
+    } as const satisfies ConversationNode
+    const view = render(<MessageItem t={t} node={node} />)
+    expect(view.container.querySelector('[data-retry-row] svg')?.getAttribute('data-icon'))
+      .toBe('dsw-icon-wifi-outline-regular')
+    expect((view.container.querySelector('[data-retry-row]') as HTMLElement).dataset.failed).toBeUndefined()
+
+    view.rerender(<MessageItem t={t} node={node} retryFailed />)
+    expect(view.container.querySelector('[data-retry-row] svg')?.getAttribute('data-icon'))
+      .toBe('dsw-icon-wifi-off-outline-regular')
+    expect((view.container.querySelector('[data-retry-row]') as HTMLElement).dataset.failed).toBe('true')
   })
 
 })

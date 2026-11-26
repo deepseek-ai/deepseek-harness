@@ -1017,7 +1017,8 @@ describe('web e2e: macOS window drag coverage', () => {
         const overlay = element.parentElement
         const rect = overlay?.getBoundingClientRect()
         return {
-          parentIsBody: overlay?.parentElement === document.body,
+          // The application document portal's wrapper is the body child.
+          parentIsBody: overlay?.parentElement?.matches('body > [data-document-portal]') === true,
           coversWindow: rect !== undefined && rect.top <= 0 && rect.bottom >= innerHeight,
         }
       })

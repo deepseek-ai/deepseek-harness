@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Button, IconRightUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { AccountDetails, AccountView, SignInAttemptId } from '@deepseek-ai/dsh-deepseek-account/types'
 import type { PropsRuntime, PropsLocale, InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { PlatformPage, PlatformPages } from './platform-pages.ts'
 import { formatBalance } from './formatBalance.ts'
 import { AccountAvatar } from './AccountAvatar.tsx'
@@ -51,11 +50,9 @@ export interface AccountSectionInjected {
   /** Desktop-only: show one page in the account feature's shared native host; absent in ordinary browsers. */
   openPlatformPage?: PlatformPages['open']
 
-  /** Account stream owned by the Host and theme snapshots published by the renderer, observed through framework hooks. */
+  /** Account stream owned by the Host, observed through a framework hook. */
   hooks: {
     account: HostObservable<AccountSnapshot>
-    /** Palette the Platform login pages follow. */
-    theme: HostObservable<ThemeSnapshot>
   }
   /**
    * Retry a failed avatar, read the profile and balances, and notify account refresh extensions. The Settings launcher

@@ -1,6 +1,7 @@
 /** Application consent checked before native observations and input. */
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { isDeepStrictEqual } from 'node:util'
 import { UserQuestionError, type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { z } from 'zod'
 import { applicationAccessDisplay } from './locales.ts'
@@ -9,11 +10,14 @@ import type { CuaAppHandle } from './types.ts'
 import type { CuaApplicationGrant, CuaApplicationId } from './application-types.ts'
 import type { CuaApplicationState } from './access-types.ts'
 import { CuaPermissionStore, type ApplicationPermission, type PermissionTransaction } from './permission-store.ts'
+import { ApplicationAttributes, applicationAttributes, matchingApplications, type ApplicationIdentity } from './application-identity.ts'
 
 /** Native identity admission occurs before any application observation or input. */
 export const ApplicationAuthorizationResult = z.object({
   id: z.string().regex(/^[a-f0-9]{64}$/).transform(value => value as CuaApplicationId),
   name: z.string(), executablePath: z.string().min(1).optional(), persistable: z.boolean(),
+  iconPath: z.string().min(1).optional(),
+  attributes: ApplicationAttributes.refine(attributes => !Object.hasOwn(attributes, 'cua.id'), 'cua.id is assigned by the Host').optional(),
 })
 /** Application consent uses one profile store, including conversation-scoped decisions. */
 export interface AccessOptions { store: CuaPermissionStore }
@@ -29,6 +33,10 @@ interface ClientSelections {
   agent: Agent
   handles: Map<CuaAppHandle, Selection>
 }
+interface PendingSelection {
+  attributes: z.infer<typeof ApplicationAttributes>
+  done: Promise<void>
+}
 interface ActiveOperation {
   agent: Agent
   client: NativeClient
@@ -41,7 +49,7 @@ interface ActiveOperation {
 export class ApplicationAccess {
   private readonly clients = new Map<NativeClient, ClientSelections>()
   private readonly active = new Set<ActiveOperation>()
-  private readonly selections = new Map<Agent['id'], Map<CuaApplicationId, Promise<void>>>()
+  private readonly selections = new Map<Agent['id'], Map<CuaApplicationId, PendingSelection>>()
   private readonly lifetime = new AbortController()
   private disposal: Promise<void> | undefined
 
@@ -69,10 +77,16 @@ export class ApplicationAccess {
   async status(): Promise<CuaApplicationState> {
     return this.options.store.withState(this.lifetime.signal, ({ state }) => {
       const allowedApps: CuaApplicationGrant[] = [], blockedApps: CuaApplicationGrant[] = []
-      for (const app of Object.values(state.applications)) {
-        if (app.always) allowedApps.push(app.always)
+      const seen = new Set<CuaApplicationId>()
+      for (const key of Object.keys(state.applications)) {
+        const id = key as CuaApplicationId
+        if (seen.has(id)) continue
+        const group = matchingApplications(state.applications, { id })
+        for (const [member] of group) seen.add(member)
+        const saved = group.find(([, app]) => app.always)?.[1].always
+        if (saved) allowedApps.push(saved)
         else {
-          const denied = Object.values(app.sessions).find(session => session.decision === 'deny')
+          const denied = group.flatMap(([, app]) => Object.values(app.sessions)).find(session => session.decision === 'deny')
           if (denied) blockedApps.push(denied.identity)
         }
       }
@@ -88,19 +102,34 @@ export class ApplicationAccess {
   async revoke(id: CuaApplicationId): Promise<void> {
     this.lifetime.signal.throwIfAborted()
     id = ApplicationAuthorizationResult.shape.id.parse(id)
-    const clients = this.invalidate(id)
-    await this.options.store.withApplication(id, this.lifetime.signal, () =>
-      this.options.store.withState(this.lifetime.signal, async (transaction) => {
-        const app = transaction.state.applications[id] ?? this.empty()
-        if (app.always && !this.options.store.persistent) throw new Error('Application permissions cannot be saved in this composition')
-        await this.save(transaction, id, { revoked: app.revoked + 1, sessions: Object.fromEntries(
-          Object.entries(app.sessions).map(([sessionId, session]) => [sessionId, { ...session, decision: 'deny' as const, revision: session.revision + 1 }]),
-        ) })
-      }),
-    )
+    const clients = new Set<NativeClient>(this.invalidate(id))
+    const members = new Set<CuaApplicationId>([id])
+    let complete = false
+    while (!complete) {
+      await this.options.store.withState(this.lifetime.signal, ({ state }) => {
+        for (const [member] of matchingApplications(state.applications, { id })) members.add(member)
+      })
+      for (const member of members) for (const client of this.invalidate(member)) clients.add(client)
+      complete = await this.withApplications([...members].sort(), () =>
+        this.options.store.withState(this.lifetime.signal, async (transaction) => {
+          const matches = matchingApplications(transaction.state.applications, { id })
+          if (matches.some(([member]) => !members.has(member))) return false
+          const applications = { ...transaction.state.applications }
+          for (const member of members) {
+            const app = applications[member] ?? this.empty()
+            if (app.always && !this.options.store.persistent) throw new Error('Application permissions cannot be saved in this composition')
+            const { always: _always, ...rest } = app
+            applications[member] = { ...rest, revoked: app.revoked + 1, sessions: Object.fromEntries(
+              Object.entries(app.sessions).map(([sessionId, session]) => [sessionId, { ...session, decision: 'deny' as const, revision: session.revision + 1 }]),
+            ) }
+          }
+          await transaction.save({ ...transaction.state, applications })
+          return true
+        }))
+    }
     const results = await Promise.allSettled([
-      ...clients.map(client => client.dispose()),
-      ...[...this.active].filter(operation => operation.identity.id === id).map(operation => operation.done.promise),
+      ...[...clients].map(client => client.dispose()),
+      ...[...this.active].filter(operation => members.has(operation.identity.id)).map(operation => operation.done.promise),
     ])
     const errors: unknown[] = []
     for (const result of results) if (result.status === 'rejected') errors.push(result.reason)
@@ -114,11 +143,16 @@ export class ApplicationAccess {
   async retryApproval(id: CuaApplicationId): Promise<void> {
     id = ApplicationAuthorizationResult.shape.id.parse(id)
     await this.options.store.withState(this.lifetime.signal, async (transaction) => {
-      const app = transaction.state.applications[id]
-      if (!app || !Object.values(app.sessions).some(session => session.decision === 'deny')) return
-      await this.save(transaction, id, { ...app, sessions: Object.fromEntries(Object.entries(app.sessions).map(([sessionId, session]) => [
-        sessionId, session.decision === 'deny' ? { ...session, decision: 'ask' as const, revision: session.revision + 1 } : session,
-      ])) })
+      const applications = { ...transaction.state.applications }
+      let changed = false
+      for (const [member, app] of matchingApplications(applications, { id })) {
+        if (!Object.values(app.sessions).some(session => session.decision === 'deny')) continue
+        changed = true
+        applications[member] = { ...app, sessions: Object.fromEntries(Object.entries(app.sessions).map(([sessionId, session]) => [
+          sessionId, session.decision === 'deny' ? { ...session, decision: 'ask' as const, revision: session.revision + 1 } : session,
+        ])) }
+      }
+      if (changed) await transaction.save({ ...transaction.state, applications })
     })
   }
 
@@ -127,22 +161,39 @@ export class ApplicationAccess {
    * @param agent Live agent whose session owns the decision.
    * @param client Helper that issued the handle.
    * @param handle Helper handle for a running instance or an approved pending launch.
-   * @param identity Platform-provided application or process-instance identity.
+   * @param identity Native application identity and presentation.
    * @param signal Calling tool lifetime.
    * @param icon Native application icon for the permission card; never saved as an identity.
    * @returns Completion after consent; refusals reject before launch, AX, screenshots, or input.
    */
   async select(agent: Agent, client: NativeClient, handle: CuaAppHandle,
-    identity: CuaApplicationGrant & { persistable: boolean }, signal: AbortSignal, icon?: string): Promise<void> {
-    await this.withOperation(agent, client, identity, signal, signal => this.selectInOrder(agent, identity.id, async () => {
+    identity: z.infer<typeof ApplicationAuthorizationResult>, signal: AbortSignal, icon?: string): Promise<void> {
+    const observation = identity
+    identity = { ...identity }
+    await this.withOperation(agent, client, identity, signal, signal => this.selectInOrder(agent, observation, async () => {
       signal.throwIfAborted()
-      const observed = await this.read(identity.id, signal)
-      const existing = this.clients.get(client)?.handles.get(handle)
-      if (!client.disposed && existing) {
-        if (this.permitted(existing, observed)) return
+      const existing = client.disposed ? undefined : this.clients.get(client)?.handles.get(handle)
+      if (existing) {
+        identity.id = existing.identity.id
+        const permitted = await this.options.store.withState(signal, async (transaction) => {
+          const app = transaction.state.applications[identity.id]
+          if (!this.permitted(existing, app)) return false
+          await this.save(transaction, identity.id, app, observation)
+          return true
+        })
+        if (permitted) return
         this.invalidate(identity.id, agent)
         throw new NativeError('APP_ACCESS_REVOKED', 'Application access changed; acquire a fresh application handle after consent')
       }
+      const observed = await this.options.store.withState(signal, ({ state }) => {
+        const matches = matchingApplications(state.applications, observation)
+        const resolved = matches.find(([, app]) => identity.persistable && app.always)
+          ?? matches.find(([, app]) => app.sessions[agent.id]?.decision === 'deny')
+          ?? matches.find(([, app]) => app.sessions[agent.id]?.decision === 'allow')
+          ?? matches[0]
+        if (resolved) identity.id = resolved[0]
+        return resolved?.[1] ?? this.empty()
+      })
       const saved = identity.persistable && observed.always !== undefined
       const decision = observed.sessions[agent.id]
       let scope: Selection['scope'] = saved ? 'persistent' : 'session'
@@ -196,9 +247,10 @@ export class ApplicationAccess {
           throw new NativeError('APP_ACCESS_REVOKED', 'Application consent changed while awaiting approval; select the application again')
         }
         if (scope === 'persistent' && !saved && !this.options.store.persistent) throw this.denied(identity)
-        const { persistable: _persistable, ...grant } = identity
+        const { persistable: _persistable, attributes: _attributes, ...grant } = identity
         const previous = app.sessions[agent.id]
         if (previous?.decision === 'allow' && (scope === 'session' || app.always)) {
+          await this.save(transaction, identity.id, app, observation)
           return { revoked: app.revoked, revision: previous.revision }
         }
         const revision = (previous?.revision ?? 0) + 1
@@ -207,14 +259,14 @@ export class ApplicationAccess {
           sessions: { ...app.sessions, [agent.id]: { identity: grant, decision: 'allow' as const,
             revision } },
         }
-        await this.save(transaction, identity.id, next)
+        await this.save(transaction, identity.id, next, observation)
         return { revoked: next.revoked, revision }
       })
       signal.throwIfAborted()
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- Persisting consent can close the native client.
       if (client.disposed) throw new NativeError('NATIVE_CLOSED', 'Helper is closed; acquire fresh application handles')
       const state = this.clients.get(client) ?? { agent, handles: new Map<CuaAppHandle, Selection>() }
-      const { persistable: _persistable, ...grant } = identity
+      const { persistable: _persistable, attributes: _attributes, ...grant } = identity
       for (const [previous, previousState] of this.clients) if (previousState.agent === agent && previous !== client) {
         for (const selected of previousState.handles.values()) selected.lifetime.abort()
         this.clients.delete(previous)
@@ -275,7 +327,7 @@ export class ApplicationAccess {
     const lifetime = AbortSignal.any([signal, this.lifetime.signal, selected.lifetime.signal])
     const requireAccess = async () => {
       const permitted = await this.options.store.withState(lifetime, ({ state: permissions }) =>
-        this.permitted(selected, permissions.applications[selected.identity.id] ?? this.empty()))
+        this.permitted(selected, permissions.applications[selected.identity.id]))
       if (!permitted) {
         this.invalidate(selected.identity.id, state.agent)
         throw new NativeError('APP_ACCESS_REVOKED', 'Application access was revoked; stop using this application')
@@ -285,13 +337,17 @@ export class ApplicationAccess {
     return { agent: state.agent, selected, lifetime, requireAccess }
   }
 
-  private async selectInOrder(agent: Agent, id: CuaApplicationId, select: () => Promise<void>): Promise<void> {
-    const selections = this.selections.get(agent.id) ?? new Map<CuaApplicationId, Promise<void>>()
+  private async selectInOrder(agent: Agent, identity: ApplicationIdentity, select: () => Promise<void>): Promise<void> {
+    const selections = this.selections.get(agent.id) ?? new Map<CuaApplicationId, PendingSelection>()
     this.selections.set(agent.id, selections)
-    const operation = (selections.get(id) ?? Promise.resolve()).then(select, select)
-    selections.set(id, operation)
+    const matches = matchingApplications(Object.fromEntries(selections), identity)
+    const id = matches[0]?.[0] ?? identity.id
+    const attributes = applicationAttributes(identity, ...matches.map(([id, pending]) => ({ id, attributes: pending.attributes })))
+    const operation = Promise.allSettled(matches.map(([, pending]) => pending.done)).then(select)
+    const pending = { attributes, done: operation }
+    selections.set(id, pending)
     try { await operation } finally {
-      if (selections.get(id) === operation) selections.delete(id)
+      if (selections.get(id) === pending) selections.delete(id)
       if (selections.size === 0) this.selections.delete(agent.id)
     }
   }
@@ -323,7 +379,8 @@ export class ApplicationAccess {
     for (const [client, state] of this.clients) if (state.agent === agent) this.clients.delete(client)
   }
 
-  private permitted(selection: Selection, app: ApplicationPermission): boolean {
+  private permitted(selection: Selection, app: ApplicationPermission | undefined): app is ApplicationPermission {
+    if (app === undefined) return false
     const session = app.sessions[selection.sessionId]
     return !selection.lifetime.signal.aborted && app.revoked === selection.revoked
       && (selection.scope === 'persistent' ? app.always !== undefined
@@ -332,13 +389,13 @@ export class ApplicationAccess {
   private denied(identity: CuaApplicationGrant): NativeError {
     return new NativeError('APP_ACCESS_DENIED', `The user denied access to ${identity.name}. Do not retry or use another tool to bypass this decision.`)
   }
-  private async decide(sessionId: Agent['id'], identity: CuaApplicationGrant, decision: 'allow' | 'deny'): Promise<void> {
+  private async decide(sessionId: Agent['id'], identity: CuaApplicationGrant & ApplicationIdentity, decision: 'allow' | 'deny'): Promise<void> {
     await this.options.store.withState(this.lifetime.signal, async (transaction) => {
       const app = transaction.state.applications[identity.id] ?? this.empty()
       await this.save(transaction, identity.id, { ...app, sessions: { ...app.sessions,
         [sessionId]: { identity: { id: identity.id, name: identity.name, executablePath: identity.executablePath }, decision,
           revision: (app.sessions[sessionId]?.revision ?? 0) + 1 },
-      } })
+      } }, identity)
     })
   }
   private invalidate(id: CuaApplicationId, agent?: Agent): NativeClient[] {
@@ -356,10 +413,18 @@ export class ApplicationAccess {
     return [...clients]
   }
   private empty(): ApplicationPermission { return { revoked: 0, sessions: {} } }
-  private read(id: CuaApplicationId, signal = this.lifetime.signal): Promise<ApplicationPermission> {
-    return this.options.store.withState(signal, ({ state }) => state.applications[id] ?? this.empty())
+  private withApplications<T>(ids: readonly CuaApplicationId[], operation: () => Promise<T>): Promise<T> {
+    const [id, ...rest] = ids
+    return id === undefined ? operation()
+      : this.options.store.withApplication(id, this.lifetime.signal, () => this.withApplications(rest, operation))
   }
-  private save(transaction: PermissionTransaction, id: CuaApplicationId, app: ApplicationPermission): Promise<void> {
-    return transaction.save({ ...transaction.state, applications: { ...transaction.state.applications, [id]: app } })
+  private save(transaction: PermissionTransaction, id: CuaApplicationId, app: ApplicationPermission,
+    observation: ApplicationIdentity): Promise<void> {
+    const applications = { ...transaction.state.applications, [id]: app }
+    const matches = matchingApplications(applications, { ...observation, id })
+    const attributes = applicationAttributes(observation, ...matches.map(([id, app]) => ({ id, attributes: app.attributes })))
+    for (const [member, permission] of matches) applications[member] = { ...permission, attributes }
+    return isDeepStrictEqual(transaction.state.applications, applications) ? Promise.resolve()
+      : transaction.save({ ...transaction.state, applications })
   }
 }

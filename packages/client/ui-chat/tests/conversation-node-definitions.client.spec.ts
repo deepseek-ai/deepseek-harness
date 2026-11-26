@@ -3134,6 +3134,88 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('reports a started retry as in flight until its Step closes', () => {
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'llm/retry', {
+        retryId: 'retry-flight', turn: 1, step: 1, provider: 'fake', mode: 'normal', policyKey: 'fake-normal',
+        retry: 1, maxRetries: 2, delayMs: 10, failure: { code: 'SERVER', message: 'unavailable' },
+      }),
+      at(4, 'llm/retry-started', { retryId: 'retry-flight', turn: 1, step: 1, retry: 1 }),
+    ], true)
+    expect((node(snapshot(value), 'model-retry')?.data as RetryChatData).inFlight).toBe(true)
+    value.append(at(5, 'step/end', { turn: 1, step: 1 }))
+    value.flush()
+    expect((node(snapshot(value), 'model-retry')?.data as RetryChatData).inFlight).toBe(false)
+  })
+
+  it('marks the retry chain failed only when its turn ended with an error', () => {
+    const retryChain = (turnEnd: 'error' | 'completed') => {
+      const value = assembler([
+        at(1, 'turn/start', { turn: 1 }),
+        at(2, 'step/start', { turn: 1, step: 1 }),
+        at(3, 'llm/retry', {
+          retryId: 'retry-failure',
+          turn: 1,
+          step: 1,
+          provider: 'fake',
+          mode: 'normal',
+          policyKey: 'fake-normal',
+          retry: 1,
+          maxRetries: 1,
+          delayMs: 10,
+          failure: { code: 'TRANSPORT', message: 'first' },
+        }),
+        at(4, 'llm/retry-started', { retryId: 'retry-failure', turn: 1, step: 1, retry: 1 }),
+        at(5, 'step/end', { turn: 1, step: 1 }),
+        at(6, 'turn/end', {
+          turn: 1,
+          reason: turnEnd === 'error'
+            ? { kind: 'error', error: { code: 'TRANSPORT', message: 'failed' } }
+            : { kind: 'completed' },
+        }),
+      ], true)
+      return node(snapshot(value), 'model-retry')?.data as RetryChatData
+    }
+
+    expect(retryChain('error').failed).toBe(true)
+    expect(retryChain('completed').failed).toBe(false)
+  })
+
+  it('marks a retry chain failed by the turn that owns its latest attempt', () => {
+    const retry = (seq: number, turn: number, attempt: number) => at(seq, 'llm/retry', {
+      retryId: 'retry-span',
+      turn,
+      step: 1,
+      provider: 'fake',
+      mode: 'normal',
+      policyKey: 'fake-normal',
+      retry: attempt,
+      maxRetries: 2,
+      delayMs: 10,
+      failure: { code: 'SERVER', message: 'unavailable' },
+    })
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      retry(3, 1, 1),
+      at(4, 'llm/retry-started', { retryId: 'retry-span', turn: 1, step: 1, retry: 1 }),
+      at(5, 'step/end', { turn: 1, step: 1 }),
+      at(6, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(7, 'turn/start', { turn: 2 }),
+      at(8, 'step/start', { turn: 2, step: 1 }),
+      retry(9, 2, 2),
+      at(10, 'llm/retry-started', { retryId: 'retry-span', turn: 2, step: 1, retry: 2 }),
+    ], true)
+    expect((node(snapshot(value), 'model-retry')?.data as RetryChatData).failed).toBe(false)
+
+    value.append(at(11, 'step/end', { turn: 2, step: 1 }))
+    value.append(at(12, 'turn/end', { turn: 2, reason: { kind: 'error', error: { code: 'SERVER', message: 'unavailable' } } }))
+    value.flush()
+    expect((node(snapshot(value), 'model-retry')?.data as RetryChatData).failed).toBe(true)
+  })
+
   it('materializes a max-tokens notice and keeps completed and error turns clean', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),

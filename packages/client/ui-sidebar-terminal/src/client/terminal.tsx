@@ -6,7 +6,7 @@ import { Button, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primi
 import type { TerminalViewState, TerminalView } from '@deepseek-ai/dsh-api-terminal-controller/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { TerminalBodyInjected } from './face.ts'
+import type { TerminalInjected } from './face.ts'
 import type {} from './locales.ts'
 import '@xterm/xterm/css/xterm.css'
 import css from './terminal.module.css'
@@ -14,7 +14,7 @@ import { TerminalTheme } from './terminal-theme.ts'
 import { observeTerminalCursor } from './terminal-cursor.ts'
 
 /** Standard sidebar owner share plus terminal model and localized copy. */
-export type TerminalBodyProps = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<'sidebarTerminal'> & InjectFace<TerminalBodyInjected>
+export type TerminalBodyProps = PropsRuntime<'sidebar.right.pane.tab'> & PropsLocale<'sidebarTerminal'> & InjectFace<TerminalInjected>
 
 /**
  * Render the retained terminal with the application theme.
@@ -88,9 +88,9 @@ function TerminalScreen({ state, model, visible, label, theme }: {
   theme: ThemeSnapshot
 }): ReactNode {
   const element = useRef<HTMLDivElement>(null)
-  const terminal = useRef<Terminal>()
-  const fit = useRef<FitAddon>()
-  const colors = useRef<TerminalTheme>()
+  const terminal = useRef<Terminal>(undefined)
+  const fit = useRef<FitAddon>(undefined)
+  const colors = useRef<TerminalTheme>(undefined)
   const lastRevision = useRef(0)
   const fontFamily = terminalFontFamily(theme.fontFamilies.terminal)
   const fontSize = theme.fontSizes.terminal

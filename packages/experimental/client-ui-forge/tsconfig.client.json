@@ -11,6 +11,7 @@
     "src/commit-range.ts",
     "src/css-modules.d.ts",
     "src/lens-version.ts",
+    "src/restore.ts",
     "src/types.ts"
   ],
   "references": [
@@ -52,6 +53,9 @@
     },
     {
       "path": "../../client/ui-renderer"
+    },
+    {
+      "path": "../../client/ui-responsive"
     },
     {
       "path": "../../client/ui-session"

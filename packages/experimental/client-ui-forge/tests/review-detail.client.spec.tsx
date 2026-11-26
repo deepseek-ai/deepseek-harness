@@ -68,7 +68,8 @@ function renderDetail(overrides: Partial<ReviewDetailProps> = {}) {
     url: URL7, read, tab: 'summary', onTab: vi.fn(), listHidden: false, onToggleList: vi.fn(), onBack: vi.fn(), now: NOW, locale: 'en',
     actions, readDescription: vi.fn(async () => ok(description('Body'))), readActivity: vi.fn(async () => ok(null)),
     addComment: vi.fn(async () => ok(undefined)), onAddHost: undefined,
-    renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), unseenQuotes: 0, t, ...overrides,
+    renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), unseenQuotes: 0, coarsePointer: false, t,
+    ...overrides,
   }
   const view = render(<ReviewDetail {...props} />)
   const rerender = (next: Partial<ReviewDetailProps>): void => { view.rerender(<ReviewDetail {...props} {...next} />) }

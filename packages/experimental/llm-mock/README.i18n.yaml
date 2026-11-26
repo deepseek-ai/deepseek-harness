@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/llm-mock/README.md
+/:
+  en: 6a01b8edb1b61e48
+  zh: eafa8cd1818a8b23
+/deepseek-ai-dsh-llm-mock:
+  en: d33232313d1ecf2b
+  zh: cd0a83e80cdda9ab
+/deepseek-ai-dsh-llm-mock/summary:
+  en: 0d426931b8aa1e04
+  zh: e6a82021970d5c38
+/deepseek-ai-dsh-llm-mock/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-llm-mock/use-this-package:
+  en: 3f9fd7ef0acd7cba
+  zh: 3b9f79559b58cf31
+/deepseek-ai-dsh-llm-mock/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-llm-mock/understand-the-implementation/source-map:
+  en: f2e6066e7fbcdd61
+  zh: 07db790b5516c6f6
+/deepseek-ai-dsh-llm-mock/further-exploration:
+  en: d5774c49ab1e8f2f
+  zh: addba76553fcc4ea
+/deepseek-ai-dsh-llm-mock/model-experience:
+  en: f73e70ed7e3f675e
+  zh: a6a30a026c034556
+/deepseek-ai-dsh-llm-mock/model-experience/kv-cache-effect:
+  en: 736323d2ffb1fa22
+  zh: 002983c8cfc5ecdb
+/deepseek-ai-dsh-llm-mock/known-limitations-and-deferred-work:
+  en: 60dd654114a28995
+  zh: dc5038fd313561f5
+/deepseek-ai-dsh-llm-mock/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

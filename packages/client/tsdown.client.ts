@@ -15,6 +15,13 @@
  * `./lib/assets/*`, and its Node Client face rejects asset imports.
  * Non-experimental client outputs reject experimental module and stylesheet
  * inputs, including origins recorded by chained source maps.
+ * A source `import()` of a package module becomes `require.async` on a split
+ * `client.<name>.js` chunk. Chunks may require each other synchronously: each
+ * registration lists those chunks as `deps`, each `require.async` names the
+ * target's remaining chunk group in a `{ deps }` prefetch hint, and the chunks
+ * the entry requires move into `client.js` ahead of the entry's registration,
+ * without source mappings for their lines; a dynamic import of one of those
+ * chunks stays a synchronous `require` because no file is left to download.
  */
 import { randomBytes } from 'node:crypto'
 import { readFile, readdir, rm, rmdir, stat, utimes } from 'node:fs/promises'
@@ -34,6 +41,7 @@ import {
   packageAssetRevision,
   packageAssetRevisionedPath,
 } from './modules/src/assets.ts'
+import { CLIENT_CHUNK_FILE } from './modules/src/chunks.ts'
 import { optionalStringArray } from './modules/src/client/manifest.ts'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS, STATIC_MODULE_MANIFEST_EXPORT } from './web/src/platform.ts'
 import { clientBuildEnvironmentDefines, clientBuildValueDefines } from '../../scripts/client-build-environment.ts'
@@ -643,30 +651,116 @@ function matchesSpecifier(patterns: readonly RegExp[], specifier: string): boole
   return patterns.some(pattern => pattern.test(specifier))
 }
 
-/** Render package-local dynamic imports through the Client module loader's asynchronous operation. */
-function asyncChunkRequirePlugin(): TsdownPlugin {
+/** The static imports of a rendered or emitted chunk, by emitted file name. */
+interface ChunkImports {
+  readonly imports: readonly string[]
+}
+
+/**
+ * Package-local chunks one chunk requires synchronously.
+ * @param chunk - Rendered or emitted chunk.
+ * @returns The `client.<name>.js` file names among its static imports.
+ */
+function localImports(chunk: ChunkImports): string[] {
+  return chunk.imports.filter(file => CLIENT_CHUNK_FILE.test(file))
+}
+
+/**
+ * Package-local chunks reachable through synchronous requires, dependencies before their dependents.
+ * @param chunks - Chunks of one output by file name.
+ * @param start - Chunk whose synchronous requires are followed; not part of the result.
+ * @returns The reachable chunk file names.
+ */
+function localClosure(chunks: Readonly<Record<string, ChunkImports>>, start: string): string[] {
+  const order: string[] = []
+  const seen = new Set([start])
+  const visit = (file: string): void => {
+    for (const dependency of localImports(chunks[file] ?? { imports: [] })) {
+      if (seen.has(dependency)) continue
+      seen.add(dependency)
+      visit(dependency)
+      order.push(dependency)
+    }
+  }
+  visit(start)
+  return order
+}
+
+/** Trailing source-map reference of one emitted chunk, removed when the chunk moves into the entry file. */
+const CHUNK_SOURCEMAP_COMMENT = /\n\/\/# sourceMappingURL=\S+\s*$/u
+
+/**
+ * Render package-local chunk requests for the Client module loader. A dynamic import becomes `require.async`
+ * with a `deps` prefetch hint naming the target's synchronous chunk closure; the chunks the entry requires
+ * synchronously, transitively, move into the entry file ahead of its own registration. A dynamic import of such a
+ * chunk keeps Rolldown's synchronous `require` inside a resolved promise: the entry file registers the chunk before
+ * any code of the package runs, and the chunk has no file left to download.
+ * @param entryFileName - The package entry's emitted file name.
+ * @returns The rendering plugin.
+ */
+function asyncChunkRequirePlugin(entryFileName: string): TsdownPlugin {
   return {
     name: 'dsh-client-async-chunk-require',
-    renderChunk(code, chunk, outputOptions) {
+    renderChunk(code, chunk, outputOptions, meta) {
       if (outputOptions.format !== 'cjs') return null
+      // The loader keys the entry by its package id, so a chunk has no relative specifier that reaches it.
+      if (!chunk.isEntry && [...chunk.imports, ...chunk.dynamicImports.map(file => file.replace(/^\.\//u, ''))].includes(entryFileName)) {
+        throw new Error(
+          `client bundle compiler: ${chunk.fileName} imports the package entry ${entryFileName}; `
+          + 'move the code it shares with the entry into a module that both import',
+        )
+      }
       const transformed = new Rolldown.RolldownMagicString(code)
+      const colocated = new Set(localClosure(meta.chunks, entryFileName))
       for (const dynamicImport of chunk.dynamicImports) {
         const fileName = dynamicImport.startsWith('./') ? dynamicImport.slice(2) : dynamicImport
-        if (!/^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/.test(fileName)) continue
+        if (!CLIENT_CHUNK_FILE.test(fileName) || colocated.has(fileName)) continue
         const specifier = `./${fileName}`
-        const call = new RegExp(
+        const expression = new RegExp(
           `Promise\\.resolve\\(\\)\\.then\\(\\(\\)\\s*=>\\s*require\\((['"])${escapeSpecifier(specifier)}\\1\\)\\)`,
           'gu',
         )
-        const matches = [...code.matchAll(call)]
+        const matches = [...code.matchAll(expression)]
         if (matches.length === 0) {
           throw new Error(`client bundle compiler: dynamic chunk ${JSON.stringify(specifier)} has no generated import expression`)
         }
+        const preload = localClosure(meta.chunks, fileName).filter(file => !colocated.has(file)).map(file => `./${file}`)
+        const call = preload.length === 0
+          ? `require.async(${JSON.stringify(specifier)})`
+          : `require.async(${JSON.stringify(specifier)}, { deps: ${JSON.stringify(preload)} })`
         for (const match of matches) {
-          transformed.overwrite(match.index, match.index + match[0].length, `require.async(${JSON.stringify(specifier)})`)
+          transformed.overwrite(match.index, match.index + match[0].length, call)
         }
       }
       return transformed.hasChanged() ? transformed : null
+    },
+    generateBundle: {
+      // After every other check, so input isolation still reads each chunk's own modules and imports.
+      order: 'post',
+      handler(_options, bundle) {
+        const entry = bundle[entryFileName]
+        if (entry?.type !== 'chunk') return
+        const chunks: Record<string, Rolldown.OutputChunk> = {}
+        for (const output of Object.values(bundle)) if (output.type === 'chunk') chunks[output.fileName] = output
+        const colocated = localClosure(chunks, entryFileName)
+        if (colocated.length === 0) return
+        // Each chunk keeps its own registration, so the entry file registers them before the entry.
+        const prefix = colocated.map(file => `${chunks[file]!.code.replace(CHUNK_SOURCEMAP_COMMENT, '')}\n`).join('')
+        entry.code = prefix + entry.code
+        // The moved chunks have no mappings; the entry's own lines move down by the inserted line count.
+        const shift = ';'.repeat(prefix.split('\n').length - 1)
+        if (entry.map !== null) entry.map.mappings = shift + entry.map.mappings
+        const mapAsset = bundle[`${entryFileName}.map`]
+        if (mapAsset?.type === 'asset' && typeof mapAsset.source === 'string') {
+          const map = JSON.parse(mapAsset.source) as { mappings: string }
+          map.mappings = shift + map.mappings
+          mapAsset.source = JSON.stringify(map)
+        }
+        for (const file of colocated) {
+          delete bundle[file]
+          delete bundle[`${file}.map`]
+        }
+      },
     },
     async writeBundle(outputOptions, bundle) {
       const entry = Object.values(bundle).find(output => output.type === 'chunk' && output.isEntry)
@@ -966,6 +1060,7 @@ function clientConfig(
     ? packageRequire.resolve(source)
     : importer === undefined ? source : sourceAssetPath(source, importer)
   const styleMarker = `/*__dshChunkStyles_${randomBytes(16).toString('hex')}__*/`
+  const entryFileName = dualClient ? 'client.browser.js' : 'client.js'
   return {
     name: `${id}/client`,
     entry: { client: entry },
@@ -1042,7 +1137,7 @@ function clientConfig(
           + '(type-only imports are erased and never reach this gate)',
         )
       },
-    }, tscSourceMapPlugin(), asyncChunkRequirePlugin(), isolation.plugin, {
+    }, tscSourceMapPlugin(), asyncChunkRequirePlugin(entryFileName), isolation.plugin, {
       name: 'dsh-client-style-factory',
       renderChunk(code, chunk) {
         const marker = code.indexOf(styleMarker)
@@ -1132,7 +1227,7 @@ function clientConfig(
       },
     }, assets.plugin],
     outputOptions: {
-      entryFileNames: dualClient ? 'client.browser.js' : 'client.js',
+      entryFileNames: entryFileName,
       // The imported source basename becomes the published chunk name; package
       // files lists and artifact tests pin every intentional chunk.
       chunkFileNames: dualClient ? 'client.browser.[name].js' : 'client.[name].js',
@@ -1145,7 +1240,11 @@ function clientConfig(
         isolation.sourcePath(source, mapPath)
         return browserSourcePath(source, mapPath)
       },
-      banner: chunk => `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, ${chunk.isEntry ? '' : `chunk: ${JSON.stringify(chunk.fileName)}, `}factory: (require) => {`,
+      banner: (chunk) => {
+        const deps = localImports(chunk).map(file => `./${file}`)
+        return `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, ${chunk.isEntry ? '' : `chunk: ${JSON.stringify(chunk.fileName)}, `}`
+          + `${deps.length === 0 ? '' : `deps: ${JSON.stringify(deps)}, `}factory: (require) => {`
+      },
       postBanner: (chunk) => {
         const prefix = clientBanner?.(chunk.fileName)
         return prefix === undefined ? '' : `${prefix}\n`

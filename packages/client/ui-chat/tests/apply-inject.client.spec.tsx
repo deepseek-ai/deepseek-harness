@@ -103,6 +103,8 @@ async function bench(initialSettings?: ChatSettings, withBrowserRegistry = true,
       openSession(ROOT)
     }),
     openSession,
+    forkSession: (sessionId: SessionId, onCreated: (childId: SessionId) => void, options: { atSeq: number }) =>
+      runtime.sessions.fork({ sessionId, atSeq: options.atSeq, increaseTitle: true, onCreated }),
   } as never)
   const session = sessionFakeFor()
   await runtime.sessions.add({
@@ -268,7 +270,7 @@ describe('Chat inject API', () => {
     }
   })
 
-  it('loads older history and forks through the Session Controller', async () => {
+  it('loads older history and forks through Workspace navigation', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(b.rootReference)
     injected.loadOlder()

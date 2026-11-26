@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { describe, expect, it, vi } from 'vitest'
 import { MenuRegistry } from '../src/client/registry.ts'
@@ -58,6 +59,22 @@ describe('menu contribution lifecycle', () => {
     expect(JSON.parse(JSON.stringify(menu.source.getSnapshot()))).toEqual(menu.source.getSnapshot())
     menu.select('first/open'); menu.select('first/open')
     expect(run).toHaveBeenCalledExactlyOnceWith('clicked')
+    expect(failure).not.toHaveBeenCalled()
+    registry.dispose()
+  })
+
+  it('waits for a pending answer created in another realm', async () => {
+    // A script-isolated provider returns its own window's Promise.
+    const ForeignPromise = runInNewContext('Promise') as PromiseConstructor
+    expect(ForeignPromise).not.toBe(Promise)
+    const failure = vi.fn()
+    const registry = new MenuRegistry(failure)
+    const answer = ForeignPromise.resolve<readonly MenuAction[]>([{ id: 'open', label: 'Isolated' }])
+    registry.register({ id: 'isolated', target: 'extension', order: 0, resolve: () => answer })
+    const menu = registry.resolve(target)
+    expect(menu.source.getSnapshot()).toEqual([])
+    await menu.ready
+    expect(menu.source.getSnapshot().map(x => x.id)).toEqual(['isolated/open'])
     expect(failure).not.toHaveBeenCalled()
     registry.dispose()
   })

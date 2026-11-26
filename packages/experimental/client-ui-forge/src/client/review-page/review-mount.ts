@@ -127,6 +127,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
   const queues = new WeakMap<AbortSignal, ReviewQueue>()
   const changes: ReviewChangesFace = {
     localDiff: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
+    localWrite: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     diffBases: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     localText: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),
     localCommits: async () => await Promise.reject(new Error('forge-panel: the review page shows no local changes')),

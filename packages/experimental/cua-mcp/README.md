@@ -90,7 +90,7 @@ On native Windows the profile mounts the [Windows provider](../cua-windows/READM
     helperPath: 'C:\absolute\path\to\dsh-cua-windows.exe'
 ```
 
-That provider does not launch applications and offers no `Always allow` grant: open the application before a program selects it, and under `elicit` every connection asks for consent again. The profile does not mount it under WSL.
+In `elicit` mode, choosing `Always allow` for a Windows application lets subsequent connections in this profile reuse the grant. Choosing `Allow for this session` covers the current connection.
 
 On other Hosts the profile starts without a provider: the listing carries `cua_get_api_reference` and `cua_reset`, each of which returns an error naming the missing provider, and a `cua_run_code` call fails as `unknown tool`. A provider row that fails to activate, such as the Windows row without a helper, leaves the same listing, and the launcher names the failure on stderr.
 
@@ -169,7 +169,6 @@ The tool catalog and instructions are stable for one installation. The reference
 
 - Successful programs retain held keys and mouse buttons across calls and report them in a system reminder. Program failure, a received cancellation of an active cua_run_code request, reset and connection closure release owned input. If a call sends down and returns, and the client pauses while its model is thinking, this server receives no cancellation: that input can remain pressed until explicit up or later cleanup.
 - macOS and native Windows Hosts have a provider. Other Hosts, WSL included, list `cua_get_api_reference` and `cua_reset`, which both name the missing provider; a `cua_run_code` call fails as `unknown tool`.
-- On Windows the [provider's limits](../cua-windows/README.md#known-limitations-and-deferred-work) apply through MCP: it does not launch applications, grants no `Always allow`, and an npm installation needs `helperPath`.
 - Elicitation uses the 2025 MCP request model; a client that negotiates the 2026-07-28 revision receives an error for consent requests and should use `DSH_CUA_CONSENT=allow`.
 - Program sandbox escalation and the raw `cua` tool are not exposed; `DSH_PERMISSION_MODE` selects the launch-time file sandbox of program processes, and the workspace is its `workspace-write` root.
 - The `cua` API reference reaches a model only when it calls `cua_get_api_reference`. The server cannot observe a new conversation on an existing connection or a compacted context, so the instructions and the tool description carry that request; a client that withholds the tool leaves its model with the execution rules alone.

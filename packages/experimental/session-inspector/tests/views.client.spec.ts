@@ -27,6 +27,7 @@ async function fixture(services?: { sessions: object; uiConversation: object; ui
   ctx.provide('sessions', services?.sessions ?? {})
   ctx.provide('uiConversation', services?.uiConversation ?? {})
   ctx.provide('uiSession', services?.uiSession ?? {})
+  ctx.provide('uiResponsive', {})
   const tabs = new SidebarRightTabRegistry(ctx)
   ctx.provide('sidebarRightTabs', tabs)
   ctx.locale.setLocale('en')

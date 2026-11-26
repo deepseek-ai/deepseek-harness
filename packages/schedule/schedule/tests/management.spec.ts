@@ -17,14 +17,22 @@ import { MemoryMediaPool } from '../../../storage/storage-domain/tests/helpers/m
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 const active: Awaited<ReturnType<typeof harness>>[] = []
+const beforeDispose: (() => Promise<void>)[] = []
 const once = 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY;COUNT=1'
 const daily = 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY'
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime('2026-09-16T00:00:00Z') })
 afterEach(async () => {
-  await Promise.all(active.splice(0).map(test => test.ctx.fiber.dispose()))
-  vi.restoreAllMocks()
-  vi.useRealTimers()
+  try {
+    await Promise.all(beforeDispose.splice(0).map(cleanup => cleanup()))
+  } finally {
+    try {
+      await Promise.all(active.splice(0).map(test => test.ctx.fiber.dispose()))
+    } finally {
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    }
+  }
 })
 
 async function setup() {
@@ -277,6 +285,12 @@ it.each([false, true])('re-arms a reserved target without a creation provider on
 it.each(['new_once', 'new'] as const)('refuses a queued %s destination when its creation provider unloads', async (kind) => {
   const entered = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
+  const pending: Promise<unknown>[] = []
+  // A failed test must release the write before context shutdown can drain its queue.
+  beforeDispose.push(async () => {
+    release.resolve(undefined)
+    await Promise.all(pending)
+  })
   let gated = false
   const pool = new MemoryMediaPool()
   const test = await harness({ sessionController: false, pool, backend: gatedScheduleBackend(pool, {
@@ -293,10 +307,14 @@ it.each(['new_once', 'new'] as const)('refuses a queued %s destination when its 
   })
   const request = { title: 'Queued', prompt: 'Prompt', timing: { kind: 'rrule', rrule: daily } } as const
   const blocking = test.service.create({ ...request, target: { kind: 'session', sessionId: brandString<SessionId>('existing') } })
+  pending.push(Promise.allSettled([blocking]))
   await entered.promise
   test.stat.mockResolvedValue(undefined)
   const queued = test.service.create({ ...request, target: { kind } })
-  await provider.dispose()
+  pending.push(Promise.allSettled([queued]))
+  const closing = provider.dispose()
+  pending.push(Promise.allSettled([closing]))
+  await closing
   release.resolve(undefined)
   await blocking
   await expect(queued).rejects.toMatchObject({ code: 'invalid_rule', message: expect.stringContaining('choose an existing Session target') as string })

@@ -6,7 +6,7 @@ import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, watchConsole, webSnapshotMode } from './scaffold.ts'
 import { launchRemoteConnectionFixture, type RemoteConnectionFixture } from './remote-connection-fixture.ts'
-import { openSettings, ZH_BROWSER_LOCALE } from './support.ts'
+import { credentialOnboardingStarted, openSettings, ZH_BROWSER_LOCALE } from './support.ts'
 
 const EXPECTED = fileURLToPath(new URL('./expected/remote-connection', import.meta.url))
 const MODE = webSnapshotMode()
@@ -16,7 +16,35 @@ const EXTENSION_FIXTURE = fileURLToPath(new URL('./fixtures/plugins/fixture-remo
 const REPLACEMENT_OVERLAY = fileURLToPath(new URL('./remote-connection-replacement.overlay.yml', import.meta.url))
 const UNTRUSTED_OVERLAY = fileURLToPath(new URL('./remote-connection-untrusted.overlay.yml', import.meta.url))
 
+/**
+ * Wait until startup navigation opens the default Workspace's blank Session,
+ * whose live composer replaces the Workspace trigger. Navigation selects that
+ * Session only after the first Session-list pull lands; on the same pull the
+ * Settings onboarding coordinator mounts its first-run steps and closes a
+ * Settings panel that is already open (#9234).
+ * @param page - application page of a Remote fixture, whose CLI starts with a default Workspace.
+ */
+async function startupSession(page: Page): Promise<void> {
+  await page.locator('[data-composer-input][data-placeholder="描述你想要构建的内容, / 调用指令, @ 文件或对话"]')
+    .waitFor({ state: 'attached' })
+}
+
+/**
+ * Open Remote connection settings on a Remote fixture page once startup navigation has settled.
+ * @param page - application page of a Remote fixture.
+ * @returns the Remote connection section.
+ */
 async function remoteSettings(page: Page): Promise<Locator> {
+  await startupSession(page)
+  return openRemoteSettings(page)
+}
+
+/**
+ * Open Settings on the Remote connection page and wait for its address card.
+ * @param page - application page whose first Session-list pull has landed.
+ * @returns the Remote connection section.
+ */
+async function openRemoteSettings(page: Page): Promise<Locator> {
   await openSettings(page, 'zh')
   await page.getByRole('dialog', { name: '设置', exact: true })
     .getByRole('button', { name: '远程连接', exact: true }).click()
@@ -453,7 +481,10 @@ describe('web e2e: one-use QR browser login', () => {
       try {
         const page = await context.newPage()
         const console = watchConsole(page)
+        // The scaffold starts without a Workspace, so startup navigation opens no Session to wait for.
+        const onboarding = credentialOnboardingStarted(page)
         await page.goto(scaffold.authenticatedUrl)
+        await onboarding
         await openSettings(page, 'zh')
         await page.getByRole('dialog', { name: '设置', exact: true })
           .getByRole('button', { name: '远程连接', exact: true }).click()
@@ -514,7 +545,9 @@ describe('web e2e: one-use QR browser login', () => {
           }
 
           await page.route('**/api/remoteConnection/status', route => route.abort('failed'))
+          const reloadedOnboarding = credentialOnboardingStarted(page)
           await page.reload()
+          await reloadedOnboarding
           await openSettings(page, 'zh')
           await page.getByRole('dialog', { name: '设置', exact: true })
             .getByRole('button', { name: '远程连接', exact: true }).click()
@@ -549,6 +582,7 @@ describe('web e2e: one-use QR browser login', () => {
       const page = await context.newPage()
       const console = watchConsole(page)
       await page.goto(secure.authenticatedUrl)
+      await startupSession(page)
       await openSettings(page, 'zh')
       const dialog = page.getByRole('dialog', { name: '设置', exact: true })
       for (const [viewport, colorScheme, suffix] of [
@@ -1275,8 +1309,11 @@ describe('web e2e: one-use QR browser login', () => {
     try {
       const page = await desktop.newPage()
       const console = watchConsole(page)
+      // The scaffold starts without a Workspace, so startup navigation opens no Session to wait for.
+      const onboarding = credentialOnboardingStarted(page)
       await page.goto(scaffold.authenticatedUrl)
-      const section = await remoteSettings(page)
+      await onboarding
+      const section = await openRemoteSettings(page)
       const extension = page.getByRole('region', { name: '连接选项', exact: true })
       const additional = await scaffold.ctx.loader.create({ name: '@fixture/remote-connection-extension' })
       await extension.waitFor()

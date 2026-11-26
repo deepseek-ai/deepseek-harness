@@ -9,7 +9,6 @@
  */
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { subscribeWithSelector } from 'zustand/middleware'
-import { shallow } from 'zustand/shallow'
 import { freeze, produce } from 'immer'
 import type {
   ActionsDecl, BakedActions, ObservableSnapshot, StoreHandle, StoreInstance, StoreSpec,
@@ -58,14 +57,44 @@ export function notifySubscribers<Args extends readonly unknown[]>(
 }
 
 /**
- * Shallow equality for selector slices (zustand/shallow semantics; travels
- * with the engine so hook consumers need no zustand dependency).
+ * Shallow equality for selector slices. `Object.is` equal values match; two
+ * Maps match when they have the same keys with `Object.is` equal values, two
+ * Sets when they hold the same members, and other object pairs, including
+ * arrays, when they have the same own enumerable string keys with `Object.is`
+ * equal values. Maps and Sets are recognized by their `Object.prototype.toString`
+ * tag, so a collection built by an isolated plugin's iframe compares like one
+ * built by the page.
  * @param a - left value.
  * @param b - right value.
  * @returns whether the values are shallowly equal.
  */
 export function shallowEqual(a: unknown, b: unknown): boolean {
-  return shallow(a, b)
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) return false
+  const tag = Object.prototype.toString.call(a)
+  if (tag === Object.prototype.toString.call(b)) {
+    if (tag === '[object Map]') return mapsEqual(a as ReadonlyMap<unknown, unknown>, b as ReadonlyMap<unknown, unknown>)
+    if (tag === '[object Set]') return setsEqual(a as ReadonlySet<unknown>, b as ReadonlySet<unknown>)
+  }
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) return false
+  return keys.every(key => Object.hasOwn(b, key) && Object.is(Reflect.get(a, key), Reflect.get(b, key)))
+}
+
+function mapsEqual(a: ReadonlyMap<unknown, unknown>, b: ReadonlyMap<unknown, unknown>): boolean {
+  if (a.size !== b.size) return false
+  for (const [key, value] of a) {
+    if (!b.has(key) || !Object.is(value, b.get(key))) return false
+  }
+  return true
+}
+
+function setsEqual(a: ReadonlySet<unknown>, b: ReadonlySet<unknown>): boolean {
+  if (a.size !== b.size) return false
+  for (const value of a) {
+    if (!b.has(value)) return false
+  }
+  return true
 }
 
 /** Batches subscriber notification into one flush per animation frame. */

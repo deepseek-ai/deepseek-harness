@@ -244,7 +244,7 @@ function ProjectRow({
           renderFactorySlot('contextMenu.button', {
             target: { kind: 'workspace', value: { ...workspaceMenuTarget, displayTitle: label } },
             label: t('actions.workspace.aria', { name: label }),
-            className: css.iconButton,
+            size: 'row',
             opener: menuOpener,
           })
         )}
@@ -678,7 +678,7 @@ export function SessionNodeItem({
           {renderFactorySlot('contextMenu.button', {
             target: { kind: 'session', value: { sessionId: node.id, displayTitle: row.title } },
             label: t('actions.session.aria', { name: title }),
-            className: css.iconButton,
+            size: 'row',
             opener: menuOpener,
           })}
           <span className={css.rowQuickActions}>

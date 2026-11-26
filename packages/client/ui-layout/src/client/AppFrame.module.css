@@ -121,11 +121,27 @@
 }
 
 :global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
-  /* A blue wash over the top of the translucent tint, gone by a third of the
-     column, and a faint blue-grey-violet rising through the bottom third.
-     Every layer stays transparent so vibrancy shows; ui-theme sets each
-     palette's wash strength and tint. */
+  border-right: none;
+}
+
+/* The opaque fullscreen fill. Registered as a color so it transitions as the
+   top background layer, without a positioned overlay or a stacking context
+   that would trap sidebar content below the centre column. */
+@property --dsh-sidebar-fullscreen-fill {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: transparent;
+}
+
+/* A blue wash over the top of the translucent tint, gone by a third of the
+   column, and a faint blue-grey-violet rising through the bottom third.
+   Every layer stays transparent so vibrancy shows; ui-theme sets each
+   palette's wash strength and tint. The top layer stays transparent outside
+   window fullscreen and fades to the opaque Web sidebar fill inside it. */
+:global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
+  --dsh-sidebar-fullscreen-fill: transparent;
   background:
+    linear-gradient(var(--dsh-sidebar-fullscreen-fill), var(--dsh-sidebar-fullscreen-fill)),
     linear-gradient(
       to bottom,
       var(--dsw-specific-sidebar-wash-top),
@@ -134,7 +150,17 @@
       var(--dsw-specific-sidebar-wash-bottom)
     ),
     var(--dsw-specific-sidebar-tint);
-  border-right: none;
+  transition: --dsh-sidebar-fullscreen-fill var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+:global([data-platform='darwin'][data-fullscreen]) .frame:not([data-sidebar-drawer]) .sidebarCol {
+  --dsh-sidebar-fullscreen-fill: var(--dsw-specific-sidebar-fill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
+    transition: none;
+  }
 }
 
 /* macOS Reduce Transparency: the OS flattens the window's vibrancy layer to a
@@ -142,7 +168,9 @@
    them with a 90%-opaque fill of the same token in both themes. */
 @media (prefers-reduced-transparency: reduce) {
   :global([data-platform='darwin']) .frame:not([data-sidebar-drawer]) .sidebarCol {
-    background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 90%, transparent);
+    background:
+      linear-gradient(var(--dsh-sidebar-fullscreen-fill), var(--dsh-sidebar-fullscreen-fill)),
+      color-mix(in srgb, var(--dsw-specific-sidebar-fill) 90%, transparent);
   }
 }
 

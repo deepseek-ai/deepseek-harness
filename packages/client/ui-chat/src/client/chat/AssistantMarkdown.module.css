@@ -28,30 +28,24 @@
   --dsh-assistant-block-gap: 4px;
 }
 
-/* Wide markdown tables (the renderer's ≥4-column md-table-wide hook) span
-   the whole transcript width instead of clipping at the 748px message
-   column, while the table content keeps starting at its normal x (the lead
-   padding compensates the negative margin) — deepsuite chat TableWrapper
-   parity, with 100cqw (the ChatView scroll container) standing in for its
-   JS-measured --dsl-virtual-list-width. `--dsh-table-spare` clamps to zero
-   when the transcript is narrower than the message column, so narrow
-   viewports keep the plain in-column scroll with no sideways shift.
-   Percentages resolve against the wrapper's containing block, so a table
-   indented inside a list still reaches the same transcript edges. */
+/* Wide markdown tables (the renderer's ≥4-column md-table-wide hook) start
+   at their normal x and extend right to the transcript's edge instead of
+   clipping at the 748px message column, so the table, its scrollbar and
+   its scrolled content all start at the message column's left edge. 100cqw
+   (the ChatView scroll container) gives the transcript width.
+   `--dsh-table-spare` clamps to zero when the transcript is narrower than
+   the message column, so narrow viewports keep the plain in-column scroll.
+   A table indented inside a list keeps its indentation. */
 .body :global(.md-table-wide) {
   --dsh-table-spare: max(0px, calc((100cqw - var(--dsh-chat-content-width)) / 2));
-  --dsh-table-lead: calc(var(--dsh-table-spare) + min(var(--dsh-chat-content-width), 100cqw) - 100%);
-  box-sizing: border-box;
-  width: calc(100% + var(--dsh-table-lead) + var(--dsh-table-spare));
+  width: calc(100% + var(--dsh-table-spare));
   /* The base .tableScroll caps at the column (max-width: 100%); the breakout
      is exactly the case that must exceed it. */
   max-width: none;
-  margin-left: calc(-1 * var(--dsh-table-lead));
-  padding-left: var(--dsh-table-lead);
 }
 
 /* Only the painted table outranks Conversation's z-index 0 width handle. The
-   full-width scroll wrapper and its transparent alignment padding stay below,
+   scroll wrapper's transparent area right of a fitting table stays below,
    so a fitting four-column table does not disable the surrounding gutter. */
 .body :global(.md-table-wide) > table {
   position: relative;

@@ -1,5 +1,5 @@
 /**
- * The twelve owner share-management operations behind the `liveshareShares` Remote.
+ * The owner share-management operations behind the `liveshareShares` Remote.
  *
  * Each method owns one operation's business order; the Remote service exposes it without a second
  * implementation. Failures are thrown as `RemoteError` values with a `liveshareShares/` code, which
@@ -8,6 +8,7 @@
  */
 
 import { randomBytes } from 'node:crypto'
+import { isExpired } from './fork-policy.ts'
 import { base64Url } from './base64-url.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { isJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -182,6 +183,7 @@ function ownerShareView(share: OwnerShare): OwnerShareView {
     viewerPlugins: share.viewerPlugins ?? [],
     ...(share.viewerPluginAccess === undefined ? {} : { viewerPluginAccess: share.viewerPluginAccess }),
     online: share.online,
+    ...(share.reconnectStopped === true ? { reconnectStopped: true } : {}),
     ...(share.access === undefined ? {} : { access: { ...share.access, mode: storedAccessMode(share.access.mode) } }),
   }
 }
@@ -200,7 +202,7 @@ function isRelayAddress(value: string): boolean {
   }
 }
 
-/** Host state the twelve operations read and change. */
+/** Host state the operations read and change. */
 export interface OwnerShareOperationDeps {
   /** Shares this host publishes. */
   readonly ownerShares: Map<string, OwnerShare>
@@ -257,7 +259,7 @@ export interface OwnerShareOperationDeps {
 }
 
 /**
- * Build the twelve owner share-management operations for one host.
+ * Build the owner share-management operations for one host.
  * @param deps - Shares, Relay authority, worker channel, persistence, and lifecycle callbacks.
  * @returns The operations the Remote service calls.
  */
@@ -283,6 +285,8 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
   const cancelShareTurn = deps.cancelShareTurn
   const cancelChildTurns = deps.cancelChildTurns
   const reconcileSourceAccess = deps.reconcileSourceAccess
+  const reconnecting = new Map<string, Promise<void>>()
+  const stopping = new Set<string>()
   const ownerStateHeld = deps.ownerStateHeld
 
   /**
@@ -295,6 +299,52 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
     if (!ownerStateHeld()) return
     throw new RemoteError('liveshareShares/owner-state-held',
       'another running dsh instance owns the LiveShare share state; stop it or manage the shares there', {})
+  }
+
+  function reconnectableShare(shareId: string): OwnerShare {
+    assertOwnerStateFree()
+    const share = ownerShares.get(shareId)
+    if (share === undefined || stopping.has(shareId)) {
+      throw new RemoteError('liveshareShares/share-not-found', `share ${shareId} is not published`, { shareId })
+    }
+    if (isExpired(share.expiresAt, Date.now())) {
+      throw new RemoteError('liveshareShares/share-expired', `share ${shareId} has expired`, { shareId })
+    }
+    return share
+  }
+
+  async function reconnect(share: OwnerShare): Promise<void> {
+    const { shareId } = share
+    // A gateway handshake can create a missing Relay row. Only reconnect a row the Relay still serves.
+    const authority = await relay.readRelayAuthority(share)
+    const current = reconnectableShare(shareId)
+    if (current.online) return
+    const sessionMode = relay.drivableModeOf(shareId)
+    if (!authority.ok) {
+      // The Relay no longer serves this row and no handshake will create it again, so retrying the
+      // link cannot succeed and the manager offers no further button.
+      if (authority.failure === 'missing') {
+        throw new RemoteError('liveshareShares/share-not-found', `share ${shareId} is no longer published on ${current.relay}`, { shareId })
+      }
+      throw new RemoteError('liveshareShares/relay-unavailable', 'cannot confirm the existing share on the Relay', { relay: current.relay })
+    }
+    if (sessionMode === undefined) {
+      throw new RemoteError('liveshareShares/relay-unavailable', 'cannot confirm the existing share on the Relay', { relay: current.relay })
+    }
+    // The Relay's answer narrowed this record to the ACL it still serves, so the registration carries
+    // that ACL alone: the deployment's default subjects are a starting point for a new share, and
+    // merging them back here would re-grant access the Relay just removed.
+    const spec = {
+      ...tunnel.shareSpec({ ...current, sessionMode }, currentCredential()),
+      allowedSubjectIds: [...current.allowedSubjectIds],
+    }
+    tunnel.send({ type: 'add-share', share: spec })
+    // The worker reports registration over asynchronous IPC; install the waiter before yielding.
+    const result = await tunnel.waitForShare(shareId, 15_000)
+    reconnectableShare(shareId)
+    if (!result.ok) {
+      throw new RemoteError('liveshareShares/relay-unavailable', result.error ?? 'relay-unavailable', { relay: current.relay })
+    }
   }
 
   /**
@@ -524,6 +574,16 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       return { shares: live.map(view => view.share) }
     },
 
+    async reconnect({ shareId }) {
+      const share = reconnectableShare(shareId)
+      if (share.online) return
+      const pending = reconnecting.get(shareId)
+      if (pending !== undefined) return pending
+      const attempt = reconnect(share).finally(() => { reconnecting.delete(shareId) })
+      reconnecting.set(shareId, attempt)
+      return attempt
+    },
+
     /**
      * Order: owner-state gate -> send(remove-share) -> closeShare -> cancel the source turn -> cancel child turns ->
      * forks.revokeShare -> ownerShares.delete -> accessChanged -> clearShareExpiry -> persist ->
@@ -537,7 +597,7 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
     async stop(request) {
       assertOwnerStateFree()
       const share = ownerShares.get(request.shareId)
-      if (share === undefined) {
+      if (share === undefined || stopping.has(request.shareId)) {
         throw new RemoteError('liveshareShares/share-not-found', `share ${request.shareId} is not published`, {
           shareId: request.shareId,
         })
@@ -555,7 +615,12 @@ export function createOwnerShareOperations(deps: OwnerShareOperationDeps): Owner
       // A removed share takes its forks with it: the children stay in the registry as history, but they
       // are marked revoked so a later resume cannot install a limit and drive a child whose share the
       // owner withdrew.
-      await forks.revokeShare(shareId, new Date().toISOString())
+      stopping.add(shareId)
+      try {
+        await forks.revokeShare(shareId, new Date().toISOString())
+      } finally {
+        stopping.delete(shareId)
+      }
       ownerShares.delete(shareId)
       // A Session no share names any more loses its sandbox, which restores its own tools.
       for (const sessionId of share.sessionIds) reconcileSourceAccess(sessionId)

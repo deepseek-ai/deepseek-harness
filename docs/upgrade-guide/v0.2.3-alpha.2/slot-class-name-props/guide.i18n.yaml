@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/slot-class-name-props/guide.md
+/:
+  en: b9062daa91a85863
+  zh: 8d2fbc8646a0c582
+/class-names-removed-from-the-menu-button-and-the-hero-brand-mark:
+  en: 44a2902bd1d6c65f
+  zh: 37fe5a12bd6d80dc
+/class-names-removed-from-the-menu-button-and-the-hero-brand-mark/change:
+  en: ec5b601fb204cd83
+  zh: c963ceeb046220c2
+/class-names-removed-from-the-menu-button-and-the-hero-brand-mark/migration:
+  en: 3733f1a87bf99a59
+  zh: e19b675fdfbe7720

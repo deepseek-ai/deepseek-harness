@@ -87,7 +87,7 @@ function visibleBounds(root: HTMLElement, source: HTMLElement, view: Window): Bo
  * @returns current owner and area-local selection actions.
  */
 export function useTextInteraction(
-  rootRef: RefObject<HTMLElement>, surfaceRef: RefObject<HTMLElement>,
+  rootRef: RefObject<HTMLElement | null>, surfaceRef: RefObject<HTMLElement | null>,
   dispatchInteraction: (gesture: TextInteractionGesture) => string | null,
   registeredIds: readonly string[],
 ): TextInteractionBinding {
@@ -202,7 +202,7 @@ export function useTextInteraction(
       previousRange = selection?.rangeCount === 1 ? selection.getRangeAt(0).cloneRange() : null
       dismiss()
       selectionChangedDuringGesture = false
-      pointerSelecting = event.button === 0 && event.target instanceof Node && root.contains(event.target)
+      pointerSelecting = event.button === 0 && root.contains(event.target as Node)
     }
     const pointerUp = (event: PointerEvent): void => {
       if (!pointerSelecting) return
@@ -212,7 +212,7 @@ export function useTextInteraction(
     const cancel = (): void => { pointerSelecting = false; keyboardSelecting = false; dismiss() }
     const keyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') { cancel(); return }
-      if (insideSurface(event) || !(event.target instanceof Node) || !root.contains(event.target)) return
+      if (insideSurface(event) || !root.contains(event.target as Node)) return
       if (event.key === 'Shift' || event.shiftKey) { keyboardSelecting = true; dismiss() }
     }
     const keyUp = (event: KeyboardEvent): void => {
@@ -222,10 +222,10 @@ export function useTextInteraction(
     }
     const contextMenu = (event: MouseEvent): void => {
       if (insideSurface(event)) return
-      const element = event.target instanceof Element ? event.target : null
-      const source = element?.closest<HTMLElement>('[data-text-interaction-source]')
+      const element = event.target as Partial<Element>
+      const source = element.closest?.<HTMLElement>('[data-text-interaction-source]')
       if (source === undefined || source === null || !root.contains(source)
-        || element?.closest('[data-text-interaction-exclude], button, input, textarea, [contenteditable="true"]')) return
+        || element.closest?.('[data-text-interaction-exclude], button, input, textarea, [contenteditable="true"]')) return
       pointerSelecting = false
       dismiss()
       const selected = readTextSelection(root, document.getSelection())

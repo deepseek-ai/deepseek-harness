@@ -81,10 +81,10 @@ export function MenuView({ menu, headers, onPick, onCrumb, onHover, onDismiss, t
   useEffect(() => {
     if (!state.open) return
     const onPointerDown = (ev: PointerEvent): void => {
-      if (!(ev.target instanceof Node)) return
-      if (listRef.current?.contains(ev.target)) return
+      const target = ev.target as Node
+      if (listRef.current?.contains(target)) return
       const composerCard = listRef.current?.closest('[data-composer-card]')
-      if (composerCard?.contains(ev.target)) return
+      if (composerCard?.contains(target)) return
       onDismiss()
     }
     document.addEventListener('pointerdown', onPointerDown, true)

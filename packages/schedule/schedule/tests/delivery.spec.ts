@@ -38,7 +38,7 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
       const commit = vi.fn(async (task: ScheduleTask) => { tasks[0] = task })
       const runtime = new ScheduleRuntime(ctx, () => tasks, work => work(), commit, () => {}, {
         retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000,
-      }, async sessionId => (await resolve(sessionId)).agent)
+      }, async sessionId => (await resolve(sessionId)).agent, () => ctx.get('sessionController'))
       try {
         runtime.requestDrive()
         await flushStarted.promise

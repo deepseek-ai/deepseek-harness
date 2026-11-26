@@ -1,0 +1,4 @@
+# Opt-in side conversations: one browser plugin row after the shipped Web layers.
+- insert:
+    - id: ui-sidechat
+      name: '@deepseek-ai/dsh-client-ui-sidechat'

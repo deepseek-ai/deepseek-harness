@@ -20,7 +20,9 @@
  * the runtime mirror of the build-time bundle purity gate).
  * The synchronous `require` handed to factories walks the same order minus
  * the load branch. Loading is async, so a requested dynamic package must have
- * registered its factory before a consumer materializes.
+ * registered its factory before a consumer materializes; likewise a
+ * `./client.<name>.js` request answers only a registered chunk of the same
+ * package, which the registration `deps` of its requester bring in first.
  *
  * This file is the browser-safe contract face (zero node imports): the
  * `__DSH_BOOT__` wire types, the boot-manifest parser, and the boundaries around
@@ -35,7 +37,7 @@ import type {
   DshClientModuleManifest,
 } from '@deepseek-ai/dsh-package-manifest'
 import type { ScriptRealm, ScriptRealmRegistryHost } from '@deepseek-ai/dsh-client-script-realm/client'
-export type { ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
+export type { ClientAsyncRequireOptions, ClientBundleRequire } from '@deepseek-ai/dsh-package-manifest'
 import type { ClientEntries } from './entries.ts'
 import type { ClientModuleSystem } from './system.ts'
 

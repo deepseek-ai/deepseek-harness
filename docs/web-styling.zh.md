@@ -18,7 +18,7 @@
 - 重新设计控件样式之前先复用控件：[ui-primitives 组件目录](../packages/client/ui-primitives/README.zh.md#component-catalog)是唯一跨功能包的通道，有意的视觉差异应作为那里的一个 prop，而不是另起一份拷贝（[参考](../packages/client/ui-primitives/README.zh.md)）。
 - 使用 CSS Modules 和 `clsx`；不得添加组件库或 Tailwind。
 - 功能组件使用 `--dsw-alias-*` 语义 token。不得复制静态色板值或在其中写入颜色字面量。ui-theme 的 color-token spec 拒绝功能样式表中的静态色板引用与十六进制、颜色函数、`white` 和 `black` 字面量，以及功能脚本中的静态色板引用；`box-shadow` 值、遮罩属性、alpha 为 0 的字面量，以及其列出的插图和主题加载前文件不受此限制。
-- 功能组件 CSS 不得包含主题选择器。明暗主题覆盖属于主题所有方。
+- 功能 CSS 中颜色的明暗差异写成以主题变量为参数的 `light-dark()`，它跟随主题 presenter 在根元素上设置的 `color-scheme`。其他明暗差异（如图片、canvas 绘制和第三方库主题）在 JavaScript 中处理：组件读取全局标准 prop [`useTheme`](subsystems/slots.zh.md#framework-provided-hooks)，apply 层读取 `ctx.theme.getTheme()` 与 `theme/change`。分支只判断 `active.colorScheme`（`'light'` 或 `'dark'`），不判断可能为 `system` 的 `preference`，也不判断主题 id。功能插件不读写 `body[data-ds-dark-theme]` 或 `html[data-ds-theme-source]`；hygiene 检查组中的 [`verify-theme-attributes`](../scripts/verify-theme-attributes.ts) 拒绝 `ui-*` 与实验性 Client 插件的样式表和脚本中出现这两个名称。
 - 字体大小必须与行高配对；已有角色匹配时使用主题排版变量。
 - 当组件约定要求保留列结构时，源码文本、终端输出和 diff 行不得换行；使用共享滚动条样式，不得定义组件专用滚动条选择器。
 - 呈现规则写在 CSS 中。React 内联样式可以传递组件局部自定义属性值，但不得编码主题分支。

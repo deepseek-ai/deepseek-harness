@@ -28,7 +28,7 @@ kind: "package-group"
 |---|---|
 | [`mcp-account/`](mcp-account/README.zh.md) | 通过连接器账号注册表，在插件页显示每个 MCP 连接器的 OAuth 服务器账号 |
 | [`mcp-client/`](mcp-client/README.zh.md) | 连接一台 MCP 服务器，暴露其工具与指令，并提供其资源操作 |
-| [`mcp-manager/`](mcp-manager/README.zh.md) | 管理设置驱动的 mcp-client 实例编队：运行时增改启停删、状态、重启、探测 |
+| [`mcp-manager/`](mcp-manager/README.zh.md) | 管理设置驱动的 mcp-client 实例编队：运行时增改启停删、状态、重启、探测；组合也可以把服务器声明为独立的一行 |
 | [`mcp-resources/`](mcp-resources/README.zh.md) | 通过显式选择服务器的共享工具发现和读取资源 |
 
 -----
@@ -40,6 +40,7 @@ kind: "package-group"
 
 - [历史MCP 客户端插件 Agent Note](../../.agents/notes/archived/feature/2026-07-07-mcp-client-plugin.md)——桥接的设计：服务器限定命名、发现、执行与环境清洗。
 - [MCP 管理器 Agent Note](../../.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.zh.md)——设置驱动的编队：对账语义、模板、状态面与被否决的替代方案。
+- [服务器行 Agent Note](../../.agents/notes/implemented/architecture/2026-11-24-mcp-manager-server-rows.zh.md)——在管理器的 `servers` 字典之外，每台服务器独立成行。
 - [资源与指令 参考](mcp-resources/README.zh.md)——按需资源访问与作用域服务器指引。
 - [第三方记忆 MCP 指南](../../docs/user/guide/mcp-memory.zh.md)——可运行的 overlay 配置行与设置说明。
 - [工具子系统参考](../../docs/subsystems/tools.zh.md)——接收已注册工具的 `ToolRuntime`。

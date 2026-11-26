@@ -14,8 +14,17 @@ import { SyncedConfigEntry } from './synced-config.ts'
 export interface ClientEntryState {
   /** True while a snapshot, retry or code replacement is being applied. */
   readonly syncing: boolean
-  /** Package ids and errors from the latest reconciliation. */
+  /** Package ids and failure texts from the latest reconciliation; a text names its error class unless that is plain `Error`. */
   readonly failures: readonly { readonly id: string; readonly message: string }[]
+}
+
+/**
+ * The text a failure is published with.
+ * @param error - the value an entry operation rejected with.
+ * @returns a plain `Error`'s message; any other value stringified, which keeps a specific class name such as `TypeError`.
+ */
+function failureText(error: unknown): string {
+  return error instanceof Error && error.name === 'Error' ? error.message : String(error)
 }
 
 /** Module-table capabilities used within serialized entry operations. */
@@ -233,7 +242,7 @@ export class ClientEntries {
     this.queue = run.then(() => undefined, (error: unknown) => {
       this.publish({ syncing: false, failures: [
         ...this.snapshot.failures.filter(failure => failure.id !== subject),
-        { id: subject, message: String(error) },
+        { id: subject, message: failureText(error) },
       ] })
     })
     return run
@@ -309,7 +318,7 @@ export class ClientEntries {
           await entry.fiber.update(entry.options.config, true)
         }
       } catch (error) {
-        failures.push({ id: row.id, message: String(error) })
+        failures.push({ id: row.id, message: failureText(error) })
       }
     }
     await loader.await()
@@ -321,7 +330,7 @@ export class ClientEntries {
         await entry.fiber.await()
         failures.push({ id, message: `client-modules: ${id} is waiting for activation` })
       } catch (error) {
-        failures.push({ id, message: String(error) })
+        failures.push({ id, message: failureText(error) })
       }
     }
     this.index.prune([...loader.entries()].map(entry => entry.options.name))

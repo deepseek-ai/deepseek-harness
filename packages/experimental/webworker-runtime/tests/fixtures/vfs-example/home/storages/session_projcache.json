@@ -37,6 +37,22 @@
             "val": "Turn spacing sample"
           }
         }
+      },
+      "preview-wide-tables": {
+        "identity": {
+          "formatVersion": 4,
+          "createdAt": 1787472400000,
+          "cwd": "/dsh/workspace",
+          "isSeeded": false,
+          "inheritedEventCount": 0
+        },
+        "rows": {
+          "title": {
+            "ver": 1,
+            "seq": 6,
+            "val": "Wide table sample"
+          }
+        }
       }
     }
   }

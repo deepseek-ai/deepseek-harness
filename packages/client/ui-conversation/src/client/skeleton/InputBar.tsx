@@ -38,7 +38,7 @@ import {
 } from '../input/editor/view-binding.ts'
 import { resolveSubmitMode } from '../input/submission-policy.ts'
 import { attachmentErrorText, imageSizeText } from '../image-labels.ts'
-import { isImageMediaType } from '../service.ts'
+import { IMAGE_MEDIA_TYPES, isImageMediaType } from '../service.ts'
 import { ContextMeter } from './ContextMeter.tsx'
 import { observeControlRow } from './control-row-layout.ts'
 import css from './InputBar.module.css'
@@ -50,7 +50,7 @@ export const InputBar = memo(function InputBar({
   retryFileUpload, registerFileIntake,
   toggleCommandMenu, stop, retry, t,
   renderSlot, renderSlotChain, useBusyEnter, useFileUploads, useNotices, useLexicon, useMenuLauncher, useStopShortcut,
-  useAccess, useMobile,
+  useAccess, useMobile, useDocumentPortal,
   useProjection, sessionId, variant, occurrence, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory,
@@ -60,6 +60,7 @@ export const InputBar = memo(function InputBar({
   const busyEnter = useBusyEnter(s => s)
   const stopKeys = useStopShortcut(keys => keys)
   const mobile = useMobile()
+  const Portal = useDocumentPortal()
   // A page whose access snapshot excludes prompting, stopping, or uploading to this Session is offered
   // no Send, no Stop, or no file intake rather than a disabled control. `useAccess` is undefined only
   // without a Session, where the bar is an inert placeholder with no keyboard, stop, or file intake.
@@ -334,9 +335,10 @@ export const InputBar = memo(function InputBar({
 
   const onCardMouseDown = (e: MouseEvent<HTMLDivElement>): void => {
     if (!editable || editor === null || e.button !== 0 || e.defaultPrevented) return
-    const target = e.target
-    if (!(target instanceof Element) || !e.currentTarget.contains(target)) return
-    if (target.closest('[data-composer-overlay]') !== null) return
+    const target = e.target as Element
+    if (!e.currentTarget.contains(target)) return
+    // Only an element outside the composer overlays moves the caret; a text target has no `closest` and keeps the browser default.
+    if ((target as Partial<Element>).closest?.('[data-composer-overlay]') !== null) return
     if (scrollRef.current?.contains(target)) return
     const control = target.closest('button, a, input, select, textarea, [role="button"], [contenteditable], [tabindex]')
     if (control !== null && control !== e.currentTarget && e.currentTarget.contains(control)) return
@@ -366,24 +368,22 @@ export const InputBar = memo(function InputBar({
     }
   }
 
-  // An ordinary running session keeps Stop while the composer is empty or
-  // owner-blocked; an actionable draft gets the busy Send action, delivered
-  // through the same mode plain Enter resolves to. The label names that mode
-  // only when the click would deliver a plain message right now — an enabled
-  // button (no pending upload) over a non-empty draft that is neither a
-  // claimed command nor a `/` line headed for adjudication — so it never
-  // describes a delivery the click cannot or does not perform; every other
-  // state keeps plain Send. A continuable child keeps Send primary and
-  // exposes Stop independently, and so does a running session while a
-  // message waits for the Host.
-  const primaryStops = running && subagent === null && !sending && (empty || blocked !== undefined)
+  // A running composer keeps Stop while its draft is empty or the owner blocks
+  // input; an actionable draft gets the busy Send action, delivered through
+  // the same mode plain Enter resolves to. Continuable children use the same
+  // seat as ordinary Sessions. The label names the delivery mode only when the
+  // click would deliver a plain message right now — an enabled button (no
+  // pending upload) over a non-empty draft that is neither a claimed command
+  // nor a `/` line headed for adjudication — so it never describes a delivery
+  // the click cannot or does not perform; every other state keeps plain Send.
+  const primaryStops = running && steeringAvailable && !sending && (empty || blocked !== undefined)
   const primaryRetries = !running && subagent === null && empty && retryableFailure !== undefined
     && !pendingHumanInput && historyOpen && !submissionPending && !disabled && input.queue.length === 0
     && input.phase === 'plain' && retry !== undefined
   // Disabled native buttons may omit mouseleave; their tooltip must close from state.
   const primaryDisabled = primaryStops ? stopAction === undefined
     : (!primaryRetries && empty) || disabled || machineBusy || uploadsPending
-  const interruptible = running && (continuable || (sending && subagent === null))
+  const interruptible = running && steeringAvailable && sending
   const primarySubmitMode = resolveSubmitMode(busyEnter, running, 'enter', steeringAvailable)
   const plainMessageDraft = !empty && input?.phase === 'plain' && !draft.trimStart().startsWith('/')
   const primaryLabel = primaryStops
@@ -526,7 +526,8 @@ export const InputBar = memo(function InputBar({
               ref={fileInputRef}
               type="file"
               multiple
-              disabled={!canAcceptDrop || subagent !== null}
+              accept={continuable ? IMAGE_MEDIA_TYPES.join(',') : undefined}
+              disabled={!canAcceptDrop}
               hidden
               onChange={onPickFiles}
             />
@@ -602,7 +603,7 @@ export const InputBar = memo(function InputBar({
         {variant === 'composer' && input !== undefined && sessionId !== undefined
           ? renderSlot('conversation.composer.dock', {})
           : null}
-        {activity ? null : <ContextMeter useProjection={useProjection} t={t} />}
+        {activity ? null : <ContextMeter useProjection={useProjection} t={t} Portal={Portal} />}
       </div>
     </div>
   )

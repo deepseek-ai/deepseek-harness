@@ -13,6 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-typert-protocol'
 import { isRemoteJsonValue, isTypertOwnedValue } from '@deepseek-ai/dsh-typert-protocol'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
+import { hasPlainPrototype } from '@deepseek-ai/dsh-util-values'
 import {
   REMOTE_EVENT_RESULT_ENDPOINT,
   REMOTE_EVENT_STREAM_ENDPOINT,
@@ -314,9 +315,7 @@ function parseRemoteEventFrame(value: unknown): Exclude<RemoteEventDownlinkFrame
 }
 
 function isRemoteEventRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
-  const prototype: unknown = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
+  return hasPlainPrototype(value) && !Array.isArray(value)
 }
 
 function hasExactRemoteEventKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {

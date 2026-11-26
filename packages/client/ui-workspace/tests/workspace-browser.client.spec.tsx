@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { Profiler } from 'react'
@@ -21,7 +21,6 @@ import { createWorkspaceViewStore, FLAT_SESSION_ORDER_KEY } from '../src/client/
 import { UNGROUPED_KEY } from '../src/client/tree.ts'
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { renderMenuButton } from './menu-button.tsx'
-import rowCss from '../src/client/rows/Rows.module.css'
 import { zh } from '../src/client/locales.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
@@ -138,7 +137,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     useSessionRetainInfo: () => undefined,
     usePanelInfo,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks(), ...themeHooks(),
     useResource,
     useWorkspaces: hook(workspaceState([])),
     ...allowAllAccess,
@@ -188,12 +187,12 @@ describe('WorkspaceBrowser', () => {
     })
     expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', {
       target: { kind: 'session', value: { sessionId: sid('session-one'), displayTitle: 'session-one' } },
-      label: '会话“session-one”的操作', className: rowCss.iconButton, opener: expect.any(String) as string,
+      label: '会话“session-one”的操作', size: 'row', opener: expect.any(String) as string,
     })
     if (mode === 'workspace') {
       expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', {
         target: { kind: 'workspace', value: { workspaceId: wid('alpha'), path: '/projects/alpha', displayTitle: 'alpha' } },
-        label: '工作区“alpha”的操作', className: rowCss.iconButton, opener: expect.any(String) as string,
+        label: '工作区“alpha”的操作', size: 'row', opener: expect.any(String) as string,
       })
     }
   })

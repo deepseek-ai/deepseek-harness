@@ -13,7 +13,7 @@ import { FileTreePane } from '../src/client/FileTreePane.tsx'
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 function file(path: string, previousPath: string | null = null): ForgeDiffFile {
-  return { path, previousPath, status: previousPath === null ? 'modified' : 'renamed', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 1, deletions: 0, hunks: [] }
+  return { path, previousPath, status: previousPath === null ? 'modified' : 'renamed', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation', digest: 'digest', additions: 1, deletions: 0, hunks: [] }
 }
 
 it('compacts directory chains, sorts directories before files, and keeps identical basenames distinct', () => {

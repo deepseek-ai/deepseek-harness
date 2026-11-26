@@ -306,7 +306,7 @@ export const trajectoryViewDefinition: ConversationViewDefinition<
   TrajectorySnapshot
 > = {
   target: 'trajectory',
-  toolCallFocus: callId => callId,
+  accepts: ['tool-call', 'request'],
   create: () => new TrajectorySnapshotBuilder(),
 }
 

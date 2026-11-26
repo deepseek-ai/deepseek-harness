@@ -218,7 +218,7 @@ export const es = {
   'action.remove': 'Quitar',
   'action.retry': 'Reintentar',
   'action.rollback': 'retroceder',
-  'action.inspect': 'inspeccionar',
+  'action.inspect': 'Inspeccionar',
   'render.failedAbdicated': 'Error de renderizado en {slot}; se restauró la interfaz de usuario predeterminada:',
   'render.failedHeld': 'Error de renderizado en {slot}:',
   'a11y.defining': 'Definiendo el complemento',

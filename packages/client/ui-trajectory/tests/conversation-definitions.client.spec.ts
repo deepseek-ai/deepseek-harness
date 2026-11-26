@@ -389,8 +389,8 @@ describe('Trajectory conversation Definitions', () => {
     }])
   })
 
-  it('addresses tool-call inspection with the persisted call identity', () => {
-    expect(trajectoryViewDefinition.toolCallFocus?.('call-1')).toBe('call-1')
+  it('accepts tool-call and request focus', () => {
+    expect(trajectoryViewDefinition.accepts).toEqual(['tool-call', 'request'])
   })
 
   it('preserves developer tool-change content', () => {

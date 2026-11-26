@@ -75,7 +75,7 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
   useEffect(() => {
     if (!state.open || state.confirming !== null) return
     const onPointerDown = (ev: PointerEvent): void => {
-      if (cardRef.current !== null && ev.target instanceof Node && cardRef.current.contains(ev.target)) return
+      if (cardRef.current !== null && cardRef.current.contains(ev.target as Node)) return
       popup.dismiss()
     }
     document.addEventListener('pointerdown', onPointerDown, true)

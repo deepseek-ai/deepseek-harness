@@ -213,7 +213,7 @@ Stage 之前先执行 V3 物理解码与 header 校验。Stage 按上述规范�
 
 | 数据 | 原生规则 |
 |---|---|
-| 逻辑 header | 精确的必需字段 `version`、`id`、`createdAt`、`isSeeded`、`delegationDepth`；可选字段 `cwd`、`parentSession`、`origin`、`agentPreset`；无其他键。Version 为 4，id 为字符串，创建时间／深度为非负安全整数，seeded 为布尔值，存在的 cwd 为绝对路径，可选 id 为字符串，存在的 origin 为 `subagent`。 |
+| 逻辑 header | 精确的必需字段 `version`、`id`、`createdAt`、`isSeeded`、`delegationDepth`；可选字段 `cwd`、`parentSession`、`origin`、`agentPreset`；无其他键。Version 为 4，id 为字符串，创建时间／深度为非负安全整数，seeded 为布尔值，存在的 cwd 为绝对路径，可选 id 为字符串，存在的 origin 为 `subagent` 或 `side`。物理编解码器让 `side` 绕过只接受 `subagent` 的冻结 V2 header 编解码器。 |
 | 事件信封 | 必需字段为 `type`、`seq`、`time` 和 JSON `data`；只允许可选的 `surfaceOp`、`sourceEventSeqs` 与 `ignorable`。序号为连续的非负安全整数，time 为安全整数，存在的 `ignorable` 必须恰好为 true。 |
 | 表面消息 | System、user、developer、assistant 和 tool/result 要求 placement，以及身份明确且角色匹配的消息。普通消息信封及角色专用来源接纳由已安装 Session 校验负责。 |
 | 替换与引用 | 端点按当前表面顺序选择包含两端的区间；引用指向更早事件并覆盖移除节点。受保护的首个 system head 只能由恰好覆盖该 head 的单个 system 消息替换。 |

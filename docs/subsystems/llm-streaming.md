@@ -870,6 +870,8 @@ interface LlmCallConfigAdapterDefaults {
 
 `ctx.deepseekLlmApiExtensions` is the provider-specific registry for additive top-level fields on `deepseek-official` requests. Contributor plugins use `register(field, provider)` to claim one field; the adapter calls `prepare(request)` after serializing its base body and merges the returned fields before HTTP. The prepared `accept()` transaction runs after 2xx, so a contributor can commit delivery state without treating a transport or provider rejection as acceptance. A contributor whose preparation throws is logged and omitted from that request, and an acceptance failure is logged without failing the request; a base-field collision uses `REQUEST_EXTENSION` and fails the model request. A merged body that fails to serialize is sent without extension fields; acceptance is skipped and the provider plugin logs the omitted field names.
 
+Contributor plugins also use `registerHeader(name, provider)` to claim one `x-deepseek-harness-` request header; the adapter adds the values `headers(request)` returns for each model request. The shipped composition registers the subagent attribution headers through [`session-log-deepseek`](../../packages/session/session-log-deepseek/README.md#subagent-headers).
+
 The [wire reference](../deepseek-llm-api-wire-extensions.md) defines the exact request headers, extension transaction, field versions, and receiver obligations. The shipped composition registers [`dsh_session_log`](../../packages/session/session-log-deepseek/README.md) as a lossless incremental canonical-log suffix and [`dsh_plugin_packages`](../../packages/llm/plugin-package-inventory-deepseek/README.md) as the complete active Loader-backed package set. These fields remain outside model messages and are absent from the pi-ai adapter path.
 
 ## Pi-ai request headers
@@ -1007,7 +1009,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.deepseekLlmApiExtensions` — `DeepSeekLlmApiExtensionRegistry`
 
-Registry of independently owned top-level fields for official DeepSeek requests.
+Registry of independently owned top-level fields and request headers for official DeepSeek requests.
 
 ```ts cordis-catalog
 /**
@@ -1027,6 +1029,25 @@ register<K extends keyof DeepSeekLlmApiExtensionMap>( field: K, provider: DeepSe
  * @returns detached fields and their idempotent joint acceptance transaction.
  */
 async prepare(request: DeepSeekLlmApiExtensionRequest): Promise<PreparedDeepSeekLlmApiExtensions>
+
+/**
+ * Register the sole provider of one request header for the calling fiber.
+ * The adapter reserves its user-id, session-id, and compact headers.
+ * @param name - declaration-merged lowercase `x-deepseek-harness-` header of hyphen-separated ASCII letters and digits.
+ * @param provider - synchronous request-time value computation.
+ * @returns disposer that releases the header.
+ */
+registerHeader<K extends keyof DeepSeekLlmApiHeaderMap>( name: K, provider: DeepSeekLlmApiHeaderProvider<DeepSeekLlmApiHeaderMap[K]>, ): () => Promise<void>
+
+/**
+ * Compute every currently registered header for one model request. A provider that
+ * returns `undefined` contributes nothing. A provider that throws, or returns a value
+ * other than non-empty printable ASCII without leading or trailing whitespace, is
+ * omitted from this request; the first such omission per header is logged.
+ * @param request - request identity and auxiliary purpose.
+ * @returns frozen header names and values to add to the HTTP request.
+ */
+headers(request: DeepSeekLlmApiHeaderRequest): Readonly<Record<string, string>>
 ```
 
 Source: [`packages/llm/deepseek-llm-api-extensions/src/index.ts`](../../packages/llm/deepseek-llm-api-extensions/src/index.ts)

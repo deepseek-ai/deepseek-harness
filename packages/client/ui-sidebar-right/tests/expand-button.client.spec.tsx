@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * Mobile devices preserve the header control's identity; desktops release
  * its header space while open.
@@ -25,7 +25,7 @@ const standard: GlobalStandardProps & SessionStandardProps = {
   useSessionRetainInfo: unused, useResource: unused, useWorkspaces: unused,
   ...allowAllAccess,
   useContextMenu: contextMenuHook(),
-  ...responsiveHooks(),
+  ...responsiveHooks(), ...themeHooks(),
   inputActions: { insertQuote: () => false, captureInsertion: unused, insertText: unused, setDraft: unused, persistDraft: unused,
     addAttachments: unused, removeAttachment: unused, pruneAttachments: unused, submit: unused },
 }
@@ -42,7 +42,7 @@ function mountButton(shortcuts: readonly ShortcutCatalogEntry[] = [], mobile = f
   const instance = createSidebarRightStore(() => ({ kind: 'guide', title: 'Start' })).create()
   const props: ExpandButtonProps = {
     ...standard,
-    ...responsiveHooks({ mobile }),
+    ...responsiveHooks({ mobile }), ...themeHooks(),
     useShortcuts: <T,>(selector: (entries: readonly ShortcutCatalogEntry[]) => T): T => selector(shortcuts),
     sessionId: SESSION,
     useStore: hookOf(instance),

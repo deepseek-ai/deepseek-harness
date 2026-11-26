@@ -1,8 +1,17 @@
-/* Base branch trigger in the local changes header and its searchable menu. */
+/* The head and base branch triggers in the local changes header and their searchable menus. */
+/* Both triggers shorten together in a narrow pane, so neither name disappears before the other. */
+.anchor,
+.headAnchor {
+  flex: 0 1 auto;
+  min-width: 3.5em;
+}
+
 .anchor {
-  flex: none;
-  min-width: 0;
   max-width: min(60%, 320px);
+}
+
+.headAnchor {
+  max-width: min(46%, 260px);
 }
 
 .trigger {

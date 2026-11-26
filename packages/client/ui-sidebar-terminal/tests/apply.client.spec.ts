@@ -18,7 +18,7 @@ import { TerminalGuide, type TerminalGuideInjected } from '../src/client/Termina
 import { LazyTerminalBody } from '../src/client/LazyTerminalBody.tsx'
 import { TerminalTitle } from '../src/client/TerminalTitle.tsx'
 import { AgentTerminalOpener, type AgentTerminalOpenerInjected } from '../src/client/AgentTerminalOpener.tsx'
-import type { TerminalBodyInjected } from '../src/client/face.ts'
+import type { TerminalInjected } from '../src/client/face.ts'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/locales.ts'
 
 vi.mock('@xterm/xterm', () => ({ Terminal: vi.fn() }))
@@ -89,14 +89,13 @@ async function mountPlugin() {
     bind: () => (key: string) => key,
     register: (name: string, values: unknown) => { dictionaries.set(name, values); return () => { dictionaries.delete(name) } },
   } as never)
-  const theme = { preference: 'light' as const, fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' }, active: { id: 'light', colorScheme: 'light' as const, tokens: {} }, themes: [], revision: 0 }
-  ctx.provide('theme', { getTheme: () => theme } as never)
+  // The plugin injects `theme` because its body reads the `useTheme` standard prop that service publishes.
+  ctx.provide('theme', {} as never)
   const fiber = await ctx.plugin({ inject, apply })
   return {
-    tabs, entries, dictionaries, terminals, model, occurrence, openTabIn, tabsIn, closeIn, sidebarTabs, openTabs, theme,
+    tabs, entries, dictionaries, terminals, model, occurrence, openTabIn, tabsIn, closeIn, sidebarTabs, openTabs,
     commandTarget, openTabFromTarget, commands, represented, rosterListeners, releaseRoster,
     setAdopted(next: boolean) { adopted = next },
-    emitTheme() { ctx.emit('theme/change', theme) },
     get closeHandler() { return closeHandler },
     setParams(next: typeof params) { params = next },
     async dispose() { await fiber.dispose(); await ctx.fiber.dispose() },
@@ -129,15 +128,9 @@ it('registers terminal views and the agent terminal opener without recovery or c
     expect(h.terminals.launchShells).toHaveBeenCalledWith(sessionId, signal)
     launcher.selectShell('/bin/bash')
     expect(h.terminals.selectShell).toHaveBeenCalledWith('/bin/bash')
-    const face = h.entries[1]!.inject(sessionId) as TerminalBodyInjected
-    expect(face.hooks.theme.getSnapshot()).toBe(h.theme)
-    const changed = vi.fn()
-    const unsubscribe = face.hooks.theme.subscribe(changed)
-    h.emitTheme()
-    expect(changed).toHaveBeenCalledOnce()
-    unsubscribe()
-    h.emitTheme()
-    expect(changed).toHaveBeenCalledOnce()
+    const face = h.entries[1]!.inject(sessionId) as TerminalInjected
+    // The body reads the application theme through the global `useTheme` standard prop, not an injected source.
+    expect(face).not.toHaveProperty('hooks')
     expect(face.view('tab')).toBe(h.model)
     expect(h.terminals.view).toHaveBeenLastCalledWith(sessionId, 'tab', 'sidebar://terminal/content', undefined, undefined)
     const terminalId = 'retained' as WebTerminalId

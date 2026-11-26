@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { ConversationSessionSlotProps } from '../contract/slots.ts'
 import { conversationPhase } from '../contract/snapshot.ts'
 import { resolveActiveView } from '../view-selection.ts'
+import { restoredViewRequest } from '../stores.ts'
 import css from './ConversationRoot.module.css'
 
 /**
@@ -12,15 +13,16 @@ import css from './ConversationRoot.module.css'
  */
 export function DefaultConversationViews({
   view, useSession, useConversation, useConversationViews, inputActions, useStore, actions,
-  renderSlot, bindDraftPersistence, openView, useInspectCall,
+  renderSlot, bindDraftPersistence, openView, useInspectCall, useInspectRequest,
 }: ConversationSessionSlotProps) {
   const tabs = useConversationViews(value => value)
   const inspectCall = useInspectCall(value => value)
+  const inspectRequest = useInspectRequest(value => value)
   const selectedId = useStore(s => s.view)
   const active = resolveActiveView(tabs, selectedId)
   const session = useSession(s => s)
   const conversation = useConversation(s => s)
-  const viewRequest = useStore(s => s.viewRequest ?? null)
+  const viewRequest = useStore(s => restoredViewRequest(s.viewRequest))
 
   useEffect(() => {
     const unbindDraftPersistence = bindDraftPersistence(actions.setDraft)
@@ -35,6 +37,7 @@ export function DefaultConversationViews({
     <div className={css.viewArea}>
       {viewId !== undefined && renderSlot('conversation.view', {
         inspectCall,
+        inspectRequest,
         viewRequest,
         openView,
         completeViewRequest: actions.completeViewRequest,

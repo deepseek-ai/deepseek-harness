@@ -106,7 +106,8 @@ describe.skipIf(MODE === 'record')('web e2e: compact Tool details', () => {
     expect(await list.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
     const geometry = await reminders.evaluate((element) => {
       const title = element.querySelector('ul')!.children[1]!.querySelector('[class*="heading"] > span')!.getBoundingClientRect()
-      const inspect = element.querySelector('[class*="inspectButton"]')!.getBoundingClientRect()
+      const inspect = [...element.querySelectorAll('button')]
+        .find(button => button.textContent === 'Inspect' || button.textContent === '查看')!.getBoundingClientRect()
       return {
         verticalOverlap: Math.min(title.bottom, inspect.bottom) - Math.max(title.top, inspect.top),
         horizontalGap: inspect.left - title.right,

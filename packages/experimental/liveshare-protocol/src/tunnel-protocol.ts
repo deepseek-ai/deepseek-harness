@@ -159,7 +159,7 @@ export type TunnelWorkerEvent =
   }
   | (ShareAccessStateFrame & TunnelRegistrationIdentity)
   | ({ readonly type: 'share-connected' } & TunnelRegistrationIdentity)
-  | ({ readonly type: 'share-error'; readonly message: string } & TunnelRegistrationIdentity)
+  | ({ readonly type: 'share-error'; readonly message: string; readonly reconnectStopped?: true } & TunnelRegistrationIdentity)
   | ({ readonly type: 'share-closed' } & TunnelRegistrationIdentity)
 
 /** One opaque viewer request the Relay routes to the owner gateway. */
@@ -514,7 +514,9 @@ export function parseTunnelWorkerEvent(value: unknown): TunnelWorkerEvent | unde
     }
     case 'share-error':
       return isTunnelRegistrationIdentity(value) && typeof value.message === 'string'
-        ? { type: 'share-error', registrationToken: value.registrationToken, shareId: value.shareId, message: value.message }
+        && (value.reconnectStopped === undefined || value.reconnectStopped === true)
+        ? { type: 'share-error', registrationToken: value.registrationToken, shareId: value.shareId, message: value.message,
+          ...(value.reconnectStopped === true ? { reconnectStopped: true } : {}) }
         : undefined
     case 'share-rpc-cancel':
       return isTunnelRequestIdentity(value)

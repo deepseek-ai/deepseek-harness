@@ -872,7 +872,8 @@ export function filesFace(
           focusTree(pane)
         }
         const focusin = (event: FocusEvent): void => {
-          edge = event.target instanceof Element && event.target.hasAttribute('data-files-navigator-resize') ? event.target : undefined
+          const target = event.target as Element
+          edge = target.hasAttribute('data-files-navigator-resize') ? target : undefined
         }
         const focusout = (event: FocusEvent): void => {
           if (event.relatedTarget === null) queueMicrotask(handOff)
@@ -887,8 +888,8 @@ export function filesFace(
         // task before the observer or the media query reports the fill.
         let covered: Element | undefined
         const release = (event: FocusEvent): void => {
-          const target = event.target
-          covered = event.relatedTarget === null && target instanceof Element && !navigator.contains(target) && hidden(target)
+          const target = event.target as Element
+          covered = event.relatedTarget === null && !navigator.contains(target) && hidden(target)
             ? target
             : undefined
         }
@@ -917,7 +918,7 @@ export function filesFace(
         const close = (event: KeyboardEvent): void => {
           if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing
             || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-          if (!(event.target instanceof Node) || !row.contains(event.target)) return
+          if (!row.contains(event.target as Node)) return
           event.preventDefault()
           pane.toggle?.focus()
           actions.shown(paneId, false)

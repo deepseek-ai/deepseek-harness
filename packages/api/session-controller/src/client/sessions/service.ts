@@ -1,7 +1,7 @@
 /** Client catalog and source-labelled ownership of exact Session generations. */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
-import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionId, type SessionOrigin } from '@deepseek-ai/dsh-session/types'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { SESSION_SEARCH_RESULT_LIMIT } from '../../types.ts'
@@ -34,7 +34,7 @@ export interface SessionSummary {
   cwd?: string
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
-  origin?: 'subagent'
+  origin?: SessionOrigin
   /** Format classification supplied by the Host list, when available. */
   formatStatus?: SessionListEntry['formatStatus']
   /** Host running state for `ids` members; a display fallback for other rows. */
@@ -474,7 +474,8 @@ export class ClientSessions implements ISessions {
    *   turn is balanced Host-side with synthetic closers, and omission selects
    *   the latest completed-turn prefix), and whether to increment an
    *   inherited durable title, skipping numbers Host-listed titles already use,
-   *   before resolving, plus permission to start source migration.
+   *   before resolving, plus permission to start source migration and the child origin.
+   *   `onCreated` also observes a child published before Workspace attachment failed.
    * @returns the child session id.
    * @throws {SessionForkError} with the source id.
    * @throws {Error} when a requested child-title rename fails after creation.
@@ -485,6 +486,7 @@ export class ClientSessions implements ISessions {
     increaseTitle?: boolean
     onCreated?: (childId: SessionId) => void
     allowMigration?: boolean
+    origin?: 'side'
   }): Promise<SessionId> {
     const sourceTitle = opts.increaseTitle
       ? this.list.getSnapshot().byId[opts.sessionId]?.title
@@ -493,8 +495,16 @@ export class ClientSessions implements ISessions {
       sessionId: opts.sessionId,
       ...(opts.atSeq === undefined ? {} : { atSeq: SessionSeq(opts.atSeq) }),
       ...(opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration }),
+      ...(opts.origin === undefined ? {} : { origin: opts.origin }),
     })
-    if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
+    if (!result.ok) {
+      // A Workspace attachment failure still published the child, so the caller can open it.
+      if (result.error.code === 'session/workspace-attach-failed') {
+        this.projectList()
+        opts.onCreated?.(result.error.details.sessionId)
+      }
+      throw new SessionForkError(result.error, opts.sessionId)
+    }
     this.projectList()
     const childId = result.value.sessionId
     opts.onCreated?.(childId)

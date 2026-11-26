@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 对业务插件
 
-挂载后的 Slot 无需额外注入服务就能使用 `useDocumentPortal()` 和 `useDocumentViewport()`。`const Portal = useDocumentPortal()` 返回稳定的组件：`<Portal onKeyDownCapture={onKey}>{children}</Portal>` 将内容渲染到应用文档的 `body`，保留来源位置最近的 `data-plugin` 标记。即使焦点在 Portal 外，`onKeyDownCapture` 和 `onKeyDown` 也能收到文档的原生事件；卸载时会移除监听器。视口钩子以 CSS 像素返回 `{ width, height }`，不含滚动条，并随窗口尺寸变化更新。两个钩子都不依赖插件脚本所在的窗口。
+挂载后的 Slot 无需额外注入服务就能使用 `useDocumentPortal()` 和 `useDocumentViewport()`。`const Portal = useDocumentPortal()` 返回稳定的组件：`<Portal onKeyDownCapture={onKey}>{children}</Portal>` 将内容渲染到应用文档的 `body`，保留来源位置最近的 `data-plugin` 标记。内容位于没有布局盒子的 `body > [data-document-portal]` 包裹层中，壳层针对 body 直接子层的规则（如 macOS 窗口拖拽扣除）作用于该包裹层的子元素。子节点与 Portal 在同一次提交中挂载，此时已位于 `body` 下并带有来源标记，因此子节点的 layout effect 与调用方的 effect 都能测量和聚焦它们；`<Portal>` 应与它展示的内容一同渲染。即使焦点在 Portal 外，`onKeyDownCapture` 和 `onKeyDown` 也能收到文档的原生事件；卸载时会移除监听器。视口钩子以 CSS 像素返回 `{ width, height }`，不含滚动条，并随窗口尺寸变化更新。两个钩子都不依赖插件脚本所在的窗口。
 
 业务插件注册普通 Slot entry 或可复用 Component Factory；渲染器在渲染位置把运行时的会话与 Workspace observable source 绑定为 selector 钩子。插件通过推导出的 Component props 收到标准 scope props——它绝不导入渲染器，也不触碰 React 内部机制。每个由 renderer 创建的 Component 都能渲染 Factory occurrence，Factory 也能暴露由调用方选择的局部 Component，而无需在包之间共享实现值。
 

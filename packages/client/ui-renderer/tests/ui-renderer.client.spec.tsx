@@ -337,7 +337,8 @@ describe('UI renderer plugin', () => {
     const expectedError = (event: ErrorEvent): void => { if (event.error === failure) event.preventDefault() }
     window.addEventListener('error', expectedError)
     try {
-      expect(() => { act(() => { unmount() }) }).toThrow('unmount cleanup failed')
+      // React 18 fails the unmount itself; React 19's act rethrows the original error after it.
+      expect(() => { act(() => { unmount() }) }).toThrow(/unmount cleanup failed|layout cleanup failed/)
     } finally {
       window.removeEventListener('error', expectedError)
     }

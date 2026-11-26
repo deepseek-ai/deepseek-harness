@@ -195,8 +195,7 @@ export function trackSessionDrags(doc: Document, mounted: () => SessionId | unde
       publish(undefined)
       return
     }
-    const column = event.target instanceof Element ? frameColumnOf(event.target) : undefined
-    publish({ sessionId: id, targets: dropTargets(doc, onScreen, column) })
+    publish({ sessionId: id, targets: dropTargets(doc, onScreen, frameColumnOf(event.target as Element)) })
   }
   const end = (): void => { publish(undefined) }
   // A source row unmounted mid-drag fires dragend on a detached node; the first

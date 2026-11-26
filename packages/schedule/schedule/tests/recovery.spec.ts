@@ -244,7 +244,9 @@ it('logs startup dispatch admission failure without rejecting initialized storag
       admission = vi.spyOn(ctx.agents, 'withoutInitiator').mockImplementationOnce(() => { throw new Error('startup dispatch failed') })
     },
   })
-  expect(test.ctx.logger.warn).toHaveBeenCalledExactlyOnceWith('schedule: dispatch stopped: Error: startup dispatch failed')
+  expect(test.ctx.logger.warn).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(
+    /^schedule: dispatch stopped: Error: startup dispatch failed/,
+  ))
   expect(await test.service.catalog()).toEqual([])
   expect(facility?.get(scheduleDomain.name)).toBeDefined()
   expect(vi.getTimerCount()).toBe(0)

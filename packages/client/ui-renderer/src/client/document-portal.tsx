@@ -22,20 +22,37 @@ function useKeyDown(doc: Document, handler: DocumentPortalProps['onKeyDown'], ca
 /**
  * Bind one stable component to the application's mount document, independently of the caller's JavaScript realm.
  * @param doc - Document of this application mount.
- * @returns Component that places its children in the document body without imposing a layout box.
+ * @returns Component that places its children in the document body without imposing a layout box. Its
+ *   `[data-document-portal]` wrapper is a direct body child, so document-wide rules for body children address
+ *   the wrapper's children instead. Children mount in the portal's own commit, already attached to the body under
+ *   the source's package marker, before their layout effects run.
  */
 export function createDocumentPortal(doc: Document): FC<DocumentPortalProps> {
   return function DocumentPortal({ children, onKeyDown, onKeyDownCapture }) {
-    const [owner, setOwner] = useState<string | null>()
+    const [layer] = useState(() => {
+      const wrapper = doc.createElement('div')
+      wrapper.setAttribute('data-document-portal', '')
+      wrapper.style.display = 'contents'
+      return wrapper
+    })
     useKeyDown(doc, onKeyDownCapture, true)
     useKeyDown(doc, onKeyDown, false)
-    // Sample after each commit, including a change of the existing source boundary. Children mount already scoped.
-    const readOwner = (source: HTMLTemplateElement | null): void => {
-      if (source) setOwner(source.closest('[data-plugin]')?.getAttribute('data-plugin') ?? null)
+    // Each commit samples the source's package marker. The template precedes the portal, so on mount this runs
+    // before the layout effects of the portal's children.
+    const anchor = (source: HTMLTemplateElement | null): void => {
+      // React detaches the previous callback with null on every commit; removing the layer here would drop the
+      // children's focus and running animations.
+      if (source === null) return
+      const owner = source.closest('[data-plugin]')?.getAttribute('data-plugin') ?? null
+      if (owner === null) layer.removeAttribute('data-plugin')
+      else layer.setAttribute('data-plugin', owner)
+      if (!layer.isConnected) doc.body.append(layer)
     }
-    return <><template ref={readOwner} />{owner !== undefined && createPortal(
-      <div data-plugin={owner ?? undefined} style={{ display: 'contents' }}>{children}</div>,
-      doc.body,
-    )}</>
+    // Unmounting removes the layer; a StrictMode remount appends it again.
+    useLayoutEffect(() => {
+      if (!layer.isConnected) doc.body.append(layer)
+      return () => { layer.remove() }
+    }, [layer])
+    return <><template ref={anchor} />{createPortal(children, layer)}</>
   }
 }

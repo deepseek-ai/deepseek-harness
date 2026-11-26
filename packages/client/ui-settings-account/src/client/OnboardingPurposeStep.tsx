@@ -1,6 +1,5 @@
 /** Work-purpose selection with controlled, independently selectable cards. */
-import { useLayoutEffect, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { Button, FileTypeIcon, IconCheckOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { OnboardingPurpose } from '../onboarding-settings.ts'
 import type { DesktopOnboardingProps } from './onboarding-contract.ts'
@@ -10,7 +9,7 @@ import css from './DesktopOnboarding.module.css'
 
 /** @param props - selected purposes, localized copy and persistence callbacks. @returns the purpose step. */
 export function OnboardingPurposeStep({ t, heading, busy, purpose, onSelect, onContinue }: Pick<DesktopOnboardingProps, 't'> & {
-  heading: RefObject<HTMLHeadingElement>
+  heading: Ref<HTMLHeadingElement>
   busy: boolean
   purpose: OnboardingPurpose | null
   onSelect: (value: OnboardingPurpose | null) => void

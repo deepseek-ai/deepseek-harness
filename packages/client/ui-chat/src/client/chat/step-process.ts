@@ -1,6 +1,23 @@
-/** Localized titles for projected step-process activity. */
+/** Step-run grouping and localized titles for projected step-process activity. */
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { ProcessActivitySummary } from '../contract/process-groups.ts'
+import type { ChatPresentationPolicy } from '../presentation-policy.ts'
+
+/**
+ * Decide whether a Turn shows its step runs behind group headers or flat.
+ * Detailed keeps the open Turn, and the latest completed Turn until the next input, flat.
+ * @param grouping - the work-details mode's step grouping.
+ * @param turnOpen - whether the Turn is still running.
+ * @param deferCollapse - whether the latest completed Turn stays flat until the next input.
+ * @returns whether the step runs render as group headers.
+ */
+export function stepRunsGrouped(
+  grouping: ChatPresentationPolicy['stepGrouping'],
+  turnOpen: boolean,
+  deferCollapse: boolean,
+): boolean {
+  return grouping === 'collapsed' || (grouping === 'history' && !turnOpen && !deferCollapse)
+}
 
 /**
  * Compose a closed group's localized title from its top three categories without counts.

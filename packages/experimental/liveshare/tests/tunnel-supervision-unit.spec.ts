@@ -278,6 +278,23 @@ describe('worker command and registration helpers', () => {
     expect(h.relay.forgetRelayAccess).toHaveBeenCalledWith('absent')
   })
 
+  it('clears the terminal reconnect marker when registering again or admitting a share', () => {
+    const held = share()
+    const h = harness({ shares: [held] })
+    const register = (): void => { h.supervision.send({ type: 'add-share', share: spec() }) }
+    const stopped = { type: 'share-error', registrationToken: 'r', shareId: 'share-1',
+      reconnectStopped: true, message: 'deadline reached' }
+    register()
+    h.worker().emit(stopped)
+    expect(held).toMatchObject({ online: false, reconnectStopped: true })
+    register()
+    expect(held).not.toHaveProperty('reconnectStopped')
+    h.worker().emit(stopped)
+    h.worker().emit({ type: 'share-connected', registrationToken: 'r', shareId: 'share-1' })
+    expect(held.online).toBe(true)
+    expect(held).not.toHaveProperty('reconnectStopped')
+  })
+
   it('marks a share offline and diagnoses a socket error', () => {
     const h = harness({ shares: [share({ online: true })] })
     h.supervision.send({ type: 'add-share', share: spec() })

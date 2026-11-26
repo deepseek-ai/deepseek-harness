@@ -28,6 +28,7 @@ export const VFS_EXAMPLE_SESSION_IDS = {
   oneShot: brandString<SessionId>('preview-architecture-review'),
   continuable: brandString<SessionId>('preview-follow-up-builder'),
   spacing: brandString<SessionId>('preview-turn-spacing'),
+  tables: brandString<SessionId>('preview-wide-tables'),
 } as const
 
 /** Stable title rendered in the root Session list. */
@@ -35,6 +36,9 @@ export const VFS_EXAMPLE_TITLE = 'WebWorker Preview Showcase'
 
 /** Title of the multi-Turn spacing sample in the root Session list. */
 export const VFS_EXAMPLE_SPACING_TITLE = 'Turn spacing sample'
+
+/** Title of the Markdown table sample in the root Session list. */
+export const VFS_EXAMPLE_TABLES_TITLE = 'Wide table sample'
 
 /** Oldest prompt, intentionally outside the first 50-message history page. */
 export const VFS_EXAMPLE_OLDEST_MESSAGE = 'History checkpoint 01: verify deterministic preview state.'
@@ -443,8 +447,8 @@ function continuableLog(): SessionEvent[] {
   return log.events
 }
 
-/** One step of the multi-Turn spacing sample: reasoning, tool calls, or a closing body. */
-interface SpacingStep {
+/** One step of a sample Turn: reasoning, tool calls, or a closing body. */
+interface SampleStep {
   /** Assistant message id. */
   readonly id: string
   /** Reasoning text shown in the step's Think row. */
@@ -455,18 +459,19 @@ interface SpacingStep {
   readonly body?: string
 }
 
-function addSpacingTurn(
+function addSampleTurn(
   log: EventLog,
+  title: string,
   turn: number,
   prompt: { readonly id: string; readonly text: string },
-  steps: readonly SpacingStep[],
+  steps: readonly SampleStep[],
 ): void {
   log.add({ type: 'turn/start', data: { turn } })
   log.add(userMessage(prompt.id, prompt.text))
   if (turn === 1) {
     log.add({
       type: 'session/title',
-      data: { title: VFS_EXAMPLE_SPACING_TITLE, messageSeqs: [], source: { kind: 'user' } },
+      data: { title, messageSeqs: [], source: { kind: 'user' } },
     })
   }
   for (const [index, step] of steps.entries()) {
@@ -512,7 +517,7 @@ function addSpacingTurn(
  */
 function spacingLog(): SessionEvent[] {
   const log = new EventLog(CREATED_AT + 300_000)
-  addSpacingTurn(log, 1, {
+  addSampleTurn(log, VFS_EXAMPLE_SPACING_TITLE, 1, {
     id: 'preview-spacing-user-1',
     text: 'Show how multiple Turns and their process steps sit on the tightened spacing.',
   }, [
@@ -541,7 +546,7 @@ function spacingLog(): SessionEvent[] {
       body: '## Turn 1 — setup\n\nThis Turn has three steps: two process steps and one closing body. Inside an expanded group the process rows use the tightened gap, while this body keeps the reply clearance from the rows above.\n\nExpand the Turn control above to compare the tightened process rhythm with the reply rhythm.',
     },
   ])
-  addSpacingTurn(log, 2, {
+  addSampleTurn(log, VFS_EXAMPLE_SPACING_TITLE, 2, {
     id: 'preview-spacing-user-2',
     text: 'Continue the sample with a second body and a shorter process.',
   }, [
@@ -559,7 +564,7 @@ function spacingLog(): SessionEvent[] {
       body: '## Turn 2 — follow-up\n\nA shorter Turn still separates its process group from this body by the reply clearance, so consecutive Turns stay readable.\n\nThe gap between the previous Turn and this user message is the ordinary flow gap.',
     },
   ])
-  addSpacingTurn(log, 3, {
+  addSampleTurn(log, VFS_EXAMPLE_SPACING_TITLE, 3, {
     id: 'preview-spacing-user-3',
     text: 'Finish the sample with one more multi-step Turn.',
   }, [
@@ -583,6 +588,42 @@ function spacingLog(): SessionEvent[] {
       body: '## Turn 3 — closing\n\nThe last Turn has a two-step shape: one process step and one closing body.\n\nSpacing sample complete: compare these process rows with the reply clearance around each Turn body.',
     },
   ])
+  return log.events
+}
+
+/** Assistant body with wide Markdown tables at the column start and inside a list, beside a narrow table. */
+export const VFS_EXAMPLE_TABLES_BODY = `## Wide table sample
+
+A table with four or more columns can extend past the message column. Hover a wide table to show its horizontal scrollbar, then drag it to the right.
+
+| Region | Owner | Service | Status | Latest change | Verification | Follow-up |
+| --- | --- | --- | --- | --- | --- | --- |
+| North | Platform team | Session storage | Ready | Retains completed Turns across restarts | Restart and reload checks | None |
+| East | Client team | Chat rendering | Review | Shows long tables without clipping the first column | Browser checks at three window widths | Confirm the narrow layout |
+| West | Tools team | Command execution | Ready | Reports the exit code beside each command | Command result fixtures | None |
+
+1. A wide table inside a list item keeps the list indentation:
+
+   | Step | Command | Expected result | Notes |
+   | --- | --- | --- | --- |
+   | Prepare | \`printf 'prepare\\n'\` | Prints the preparation marker for this sample step | Runs before the check step |
+   | Check | \`printf 'check\\n'\` | Prints the check marker for this sample step | Runs after the preparation step |
+
+A table with fewer than four columns stays inside the message column:
+
+| Width | Behavior |
+| --- | --- |
+| Narrow | Stays inside the message column |
+| Wide | Scrolls horizontally from the message column |
+`
+
+/** One Turn whose closing body shows wide and narrow Markdown tables. */
+function tablesLog(): SessionEvent[] {
+  const log = new EventLog(CREATED_AT + 400_000)
+  addSampleTurn(log, VFS_EXAMPLE_TABLES_TITLE, 1, {
+    id: 'preview-tables-user',
+    text: 'Show wide Markdown tables beside a narrow one.',
+  }, [{ id: 'preview-tables-body', body: VFS_EXAMPLE_TABLES_BODY }])
   return log.events
 }
 
@@ -683,10 +724,27 @@ function scheduleTasks(): Readonly<Record<string, unknown>> {
   }
 }
 
+/** Projection-cache entry for a root Session whose title row is current at its last event. */
+function cachedRoot(createdAt: number, events: readonly SessionEvent[], title: string): unknown {
+  return {
+    identity: {
+      formatVersion: SESSION_FORMAT_VERSION,
+      createdAt,
+      cwd: WORKSPACE,
+      isSeeded: false,
+      inheritedEventCount: 0,
+    },
+    rows: {
+      title: { ver: 1, seq: events.at(-1)?.seq ?? -1, val: title },
+    },
+  }
+}
+
 /** Build current-generation fixture files as fixture-relative UTF-8 text; committed predecessors remain untouched. */
 export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
   const main = mainLog()
   const spacing = spacingLog()
+  const tables = tablesLog()
   const project = projectKey(WORKSPACE)
   const sessionPath = (id: string): string =>
     `home/sessions/${project}/${id}/${generationLogFilename(SESSION_FORMAT_VERSION, 'none')}`
@@ -696,30 +754,9 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
     global: null,
     tables: {
       sessions: {
-        [VFS_EXAMPLE_SESSION_IDS.main]: {
-          identity: {
-            formatVersion: SESSION_FORMAT_VERSION,
-            createdAt: CREATED_AT,
-            cwd: WORKSPACE,
-            isSeeded: false,
-            inheritedEventCount: 0,
-          },
-          rows: {
-            title: { ver: 1, seq: main.events.at(-1)?.seq ?? -1, val: VFS_EXAMPLE_TITLE },
-          },
-        },
-        [VFS_EXAMPLE_SESSION_IDS.spacing]: {
-          identity: {
-            formatVersion: SESSION_FORMAT_VERSION,
-            createdAt: CREATED_AT + 300_000,
-            cwd: WORKSPACE,
-            isSeeded: false,
-            inheritedEventCount: 0,
-          },
-          rows: {
-            title: { ver: 1, seq: spacing.at(-1)?.seq ?? -1, val: VFS_EXAMPLE_SPACING_TITLE },
-          },
-        },
+        [VFS_EXAMPLE_SESSION_IDS.main]: cachedRoot(CREATED_AT, main.events, VFS_EXAMPLE_TITLE),
+        [VFS_EXAMPLE_SESSION_IDS.spacing]: cachedRoot(CREATED_AT + 300_000, spacing, VFS_EXAMPLE_SPACING_TITLE),
+        [VFS_EXAMPLE_SESSION_IDS.tables]: cachedRoot(CREATED_AT + 400_000, tables, VFS_EXAMPLE_TABLES_TITLE),
       },
     },
   }, null, 2)}\n`
@@ -736,6 +773,10 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
     [sessionPath(VFS_EXAMPLE_SESSION_IDS.spacing), renderLog(
       header(VFS_EXAMPLE_SESSION_IDS.spacing, CREATED_AT + 300_000),
       spacing,
+    )],
+    [sessionPath(VFS_EXAMPLE_SESSION_IDS.tables), renderLog(
+      header(VFS_EXAMPLE_SESSION_IDS.tables, CREATED_AT + 400_000),
+      tables,
     )],
     [sessionPath(VFS_EXAMPLE_SESSION_IDS.oneShot), renderLog(
       header(VFS_EXAMPLE_SESSION_IDS.oneShot, CREATED_AT + 100_000, {

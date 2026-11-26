@@ -155,7 +155,9 @@ export function ShortcutReference({
   return <><Modal open={open} onClose={closeReference} title={t('title')} headless
     shortcutModal="shortcuts" className={css.dialog as string}>
     <div className={css.contents} onPointerDownCapture={(event) => {
-      if (target === null || busy || !(event.target instanceof Element) || event.target.closest('button, input, a, [contenteditable="true"], [role="group"]') !== null) return
+      // A text target has no `closest`, so it keeps the editor open like a control does.
+      if (target === null || busy
+        || (event.target as Partial<Element>).closest?.('button, input, a, [contenteditable="true"], [role="group"]') !== null) return
       event.preventDefault()
       closeEditor()
     }}>

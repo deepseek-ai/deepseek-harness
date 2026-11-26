@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { FontNotice, type FontNoticeProps } from '../src/client/office/FontNotice.tsx'
 import { en, zh } from '../src/client/office/locales.ts'
 
@@ -13,18 +14,24 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
+
 function props(overrides: Partial<FontNoticeProps> = {}): FontNoticeProps {
   return {
     fonts: ['Consolas', 'Missing Serif'],
-    t: makeTranslate(en), ...overrides,
+    t: makeTranslate(en), Portal, ...overrides,
   }
 }
 
 it('opens details, restores focus on Escape or close, and dismisses outside without stealing focus', () => {
-  render(<FontNotice {...props()} />)
+  const view = render(<FontNotice {...props()} />)
   const more = screen.getByRole('button', { name: makeTranslate(en)('viewMissingFonts', { count: 2 }) })
   fireEvent.click(more)
   const dialog = screen.getByRole('dialog', { name: en.missingFontsTitle })
+  // The details leave the toolbar for the document body, so toolbar overflow cannot crop them.
+  expect(view.container.contains(dialog)).toBe(false)
+  expect(document.body.contains(dialog)).toBe(true)
   expect(dialog.textContent).toContain('Consolas')
   expect(dialog.textContent).toContain('Missing Serif')
   expect(document.activeElement).toBe(dialog)

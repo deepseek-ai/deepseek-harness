@@ -224,7 +224,7 @@ export class SessionCommandController {
    * Create a new ordinary Session from an exact event prefix. An explicit
    * `atSeq` is the inclusive cut; an omitted value selects the latest
    * completed-turn prefix. An open cut receives synthetic fork closers.
-   * @param request - source Session and optional exact event boundary.
+   * @param request - source Session, optional exact event boundary, and optional child origin.
    * @returns the new Session identity.
    */
   async fork(request: SessionForkRequest): Promise<SessionForkValue> {
@@ -233,6 +233,19 @@ export class SessionCommandController {
       atSeq = request.atSeq === undefined ? undefined : SessionSeq(request.atSeq)
     } catch {
       throw new RemoteError('gateway/bad-request', 'atSeq must be a non-negative safe integer', {})
+    }
+    // The Remote request is untrusted wire input, so a value outside the declared type is rejected here.
+    const origin: string | undefined = request.origin
+    if (origin !== undefined && origin !== 'side') {
+      throw new RemoteError('gateway/bad-request', 'origin must be "side"', {})
+    }
+    if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === undefined) {
+      const stored = await this.ctx.get('sessionPersistence')?.stat(request.sessionId)
+      if (stored?.formatStatus === 'migration-required' && this.ctx.sessions.get(request.sessionId) === undefined) {
+        throw new RemoteError('session/migration-required', 'Open the source Session to complete migration before forking', {
+          sessionId: request.sessionId,
+        })
+      }
     }
     let observed: SessionObservation
     try {
@@ -251,6 +264,10 @@ export class SessionCommandController {
       )
     }
     using source = observed
+    // A side child of a subagent would inherit the delegated approval policy and preset without the delegation.
+    if (request.origin === 'side' && source.header.origin === 'subagent') {
+      throw new RemoteError('gateway/bad-request', 'a subagent Session cannot be the source of a side conversation', {})
+    }
     const boundary = atSeq ?? latestCompletedPrefixBoundary(source.events)
     if (boundary === undefined || source.events[boundary]?.seq !== boundary) {
       throw new RemoteError(
@@ -285,6 +302,7 @@ export class SessionCommandController {
         meta: {
           ...(source.header.cwd === undefined ? {} : { cwd: source.header.cwd }),
           isSeeded: true,
+          ...(request.origin === undefined ? {} : { origin: request.origin }),
           ...(composition.agentPreset === undefined
             ? {}
             : { agentPreset: composition.agentPreset }),

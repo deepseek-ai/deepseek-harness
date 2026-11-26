@@ -35,6 +35,9 @@ describe('QQ error table', () => {
     [304004, 'invalid'],
     [22009, 'rate-limit'],
     [40034100, 'rate-limit'],
+    [40034105, 'permission'],
+    [40034128, 'invalid'],
+    [40034025, 'invalid'],
   ]
 
   it.each(table)('classifies %i as %s', (code, kind) => {
@@ -59,6 +62,22 @@ describe('QQ error table', () => {
     expect(error.kind).toBe('invalid')
     expect(error.code).toBe(12345)
     expect(error.published).toBe('no')
+  })
+
+  it('keeps the platform sentence for a code the table does not list', () => {
+    // The client put the platform's code and text into the error; an unlisted code must reach the operator with them
+    // instead of behind the anonymous status rule.
+    const sentence = 'POST /v2/groups/G/messages answered 400 (code 40034111: 主动消息失败, 无权限)'
+    const error = classify(new QqApiError(sentence, {
+      code: 40034111,
+      status: 400,
+      body: { code: 40034111, message: '主动消息失败, 无权限' },
+    }))
+    expect(error.kind).toBe('invalid')
+    expect(error.code).toBe(40034111)
+    expect(error.message).toBe(sentence)
+    // A status-only refusal keeps the status rule's own sentence.
+    expect(classify(apiError(undefined, 400)).message).toBe('the platform rejected the request')
   })
 
   it('covers every documented code with a non-empty message', () => {

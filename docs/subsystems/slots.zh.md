@@ -163,6 +163,7 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 | 所有已挂载的作用域 | `useDocumentPortal`、`useDocumentViewport` | [ui-renderer](../../packages/client/ui-renderer/README.zh.md#use-this-package) |
 | 所有 scope | `useMediaQuery` | `ui-responsive` |
 | 所有 scope | `useMobile` | `ui-responsive` |
+| 所有 scope | `useTheme` | [ui-theme](../../packages/client/ui-theme/README.zh.md#use-this-package) |
 | `session` | `sessionId`、`useSession`、`useProjection`、`useAccess`（所绑定 Session 的答案） | `ui-session` |
 | `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection`、`useAccess` | `ui-session` |
 | `session` | `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
@@ -170,7 +171,7 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 | `session` | `useChat` | `ui-chat` |
 | `session` | `useTrajectory` | `ui-trajectory` |
 
-`useMediaQuery(query)` 回答 CSS 媒体查询当前是否在页面窗口中匹配，结果变化时组件重新渲染；当结果决定渲染结构或行为时使用它，纯样式差异仍写在 CSS `@media` 规则中。`useMobile()` 回答页面是否运行在手机或平板上，在页面生命周期内固定不变；它只用于自动聚焦和软键盘行为，布局按宽度媒体查询选择。组件读取其中任一 prop 的插件要 inject `uiResponsive` 服务，这样它会在两个 props 都存在之后启动，并随它们一起卸载。
+`useMediaQuery(query)` 回答 CSS 媒体查询当前是否在页面窗口中匹配，结果变化时组件重新渲染；当结果决定渲染结构或行为时使用它，纯样式差异仍写在 CSS `@media` 规则中。`useMobile()` 回答页面是否运行在手机或平板上，在页面生命周期内固定不变；它只用于自动聚焦和软键盘行为，布局按宽度媒体查询选择。组件读取其中任一 prop 的插件要 inject `uiResponsive` 服务，这样它会在两个 props 都存在之后启动，并随它们一起卸载。`useTheme(selector)` 从当前主题快照中选取值；组件读取它的插件要 inject `theme` 服务。
 
 Renderer 还会根据声明的 store 创建 `useStore`，并根据声明的 locale namespace 创建 `t`。这些是由注册项推导的 props，不属于全局标准 props。
 

@@ -57,17 +57,6 @@
   white-space: nowrap;
 }
 
-/* The checked-out branch gives way first, so the base branch stays readable. */
-.headerHead {
-  flex: 0 100 auto;
-  min-width: 2.5em;
-  overflow: hidden;
-  color: var(--dsw-alias-label-secondary);
-  font-family: var(--ds-font-family-code);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .headerArrow {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
@@ -84,7 +73,6 @@
 }
 
 @container forge-changes (max-width: 380px) {
-  .headerHead,
   .headerArrow {
     display: none;
   }
@@ -97,6 +85,17 @@
   gap: 4px;
   min-width: 0;
   margin-left: auto;
+}
+
+/* Buttons alone do not shrink, so the note before them gives way and they keep their inset from the pane's edge. */
+.headerEnd[data-forge-header-buttons] {
+  flex-shrink: 0;
+}
+
+/* A long path wraps inside the confirmation instead of widening it. */
+.restoreText {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 
@@ -511,8 +510,50 @@
   text-overflow: ellipsis;
 }
 
-/* The viewed mark: a native checkbox with its label as one bordered chip, peer to the file menu button. */
+/* Writes of one file. They sit before the viewed mark, so that mark and the menu button keep their place when these show. */
+.fileActions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+/* A narrow pane keeps the path readable: the writes show under the pointer and once the keyboard reaches one of them.
+   Clipped buttons stay in the tab order, and the header's gap before the clipped group is taken back. */
+@container forge-changes (max-width: 380px) {
+  .fileActions {
+    width: 0;
+    margin-inline-start: -6px;
+    overflow: hidden;
+    opacity: 0;
+  }
+
+  .fileActions:focus-within {
+    width: auto;
+    margin-inline-start: 0;
+    overflow: visible;
+    opacity: 1;
+  }
+}
+
+@media (hover: hover) {
+  @container forge-changes (max-width: 380px) {
+    .fileHeader:hover .fileActions {
+      width: auto;
+      margin-inline-start: 0;
+      overflow: visible;
+      opacity: 1;
+    }
+
+    /* The line counts give way while the writes show, so the file name stays readable at the moment of a write. */
+    .fileHeader[data-forge-file-writes]:hover > .counts {
+      display: none;
+    }
+  }
+}
+
+/* The viewed mark: a checkbox drawn as a ring, with its label as one bordered chip, peer to the file menu button. */
 .viewed {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -528,10 +569,33 @@
   user-select: none;
 }
 
+/* The checkbox covers the chip and takes its presses; the ring beside the label draws its state. */
 .viewed input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  accent-color: var(--dsw-alias-state-business-primary);
+  opacity: 0;
   cursor: pointer;
+}
+
+.viewedMark {
+  display: inline-flex;
+  flex: none;
+}
+
+.viewedMark svg {
+  width: 15px;
+  height: 15px;
+}
+
+.viewed[data-checked] .viewedMark {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.viewed[data-disabled] .viewedMark {
+  color: inherit;
 }
 
 .viewed:has(input:checked) {
@@ -560,13 +624,28 @@
   outline: none;
 }
 
+/* Without its label the mark is an icon button of the size of the file menu button beside it. */
 @container forge-changes (max-width: 520px) {
-  .viewed {
-    padding: 0 6px;
+  .viewed,
+  .viewed:has(input:checked) {
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-color: transparent;
+    background: none;
   }
 
   .viewedLabel {
     display: none;
+  }
+}
+
+@media (hover: hover) {
+  @container forge-changes (max-width: 520px) {
+    .viewed:hover {
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
   }
 }
 

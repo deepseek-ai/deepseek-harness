@@ -641,7 +641,7 @@ describe('UiWorkspaceService', () => {
     b.sessions.retain.mockClear()
     b.selectPanel.mockClear()
     await b.uiWorkspace.forkSession(sid('source'))
-    expect(b.sessions.fork).toHaveBeenCalledWith({ sessionId: sid('source'), increaseTitle: true })
+    expect(b.sessions.fork).toHaveBeenCalledWith({ sessionId: sid('source'), increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void })
     expect(b.sessions.retain).not.toHaveBeenCalled()
     b.sessions.fork.mockRejectedValueOnce(new Error('fork failed'))
     await expect(b.uiWorkspace.forkSession(sid('source'))).rejects.toThrow('fork failed')
@@ -662,12 +662,143 @@ describe('UiWorkspaceService', () => {
     await expect(b.uiWorkspace.forkSession(sid('source'), onCreated, options)).resolves.toBe(sid('forked'))
 
     expect(b.sessions.fork).toHaveBeenCalledExactlyOnceWith({
-      sessionId: sid('source'), increaseTitle: true, onCreated,
+      sessionId: sid('source'), increaseTitle: true, onCreated: expect.any(Function) as (childId: SessionId) => void,
       ...allowMigration === undefined ? {} : { allowMigration },
     })
     expect(onCreated).toHaveBeenCalledExactlyOnceWith(sid('forked'))
     expect(b.sessions.retain).not.toHaveBeenCalled()
     expect(b.selectPanel).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['its Workspace', 'a'],
+    ['Ungrouped', ''],
+  ])('saves a Manual fork child directly above its source in %s and the flat list', async (_name, key) => {
+    const members = [sid('one'), sid('source'), sid('three')]
+    const b = bench({
+      workspaces: workspaceState(key === '' ? [] : [workspace(wid('a'), members)]),
+      sessions: sessionState([
+        summary('one', { updatedAt: 3 }), summary('source', { updatedAt: 2 }), summary('three', { updatedAt: 1 }),
+      ]),
+    })
+    b.view.actions.setOrderBy('manual', { [key]: members, [FLAT_SESSION_ORDER_KEY]: members })
+    b.sessions.fork.mockImplementationOnce(async (options) => {
+      options.onCreated?.(sid('forked'))
+      return sid('forked')
+    })
+
+    await b.uiWorkspace.forkSession(sid('source'))
+
+    expect(b.view.getSnapshot().sessionOrderByAccount).toMatchObject({
+      [key]: ['one', 'forked', 'source', 'three'],
+      [FLAT_SESSION_ORDER_KEY]: ['one', 'forked', 'source', 'three'],
+    })
+  })
+
+  function manualForkBench(options: { pinned?: readonly SessionId[]; flat?: boolean } = {}) {
+    const members = [sid('one'), sid('source'), sid('three')]
+    const workspaces = workspaceState([workspace(wid('a'), members)])
+    const b = bench({
+      workspaces: { ...workspaces, pinnedSessionIds: options.pinned ?? [] },
+      sessions: sessionState([
+        summary('one', { updatedAt: 3 }), summary('source', { updatedAt: 2 }), summary('three', { updatedAt: 1 }),
+      ]),
+    })
+    b.view.actions.setOrderBy('manual', { a: members, [FLAT_SESSION_ORDER_KEY]: members })
+    b.sessions.fork.mockImplementationOnce(async (options) => {
+      options.onCreated?.(sid('forked'))
+      return sid('forked')
+    })
+    return b
+  }
+
+  it('forwards an event cut and places the child above its source', async () => {
+    const b = manualForkBench()
+    const onCreated = vi.fn<(childId: SessionId) => void>()
+
+    await b.uiWorkspace.forkSession(sid('source'), onCreated, { atSeq: 7 })
+
+    expect(b.sessions.fork).toHaveBeenCalledWith(expect.objectContaining({ sessionId: sid('source'), atSeq: 7 }))
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(sid('forked'))
+    expect(b.view.getSnapshot().sessionOrderByAccount.a).toEqual(['one', 'forked', 'source', 'three'])
+  })
+
+  it('leads the ordinary rows with a fork of a pinned source in the saved order', async () => {
+    const b = manualForkBench({ pinned: [sid('source')] })
+
+    await b.uiWorkspace.forkSession(sid('source'))
+
+    expect(b.view.getSnapshot().sessionOrderByAccount.a).toEqual(['one', 'forked', 'source', 'three'])
+  })
+
+  it('keeps a fork position that an order already saves', async () => {
+    const b = manualForkBench()
+    b.view.actions.setSessionOrder('a', ['forked', 'one', 'source', 'three'], {})
+
+    await b.uiWorkspace.forkSession(sid('source'))
+
+    expect(b.view.getSnapshot().sessionOrderByAccount).toMatchObject({
+      a: ['forked', 'one', 'source', 'three'],
+      [FLAT_SESSION_ORDER_KEY]: ['one', 'forked', 'source', 'three'],
+    })
+  })
+
+  it('moves a fork child that is already a member above its source', async () => {
+    const b = manualForkBench()
+    b.workspaces.list.set(workspaceState([workspace(wid('a'), [sid('one'), sid('source'), sid('three'), sid('forked')])]))
+    b.sessions.list.set(sessionState([
+      summary('one', { updatedAt: 3 }), summary('source', { updatedAt: 2 }), summary('three', { updatedAt: 1 }),
+      summary('forked', { updatedAt: 4 }),
+    ]))
+
+    await b.uiWorkspace.forkSession(sid('source'))
+
+    expect(b.view.getSnapshot().sessionOrderByAccount.a).toEqual(['one', 'forked', 'source', 'three'])
+  })
+
+  it('leaves an order that does not list the source to the supplementation rule', async () => {
+    const b = manualForkBench()
+    b.view.actions.setSessionOrder('a', ['one', 'three'], {})
+    b.view.actions.setSessionOrder(FLAT_SESSION_ORDER_KEY, ['one', 'three'], {})
+    b.sessions.list.set(sessionState([summary('one', { updatedAt: 3 }), summary('three', { updatedAt: 1 })]))
+
+    await b.uiWorkspace.forkSession(sid('source'))
+
+    expect(b.view.getSnapshot().sessionOrderByAccount[FLAT_SESSION_ORDER_KEY]).toEqual(['one', 'three'])
+  })
+
+  it.each(['disposal', 'pending Workspace list'] as const)('does not save a fork position after %s', async (kind) => {
+    const b = manualForkBench()
+    const created = Promise.withResolvers<SessionId>()
+    b.sessions.fork.mockReset()
+    b.sessions.fork.mockImplementationOnce(async (options) => {
+      const childId = await created.promise
+      options.onCreated?.(childId)
+      return childId
+    })
+    const before = b.view.getSnapshot().sessionOrderByAccount
+    const forking = b.uiWorkspace.forkSession(sid('source'))
+    if (kind === 'disposal') await b.ctx.fiber.dispose()
+    else b.workspaces.list.set(workspaceState([], [], 'pending'))
+    created.resolve(sid('forked'))
+    await forking
+
+    expect(b.view.getSnapshot().sessionOrderByAccount).toEqual(before)
+  })
+
+  it('leaves Last updated without a saved order when a fork completes', async () => {
+    const b = bench({
+      workspaces: workspaceState([workspace(wid('a'), [sid('source')])]),
+      sessions: sessionState([summary('source')]),
+    })
+    b.sessions.fork.mockImplementationOnce(async (options) => {
+      options.onCreated?.(sid('forked'))
+      return sid('forked')
+    })
+
+    await b.uiWorkspace.forkSession(sid('source'))
+
+    expect(b.view.getSnapshot()).toMatchObject({ orderBy: 'updated', sessionOrderByAccount: {} })
   })
 
   it('does not supersede a pending Workspace selection when a sidebar fork completes', async () => {

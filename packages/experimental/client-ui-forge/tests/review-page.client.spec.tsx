@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import './fonts-dom.client.ts'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -73,7 +73,7 @@ function deferred<T>() {
 /** New side of `src/app.ts`, whose one hunk replaces its fourth line. */
 const APP_TEXT = ['const a1 = 1', 'const a2 = 2', 'const a3 = 3', 'const y = 4', 'const a5 = 5'].join('\n') + '\n'
 const APP: ForgeDiffFile = {
-  path: 'src/app.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation',
+  path: 'src/app.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation',
   digest: 'digest', additions: 1, deletions: 1,
   hunks: [{
     oldStart: 3, oldLines: 3, newStart: 3, newLines: 3, lines: [' const a3 = 3', '-const x = 4', '+const y = 4', ' const a5 = 5'],
@@ -93,6 +93,7 @@ function changesFaces(threads: readonly ForgeReviewThread[] = []): ReviewChanges
   const local = async (): Promise<never> => await Promise.reject(new Error('no local changes'))
   return {
     localDiff: vi.fn(local),
+    localWrite: vi.fn(local),
     diffBases: vi.fn(local),
     localText: vi.fn(local),
     localCommits: vi.fn(local),
@@ -182,6 +183,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
     actions: store.actions,
     renderSlot,
     SessionProvider,
+    useMediaQuery: responsiveHooks().useMediaQuery,
     t,
   }
   const view = render(<ReviewPage {...props} />)

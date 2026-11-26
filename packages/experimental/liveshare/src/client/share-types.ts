@@ -41,6 +41,8 @@ export interface OutgoingShare {
   /** ISO time after which the Relay denies viewers; absent means it never expires. */
   readonly expiresAt?: string
   readonly online: boolean
+  /** True when this share has exhausted its automatic reconnect budget. */
+  readonly reconnectStopped?: boolean
   readonly access?: unknown
 }
 

@@ -32,7 +32,7 @@ it('retries a reserved new Session identity after creation fails', async () => {
   test.createSession.mockRejectedValueOnce(new Error('temporary create failure'))
   const runtime = new ScheduleRuntime(
     test.ctx, () => [task], work => work(), async (next) => { Object.assign(task, next) }, () => {},
-    { retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000 }, test.resolveAgent,
+    { retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000 }, test.resolveAgent, () => test.ctx.get('sessionController'),
   )
   try {
     runtime.requestDrive()

@@ -22,12 +22,24 @@ export type ClientModuleMetaFactory = () => ClientModuleMeta
 
 /** Dependency resolver supplied to a JavaScript module factory. */
 export interface ClientBundleRequire {
-  /** Resolve a previously arrived shared module synchronously. */
+  /** Resolve a previously arrived shared module, or a registered chunk of the owning package (`./client.<name>.js`), synchronously. */
   (specifier: string): unknown
-  /** Load a module or an owning package's relative chunk using the existing module request semantics. */
-  async(specifier: string): Promise<unknown>
+  /**
+   * Load a module or an owning package's relative chunk using the existing module request semantics.
+   * `options` applies only to a relative chunk request; another package's request ignores it.
+   */
+  async(specifier: string, options?: ClientAsyncRequireOptions): Promise<unknown>
   /** Resolve a package asset reference. */
   asset(reference: string): string
+}
+
+/** Options of one asynchronous package-local chunk request. */
+export interface ClientAsyncRequireOptions {
+  /**
+   * Chunks of the owning package (`./client.<name>.js`) to download in parallel with the requested chunk. The list
+   * only saves round trips: the requested chunk's registration `deps` still decide what must arrive before it runs.
+   */
+  readonly deps?: readonly string[]
 }
 
 /** Materialize JavaScript exports without producing stylesheet resources. */
@@ -37,6 +49,11 @@ export type ClientModuleFactory = (require: ClientBundleRequire) => Record<strin
 export interface DshClientModuleManifest {
   readonly id: string
   readonly chunk?: string
+  /**
+   * Chunks of the same package (`./client.<name>.js`) that the factory requires synchronously. The module system
+   * registers each of them, and their own `deps`, before it runs the factory.
+   */
+  readonly deps?: readonly string[]
   readonly factory: ClientModuleFactory
   readonly meta?: ClientModuleMetaFactory
 }

@@ -1,5 +1,5 @@
 ---
-description: "Discover Windows applications by AUMID and observe or operate explicitly selected windows."
+description: "Discover Windows applications, manage application consent, and observe or operate explicitly selected windows."
 kind: "package-reference"
 ---
 
@@ -33,23 +33,38 @@ In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to 
 
 `cua.listApps()` aggregates applications from eligible visible top-level windows in the current Windows session. Name searches and empty `cua.findApps` queries return installed applications from the StartApps catalog, enumerated through AppsFolder. Window observations supplement those catalog entries with running state and known executable paths. The catalog may be incomplete; if an application is missing, ask the user for its location.
 
-Each result contains `id`, `displayName`, `identity: null`, and `isRunning`. The ID is an AUMID, or the full executable path when Windows supplies no window or process AUMID. Only identical ID strings merge, using case-sensitive equality. Pass the returned ID unchanged to `cua.getApp`, or supply an existing absolute `.exe` path.
+Discovery results contain `id`, `identity: null`, and `isRunning`, with `name` in `listApps` and `displayName` in `findApps`. A window's ID comes from its explicit AUMID, then the package process AUMID, then the executable path. Only identical ID strings merge, using case-sensitive equality. Pass the returned ID unchanged to `cua.getApp`, or supply an existing absolute `.exe` path. Shell names, process names and executable metadata provide display labels; labels do not determine identity.
 
-`listApps` results have `isRunning: true`. In `findApps` results, `isRunning` indicates an associated window; a catalog application without a window reports `false`. Inaccessible windows or processes are omitted. Failure to read the application catalog fails `findApps`. `cua.getState().apps` comes from `listApps()`.
+`listApps` results have `isRunning: true`. In `findApps` results, `isRunning` indicates an associated window; a catalog application without a window reports `false`. Inaccessible windows or processes are omitted. Failure to read the application catalog fails name and empty `findApps` queries. `listApps` and explicit path selection do not read the application catalog. `cua.getState().apps` comes from `listApps()`.
 
 `cua.findApps(query)` uses case-insensitive literal substring matching on display names, IDs, and known executable paths, or checks an absolute `.exe` path directly. `""` and `null` return all catalog applications. Nonempty queries must contain a non-whitespace character and use `maxAppMatches` (default 20); excessive matches return `AMBIGUOUS_APP`. Response-size and time limits apply to all queries.
 
 ### Application and window selection
 
+The first time a conversation selects an application without a saved grant, the approval card offers **Reject**, **Allow for this session**, and, when the profile can save grants, **Always allow**. **Always allow** is the primary button. Selecting it grants access across conversations in the same profile until revoked on the Computer Use plugin page. Pressing Enter in the approval details grants access for the current conversation.
+
+Application consent uses the [permission attributes](#permission-attributes) observed at selection. Versions and copies sharing an attribute can share consent regardless of executable location or signing. Permission equivalence does not merge discovery IDs, change launch targets or associate additional windows. A launcher and its runtime may share consent while remaining separate native application objects.
+
+The approval card and permission list use the shared Computer Use presentation and copy, showing the application name and icon. Reusing an application's consent within a conversation preserves its saved name and icon lookup target. Only an explicit **Always allow** choice saves a cross-conversation grant; existing session consent is not upgraded. Selecting an executable path retains that launch target even when its consent is shared with other copies.
+
 - `cua.getApp(id)` requests application consent and returns an App on success. It does not read accessibility state or activate the application. Stopped applications are launched through Explorer after consent.
 - `app.getWindows()` reads the application's current window list. One application can have multiple windows across multiple processes. Previously admitted HWNDs remain listed while valid, including hidden windows.
-- `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Windows checks application ownership on first admission, then trusts the HWND while it remains valid.
+- `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Windows checks application association on first admission, then trusts the HWND while it remains valid; later observations and input do not compare target PIDs, process start times or application identities.
 - `window.getAccessibilityTree()` explicitly reads accessibility state. Element IDs belong to the current observation; reading another window of the same App replaces the facade's current snapshot. Do not mix elements or snapshots across windows.
 - Pass `showDiff: true` on successive reads to receive UI Automation structure, property and text notifications for one window. The initial read and the first read after a cancellation return the observed tree. Changing the window or read options, or reaching a traversal limit, also returns the observed tree. Set `maxDiffNotifications` in the Windows provider configuration to limit distinct (event type, RuntimeId) pairs per read interval (default 50). When the count exceeds the limit or the nonempty summary reaches the current tree’s UTF-8 byte count, the first line reads `Diff too large. Showing the current tree instead.`, followed by the current tree within the requested traversal limits. A notification names the current element when available. A removal can identify a previous element. Providers can omit changes or report a whole container. Omit the option or pass `false` to read the current tree and stop listening. The helper can acknowledge connection close while unsubscription is queued on the UIA thread. It logs one diagnostic if removal fails.
 - Use `getActionSchema(action)` to query an action's parameter JSON Schema.
 - `window.getScreenshot()` captures that explicit window and does not read or replace its accessibility tree. Screenshots can remain usable when an accessibility read fails.
 - `app.launch()` requests a new application instance and waits for the selected application's HWND set to change or the launch wait limit to expire. A single-instance program may only activate its existing instance, and a launched instance may belong to another application ID.
 - `app.activate()` explicitly requests foreground activation. `app.show()` restores a default window without requesting activation; `window.show()` restores the named window. An absent default returns `WINDOW_NOT_FOUND`; an ambiguous default returns `AMBIGUOUS_WINDOW`.
+
+<a id="permission-attributes"></a>
+### Permission attributes
+
+Selection supplies the existing authorization digest and optional AUMIDs and executable paths to the shared [consent matcher](../cua/README.md#permission-controls). Window, package and Shell-resolved AUMIDs occupy one attribute set and compare case-sensitively; executable paths occupy another and compare case-insensitively. Empty or unavailable values do not match. Names, icons, publisher signatures, installation directories and process ancestry do not contribute.
+
+The optional [Shell resolver](native/entry/ApplicationResolver.cs) queries a selected executable path's registered shortcut and selected windows on the STA thread. Its undocumented Windows 8+ interface can be unavailable; failed queries contribute no value and leave the other attributes usable. Application enumeration and window ownership never call it. There is no product-specific list.
+
+These attributes group permissions, not authenticated publishers. An application declaring an already authorized AUMID can share that grant. Missing shared attributes still require separate consent. See the [permission matching decision](../../../.agents/notes/implemented/architecture/2026-11-26-cua-permission-attributes.md) and [upgrade guide](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.md).
 
 <a id="interaction-rules"></a>
 ## Interaction rules
@@ -58,7 +73,7 @@ Each result contains `id`, `displayName`, `identity: null`, and `isRunning`. The
 2. Read an accessibility tree before using element IDs. Absolute pointer coordinates use pixels in the latest returned screenshot, relative to that window. `relative: true` uses integer thousandths from 0 to 999 after an appropriate AX observation or screenshot. Capture again after a resize.
 3. `pressKey`, `click`, and `drag` accept `ctrl` (or `control`), `alt`, and `shift`. Only `click` and `drag` accept `win`. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
-5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
+5. Respect denial and revocation. After a reconnect, select the application again to obtain a fresh handle.
 
 `win.toggleMouse(button, direction)` sends one system mouse button event at the current pointer. A down requires the selected window to be in the foreground and under the pointer. Release through the original Window object. An up releases the desktop button without switching focus or moving the pointer.
 
@@ -94,7 +109,6 @@ Inspected results append to model history. Retaining an App, Window, or returned
 - App-level accessibility is unavailable; select an explicit window before reading its tree.
 - If `getWindows()` is empty after launch, ask the user to open the required window.
 - Observation and input require an accessible, unlocked interactive Windows session. Screenshots require Windows Graphics Capture support; a listed window can still be unavailable for capture or input.
-- Application consent does not offer an **Always allow** grant. Another conversation needs its own consent.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -1,10 +1,11 @@
 /** Owner-side gateway worker: one process multiplexes every share over IPC to the owner host. */
 
 import { WebSocket, type RawData } from 'ws'
-import { relayRefusal } from './relay-refusal.ts'
+import { RELAY_TRANSIENT_ATTEMPT_LIMIT, RELAY_TRANSIENT_WINDOW_MS, relayRefusal } from './relay-refusal.ts'
 import { registrationUrl } from './registration-url.ts'
 import {
   INITIAL_RETRY_BACKOFF,
+  RETRY_BACKOFF_MAX_MS,
   RETRY_STABLE_MS,
   retryBackoffNext,
   retryBackoffSettled,
@@ -49,6 +50,9 @@ interface GatewayState {
   heartbeat: ReturnType<typeof setInterval> | undefined
   retryTimer: ReturnType<typeof setTimeout> | undefined
   retry: RetryBackoff
+  transientAttempts: number
+  /** Runs across all unadmitted dials and their backoffs, including a handshake that never answers. */
+  deadline: ReturnType<typeof setTimeout> | undefined
   openedAt: number | undefined
   stopped: boolean
 }
@@ -137,6 +141,8 @@ function addShare(shares: Map<string, GatewayState>, spec: TunnelShareSpec, regi
     heartbeat: undefined,
     retryTimer: undefined,
     retry: INITIAL_RETRY_BACKOFF,
+    transientAttempts: 0,
+    deadline: undefined,
     openedAt: undefined,
     stopped: false,
   }
@@ -149,10 +155,18 @@ function removeShare(shares: Map<string, GatewayState>, shareId: string): void {
   if (state === undefined) return
   state.stopped = true
   if (state.retryTimer !== undefined) clearTimeout(state.retryTimer)
+  clearTimeout(state.deadline)
   clearInterval(state.heartbeat)
   if (state.gateway !== undefined) clearPendingRpc(state.gateway)
   state.gateway?.socket.close(1000, 'share removed')
   shares.delete(shareId)
+}
+
+function stopReconnect(shares: Map<string, GatewayState>, state: GatewayState, message: string): void {
+  removeShare(shares, state.spec.shareId)
+  console.warn(`[liveshare] worker stopped share=${state.spec.shareId} ${message}`)
+  notifyWorker({ type: 'share-error', registrationToken: state.registrationToken, shareId: state.spec.shareId,
+    message, reconnectStopped: true })
 }
 
 function connectShare(shares: Map<string, GatewayState>, state: GatewayState): void {
@@ -167,6 +181,9 @@ function connectShare(shares: Map<string, GatewayState>, state: GatewayState): v
   })
   const connection: GatewayConnection = { socket: gateway, registrationToken: state.registrationToken }
   state.gateway = connection
+  state.deadline ??= setTimeout(() => {
+    stopReconnect(shares, state, 'automatic reconnect deadline reached')
+  }, RELAY_TRANSIENT_WINDOW_MS)
   let awaitingPong = false
   let missedPongs = 0
   // A single unanswered ping means this machine or the Relay was briefly busy, not that the
@@ -195,6 +212,10 @@ function connectShare(shares: Map<string, GatewayState>, state: GatewayState): v
   gateway.on('pong', () => { awaitingPong = false; missedPongs = 0 })
   gateway.on('open', () => {
     if (state.stopped || state.gateway !== connection) return
+    // The Relay admitted this share, so the failures before it belong to a sequence that ended.
+    state.transientAttempts = 0
+    clearTimeout(state.deadline)
+    state.deadline = undefined
     state.openedAt = Date.now()
     notifyWorker({ type: 'share-connected', registrationToken: state.registrationToken, shareId: state.spec.shareId })
   })
@@ -231,20 +252,22 @@ function connectShare(shares: Map<string, GatewayState>, state: GatewayState): v
     )
     const refusal = relayRefusal(handshakeStatus)
     if (refusal !== undefined) {
-      // The Relay decided against this registration, so reconnecting with the same spec reaches the
-      // same answer. The share stops here with the status as its diagnostic; registering it again
-      // (an owner republish) builds a new state and asks the Relay once more.
-      state.stopped = true
-      shares.delete(state.spec.shareId)
-      console.warn(`[liveshare] worker stopped share=${state.spec.shareId} ${refusal}`)
+      stopReconnect(shares, state, refusal)
       return
+    }
+    if (handshakeStatus !== undefined || state.openedAt === undefined) {
+      if (++state.transientAttempts >= RELAY_TRANSIENT_ATTEMPT_LIMIT) {
+        const lastFailure = handshakeStatus === undefined ? closeReason : `relay answered registration status=${String(handshakeStatus)}`
+        stopReconnect(shares, state, `automatic reconnect attempts exhausted: ${lastFailure}`)
+        return
+      }
     }
     if (state.openedAt !== undefined && Date.now() - state.openedAt >= RETRY_STABLE_MS) {
       state.retry = retryBackoffSettled()
     }
     state.openedAt = undefined
     const delayMs = state.retry.delayMs
-    state.retry = retryBackoffNext(state.retry)
+    state.retry = retryBackoffNext(state.retry, RETRY_BACKOFF_MAX_MS)
     state.retryTimer = setTimeout(() => { connectShare(shares, state) }, delayMs)
     notifyWorker({ type: 'share-closed', registrationToken: state.registrationToken, shareId: state.spec.shareId })
   })

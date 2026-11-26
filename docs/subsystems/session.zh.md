@@ -982,10 +982,10 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
  * Fork one cold-readable exact event prefix into a new Session. An omitted
  * boundary selects the latest completed-turn prefix; an open cut receives
  * synthetic fork closers.
- * @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
+ * @param request - source Session, optional exact inclusive event boundary, migration preflight choice, and child origin.
  * @returns the new Session identity.
  */
-@Remote('fork') async fork(request: SessionForkRequest): Promise<SessionForkValue>
+@Remote('fork') fork(request: SessionForkRequest): Promise<SessionForkValue>
 
 /**
  * Admit one prompt after explicitly resuming its Session.

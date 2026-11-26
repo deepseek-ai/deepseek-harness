@@ -30,7 +30,7 @@ function InspectorPage({ t, frontendUrl, close, bindFrame, usePanel }:
   const state = usePanel(value => value)
   const [height, setHeight] = useState(45)
   const panelId = useId()
-  const release = useRef<() => void>()
+  const release = useRef<() => void>(undefined)
   const frameRef = useCallback((frame: HTMLIFrameElement | null) => {
     release.current?.()
     release.current = frame === null ? undefined : bindFrame(frame)

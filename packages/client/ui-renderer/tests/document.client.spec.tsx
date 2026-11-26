@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { StrictMode, useEffect, useLayoutEffect, useRef } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createDocumentPortal } from '../src/client/document-portal.tsx'
 import { documentViewport } from '../src/client/document-viewport.ts'
@@ -24,14 +25,84 @@ it('keeps portaled content mounted when its nearest package boundary changes, in
   const view = render(<Source />)
   const input = view.getByRole('textbox')
   expect(view.container.contains(input)).toBe(false)
+  // Document-wide rules for body-level layers address the marked wrapper's children.
+  expect(input.parentElement?.matches('body > [data-document-portal]')).toBe(true)
   expect(input.closest('[data-plugin]')?.getAttribute('data-plugin')).toBe('outer')
   fireEvent.change(input, { target: { value: 'retained draft' } })
+  input.focus()
   for (const owner of ['inner', '']) {
     view.rerender(<Source owner={owner} />)
     expect(view.getByDisplayValue('retained draft')).toBe(input)
+    expect(document.activeElement).toBe(input)
     expect(input.closest('[data-plugin]')?.getAttribute('data-plugin')).toBe(owner)
   }
   expect(document.body.hasAttribute('data-plugin')).toBe(false)
+})
+
+it('mounts content in the commit that renders the portal, attached and scoped before layout effects', () => {
+  const Portal = createDocumentPortal(document)
+  const layout = vi.fn<(owner: string | null | undefined, attached: boolean) => void>()
+  const opened = vi.fn<(panel: HTMLDivElement | null) => void>()
+  function Probe() {
+    const own = useRef<HTMLSpanElement>(null)
+    useLayoutEffect(() => {
+      const element = own.current!
+      layout(element.closest('[data-plugin]')?.getAttribute('data-plugin'), document.body.contains(element))
+    }, [])
+    return <span ref={own} />
+  }
+  function Caller({ open }: { open: boolean }) {
+    const panel = useRef<HTMLDivElement>(null)
+    useEffect(() => { if (open) opened(panel.current) }, [open])
+    return <section data-plugin="source">{open && <Portal><div ref={panel} role="dialog"><Probe /></div></Portal>}</section>
+  }
+  const view = render(<Caller open={false} />)
+  expect(view.queryByRole('dialog')).toBeNull()
+  view.rerender(<Caller open />)
+  expect(layout.mock.calls).toEqual([['source', true]])
+  expect(opened).toHaveBeenCalledOnce()
+  expect(opened.mock.calls[0]![0]).toBe(view.getByRole('dialog'))
+})
+
+it('removes its wrapper from the body when the portal unmounts', () => {
+  const Portal = createDocumentPortal(document)
+  const view = render(<Portal><p>Layer</p></Portal>)
+  expect(document.body.querySelectorAll(':scope > [data-document-portal]')).toHaveLength(1)
+  view.rerender(<></>)
+  expect(document.body.querySelector(':scope > [data-document-portal]')).toBeNull()
+  view.rerender(<Portal><p>Layer</p></Portal>)
+  view.unmount()
+  expect(document.body.querySelector(':scope > [data-document-portal]')).toBeNull()
+})
+
+it('follows the source package marker on each render, including gaining and losing one', () => {
+  const Portal = createDocumentPortal(document)
+  function Source({ owner }: { owner?: string }) {
+    return <div data-plugin={owner}><Portal><p>Layer</p></Portal></div>
+  }
+  const view = render(<Source />)
+  const wrapper = view.getByText('Layer').parentElement!
+  expect(wrapper.matches('body > [data-document-portal]')).toBe(true)
+  expect(wrapper.hasAttribute('data-plugin')).toBe(false)
+  view.rerender(<Source owner="first" />)
+  expect(view.getByText('Layer').parentElement).toBe(wrapper)
+  expect(wrapper.getAttribute('data-plugin')).toBe('first')
+  view.rerender(<Source />)
+  expect(wrapper.hasAttribute('data-plugin')).toBe(false)
+  expect(document.body.querySelectorAll(':scope > [data-document-portal]')).toHaveLength(1)
+})
+
+it('keeps content in the body through StrictMode effect replay', () => {
+  const Portal = createDocumentPortal(document)
+  const view = render(<StrictMode><div data-plugin="strict"><Portal><p>Layer</p></Portal></div></StrictMode>)
+  const content = view.getByText('Layer')
+  expect(document.body.contains(content)).toBe(true)
+  expect(content.closest('[data-plugin]')?.getAttribute('data-plugin')).toBe('strict')
+  expect(document.body.querySelectorAll(':scope > [data-document-portal]')).toHaveLength(1)
+  act(() => { view.rerender(<StrictMode><div data-plugin="strict"><Portal><p>Layer</p></Portal></div></StrictMode>) })
+  expect(document.body.contains(view.getByText('Layer'))).toBe(true)
+  view.unmount()
+  expect(document.body.querySelector(':scope > [data-document-portal]')).toBeNull()
 })
 
 it('owns each native listener even when portals share their callback, and replaces callbacks on commit', () => {

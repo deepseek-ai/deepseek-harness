@@ -187,73 +187,65 @@
   white-space: nowrap;
 }
 
-.retryRow {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
-}
-
-.retrySummary {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  max-width: 100%;
-  padding: 2px 0;
-  gap: 7px;
-  border-radius: var(--dsw-radius-sm);
-  color: inherit;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-}
-
-.retrySummary::-webkit-details-marker {
-  display: none;
-}
-
-.retrySummary::after {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  margin-right: 2px;
-  border-right: 1.5px solid currentcolor;
-  border-bottom: 1.5px solid currentcolor;
-  content: '';
-  transform: rotate(-45deg);
-  transition: transform 120ms ease;
-}
-
-@media (hover: hover) {
-  .retrySummary:hover {
-    color: var(--dsw-alias-label-secondary);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .compactionButton {
     transition: none;
   }
 }
 
-.retrySummary:focus-visible {
-  outline: 1.5px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 2px;
+/* The retry row matches its neighbours: step rows (secondary size) when the
+   Turn shows its step runs flat, and group headers (body size) when it shows
+   them grouped. It keeps the 24px line, but its status wraps in a narrow column
+   instead of clipping: the row grows from its single-line height and the glyph
+   stays on the first line. */
+[data-disclosure-row].retryRow {
+  height: auto;
+  min-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  align-items: flex-start;
 }
 
-.retryText {
+[data-disclosure-row] .retryLeading {
+  margin-top: 4px;
+}
+
+[data-disclosure-row] .retryTitle {
+  flex: 0 1 auto;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
   min-width: 0;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
-.retryRow[open] .retrySummary::after {
-  transform: rotate(45deg);
+/* Title (attempt/maximum) · countdown, with the tool-row separator dot and summary type. */
+.retrySeparator {
+  flex: none;
+  align-self: center;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-caption);
 }
 
+.retryProgress {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+}
+
+.retryBesideGroups [data-disclosure-row] .retryTitle,
+.retryBesideGroups .retryProgress {
+  font-size: var(--dsh-content-font-size, 14px);
+}
+
+/* Retry delay and failure under the expanded retry row, aligned with its title text. */
 .retryDetails {
   display: grid;
   gap: 2px;
-  margin-top: 3px;
-  padding-left: 14px;
+  margin-top: 2px;
+  padding-left: calc(22px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-tertiary);
   overflow-wrap: anywhere;
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(18px + var(--dsh-content-font-delta-secondary, 0px));

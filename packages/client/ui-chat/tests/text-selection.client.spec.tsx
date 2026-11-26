@@ -273,4 +273,26 @@ describe('text source boundaries', () => {
     range.selectNodeContents(source)
     expect(selectedText({ source, range })).toBe('hello world')
   })
+
+  it('reads and projects a selection on a page of another window', () => {
+    // A script-isolated plugin runs in its own window while the transcript belongs to the page.
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    try {
+      const page = frame.contentDocument!
+      expect(page.defaultView!.Element).not.toBe(Element)
+      const root = page.createElement('div')
+      const source = page.createElement('div')
+      source.setAttribute('data-text-interaction-source', '')
+      source.innerHTML = '<p>one</p><p>two<br>\nthree</p>'
+      root.append(source)
+      page.body.append(root)
+      const range = page.createRange()
+      range.selectNodeContents(source)
+      const selection = page.getSelection()!
+      selection.removeAllRanges()
+      selection.addRange(range)
+      expect(readSelection(root, selection)).toEqual({ text: 'one\ntwo\nthree' })
+    } finally { frame.remove() }
+  })
 })

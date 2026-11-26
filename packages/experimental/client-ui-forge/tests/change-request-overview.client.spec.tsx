@@ -24,17 +24,24 @@ afterEach(() => {
 const t = makeTranslate(en)
 const HEAD = 'a'.repeat(40)
 
-function card(value: ChangeRequestSnapshot, actions: Partial<ChangeRequestActions> = {}) {
+function card(value: ChangeRequestSnapshot, actions: Partial<ChangeRequestActions> = {}, coarsePointer = false) {
   const openLink = vi.fn<(url: string) => void>()
   const full: ChangeRequestActions = { openLink, copyLink: vi.fn(), retry: vi.fn(), ...actions }
   const subject = entry(value.ref.number, value)
   const view = render(
-    <ul><ChangeRequestCard locale="en" entry={subject} expanded onToggle={vi.fn()} now={0} actions={full} t={t} /></ul>,
+    <ul>
+      <ChangeRequestCard locale="en" entry={subject} expanded onToggle={vi.fn()} now={0} actions={full} coarsePointer={coarsePointer} t={t} />
+    </ul>,
   )
   const item = view.container.querySelector('[data-forge-change]')
   if (!(item instanceof HTMLElement)) throw new Error('no card')
   const rerender = (next: ChangeRequestSnapshot): void => {
-    view.rerender(<ul><ChangeRequestCard locale="en" entry={entry(next.ref.number, next)} expanded onToggle={vi.fn()} now={0} actions={full} t={t} /></ul>)
+    view.rerender(
+      <ul>
+        <ChangeRequestCard locale="en" entry={entry(next.ref.number, next)} expanded onToggle={vi.fn()} now={0} actions={full}
+          coarsePointer={coarsePointer} t={t} />
+      </ul>,
+    )
   }
   return { view, item, subject, openLink, rerender }
 }
@@ -243,8 +250,7 @@ describe('reviewers', () => {
       .mockRejectedValueOnce(new Error('down'))
       .mockResolvedValueOnce([])
       .mockReturnValueOnce(late.promise)
-    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
-    const b = card(snapshot(7, { canRequestReviews: true }), { requestReviews: vi.fn(), reviewerCandidates })
+    const b = card(snapshot(7, { canRequestReviews: true }), { requestReviews: vi.fn(), reviewerCandidates }, true)
     const row = b.item.querySelector('[data-forge-review]') as HTMLElement
     fireEvent.click(row)
     fireEvent.click(screen.getByRole('menuitem', { name: en['reviewers.requestMore'] }))

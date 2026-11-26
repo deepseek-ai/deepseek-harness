@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-用户从设置（「通用」分区）的各行中切换配色方案、字号与字体；在每个已认证浏览器中，这些选择都会跨重启持久化。功能插件通过 `ctx.theme` 消费当前快照，并在 CSS 中读取 `--dsw-*` token；它们不自行管理主题状态。
+用户从设置（「通用」分区）的各行中切换配色方案、字号与字体；在每个已认证浏览器中，这些选择都会跨重启持久化。功能插件在 CSS 中读取 `--dsw-*` token，不自行管理主题状态。Slot 组件通过全局标准 prop `useTheme(selector)` 读取当前快照；本插件先发布该 prop，再提供 `ctx.theme`，组件读取它的插件要 inject `theme`。apply 层读取 `ctx.theme.getTheme()` 与 `theme/change` 事件。明暗分支只判断 `active.colorScheme`，不判断 `preference`（可能为 `system`）或主题 id。`s => s.active` 在主题或令牌覆盖层变化时改变；存在覆盖层时，字体变化也会产生新对象。
 
 ### 外观与字号
 

@@ -242,6 +242,32 @@ describe('llm-deepseek real dynamic composition', () => {
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
   })
 
+  it('identifies a nested subagent and its direct creator on Messages and compaction calls with log upload disabled', async () => {
+    vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
+    const server = await mockServer([{ kind: 'sse', events: textEvents }, { kind: 'sse', events: textEvents }])
+    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, enableSessionLog: false })
+    const parent = ctx.sessions.create(brandString<SessionId>('parent'), {
+      meta: { origin: 'subagent', parentSession: brandString<SessionId>('root') },
+    })
+    const child = ctx.sessions.create(brandString<SessionId>('child'), { meta: { origin: 'subagent', parentSession: parent.id } })
+    const options = { model: 'deepseek-v4-flash', messages: [], sessionId: child.id }
+    await assemble(ctx, options)
+    await assemble(ctx, { ...options, purpose: 'compaction' })
+
+    for (const headers of server.headers) {
+      expect(headers).toMatchObject({
+        'x-deepseek-harness-session-id': child.id,
+        'x-deepseek-harness-session-type': 'subagent',
+        'x-deepseek-harness-subagent-parent-session-id': parent.id,
+      })
+      expect(headers).not.toHaveProperty('x-dsh-session-type')
+      expect(headers).not.toHaveProperty('x-dsh-subagent-parent-session-id')
+    }
+    expect(server.headers[0]).not.toHaveProperty('x-deepseek-harness-compact')
+    expect(server.headers[1]?.['x-deepseek-harness-compact']).toBe('1')
+    for (const body of server.requests) expect(body).not.toHaveProperty('dsh_session_log')
+  })
+
   it('sends the canonical session suffix by default through Loader composition', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await mockServer([{ kind: 'sse', events: textEvents }])

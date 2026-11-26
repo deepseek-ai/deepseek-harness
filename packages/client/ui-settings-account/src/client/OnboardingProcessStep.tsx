@@ -1,5 +1,5 @@
 /** Work-detail choices with radio-group keyboard navigation. */
-import type { KeyboardEvent, RefObject } from 'react'
+import type { KeyboardEvent, Ref } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { OnboardingProcess } from '../onboarding-settings.ts'
 import type { DesktopOnboardingProps } from './onboarding-contract.ts'
@@ -16,7 +16,7 @@ const options = [
 
 /** @param props - selected detail, localized copy and persistence callbacks. @returns the process step. */
 export function OnboardingProcessStep({ t, heading, busy, process, onSelect, onComplete }: Pick<DesktopOnboardingProps, 't'> & {
-  heading: RefObject<HTMLHeadingElement>
+  heading: Ref<HTMLHeadingElement>
   busy: boolean
   process: OnboardingProcess | null
   onSelect: (value: OnboardingProcess) => void

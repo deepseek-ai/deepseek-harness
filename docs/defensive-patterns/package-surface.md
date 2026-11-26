@@ -11,7 +11,7 @@ A plugin package's entry point takes one of two forms, and they are not mixed. A
 - The Loader four and its exact form are defined in [cordis-primer.md](../cordis-primer.md#loader-configuration).
 - Judged condition: a function plugin's entry (`src/index.ts`) exports an entity beyond the four; a default export is added beside the four, or the two forms are mixed; a `/client` entry exports an implementation value or lets another feature plugin import one; a fixture reaches another package by relative path.
 - Boundary: only Loader plugin entry points are constrained. Internal modules, helper functions, and hooks keep exporting values; a Host entry's Service Definition classes and error types are expected exports; and a test fixture stays inside its own package — a relative path into another package's `src` bypasses the `exports` map and the package-boundary checks.
-- Exception: none by default; an exception that is genuinely needed requires the domain owner's confirmation.
+- Exception: requires the domain owner's confirmation.
 
 The compliant entry — the four exports, with the same-package test path recorded as a comment rather than as a fifth export.
 
@@ -81,6 +81,7 @@ A `package.json` `exports` map uses only the standard key set, in which every ke
 - `dsh-tools` additionally exposes `./pipeline` for reusable invocation stages and batch scheduling. Its main and pipeline bundles share runtime chunks to preserve error-class identity; workspace constraints check the export targets and publication files.
 - `dsh-tool-executor-ptc` exposes `./run-code` for the shared program-tool factory, explicit runtime and call limits, and private callable tool definitions. Workspace constraints check its export targets and publication files.
 - `dsh-llm-pi-ai` exposes `./provider` for its provider row plugin, a second Loader entry that a composition layer names as `@deepseek-ai/dsh-llm-pi-ai/provider`, and `./provider/locale/*.json` for that plugin's locale resources. The row plugin registers with the registry of the adapter entry, so the two entries live in one package. Workspace constraints check its export targets and publication files.
+- `dsh-mcp-manager` exposes `./server` for its server row plugin, a second Loader entry that a composition layer names as `@deepseek-ai/dsh-mcp-manager/server`, and `./server/locale/*.json` for that plugin's locale resources. The row plugin registers with the manager entry's registry, so the two entries live in one package. Workspace constraints check its export targets and publication files.
 - Judged condition: does a change add an export key outside the standard set?
 - Exception: none by default; a new key changes the owning document and the check first, with the domain owner's confirmation.
 - Recompute the distribution:

@@ -71,20 +71,22 @@ describe('fixture helpers', () => {
 
   it('retracts default root sources without removing their live replacements', async () => {
     const runtime = await SlotTestRuntime.create()
-    const hooks = { workspaces: runtime.workspaces.list, panelInfo: runtime.panelInfo }
+    const hooks = { workspaces: runtime.workspaces.list, panelInfo: runtime.panelInfo, theme: runtime.theme }
     const props = responsiveHooks()
     let releaseReplacement: (() => void) | undefined
     try {
       expect(runtime.ctx.get('uiResponsive')).toBeDefined()
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
+      runtime.releaseThemeSource()
       await runtime.releaseResponsiveSource()
       expect(runtime.ctx.get('uiResponsive')).toBeUndefined()
       releaseReplacement = runtime.slots.provideRoot({ hooks, props: { useMediaQuery: props.useMediaQuery, useMobile: props.useMobile } })
       runtime.releaseWorkspaceSource()
       runtime.releasePanelInfoSource()
+      runtime.releaseThemeSource()
       await runtime.releaseResponsiveSource()
-      for (const key of ['workspaces', 'panelInfo'] as const) {
+      for (const key of ['workspaces', 'panelInfo', 'theme'] as const) {
         expect(() => runtime.slots.provideRoot({ hooks: { [key]: hooks[key] } }))
           .toThrow(`duplicate root standard hook '${key}'`)
       }
@@ -97,6 +99,7 @@ describe('fixture helpers', () => {
         releaseReplacement?.()
         runtime.releaseWorkspaceSource()
         runtime.releasePanelInfoSource()
+        runtime.releaseThemeSource()
         await runtime.releaseResponsiveSource()
       } finally {
         await runtime.dispose()

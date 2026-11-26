@@ -11,7 +11,7 @@
 - Loader 四件套及其准确形态见 [cordis-primer.zh.md](../cordis-primer.zh.md#loader-configuration)。
 - 判定条件：函数插件的入口（`src/index.ts`）导出了四件套以外的实体；在四件套旁边加了默认导出，或两种形态被混用；`/client` 入口导出了实现值、或让另一个功能插件导入了实现值；fixture 用相对路径引用其他包。
 - 边界：只约束 Loader 插件入口。内部模块、工具函数与 hooks 照常导出值；Host 入口的 Service Definition 类与错误类型是应有的导出；测试 fixture 也留在本包内——用相对路径伸进别的包的 `src` 会绕过 `exports` 映射与包边界检查。
-- 例外：无默认例外；确需破例须经对应领域专家确认。
+- 例外：须经对应领域专家确认。
 
 合规的入口——四件套，同包测试路径以注释记录，而不是加出第五个导出。
 
@@ -81,6 +81,7 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 - `dsh-tools` 另行提供 `./pipeline`，用于复用调用阶段与批量调度。主入口与 pipeline bundle 共享运行时 chunk，以保持错误类的身份一致；工作区检查验证导出目标与发布文件。
 - `dsh-tool-executor-ptc` 提供 `./run-code`，用于共享程序工具工厂、显式指定运行时及调用上限，并传入私有可调用工具定义。工作区检查验证其导出目标与发布文件。
 - `dsh-llm-pi-ai` 提供 `./provider`，用于它的提供方条目插件：这是第二个 Loader 入口，配置层以 `@deepseek-ai/dsh-llm-pi-ai/provider` 指名；另提供 `./provider/locale/*.json`，用于该插件的 locale 资源。条目插件向适配器入口的注册表注册，因此两个入口位于同一个包。工作区检查验证其导出目标与发布文件。
+- `dsh-mcp-manager` 提供 `./server`，用于它的服务器条目插件：这是第二个 Loader 入口，配置层以 `@deepseek-ai/dsh-mcp-manager/server` 指名；另提供 `./server/locale/*.json`，用于该插件的 locale 资源。条目插件向管理器入口的注册表注册，因此两个入口位于同一个包。工作区检查验证其导出目标与发布文件。
 - 判定条件：改动是否新增了标准集合以外的 export 键？
 - 例外：无默认例外；新增键须先改正家文档与检查，并取得对应领域专家确认。
 - 复算分布：

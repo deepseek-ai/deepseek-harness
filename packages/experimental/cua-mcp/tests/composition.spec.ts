@@ -1,5 +1,7 @@
 /** A real Loader composition: the MCP connection runs retained Computer Use programs through a fixture desktop. */
+import { randomBytes } from 'node:crypto'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -90,6 +92,55 @@ function lastJson(result: CallToolResult): unknown {
   const text = texts(result).at(-1)
   if (text === undefined) throw new Error('result carries no text')
   return JSON.parse(text)
+}
+
+/** A program process, identified by an endpoint that accepts connections until the process ends. */
+interface ProgramProcess {
+  readonly pid: number
+  readonly endpoint: string
+}
+
+/**
+ * Program statements that make the program process listen on a private endpoint, then inspect a {@link ProgramProcess}
+ * as JSON. Windows can give a PID to a new process soon after the previous process with that PID ends, so only the
+ * endpoint identifies the program process after a reset.
+ * @param directory - The test's private directory, which holds the socket on Hosts other than Windows.
+ * @returns Statements to place last in a program.
+ */
+function identifyProcess(directory: string): string {
+  const name = randomBytes(6).toString('hex')
+  const endpoint = JSON.stringify(process.platform === 'win32' ? `\\\\.\\pipe\\dsh-cua-mcp-${name}` : join(directory, `${name}.sock`))
+  // The listener never keeps the process alive; only the end of the process closes it.
+  return 'var listener = (await import("node:net")).createServer(); '
+    + `await new Promise((resolve, reject) => { listener.once("error", reject).listen(${endpoint}, resolve) }); `
+    + `listener.unref(); inspect(JSON.stringify({ pid: process.pid, endpoint: ${endpoint} }))`
+}
+
+/**
+ * Whether the program process that opened `endpoint` still runs; a later process that received its PID does not count.
+ * @param endpoint - Endpoint of a {@link ProgramProcess}.
+ * @returns False once the endpoint refuses connections or no longer exists.
+ */
+function listening(endpoint: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const socket = connect(endpoint)
+    socket.once('connect', () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT' || error.code === 'ECONNREFUSED') resolve(false)
+      else reject(error)
+    })
+  })
+}
+
+/**
+ * Assert that a program process has ended, whichever process holds its PID now.
+ * @param program - The process a program identified with {@link identifyProcess}.
+ */
+async function expectEnded(program: ProgramProcess): Promise<void> {
+  expect(await listening(program.endpoint), `program process ${String(program.pid)} still listens at ${program.endpoint}`).toBe(false)
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -417,21 +468,21 @@ describe('Computer Use MCP composition', () => {
   })
 
   it('resets only the program environment: a fresh process and cua object, the same Agent and native connection', async () => {
-    const { ctx, native, run, client, adapter } = await setup()
-    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); inspect(process.pid)')
-    const pid = lastJson(first) as number
+    const { ctx, native, run, client, adapter, directory } = await setup()
+    const first = await run(`globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); ${identifyProcess(directory)}`)
+    const previous = lastJson(first) as ProgramProcess
     const { agent } = adapter
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(reset.isError).not.toBe(true)
     expect(texts(reset)).toEqual(['Program environment cleared: variables, imports, and application and window objects from earlier calls '
       + 'are gone. Application access granted earlier still applies; select applications again with cua.getApp.'])
-    const next = await run('inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", cua: typeof cua, pid: process.pid }))')
+    const next = await run('inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", cua: typeof cua }))')
     expect(next.content).toHaveLength(1)
-    const state = lastJson(next) as { visits: null; hasApp: boolean; cua: string; pid: number }
+    const state = lastJson(next) as { visits: null; hasApp: boolean; cua: string }
     // The fresh process re-created the cua object; the variables and application objects of the previous one are gone.
     expect(state).toMatchObject({ visits: null, hasApp: false, cua: 'object' })
-    expect(state.pid).not.toBe(pid)
-    expect(() => process.kill(pid, 0)).toThrow()
+    // The previous process has ended, so the program that answered ran in another one.
+    await expectEnded(previous)
     // The program selects the application and its window again and operates them over the connection the Agent kept.
     const again = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify(win.windowId))')
     expect(lastJson(again)).toBe('7')
@@ -463,14 +514,14 @@ describe('Computer Use MCP composition', () => {
 
   it('cancels the running program on reset, answers after it has settled, and runs a queued program in the fresh environment', async () => {
     // The native operation takes 200 ms to acknowledge cancellation, so the cancelled program stays in flight that long.
-    const { native, run, client } = await setup({ cancellationAcknowledgementMs: 200 })
-    const ready = await run('globalThis.generation = "first"; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); inspect(process.pid)')
-    const pid = lastJson(ready) as number
+    const { native, run, client, directory } = await setup({ cancellationAcknowledgementMs: 200 })
+    const ready = await run(`globalThis.generation = "first"; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); ${identifyProcess(directory)}`)
+    const previous = lastJson(ready) as ProgramProcess
     const held = native.holdNextClick()
     const running = run('await win.click("0")')
     await held
     // Queued behind the running program, before the reset arrives.
-    const queued = run('inspect(JSON.stringify({ generation: globalThis.generation ?? null, pid: process.pid }))')
+    const queued = run('inspect(JSON.stringify({ generation: globalThis.generation ?? null }))')
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     // The reset answered after the cancelled program's native operation had acknowledged the cancellation.
     expect(native.events).toEqual(['native-cancelled', 'cancellation-acknowledged'])
@@ -478,10 +529,9 @@ describe('Computer Use MCP composition', () => {
     const cancelled = await running
     expect(cancelled.isError).toBe(true)
     expect(texts(cancelled).join('\n')).toContain('tool call aborted')
-    const fresh = lastJson(await queued) as { generation: null; pid: number }
+    const fresh = lastJson(await queued) as { generation: null }
     expect(fresh.generation).toBeNull()
-    expect(fresh.pid).not.toBe(pid)
-    expect(() => process.kill(pid, 0)).toThrow()
+    await expectEnded(previous)
     // Nothing closed the Agent's native connection.
     expect(native.events).not.toContain('native-close')
     expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
@@ -503,11 +553,11 @@ describe('Computer Use MCP composition', () => {
   it('ends a program that cannot be interrupted on reset without waiting for the runtime to stop it', async () => {
     // A cancelled program gets ten minutes to settle before the runtime stops its process, longer than any test
     // budget: this reset answers only because releasing the environment ends that wait.
-    const { ctx, run, client, adapter } = await setup({ stopGraceMs: 600_000 })
-    const pid = lastJson(await run('globalThis.kept = 1; inspect(process.pid)')) as number
-    // The looping process below is stopped even when the reset fails to stop it.
-    onTestFinished(() => {
-      try { process.kill(pid, 'SIGKILL') } catch (_error: unknown) { /* The reset already ended the process. */ }
+    const { ctx, run, client, adapter, directory } = await setup({ stopGraceMs: 600_000 })
+    const previous = lastJson(await run(`globalThis.kept = 1; ${identifyProcess(directory)}`)) as ProgramProcess
+    // The looping process below is stopped even when the reset fails to stop it. Its PID names it only while it runs.
+    onTestFinished(async () => {
+      if (await listening(previous.endpoint)) process.kill(previous.pid, 'SIGKILL')
     })
     const observed: PromiseWithResolvers<void> = Promise.withResolvers()
     ctx.on('session/event', (candidate, event) => {
@@ -521,7 +571,7 @@ describe('Computer Use MCP composition', () => {
     const cancelled = await looping
     expect(cancelled.isError).toBe(true)
     expect(texts(cancelled).join('\n')).toContain('tool call aborted')
-    expect(() => process.kill(pid, 0)).toThrow()
+    await expectEnded(previous)
     expect(lastJson(await run('inspect(JSON.stringify({ kept: globalThis.kept ?? null }))'))).toEqual({ kept: null })
   })
 

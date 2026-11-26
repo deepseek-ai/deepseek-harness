@@ -16,7 +16,8 @@ allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function observe(value: CuaApplicationState & { system: CuaSystemPermissionState }) {
   return { system: { value: value.system, busy: false, error: null },
-    applications: { value, busy: false, error: null }, icons: { value: {}, busy: false, error: null }, busy: false }
+    applications: { value, busy: false, error: null },
+    icons: { value: {}, busy: false, error: null }, busy: false }
 }
 
 function fixture() {
@@ -158,16 +159,43 @@ it('keeps permission guidance open while a fresh observation is pending', () => 
   expect(screen.getByRole('dialog')).toBe(dialog)
 })
 
-it('shows application icons and names while keeping the executable path in the tooltip', () => {
-  const f = fixture()
+it.each(['/Applications/Calculator.app/Contents/MacOS/Calculator', 'C:\\Applications\\Calculator.exe'])(
+  'shows the application name and icon with %s available as a tooltip', (executablePath) => {
+    const f = fixture()
+    render(<PermissionPanel {...f.props} />)
+    f.publish({ ...observe({ ...value, allowedApps: [{ id: 'a'.repeat(64) as CuaApplicationId,
+      name: 'Calculator', executablePath }] }),
+    icons: { value: { [executablePath]: 'data:image/png;base64,aWNvbg==' }, busy: false, error: null }, busy: false })
+    expect(screen.getByText('Calculator')).toBeTruthy()
+    expect(screen.queryByText(executablePath)).toBeNull()
+    const identity = screen.getByTitle(executablePath)
+    expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+  })
+
+it('uses a Shell icon for a packaged application without an executable path', () => {
+  const f = fixture(), iconPath = 'shell:AppsFolder\\Package!App'
   render(<PermissionPanel {...f.props} />)
-  f.publish({ ...observe({ ...value, allowedApps: [{ id: 'a'.repeat(64) as CuaApplicationId,
-    name: 'Calculator', executablePath: '/Applications/Calculator.app/Contents/MacOS/Calculator' }] }),
-  icons: { value: { '/Applications/Calculator.app/Contents/MacOS/Calculator': 'data:image/png;base64,aWNvbg==' }, busy: false, error: null }, busy: false })
-  expect(screen.getByText('Calculator')).toBeTruthy()
-  expect(screen.queryByText('/Applications/Calculator.app/Contents/MacOS/Calculator')).toBeNull()
-  const identity = screen.getByTitle('/Applications/Calculator.app/Contents/MacOS/Calculator')
-  expect(identity.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+  f.publish({ ...observe({ ...value, allowedApps: [{ id: 'b'.repeat(64) as CuaApplicationId, name: 'Notepad', iconPath }] }),
+    icons: { value: { [iconPath]: 'data:image/png;base64,aWNvbg==' }, busy: false, error: null } })
+  expect(screen.getByText('Notepad').closest('li')?.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,aWNvbg==')
+})
+
+it.each<CuaSystemPermissionState>([value.system,
+  { platform: 'windows', sessionLocked: false, captureAvailable: true, elevated: false, helper: {} },
+])('shows the same application groups and actions on $platform', (system) => {
+  const f = fixture()
+  const allowed = { id: 'b'.repeat(64) as CuaApplicationId, name: 'Allowed application' }
+  const blocked = { id: 'c'.repeat(64) as CuaApplicationId, name: 'Blocked application' }
+  render(<PermissionPanel {...f.props} />)
+  f.publish(observe({ ...value, system, allowedApps: [allowed], blockedApps: [blocked] }))
+  const applications = within(screen.getByRole('region', { name: en.applicationsTitle }))
+  expect(applications.getAllByRole('heading').map(heading => heading.textContent))
+    .toEqual([en.applicationsTitle, en.allowedApps, en.blockedApps])
+  fireEvent.click(applications.getByRole('button', { name: en.revoke }))
+  fireEvent.click(applications.getByRole('button', { name: en.retryApproval }))
+  expect(f.props.revoke).toHaveBeenCalledWith(allowed.id)
+  expect(f.props.retryApproval).toHaveBeenCalledWith(blocked.id)
+  expect(screen.queryByText(en.noApps)).toBeNull()
 })
 
 it.each([en, zh])('shows system permissions with the target application beside each system permission', (dictionary) => {
@@ -287,6 +315,25 @@ it('shows and revokes an application whose executable path is unavailable', () =
   expect(row.querySelector('img')).toBeNull()
   expect(row.querySelector('[aria-hidden]')).not.toBeNull()
   fireEvent.click(within(row).getByRole('button', { name: en.revoke }))
+  expect(f.props.revoke).toHaveBeenCalledWith(app.id)
+})
+
+it('keeps new grants visible and revoked apps absent while icons load', () => {
+  const f = fixture()
+  const old = { id: 'a'.repeat(64) as CuaApplicationId, name: 'Revoked application', executablePath: '/old/app' }
+  const app = { id: 'b'.repeat(64) as CuaApplicationId, name: 'New application', iconPath: 'shell:AppsFolder\\Package!App' }
+  f.publish({ ...observe({ ...value, allowedApps: [old] }) })
+  render(<PermissionPanel {...f.props} />)
+  f.publish({ applications: { value: { ...value, allowedApps: [app] }, busy: false, error: null },
+    icons: { value: {}, busy: true, error: null } })
+  expect(screen.queryByText(old.name)).toBeNull()
+  expect(screen.getByText(app.name)).toBeTruthy()
+  expect(screen.getByRole('button', { name: en.revoke }).hasAttribute('disabled')).toBe(false)
+  f.publish({ icons: { value: { [old.executablePath]: 'data:image/png;base64,b2xk' }, busy: false, error: null } })
+  expect(screen.queryByText(old.name)).toBeNull()
+  expect(screen.getByText(app.name)).toBeTruthy()
+  expect(screen.getByText(app.name).parentElement?.querySelector('img')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: en.revoke }))
   expect(f.props.revoke).toHaveBeenCalledWith(app.id)
 })
 

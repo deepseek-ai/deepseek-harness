@@ -583,6 +583,7 @@ describe('ToolRow', () => {
     expect(view.queryByText('查看')).toBeNull()
     fireEvent.click(view.getByRole('button', { name: /Bash/ }))
     const pill = view.getByText('查看')
+    expect(pill.closest('[data-inspect-scope]')).not.toBeNull()
     fireEvent.click(pill)
     expect(inspect).toHaveBeenCalledTimes(1)
     // The pill click must not collapse the row (body is a .row sibling).
