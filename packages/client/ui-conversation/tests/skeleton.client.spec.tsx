@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
@@ -249,7 +249,7 @@ function mount(
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
           usePanelInfo={props.usePanelInfo}
-          useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource}
+          useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource}
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
@@ -281,7 +281,7 @@ function mount(
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
           usePanelInfo={props.usePanelInfo}
-          useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource}
+          useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource}
           useSessionStatus={useSessionStatus}
           useSessionRetainInfo={() => undefined}
           useWorkspaces={props.useWorkspaces}
@@ -305,7 +305,7 @@ function mount(
         <InputBar
           sessionId={SID}
           SessionProvider={({ children }) => children}
-          useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource}
+          useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource}
           useSession={useSession}
           useConversation={useConversation}
           useSessions={props.useSessions}
@@ -374,7 +374,7 @@ function mount(
       useSessions: bindSnapshotSelector(sessions),
       usePanelInfo: selector => selector({ activePanelId: null }),
       useContextMenu: contextMenuHook(),
-      ...responsiveHooks(),
+      ...responsiveHooks(), ...themeHooks(),
       useResource,
       useSessionStatus,
       useSessionRetainInfo: () => undefined,
@@ -410,7 +410,7 @@ function mount(
     useSessionStatus,
     useSessionRetainInfo: () => undefined,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks(), ...themeHooks(),
     useResource,
     useWorkspaces: bindSnapshotSelector(workspaces),
     ...allowAllAccess,
@@ -442,12 +442,8 @@ describe('Hero chrome', () => {
     expect(view.getByText('Preview')).toBeTruthy()
     expect(renderSlot).toHaveBeenCalledOnce()
     expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
-    const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
-    if (brandMarkOwner === undefined || !('size' in brandMarkOwner) || !('className' in brandMarkOwner)) {
-      throw new Error('hero brand-mark owner must provide size and className')
-    }
-    expect(brandMarkOwner.size).toBe(34)
-    expect(brandMarkOwner.className).toBeTypeOf('string')
+    // The occupant receives only the requested edge; it styles its own mark.
+    expect(renderSlot.mock.calls[0]?.[1]).toEqual({ size: 34 })
     expect(renderSlot.mock.calls[0]?.[2]?.fallback).toBeTruthy()
   })
 

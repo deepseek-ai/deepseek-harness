@@ -626,7 +626,7 @@ describe('workspace browser rows', () => {
     expect(openMenu).toHaveBeenLastCalledWith(target, { x: 36, y: 48 }, expect.any(String))
     const opener = openMenu.mock.lastCall?.[2] as string
     expect(renderFactorySlot).toHaveBeenLastCalledWith('contextMenu.button', {
-      target, label: '工作区“Project”的操作', className: rowCss.iconButton, opener,
+      target, label: '工作区“Project”的操作', size: 'row', opener,
     })
     expect(onToggle).not.toHaveBeenCalled()
     // A menu for the same Workspace opened by another element leaves the row unchanged.
@@ -936,7 +936,7 @@ describe('workspace browser rows', () => {
     fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 31, clientY: 47 })
     expect(openMenu).toHaveBeenLastCalledWith(target, { x: 31, y: 47 }, expect.any(String))
     expect(renderFactorySlot).toHaveBeenLastCalledWith('contextMenu.button', {
-      target, label: '会话“One”的操作', className: rowCss.iconButton, opener: openMenu.mock.lastCall?.[2] as string,
+      target, label: '会话“One”的操作', size: 'row', opener: openMenu.mock.lastCall?.[2] as string,
     })
     expect(onOpen).not.toHaveBeenCalled()
     cleanup()

@@ -9,6 +9,7 @@ import { TestRemote, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, SETTINGS_NS, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { AppearanceRowInjected, FontSettingsInjected, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
 import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema, type ThemeSettings } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
 import type { createAppearanceRowStore, createFontRowStore } from '../src/client/settings-store.ts'
@@ -135,6 +136,33 @@ async function keyboardTheme(host = stubConfigForm<ThemeSettings>()) {
 }
 
 describe('ui-theme apply', () => {
+  it('publishes the useTheme standard prop over the live snapshot and withdraws it with the plugin', async () => {
+    const b = await bench()
+    declareItems(b.slots)
+    let host: SlotRendererHost | undefined
+    b.slots.install({ renderRoot: (value) => { host = value; return null } })
+    b.slots.renderSlot('root', {})
+    if (host === undefined) throw new Error('the root renderer did not receive its host')
+    const root = host.root
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const theme = b.ctx.get('theme') as ThemeRuntime
+    const source = root.getSnapshot().hooks['theme']
+    if (source === undefined) throw new Error('ui-theme did not publish its theme source')
+    expect(source.getSnapshot()).toBe(theme.getTheme())
+    const changed = vi.fn()
+    const unsubscribe = source.subscribe(changed)
+    theme.setTheme('dark')
+    expect(changed).toHaveBeenCalledOnce()
+    expect(source.getSnapshot()).toBe(theme.getTheme())
+    unsubscribe()
+    theme.setTheme('light')
+    expect(changed).toHaveBeenCalledOnce()
+    await fiber.dispose()
+    expect(root.getSnapshot().hooks['theme']).toBeUndefined()
+    await b.ctx.fiber.dispose()
+  })
+
   it('steps all font sizes in one settings mutation and one snapshot', async () => {
     const { theme, keyboard, events, host } = await keyboardTheme()
     keyboard.press()

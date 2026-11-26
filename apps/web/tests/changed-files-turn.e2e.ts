@@ -618,11 +618,13 @@ describe('web e2e: a git workspace turn ends with its changed files', () => {
     await review.getByRole('button', { name: '自动换行' }).click()
     const body = review.locator('[data-review-view="split"]:not([data-review-wrap])')
     await body.waitFor({ state: 'visible' })
-    // A scrollable parent makes escaped edge gestures observable without native trackpad rebound.
+    // A scrollable parent makes escaped edge gestures observable without native trackpad rebound. The overrides
+    // outrank the diff's one-class rules by specificity, not by coming later: under package style isolation a
+    // scoped rule beats an unscoped rule of equal specificity regardless of order.
     const layout = await page.addStyleTag({ content: `
       [data-changes-review] { height: 220px !important; }
-      [data-review-view="split"] { display: block; max-width: 220px; }
-      [data-review-view="split"] > div { width: 160px; height: 60px; margin: 160px; }
+      [data-changes-review] [data-review-view="split"] { display: block; max-width: 220px; }
+      [data-changes-review] [data-review-view="split"] > div { width: 160px; height: 60px; margin: 160px; }
     ` })
     onTestFinished(async () => {
       await layout.evaluate(element => element.parentNode!.removeChild(element))

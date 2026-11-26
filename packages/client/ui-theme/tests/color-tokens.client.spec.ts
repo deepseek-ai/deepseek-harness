@@ -18,10 +18,13 @@ const EXEMPT_FILES: Record<string, string> = {
 /** Alpha masks and box-shadow ink are geometry, not themed surface or label colors. */
 const EXEMPT_PROPERTIES = /^(-webkit-)?mask(-image)?$|^box-shadow$/
 
-/** Hex, color-function, and `white`/`black` literals; other CSS named colors are outside this check. */
+/**
+ * Hex, color-function, and `white`/`black` literals; other CSS named colors are outside this check. `light-dark()` over
+ * theme variables is the feature-CSS form of a palette difference; a literal among its arguments still matches here.
+ */
 const LITERAL_COLOR = new RegExp([
   String.raw`#[0-9a-f]{3,8}\b`,
-  String.raw`\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|light-dark)\([^)]*\)`,
+  String.raw`\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)`,
   String.raw`(?<![\w-])(white|black)(?![\w-])`,
 ].join('|'), 'gi')
 
@@ -77,6 +80,7 @@ it('rejects static palette steps and literal colors outside box shadows, masks a
     .e { color: rgb(0, 0, 0); }
     .f { fill: white; }
     .g { color: oklch(70% 0.1 250); }
+    .h { color: light-dark(#0f1115, var(--dsw-alias-label-primary)); }
   `)).toEqual([
     '.a { color: var(--dsw-static-blue-500) }',
     '.b { background: #2C2C2E }',
@@ -85,6 +89,7 @@ it('rejects static palette steps and literal colors outside box shadows, masks a
     '.e { color: rgb(0, 0, 0) }',
     '.f { fill: white }',
     '.g { color: oklch(70% 0.1 250) }',
+    '.h { color: light-dark(#0f1115, var(--dsw-alias-label-primary)) }',
   ])
   expect(colorViolations(`
     .a { color: var(--dsw-alias-label-primary); }
@@ -92,6 +97,7 @@ it('rejects static palette steps and literal colors outside box shadows, masks a
     .c { mask-image: linear-gradient(#000, transparent); }
     .d { border-left: 3px solid rgb(255 255 255 / 0); }
     .e { border-color: rgba(0, 0, 0, 0); transition: var(--white-space, none); }
+    .f { --stroke: light-dark(var(--dsw-alias-border-l2), var(--dsw-alias-border-l3)); }
   `)).toEqual([])
 })
 

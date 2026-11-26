@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import type { ShortcutCatalogEntry, ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
@@ -126,7 +126,7 @@ function mount({
     useWorkspaces: unusedHook,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks({ portal: Portal }),
+    ...responsiveHooks({ portal: Portal }), ...themeHooks(),
     wide,
     reconnect,
     openDesktopUpdate: () => {},

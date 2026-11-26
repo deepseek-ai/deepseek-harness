@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import './fonts-dom.client.ts'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -183,6 +183,7 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
     actions: store.actions,
     renderSlot,
     SessionProvider,
+    useMediaQuery: responsiveHooks().useMediaQuery,
     t,
   }
   const view = render(<ReviewPage {...props} />)

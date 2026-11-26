@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -129,7 +129,7 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'useQuestion
   useSessions: selector => selector(sessionList),
   usePanelInfo,
   useContextMenu: contextMenuHook(),
-  ...responsiveHooks(),
+  ...responsiveHooks(), ...themeHooks(),
   useResource,
   useSessionStatus: selector => selector(attentionState),
   useSessionRetainInfo: () => undefined,

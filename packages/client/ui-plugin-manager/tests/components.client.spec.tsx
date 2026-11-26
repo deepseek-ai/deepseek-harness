@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import type { ConfigPageForm } from '../src/client/slot-contract.ts'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
@@ -170,7 +170,7 @@ function renderTab(
     useResource: unusedStandardHook,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks({ portal: Portal }),
+    ...responsiveHooks({ portal: Portal }), ...themeHooks(),
   }
   const navigation = createNavigationStore().create()
   const props: PluginManagerPageProps = {

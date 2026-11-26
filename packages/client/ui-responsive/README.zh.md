@@ -34,7 +34,7 @@ Web 应用 bundle 挂载此 Client 插件，无需配置字段。它发布两个
 
 ### 组合与测试
 
-输入框、右侧栏展开按钮、agent preset 选择芯片、桌面引导流程、模型选择器和会话面板会读取这些 props。这些插件都 inject 本包提供的 `uiResponsive` 服务，因此只在两个 props 发布之后启动，并随它们一起卸载；组件读取其中任一 prop 的插件也应这样做。该服务没有公开成员。保留了其中任一插件的自定义 Web roster 也必须保留本包；缺少本包时，这些插件会一直等待 `uiResponsive`，不会启动。手工构造 props 的组件测试展开[客户端测试运行时](../../test-support/client-runtime/README.zh.md)提供的 `responsiveHooks(options?)`，该运行时的 `SlotTestRuntime` 也会提供带同样默认值的 `uiResponsive` 替身。
+组件读取这些 props 的插件（其中包括输入框和会话面板）都 inject 本包提供的 `uiResponsive` 服务，因此只在两个 props 发布之后启动，并随它们一起卸载；组件读取其中任一 prop 的插件也应这样做。该服务没有公开成员。只要自定义 Web roster 保留了这样的插件，就必须保留本包；缺少本包时，这些插件会一直等待 `uiResponsive`，不会启动。手工构造 props 的组件测试展开[客户端测试运行时](../../test-support/client-runtime/README.zh.md)提供的 `responsiveHooks(options?)`，该运行时的 `SlotTestRuntime` 也会提供带同样默认值的 `uiResponsive` 替身。
 
 -----
 

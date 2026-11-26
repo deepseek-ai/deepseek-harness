@@ -73,6 +73,9 @@
       "path": "../../client/ui-responsive"
     },
     {
+      "path": "../../client/ui-theme/tsconfig.client.json"
+    },
+    {
       "path": "../../client/ui-workspace/tsconfig.client.json"
     },
     {

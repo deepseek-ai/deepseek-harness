@@ -121,6 +121,7 @@
     "verify-no-unknown-casts": "tsx scripts/verify-no-unknown-casts.ts",
     "verify-empty-catch": "tsx scripts/verify-empty-catch.ts",
     "verify-css-selectors": "tsx scripts/verify-css-selectors.ts",
+    "verify-theme-attributes": "tsx scripts/verify-theme-attributes.ts",
     "verify-cordis-root": "tsx scripts/verify-cordis-root.ts",
     "verify-doc-refs": "tsx scripts/verify-doc-refs.ts",
     "verify-subsystem-pages": "tsx scripts/verify-subsystem-pages.ts",

@@ -9,9 +9,9 @@ description: "手工构造 Web Client Slot props 时必须提供响应式钩子�
 
 ## 变更
 
-在 0.2.3-alpha.2 中，按媒体查询或设备类别切换的 Web Client 组件自行调用 `window.matchMedia` 或 `isMobileDevice()`。升级后，`GlobalStandardProps` 要求 `useMediaQuery(query)` 与 `useMobile()`，由新的 `@deepseek-ai/dsh-client-ui-responsive` Client 插件提供的 `uiResponsive` 服务发布到每个 Slot 作用域；见[框架提供的 hooks](../../../subsystems/slots.zh.md#framework-provided-hooks)。输入框、右侧栏展开按钮、agent preset 选择芯片、桌面引导流程、模型选择器和会话面板会读取它们，其插件都 inject `uiResponsive`。运行随附 Web bundle 的 profile 无需修改配置。
+在 0.2.3-alpha.2 中，按媒体查询或设备类别切换的 Web Client 组件自行调用 `window.matchMedia` 或 `isMobileDevice()`。升级后，`GlobalStandardProps` 要求 `useMediaQuery(query)` 与 `useMobile()`，由新的 `@deepseek-ai/dsh-client-ui-responsive` Client 插件提供的 `uiResponsive` 服务发布到每个 Slot 作用域；见[框架提供的 hooks](../../../subsystems/slots.zh.md#framework-provided-hooks)。输入框、右侧栏展开按钮、agent preset 选择芯片、桌面引导流程、模型选择器和会话面板会读取它们，实验性的 Session Inspector 和 Forge 也会读取；这些插件都 inject `uiResponsive`。运行随附 Web bundle 的 profile 无需修改配置。
 
-手工构造完整 Slot props 的 TypeScript 代码必须提供这两个钩子，以及渲染器的 `useDocumentPortal()` 和 `useDocumentViewport()`。使用文档钩子无需注入 `uiResponsive`。保留 `ui-conversation`、`ui-sidebar-right`、`ui-agent-preset`、`ui-settings-account`、`ui-model-selection` 或 `ui-session-panel`，却省略了 `@deepseek-ai/dsh-client-ui-responsive` 的自定义 Web roster，不再启动这些插件：它们的媒体与设备钩子需要 `uiResponsive` 服务。
+手工构造完整 Slot props 的 TypeScript 代码必须提供这两个钩子，以及渲染器的 `useDocumentPortal()` 和 `useDocumentViewport()`。使用文档钩子无需注入 `uiResponsive`。省略了 `@deepseek-ai/dsh-client-ui-responsive` 的自定义 Web roster 不再启动这些插件，因为它们的媒体与设备钩子需要 `uiResponsive` 服务。
 
 ## 迁移
 

@@ -49,9 +49,13 @@ export type ContextMenuTarget = {
 export interface ContextMenuButtonProps {
   readonly target: ContextMenuTarget
   readonly label: string
-  readonly className?: string | undefined
-  /** Use the compact toolbar control with a label tooltip; omission preserves caller-styled row button geometry without a tooltip. */
-  readonly size?: 'sm'
+  /**
+   * Control geometry, styled by this package. `sm` is the compact toolbar control: a 28px square around a 15px
+   * secondary glyph, with a label tooltip. `row` is a list-row action: a 24px target whose margins keep a 16px layout
+   * footprint, around a 14px tertiary glyph, without a tooltip. Omission renders an unstyled native button without a
+   * tooltip, whose geometry the surrounding container supplies.
+   */
+  readonly size?: 'sm' | 'row'
   /** Instance id shared with the owner's gesture trigger, so both mark the same opener; omission uses this button's own id. */
   readonly opener?: string | undefined
 }

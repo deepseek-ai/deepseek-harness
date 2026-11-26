@@ -6,8 +6,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PixelWhale } from './home-whale/PixelWhale.tsx'
 import { OfficialBrandMark, OfficialBrandName } from './Brand.tsx'
 
-/** Required service: the UI slot registry. */
-export const inject = ['slots']
+/** Required services: the UI slot registry, and `theme`, whose owner publishes the `useTheme` prop the whale reads. */
+export const inject = ['slots', 'theme']
 
 /**
  * Fill official sidebar artwork and frame the blank home with the whale decoration.

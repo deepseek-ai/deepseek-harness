@@ -95,14 +95,15 @@
    radius sized for a panel this narrow. The layer-1 background separates the
    card in dark mode; its shadow is `--dsw-elevation-prominent` with the l2
    hairline, l3 in dark mode as on menu cards (ui-theme
-   styles/gradient-shadow-text.css). */
+   styles/gradient-shadow-text.css). `light-dark()` follows the root
+   `color-scheme` the theme presenter sets. */
 @media (width >= 768px) {
   .push,
   .overlay {
     background: var(--dsw-alias-bg-layer-1);
     border: 0;
     border-radius: var(--dsw-radius-lg);
-    --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+    --dsw-elevation-stroke-color: light-dark(var(--dsw-alias-border-l2), var(--dsw-alias-border-l3));
     box-shadow: var(--dsw-elevation-prominent);
     /* Elevated surface: the tree's scrollbar takes the l2 thumb pair (ui-theme
        styles/scrollbar.css). */
@@ -126,11 +127,6 @@
     bottom: 8px;
     z-index: 2;
     height: auto;
-  }
-
-  :global(body[data-ds-dark-theme]) .push,
-  :global(body[data-ds-dark-theme]) .overlay {
-    --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
   }
 
   /* The bar stops where the card's corners curve, so they do not clip it. */

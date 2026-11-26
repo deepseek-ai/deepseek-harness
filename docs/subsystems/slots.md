@@ -163,6 +163,7 @@ The shipped adapters add these standard props. They are available according to t
 | every mounted scope | `useDocumentPortal`, `useDocumentViewport` | [ui-renderer](../../packages/client/ui-renderer/README.md#use-this-package) |
 | every scope | `useMediaQuery` | `ui-responsive` |
 | every scope | `useMobile` | `ui-responsive` |
+| every scope | `useTheme` | [ui-theme](../../packages/client/ui-theme/README.md#use-this-package) |
 | `session` | `sessionId`, `useSession`, `useProjection`, `useAccess` (the bound Session's answer) | `ui-session` |
 | `session-maybe` | optional `sessionId`, `useSession`, `useProjection`, `useAccess` results | `ui-session` |
 | `session` | `useConversation`, `useInput`, `inputActions` | `ui-conversation` |
@@ -170,7 +171,7 @@ The shipped adapters add these standard props. They are available according to t
 | `session` | `useChat` | `ui-chat` |
 | `session` | `useTrajectory` | `ui-trajectory` |
 
-`useMediaQuery(query)` answers whether a CSS media query matches in the page window and rerenders the component when the answer changes; use it when the answer selects rendered structure or behavior, and keep a style-only difference in a CSS `@media` rule. `useMobile()` answers whether the page runs on a phone or tablet and stays fixed for the page lifetime; use it only for automatic focus and soft-keyboard behavior, and select layouts with width media queries. A plugin whose components read either prop injects the `uiResponsive` service, so it starts after both props exist and unloads with them.
+`useMediaQuery(query)` answers whether a CSS media query matches in the page window and rerenders the component when the answer changes; use it when the answer selects rendered structure or behavior, and keep a style-only difference in a CSS `@media` rule. `useMobile()` answers whether the page runs on a phone or tablet and stays fixed for the page lifetime; use it only for automatic focus and soft-keyboard behavior, and select layouts with width media queries. A plugin whose components read either prop injects the `uiResponsive` service, so it starts after both props exist and unloads with them. `useTheme(selector)` selects from the current theme snapshot; a plugin whose components read it injects the `theme` service.
 
 The renderer also creates `useStore` from a declared store and `t` from a declared locale namespace. These are registration-derived props rather than global standard props.
 

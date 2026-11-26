@@ -232,10 +232,6 @@ export function apply(ctx: Context): void {
         getSnapshot: () => snapshot,
         subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
       },
-      theme: {
-        getSnapshot: () => ctx.theme.getTheme(),
-        subscribe: listener => ctx.on('theme/change', listener),
-      },
     },
     async start() {
       publish({ ...snapshot, loginVisible: true, loginFailed: false })

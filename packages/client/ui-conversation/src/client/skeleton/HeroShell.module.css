@@ -75,8 +75,8 @@
   white-space: nowrap;
 }
 
-/* Keep hover detection on a stationary box while the mark moves within it;
-   hover rules target the hitbox so a slot-occupant mark swims too. */
+/* Keep hover detection on a stationary box while the fallback mark moves
+   within it. A slot occupant styles and animates its own mark. */
 .fishHitbox {
   display: inline-flex;
   flex: none;

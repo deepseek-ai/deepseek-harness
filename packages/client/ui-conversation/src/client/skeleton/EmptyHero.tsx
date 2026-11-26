@@ -148,7 +148,7 @@ export function HeroShell({ t, renderSlot, headline, children }: HeroShellProps)
             }}
             onPointerLeave={() => { setHovering(false) }}
           >
-            {renderSlot('conversation.hero.brand.mark', { size: 34, className: css.fish }, {
+            {renderSlot('conversation.hero.brand.mark', { size: 34 }, {
               fallback: <HeroFish hovering={hovering} />,
             })}
           </span>

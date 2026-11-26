@@ -59,7 +59,7 @@ it('switches presentation in one table and follows a linked node through its col
       if (!picker.start()) return undefined
       return () => { picker.dispose() }
     },
-    loadOlder: async () => {}, t: makeTranslate(en), useDocumentPortal: () => Portal,
+    loadOlder: async () => {}, t: makeTranslate(en), useDocumentPortal: () => Portal, useMediaQuery: () => true,
   }
   const ui = render(<SessionInspectorView {...props} />)
   expect(ui.getAllByRole('table')).toHaveLength(1)

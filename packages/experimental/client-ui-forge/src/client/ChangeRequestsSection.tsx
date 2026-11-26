@@ -9,6 +9,8 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
+// Type-only: the `useMediaQuery` standard prop merge.
+import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import type { ForgePanelState } from '../types.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { createChangeRequestsSectionStore } from './change-requests-store.ts'
@@ -156,16 +158,17 @@ function SignInRow({ need, copyText, t }: {
  * expands or collapses keeps that choice in the Session's store, across
  * updates and while the panel is hidden. Viewing changes closes the panel's
  * overlay.
- * @param props - panel snapshot hooks, card actions, panel owner values, the store, and copy.
+ * @param props - panel snapshot hooks, card actions, panel owner values, the media query hook, the store, and copy.
  * @returns the cards, or null with neither bound change requests nor a sign-in to complete.
  */
 export function ChangeRequestsSection({
   usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, autoMerge, readChecks,
   rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot,
-  renderFactorySlot, t,
+  renderFactorySlot, useMediaQuery, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
+  const coarsePointer = useMediaQuery('(pointer: coarse)')
   const chosen = useStore(current => current.expanded)
   const unfolded = useStore(current => current.unfolded)
   const renderDetails = useCallback(
@@ -208,6 +211,7 @@ export function ChangeRequestsSection({
                 now={now}
                 actions={actions}
                 locale={locale}
+                coarsePointer={coarsePointer}
                 t={t}
               />
             ))}

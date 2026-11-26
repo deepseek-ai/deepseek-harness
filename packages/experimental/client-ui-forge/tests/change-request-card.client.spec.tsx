@@ -36,7 +36,7 @@ function card(value: ForgePanelChangeRequest, options: { expanded?: boolean; act
   const view = render(
     <ul>
       <ChangeRequestCard locale="en" entry={value} expanded={options.expanded ?? false} onToggle={onToggle} now={NOW} actions={actions}
-        t={options.t ?? t} />
+        coarsePointer={false} t={options.t ?? t} />
     </ul>,
   )
   const item = view.container.querySelector('[data-forge-change]')
@@ -535,7 +535,8 @@ describe('expanded ChangeRequestCard', () => {
     if (change === 'close') fireEvent.click(within(b.item).getByText(en['change.row.checks']))
     else if (change === 'unmount') b.view.unmount()
     else b.view.rerender(<ul><ChangeRequestCard entry={entry(1, { ...partial, headSha: 'b'.repeat(40) })} expanded onToggle={b.onToggle}
-      now={NOW} locale="en" actions={{ openLink: b.openLink, copyLink: b.copyLink, retry: b.retry, readChecks }} t={t} /></ul>)
+      now={NOW} locale="en" actions={{ openLink: b.openLink, copyLink: b.copyLink, retry: b.retry, readChecks }} coarsePointer={false}
+      t={t} /></ul>)
     expect(signal.aborted).toBe(true)
     await act(async () => { pending.resolve(snapshot(1, { checks: [check('late result', { state: 'failure' })] })); await Promise.resolve() })
     expect(screen.queryByText('late result')).toBeNull()
@@ -700,7 +701,7 @@ describe('ChangeRequestCard actions', () => {
     const merge = vi.fn<NonNullable<ChangeRequestActions['merge']>>(async () => {})
     const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), merge }
     const view = (headSha: string) => <ChangeRequestCard locale="en" entry={entry(7, snapshot(7, { mergeReady: true, headSha }))}
-      expanded onToggle={vi.fn()} now={NOW} actions={actions} t={t} />
+      expanded onToggle={vi.fn()} now={NOW} actions={actions} coarsePointer={false} t={t} />
     const rendered = render(view(head))
     const button = screen.getByRole('button', { name: en['change.merge'] })
     fireEvent.click(button)
@@ -726,6 +727,7 @@ describe('ChangeRequestCard actions', () => {
           onToggle={vi.fn()}
           now={NOW}
           actions={actions}
+          coarsePointer={false}
           t={t}
         />
       </ul>
@@ -888,7 +890,7 @@ describe('change request number formatting', () => {
     const value = entry(7, snapshot(7, { additions: 1234, deletions: 5678 }))
     const actions: ChangeRequestActions = { openLink: vi.fn(), copyLink: vi.fn(), retry: vi.fn(), viewChanges: vi.fn() }
     const view = (locale: string) => <ChangeRequestCard locale={locale} entry={value} expanded onToggle={vi.fn()}
-      now={NOW} actions={actions} t={t} />
+      now={NOW} actions={actions} coarsePointer={false} t={t} />
     const rendered = render(view('de'))
     expect(screen.getByText('+1.234')).toBeTruthy()
     expect(screen.getByText('−5.678')).toBeTruthy()

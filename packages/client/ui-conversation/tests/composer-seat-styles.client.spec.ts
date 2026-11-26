@@ -19,7 +19,8 @@ function rule(css: string, selector: string): string {
 }
 
 describe('docked composer seat styles', () => {
-  const seat = rule(conversationCss, ".root[data-phase='active'] .composerSeat,")
+  // `:where(:scope, *)` keeps the phase ancestor reachable when isolation scopes this sheet below a hoc layer.
+  const seat = rule(conversationCss, ".root[data-phase='active'] :where(:scope, *) .composerSeat,")
 
   it('keeps the seat at one stacking rank in every state', () => {
     expect(seat).toMatch(/position:\s*sticky;/)
@@ -33,7 +34,7 @@ describe('docked composer seat styles', () => {
   it('lets a forwarded Session View own its scroller when it contains a composer overlay', () => {
     const views = ":where([data-slot-factory-children='conversation.content:views'])"
     const session = ":global([data-slot='conversation.session'])"
-    const area = rule(conversationCss, `.scrollBody > ${views} > ${session} > .viewArea:has([data-conversation-composer-overlay])`)
+    const area = rule(conversationCss, `.scrollBody > ${views} > ${session}:where(:scope, *) > .viewArea:has([data-conversation-composer-overlay])`)
     expect(area).toMatch(/flex:\s*1 1 0;/)
     expect(area).toMatch(/min-height:\s*0;/)
     expect(area).toMatch(/overflow:\s*hidden;/)

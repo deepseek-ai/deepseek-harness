@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { Context } from '@deepseek-ai/cordis'
@@ -364,7 +364,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useWorkspaces: selector => selector(panelWorkspace),
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks(), ...themeHooks(),
     useTurnData: () => undefined,
     useDisclosure: () => { throw new Error('unused') },
     useGroupAction: () => { throw new Error('unused') },

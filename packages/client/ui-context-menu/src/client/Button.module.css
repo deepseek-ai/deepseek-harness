@@ -1,0 +1,48 @@
+/* List-row action (`size: 'row'`): compensated margins keep the 24px target
+   centered on a 16px layout footprint, so the glyph sits where the row's
+   other compact icons do. */
+.row {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  border: none;
+  border-radius: var(--dsw-radius-xs);
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.row > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Keep the focus ring on the compact outline. */
+.row:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* Compact toolbar control (`size: 'sm'`): the primitive's 28px compact button
+   made square for the glyph alone. */
+.toolbar {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.toolbar svg {
+  width: 15px;
+  height: 15px;
+}

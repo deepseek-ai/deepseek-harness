@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
+// Type-only: the `useMediaQuery` standard prop merge.
+import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import type { InspectorInjected } from './InspectorTable.tsx'
 import { InspectorTable } from './InspectorTable.tsx'
 import type { InspectorObjects, InspectorChatTarget } from './objects.ts'
@@ -39,8 +41,8 @@ export interface SessionInspectorInjected {
   readonly pickRow: (target: InspectorPickTarget, mode: InspectorPresentation) => string | undefined
 }
 
-/** Sidebar Session source and Inspector-owned actions and data. */
-export type SessionInspectorProps = Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useSession' | 'useDocumentPortal'>
+/** Sidebar Session source, the media query hook, and Inspector-owned actions and data. */
+export type SessionInspectorProps = Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useSession' | 'useDocumentPortal' | 'useMediaQuery'>
   & InjectFace<SessionInspectorInjected> & PropsLocale<'session-inspector'>
 
 /** @param props - Session-bound sources. @returns One Inspector with an in-toolbar presentation selector. */
@@ -51,6 +53,7 @@ export function SessionInspectorView(props: SessionInspectorProps) {
   const [pickedRow, setPickedRow] = useState<{ key: string }>()
   const pickButton = useRef<HTMLButtonElement>(null)
   const Portal = props.useDocumentPortal()
+  const reducedMotion = props.useMediaQuery('(prefers-reduced-motion: reduce)')
   const chat = mode === 'chat-node'
   const revealer = useMemo(() => new InspectorChatRevealer(props.chatRoot), [props.chatRoot])
   useEffect(() => () => { revealer.dispose() }, [revealer, mode])
@@ -94,6 +97,6 @@ export function SessionInspectorView(props: SessionInspectorProps) {
     notice={picking ? props.t(pickFailed ? 'picker.noMatch' : 'picker.instructions') : pickFailed ? props.t('picker.noChat') : undefined}
     useRows={chat ? props.useChatRows : props.useLogRows}
     useRecord={chat ? props.useChatRecord : props.useLogRecord} useSession={props.useSession}
-    loadOlder={props.loadOlder} typeOf={typeOf} t={props.t} flash={chat} showTime={!chat}
+    loadOlder={props.loadOlder} typeOf={typeOf} t={props.t} flash={chat} reducedMotion={reducedMotion} showTime={!chat}
     navigation={navigation} Portal={Portal} {...chat ? { objects: props.objects } : {}} />
 }

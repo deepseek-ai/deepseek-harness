@@ -81,6 +81,8 @@ export interface ChangeRequestCardProps {
   readonly actions: ChangeRequestActions
   /** Active UI language for numeric formatting. */
   readonly locale: string
+  /** Whether the page's primary pointer is coarse, which keeps the reviewer search from focusing its field. */
+  readonly coarsePointer: boolean
   /** Forge panel copy. */
   readonly t: Translate
 }
@@ -549,13 +551,14 @@ export function MergeStateRow({ entry, snapshot, updateBranch, t }: {
  * The facts of a change request one row each: the merged or closed state, or the checks, review, and merge state;
  * the changed lines; and the linked issues.
  */
-function Details({ entry, snapshot, name, now, actions, locale, t }: {
+function Details({ entry, snapshot, name, now, actions, locale, coarsePointer, t }: {
   readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly now: number
   readonly actions: ChangeRequestActions
   readonly locale: string
+  readonly coarsePointer: boolean
   readonly t: Translate
 }): ReactNode {
   const changes = <ChangesRow entry={entry} snapshot={snapshot} name={name} actions={actions} locale={locale} t={t} />
@@ -573,7 +576,7 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
       <ChecksRow key={snapshot.headSha} entry={entry} snapshot={snapshot} openLink={actions.openLink} readChecks={actions.readChecks}
         rerunChecks={actions.rerunChecks} t={t} />
       <ReviewRow entry={entry} snapshot={snapshot} tone={review.tone} openLink={actions.openLink} value={review.value}
-        requestReviews={actions.requestReviews} reviewerCandidates={actions.reviewerCandidates} t={t} />
+        requestReviews={actions.requestReviews} reviewerCandidates={actions.reviewerCandidates} coarsePointer={coarsePointer} t={t} />
       <MergeStateRow entry={entry} snapshot={snapshot} updateBranch={actions.updateBranch} t={t} />
       {changes}
       <IssuesRow snapshot={snapshot} openLink={actions.openLink} t={t} />
@@ -586,10 +589,12 @@ function Details({ entry, snapshot, name, now, actions, locale, t }: {
  * and has read; with the platform's modifier key or the middle button, and for any other change request, it opens
  * the host's page. The line shows its status as glyphs and, while collapsed, reads it in words to assistive
  * technology, which the expanded rows do otherwise; the hover card names the full title, the branches, and that status.
- * @param props - change request, expansion, current time, actions, and copy.
+ * @param props - change request, expansion, current time, actions, number locale, pointer accuracy, and copy.
  * @returns the card.
  */
-export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, locale, t }: ChangeRequestCardProps): ReactNode {
+export function ChangeRequestCard({
+  entry, expanded, onToggle, now, actions, locale, coarsePointer, t,
+}: ChangeRequestCardProps): ReactNode {
   const snapshot = entry.snapshot
   const number = numberOf(entry)
   const url = snapshot?.url ?? entry.url
@@ -664,7 +669,8 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
         </div>
       )}
       {expanded && snapshot !== null && (
-        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
+        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale}
+          coarsePointer={coarsePointer} t={t} />
       )}
       {expanded && snapshot !== null && <ChangeRequestPrimary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>

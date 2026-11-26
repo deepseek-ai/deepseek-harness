@@ -32,7 +32,7 @@ it('shows late registered kinds without preparing actions and withdraws them wit
     {renderFactorySlot('contextMenu.button', { target: target('header'), label: 'Header menu', size: 'sm' })}
     {renderFactorySlot('contextMenu.button', { target: { kind: 'session', value: {
       sessionId: brandString<SessionId>('row'), displayTitle: 'Row',
-    } }, label: 'Row menu', className: 'row-control' })}
+    } }, label: 'Row menu', size: 'row' })}
   </>)
   const view = runtime.renderRoot()
   expect(view.queryByRole('button')).toBeNull()
@@ -59,24 +59,27 @@ it('shows late registered kinds without preparing actions and withdraws them wit
   expect(source.getSnapshot()).toEqual([])
 })
 
-it('shows the label tooltip on the compact toolbar button but not on row buttons', async () => {
+it('shows the label tooltip on the compact toolbar button but not on row or container-styled buttons', async () => {
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
   runtime.ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   runtime.ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
   await runtime.root.declare({}, ({ renderFactorySlot }) => <>
     {renderFactorySlot('contextMenu.button', { target: target('header'), label: 'Header menu', size: 'sm' })}
-    {renderFactorySlot('contextMenu.button', { target: target('row'), label: 'Row menu' })}
+    {renderFactorySlot('contextMenu.button', { target: target('row'), label: 'Row menu', size: 'row' })}
+    {renderFactorySlot('contextMenu.button', { target: target('panel'), label: 'Panel row menu' })}
   </>)
   await runtime.mount({ inject, apply }, syncedConfig({ resolutionTimeoutMs: 1000 }))
   await runtime.mount({ inject: ['contextMenus'], apply: (ctx: Context) => { ctx.effect(() => ctx.contextMenus.register({
     id: 'header', target: 'header', order: 0, resolve: () => [],
   })) } })
   const view = runtime.renderRoot()
-  const row = view.getByRole('button', { name: 'Row menu' })
-  fireEvent.pointerEnter(row)
-  fireEvent.focus(row)
-  expect(view.queryByRole('tooltip')).toBeNull()
+  for (const name of ['Row menu', 'Panel row menu']) {
+    const row = view.getByRole('button', { name })
+    fireEvent.pointerEnter(row)
+    fireEvent.focus(row)
+    expect(view.queryByRole('tooltip')).toBeNull()
+  }
   fireEvent.focus(view.getByRole('button', { name: 'Header menu' }))
   expect(view.getByRole('tooltip').textContent).toBe('Header menu')
 })

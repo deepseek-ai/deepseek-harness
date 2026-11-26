@@ -6,8 +6,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { en, ja, es, fr, de, ru, pt, NS, zh } from './locales.ts'
 import { registerInspectorTab } from './views/index.ts'
 
-/** Services required to register the localized Session-bound sidebar tab. */
-export const inject = ['slots', 'locale', 'sessions', 'uiSession', 'uiConversation', 'sidebarRightTabs']
+/** Services required to register the localized Session-bound sidebar tab; `uiResponsive` owns the view's `useMediaQuery` prop. */
+export const inject = ['slots', 'locale', 'sessions', 'uiSession', 'uiConversation', 'sidebarRightTabs', 'uiResponsive']
 
 /**
  * Register the Inspector tab for this plugin's lifetime.

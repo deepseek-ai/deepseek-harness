@@ -25,6 +25,8 @@ const HERO_HOLE = 'conversation.hero.brand.mark'
 async function bench(declare = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
+  // The plugin injects `theme` because the whale reads the `useTheme` standard prop that service's owner publishes.
+  ctx.provide('theme', {} as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declareHoles = () => slots.register({
     name: 'root',
@@ -42,8 +44,8 @@ describe('official browser-brand plugin', () => {
     expect(hostApply).not.toThrow()
   })
 
-  it('declares only the slot service it uses', () => {
-    expect(inject).toEqual(['slots'])
+  it('declares the slot registry and the theme owner of the useTheme prop', () => {
+    expect(inject).toEqual(['slots', 'theme'])
   })
 
   it('keeps local sidebar branding and provides the same blank-home feedback', async () => {

@@ -168,10 +168,15 @@
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
    render stays static. The New Session row animates each direct output of its
    slot. Only the slot's children outlets are transparent: a layer's own wrapper
-   moves as one item, not together with a second animation on its descendants. */
+   moves as one item, not together with a second animation on its descendants.
+   A layer from another package sits between `.railIn` and this package's
+   content in that outlet, which starts this package's style scope again;
+   naming `:scope` lets `.railIn` match outside the scope, and `:where()`
+   keeps the specificity. The `.collapsed` rules for the New session button
+   below use the same form. */
 .railIn .iconButton,
 .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
-.railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+.railIn .newSessionRow [data-slot-children='sidebar.session.action']:where(:scope, *):not(:where(
   [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
 )) > *,
 .railIn .panelList,
@@ -179,7 +184,7 @@
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
 }
 
-.railIn .newSessionRow [data-slot-children='sidebar.session.action'] {
+.railIn .newSessionRow [data-slot-children='sidebar.session.action']:where(:scope, *) {
   animation: none;
 }
 
@@ -501,7 +506,7 @@
   margin: 0 0 12px;
 }
 
-.collapsed .newSession {
+.collapsed :where(:scope, *) .newSession {
   flex: none;
   width: 36px;
   height: 36px;
@@ -513,7 +518,7 @@
 }
 
 @media (hover: hover) {
-  .collapsed .newSession:hover {
+  .collapsed :where(:scope, *) .newSession:hover {
     background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
@@ -534,7 +539,7 @@
   white-space: nowrap;
 }
 
-.collapsed .newSessionLabel {
+.collapsed :where(:scope, *) .newSessionLabel {
   max-width: 0;
 }
 
@@ -896,7 +901,7 @@
   .fading > *,
   .railIn .iconButton,
   .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
-  .railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+  .railIn .newSessionRow [data-slot-children='sidebar.session.action']:where(:scope, *):not(:where(
     [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
   )) > *,
   .railIn .panelList,

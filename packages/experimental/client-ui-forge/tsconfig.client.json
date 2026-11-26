@@ -55,6 +55,9 @@
       "path": "../../client/ui-renderer"
     },
     {
+      "path": "../../client/ui-responsive"
+    },
+    {
       "path": "../../client/ui-session"
     },
     {
