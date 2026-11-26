@@ -458,18 +458,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const detectedVisibleRef = detectedRef === undefined || !visibleRefs.includes(detectedRef) ? undefined : detectedRef
     const missingRefs = checkedRefs.length > 0 && checkedRefs.every(([, info]) => info?.configured === false)
     const savedCredential = detected?.[1]?.source === 'file' && detectedVisibleRef !== undefined
-    const credentialHint = props.credentialRequired === true
+    // No hint accompanies a saved key, a typed draft, or a staged removal: `credentials.describe` reports
+    // only the source in effect, so the environment status behind the saved key is unknown until Apply.
+    // The hint reports the environment fallback, or a removal that completed before its settings write failed.
+    const credentialHint = props.credentialRequired === true || keyText.length > 0
       ? undefined
-      : keyText.length > 0 ? savedCredential ? t('keyReplacePending') : undefined
-        : keyRemoval !== undefined ? keyRemoval.removed === true ? t('keyRemoveApplied')
-          : keyHint === undefined ? t('keyRemovePending')
-            : t('keyRemovePendingEnvironment').replace('{hint}', () => keyHint)
-          : keyHint === undefined ? undefined
-            : savedCredential
-              ? t('keySaved')
-              : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
-                : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
-                .replace('{hint}', () => detectedVisibleRef ?? keyHint)
+      : keyRemoval !== undefined ? keyRemoval.removed === true ? t('keyRemoveApplied') : undefined
+        : keyHint === undefined || savedCredential ? undefined
+          : t(detectedRef === undefined ? missingRefs ? 'keyFallbackMissing' : 'keyFallbackUnchecked'
+            : detectedVisibleRef === undefined ? 'keyFallbackDetectedHidden' : 'keyFallbackDetected')
+            .replace('{hint}', () => detectedVisibleRef ?? keyHint)
     const keyHelp = visibleRefs.length === 0
       ? undefined
       : t('keyHelp').replace('{env}', () => visibleRefs.join(' / '))
@@ -507,28 +505,27 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
             <ApiKeyInput
               t={t}
               value={keyText}
-              {...keyDraft === undefined && savedCredential ? {
+              {...keyRemoval === undefined && savedCredential ? {
                 saved: {
-                  masked: detected[1].masked ?? '',
+                  masked: detected[1].masked,
                   ...detected[1].writable
                     ? { clear: () => { setKeyDraft({ ref: detected[0] }); setFailure(undefined) } } : {},
                 },
               } : {}}
               placeholder={keyPlaceholder}
               aria-label={t('keyInput')}
-              aria-invalid={shownKeyFailure !== undefined && !keyRequirementQuiet}
+              invalid={shownKeyFailure !== undefined && !keyRequirementQuiet}
               aria-describedby={credentialHint === undefined ? undefined : `${props.provider}-credential-hint`}
               required={props.credentialRequired === true || protocolNeedsKeyHere}
               autoFocus={props.autoFocusCredential === true}
               disabled={disabled || keyRemoval?.removed === true}
               onChange={(event) => {
-                setKeyDraft(event.target.value === '' && savedCredential
-                  ? detected[1].writable ? { ref: detected[0] } : undefined
-                  : event.target.value)
+                // An emptied replacement keeps the saved key; only the clear action stages its removal.
+                setKeyDraft(event.target.value === '' && savedCredential ? undefined : event.target.value)
                 setFailure(undefined)
               }}
             />
-            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : keyText.length > 0 || detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
+            {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[keyRemoval !== undefined || missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {/* A key the protocol requires is a requirement still to meet, and a fault once a save was refused for it. */}
             {shownKeyFailure === undefined
               ? null

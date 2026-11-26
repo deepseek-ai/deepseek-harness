@@ -327,6 +327,12 @@ function authHelpText(): string | null {
   return screen.getByRole('tooltip').textContent
 }
 
+/** Open the input of a saved key through its replace action. */
+function replaceSavedKey(): HTMLInputElement {
+  fireEvent.click(screen.getByRole('button', { name: en.keyReplace }))
+  return screen.getByLabelText<HTMLInputElement>(en.keyInput)
+}
+
 /** One recorded child-slot dispatch: seat name, owner share, kind options. */
 type RenderSlotCall = [name: string, owner: Record<string, unknown>, opts?: { entryKey?: string }]
 
@@ -778,7 +784,7 @@ describe('ModelsSection', () => {
     await mountFace(scripted)
     expect(screen.getByRole('alert').textContent).toBe(failure)
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-    expect(await screen.findByLabelText(en.keyInput)).toBeTruthy()
+    expect(await screen.findByRole('button', { name: en.keyReplace })).toBeTruthy()
     expect(screen.getByRole('button', { name: en.add })).toBeTruthy()
   })
 
@@ -1736,9 +1742,9 @@ describe('ModelsSection', () => {
   it('edits a pi-ai profile with the curated fields only', async () => {
     const { mutate } = await mountSection()
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-    // The field names the profile's reference; a stored value stays hidden.
-    const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(editorKey.placeholder).toBe('••••••••')
+    // The saved key shows only its preview; no input holds a stored value.
+    expect(await screen.findByText('••••••••')).toBeTruthy()
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
     // pi-ai carries Base URL too: the stored override shows as the value and
     // the effective profile endpoint, ahead of the catalog's, as its placeholder.
     fireEvent.click(screen.getByText(en.customized))
@@ -1923,9 +1929,8 @@ describe('ModelsSection', () => {
     const { face, set } = await mountSection()
     face.credentials.describe.mockImplementation(() => Promise.resolve(remoteFail('down', 'gateway/internal')))
     fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-    const editorKey = await screen.findByLabelText<HTMLInputElement>(en.keyInput)
-    expect(editorKey.placeholder).toBe('••••••••')
-    fireEvent.change(editorKey, { target: { value: 'sk-live' } })
+    expect(await screen.findByText('••••••••')).toBeTruthy()
+    fireEvent.change(replaceSavedKey(), { target: { value: 'sk-live' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledTimes(1) })
   })
@@ -2055,7 +2060,7 @@ describe('ModelsSection', () => {
     await mountSection()
     const row = screen.getByRole('button', { name: openaiCopy(en.editProvider) }).closest('li')!
     fireEvent.click(within(row).getByRole('button', { name: openaiCopy(en.editProvider) }))
-    expect(within(row).getByLabelText(en.keyInput)).toBeTruthy()
+    expect(within(row).getByRole('button', { name: en.keyReplace })).toBeTruthy()
     expect(within(row).getAllByText('openai')).toHaveLength(1)
     expect(within(row).queryByRole('button', { name: openaiCopy(en.editProvider) })).toBeNull()
     expect(within(row).getByRole('button', { name: openaiCopy(en.removeProvider) })).toBeTruthy()
@@ -2587,30 +2592,26 @@ describe('apiKeyFailure', () => {
   })
 })
 
-it.each(['file', 'env', 'project-env', 'user-env'] as const)('shows the existing authentication with a blank input for source %s', (source) => {
+it.each(['env', 'project-env', 'user-env'] as const)('shows the environment authentication with a blank input for source %s', (source) => {
   renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
-    credential: { configured: true, source, writable: true, ...source === 'file' ? { masked: '••••••••' } : {} },
+    credential: { configured: true, source, writable: true },
   })
   const hint = en.keyFallbackDetected.replace('{hint}', 'OPENAI_API_KEY')
   const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
   expect(screen.queryByText(/^API key source:/)).toBeNull()
-  if (source === 'file') expect(screen.getByText(en.keySaved)).toBeTruthy()
-  else expect(screen.getAllByText(hint)).toHaveLength(1)
+  expect(screen.getAllByText(hint)).toHaveLength(1)
   expect(input.value).toBe('')
-  expect(input.placeholder)
-    .toBe(source === 'file' ? '••••••••' : en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
+  expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
   fireEvent.change(input, { target: { value: 'new-key' } })
   expect(screen.queryByText(hint)).toBeNull()
   expect(screen.queryByText(/^API key source:/)).toBeNull()
-  if (source === 'file') {
-    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toBe(en.keyReplacePending)
-  } else {
-    expect(screen.queryByText(en.keyReplacePending)).toBeNull()
-    expect(input.getAttribute('aria-describedby')).toBeNull()
-  }
+  expect(input.getAttribute('aria-describedby')).toBeNull()
+  // Without a saved key the field has no read-only form to return to.
+  fireEvent.blur(input)
+  expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true)
+  expect(screen.getByLabelText(en.keyInput)).toBe(input)
   fireEvent.change(input, { target: { value: '' } })
-  if (source === 'file') expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'OPENAI_API_KEY'))).toBeTruthy()
-  else expect(screen.getAllByText(hint)).toHaveLength(1)
+  expect(screen.getAllByText(hint)).toHaveLength(1)
 })
 
 it.each([
@@ -2619,30 +2620,106 @@ it.each([
   ['google', `AIzaS${'•'.repeat(8)}wxyz`],
   ['deepseek', `sk-abcde${'•'.repeat(8)}wxyz`],
   ['acme-gateway', `vendor_abcde${'•'.repeat(8)}wxyz`],
-] as const)('protects the saved %s key and reveals only its replacement', (provider, masked) => {
+] as const)('shows the saved %s key read-only and edits its replacement on request', (provider, masked) => {
   renderPiAiEditor(provider, piAiNamespaceWith(provider, { apiKeyEnv: 'TEAM_API_KEY' }), {
     credential: { configured: true, source: 'file', writable: true, masked },
   })
-  const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+  expect(screen.getByText(masked)).toBeTruthy()
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
+  const input = replaceSavedKey()
+  expect(document.activeElement).toBe(input)
   expect(input.value).toBe('')
   expect(input.type).toBe('password')
-  expect(input.placeholder).toBe(masked)
-  expect(screen.queryByRole('button', { name: 'Clear saved key' })).toBeNull()
+  expect(input.placeholder).toBe(en.keyReplacementPlaceholder)
   expect(screen.queryByRole('button', { name: en.keyReveal })).toBeNull()
-  expect(fireEvent.copy(input)).toBe(false)
-  expect(fireEvent.cut(input)).toBe(false)
+  // Focus leaving the untouched input restores the preview.
+  fireEvent.blur(input)
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(screen.getByText(masked)).toBeTruthy()
+  const draft = replaceSavedKey()
+  fireEvent.change(draft, { target: { value: 'replacement-key' } })
+  expect(draft.getAttribute('aria-describedby')).toBeNull()
+  // Pressing the reveal button leaves focus in the input, and focus moving to it stays in the field.
+  const reveal = screen.getByRole('button', { name: en.keyReveal })
+  expect(fireEvent.mouseDown(reveal)).toBe(false)
+  fireEvent.blur(draft, { relatedTarget: reveal })
+  fireEvent.click(reveal)
+  expect(draft.type).toBe('text')
+  expect(draft.value).toBe('replacement-key')
+  fireEvent.blur(draft)
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(screen.getByText('•'.repeat('replacement-key'.length))).toBeTruthy()
+  // The reopened input still holds the draft, masked again.
+  const reopened = replaceSavedKey()
+  expect(reopened.value).toBe('replacement-key')
+  expect(reopened.type).toBe('password')
+  // An emptied draft keeps the saved key.
+  fireEvent.change(reopened, { target: { value: '' } })
+  expect(reopened.placeholder).toBe(en.keyReplacementPlaceholder)
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
+  fireEvent.blur(reopened)
+  expect(screen.getByText(masked)).toBeTruthy()
+})
+
+it('keeps the input of a saved key while the window is deactivated', () => {
+  renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
+    credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
+  })
+  const input = replaceSavedKey()
+  const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+  try {
+    fireEvent.blur(input)
+    expect(screen.getByLabelText(en.keyInput)).toBe(input)
+    hasFocus.mockReturnValue(true)
+    fireEvent.blur(input)
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  } finally {
+    hasFocus.mockRestore()
+  }
+})
+
+it('returns a valid replacement to read-only text with Enter and focuses the replace action', () => {
+  renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
+    credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
+  })
+  const input = replaceSavedKey()
   fireEvent.change(input, { target: { value: 'replacement-key' } })
-  expect(screen.queryByText(en.keySaved)).toBeNull()
-  expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toBe(en.keyReplacePending)
-  fireEvent.click(screen.getByRole('button', { name: en.keyReveal }))
-  expect(input.type).toBe('text')
-  expect(input.value).toBe('replacement-key')
-  expect(fireEvent.copy(input)).toBe(true)
-  expect(fireEvent.cut(input)).toBe(true)
-  fireEvent.change(input, { target: { value: '' } })
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'TEAM_API_KEY'))).toBeTruthy()
-  expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'TEAM_API_KEY'))
-  expect(screen.queryByLabelText(en.keyReveal)).toBeNull()
+  // Other keys and an IME confirmation leave the input open.
+  expect(fireEvent.keyDown(input, { key: 'a' })).toBe(true)
+  expect(fireEvent.keyDown(input, { key: 'Enter', isComposing: true })).toBe(true)
+  expect(screen.getByLabelText(en.keyInput)).toBe(input)
+  expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false)
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(screen.getByText('•'.repeat('replacement-key'.length))).toBeTruthy()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: en.keyReplace }))
+})
+
+it('keeps the input and its error when a failing replacement loses focus, and refuses its save there', () => {
+  const { face, set } = scriptedFace()
+  const closed = vi.fn()
+  render(<ProviderEditor provider="openai" displayName="OpenAI"
+    namespace={piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' })}
+    settingsPath={['providers', 'openai']} schema={settingsSchema} operations={operationsWith(face)}
+    t={t} readOnly={false} onClose={closed}
+    credential={{ configured: true, source: 'file', writable: true, masked: '••••••••' }} />)
+  const input = replaceSavedKey()
+  fireEvent.change(input, { target: { value: '"sk-abc"' } })
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  fireEvent.blur(input)
+  expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true)
+  expect(screen.getByLabelText(en.keyInput)).toBe(input)
+  expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
+  // The refused save writes nothing and returns the keyboard to the input that stayed open.
+  input.blur()
+  fireEvent.click(screen.getByRole('button', { name: en.apply }))
+  expect(document.activeElement).toBe(input)
+  expect(set).not.toHaveBeenCalled()
+  expect(closed).not.toHaveBeenCalled()
+  fireEvent.change(input, { target: { value: 'sk-abc' } })
+  fireEvent.blur(input)
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(screen.queryByText(en.keyIllegalCharacters)).toBeNull()
 })
 
 it('shows a key the route\'s protocol requires as a hint, and as an error once Apply was refused for it', async () => {
@@ -2687,50 +2764,58 @@ it('hides the reveal control and masks a disabled key draft', () => {
   expect(document.querySelector('input')?.type).toBe('password')
 })
 
-it('does not invent a preview when the credential provider omits it', () => {
+it('disables the saved-key actions of a disabled field', () => {
+  render(<ApiKeyInput value="" t={t} disabled saved={{ masked: '••••••••', clear: vi.fn() }} />)
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: en.keyReplace }).disabled).toBe(true)
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: en.keyClear }).disabled).toBe(true)
+})
+
+it('shows a fixed mask when the credential provider omits the preview', () => {
   renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
     credential: { configured: true, source: 'file', writable: true },
   })
-  const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
-  expect(input.value).toBe('')
-  expect(input.placeholder).toBe('')
-  expect(screen.getByText(en.keySaved)).toBeTruthy()
-  expect(screen.queryByRole('button', { name: en.keyReveal })).toBeNull()
+  expect(screen.getByText('•'.repeat(8))).toBeTruthy()
+  expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  expect(screen.getByRole('button', { name: en.keyReplace })).toBeTruthy()
 })
 
-it.each(['Backspace', 'Delete'])('stages whole saved-key deletion with %s and can cancel it', async (key) => {
+it('stages saved-key deletion with the clear action and can cancel it', async () => {
   const { unset } = await mountSection()
   const edit = () => screen.getByRole('button', { name: openaiCopy(en.editProvider) })
   fireEvent.click(edit())
-  let input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
-  expect(input.placeholder).toBe('••••••••')
-  fireEvent.keyDown(input, { key: 'ArrowLeft' })
-  expect(input.placeholder).toBe('••••••••')
-  fireEvent.keyDown(input, { key })
+  expect(screen.getByText('••••••••')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
+  const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+  expect(document.activeElement).toBe(input)
   expect(input.placeholder).toBe(en.keyPlaceholderFallback.replace('{hint}', 'OPENAI_API_KEY'))
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'OPENAI_API_KEY'))).toBeTruthy()
+  // Only the placeholder speaks for the cleared field; no hint sits below it.
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
+  expect(input.getAttribute('aria-describedby')).toBeNull()
+  // A staged removal has no read-only form.
+  fireEvent.blur(input)
+  expect(screen.getByLabelText(en.keyInput)).toBe(input)
   expect(unset).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: en.cancel }))
   expect(unset).not.toHaveBeenCalled()
   fireEvent.click(edit())
-  input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
-  expect(input.placeholder).toBe('••••••••')
-  fireEvent.keyDown(input, { key })
+  expect(screen.getByText('••••••••')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await waitFor(() => { expect(unset).toHaveBeenCalledExactlyOnceWith('OPENAI_API_KEY') })
 })
 
-it('keeps a saved read-only credential masked when deletion is unavailable', () => {
+it('offers no clear action when the credential store refuses writes', () => {
   renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
     credential: { configured: true, source: 'file', writable: false, masked: '••••••••' },
   })
-  const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
-  fireEvent.keyDown(input, { key: 'Delete' })
-  expect(input.placeholder).toBe('••••••••')
-  expect(screen.queryByText(en.keyRemovePending)).toBeNull()
+  expect(screen.getByText('••••••••')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: en.keyClear })).toBeNull()
+  const input = replaceSavedKey()
   fireEvent.change(input, { target: { value: 'replacement' } })
   fireEvent.change(input, { target: { value: '' } })
-  expect(input.placeholder).toBe('••••••••')
+  fireEvent.blur(input)
+  expect(screen.getByText('••••••••')).toBeTruthy()
+  expect(screen.queryByText(en.keyRemovePending)).toBeNull()
 })
 
 it('keeps a hidden OAuth reference out of the saved API-key controls', () => {
@@ -2740,8 +2825,8 @@ it('keeps a hidden OAuth reference out of the saved API-key controls', () => {
   const input = screen.getByLabelText<HTMLInputElement>(en.keyInput)
   expect(input.value).toBe('')
   expect(input.placeholder).toBe(en.keyPlaceholder)
-  fireEvent.keyDown(input, { key: 'Delete' })
-  expect(screen.queryByText(en.keyRemovePending)).toBeNull()
+  expect(screen.queryByRole('button', { name: en.keyReplace })).toBeNull()
+  expect(screen.queryByRole('button', { name: en.keyClear })).toBeNull()
 })
 
 it.each([
@@ -2756,11 +2841,11 @@ it.each([
     settingsPath={['providers', provider]} schema={settingsSchema} operations={operationsWith(face)}
     t={t} readOnly={false} onClose={closed} {...nativeAuth === undefined ? {} : { nativeAuth }}
     credential={{ configured: true, source: 'file', writable: true, masked: '••••••••' }} />)
-  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
   const envRef = removesReference && nativeAuth !== undefined ? nativeAuth.env[0] : ref
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
     .toBe(en.keyPlaceholderFallback.replace('{hint}', envRef))
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', envRef))).toBeTruthy()
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
   fireEvent.click(screen.getByText(en.customized))
   expect(screen.getByRole<HTMLButtonElement>('button', { name: en.fetchModels }).disabled).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
@@ -2772,13 +2857,28 @@ it.each([
   else expect(mutate).not.toHaveBeenCalled()
 })
 
-it('keeps the clear hint generic when native authentication has no visible environment reference', () => {
+it.each([
+  ['detected', { configured: true, source: 'env', writable: true }],
+  ['missing', { configured: false, writable: true }],
+] as const)('shows no hint for a cleared key whose environment fallback is %s', (_label, check) => {
+  renderPiAiEditor('google', piAiNamespaceWith('google', { apiKeyEnv: 'GOOGLE_API_KEY' }), {
+    nativeAuth: { env: ['GEMINI_API_KEY'], oauth: false },
+    credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
+    credentialChecks: { GEMINI_API_KEY: check },
+  })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', 'GEMINI_API_KEY'))
+})
+
+it('shows no hint after clearing when native authentication has no visible environment reference', () => {
   renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
     nativeAuth: { env: [], oauth: false },
     credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
   })
-  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
-  expect(screen.getByText(en.keyRemovePending)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
+  expect(document.querySelector('[id$="-credential-hint"]')).toBeNull()
   expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe(en.keyPlaceholder)
 })
 
@@ -2792,11 +2892,12 @@ it.each(['cancel', 'replace'])('keeps authentication unchanged after refused del
     settingsPath={['providers', 'google']} schema={settingsSchema} operations={operationsWith(face)}
     t={t} readOnly={false} onClose={closed} nativeAuth={{ env: ['GEMINI_API_KEY'], oauth: false }}
     credential={{ configured: true, source: 'file', writable: true, masked: '••••••••' }} />)
-  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await screen.findByText('credential store locked')
   expect(mutate).not.toHaveBeenCalled()
-  expect(screen.getByText(en.keyRemovePendingEnvironment.replace('{hint}', 'GEMINI_API_KEY'))).toBeTruthy()
+  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder)
+    .toBe(en.keyPlaceholderFallback.replace('{hint}', 'GEMINI_API_KEY'))
   if (action === 'cancel') {
     fireEvent.click(screen.getByRole('button', { name: en.cancel }))
     expect(closed).toHaveBeenCalledWith(false)
@@ -2822,7 +2923,7 @@ it.each(['retry', 'close'])('reports a completed deletion when settings fail, th
     settingsPath={['providers', 'google']} schema={settingsSchema} operations={operationsWith(face)}
     t={t} readOnly={false} onClose={closed} nativeAuth={{ env: ['GEMINI_API_KEY'], oauth: false }}
     credential={{ configured: true, source: 'file', writable: true, masked: '••••••••' }} />)
-  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await screen.findByText('settings locked')
   expect(screen.getByText(en.keyRemoveApplied)).toBeTruthy()
@@ -2847,7 +2948,7 @@ it('clears the selected reference when refreshed metadata names a different cred
     t, readOnly: false, onClose: vi.fn(), credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
   }
   const view = render(<ProviderEditor {...props} />)
-  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
   view.rerender(<ProviderEditor {...props} namespace={piAiNamespaceWith('openai', { apiKeyEnv: 'NEW_KEY' })} />)
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await waitFor(() => { expect(unset).toHaveBeenCalledExactlyOnceWith('OLD_KEY') })
@@ -2860,7 +2961,7 @@ it('clears the detected native key instead of an unused derived reference', asyn
     settingsPath={['providers', 'google']} schema={settingsSchema} operations={operationsWith(face)}
     t={t} readOnly={false} onClose={vi.fn()} nativeAuth={{ env: ['GEMINI_API_KEY'], oauth: false }}
     credentialChecks={{ GEMINI_API_KEY: { configured: true, source: 'file', writable: true, masked: '••••••••' } }} />)
-  fireEvent.keyDown(screen.getByLabelText(en.keyInput), { key: 'Delete' })
+  fireEvent.click(screen.getByRole('button', { name: en.keyClear }))
   fireEvent.click(screen.getByRole('button', { name: en.apply }))
   await waitFor(() => { expect(unset).toHaveBeenCalledExactlyOnceWith('GEMINI_API_KEY') })
   expect(mutate).not.toHaveBeenCalled()
@@ -2880,7 +2981,7 @@ it('refreshes a blank editor from saved credentials to environment detection wit
   const { face, controller } = await mountSection()
   const reads = face.credentials.describe.mock.calls.length
   fireEvent.click(screen.getByRole('button', { name: openaiCopy(en.editProvider) }))
-  expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).placeholder).toBe('••••••••')
+  expect(screen.getByText('••••••••')).toBeTruthy()
   expect(screen.queryByText(/^API key source:/)).toBeNull()
   expect(screen.queryByText(/Env var detected/)).toBeNull()
   expect(face.credentials.describe).toHaveBeenCalledTimes(reads)

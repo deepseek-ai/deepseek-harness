@@ -1098,9 +1098,27 @@ select.input {
   position: relative;
 }
 
-.savedKeyInput .input::placeholder {
+/* Read-only saved key: as tall as the input it alternates with, so entering
+   and leaving the input moves nothing below the field. */
+.keyDisplay {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+}
+
+.keyDisplay .iconButton {
+  flex: none;
+}
+
+.keyDisplayValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 22px;
   color: var(--dsw-alias-label-primary);
-  opacity: 1;
 }
 
 .keyInputFilled {

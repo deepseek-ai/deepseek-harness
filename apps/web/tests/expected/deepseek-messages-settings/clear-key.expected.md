@@ -18,7 +18,6 @@
       - button "认证说明": "?"
       - textbox "API 密钥":
         - /placeholder: 留空使用环境认证（DEEPSEEK_API_KEY）
-      - paragraph: 保存以清除已保存的 API 密钥。之后使用环境认证（DEEPSEEK_API_KEY）。
       - region "模型":
         - button "模型" [expanded]
         - text: 已自定义

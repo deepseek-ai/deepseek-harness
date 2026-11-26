@@ -101,8 +101,8 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     const acknowledgedSettings = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(acknowledgedSettings).toContain(`${WELCOME_NOTICE_ACK_FIELD}: ${WELCOME_NOTICE_VERSION}`)
 
-    // The ordinary Models surface reuses the refreshed join and exposes the
-    // configured write-only placeholder without a reload.
+    // The ordinary Models surface reuses the refreshed join and shows the
+    // saved key's masked preview without a reload.
     await openSettings(page, 'zh')
     const settings = page.getByRole('dialog', { name: '设置' })
     await settings.waitFor({ timeout: 10_000 })
@@ -110,12 +110,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     const deepSeekRow = settings.getByText('DeepSeek API', { exact: true }).first()
     await deepSeekRow.waitFor({ timeout: 10_000 })
     await deepSeekRow.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    const configuredInput = settings.getByLabel('API 密钥', { exact: true })
-    await configuredInput.waitFor({ timeout: 10_000 })
-    await expect.poll(
-      () => configuredInput.getAttribute('placeholder'),
-      { timeout: 10_000 },
-    ).toBe(`dsh_onboa${'•'.repeat(31)}test`)
+    await settings.getByText(`dsh_onboa${'•'.repeat(31)}test`, { exact: true }).waitFor({ timeout: 10_000 })
 
     const secondReloadWarnings = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
@@ -263,10 +258,7 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(false)
     await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).check()
 
-    await expect.poll(
-      () => settings.getByLabel('API 密钥', { exact: true }).getAttribute('placeholder'),
-      { timeout: 10_000 },
-    ).toBe(`dsh_onboa${'•'.repeat(31)}test`)
+    await settings.getByText(`dsh_onboa${'•'.repeat(31)}test`, { exact: true }).waitFor({ timeout: 10_000 })
     const modelEditor = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(MODELS_EXPECTED, modelEditor, MODE)
     await settings.getByRole('button', { name: '保存', exact: true }).click()

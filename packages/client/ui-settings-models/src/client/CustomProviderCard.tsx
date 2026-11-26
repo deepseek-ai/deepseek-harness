@@ -300,7 +300,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
           value={keyDraft}
           placeholder={t('keyPlaceholder')}
           aria-label={t('keyInput')}
-          aria-invalid={keyFailure !== undefined && (!keyMissing || reported('key'))}
+          invalid={keyFailure !== undefined && (!keyMissing || reported('key'))}
           required={protocolNeedsKey(protocol)}
           disabled={disabled}
           onChange={(event) => { setKeyDraft(event.target.value) }}

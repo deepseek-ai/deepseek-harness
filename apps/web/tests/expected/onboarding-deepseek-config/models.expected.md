@@ -16,9 +16,9 @@
       - img "API 密钥已配置"
       - text: API 密钥
       - button "认证说明": "?"
-      - textbox "API 密钥":
-        - /placeholder: dsh_onboa•••••••••••••••••••••••••••••••test
-      - paragraph: 使用已保存的 API 密钥。
+      - text: dsh_onboa•••••••••••••••••••••••••••••••test
+      - button "更换 API 密钥"
+      - button "清除 API 密钥"
       - region "模型":
         - button "模型" [expanded]
         - text: 已自定义
