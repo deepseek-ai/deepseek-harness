@@ -264,8 +264,8 @@ export interface InstallState {
   /** Why it waits, when the Host says. */
   readonly restartReason?: RestartReason
   /**
-   * The run's failure, once one settled the dialog: the Host's refusal
-   * `code` with its diagnostic as `reason`, or the transport's words alone;
+   * The run's failure, once one settled the dialog: the Host's refusal as
+   * `error` with its diagnostic as `reason`, or the transport's words alone;
    * `kind` classifies a pnpm failure, and `pendingBuilds` names the packages
    * whose install scripts pnpm left undecided, offered for approval.
    * `uncertainty` distinguishes a lost installation reply, an unconfirmed
