@@ -1,16 +1,11 @@
 /** Installed release version in General Settings, with hidden 5-click unlock in Desktop. */
 import { useState } from 'react'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { DesktopChannelSnapshot, DesktopChannelSource } from './desktop-channel-source.ts'
+import type { DesktopChannelSource } from './desktop-channel-source.ts'
 import css from './CurrentVersionRow.module.css'
 
 const UNLOCK_CLICKS_REQUIRED = 5
-/** Inert channel store supplied outside Electron so the version slot stays unconditionally registered. */
-export const INACTIVE_CHANNEL_STORE = createSnapshotStore<DesktopChannelSnapshot>({ failed: false })
-const fallbackUseChannel = <R,>(selector: (snapshot: DesktopChannelSnapshot) => R): R =>
-  selector(INACTIVE_CHANNEL_STORE.getSnapshot())
 
 /** Channel observation and optional Desktop unlock action injected into CurrentVersionRow. */
 export interface CurrentVersionRowInjected {
@@ -18,19 +13,19 @@ export interface CurrentVersionRowInjected {
   unlock?: () => Promise<void>
 }
 
-/** Props for CurrentVersionRow in Web (no channel injection) and Desktop (channel injection). */
+/** Props for CurrentVersionRow in Web (inactive channel store, no unlock) and Desktop (live channel store + unlock). */
 export type CurrentVersionRowProps =
   PropsRuntime<'settings.general.group.updates.item'> &
   PropsLocale<'settings'> &
-  Partial<InjectFace<CurrentVersionRowInjected>>
+  InjectFace<CurrentVersionRowInjected>
 
 /**
  * Render the version embedded by the client build; clicking 5 times in Desktop opens the unlock confirmation.
- * @param props - runtime share, localized copy, and optional Desktop channel unlock controls.
+ * @param props - runtime share, localized copy, and channel observation with optional Desktop unlock controls.
  * @returns the current release label and confirmation modal, or nothing when build metadata is absent.
  */
 export function CurrentVersionRow({ t, useChannel, unlock }: CurrentVersionRowProps) {
-  const snapshot = (useChannel ?? fallbackUseChannel)(value => value)
+  const snapshot = useChannel(value => value)
   const [clicks, setClicks] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const version = process.env.DSH_CLIENT_VERSION

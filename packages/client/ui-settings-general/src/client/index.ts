@@ -17,6 +17,7 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client
 // Type-only: pulls the ctx.modules merge.
 import type {} from '@deepseek-ai/dsh-client-modules/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { closeTopModal } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the settings slot declarations plus the ctx.configForms Context
 // merge. Cross-plugin collaboration goes through the service, never a value
@@ -36,14 +37,14 @@ import { createSettingsShellStore } from './shell-store.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
 import type { DesktopUpdateBridge } from '../types.ts'
-import { DesktopChannelSource } from './desktop-channel-source.ts'
+import { DesktopChannelSource, type DesktopChannelSnapshot } from './desktop-channel-source.ts'
 import { DesktopChannelRow, DesktopChannelToast } from './DesktopChannelRow.tsx'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection, type GeneralSectionInjected } from './GeneralSection.tsx'
 import { SettingsSectionView } from './SettingsSectionView.tsx'
 import { GeneralGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup } from './GeneralGroup.tsx'
-import { CurrentVersionRow, INACTIVE_CHANNEL_STORE, type CurrentVersionRowInjected } from './CurrentVersionRow.tsx'
+import { CurrentVersionRow, type CurrentVersionRowInjected } from './CurrentVersionRow.tsx'
 import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperToolsRow.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
@@ -101,6 +102,7 @@ export function apply(ctx: ClientContext): void {
     }),
   }, DeveloperToolsRow))
   // Version information follows the core preferences; Desktop binds hidden 5-click channel unlock.
+  const inactiveChannel = createSnapshotStore<DesktopChannelSnapshot>({ failed: false })
   let channel: DesktopChannelSource | undefined
   ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
     name: 'settings.general.group.updates.item',
@@ -110,7 +112,7 @@ export function apply(ctx: ClientContext): void {
     inject: (): CurrentVersionRowInjected => {
       const desktopChannel = channel
       return {
-        hooks: { channel: desktopChannel?.store ?? INACTIVE_CHANNEL_STORE },
+        hooks: { channel: desktopChannel?.store ?? inactiveChannel },
         ...(desktopChannel === undefined ? {} : { unlock: () => desktopChannel.select('nightly') }),
       }
     },

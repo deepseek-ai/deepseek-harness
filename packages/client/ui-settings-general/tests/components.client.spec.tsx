@@ -307,6 +307,10 @@ it('reports a failed developer-tool write and allows retry', async () => {
 })
 
 describe('current version', () => {
+  const inactiveUseChannel = bindSnapshotSelector(
+    createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({ failed: false }),
+  )
+
   it.each([
     ['Current version: 1.2.3-rc.4', en],
     ['当前版本：1.2.3-rc.4', zh],
@@ -317,14 +321,14 @@ describe('current version', () => {
       for (const [name, value] of Object.entries(params ?? {})) text = text.replace(`{${name}}`, String(value))
       return text
     }
-    render(<CurrentVersionRow {...kit} t={translate} />)
+    render(<CurrentVersionRow {...kit} t={translate} useChannel={inactiveUseChannel} />)
     expect(screen.getByText(expected)).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('omits the row when a partial build has no version metadata', () => {
     vi.stubEnv('DSH_CLIENT_VERSION', undefined)
-    const view = render(<CurrentVersionRow {...kit} t={t} />)
+    const view = render(<CurrentVersionRow {...kit} t={t} useChannel={inactiveUseChannel} />)
     expect(view.container.textContent).toBe('')
   })
 
