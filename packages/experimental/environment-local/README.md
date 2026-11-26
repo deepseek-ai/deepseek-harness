@@ -25,7 +25,7 @@ Run environment functions in a local Node process while origin callbacks stay in
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the registry and provider, then pass the contributed handle to `ctx.environments.define`. Multiple provider instances may contribute distinct local environments.
+Mount the registry and provider, then pass the contributed handle to the runners that `ctx.environments.define` returns. Multiple provider instances may contribute distinct local environments.
 
 ```yaml
 - name: '@deepseek-ai/dsh-environment'

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-26-environment-runner-selects-handle.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-26-environment-runner-selects-handle.md
+/agent-note-environment-runners-select-the-handle-per-run:
+  en: 2769179b7d720ff6
+  zh: 6f427cbd281ebd40
+/agent-note-environment-runners-select-the-handle-per-run/problem:
+  en: c27ce4578aee7289
+  zh: e5b40f8cdee99759
+/agent-note-environment-runners-select-the-handle-per-run/decision:
+  en: be87e63aa73516a3
+  zh: 1a2dff8fb2b21087
+/agent-note-environment-runners-select-the-handle-per-run/alternatives-considered:
+  en: bc93773647a791ef
+  zh: 916fd70d8f5fb368
+/agent-note-environment-runners-select-the-handle-per-run/consequences:
+  en: fa341b1c64d902e3
+  zh: 849ad896acd2b705

@@ -12,7 +12,7 @@
 
 ## 定义与运行
 
-`define(handle, fn, options)` 将自包含函数、其结果校验和发起端处理函数绑定到一个环境句柄，并返回 `EnvironmentRunner`。每次使用参数和信号调用该运行器，最多运行一次函数：该次调用会解析到所绑定句柄当前的注册项，发送参数，以及根据该定义的函数源码和发起端方法名称计算的哈希（在该连接的守护进程持有该定义之前还会附带定义本身），并通过所属定义的 `result` 校验返回值。定义时不与任何环境通信。注册表和发起端处理函数在 dsh 中运行。每次运行占用目标执行进程的一个 worker 线程，因此阻塞的函数不会延迟其他运行。`EnvironmentContext` 属于该进程，提供该进程的文件系统、路径、工作目录、平台、进程执行、信号、上限和类型化 `origin` 方法。发起端调用仅限于活跃的运行及其所属连接。
+`define(fn, options)` 绑定自包含函数、其结果校验和发起端处理函数，并返回 `EnvironmentRunner`。每次使用环境句柄、参数和信号调用该运行器，最多运行一次函数：该次调用会解析到该句柄当前的注册项，发送参数，以及根据该定义的函数源码和发起端方法名称计算的哈希（在该连接的守护进程持有该定义之前还会附带定义本身），并通过所属定义的 `result` 校验返回值。定义时不与任何环境通信。注册表和发起端处理函数在 dsh 中运行。每次运行占用目标执行进程的一个 worker 线程，因此阻塞的函数不会延迟其他运行。`EnvironmentContext` 属于该进程，提供该进程的文件系统、路径、工作目录、平台、进程执行、信号、上限和类型化 `origin` 方法。发起端调用仅限于活跃的运行及其所属连接。
 
 参数、结果和发起端值都是通过结构化克隆复制的 `EnvironmentValue`，因此可以携带以 `Uint8Array` 表示的二进制数据、`undefined`、日期、Map 和 Set。注册表和 `EnvironmentContext` 上的 `limits.maxMessageBytes` 限制每条编码后的消息；注册表会自动拆分大于一帧的消息。函数抛出异常的运行以 `ENVIRONMENT_RUN_FAILED` 失败，其 `EnvironmentError.remote` 保存所抛出错误的名称、消息和字符串错误码。
 
@@ -63,7 +63,7 @@ list(): readonly EnvironmentInfo[]
 get(handle: EnvironmentHandle): EnvironmentInfo
 
 /**
- * Define `fn` for the selected environment's execution process. Only its source text and the names of its origin
+ * Define `fn` for execution processes; each run names its environment. Only its source text and the names of its origin
  * handlers are sent, so `fn` must be a self-contained function or arrow expression without host closures. The type
  * of `fn`'s first parameter determines the arguments of each call. Arguments, results and origin values are copied
  * by structured clone; values it cannot copy, such as functions, fail their run. The own property names of
@@ -71,13 +71,12 @@ get(handle: EnvironmentHandle): EnvironmentInfo
  * exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers' types
  * determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only
  * parameters from the function, so host state that belongs to one call, such as a tool call's background job,
- * needs a definition made for that call. Defining neither contacts the environment nor requires its registration.
- * @param handle - provider-owned identifier selecting the execution environment.
+ * needs a definition made for that call. Defining neither contacts an environment nor requires a registration.
  * @param fn - daemon-side code receiving each call's arguments and the daemon environment.
  * @param options - result validation and host handlers.
  * @returns a function that runs `fn` at most once per call.
  */
-define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( handle: EnvironmentHandle, fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>
+define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>
 ```
 
 Source: [`packages/experimental/environment/src/index.ts`](../../packages/experimental/environment/src/index.ts)

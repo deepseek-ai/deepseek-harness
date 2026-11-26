@@ -12,7 +12,7 @@ The [single SSH](../../packages/experimental/environment-ssh/README.md), [SSH co
 
 ## Definitions and runs
 
-`define(handle, fn, options)` binds a self-contained function, its result validation and its origin handlers to one environment handle and returns an `EnvironmentRunner`. Each call of the runner with arguments and a signal runs the function at most once: it resolves the handle's current registration, sends the arguments with the hash of the definition's function source and origin method names, adding the definition itself until the connection's daemon holds it, and validates the returned value through the definition's `result`. Defining contacts no environment. The registry and origin handlers run in dsh. Each run occupies a worker thread of the target execution process, so a function that blocks delays no other run. `EnvironmentContext` belongs to that process and supplies its filesystem, paths, working directory, platform, process execution, signal, limits and typed `origin` methods. Origin calls are restricted to the active run and its owning connection.
+`define(fn, options)` binds a self-contained function, its result validation and its origin handlers and returns an `EnvironmentRunner`. Each call of the runner with an environment handle, arguments and a signal runs the function at most once: it resolves the handle's current registration, sends the arguments with the hash of the definition's function source and origin method names, adding the definition itself until the connection's daemon holds it, and validates the returned value through the definition's `result`. Defining contacts no environment. The registry and origin handlers run in dsh. Each run occupies a worker thread of the target execution process, so a function that blocks delays no other run. `EnvironmentContext` belongs to that process and supplies its filesystem, paths, working directory, platform, process execution, signal, limits and typed `origin` methods. Origin calls are restricted to the active run and its owning connection.
 
 Arguments, results and origin values are `EnvironmentValue`s copied by structured clone, so they may carry binary data as `Uint8Array`, `undefined`, dates, maps and sets. `limits.maxMessageBytes`, on the registry and in `EnvironmentContext`, bounds each encoded message; the registry splits messages larger than a frame automatically. A run whose function throws fails with `ENVIRONMENT_RUN_FAILED`, and its `EnvironmentError.remote` holds the thrown error's name, message and string code.
 
@@ -63,7 +63,7 @@ list(): readonly EnvironmentInfo[]
 get(handle: EnvironmentHandle): EnvironmentInfo
 
 /**
- * Define `fn` for the selected environment's execution process. Only its source text and the names of its origin
+ * Define `fn` for execution processes; each run names its environment. Only its source text and the names of its origin
  * handlers are sent, so `fn` must be a self-contained function or arrow expression without host closures. The type
  * of `fn`'s first parameter determines the arguments of each call. Arguments, results and origin values are copied
  * by structured clone; values it cannot copy, such as functions, fail their run. The own property names of
@@ -71,13 +71,12 @@ get(handle: EnvironmentHandle): EnvironmentInfo
  * exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers' types
  * determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only
  * parameters from the function, so host state that belongs to one call, such as a tool call's background job,
- * needs a definition made for that call. Defining neither contacts the environment nor requires its registration.
- * @param handle - provider-owned identifier selecting the execution environment.
+ * needs a definition made for that call. Defining neither contacts an environment nor requires a registration.
  * @param fn - daemon-side code receiving each call's arguments and the daemon environment.
  * @param options - result validation and host handlers.
  * @returns a function that runs `fn` at most once per call.
  */
-define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( handle: EnvironmentHandle, fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>
+define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>( fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>, ): EnvironmentRunner<A, T>
 ```
 
 Source: [`packages/experimental/environment/src/index.ts`](../../packages/experimental/environment/src/index.ts)

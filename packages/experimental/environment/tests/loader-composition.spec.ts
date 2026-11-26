@@ -34,9 +34,9 @@ import { ENVIRONMENT_PROTOCOL_VERSION, RpcPeer } from '../src/protocol.ts'
 /** Define `fn` and call it once, for tests of a single run. */
 function runOnce<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>(
   registry: EnvironmentRegistry, handle: EnvironmentHandle, fn: EnvironmentFunction<A, NoInfer<H>>, args: A,
-  options: EnvironmentDefineOptions<T, H> & Parameters<EnvironmentRunner<A, T>>[1],
+  options: EnvironmentDefineOptions<T, H> & Parameters<EnvironmentRunner<A, T>>[2],
 ): Promise<T> {
-  return registry.define(handle, fn, options)(args, options)
+  return registry.define(fn, options)(handle, args, options)
 }
 
 const node = process.execPath
@@ -63,7 +63,7 @@ const readTracked = {
   inject: ['tools', 'environments'],
   apply(ctx: Context) {
     const read = new Set<string>()
-    const readFile = ctx.environments.define(EnvironmentHandle('local'), async ({ path, node }: { path: string; node: string }, env) => {
+    const readFile = ctx.environments.define(async ({ path, node }: { path: string; node: string }, env) => {
       const text = await env.fs.readFile(path, 'utf8')
       const first = await env.origin.markRead(path)
       const daemon = (await env.exec([node, '-e', 'process.stdout.write(String(process.ppid))'])).stdout
@@ -86,7 +86,7 @@ const readTracked = {
         schema: { type: 'object', additionalProperties: false, properties: { text: { type: 'string', required: true }, first: { type: 'boolean', required: true }, daemon: { type: 'string', required: true } } },
         render: (args, value) => [{ type: 'text', text: `${args.path}${value.first ? '' : ' (read before)'}: ${value.text} [${value.daemon}]` }],
       },
-      execute: (args, exec) => readFile({ path: args.path, node: args.node }, { signal: exec.signal }),
+      execute: (args, exec) => readFile(EnvironmentHandle('local'), { path: args.path, node: args.node }, { signal: exec.signal }),
     }))
   },
 }
@@ -231,7 +231,7 @@ describe('execution environment through real Loader composition', () => {
   it('fixes the handler names when defining and looks each handler up on its object when called', async () => {
     const ctx = await boot(serve)
     const handlers: Record<string, () => string> = { kept: () => 'kept', removed: () => 'removed' }
-    const call = ctx.environments.define(target(ctx), async (_args: null, env) => ({
+    const call = ctx.environments.define(async (_args: null, env) => ({
       methods: Object.keys(env.origin),
       kept: await env.origin.kept!(),
       removed: await env.origin.removed!().then(() => 'served', (error: unknown) => (error as Error).message),
@@ -239,7 +239,7 @@ describe('execution environment through real Loader composition', () => {
     handlers.kept = () => 'replaced'
     delete handlers.removed
     handlers.added = () => 'added'
-    await expect(call(null, { signal: new AbortController().signal })).resolves
+    await expect(call(target(ctx), null, { signal: new AbortController().signal })).resolves
       .toEqual({ methods: ['kept', 'removed'], kept: 'replaced', removed: 'Unknown host handler: removed' })
   })
 
@@ -253,14 +253,15 @@ describe('execution environment through real Loader composition', () => {
       { handle: 'local', displayName: 'local' }, { handle: 'build', displayName: 'build' },
     ])
     expect(ctx.environments.get(EnvironmentHandle('build'))).toEqual({ handle: 'build', displayName: 'build' })
-    const write = async (text: string, env: import('../src/types.ts').EnvironmentContext) => {
+    // One definition runs in whichever environment each call names.
+    const write = ctx.environments.define(async (text: string, env) => {
       await env.fs.writeFile(env.path.join(env.cwd, 'written.txt'), text)
       return env.cwd
-    }
-    const options = { signal: new AbortController().signal, result: z.string() }
+    }, { result: z.string() })
+    const options = { signal: new AbortController().signal }
     await expect(Promise.all([
-      runOnce(ctx.environments, EnvironmentHandle('local'), write, 'local output', options),
-      runOnce(ctx.environments, EnvironmentHandle('build'), write, 'build output', options),
+      write(EnvironmentHandle('local'), 'local output', options),
+      write(EnvironmentHandle('build'), 'build output', options),
     ])).resolves.toEqual([root, second])
     expect(await readFile(join(root!, 'written.txt'), 'utf8')).toBe('local output')
     expect(await readFile(join(second, 'written.txt'), 'utf8')).toBe('build output')
@@ -271,7 +272,7 @@ describe('execution environment through real Loader composition', () => {
     const entered = new Map<string, AbortSignal>()
     const bothEntered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
-    const echo = ctx.environments.define(target(ctx), async (label: string, env) => {
+    const echo = ctx.environments.define(async (label: string, env) => {
       await env.origin.hold(label)
       return label
     }, {
@@ -285,8 +286,8 @@ describe('execution environment through real Loader composition', () => {
       },
     })
     const first = new AbortController()
-    const cancelled = echo('first', { signal: first.signal })
-    const kept = echo('second', { signal: new AbortController().signal })
+    const cancelled = echo(target(ctx), 'first', { signal: first.signal })
+    const kept = echo(target(ctx), 'second', { signal: new AbortController().signal })
     await bothEntered.promise
     first.abort(new Error('stop first'))
     await expect(cancelled).rejects.toThrow('stop first')
@@ -394,7 +395,7 @@ describe('execution environment through real Loader composition', () => {
     const ctx = await boot(serve)
     const handle = EnvironmentHandle('replaced-by-listener')
     const opened: string[] = []
-    const run = ctx.environments.define(handle, () => 'ran', { result: z.string() })
+    const run = ctx.environments.define(() => 'ran', { result: z.string() })
     const signal = new AbortController().signal
     // The old registration's connection is still opening when the registration is removed.
     const dispose = ctx.environments.register({ handle, displayName: 'Old' }, {
@@ -403,7 +404,7 @@ describe('execution environment through real Loader composition', () => {
         return new Promise(() => {})
       },
     })
-    const waiting = run(null, { signal })
+    const waiting = run(handle, null, { signal })
     let replacement: Promise<string> | undefined
     ctx.on('environments/change', () => {
       if (replacement !== undefined || ctx.environments.list().some(environment => environment.handle === handle)) return
@@ -416,7 +417,7 @@ describe('execution environment through real Loader composition', () => {
           return { input: toHost, output: toDaemon, security: { kind: 'authenticated-transport' }, ended, close: () => { toDaemon.end() } }
         },
       })
-      replacement = run(null, { signal })
+      replacement = run(handle, null, { signal })
     })
     dispose()
     await expect(waiting).rejects.toThrow('"replaced-by-listener" was unregistered')
@@ -529,9 +530,9 @@ describe('execution environment through real Loader composition', () => {
   it('refuses daemon calls for inactive runs, unknown host methods and handlers added after defining', async () => {
     const ctx = await boot([node, fileURLToPath(new URL('fixtures/stray-calls-daemon.ts', import.meta.url))])
     const handlers: Record<string, () => string> = {}
-    const call = ctx.environments.define(target(ctx), () => null, { result: z.array(z.string()), handlers })
+    const call = ctx.environments.define(() => null, { result: z.array(z.string()), handlers })
     handlers.added = () => 'added'
-    await expect(call(null, { signal: new AbortController().signal })).resolves.toEqual([
+    await expect(call(target(ctx), null, { signal: new AbortController().signal })).resolves.toEqual([
       'Execution environment run is no longer active', 'Unknown host handler: toString', 'Unknown host handler: added',
       'Unknown execution environment host method: other',
     ])
@@ -563,13 +564,13 @@ describe('execution environment through real Loader composition', () => {
 
     const service = ctx.environments
     const inflight = runOnce(service, EnvironmentHandle('local'), () => new Promise(() => {}), null, { signal: new AbortController().signal, result: z.null() })
-    const stored = service.define(EnvironmentHandle('local'), () => null, { result: z.null() })
+    const stored = service.define(() => null, { result: z.null() })
     // The transport plugin unloads first, which closes the connection before the service itself is disposed.
     const rejected = expect(inflight).rejects.toThrow(/^Environment "local" was unregistered/)
     await context!.fiber.dispose()
     context = undefined
     await rejected
-    await expect(stored(null, { signal: new AbortController().signal })).rejects.toThrow('Execution environment is disposed')
+    await expect(stored(EnvironmentHandle('local'), null, { signal: new AbortController().signal })).rejects.toThrow('Execution environment is disposed')
   })
 
   it('stops waiting for a starting daemon on abort and stops starting it on disposal', async () => {
@@ -601,9 +602,9 @@ describe('execution environment through real Loader composition', () => {
   it('terminates a cancelled run that ignores its signal and keeps its daemon for later runs', async () => {
     const ctx = await boot(serve, { maxPending: 1, cancelGraceMs: 2000 })
     const signal = new AbortController().signal
-    const daemon = ctx.environments.define(target(ctx), async (node: string, env) =>
+    const daemon = ctx.environments.define(async (node: string, env) =>
       (await env.exec([node, '-e', 'process.stdout.write(String(process.ppid))'])).stdout, { result: z.string() })
-    const before = await daemon(node, { signal })
+    const before = await daemon(target(ctx), node, { signal })
     const controller = new AbortController()
     const started = Promise.withResolvers<undefined>()
     const stuck = runOnce(ctx.environments, target(ctx), async (_args: null, env) => {
@@ -617,7 +618,9 @@ describe('execution environment through real Loader composition', () => {
     controller.abort(new Error('stop'))
     await expect(stuck).rejects.toThrow('stop')
     // The run's slot returns when the daemon answers the cancellation; a host that waited out the grace would start a new daemon.
-    await vi.waitFor(async () => { await expect(daemon(node, { signal })).resolves.toBe(before) }, { timeout: 10_000, interval: 100 })
+    await vi.waitFor(async () => {
+      await expect(daemon(target(ctx), node, { signal })).resolves.toBe(before)
+    }, { timeout: 10_000, interval: 100 })
   })
 
   it('serves other runs while a function blocks its worker', async () => {
@@ -654,7 +657,7 @@ describe('execution environment through real Loader composition', () => {
       .map(frame => runRequest.parse(frame.params)))
     /** Whether each run the host sent on each connection carried its definition. */
     const carried = (): boolean[][] => sent().map(runs => runs.map(({ definition }) => definition !== undefined))
-    ctx.environments.register({ handle, displayName: 'Cached' }, {
+    const transport = {
       async open() {
         const chunks: Buffer[] = []
         written.push(chunks)
@@ -672,19 +675,20 @@ describe('execution environment through real Loader composition', () => {
         channels.push(channel)
         return channel
       },
-    })
+    }
+    ctx.environments.register({ handle, displayName: 'Cached' }, transport)
     const signal = new AbortController().signal
-    const increment = ctx.environments.define(handle, (n: number) => n + 1, { result: z.number() })
-    const twin = ctx.environments.define(handle, (n: number) => n + 1, { result: z.number() })
-    const other = ctx.environments.define(handle, (n: number) => n - 1, { result: z.number() })
+    const increment = ctx.environments.define((n: number) => n + 1, { result: z.number() })
+    const twin = ctx.environments.define((n: number) => n + 1, { result: z.number() })
+    const other = ctx.environments.define((n: number) => n - 1, { result: z.number() })
     // Handler names belong to the definition, so equal source with other names is another definition.
-    const handled = ctx.environments.define(handle, (n: number) => n + 1, { result: z.number(), handlers: { unused: () => null } })
-    await expect(increment(1, { signal })).resolves.toBe(2)
-    await expect(increment(2, { signal })).resolves.toBe(3)
-    await expect(twin(3, { signal })).resolves.toBe(4)
-    await expect(other(4, { signal })).resolves.toBe(3)
-    await expect(handled(5, { signal })).resolves.toBe(6)
-    await expect(handled(6, { signal })).resolves.toBe(7)
+    const handled = ctx.environments.define((n: number) => n + 1, { result: z.number(), handlers: { unused: () => null } })
+    await expect(increment(handle, 1, { signal })).resolves.toBe(2)
+    await expect(increment(handle, 2, { signal })).resolves.toBe(3)
+    await expect(twin(handle, 3, { signal })).resolves.toBe(4)
+    await expect(other(handle, 4, { signal })).resolves.toBe(3)
+    await expect(handled(handle, 5, { signal })).resolves.toBe(6)
+    await expect(handled(handle, 6, { signal })).resolves.toBe(7)
     expect(carried()).toEqual([[true, false, false, true, true, false]])
     const [runs] = sent()
     expect(runs!.map(({ definition }) => definition?.methods)).toEqual([[], undefined, undefined, [], ['unused'], undefined])
@@ -694,15 +698,21 @@ describe('execution environment through real Loader composition', () => {
     await channels[0]!.ended
     // The registry drops the closed connection in promise callbacks, which all run before the next macrotask.
     await new Promise(resolve => setImmediate(resolve))
-    await expect(twin(5, { signal })).resolves.toBe(6)
+    await expect(twin(handle, 5, { signal })).resolves.toBe(6)
     expect(carried()).toEqual([[true, false, false, true, true, false], [true]])
+    // Another environment's connection receives the same definition on its own first run.
+    const elsewhere = EnvironmentHandle('cached-elsewhere')
+    ctx.environments.register({ handle: elsewhere, displayName: 'Cached elsewhere' }, transport)
+    await expect(twin(elsewhere, 6, { signal })).resolves.toBe(7)
+    await expect(twin(elsewhere, 7, { signal })).resolves.toBe(8)
+    expect(carried()).toEqual([[true, false, false, true, true, false], [true], [true, false]])
   })
 
   it('names the registered environments when the configured one is missing, and refuses duplicates', async () => {
     const ctx = await boot(serve, { environment: 'elsewhere' })
     // Defining requires no registration; each call resolves the handle.
-    const missing = ctx.environments.define(target(ctx), () => null, { result: z.null() })
-    await expect(missing(null, { signal: new AbortController().signal })).rejects
+    const missing = ctx.environments.define(() => null, { result: z.null() })
+    await expect(missing(target(ctx), null, { signal: new AbortController().signal })).rejects
       .toThrow('Environment "elsewhere" is not registered; registered: local')
     expect(() => ctx.environments.register({ handle: EnvironmentHandle('local'), displayName: 'local' }, { open: () => Promise.reject(new Error('unused')) })).toThrow('already registered')
     const owner = new Context()
@@ -839,13 +849,13 @@ describe('execution environment through real Loader composition', () => {
         return old
       },
     })
-    // One stored definition reaches whichever registration holds its handle at each call.
-    const call = ctx.environments.define(handle, () => null, { result: z.string() })
+    // One stored definition reaches whichever registration holds the called handle.
+    const call = ctx.environments.define(() => null, { result: z.string() })
     const options = { signal: new AbortController().signal }
     try {
-      await expect(call(null, options)).rejects.toThrow('was unregistered')
+      await expect(call(handle, null, options)).rejects.toThrow('was unregistered')
       await oldClosed.promise
-      await expect(call(null, options)).resolves.toBe('new')
+      await expect(call(handle, null, options)).resolves.toBe('new')
       expect(newOpens).toBe(1)
       expect(ctx.environments.get(handle).displayName).toBe('New')
     } finally {
@@ -1046,7 +1056,7 @@ describe('execution environment through real Loader composition', () => {
     const ctx = await boot(serve, { maxFrameBytes: 1024, maxMessageBytes: 256 * 1024 })
     const signal = new AbortController().signal
     type RelayArgs = { data: Uint8Array; node: string; send: number; answer: number }
-    const relay = ctx.environments.define(target(ctx), async ({ data, node, send, answer }: RelayArgs, env) => {
+    const relay = ctx.environments.define(async ({ data, node, send, answer }: RelayArgs, env) => {
       const daemon = (await env.exec([node, '-e', 'process.stdout.write(String(process.ppid))'])).stdout
       const failure = (error: unknown) => (error as Error).message
       const sent = await env.origin.echo({ data: new Uint8Array(send), size: answer }).then(reply => reply.length, failure)
@@ -1056,23 +1066,23 @@ describe('execution environment through real Loader composition', () => {
       handlers: { echo: ({ data, size }: { data: Uint8Array; size: number }) => size === 0 ? data : new Uint8Array(size) },
     })
     const data = new Uint8Array(100_000).map((_, index) => index % 251)
-    const first = await relay({ data, node, send: 100_000, answer: 0 }, { signal })
+    const first = await relay(target(ctx), { data, node, send: 100_000, answer: 0 }, { signal })
     expect(first).toEqual({ data, daemon: first.daemon, sent: 100_000 })
     const over = 300 * 1024
-    const refused = relay({ data: new Uint8Array(over), node, send: 0, answer: 0 }, { signal })
+    const refused = relay(target(ctx), { data: new Uint8Array(over), node, send: 0, answer: 0 }, { signal })
     await expect(refused).rejects.toEqual(withCode('ENVIRONMENT_REQUEST_REFUSED'))
     await expect(refused).rejects.toThrow(/^Execution environment message of 307\d{3} bytes exceeds maxMessageBytes \(262144\)$/)
     // Origin calls and their results over the limit fail inside the function.
-    const origin = await relay({ data: new Uint8Array(0), node, send: over, answer: 0 }, { signal })
+    const origin = await relay(target(ctx), { data: new Uint8Array(0), node, send: over, answer: 0 }, { signal })
     expect(origin.sent).toMatch(/exceeds maxMessageBytes \(262144\)$/)
-    const answer = await relay({ data: new Uint8Array(0), node, send: 0, answer: over }, { signal })
+    const answer = await relay(target(ctx), { data: new Uint8Array(0), node, send: 0, answer: over }, { signal })
     expect(answer.sent).toMatch(/exceeds maxMessageBytes \(262144\)$/)
     const result = runOnce(ctx.environments, target(ctx), (size: number) => new Uint8Array(size), over, { signal, result: z.unknown() })
     await expect(result).rejects.toEqual(withCode('ENVIRONMENT_RUN_FAILED'))
     await expect(result).rejects.toThrow(/exceeds maxMessageBytes \(262144\)$/)
     // Every refusal kept the connection and its daemon.
     expect(answer.daemon).toBe(first.daemon)
-    expect((await relay({ data, node, send: 1, answer: 0 }, { signal })).daemon).toBe(first.daemon)
+    expect((await relay(target(ctx), { data, node, send: 1, answer: 0 }, { signal })).daemon).toBe(first.daemon)
   })
 
   it('preserves the name, message and code of errors from the function and from host handlers', async () => {

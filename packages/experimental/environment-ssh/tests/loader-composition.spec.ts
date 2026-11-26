@@ -79,10 +79,10 @@ async function boot(setup: Setup = {}): Promise<{ ctx: Context; knownHosts: stri
   return { ctx: context, knownHosts }
 }
 
-const daemonPid = (ctx: Context, confirm?: () => Promise<boolean>) => ctx.environments.define(ctx.environments.handle('box'),
+const daemonPid = (ctx: Context, confirm?: () => Promise<boolean>) => ctx.environments.define(
   async (nodePath: string, env) => (await env.exec([nodePath, '-e', 'process.stdout.write(String(process.ppid))'])).stdout,
   { result: z.string() },
-)(node, { signal: new AbortController().signal, ...confirm === undefined ? {} : { confirm } })
+)(ctx.environments.handle('box'), node, { signal: new AbortController().signal, ...confirm === undefined ? {} : { confirm } })
 
 describe('SSH transport through real Loader composition', () => {
   it('reuses a direct SSH execution process and starts a fresh one after the host reconnects', async () => {

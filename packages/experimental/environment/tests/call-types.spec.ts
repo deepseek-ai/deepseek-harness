@@ -5,11 +5,13 @@ import type {
   EnvironmentRegistry, EnvironmentContext, EnvironmentDefineOptions, EnvironmentFunction, EnvironmentRunner, EnvironmentValue,
 } from '../src/index.ts'
 
+const local = EnvironmentHandle('local')
+
 interface LookupParams { id: number }
 interface PathArgs { path: string; bytes?: Uint8Array; seen: Map<string, Date> }
 
 function inferredCalls(executor: EnvironmentRegistry, signal: AbortSignal): void {
-  const markRead = executor.define(EnvironmentHandle('local'), async (args: { path: string }, env) => {
+  const markRead = executor.define(async (args: { path: string }, env) => {
     expectTypeOf(args).toEqualTypeOf<{ path: string }>()
     expectTypeOf(env.origin.markRead).toBeCallableWith(args.path)
     expectTypeOf(env.origin.markRead).returns.toEqualTypeOf<Promise<boolean>>()
@@ -67,20 +69,22 @@ function inferredCalls(executor: EnvironmentRegistry, signal: AbortSignal): void
     },
   })
   expectTypeOf(markRead).toEqualTypeOf<EnvironmentRunner<{ path: string }, boolean>>()
-  expectTypeOf(markRead({ path: 'note.txt' }, { signal })).toEqualTypeOf<Promise<boolean>>()
+  expectTypeOf(markRead(local, { path: 'note.txt' }, { signal })).toEqualTypeOf<Promise<boolean>>()
   // @ts-expect-error -- call arguments match the function's first parameter.
-  void markRead({ path: 1 }, { signal })
+  void markRead(local, { path: 1 }, { signal })
   // @ts-expect-error -- every call supplies its cancellation.
-  void markRead({ path: 'note.txt' }, {})
+  void markRead(local, { path: 'note.txt' }, {})
+  // @ts-expect-error -- every call names its environment with a branded handle.
+  void markRead('local', { path: 'note.txt' }, { signal })
 
   // Interface-typed arguments need no index signature; structured clone carries binary data, maps and dates.
-  const readPath = executor.define(EnvironmentHandle('local'), (args: PathArgs) => args.path, { result: z.string() })
+  const readPath = executor.define((args: PathArgs) => args.path, { result: z.string() })
   expectTypeOf(readPath).toEqualTypeOf<EnvironmentRunner<PathArgs, string>>()
-  expectTypeOf(readPath).toBeCallableWith({ path: 'a', seen: new Map([['a', new Date()]]) }, { signal })
+  expectTypeOf(readPath).toBeCallableWith(local, { path: 'a', seen: new Map([['a', new Date()]]) }, { signal })
   // @ts-expect-error -- symbols are not structured-clone values.
-  void executor.define(EnvironmentHandle('local'), (args: symbol) => args.description, { result: z.string() })
+  void executor.define((args: symbol) => args.description, { result: z.string() })
 
-  void executor.define(EnvironmentHandle('local'), (args, env) => {
+  void executor.define((args, env) => {
     // An unannotated first parameter accepts any structured-clone arguments.
     expectTypeOf(args).toEqualTypeOf<EnvironmentValue>()
     // @ts-expect-error -- a definition without handlers exposes no host methods.
@@ -97,12 +101,12 @@ const remote: EnvironmentFunction<string, typeof handlers> = (text, env) => env.
 const options: EnvironmentDefineOptions<number, typeof handlers> = { handlers, result: z.number() }
 
 function declaredCalls(executor: EnvironmentRegistry, signal: AbortSignal): void {
-  const length = executor.define(EnvironmentHandle('local'), remote, options)
-  expectTypeOf(length('text', { signal })).toEqualTypeOf<Promise<number>>()
+  const length = executor.define(remote, options)
+  expectTypeOf(length(local, 'text', { signal })).toEqualTypeOf<Promise<number>>()
   // @ts-expect-error -- the remote function requires its matching handler map.
-  void executor.define(EnvironmentHandle('local'), remote, { result: z.number() })
+  void executor.define(remote, { result: z.number() })
   // @ts-expect-error -- explicitly supplying handler types still requires their implementations.
-  void executor.define<string, number, typeof handlers>(EnvironmentHandle('local'), remote, { result: z.number() })
+  void executor.define<string, number, typeof handlers>(remote, { result: z.number() })
   // @ts-expect-error -- options with known handlers require their implementations.
   const missingHandlers: EnvironmentDefineOptions<number, typeof handlers> = { result: z.number() }
   void missingHandlers

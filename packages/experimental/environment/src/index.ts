@@ -4,7 +4,7 @@
  * remote function), host-side state changes (handlers the function reaches
  * through `env.origin`, or ordinary code after a call returns) and model-facing
  * formatting (the tool's `output.render`). Transport providers register named
- * environments; each definition binds one provider-owned handle.
+ * environments; each run of a definition names the handle it runs in.
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
@@ -76,14 +76,15 @@ export type EnvironmentDefineOptions<T, H extends EnvironmentHandlers = Record<n
 } & (keyof H extends never ? unknown : { readonly handlers: H })
 
 /**
- * A function bound to one environment handle by {@link EnvironmentRegistry.define}. Each call runs the function at most
- * once with its arguments, in the registration that holds the handle when the call starts.
+ * A function defined by {@link EnvironmentRegistry.define}. Each call runs the function at most once with its
+ * arguments, in the registration that holds `handle` when the call starts.
+ * @param handle - provider-owned identifier selecting the execution environment of this run.
  * @param args - arguments, copied by structured clone.
  * @param options - cancellation and trust confirmation for this run.
  * @returns the validated result. Rejects with a {@link EnvironmentError} whose code names the failure class,
  * a transport's own `HarnessError`, or the caller's abort reason.
  */
-export type EnvironmentRunner<A extends EnvironmentValue, T> = (args: A, options: {
+export type EnvironmentRunner<A extends EnvironmentValue, T> = (handle: EnvironmentHandle, args: A, options: {
   /** Cancellation; aborts `env.signal` in the daemon and the run's host handler calls, and never rolls back completed remote effects. */
   readonly signal: AbortSignal
   /**
@@ -96,11 +97,10 @@ export type EnvironmentRunner<A extends EnvironmentValue, T> = (args: A, options
 }) => Promise<T>
 
 /** Options of one run. */
-type CallOptions = Parameters<EnvironmentRunner<EnvironmentValue, unknown>>[1]
+type CallOptions = Parameters<EnvironmentRunner<EnvironmentValue, unknown>>[2]
 
 /** What every call of one definition sends and validates; `methods` lists the handler names fixed when defining. */
 interface Definition<T> extends RunDefinition {
-  readonly handle: EnvironmentHandle
   /** {@link definitionHash} of `source` and `methods`, which names them on a connection that already holds them. */
   readonly hash: string
   readonly result: z.ZodType<T>
@@ -277,7 +277,7 @@ export class EnvironmentRegistry extends Service {
   }
 
   /**
-   * Define `fn` for the selected environment's execution process. Only its source text and the names of its origin
+   * Define `fn` for execution processes; each run names its environment. Only its source text and the names of its origin
    * handlers are sent, so `fn` must be a self-contained function or arrow expression without host closures. The type
    * of `fn`'s first parameter determines the arguments of each call. Arguments, results and origin values are copied
    * by structured clone; values it cannot copy, such as functions, fail their run. The own property names of
@@ -285,28 +285,26 @@ export class EnvironmentRegistry extends Service {
    * exposed nor served, while an origin call looks its handler up on the object when it arrives. The handlers' types
    * determine `env.origin` parameter types and awaited result types. Handlers serve every call and receive only
    * parameters from the function, so host state that belongs to one call, such as a tool call's background job,
-   * needs a definition made for that call. Defining neither contacts the environment nor requires its registration.
-   * @param handle - provider-owned identifier selecting the execution environment.
+   * needs a definition made for that call. Defining neither contacts an environment nor requires a registration.
    * @param fn - daemon-side code receiving each call's arguments and the daemon environment.
    * @param options - result validation and host handlers.
    * @returns a function that runs `fn` at most once per call.
    */
   define<A extends EnvironmentValue, T, H extends EnvironmentHandlers = Record<never, never>>(
-    handle: EnvironmentHandle, fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>,
+    fn: EnvironmentFunction<A, NoInfer<H>>, options: EnvironmentDefineOptions<T, H>,
   ): EnvironmentRunner<A, T> {
     const source = fn.toString()
     const handlers: EnvironmentHandlers = options.handlers ?? {}
     const methods = Object.freeze(Object.getOwnPropertyNames(handlers))
     const definition: Definition<T> = {
-      handle, source, methods, hash: definitionHash({ source, methods }), result: options.result, handlers,
+      source, methods, hash: definitionHash({ source, methods }), result: options.result, handlers,
     }
-    return (args, call) => this.call(definition, args, call)
+    return (handle, args, call) => this.call(definition, handle, args, call)
   }
 
-  private async call<T>(definition: Definition<T>, args: EnvironmentValue, options: CallOptions): Promise<T> {
+  private async call<T>(definition: Definition<T>, handle: EnvironmentHandle, args: EnvironmentValue, options: CallOptions): Promise<T> {
     options.signal.throwIfAborted()
     if (this.disposal !== undefined) throw this.disposal
-    const { handle } = definition
     const registration = this.registration(handle)
     // One reconnect covers a connection that closed before this run was sent, such as a daemon that just went idle.
     for (let attempt = 0; ; attempt++) {

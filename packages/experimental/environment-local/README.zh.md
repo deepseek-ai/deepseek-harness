@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-挂载注册表和提供方，然后将贡献的环境标识传给 `ctx.environments.define`。多个提供方实例可以贡献不同的本地环境。
+挂载注册表和提供方，然后将贡献的环境标识传给 `ctx.environments.define` 返回的运行器。多个提供方实例可以贡献不同的本地环境。
 
 ```yaml
 - name: '@deepseek-ai/dsh-environment'
