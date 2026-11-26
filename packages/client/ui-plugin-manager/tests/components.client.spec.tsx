@@ -254,7 +254,8 @@ describe('PluginManagerPage', () => {
     expect(screen.getByText(en.clientSyncing).getAttribute('role')).toBe('status')
     const notice = document.querySelector('[data-client-sync-failure]') as HTMLElement
     expect(within(notice).getByRole('alert').textContent).toBe(en.clientSyncFailed)
-    expect(within(notice).getByText('@fixture/live: download failed')).toBeTruthy()
+    expect(notice.querySelector('[data-icon="dsw-icon-warning-outline-regular"]')).not.toBeNull()
+    expect([...within(notice).getByRole('listitem').children].map(part => part.textContent)).toEqual(['@fixture/live', 'download failed'])
     const retry = within(notice).getByRole('button', { name: en.clientSyncRetry })
     expect((retry as HTMLButtonElement).disabled).toBe(true)
     setClientSync({ syncing: false, failures: [{ id: '@fixture/live', message: 'download failed' }] })
@@ -612,7 +613,7 @@ describe('PluginManagerPage', () => {
     expect(screen.queryByRole('status', { name: en.loading })).toBeNull()
     expect(screen.getByRole('status').querySelector('[data-state="idle"]')).not.toBeNull()
     set({ status: 'error' })
-    expect(screen.getByRole('alert').querySelector('[data-state="error"]')).not.toBeNull()
+    expect(screen.getByRole('alert').textContent).toBe(en.error)
     fireEvent.click(screen.getByRole('button', { name: en.retry }))
     expect(actions.refresh).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByRole('button', { name: en.refresh }))
@@ -756,7 +757,7 @@ describe('PluginManagerPage', () => {
     fireEvent.click(screen.getByRole('button', { name: en.openDetail.replace('{name}', 'dsh-better-sidebar') }))
     expect(screen.queryByRole('alert')).toBeNull()
     set({ status: 'error' })
-    expect(screen.getByRole('alert').querySelector('[data-state="error"]')).not.toBeNull()
+    expect(screen.getByRole('alert').textContent).toBe(en.error)
     fireEvent.click(screen.getByRole('button', { name: en.retry }))
     expect(actions.refresh).toHaveBeenCalledTimes(1)
     // The detail keeps showing the kept data behind the alert.

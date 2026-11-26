@@ -42,6 +42,7 @@ import { UpdateDialog, VersionSection } from './versions.tsx'
 import { BuildApproval } from './BuildApproval.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
 import { ClientSyncNotice } from './ClientSyncNotice.tsx'
+import { FailureNotice } from './FailureNotice.tsx'
 import css from './PluginManagerPage.module.css'
 
 /** Full component props assembled by the main slot renderer. */
@@ -1815,12 +1816,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           )}
         {!showsCards && state.status === 'error' && !refreshing
           ? (
-            <div className={css.failure}>
-              <p className={css.statusWithDot} role="alert">
-                <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
-              </p>
-              <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
-            </div>
+            <FailureNotice message={t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')} retryLabel={t('retry')} onRetry={props.refresh} />
           )
           : null}
         {onInstalled && loaded && openPkg !== undefined && openRow !== undefined
@@ -1895,12 +1891,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                     first-load failure, and after the kept cards when a refresh fails over stale data. */}
                 {state.status === 'error' && !refreshing
                   ? (
-                    <div className={css.failure}>
-                      <p className={css.statusWithDot} role="alert">
-                        <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
-                      </p>
-                      <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
-                    </div>
+                    <FailureNotice message={t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')} retryLabel={t('retry')} onRetry={props.refresh} />
                   )
                   : null}
               </div>
