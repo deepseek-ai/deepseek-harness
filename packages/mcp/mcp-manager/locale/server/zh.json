@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP 服务器",
+    "description": "通过 MCP 服务器管理连接一个 MCP 服务器，并提供它的工具。"
+  }
+}

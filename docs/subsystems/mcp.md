@@ -23,7 +23,7 @@ Model Context Protocol (MCP) connects the model to tools supplied by external se
 
 MCP servers are opt-in. Configure one `@deepseek-ai/dsh-mcp-client` entry per server in the intended Cordis scope. Every shipped profile supplies the [tool registry](tools.md) and mounts the shared resource service once; users configure only client entries. Callers with no visible configured server receive no MCP prompt text or tools in native or PTC mode.
 
-The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server registers its account with `ctx.mcpAccounts` from [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.md) to show it on the **Plugins** page.
+The Web and Desktop profiles also mount the [MCP server manager](../../packages/mcp/mcp-manager/README.md) once. It runs servers configured through Settings, servers that a composition declares as their own `@deepseek-ai/dsh-mcp-manager/server` rows, and servers that installed plugins register for their own lifetime, and serves their status, restart, and probe operations to Remote clients. A plugin that registers an OAuth server registers its account with `ctx.mcpAccounts` from [`dsh-mcp-account`](../../packages/mcp/mcp-account/README.md) to show it on the **Plugins** page.
 
 | Choice | Configuration owner |
 |---|---|
@@ -111,7 +111,7 @@ MCP prompt templates, human-input elicitation, task-based execution, and resourc
 
 - [MCP package group](../../packages/mcp/README.md) — package entry points.
 - [MCP resources](../../packages/mcp/mcp-resources/README.md) — shared tools and resource-provider semantics.
-- [MCP manager](../../packages/mcp/mcp-manager/README.md) — Settings-configured and plugin-registered servers, status, and Remote operations.
+- [MCP manager](../../packages/mcp/mcp-manager/README.md) — Settings-configured servers, server rows, and plugin-registered servers; status and Remote operations.
 - [Resource visibility reference](../../packages/mcp/mcp-resources/README.md) — shared profile mounting and visibility from configured servers.
 - [Third-party memory servers](../user/guide/mcp-memory.md) — product configuration guide.
 - [Protocol negotiation reference](../../packages/mcp/mcp-client/README.md) — SDK ownership and compatibility decisions.

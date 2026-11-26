@@ -9,29 +9,32 @@
   en: 4aaba88431d337f0
   zh: dbeb71a252aa7748
 /deepseek-ai-dsh-mcp-manager/summary:
-  en: d2b26c63ca0e837b
-  zh: ea377b20252a0fbe
+  en: 09c5be14ae731fc2
+  zh: 95a61d34358aca5d
 /deepseek-ai-dsh-mcp-manager/table-of-contents:
   en: d152484eb41ac6b4
   zh: f14f34fce35a8d90
 /deepseek-ai-dsh-mcp-manager/use-this-package:
-  en: 9e7e2300ce144738
-  zh: 412d9c7a7ec02467
+  en: d998aca6983c190e
+  zh: 4f2eac0bbd7ebecc
 /deepseek-ai-dsh-mcp-manager/use-this-package/when-to-choose-it:
-  en: 5a005b1ef5f53881
-  zh: d8bae243d10b2da5
+  en: c6a69efec6b5bd8c
+  zh: 63e39cf97578e09c
 /deepseek-ai-dsh-mcp-manager/use-this-package/minimal-configuration:
-  en: f1a2c66df2e70c17
-  zh: a445264301c3c898
+  en: 1c7de82eda539390
+  zh: 73bfdffac41e5ae9
+/deepseek-ai-dsh-mcp-manager/use-this-package/declaring-a-server-as-its-own-row:
+  en: 83b461b78fcfe43a
+  zh: 9f8c48fe15c1a944
 /deepseek-ai-dsh-mcp-manager/use-this-package/managing-configured-servers:
   en: 765209b5639c4be2
   zh: 48211813d2d25afc
 /deepseek-ai-dsh-mcp-manager/use-this-package/registering-a-server-from-a-plugin:
-  en: 313bcb35b12be8e1
-  zh: a85f75db6b138547
+  en: f39381880e3be29b
+  zh: bbf72968e33cac3b
 /deepseek-ai-dsh-mcp-manager/use-this-package/observing-and-recovering:
-  en: 6ef5e9e5be1cfa6f
-  zh: 334f127e53ff9ed2
+  en: f51406fd29ec0f3e
+  zh: 95eef8e608d1857a
 /deepseek-ai-dsh-mcp-manager/use-this-package/oauth-authorization:
   en: 86ad23ffe9337ec1
   zh: 33671e9bacf7eb6e
@@ -42,17 +45,17 @@
   en: 8a74186fa5bfe79d
   zh: c7c952876ca2992b
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/design-philosophy:
-  en: 8140d6676c500bda
-  zh: def13c78fd7949db
+  en: 11d1977fbb442b49
+  zh: e11948571f3a1266
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/source-map:
-  en: 874fe61698123da8
-  zh: 85f9cb1eb4881cbc
+  en: a3853c09381759f1
+  zh: f1674ac80026d90f
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/lifecycle-notes:
   en: ca31d0c252cc42ac
   zh: e9c4c537a6b10426
 /deepseek-ai-dsh-mcp-manager/further-exploration:
-  en: 1383d0b5ab881285
-  zh: bef9f5386cb092e1
+  en: 644d052e6856c56e
+  zh: 95cabfc24eb8592f
 /deepseek-ai-dsh-mcp-manager/model-experience:
   en: 622033747c4c0066
   zh: 821213fd61a98105
@@ -60,8 +63,8 @@
   en: 7a8d0bf11425040b
   zh: b39181f89ba4fbe8
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work:
-  en: c26f7e40e621bc2d
-  zh: 49ce0f2ec6b89dab
+  en: 238d854dfbc9672b
+  zh: cd089c38aab660f4
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work/dev-note:
   en: 22b977acde90c5b7
   zh: 756afde34c9bcd99
