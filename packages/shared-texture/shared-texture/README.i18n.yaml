@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/shared-texture/shared-texture/README.md
+/:
+  en: 462a8ef5fbdd56a8
+  zh: 3b617d3ee0d7254d
+/deepseek-ai-dsh-shared-texture:
+  en: c7064433eea3a30e
+  zh: 25578d5a50ed1771
+/deepseek-ai-dsh-shared-texture/summary:
+  en: 81938887ffe95cae
+  zh: 30cf5cb6d922c3db
+/deepseek-ai-dsh-shared-texture/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 05f2326e2b256b2e
+/deepseek-ai-dsh-shared-texture/use-this-package:
+  en: bbff250eba0f1b89
+  zh: b20a47f82d8ab6e0
+/deepseek-ai-dsh-shared-texture/use-this-package/host-service-deepseek-ai-dsh-shared-texture:
+  en: 84dba03e7be89b8d
+  zh: 5bc384b906539a40
+/deepseek-ai-dsh-shared-texture/use-this-package/client-plugin-deepseek-ai-dsh-shared-texture-client:
+  en: 4bbc5bbf7e542e56
+  zh: 6248dc219b321843
+/deepseek-ai-dsh-shared-texture/use-this-package/renderer-types-deepseek-ai-dsh-shared-texture-types:
+  en: b030f465ab1d958f
+  zh: 5463046dcae39227
+/deepseek-ai-dsh-shared-texture/use-this-package/configuration:
+  en: 784feb641dbe2ba0
+  zh: 39187b7407e613cc
+/deepseek-ai-dsh-shared-texture/understand-the-implementation:
+  en: 8c988c895f4e0128
+  zh: dccd7bb2ef08da03
+/deepseek-ai-dsh-shared-texture/further-exploration:
+  en: 5427b23985558b60
+  zh: 80b0084b516ca161
+/deepseek-ai-dsh-shared-texture/model-experience:
+  en: 61c88ed6c1573710
+  zh: 35c5689ce560cf49
+/deepseek-ai-dsh-shared-texture/model-experience/kv-cache-effect:
+  en: 4ddf239cb383bcdf
+  zh: 617803c558367430
+/deepseek-ai-dsh-shared-texture/known-limitations-and-deferred-work:
+  en: 7e178d1df955e3a8
+  zh: 337375b2a85fdf0d
+/deepseek-ai-dsh-shared-texture/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

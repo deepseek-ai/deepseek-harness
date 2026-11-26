@@ -327,6 +327,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The provider owns the retained cua_run_code runtime; a host without a model releases one Agent\'s environment and reads the configured screenshot request target through it.',
   },
   {
+    key: 'sharedTexture',
+    pkg: 'shared-texture',
+    title: 'Shared-texture presentation',
+    mode: 'seam',
+    note: 'Desktop Host implements the exclusive Host claim that submits GPU-backed frames to Desktop; the Client half of the package provides the Desktop preload bridge as the Client service. Consumers never touch Mach ports, Win32 handles, or Electron.',
+  },
+  {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
     mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-document'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',

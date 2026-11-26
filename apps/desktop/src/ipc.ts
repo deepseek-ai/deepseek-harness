@@ -7,6 +7,7 @@ import type { DesktopKeyboardApi, DesktopShortcutsApi } from '@deepseek-ai/dsh-c
 import type { IpcMainInvokeEvent } from 'electron'
 import type { DesktopBrowserBridge } from '@deepseek-ai/dsh-client-ui-sidebar-browser/types'
 import type { DesktopFileDrag } from '@deepseek-ai/dsh-util-file-drag'
+import type { SharedTextureClientExport } from '@deepseek-ai/dsh-shared-texture/types'
 
 /** IPC channel names kept private to the desktop application bundle. */
 export const DESKTOP_IPC = {
@@ -44,6 +45,9 @@ export const DESKTOP_IPC = {
   windowFullscreen: 'dsh-desktop:window-fullscreen',
   windowsAppearance: 'dsh-desktop:windows-appearance',
   windowsMenu: 'dsh-desktop:windows-menu',
+  sharedTexture: 'dsh-desktop:shared-texture',
+  sharedTextureImported: 'dsh-desktop:shared-texture-imported',
+  sharedTextureReleased: 'dsh-desktop:shared-texture-released',
 } as const
 
 /** Desktop release update state rendered by desktop-owned UI. */
@@ -102,6 +106,11 @@ export interface DshDesktopProductApi {
    * @returns `name=value` fields separated by `; `, with no hostname, user name, or serial number.
    */
   deviceInfo(): Promise<string>
+  /**
+   * Textures the Desktop Host presents in this window; see {@link SharedTextureClientExport}. Desktop-internal: frame
+   * forwarding consumes it for the document's whole life, so plugins use frame forwarding instead.
+   */
+  readonly textures: SharedTextureClientExport
   readonly updates: {
     readonly channels: DesktopChannelBridge
     status(): Promise<DesktopUpdatePresentation>

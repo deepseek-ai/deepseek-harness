@@ -460,6 +460,12 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-settings` | no | Abstract user-settings seam (ctx.settings) for the DeepSeek Harness |
 
+## shared-texture
+
+| Package | Config | Description |
+|---|---|---|
+| `@deepseek-ai/dsh-shared-texture` | no | Host and Client shared-texture Cordis services (ctx.sharedTexture) and renderer bridge types |
+
 ## shell
 
 | Package | Config | Description |

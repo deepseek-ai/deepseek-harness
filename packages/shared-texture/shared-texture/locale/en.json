@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Shared textures",
+    "description": "Gives Host plugins exclusive access to presenting GPU frames in the Desktop window and exposes the renderer texture bridge to Client plugins."
+  }
+}

@@ -23,11 +23,13 @@ import {
   protocol,
   session,
   shell,
+  type IpcMainEvent,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager } from './project-manager.ts'
+import { createDesktopSharedTextures } from './shared-texture/main.ts'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
 import { installDesktopFileDrag } from './file-drag.ts'
@@ -512,6 +514,13 @@ async function main(): Promise<void> {
     }
     return mainWindow
   }
+  const textures = createDesktopSharedTextures(app.getAppPath(), () => mainWindow)
+  app.on('child-process-gone', (_event, details) => {
+    // A new GPU process can composite on another adapter.
+    if (details.type === 'GPU') void textures.reset({ gpuProcessGone: true }).catch((error: unknown) => {
+      console.error('Shared textures could not reset after GPU exit', error)
+    })
+  })
   let navigation: { window: BrowserWindow; url: string; promise: Promise<void> } | undefined
   const navigateMain = (url: string): Promise<void> => {
     const window = mainWindow
@@ -533,14 +542,17 @@ async function main(): Promise<void> {
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
-      hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, onFailure,
+      hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, (error) => {
+        void textures.dispose().catch((closeError: unknown) => { console.error('Shared texture cleanup failed', closeError) })
+        onFailure(error)
+      },
       primaryRuntime,
       resources, (next) => { platformView.setSession(next) }, (record) => {
         operationJournal ??= new OperationJournal(join(app.getPath('userData'), 'plugin-operations'), {
           segmentBytes: 256 * 1024, recordBytes: 4096, queuedBytes: 64 * 1024,
         })
         operationJournal.enqueue(JSON.stringify(record))
-      })
+      }, [textures.channel])
     return {
       start: async () => {
         const ready = await host.start()
@@ -605,8 +617,11 @@ async function main(): Promise<void> {
         try { await host.stop(requireCleanStop) }
         catch (error) {
           if (!requireCleanStop || !(error instanceof DesktopHostUncleanExitError)) throw error
-          // Backend cleanup succeeded; installation still rejects the unsuccessful task teardown.
+          // Installation still rejects the unsuccessful task teardown after resources are released.
           updateStopFailure = error
+        } finally {
+          // A cleanup failure must not replace the stop outcome.
+          await textures.dispose().catch((error: unknown) => { console.error('Shared texture cleanup failed', error) })
         }
       },
       updateTasks: (action: 'inspect' | 'lock' | 'unlock') => host.updateTasks(action),
@@ -977,16 +992,25 @@ async function main(): Promise<void> {
     assertProductSender(event)
     return (await readWelcomeState()).hasApiKey
   })
+  const fromProductDocument = (event: IpcMainEvent): boolean => {
+    const window = mainWindow
+    return window !== undefined && !window.isDestroyed() && event.sender === window.webContents
+      && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url.startsWith(`${SCHEME}://app/`)
+  }
   ipcMain.on(DESKTOP_IPC.onboardingActive, (event, active: unknown) => {
     const window = mainWindow
-    if (window === undefined || window.isDestroyed() || event.sender !== window.webContents
-      || event.senderFrame !== window.webContents.mainFrame
-      || !event.senderFrame.url.startsWith(`${SCHEME}://app/`) || typeof active !== 'boolean') return
+    if (window === undefined || !fromProductDocument(event) || typeof active !== 'boolean') return
     window.setMinimumSize(active ? 960 : 520, 600)
     if (active) {
       const { width, height } = window.getBounds()
       if (width < 960) window.setSize(960, height)
     }
+  })
+  ipcMain.on(DESKTOP_IPC.sharedTextureImported, (event, id: unknown, result: unknown) => {
+    if (fromProductDocument(event) && typeof id === 'number') textures.rendererImported(id, result)
+  })
+  ipcMain.on(DESKTOP_IPC.sharedTextureReleased, (event, id: unknown) => {
+    if (fromProductDocument(event) && typeof id === 'number') textures.rendererReleased(id)
   })
   ipcMain.handle(DESKTOP_IPC.updatesOpen, async (event) => {
     assertProductSender(event)
@@ -1386,7 +1410,11 @@ async function main(): Promise<void> {
       window.on('focus', () => { sessionEnding = false })
       window.on('show', () => { sessionEnding = false })
     }
-    window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
+    window.on('closed', () => {
+      if (mainWindow !== window) return
+      mainWindow = undefined
+      void textures.reset().catch((error: unknown) => { console.error('Shared texture cleanup failed', error) })
+    })
     window.webContents.on('console-message', (details) => {
       if (details.level !== 'error') return
       rendererConsole.push(`${details.sourceId}:${String(details.lineNumber)} ${details.message}`)
@@ -1399,7 +1427,13 @@ async function main(): Promise<void> {
     window.webContents.on('preload-error', (_event, _path, error) => {
       if (!quitting && !window.isDestroyed()) reportFatal(error, 'renderer')
     })
+    // Only a committed cross-document navigation replaces the document; cancelled, intercepted, and same-document
+    // navigations keep its textures.
+    window.webContents.on('did-navigate', () => {
+      void textures.reset().catch((error: unknown) => { console.error('Shared texture cleanup after navigation failed', error) })
+    })
     window.webContents.on('render-process-gone', (_event, details) => {
+      void textures.reset().catch((error: unknown) => { console.error('Shared texture cleanup failed', error) })
       navigation = undefined
       if (!quitting && !window.isDestroyed() && details.reason !== 'clean-exit') {
         reportFatal(new Error(`Desktop renderer exited: ${details.reason}`), 'renderer')

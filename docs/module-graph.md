@@ -467,6 +467,9 @@ flowchart TD
   subgraph group_settings["packages/settings"]
     pkg_settings["settings"]
   end
+  subgraph group_shared_texture["packages/shared-texture"]
+    pkg_shared_texture["shared-texture"]
+  end
   subgraph group_shell["packages/shell"]
     pkg_bash_local["bash-local"]
     pkg_bash_sandbox["bash-sandbox"]
@@ -1867,6 +1870,7 @@ flowchart TD
 | [`session-format-v1-to-v2`](../packages/session/session-format-v1-to-v2) | `session` | — |
 | [`session-format-v2-to-v3`](../packages/session/session-format-v2-to-v3) | `session` | — |
 | [`session-format-v3-to-v4`](../packages/session/session-format-v3-to-v4) | `session` | — |
+| [`shared-texture`](../packages/shared-texture/shared-texture) | `shared-texture` | — |
 | [`ssh-helper-runtime`](../packages/ssh/ssh-helper-runtime) | `ssh` | — |
 | [`storage`](../packages/storage/storage) | `storage` | — |
 | [`llm-mock-server`](../packages/test-support/llm-mock-server) | `test-support` | — |

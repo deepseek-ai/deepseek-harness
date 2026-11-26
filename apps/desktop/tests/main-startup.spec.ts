@@ -23,6 +23,11 @@ type InvokeHandler = (event: InvokeEvent, ...args: unknown[]) => unknown
 const fileDrag = vi.hoisted(() => ({ dispose: vi.fn<() => Promise<void>>(), install: vi.fn() }))
 vi.mock('../src/file-drag.ts', () => ({ installDesktopFileDrag: () => { fileDrag.install(); return fileDrag.dispose } }))
 
+const sharedTextures = vi.hoisted(() => ({ reset: vi.fn(async () => {}) }))
+vi.mock('../src/shared-texture/main.ts', () => ({
+  createDesktopSharedTextures: () => ({ channel: { attach: () => () => false }, reset: sharedTextures.reset, dispose: async () => {} }),
+}))
+
 vi.mock('../src/web-document.ts', () => ({
   serveWebDocument: vi.fn(), forwardWebRequest: vi.fn(),
   removeLegacyHostCookies: harness.removeLegacyHostCookies,
@@ -2893,6 +2898,28 @@ describe('desktop main startup', () => {
     window.webContents.emit('render-process-gone', {}, { reason: 'crashed' })
     await vi.advanceTimersByTimeAsync(0)
     expect(harness.dialog.showMessageBox).not.toHaveBeenCalled()
+  })
+
+  it('resets shared textures only after a committed cross-document navigation', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    const window = harness.windows[0]!
+    // A started navigation may still be cancelled or intercepted, and a same-document navigation keeps the document.
+    window.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false }, 'dsh-app://app/', false, true)
+    window.webContents.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true }, 'dsh-app://app/#account', true, true)
+    window.webContents.emit('did-navigate-in-page', {}, 'dsh-app://app/#account', true)
+    expect(sharedTextures.reset).not.toHaveBeenCalled()
+    window.webContents.emit('did-navigate', {}, 'dsh-app://app/', 200, 'OK')
+    expect(sharedTextures.reset).toHaveBeenCalledOnce()
+  })
+
+  it('resets shared textures for a new GPU process only after the GPU process exits', async () => {
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.app.emit('child-process-gone', {}, { type: 'Utility', reason: 'crashed', exitCode: 1 })
+    expect(sharedTextures.reset).not.toHaveBeenCalled()
+    harness.app.emit('child-process-gone', {}, { type: 'GPU', reason: 'crashed', exitCode: 1 })
+    expect(sharedTextures.reset).toHaveBeenCalledExactlyOnceWith({ gpuProcessGone: true })
   })
 
   it('reports a rejected document load without navigating to a recovery page', async () => {

@@ -19,6 +19,9 @@
       "path": "../cli"
     },
     {
+      "path": "../../packages/shared-texture/shared-texture/tsconfig.host.json"
+    },
+    {
       "path": "../../packages/boot/app-boot"
     },
     {

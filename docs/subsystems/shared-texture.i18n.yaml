@@ -1,0 +1,10 @@
+# Bilingual-pair consistency record for shared-texture.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/shared-texture.md
+/shared-textures:
+  en: 0450e0ba89c87bad
+  zh: 68d674cc55198189
+/shared-textures/host-and-client-entry-points:
+  en: 91b0fcbbc6121fb4
+  zh: b0315386acd9d8cf

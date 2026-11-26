@@ -9,6 +9,12 @@
   ],
   "references": [
     {
+      "path": "../desktop-host"
+    },
+    {
+      "path": "../../packages/shared-texture/shared-texture/tsconfig.host.json"
+    },
+    {
       "path": "../../packages/boot/app-boot"
     },
     {
@@ -46,6 +52,9 @@
     },
     {
       "path": "../../packages/client/ui-file-actions"
+    },
+    {
+      "path": "../../packages/util/values"
     }
   ],
   "exclude": [

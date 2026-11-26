@@ -205,6 +205,7 @@ describe('directory-picker-native client half', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     vi.resetModules()
     vi.stubGlobal('location', new URL('dsh-app://app/'))
+    vi.stubGlobal('navigation', new EventTarget())
     // Desktop's preload is typechecked by its own compiler program.
     const preload = '../../../../apps/desktop/src/preload-app.ts'
     await import(/* @vite-ignore */ preload)

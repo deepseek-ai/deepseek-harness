@@ -13,6 +13,7 @@
     "test:installer": "node scripts/test-windows-installer.mjs",
     "build": "tsc -b && pnpm run bundle",
     "bundle": "tsdown --config-loader native",
+    "build:native": "tsx native/shared-texture/scripts/build.ts",
     "dev": "tsx scripts/dev.ts",
     "start": "tsx scripts/dev.ts --skip-build",
     "test:updates:channels": "pnpm run build && node scripts/test-update-channels.mjs",
@@ -56,6 +57,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-shared-texture": "workspace:*",
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-client-connection": "workspace:*",
@@ -78,6 +80,7 @@
     "extract-zip": "^2.0.1",
     "js-yaml": "^4.3.2",
     "koffi": "3.1.1",
+    "node-api-headers": "1.9.0",
     "pnpm": "11.28.5",
     "sharp": "0.35.5",
     "typescript": "^6.0.3",
@@ -96,6 +99,7 @@
     "@deepseek-ai/dsh-util-file-drag": "workspace:*",
     "@deepseek-ai/dsh-client-ui-file-actions": "workspace:*",
     "tencentcloud-sdk-nodejs-teo": "4.1.330",
-    "@deepseek-ai/dsh-desktop-publisher": "workspace:*"
+    "@deepseek-ai/dsh-desktop-publisher": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   }
 }

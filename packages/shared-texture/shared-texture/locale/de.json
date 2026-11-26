@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Geteilte Texturen",
+    "description": "Gibt Host-Plugins exklusiven Zugriff auf die Darstellung von GPU-Frames im Desktop-Fenster und stellt Client-Plugins die Textur-Brücke des Renderers bereit."
+  }
+}

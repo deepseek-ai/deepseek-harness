@@ -4412,6 +4412,19 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sharedTexture',
+    summary: 'Abstract Host shared-texture service registered as `ctx.sharedTexture`.',
+    description: 'Abstract Host shared-texture service registered as `ctx.sharedTexture`. Subclasses own exclusive-claim concurrency control and the underlying native transport.',
+    methods: [
+      {
+        signature: 'abstract claim(): SharedTextureClaim',
+        description: 'Take the only claim for the calling scope. The claim ends at `release` or when that scope is disposed, whichever comes first; afterwards its operations reject, and the frames of a connection whose SharedTextureService.nativeSink the claim took settle as invalidated.',
+        parameters: [],
+        returns: 'The texture operations until the claim ends; throws while another claim is held or when the calling scope is inactive.',
+      },
+    ],
+  },
+  {
     key: 'shell',
     summary: 'Abstract bash execution service.',
     description: 'Abstract bash execution service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.shell` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nexecute resolves with the process handle after preparation. "Foreground" is a property of what the caller awaits, not of the spawn — a caller that awaits ShellExecution.result ran the command in the foreground; one that keeps the handle ran it in the background. A caller that waits only for a while runs the command under `onExpiry: \'none\'` and bounds its own wait; the handle stays valid after the caller stops waiting.\n\nImplementations must honor these semantics:\n\n- ShellExecution.result rejects only for infrastructure failures. Nonzero exits, timeout kills, and abort kills resolve with a descriptive result: first-cause `timedOut`/`aborted`, the spec\'s `timeoutMs` echoed.\n- The handle is published after preparation. `done` settles at process close and never rejects; spawn failures settle as `killed` with the error on the read path, while `result()` carries the same failure as its rejection.\n- `onExpiry: \'none\'` arms no deadline; `\'kill\'` kills at expiry. Expiry during preparation returns a settled timed-out handle without output.\n- ShellProcess.readOutput is incremental: consecutive reads never repeat output. Lossy reads report truncation and available spill files.\n- A still-running process is stopped and awaited when its owning composition tears down. With the subprocess seam that boundary is `ctx.subprocess` disposal, so a process survives an executor-only reload.',
@@ -11422,6 +11435,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ShareCapabilityOffers',
     declaration: 'export interface ShareCapabilityOffers {\n    readonly capabilities: readonly ShareCapabilityGroup[];\n}',
+  },
+  {
+    name: 'SharedTextureCapabilities',
+    declaration: 'export interface SharedTextureCapabilities {\n    supported: boolean;\n    reason?: string;\n}',
+  },
+  {
+    name: 'SharedTextureClaim',
+    declaration: 'export interface SharedTextureClaim extends SharedTextureService {\n    release(): void;\n}',
+  },
+  {
+    name: 'SharedTextureNativeSink',
+    declaration: 'export interface SharedTextureNativeSink {\n    readonly __sharedTextureNativeSink: unique symbol;\n}',
+  },
+  {
+    name: 'SharedTextureService',
+    declaration: 'export interface SharedTextureService {\n    capabilities(timeoutMs: number): Promise<SharedTextureCapabilities>;\n    nativeSink(timeoutMs: number): Promise<SharedTextureNativeSink>;\n    adapterLuid(timeoutMs: number): Promise<string | null>;\n}',
   },
   {
     name: 'ShareSessions',

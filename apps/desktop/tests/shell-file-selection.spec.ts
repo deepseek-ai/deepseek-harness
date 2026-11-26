@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { Packager, type Configuration, type PlatformSpecificBuildOptions } from 'app-builder-lib'
 import { readAsar } from 'app-builder-lib/out/asar/asar.js'
-import type { FileMatcher } from 'app-builder-lib/out/fileMatcher.js'
+import { getFileMatchers, type FileMatcher } from 'app-builder-lib/out/fileMatcher.js'
 import { MacPackager } from 'app-builder-lib/out/macPackager.js'
 import { PM } from 'app-builder-lib/out/node-module-collector/index.js'
 import type { PlatformPackager } from 'app-builder-lib/out/platformPackager.js'
@@ -12,6 +13,7 @@ import type { ResolvedFileSet } from 'app-builder-lib/out/util/appFileCopier.js'
 import { WinPackager } from 'app-builder-lib/out/winPackager.js'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createElectronBuilderConfig } from '../scripts/electron-builder-config.mjs'
+import { sharedTextureAddonNames } from '../scripts/verify-shared-texture.mjs'
 
 const require = createRequire(import.meta.url)
 // The locked builder exports these packaging operations without declarations.
@@ -107,4 +109,56 @@ it.each([
     for (const name of omitted) expect(archive.getNode(join(directory, name))).toBeUndefined()
   }
   for (const [file, contents] of originals) expect(await readFile(file)).toEqual(contents)
+})
+
+it.each([
+  ['darwin', 'arm64'], ['darwin', 'x64'],
+] as const)('ships every %s/%s texture addon at its unpacked runtime path', async (platform, arch) => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-texture-files-'))
+  onTestFinished(() => rm(root, { recursive: true, force: true }))
+  const appDir = join(root, 'app')
+  const resources = join(root, 'resources')
+  const destination = join(resources, 'app')
+  await mkdir(resources, { recursive: true })
+  const names = sharedTextureAddonNames(platform)
+  expect(names).toEqual(['shared-texture-hop', 'shared-texture-ingress'])
+  const paths = names.map(name => `lib/native/${platform}-${arch}/${name}.node`)
+  const desktopConfig = createElectronBuilderConfig({
+    DSH_DESKTOP_APP_ID: 'com.example.texture-files', DSH_DESKTOP_UNSIGNED: '1',
+    DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN: 'https://policy.example.com',
+    DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: JSON.stringify({ allowedAuthOrigins: ['https://login.example.com'] }),
+  }, platform, arch)
+  expect(desktopConfig.files).toEqual(expect.arrayContaining(paths))
+  const config: Configuration = {
+    files: desktopConfig.files.map(file => typeof file === 'string' ? file : { ...file, filter: [...file.filter] }),
+    asarUnpack: [...desktopConfig.asarUnpack],
+  }
+  const options = { defaultSrc: appDir, globalOutDir: root, customBuildOptions: {}, macroExpander: (value: string) => value }
+  const fileMatcher = getFileMatchers(config, 'files', destination, options)!.find(matcher => matcher.from === appDir)!
+  const unpackMatcher = getFileMatchers(config, 'asarUnpack', destination, options)![0]!
+  const include = fileMatcher.createFilter()
+  const unpack = unpackMatcher.createFilter()
+  const files: string[] = []
+  const metadata = new Map<string, Stats>()
+  for (const path of paths) {
+    const file = join(appDir, path)
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, path)
+    const stat = await lstat(file)
+    expect(include(file, stat)).toBe(true)
+    expect(unpack(file, stat)).toBe(true)
+    files.push(file)
+    metadata.set(file, stat)
+  }
+  const consoleLog = console.log
+  try {
+    await new AsarPackager({ info: { getWorkspaceRoot: async () => root } }, {
+      defaultDestination: destination, resourcePath: resources, options: { smartUnpack: false }, unpackPattern: unpack,
+    }).pack([{ src: appDir, destination, files, metadata }])
+  } finally { console.log = consoleLog }
+  const archive = await readAsar(join(resources, 'app.asar'))
+  for (const path of paths) {
+    expect(archive.getFile(join(...path.split('/'))).unpacked).toBe(true)
+    expect(await readFile(join(resources, 'app.asar.unpacked', path), 'utf8')).toBe(path)
+  }
 })

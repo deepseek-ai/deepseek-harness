@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "共享纹理",
+    "description": "让 Host 插件独占地把 GPU 帧呈现到 Desktop 窗口，并向 Client 插件提供渲染器纹理桥接。"
+  }
+}

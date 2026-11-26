@@ -3,7 +3,7 @@ import * as childProcess from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, QUIT_INSPECTION_DEADLINE_MS } from '../src/host-process.ts'
+import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, QUIT_INSPECTION_DEADLINE_MS, type DesktopHostChannel } from '../src/host-process.ts'
 import { OperationJournal } from '../src/operation-journal.ts'
 import { readOperationHistory } from '../src/operation-history.ts'
 import { renderCrashReport } from '../src/crash-report.ts'
@@ -223,6 +223,47 @@ ${HTTP_HOST}`)
     await host.start()
     await expect(host.resolveDragResource('invalid')).rejects.toThrow('invalid IPC event')
   })
+
+  it('offers Host messages to attached channels before shell events and lets a channel reply or fail the Host', async () => {
+    const runtime = projectWithHost(`
+      process.send({ type: 'starting', runId: 'c254ab28-97c9-4382-95e6-2db9c66f98c8' })
+      process.on('message', message => {
+        if (message.type === 'desktop-auth') process.send({ type: 'echo', value: 1 })
+        if (message.type === 'echo') {
+          if (message.value !== 2) throw new Error('unexpected echo reply')
+          process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' })
+        }
+        if (message.type === 'shutdown') process.send({ type: 'echo', value: 'late' }, () => process.send({ type: 'shutdown-complete' }, () => process.disconnect()))
+      })
+    `)
+    const received: unknown[] = []
+    const stopping: boolean[] = []
+    const channel: DesktopHostChannel = {
+      attach(child, link) {
+        return (message) => {
+          if ((message as { type?: unknown }).type !== 'echo') return false
+          received.push(message)
+          stopping.push(link.stopping())
+          if (child.connected) child.send({ type: 'echo', value: 2 })
+          return true
+        }
+      },
+    }
+    const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
+      undefined, undefined, undefined, undefined, undefined, [channel])
+    hosts.push(host)
+    expect((await host.start()).url).toBe('http://127.0.0.1:3080/')
+    await host.stop(true)
+    expect(received).toEqual([{ type: 'echo', value: 1 }, { type: 'echo', value: 'late' }])
+    expect(stopping).toEqual([false, true])
+
+    const failing: DesktopHostChannel = { attach: (_child, link) => () => { link.fail(new Error('channel refused the Host')); return true } }
+    const refused = new DesktopHostProcess(process.execPath, projectWithHost("process.send({ type: 'ready', url: 'http://127.0.0.1:3080/' })"),
+      runtime, undefined, process.env, undefined, undefined, undefined, undefined, undefined, [failing])
+    hosts.push(refused)
+    await expect(refused.start()).rejects.toThrow('channel refused the Host')
+  })
+
   it('correlates task inspections and admission changes over private IPC', async () => {
     const host = hostProcess(projectWithHost())
     await expect(host.updateTasks('inspect')).rejects.toThrow('Host is unavailable')
@@ -425,6 +466,7 @@ process.send({ type: 'starting', runId: randomUUID() })
     ["process.send({ type: 'fatal', message: 'startup failed' }); process.disconnect()", 'startup failed'],
     ["process.send({ type: 'ready', url: 4 })", 'invalid IPC event'],
     ["process.send({ type: 'fatal', message: 'startup failed', diagnostic: 42 })", 'invalid IPC event'],
+    ["process.send({ type: 'shared-texture', requestId: 1, request: { op: 'probe' } })", 'invalid IPC event'],
     ['process.exit(0)', 'host stopped'],
   ])('rejects startup when the child fails before readiness: %s', async (source, message) => {
     const host = hostProcess(projectWithHost(source))

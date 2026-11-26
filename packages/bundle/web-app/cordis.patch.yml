@@ -84,6 +84,11 @@
     - id: ui-open-in-app
       name: '@deepseek-ai/dsh-client-ui-open-in-app'
 
+    # Renderer shared-texture bridge: the Client half provides ctx.sharedTexture where
+    # Desktop's product preload exposes textures; other documents get no service.
+    - id: shared-texture
+      name: '@deepseek-ai/dsh-shared-texture'
+
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 

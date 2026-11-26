@@ -53,10 +53,12 @@ describe.skipIf(!existsSync(preload('preload-app')))('built sandboxed Desktop pr
     const exposed = new Map<string, Record<string, unknown>>()
     const invoke = vi.fn<(...args: unknown[]) => Promise<unknown>>(() => Promise.resolve({ languages: ['en-US'], preference: 'zh' }))
     const send = vi.fn()
+    const on = vi.fn()
     const browser = browserEnvironment()
     const electron = {
       contextBridge: { exposeInMainWorld: (key: string, value: Record<string, unknown>) => { exposed.set(key, value) } },
-      ipcRenderer: { invoke, send, on: vi.fn(), off: vi.fn() },
+      ipcRenderer: { invoke, send, on, off: vi.fn() },
+      sharedTexture: { subtle: { finishTransferSharedTexture: vi.fn() } },
     }
     runInNewContext(readFileSync(preload(name), 'utf8'), {
       ...browser.globals,
@@ -66,9 +68,14 @@ describe.skipIf(!existsSync(preload('preload-app')))('built sandboxed Desktop pr
       },
       process: { argv: ['electron', '--dsh-welcome-locale=en'], isMainFrame: true },
       location: new URL('dsh-app://app/'),
+      navigation: new EventTarget(),
+      URL,
       exports: {},
     })
+    // Only the product document receives the shared textures behind dshDesktop.textures.
+    expect(on.mock.calls.filter(([channel]) => channel === 'dsh-desktop:shared-texture')).toHaveLength(name === 'preload-app' ? 1 : 0)
     if (name === 'preload-app') {
+      expect(Object.keys((exposed.get('dshDesktop') as { textures: object }).textures)).toEqual(['onFrame'])
       const product = exposed.get('dshDesktop') as { deviceInfo(): Promise<string> }
       invoke.mockResolvedValueOnce('platform=darwin; memory_gib=32.0')
       await expect(product.deviceInfo()).resolves.toBe('platform=darwin; memory_gib=32.0')

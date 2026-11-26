@@ -295,6 +295,7 @@
     "apps/desktop/scripts/**/*.ts",
     "apps/desktop-publisher/src/**/*.ts",
     "apps/desktop-publisher/tests/**/*.ts",
+    "apps/desktop/native/**/*.ts",
     "apps/desktop/tests/**/*.ts",
     "apps/desktop-host/tests/**/*.ts",
     "benchmarks/**/*.ts",
@@ -698,6 +699,7 @@
     { "path": "./packages/lsp/tool-lsp" },
     { "path": "./apps/cli" },
     { "path": "./apps/plugin-market-generator" },
+    { "path": "./packages/shared-texture/shared-texture/tsconfig.host.json" },
     { "path": "./apps/desktop-host" },
     { "path": "./apps/desktop/tsconfig.host.json" }
   ]

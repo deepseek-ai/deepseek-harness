@@ -95,6 +95,10 @@ async function main(): Promise<void> {
   if (!values['skip-build']) {
     await runPackageScript('build:artifacts', REPOSITORY_ROOT)
     await runPackageScript('build', APP_ROOT)
+    // Without a C++ toolchain, development uses the consumers' unavailable-addon fallbacks.
+    if (process.platform === 'darwin' || process.platform === 'win32') await runPackageScript('build:native', APP_ROOT).catch((error: unknown) => {
+      console.warn(`desktop development: shared-texture addons not built: ${error instanceof Error ? error.message : String(error)}`)
+    })
   }
   for (const path of [
     join(APP_ROOT, 'lib', 'main.js'),

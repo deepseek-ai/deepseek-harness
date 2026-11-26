@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Textures partagées",
+    "description": "Donne aux plugins Host un accès exclusif à la présentation d'images GPU dans la fenêtre Desktop et expose le pont de textures du moteur de rendu aux plugins Client."
+  }
+}

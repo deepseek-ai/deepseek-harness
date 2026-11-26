@@ -10,6 +10,7 @@ const electron = vi.hoisted(() => ({
   contextBridge: { exposeInMainWorld: vi.fn() },
   ipcRenderer: { invoke: vi.fn(), on: vi.fn(), off: vi.fn(), send: vi.fn() },
   webUtils: { getPathForFile: vi.fn() },
+  sharedTexture: { subtle: { finishTransferSharedTexture: vi.fn() } },
 }))
 vi.mock('electron', () => electron)
 vi.mock('../src/preload-platform.ts', () => ({ markDocumentPlatform: vi.fn(), syncWindowFullscreen: vi.fn() }))
@@ -17,7 +18,10 @@ vi.mock('../src/preload-theme.ts', () => ({ syncNativeTheme: vi.fn() }))
 vi.mock('../src/preload-windows.ts', () => ({ syncWindowsAppearance: vi.fn() }))
 vi.mock('../src/preload-mandatory-overlay.ts', () => ({ installMandatoryUpdateOverlay: vi.fn() }))
 
-beforeEach(() => { vi.stubGlobal('process', { ...process, isMainFrame: true }) })
+beforeEach(() => {
+  vi.stubGlobal('process', { ...process, isMainFrame: true })
+  vi.stubGlobal('navigation', new EventTarget())
+})
 afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); vi.resetModules() })
 
 it('reads only native login API-key presence through the onboarding bridge', async () => {
@@ -292,6 +296,22 @@ const imageProtocol = (value: import('../src/ipc.ts').DshDesktopProductApi['file
 const imageProtocolBack = (value: DesktopFileDrag): import('../src/ipc.ts').DshDesktopProductApi['fileDrag'] => value
 void imageProtocol
 void imageProtocolBack
+
+it.each(['about:blank', 'about:blank#fragment'])('cancels %s before replacing the product document', async (url) => {
+  vi.stubGlobal('location', new URL('dsh-app://app/'))
+  await import('../src/preload-app.ts')
+  const event = Object.assign(new Event('navigate', { cancelable: true }), { destination: { url } })
+  navigation.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(true)
+})
+
+it.each(['dsh-app://app/?next', 'dsh-app://app/#part', 'https://example.com/'])('leaves %s to normal navigation policy', async (url) => {
+  vi.stubGlobal('location', new URL('dsh-app://app/'))
+  await import('../src/preload-app.ts')
+  const event = Object.assign(new Event('navigate', { cancelable: true }), { destination: { url } })
+  navigation.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(false)
+})
 
 
 it('exposes channel choices and scoped subscriptions without exposing updater objects', async () => {

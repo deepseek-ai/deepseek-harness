@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/shared-texture/README.md
+/:
+  en: 9c29c2c77451ac0d
+  zh: e49d919db9243b5a
+/packages-shared-texture:
+  en: 7977dfb14a2f1be2
+  zh: 6ce83f127670b74c
+/packages-shared-texture/summary:
+  en: 89eaac02e8a91bf9
+  zh: b8b43af08005372c
+/packages-shared-texture/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/packages-shared-texture/packages:
+  en: 5c21924a3a417a2e
+  zh: 041dc8a7f6ecf817
+/packages-shared-texture/related-documentation:
+  en: 6c6db56cb0815ba0
+  zh: c7ce1184573bd524
+/packages-shared-texture/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

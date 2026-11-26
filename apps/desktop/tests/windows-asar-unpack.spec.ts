@@ -9,6 +9,7 @@ import { getFileMatchers } from 'app-builder-lib/out/fileMatcher.js'
 import { readAsar } from 'app-builder-lib/out/asar/asar.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { prepareWindowsAsarUnpack, verifyWindowsAsarUnpack } from '../scripts/windows-asar-unpack.mjs'
+import { windowsRuntimeCode } from '../scripts/windows-runtime-signature.mjs'
 import { createElectronBuilderConfig } from '../scripts/electron-builder-config.mjs'
 import { verifyRuntimeArchive } from '../scripts/verify-runtime-archive.ts'
 import { DESKTOP_HOST_PROTOCOL_VERSION } from '../src/host-protocol.ts'
@@ -23,6 +24,11 @@ vi.mock('../scripts/windows-sign.mjs', async importOriginal => ({
 vi.mock('../scripts/windows-runtime-signature.mjs', async importOriginal => ({
   ...await importOriginal<typeof import('../scripts/windows-runtime-signature.mjs')>(),
   signWindowsCode: async () => {},
+}))
+// Native artifact receipts have their own packaging tests; ASAR fixtures contain only runtime files.
+vi.mock('../scripts/verify-shared-texture.mjs', async importOriginal => ({
+  ...await importOriginal<typeof import('../scripts/verify-shared-texture.mjs')>(),
+  verifySharedTextureAddons: async () => {},
 }))
 // Vite's root-relative IDs also resolve mocked build outputs on a clean checkout.
 vi.mock('/apps/desktop/lib/types/runtime-tree.js', () => ({ verifyDesktopRuntime: async () => {} }))
@@ -370,4 +376,50 @@ it.skipIf(process.platform === 'win32')('rejects group-only executable files who
   const expected = await seal(input)
   await packageFixture(input)
   await expect(verifyRuntimeArchive(join(input.resources, 'app.asar'), expected)).rejects.toThrow('ASAR integrity')
+})
+
+it('ships the Windows texture addons unpacked, where application code signing enumerates them', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'desktop-texture-files-'))
+  roots.push(root)
+  const appDir = join(root, 'app')
+  const resources = join(root, 'resources')
+  const destination = join(resources, 'app')
+  await mkdir(resources, { recursive: true })
+  const config = unsignedWindowsConfig('com.example.texture', '/fixture/dsh')
+  const paths = ['shared-texture-hop', 'shared-texture-ingress'].map(name => `lib/native/win32-x64/${name}.node`)
+  expect(config.files).toEqual(expect.arrayContaining(paths))
+  const builder: Configuration = {
+    files: config.files.map(file => typeof file === 'string' ? file : { ...file, filter: [...file.filter] }),
+    asarUnpack: [...config.asarUnpack],
+  }
+  const options = { defaultSrc: appDir, globalOutDir: root, customBuildOptions: {}, macroExpander: (value: string) => value }
+  const include = getFileMatchers(builder, 'files', destination, options)!.find(matcher => matcher.from === appDir)!.createFilter()
+  const unpack = getFileMatchers(builder, 'asarUnpack', destination, options)![0]!.createFilter()
+  // A minimal PE image: the `MZ` header pointing at a `PE\0\0` signature.
+  const image = Buffer.alloc(128)
+  image.write('MZ', 0, 'latin1')
+  image.writeUInt32LE(64, 0x3c)
+  image.write('PE\0\0', 64, 'latin1')
+  const files: string[] = []
+  const metadata = new Map<string, Stats>()
+  for (const path of paths) {
+    const file = join(appDir, ...path.split('/'))
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, image)
+    const stat = await lstat(file)
+    expect(include(file, stat)).toBe(true)
+    expect(unpack(file, stat)).toBe(true)
+    files.push(file)
+    metadata.set(file, stat)
+  }
+  const consoleLog = console.log
+  try {
+    await new AsarPackager({ info: { getWorkspaceRoot: async () => root } }, {
+      defaultDestination: destination, resourcePath: resources, options: { smartUnpack: false }, unpackPattern: unpack,
+    }).pack([{ src: appDir, destination, files, metadata }])
+  } finally { console.log = consoleLog }
+  const archive = await readAsar(join(resources, 'app.asar'))
+  for (const path of paths) expect(archive.getFile(join(...path.split('/'))).unpacked).toBe(true)
+  // `signWindowsCode` signs every PE file `windowsRuntimeCode` finds under the application output directory.
+  expect(await windowsRuntimeCode(resources)).toEqual(paths.map(path => join(resources, 'app.asar.unpacked', ...path.split('/'))).sort())
 })

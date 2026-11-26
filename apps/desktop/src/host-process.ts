@@ -1,12 +1,33 @@
 /** Electron Node-mode child lifecycle for the shared Web application. */
 
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess, type Serializable } from 'node:child_process'
 import { DesktopParentAuthentication } from './parent-authentication.ts'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
 import { desktopNodeEnvironment } from './node-environment.ts'
 import { parsePluginOperationRecord, type PluginOperationRecord, type PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+
+/** The parts of a spawned Host process a {@link DesktopHostChannel} uses; a `ChildProcess` satisfies it. */
+export interface DesktopHostChild {
+  readonly pid?: number | undefined
+  readonly connected: boolean
+  send(message: Serializable, callback?: (error: Error | null) => void): boolean
+  kill(signal?: NodeJS.Signals): boolean
+}
+
+/**
+ * An additional message exchange over one Host process's IPC channel, owned by a Main feature.
+ * `attach` runs once per spawned Host before any message arrives.
+ */
+export interface DesktopHostChannel {
+  /**
+   * @param child - The spawned Host process; the channel sends on it only while it is connected.
+   * @param host - `fail` reports an unexpected Host failure; `stopping` is true once Main requested teardown.
+   * @returns Receiver offered every Host message first; true claims the message, false leaves it to the shell events.
+   */
+  attach(child: DesktopHostChild, host: { fail(error: Error): void; stopping(): boolean }): (message: unknown) => boolean
+}
 
 interface ReadyEvent {
   readonly type: 'ready'
@@ -202,6 +223,7 @@ export class DesktopHostProcess {
    * @param packageManager - Bundled pnpm entry and Node launcher directory, scoped to package operations.
    * @param onPlatformSession - Private credential updates for embedded Platform views.
    * @param onPluginOperation - Optional diagnostic sink; malformed records are ignored without failing the Host.
+   * @param channels - Feature exchanges attached to each spawned Host; messages none of them claims must be shell events.
    */
   constructor(
     private readonly node: string,
@@ -215,6 +237,7 @@ export class DesktopHostProcess {
 
     private readonly onPlatformSession?: (session: PlatformSession | null) => void,
     private readonly onPluginOperation?: (record: PluginOperationRecord) => void,
+    private readonly channels: readonly DesktopHostChannel[] = [],
   ) {}
 
   /**
@@ -242,6 +265,10 @@ export class DesktopHostProcess {
     child.stderr?.setEncoding('utf8')
     child.stderr?.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-MAX_HOST_DIAGNOSTIC_CHARS) })
     child.stdout?.pipe(process.stdout)
+    const receivers = this.channels.map(channel => channel.attach(child, {
+      fail: (error) => { this.fail(error) },
+      stopping: () => this.stopping,
+    }))
     child.on('message', (message: unknown) => {
       if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'plugin-operation') {
         const record = 'record' in message ? parsePluginOperationRecord(message.record) : undefined
@@ -254,6 +281,7 @@ export class DesktopHostProcess {
         }
         return
       }
+      if (receivers.some(receive => receive(message))) return
       if (!isDesktopHostEvent(message)) {
         this.fail(new Error('dsh desktop host sent an invalid IPC event'))
         child.kill('SIGTERM')

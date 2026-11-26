@@ -6,6 +6,12 @@
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    }
+  },
   "files": [
     "lib/index.js",
     "lib/cli.js"
@@ -23,7 +29,8 @@
     "@deepseek-ai/dsh-schedule": "workspace:*",
     "@deepseek-ai/dsh-deepseek-account": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
-    "@deepseek-ai/dsh-plugin-manager": "workspace:*"
+    "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-shared-texture": "workspace:*"
   },
   "devDependencies": {
     "ws": "^8.21.3",

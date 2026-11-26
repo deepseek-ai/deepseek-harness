@@ -45,6 +45,24 @@ function supervisor(failure?: string) {
   return { run, stages }
 }
 
+it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('builds %s native addons before package and runtime preparation in every signing mode', async (target) => {
+  for (const mode of [undefined, '--unsigned', '--prepare-only']) {
+    const { run, stages } = supervisor()
+    const invocation = parseDesktopPackageInvocation([target, ...(mode === undefined ? [] : [mode])],
+      target === 'win-x64' ? 'win32' : 'darwin', target === 'win-x64' ? 'x64' : 'arm64')
+    await packageTarget(invocation, environment, run)
+    const native = `run build:native --arch ${invocation.target.arch}`
+    expect(stages.filter(stage => stage.startsWith('run build'))).toEqual([
+      mode === '--unsigned' ? 'run build --profile local' : 'run build:official', native,
+    ])
+    const pack = mode === '--unsigned' ? 'exec tsx apps/desktop/scripts/pack-local-packages.ts' : 'run release:pack'
+    expect(stages.indexOf(native)).toBeLessThan(stages.findIndex(stage => stage.startsWith(pack)))
+    expect(stages.indexOf(native)).toBeLessThan(stages.findIndex(stage => stage.startsWith('run prepare:runtime')))
+    const nativeCall = run.run.mock.calls.find(([stage]) => stage === native)!
+    expect(nativeCall[3].env).not.toHaveProperty('DSH_DESKTOP_WINDOWS_TOKEN_PIN')
+  }
+})
+
 it.each(['pack', 'runtime'] as const)('overlaps Windows preparation and waits for both before signing when %s finishes first', async (first) => {
   const { run, stages } = supervisor()
   const pack = Promise.withResolvers<undefined>()
@@ -183,7 +201,7 @@ it('initializes shared storage only after acquiring the preflight stage lock', a
   await packageTarget(parseDesktopPackageInvocation(['win-x64'], 'win32', 'x64'), environment, run)
 })
 
-it.each(['preflight:windows-signing', 'run build:official', 'run sign:primary-runtime', 'run prepare:dsh --defer-runtime-smoke', 'run sign:primary-runtime --dsh',
+it.each(['preflight:windows-signing', 'run build:official', 'run build:native --arch x64', 'run sign:primary-runtime', 'run prepare:dsh --defer-runtime-smoke', 'run sign:primary-runtime --dsh',
   'exec tsx scripts/smoke-packaged-runtime.ts',
   'exec electron-builder --config electron-builder.config.mjs --win --x64 --publish never'])
 ('never continues or records a release after %s fails', async (failure) => {
@@ -233,6 +251,8 @@ it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('selects branding from the
 it.each([
   ['mac-arm64', 'run build --profile local'],
   ['win-x64', 'run build --profile local'],
+  ['mac-arm64', 'run build:native --arch arm64'],
+  ['win-x64', 'run build:native --arch x64'],
   ['mac-arm64', 'exec tsx apps/desktop/scripts/pack-local-packages.ts'],
   ['win-x64', 'exec tsx apps/desktop/scripts/pack-local-packages.ts'],
 ] as const)('stops unsigned %s packaging when %s fails', async (target, failure) => {

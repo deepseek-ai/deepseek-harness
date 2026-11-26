@@ -872,9 +872,15 @@ importers:
       '@deepseek-ai/dsh-plugin-manager':
         specifier: workspace:*
         version: link:../../packages/boot/plugin-manager
+      '@deepseek-ai/dsh-shared-texture':
+        specifier: workspace:*
+        version: link:../../packages/shared-texture/shared-texture
       '@deepseek-ai/dsh-util-file-drag':
         specifier: workspace:*
         version: link:../../packages/util/file-drag
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:*
+        version: link:../../packages/util/values
       '@deepseek-ai/node-addon-system':
         specifier: workspace:~
         version: link:../../native/system/packages/entry
@@ -917,6 +923,9 @@ importers:
       koffi:
         specifier: 3.1.1
         version: 3.1.1
+      node-api-headers:
+        specifier: 1.9.0
+        version: 1.9.0
       pnpm:
         specifier: 11.28.5
         version: 11.28.5
@@ -977,6 +986,9 @@ importers:
       '@deepseek-ai/dsh-schedule':
         specifier: workspace:*
         version: link:../../packages/schedule/schedule
+      '@deepseek-ai/dsh-shared-texture':
+        specifier: workspace:*
+        version: link:../../packages/shared-texture/shared-texture
       '@deepseek-ai/dsh-workspace':
         specifier: workspace:*
         version: link:../../packages/workspace/workspace
@@ -3578,6 +3590,9 @@ importers:
       '@deepseek-ai/dsh-session-turn-outline':
         specifier: workspace:*
         version: link:../../session/session-turn-outline
+      '@deepseek-ai/dsh-shared-texture':
+        specifier: workspace:*
+        version: link:../../shared-texture/shared-texture
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
         version: link:../../skill/skill-filesystem
@@ -18527,6 +18542,12 @@ importers:
         specifier: workspace:*
         version: link:../../core/session
 
+  packages/shared-texture/shared-texture:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+
   packages/shell/bash-local:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -28502,6 +28523,9 @@ packages:
     resolution: {integrity: sha512-oSie9nna4k7/4GVGaLdHeHjZZ16KB5OQa0VnQ8vfIl83c0x6swZrmAqMih6RWq/9/7AdYnuuMXriQndymDEyyA==}
     engines: {node: '>=20'}
 
+  node-api-headers@1.9.0:
+    resolution: {integrity: sha512-2oNILP4jXwRB4ywnYKjVk1YyJ96n2D4EOVJO6S3oYZ5PtbJrw3Yt9TpAuX3nBLMuzn74rnfGQrv13pS9vC+YiA==}
+
   node-api-version@0.2.1:
     resolution: {integrity: sha512-2xP/IGGMmmSQpI1+O/k72jF/ykvZ89JeuKX3TLJAYPDVLUalrshrLHkeVcCCZqG/eEa635cr8IBYzgnDvM2O8Q==}
 
@@ -36614,6 +36638,8 @@ snapshots:
       node-addon-require-builtin-win32-arm64-msvc: 0.1.10
       node-addon-require-builtin-win32-ia32-msvc: 0.1.10
       node-addon-require-builtin-win32-x64-msvc: 0.1.10
+
+  node-api-headers@1.9.0: {}
 
   node-api-version@0.2.1:
     dependencies:
