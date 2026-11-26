@@ -865,9 +865,12 @@ describe('older history', () => {
     fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(1)
     layout.height = 1_500
+    // As in the plugin, the page's turns publish after the loader settles: consumeOlder runs in the
+    // loader's continuation, ahead of the commit that renders them.
     await act(async () => {
-      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 3 })
       gate.resolve('prepared')
+      await gate.promise
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 3 })
     })
     positioned.mockRestore()
     // The page inserted 500px, so the offset follows it: the rows in view stay put
@@ -907,9 +910,12 @@ describe('older history', () => {
     // The page renders at its new height in the same commit that restores.
     layout.top = 200
     layout.height = 1_500
+    // As in the plugin, the page's turns publish after the loader settles: consumeOlder runs in the
+    // loader's continuation, ahead of the commit that renders them.
     await act(async () => {
-      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 3 })
       gate.resolve('prepared')
+      await gate.promise
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 3 })
     })
     rect.mockRestore()
     // Above the zone the page inserted 500px above the reader, and their own
