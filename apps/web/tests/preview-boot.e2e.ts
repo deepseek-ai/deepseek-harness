@@ -45,6 +45,7 @@ import {
   VFS_EXAMPLE_SESSION_IDS,
   VFS_EXAMPLE_REASONING,
   VFS_EXAMPLE_SPACING_TITLE,
+  VFS_EXAMPLE_TABLES_TITLE,
   VFS_EXAMPLE_WRAPPED_COMMAND,
   buildVfsExampleFiles,
 } from '../../../packages/experimental/webworker-runtime/tests/vfs-example-fixture.ts'
@@ -482,9 +483,11 @@ async function bootPreview(site: Site, manifest: ImageManifest, browser: Browser
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     const showcase = sessions.getByRole('treeitem').filter({ hasText: SHOWCASE_TITLE })
     await expect.poll(() => showcase.count(), { timeout: 15_000 }).toBe(1)
-    // The current-generation spacing sample ships beside the showcase and must be listed cold.
-    const spacingSample = sessions.getByRole('treeitem').filter({ hasText: VFS_EXAMPLE_SPACING_TITLE })
-    await expect.poll(() => spacingSample.count(), { timeout: 15_000 }).toBe(1)
+    // The current-generation root samples ship beside the showcase and must be listed cold.
+    for (const title of [VFS_EXAMPLE_SPACING_TITLE, VFS_EXAMPLE_TABLES_TITLE]) {
+      const sample = sessions.getByRole('treeitem').filter({ hasText: title })
+      await expect.poll(() => sample.count(), { timeout: 15_000 }).toBe(1)
+    }
     // The packed deployment ships the Schedule rows, and the preview storage
     // seeds the showcase Session with active tasks.
     expect(await showcase.locator('[data-session-schedule-mark]').count()).toBe(1)

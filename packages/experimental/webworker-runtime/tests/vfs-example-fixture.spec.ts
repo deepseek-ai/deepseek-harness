@@ -16,6 +16,8 @@ import {
   VFS_EXAMPLE_ROOT,
   VFS_EXAMPLE_REASONING,
   VFS_EXAMPLE_SPACING_TITLE,
+  VFS_EXAMPLE_TABLES_BODY,
+  VFS_EXAMPLE_TABLES_TITLE,
   VFS_EXAMPLE_WRAPPED_COMMAND,
   VFS_EXAMPLE_SCHEDULE_IDS,
   VFS_EXAMPLE_SESSION_IDS,
@@ -67,9 +69,11 @@ describe('WebWorker preview VFS example', () => {
     const expected = buildVfsExampleFiles()
     const currentName = generationLogFilename(SESSION_FORMAT_VERSION, 'none')
     const main = `home/sessions/--dsh-workspace--/${VFS_EXAMPLE_SESSION_IDS.main}/`
-    // The showcase and the spacing sample ship their current generation; only the children keep a
+    // The showcase and the root samples ship their current generation; only the children keep a
     // released v3 predecessor that the packer upgrades at build time.
-    const currentOnly = new Set<string>([VFS_EXAMPLE_SESSION_IDS.main, VFS_EXAMPLE_SESSION_IDS.spacing])
+    const currentOnly = new Set<string>([
+      VFS_EXAMPLE_SESSION_IDS.main, VFS_EXAMPLE_SESSION_IDS.spacing, VFS_EXAMPLE_SESSION_IDS.tables,
+    ])
     const sessionIdOf = (path: string): string => path.split('/').at(-2) ?? ''
     const committedPath = (path: string): string => path.endsWith(`/${currentName}`) && !currentOnly.has(sessionIdOf(path))
       ? `${path.slice(0, -currentName.length)}session.v3.jsonl`
@@ -211,6 +215,20 @@ describe('WebWorker preview VFS example', () => {
         .join('\n')
       expect(body).toContain('## Turn')
     }
+  })
+
+  it('restores the table sample with wide tables at the column start and inside a list', () => {
+    const { meta, events } = readSession(VFS_EXAMPLE_SESSION_IDS.tables)
+    expect(meta).toMatchObject({ id: VFS_EXAMPLE_SESSION_IDS.tables, cwd: '/dsh/workspace', delegationDepth: 0 })
+    expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
+    expect(events.some(event => event.type === 'session/title'
+      && event.data.title === VFS_EXAMPLE_TABLES_TITLE)).toBe(true)
+    const body = events.filter(event => event.type === 'assistant/message').map(textOf).join('\n')
+    expect(body).toBe(VFS_EXAMPLE_TABLES_BODY)
+    const columns = (line: string): number => line.trim().split('|').length - 2
+    const separators = body.split('\n').filter(line => /^\s*\| ---/.test(line))
+    expect(separators.map(columns)).toEqual([7, 4, 2])
+    expect(separators[1]?.startsWith('   |')).toBe(true)
   })
 
   it('preserves the 28-turn history prefix and both child catalog identities', () => {
