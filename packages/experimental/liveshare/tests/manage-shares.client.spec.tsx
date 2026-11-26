@@ -64,6 +64,92 @@ describe('Liveshare global share manager', () => {
     expect(opened).toEqual(['session-one:First session'])
   })
 
+  it('reconnects only unexpired offline shares, keeps a failed row, and refreshes its original registration', async () => {
+    const offline = { ...ROWS[1], reconnectStopped: true }
+    const expired = { ...offline, shareId: 'expired', expiresAt: '2001-01-01T00:00:00Z', reconnectStopped: false }
+    const pending = Promise.withResolvers<RemoteResult<void>>()
+    const reconnect = vi.fn<() => Promise<RemoteResult<void>>>()
+      .mockReturnValueOnce(pending.promise).mockResolvedValueOnce(accepted(undefined))
+    const list = vi.fn<() => Promise<RemoteResult<OwnerShareList>>>()
+      .mockResolvedValueOnce(accepted({ shares: [ROWS[0], offline, expired] as never }))
+      .mockResolvedValueOnce(accepted({ shares: [ROWS[0], { ...offline, reconnectStopped: false }, expired] as never }))
+      .mockResolvedValueOnce(accepted({ shares: [ROWS[0], { ...offline, online: true }, expired] as never }))
+    const host = await showManager(list, undefined, undefined, { reconnect })
+    expect(screen.getByText(en['manage.reconnectStopped'])).toBeDefined()
+    const button = screen.getByRole('button', { name: en['manage.reconnect'] })
+    await act(async () => { fireEvent.click(button); fireEvent.click(button) })
+    expect(reconnect).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: en['manage.reconnecting'] })).toHaveProperty('disabled', true)
+    await act(async () => { pending.resolve(refused('gateway/internal', {})) })
+    expect(screen.getByRole('alert').textContent).toBe(en['manage.reconnectFailed'])
+    expect(screen.queryByText(en['manage.reconnectStopped'])).toBeNull()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['manage.reconnect'] })) })
+    expect(host.calls.map(({ method, argument }) => [method, argument])).toEqual([
+      ['list', undefined], ['reconnect', { shareId: 'two' }], ['list', undefined], ['reconnect', { shareId: 'two' }], ['list', undefined],
+    ])
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: en['manage.reconnect'] })).toBeNull()
+    expect(screen.getAllByText('Online')).toHaveLength(2)
+  })
+
+  it.each([
+    ['owner-state-held', async () => refused('liveshareShares/owner-state-held', {}), en['dialog.ownerStateHeld']],
+    ['channel lost', async () => { throw new Error('channel lost') }, en['manage.reconnectFailed']],
+  ] as const)('keeps the reconnect action when the Host reports %s', async (_reason, reconnect, message) => {
+    await showManager(async () => accepted({ shares: ROWS as never }), undefined, undefined, { reconnect })
+    const button = screen.getByRole('button', { name: en['manage.reconnect'] })
+    await act(async () => { fireEvent.click(button) })
+    expect(screen.getByRole('alert').textContent).toBe(message)
+    expect(button).toHaveProperty('disabled', false)
+  })
+
+  it.each([
+    ['liveshareShares/share-not-found', 'viewer.reason.share-not-found'],
+    ['liveshareShares/share-expired', 'viewer.reason.share-expired'],
+  ] as const)('does not offer another reconnect after %s even if the list cannot refresh', async (code, reason) => {
+    const list = vi.fn<() => Promise<RemoteResult<OwnerShareList>>>()
+      .mockResolvedValueOnce(accepted({ shares: ROWS as never })).mockResolvedValueOnce(refused('gateway/internal', {}))
+    await showManager(list, undefined, undefined, { reconnect: async () => refused(code, { shareId: 'two' }) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['manage.reconnect'] })) })
+    expect(screen.queryByRole('button', { name: en['manage.reconnect'] })).toBeNull()
+    expect(screen.getByText(en[reason])).toBeDefined()
+    expect(screen.getByText(en['manage.unavailable'])).toBeDefined()
+  })
+
+  it.each([
+    ['refused', async () => refused('gateway/internal', {})],
+    ['lost', async () => { throw new Error('channel lost') }],
+  ] as const)('retains the last list when the refresh is %s, then removes a share the host no longer lists', async (_reason, unavailable) => {
+    const list = vi.fn<() => Promise<RemoteResult<OwnerShareList>>>()
+      .mockResolvedValueOnce(accepted({ shares: ROWS as never }))
+      .mockImplementationOnce(unavailable)
+      .mockResolvedValueOnce(accepted({ shares: [] }))
+    await showManager(list)
+    const button = screen.getByRole('button', { name: en['manage.reconnect'] })
+    await act(async () => { fireEvent.click(button) })
+    expect(screen.getByRole('alert').textContent).toBe(en['manage.unavailable'])
+    await act(async () => { fireEvent.click(button) })
+    expect(screen.queryByText('Second session')).toBeNull()
+  })
+
+  it.each(['timer', 'click'] as const)('hides a share that expires in the open manager (%s)', async (source) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      const end = Date.now() + 1_000
+      const item = { ...ROWS[1], expiresAt: new Date(end).toISOString() }
+      const host = await showManager(async () => accepted({ shares: [item] as never }))
+      const button = screen.getByRole('button', { name: en['manage.reconnect'] })
+      await act(async () => {
+        if (source === 'timer') vi.advanceTimersByTime(1_000)
+        else { vi.setSystemTime(end); fireEvent.click(button) }
+      })
+      expect(screen.queryByRole('button', { name: en['manage.reconnect'] })).toBeNull()
+      expect(requestOf(host.calls, 'reconnect')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('opens a share from a Host that reports only sessionId', async () => {
     const opened: string[] = []
     await showManager(

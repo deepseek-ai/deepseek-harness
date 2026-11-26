@@ -51,6 +51,23 @@ describe('QQ markdown mode', () => {
     ].join('\n\n'))])
   })
 
+  it('renders user and @everyone mentions as the tags QQ notifies from', async () => {
+    // QQ reads `<qqbot-at-user>` and `<qqbot-at-everyone />` only inside a markdown body; the text mode keeps the
+    // readable `@name` fallback, so a message carrying a mention resolves to this mode.
+    const bot = await mountQQ({ markdown: true })
+    const { payloads } = await bot.render(group, [
+      h('p', h('at', { type: 'user', id: 'u-alice', name: 'Alice' }), ' please take a look'),
+      h('p', h('at', { type: 'all', name: '所有人' }), ' build is green again'),
+      // `here` and `role` have no QQ tag: they keep the core's readable fallback.
+      h('p', h('at', { type: 'here', name: '在线成员' })),
+    ])
+    expect(payloads).toEqual([markdown([
+      '<qqbot-at-user id="u-alice" /> please take a look',
+      '<qqbot-at-everyone /> build is green again',
+      '@在线成员',
+    ].join('\n\n'))])
+  })
+
   it('renders inline code as a plain span and a code block as a verbatim fence', async () => {
     const bot = await mountQQ({ markdown: true })
     const code = 'const a = 1\n\nif (a) {\n  b(`x|y`) // #1\n}'

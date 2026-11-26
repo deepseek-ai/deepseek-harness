@@ -1323,7 +1323,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:602`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:639`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -2497,6 +2497,23 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-api-key -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-mock -->
+<a id="deepseek-aidsh-llm-mock"></a>
+
+## `@deepseek-ai/dsh-llm-mock`
+
+- `inject`: `llm`
+- `source`: [`packages/experimental/llm-mock/src/index.ts:17`](../packages/experimental/llm-mock/src/index.ts)
+
+```ts config-catalog
+/** Mock route settings. */
+export interface Config {
+  /** Text every model call returns. */
+  reply: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-mock -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-pi-ai -->
 <a id="deepseek-aidsh-llm-pi-ai"></a>
@@ -3825,9 +3842,7 @@ export interface Config extends JsonlConfigOptions {
   /**
    * Maximum events stored per frame. One frame is the unit of compression and
    * of decoding, so this bounds both the compression ratio and the cost of
-   * reading a slice. When the Segment's newest frames that each hold fewer
-   * events reach this many together, an append re-encodes them as frames of up
-   * to this many events.
+   * reading a slice; stored frames keep the size they were written with.
    */
   frameEvents?: number
 }
@@ -5988,6 +6003,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-sidebar-files` | — | [`packages/client/ui-sidebar-files/src/index.ts`](../packages/client/ui-sidebar-files/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-sidebar-right` | — | [`packages/client/ui-sidebar-right/src/index.ts`](../packages/client/ui-sidebar-right/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-sidebar-terminal` | — | [`packages/client/ui-sidebar-terminal/src/index.ts`](../packages/client/ui-sidebar-terminal/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-sidechat` | — | [`packages/experimental/client-ui-sidechat/src/index.ts`](../packages/experimental/client-ui-sidechat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-skill` | — | [`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-subagent` | — | [`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-tool` | — | [`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts) |

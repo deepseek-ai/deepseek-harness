@@ -391,6 +391,7 @@ function registerUi(ctx: Context): void {
       changesLens: (request, signal) => ctx.remote.forgePanel.changesLens(sessionId, request, signal),
       reconnect: store.panel.reconnect,
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
+      localWrite: write => ctx.remote.forgePanel.localWrite(sessionId, write),
       diffBases: (query, signal) => ctx.remote.forgePanel.diffBases(sessionId, query, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
       localCommits: (base, signal) => ctx.remote.forgePanel.localCommits(sessionId, base, signal),

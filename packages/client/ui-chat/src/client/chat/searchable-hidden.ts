@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 
 /**
  * Optional visibility operation; its caller owns cancellation and eventually commits the attribute.
@@ -19,7 +19,7 @@ export function useSearchableHidden(
   hidden: boolean,
   reveal: () => void,
   transition?: HiddenTransition,
-): RefObject<HTMLDivElement> {
+): MutableRefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     const element = ref.current

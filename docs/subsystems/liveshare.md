@@ -96,6 +96,13 @@ The Gateway decides each call through remote access, so a `share-viewer` Peer is
 @Remote('list') list(): Promise<OwnerShareList>
 
 /**
+ * Reconnect an unexpired owner share at its original address. An online share needs no registration.
+ * @param request - Share whose existing link is to be reconnected.
+ * @returns Completion when connected; rejects if the share is gone, expired, or cannot reconnect.
+ */
+@Remote('reconnect') reconnect(request: ReconnectShareRequest): Promise<void>
+
+/**
  * Stop one share locally, revoke its forks, and delete its row on the Liveshare server when reachable.
  * @param request - Share to stop.
  * @returns Whether the row on the Liveshare server still needs a retry.

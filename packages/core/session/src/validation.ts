@@ -44,8 +44,8 @@ function validateSessionHeader(id: SessionId, input: unknown): SessionHeader {
   if (typeof record.isSeeded !== 'boolean') {
     throw new Error('session header isSeeded must be a boolean')
   }
-  if (record.origin !== undefined && record.origin !== 'subagent') {
-    throw new Error('session header origin must be "subagent"')
+  if (record.origin !== undefined && record.origin !== 'subagent' && record.origin !== 'side') {
+    throw new Error('session header origin must be "subagent" or "side"')
   }
   if (record.delegationDepth !== undefined
     && (typeof record.delegationDepth !== 'number' || !Number.isSafeInteger(record.delegationDepth) || record.delegationDepth < 0)) {

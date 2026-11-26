@@ -12,6 +12,17 @@ interface Provider {
   resolve(target: ContextMenuTarget, signal: AbortSignal): readonly MenuAction[] | Promise<readonly MenuAction[]>
 }
 
+/**
+ * Whether a provider answered asynchronously. Unlike `instanceof Promise`, this
+ * also holds for a Promise from another window, such as the answer of a
+ * provider that runs in an isolated script realm.
+ * @param result - the provider's answer.
+ * @returns true for a pending answer.
+ */
+function isPending(result: readonly MenuAction[] | Promise<readonly MenuAction[]>): result is Promise<readonly MenuAction[]> {
+  return 'then' in result && typeof result.then === 'function'
+}
+
 /** React-free registry; each occurrence captures the providers registered at opening. */
 export class MenuRegistry {
   private readonly kindsSource = createSnapshotStore<readonly (keyof ContextMenuTargetMap)[]>([])
@@ -111,17 +122,18 @@ export class MenuRegistry {
         preparing = undefined
         try {
           const result = provider.resolve(target, signal)
-          if (result instanceof Promise) clear()
-          preparing = result instanceof Promise ? new Promise<void>((settle) => {
-            const timeoutMs = this.timeoutMs()
-            const timer = timeoutMs === undefined ? undefined : setTimeout(() => {
-              deadline.abort(); this.failed()
-            }, timeoutMs)
-            const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); settle() }
-            signal.addEventListener('abort', finish, { once: true })
-            void result.then(accept).catch(() => { if (!signal.aborted) this.failed() }).finally(finish)
-          }) : undefined
-          if (!(result instanceof Promise)) accept(result)
+          if (isPending(result)) {
+            clear()
+            preparing = new Promise<void>((settle) => {
+              const timeoutMs = this.timeoutMs()
+              const timer = timeoutMs === undefined ? undefined : setTimeout(() => {
+                deadline.abort(); this.failed()
+              }, timeoutMs)
+              const finish = (): void => { clearTimeout(timer); signal.removeEventListener('abort', finish); settle() }
+              signal.addEventListener('abort', finish, { once: true })
+              void result.then(accept).catch(() => { if (!signal.aborted) this.failed() }).finally(finish)
+            })
+          } else accept(result)
         } catch (_error) { if (!signal.aborted) { clear(); this.failed() } }
       }
       const subscriptions: (() => void)[] = []

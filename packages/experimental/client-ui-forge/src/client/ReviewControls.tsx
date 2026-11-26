@@ -14,6 +14,13 @@ import css from './ReviewControls.module.css'
 /** Lenses in display order. */
 export const LENSES: readonly ChangesLens[] = ['all', 'interface', 'implementation', 'test']
 
+/**
+ * Inert attribute for the measuring copies. React 18 forwards `inert` only as a string, and React 19
+ * treats an empty string as false; a non-empty string sets the attribute under both. Typed `object`
+ * because React 18's DOM types omit `inert` and React 19's declare it boolean.
+ */
+const INERT: object = { inert: 'inert' }
+
 const LENS_LABEL: Record<ChangesLens, ForgePanelKey> = {
   all: 'lens.all',
   interface: 'lens.interface',
@@ -154,7 +161,7 @@ export function LensControl({ lens, counts, hideTests, choose, t, need }: LensPr
   }, [key])
   return <div ref={root} className={css.lensFit}>
     <SegmentedChoice label={t('lens.aria')} value={lens} choose={choose} segments={segments} sizing="content" counted={counted} />
-    <div className={css.measures} aria-hidden="true" {...{ inert: '' }}>
+    <div className={css.measures} aria-hidden="true" {...INERT}>
       <div ref={withCounts}><SegmentedChoice label="" value={lens} choose={choose} segments={segments} sizing="content" /></div>
       <div ref={labelsOnly}><SegmentedChoice label="" value={lens} choose={choose} segments={segments} sizing="content" counted={false} /></div>
     </div>

@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -74,6 +75,9 @@ function fileDraft(id: string, name = `${id}.pdf`): ComposerAttachment {
   }
 }
 
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
+
 function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Parameters<typeof ComposerAttachments>[0] {
   return {
     attachments: [],
@@ -86,6 +90,7 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Paramete
     t,
     ...overrides,
     readFileDrag: () => undefined,
+    useDocumentPortal: () => Portal,
   }
 }
 

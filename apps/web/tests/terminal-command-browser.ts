@@ -118,7 +118,11 @@ export async function expectWrappedCommandText(
       if (start.tail.y > viewport.y + viewport.height) {
         await page.mouse.move(start.head.x + 0.1, viewport.y + viewport.height - 2)
         await page.mouse.wheel(0, await scrollport.evaluate(element => element.scrollHeight))
-        await expect.poll(async () => (await geometry()).tail.y < viewport.y + viewport.height).toBe(true)
+        // Chromium's drag-selection autoscroll and the wheel move the scrollport after these calls return;
+        // a tail read before it rests at its end releases the drag below the tail once the remaining scroll lands.
+        await expect.poll(() => scrollport.evaluate(element =>
+          element.scrollTop + element.clientHeight >= element.scrollHeight - 1)).toBe(true)
+        expect((await geometry()).tail.y).toBeLessThan(viewport.y + viewport.height)
       }
       const end = await geometry()
       await page.mouse.move(end.tail.x - 0.1, end.tail.y, { steps: 5 })

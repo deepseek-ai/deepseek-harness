@@ -704,8 +704,8 @@ export function JsonTree({
       ? null
       : pathId([Array.isArray(data) ? firstExpandableIndex : firstExpandableEntry[0]])
     : isExpandableValue(data) && rootEntries.length > 0 ? pathId([]) : null
-  const activeRowRef = useRef<HTMLElement>()
-  const resetTimer = useRef<ReturnType<typeof setTimeout>>()
+  const activeRowRef = useRef<HTMLElement>(undefined)
+  const resetTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const copySequence = useRef(0)
   const [copyStore] = useState(createCopyStore)
   const [tabStopId, setTabStopId] = useState<string | null>(initialTabStopId)

@@ -25,10 +25,6 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-:global([data-animating]:not([data-dragging])) .root {
-  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
-}
-
 /* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
    opaque fill here would sit on top of it and block the window vibrancy. */
 :global([data-platform='darwin']) .root {
@@ -136,13 +132,18 @@
    most of its change in a few frames and reads as a cut. Only the quiet state
    carries the transition, so a reveal is immediate and a pointer that returns
    during the delay sees no change. The collapse rule's `transition: width`
-   outranks this one, so a leave during collapse or expand hides at once. */
+   below replaces this one, so a leave during collapse or expand hides at once. */
 .root.quietBars {
   --dsh-scrollbar-thumb: transparent;
   --dsh-scrollbar-thumb-hover: transparent;
   transition:
     --dsh-scrollbar-thumb 200ms linear 500ms,
     --dsh-scrollbar-thumb-hover 200ms linear 500ms;
+}
+
+/* The width follows the frame's track easing, which its owner props report. */
+.root[data-sidebar-animating] {
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* Collapse phase 1: the whole frozen-width content fades out in place over
@@ -474,15 +475,20 @@
   }
 }
 
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
-   controls; the glass tokens lower its alpha in dark mode. */
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+   controls; the glass tokens lower its alpha in dark mode. Window fullscreen
+   paints the opaque Web sidebar fill, so the Web control fills return. */
+:global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])) .newSession {
   background: var(--dsw-specific-sidebar-glass-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
+  :global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])) .newSession:hover {
     background: var(--dsw-specific-sidebar-glass-hover);
   }
 }
@@ -512,12 +518,12 @@
   }
 }
 
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession {
+:global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])).collapsed .newSession {
   background: var(--dsw-specific-sidebar-glass-collapsed-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
+  :global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
     background: var(--dsw-specific-sidebar-glass-collapsed-hover);
   }
 }
@@ -628,7 +634,15 @@
   pointer-events: none;
 }
 
-:global([data-platform='darwin']) .scrollFade,
+:global([data-platform='darwin']) .scrollFade {
+  opacity: 1;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+:global([data-platform='darwin']:not([data-fullscreen])) .scrollFade {
+  opacity: 0;
+}
+
 .collapsed .scrollFade,
 .collapsed .scrollArea::before,
 .collapsed .scrollArea::after {
@@ -875,7 +889,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :global([data-animating]:not([data-dragging])) .root,
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession,
+  :global([data-platform='darwin']) .scrollFade,
+  .root[data-sidebar-animating],
   .wide,
   .fading > *,
   .railIn .iconButton,

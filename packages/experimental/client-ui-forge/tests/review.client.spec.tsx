@@ -19,7 +19,7 @@ import { hostCopy } from './client-fixtures.client.ts'
 const english = makeTranslate(en)
 /** Copy of a view of a GitHub pull request, which names the code host and the noun. */
 const t = (key: string, params?: Record<string, unknown>): string => english(key, { forge: 'GitHub', noun: 'PR', ...params })
-const file: ForgeDiffFile = { path: 'a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 3, deletions: 2,
+const file: ForgeDiffFile = { path: 'a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation', digest: 'digest', additions: 3, deletions: 2,
   hunks: [
     { oldStart: 2, oldLines: 2, newStart: 2, newLines: 3, lines: [' unchanged', '-old', '+new', '+another'] },
     { oldStart: 10, oldLines: 1, newStart: 11, newLines: 1, lines: ['-last', '+final'] },

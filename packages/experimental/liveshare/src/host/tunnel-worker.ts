@@ -15,6 +15,7 @@ import {
 } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 import {
   INITIAL_RETRY_BACKOFF,
+  RESTART_BACKOFF_MAX_MS,
   RETRY_STABLE_MS,
   retryBackoffNext,
   retryBackoffSettled,
@@ -282,7 +283,7 @@ export class TunnelWorker {
     /* v8 ignore next -- only the current child's exit calls this, and stop() cancels a pending replacement. */
     if (this.stopping || this.child !== undefined || this.restartTimer !== undefined) return
     const delayMs = this.backoff.delayMs
-    this.backoff = retryBackoffNext(this.backoff)
+    this.backoff = retryBackoffNext(this.backoff, RESTART_BACKOFF_MAX_MS)
     console.warn(
       `[liveshare] restarting tunnel worker delayMs=${String(delayMs)}`
       + ` attempt=${String(this.backoff.attempt)} shares=${String(this.registrations.size)}`,

@@ -34,7 +34,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, MenuSurfaceProps>(function
     document.body.appendChild(backingRef.current!)
   }, [])
   const anchorStyle: CSSProperties & Record<`--dsh-menu-${string}`, string> = {
-    '--dsh-menu-anchor': `--dsh-menu-${id.replaceAll(':', '')}`,
+    '--dsh-menu-anchor': `--dsh-menu-${id.replace(/[^\w-]/g, '')}`,
     '--dsh-menu-enter': `${MENU_TRANSITION_MS.enter}ms`,
     '--dsh-menu-dismiss': `${MENU_TRANSITION_MS.dismiss}ms`,
     '--dsh-menu-replace': `${MENU_TRANSITION_MS.replace}ms`,

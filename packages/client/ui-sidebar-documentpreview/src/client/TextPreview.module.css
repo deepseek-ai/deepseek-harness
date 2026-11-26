@@ -31,6 +31,31 @@
   min-width: 0;
 }
 
+/* The navigator reports its layout on its root as `data-files-navigator-mode`;
+   every layout fills the row below 768px (ui-sidebar-files navigator-layout
+   `FULLSCREEN_QUERY`). The body it fills stays laid out but cannot receive
+   keyboard focus. The `:has()` match only sets a property on the row; a
+   `:has()` rule that selects the row's children makes Chromium restyle the
+   whole document on unrelated scrolls, such as the Chat turn rail's. */
+.content,
+.content > [data-slot-factory='sidebar.files.navigator'] {
+  --navigator-covered: initial;
+}
+
+.content > * {
+  visibility: var(--navigator-covered, inherit);
+}
+
+.content:has(> [data-slot-factory='sidebar.files.navigator'] > [data-files-navigator-mode='fill']) {
+  --navigator-covered: hidden;
+}
+
+@media (width < 768px) {
+  .content:has(> [data-slot-factory='sidebar.files.navigator'] > [data-files-navigator-mode]) {
+    --navigator-covered: hidden;
+  }
+}
+
 /* One 38px row flush under the pane's strip: the path, then the type's
    controls at its end. With the strip's 38px above, its rule lies where the
    conversation header's does (ui-conversation ConversationRoot `.header`,

@@ -10,6 +10,7 @@ import { isAtOrOutside } from '../contract/group-tree.ts'
 import { turnProcessAlwaysOpen } from '../contract/turn-process.ts'
 import { turnProcessOpen } from '../stores.ts'
 import { hiddenOrCollapsing } from './flow-motion.ts'
+import { stepRunsGrouped } from './step-process.ts'
 import css from './ChatView.module.css'
 
 interface ChatNodeSeatProps extends ChatNodeOwnerProps {
@@ -49,7 +50,7 @@ function turnOf(node: ChatNode | undefined): number | undefined {
  */
 export const ChatNodeSeat = memo(function ChatNodeSeat({
   nodeKey, groupPart, useChatNode, useChatNodeProcess, usePresentation,
-  cwd, openFile, inspectCall, forkAt,
+  cwd, openFile, inspectCall, inspectRequest, forkAt,
   loadImage, useStore, actions, renderSlot, t, useChatNodeBottom, deferCollapse, useGroupAction,
 }: ChatNodeSeatProps) {
   const bottom = useChatNodeBottom(nodeKey)
@@ -129,6 +130,11 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       disclosureReset.set(disclosureReset.getSnapshot() + 1)
     }
   }, [processMember, processHidden, wrapperRef, disclosureReset])
+  const turnOpen = routedNode?.location.kind === 'turn' || routedNode?.location.kind === 'step'
+    ? routedNode.location.turn.status === 'open'
+    : false
+  const stepRunsGroupedHere = usePresentation(policy =>
+    stepRunsGrouped(policy.stepGrouping, turnOpen, bottom === true && deferCollapse))
   const owner = useMemo<ChatNodeOwnerProps | null>(() => node === undefined
     ? null
     : {
@@ -136,12 +142,14 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
       cwd,
       openFile,
       inspectCall,
+      inspectRequest,
       forkAt,
       loadImage,
       turnProcess,
+      stepRunsGrouped: stepRunsGroupedHere,
     }, [
-    node, groupPart, cwd, openFile, inspectCall, forkAt,
-    loadImage, turnProcess,
+    node, groupPart, cwd, openFile, inspectCall, inspectRequest, forkAt,
+    loadImage, turnProcess, stepRunsGroupedHere,
   ])
   if (routedNode === undefined || owner === null) return null
   // Runtime dispatch owns the correlation: every Node's discriminant is the

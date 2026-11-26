@@ -42,6 +42,7 @@ interface GatewayUpgrade {
 interface RelayStandIn {
   readonly origin: string
   readonly upgrades: GatewayUpgrade[]
+  readonly disconnect: () => void
   readonly close: () => Promise<void>
 }
 
@@ -121,13 +122,24 @@ function expiredCredentialFile(directory: string, relay: string): string {
  * the real Relay uses for a first publish it will not admit — the same answer the owner's gateway
  * worker treats as a decision about that registration rather than as a transient failure.
  * @param accepts Whether the credential one upgrade presented is admitted.
+ * @param allowedSubjects Subjects the Relay currently admits to the share.
  * @returns The stand-in origin, every upgrade it saw, and its disposer.
  */
-async function relayStandIn(accepts: (credential: string | undefined) => boolean): Promise<RelayStandIn> {
+async function relayStandIn(
+  accepts: (credential: string | undefined) => boolean,
+  allowedSubjects: () => readonly string[] = () => [],
+): Promise<RelayStandIn> {
   const upgrades: GatewayUpgrade[] = []
   const wss = new WebSocketServer({ noServer: true })
   const server = createServer((req, res) => {
-    const path = new URL(req.url ?? '/', 'http://relay.local').pathname
+    const { pathname: path, searchParams } = new URL(req.url ?? '/', 'http://relay.local')
+    if (path === '/__liveshare/requests' && searchParams.get('shareId') === SHARE_ID && req.headers.authorization === `Bearer ${GATEWAY_TOKEN}`) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      const allowedSubjectIds = allowedSubjects()
+      res.end(JSON.stringify({ version: allowedSubjectIds.length ? 2 : 1, accessMode: allowedSubjectIds.length ? 'selected' : 'open',
+        sessionMode: 'view', allowedSubjectIds, requests: [] }))
+      return
+    }
     if (path === '/__liveshare/share/claim') {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ shareId: SHARE_ID, ownerVerified: true, claimed: true }))
@@ -170,6 +182,7 @@ async function relayStandIn(accepts: (credential: string | undefined) => boolean
   return {
     origin: `http://127.0.0.1:${String(port)}`,
     upgrades,
+    disconnect: () => { for (const client of wss.clients) client.terminate() },
     close: async () => {
       for (const client of wss.clients) client.terminate()
       wss.close()
@@ -210,6 +223,39 @@ describe('restoring a share with a credential this host reads as expired', () =>
     // The host's own read of the sign-in says it is past, which is what used to withhold the header.
     expect(await identityState(host, relay.origin)).toBe('expired')
     await expect.poll(async () => (await listedShares(host))[0]?.online, { timeout: 15_000 }).toBe(true)
+  }, 30_000)
+
+  it('manually reconnects the original link after automatic reconnection stops', async () => {
+    let available = true
+    let allowed: readonly string[] = []
+    const relay = await relayStandIn(() => available, () => allowed)
+    disposers.push(relay.close)
+    const directory = stateDirectory()
+    const { host } = ownerRoutes()
+    const dispose = await apply(host, {
+      ownerStateFile: ownerStateFile(directory, relay.origin),
+      ownerCredentialFile: expiredCredentialFile(directory, relay.origin),
+    })
+    disposers.push(dispose)
+
+    const list = async () => (await host.liveshareShares.list()).shares
+    await expect.poll(async () => (await list())[0]?.online, { timeout: 20_000 }).toBe(true)
+    const original = (await list())[0]!
+    expect(original.shareId).toBe(SHARE_ID)
+    expect(original.link).toBe(`${relay.origin}/?shareId=${SHARE_ID}`)
+    available = false
+    relay.disconnect()
+    await expect.poll(async () => (await list())[0]?.reconnectStopped, { timeout: 20_000 }).toBe(true)
+    allowed = ['remaining-reader']
+    available = true
+    await host.liveshareShares.reconnect({ shareId: original.shareId })
+
+    expect(await list()).toMatchObject([{ shareId: original.shareId, link: original.link, online: true }])
+    expect(relay.upgrades).toHaveLength(3)
+    expect(relay.upgrades[2]).toMatchObject({ shareId: SHARE_ID, authorization: `Bearer ${GATEWAY_TOKEN}`, credential: STORED_TOKEN })
+    expect(relay.upgrades[0]?.search.get('accessMode')).toBe('open')
+    expect(relay.upgrades[2]?.search.get('accessMode')).toBe('selected')
+    expect(relay.upgrades[2]?.search.getAll('allowedSubjectId')).toEqual(['remaining-reader'])
   }, 30_000)
 
   it('keeps a refused share and registers it again once a credential arrives', async () => {

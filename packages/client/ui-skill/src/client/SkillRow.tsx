@@ -1,6 +1,6 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutlineRegular, IconInspectOutlineRegular, IconSkillOutlineRegular, TextShimmer,
+  IconChevronDownOutlineRegular, IconSkillOutlineRegular, InspectButton, TextShimmer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StartedToolCallViewProps, ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -136,7 +136,7 @@ function StartedSkillRow({ block, inspect, t }: Exclude<SkillRowProps, { phase: 
   } : {}
   const leading = disclosureLeading(open, expandable)
   return (
-    <div className={css.card} data-tool="skill" data-state={model.state}>
+    <div className={css.card} data-inspect-scope data-tool="skill" data-state={model.state}>
       <div
         className={css.row}
         data-expandable={expandable || undefined}
@@ -162,10 +162,7 @@ function StartedSkillRow({ block, inspect, t }: Exclude<SkillRowProps, { phase: 
             <pre className={css.instructions} data-error={model.state === 'error' || undefined}>{model.output}</pre>
           </section>
           {inspect !== undefined ? (
-            <button type="button" className={css.inspectButton} onClick={inspect}>
-              <IconInspectOutlineRegular />
-              {t('row.inspect')}
-            </button>
+            <InspectButton label={t('row.inspect')} onClick={inspect} />
           ) : null}
         </div>
       ) : null}

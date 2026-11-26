@@ -67,6 +67,34 @@ async function showSharedTasksSection(page: Page): Promise<Locator> {
   return (await showSessionPanel(page)).locator(SHARED_TASKS_SECTION)
 }
 
+/**
+ * Wait until the Session panel's dock probe has reported the room of the window's current size, for a width
+ * that does not use the sidebar drawer. A resize reaches the layout over several frames: the app frame takes
+ * its sidebar mode from a measurement a frame later, and the Conversation body publishes its widths from size
+ * observers. Until they all follow the window the probe can report room that the settled layout does not have,
+ * and a toggle press then flips the docking preference instead of opening the panel over the conversation.
+ * The wait ends one frame after the first frame whose inputs all follow the window: that frame lays the probe
+ * out at its final width, and its size observers, the panel's own among them, report that width before the
+ * next frame's callbacks run.
+ * @param page - the page under test.
+ */
+async function settleDockProbe(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    const settled = (): boolean => {
+      const body = document.querySelector('[data-session-panel-probe]')?.closest<HTMLElement>('[data-conversation-content]')
+      const scroll = body?.querySelector<HTMLElement>('[data-conversation-scroll]')
+      if (body === undefined || body === null || scroll === undefined || scroll === null) return false
+      return document.querySelector('[data-sidebar-drawer]') === null
+        && body.style.getPropertyValue('--dsh-conversation-column-width') === `${Math.round(body.getBoundingClientRect().width)}px`
+        && body.style.getPropertyValue('--dsh-conversation-viewport-width') === `${scroll.clientWidth}px`
+    }
+    const frame = (): void => {
+      requestAnimationFrame(settled() ? () => { resolve() } : frame)
+    }
+    requestAnimationFrame(frame)
+  }))
+}
+
 async function openTeamSettings(page: Page, chinese = false): Promise<void> {
   const trigger = page.getByRole('button', { name: chinese ? /^选择模型/u : /^Select model/u })
   await trigger.click()
@@ -629,6 +657,8 @@ describe('web e2e: agent teamwork panel', () => {
       await panel.waitFor({ state: 'detached' })
       // A width whose transcript cannot move aside for the panel, so the toggle opens it over the conversation.
       await page.setViewportSize({ width: 1100, height: viewport.height })
+      await settleDockProbe(page)
+      expect(await page.locator('[data-session-panel-probe]').evaluate(element => element.getBoundingClientRect().width)).toBe(0)
       await trigger.focus()
       await page.keyboard.press('Enter')
       await tasksHeading.waitFor()
@@ -742,12 +772,9 @@ describe('web e2e: agent teamwork panel', () => {
       })).toEqual([{ panel: true, hasTree: true, hasBoard: true, fitsWidth: true }])
       expect((await measureScroll()).arrowsBeforeTrack).toBe(true)
       await panel.hover({ position: { x: 20, y: 20 } })
-      await Promise.all([
-        panel.evaluate(element => new Promise<void>((resolve) => {
-          element.addEventListener('scrollend', () => { resolve() }, { once: true })
-        })),
-        page.mouse.wheel(0, 180),
-      ])
+      // A `scrollend` listener attached alongside the wheel can miss the event, which does not repeat; the offset
+      // records the scroll either way.
+      await page.mouse.wheel(0, 180)
       await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
       await panel.evaluate((element) => { element.scrollTo({ top: 0 }) })
       await expect.poll(() => panel.evaluate(element => element.scrollTop)).toBe(0)

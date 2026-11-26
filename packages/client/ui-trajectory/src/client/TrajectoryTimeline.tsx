@@ -417,8 +417,7 @@ export const TrajectoryTimeline = memo(function TrajectoryTimeline({
   }
 
   const recordIndexAt = (event: PointerEvent<HTMLDivElement>): number | null => {
-    const target = event.target instanceof HTMLElement ? event.target : null
-    const value = target?.closest<HTMLElement>('[data-timeline-record-index]')
+    const value = (event.target as Partial<Element>).closest?.<HTMLElement>('[data-timeline-record-index]')
       ?.dataset.timelineRecordIndex
     if (value === undefined) return null
     const index = Number(value)

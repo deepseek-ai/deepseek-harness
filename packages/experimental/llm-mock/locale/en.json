@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Mock model",
+    "description": "Answer every model call with fixed text, without a provider key."
+  }
+}

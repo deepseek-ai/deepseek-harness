@@ -16,6 +16,7 @@ import type {} from '../src/client/index.ts'
 import { en, zh, type AccountKey } from '../src/client/locales.ts'
 import css from '../src/client/AccountSection.module.css'
 import type { AccountAvatarSnapshot } from '../src/client/account-avatar.ts'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
@@ -24,6 +25,9 @@ const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
   preference: colorScheme, fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' },
   active: { id: colorScheme, colorScheme, tokens: {} }, themes: [], revision: 0,
 })
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 function operationsOf(state: Omit<AccountView, 'links'>, details?: Partial<AccountDetails>, pages?: PlatformPages,
   avatar?: AccountAvatarSnapshot): AccountSectionInjected {
@@ -48,8 +52,8 @@ function mount(state: Omit<AccountView, 'links'>, copy: typeof en | typeof zh = 
   platform?: PlatformBridge, avatar?: AccountAvatarSnapshot) {
   const pages = platform === undefined ? undefined : createPlatformPages()
   const operations = operationsOf(state, details, pages, avatar)
-  // AccountSection consumes no global hooks; the slot supplies them in the application.
-  const globals = {} as GlobalStandardProps
+  // AccountSection consumes no global hooks and the Platform host only the document portal; the slot supplies them in the application.
+  const globals = { useDocumentPortal: () => Portal } as Partial<GlobalStandardProps> as GlobalStandardProps
   render(<>
     <AccountSection {...globals} {...operations}
       useAccount={selector => selector(operations.hooks.account.getSnapshot())}
@@ -668,23 +672,23 @@ it('reads the account again when the user returns from the top-up view, and not 
   expect(operations.refreshAccount).toHaveBeenCalledOnce()
 })
 
-it('reports resize failure, ignores late native failures, and tolerates a removed IPC receiver', async () => {
+it('reports resize failure, ignores late native failures, and tolerates a removed IPC receiver and focus origin', async () => {
   let resize: (() => void) | undefined
   vi.stubGlobal('ResizeObserver', class { constructor(callback: () => void) { resize = callback } observe() {} disconnect() {} })
   const loaded = Promise.withResolvers<undefined>()
   const platform: PlatformBridge = { open: () => loaded.promise,
     setBounds: vi.fn(async () => { throw new Error('resize failed') }), close: vi.fn(async () => { throw new Error('window gone') }) }
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.setAttribute('tabindex', '0')
-  document.body.append(svg)
-  onTestFinished(() => { svg.remove() })
-  svg.focus()
+  const origin = document.createElement('button')
+  document.body.append(origin)
+  origin.focus()
   mount({ status: 'credential-stored', attempt: null }, en, undefined, platform)
   await act(async () => { fireEvent.click(screen.getByRole('link', { name: en.usage })) })
   await act(async () => { resize!() })
   expect(platform.setBounds).toHaveBeenCalled()
   expect(screen.getByText(en.platformFailed)).toBeTruthy()
+  origin.remove()
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: en.backToHarness })) })
+  expect(document.activeElement).not.toBe(origin)
   await act(async () => { loaded.reject(new Error('late failure')); await loaded.promise.catch(() => {}) })
   expect(screen.queryByRole('dialog')).toBeNull()
 })

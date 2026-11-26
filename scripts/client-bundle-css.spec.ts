@@ -3,7 +3,7 @@
  * which register their physical files as watch dependencies. Package assets
  * are emitted under `lib/assets/` with revisioned file names and referenced by document-relative URLs.
  */
-import { transform, type Selector } from 'lightningcss'
+import { transform } from 'lightningcss'
 import { runInNewContext } from 'node:vm'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -14,6 +14,7 @@ import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
 import { afterEach, describe, expect, it } from 'vitest'
 import { packageAssetRevision } from '../packages/client/modules/src/assets.ts'
 import { clientBundle } from '../packages/client/tsdown.client.ts'
+import { cssIdentifier } from './test-css-identifier.ts'
 
 interface EmittedAsset {
   type: 'asset'
@@ -215,14 +216,7 @@ describe('client bundle CSS Modules', () => {
     const classMap = manifest.factory(require)
     expect(Object.keys(classMap)).toEqual(['root'])
     expect(classMap['root']).toMatch(/_root$/u)
-    const css = stylesheetText(output, reference => reference)
-    const selectors: Selector[] = []
-    // CSS serialization can escape the path-derived class name.
-    transform({ filename: stylesheet, code: Buffer.from(css), visitor: {
-      Selector(selector) { selectors.push(selector) },
-    } })
-    expect(selectors).toEqual([[{ type: 'class', name: classMap['root'] }]])
-    expect(css).toContain('{color:red}')
+    expect(stylesheetText(output, reference => reference)).toContain(`.${cssIdentifier(String(classMap['root']))}{color:red}`)
   })
 })
 

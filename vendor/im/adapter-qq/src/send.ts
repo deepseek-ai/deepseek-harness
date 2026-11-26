@@ -18,6 +18,10 @@
  * only the id is unknown — the failure is reported as `published: 'unknown'` (dsh-im records `uncertain`) instead of
  * sending a duplicate.
  *
+ * A click's `event_id` goes out as `INTERACTION_CREATE:<id>` ({@link eventIdOf}): the gateway reports the interaction
+ * as a bare uuid, and a message body carrying that bare id is refused with `40034025`. A refusal of the field itself
+ * falls back to one active send, which cannot duplicate anything because the refusal published nothing.
+ *
  * Outside the passive window (`target.referrer` absent, window closed, or budget spent) the body simply carries no
  * passive field: that is a 主动 message, which the platform accepts under its own frequency quota and refuses with
  * `22009` / `40034100` / `40054002`, classified by `errors.ts`.
@@ -51,6 +55,27 @@ export const DELETE_WINDOW_MS = 2 * 60 * 1000
 
 /** Platform code of the `(msg_id, msg_seq)` dedupe rejection . */
 export const DEDUPE_CODE = 40054005
+
+/**
+ * Prefix the message body's `event_id` carries. The gateway reports the interaction as `d.id` (a bare uuid) and
+ * `PUT /interactions/{id}` takes it verbatim, but a message that answers the click carries
+ * `event_id: INTERACTION_CREATE:<d.id>`: the bare id is refused with `400 40034025 请求参数event_id无效`.
+ */
+export const EVENT_ID_PREFIX = 'INTERACTION_CREATE:'
+
+/** Platform code of an `event_id` the platform will not take as a message body field. */
+export const INVALID_EVENT_ID_CODE = 40034025
+
+/**
+ * `event_id` of a click in the form the message body expects.
+ *
+ * @param id - interaction id of `Target.referrer` (`QQReferrer.event_id`).
+ * @returns the id with {@link EVENT_ID_PREFIX}; an id that already carries the prefix passes through, so a referrer
+ * built from a stored body stays usable.
+ */
+export function eventIdOf(id: string): string {
+  return id.startsWith(EVENT_ID_PREFIX) ? id : `${EVENT_ID_PREFIX}${id}`
+}
 
 /**
  * `SentPart.kind` of one body: the `msg_type` it was sent with.
@@ -151,7 +176,7 @@ function fillRequest(
   if (ticket) {
     if (ticket.field === 'event_id') {
  // A click is answered with `event_id`; `msg_seq` is only read together with `msg_id`.
-      request.event_id = ticket.key
+      request.event_id = eventIdOf(ticket.key)
     } else {
       request.msg_id = ticket.key
       request.msg_seq = ticket.seq
@@ -166,6 +191,11 @@ function fillRequest(
 /** Whether a failure is the platform's `(msg_id, msg_seq)` dedupe answer . */
 function isDedupe(error: unknown) {
   return QqApiError.is(error) && error.code === DEDUPE_CODE
+}
+
+/** Whether a failure is the platform refusing the `event_id` carried by the body (see {@link EVENT_ID_PREFIX}). */
+function isInvalidEventId(error: unknown) {
+  return QqApiError.is(error) && error.code === INVALID_EVENT_ID_CODE
 }
 
 /**
@@ -205,7 +235,9 @@ export async function sendMessagePayload(
   const idempotencyKey = partKey(ctx)
   const referrer = referrerOf(target)
   let ticket = claim(bot, referrer, idempotencyKey)
-  for (let attempt = 1; ; attempt++) {
+  let dedupeRetried = false
+  let eventIdFellBack = false
+  for (;;) {
     const request = fillRequest(body, ticket, ctx.quote)
     try {
       const answer = await bot.api.sendMessage(address, request, ctx.options.signal)
@@ -218,10 +250,18 @@ export async function sendMessagePayload(
         raw: answer,
       }
     } catch (error) {
-      if (!isDedupe(error) || attempt > 1) throw error
+ // A click whose event id the platform refuses falls back to one active send: the refusal published nothing, so the
+ // reply without the passive field cannot duplicate it.
+      if (isInvalidEventId(error) && ticket?.field === 'event_id' && !eventIdFellBack) {
+        eventIdFellBack = true
+        ticket = undefined
+        continue
+      }
+      if (!isDedupe(error) || dedupeRetried) throw error
       if (ticket?.reused) throw alreadyPublished(bot, ticket, error)
       const next = claim(bot, referrer, idempotencyKey, true)
       if (!next) throw error
+      dedupeRetried = true
       ticket = next
     }
   }

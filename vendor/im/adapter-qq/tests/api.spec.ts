@@ -170,6 +170,9 @@ describe('QqApi', () => {
     expect(error.code).toBe(40054010)
     expect(error.status).toBe(400)
     expect(error.body).toEqual({ code: 40054010, message: '不允许发送URL' })
+    // The platform's own code and sentence reach the operator, so a refusal the table does not list still says what
+    // was refused.
+    expect(error.message).toBe('POST /v2/groups/G/messages answered 400 (code 40054010: 不允许发送URL)')
   })
 
   it('turns a code in a 2xx body into a failure', async () => {
@@ -177,6 +180,7 @@ describe('QqApi', () => {
     const error = await api.sendMessage({ kind: 'group', id: 'G' }, { msg_type: 2 }).catch(error => error)
     expect(error).toBeInstanceOf(QqApiError)
     expect(error.code).toBe(40034029)
+    expect(error.message).toBe('POST /v2/groups/G/messages answered code 40034029: keyboard too large')
   })
 
   it('accepts a `code: 0` body and an answer the route does not type', async () => {

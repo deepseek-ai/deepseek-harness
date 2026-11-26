@@ -172,10 +172,11 @@ interface SessionHeader {
    */
   readonly isSeeded: boolean
   /**
-   * Coarse product classification for a session created as a subagent child.
-   * This is presentation metadata, not proof that the child is continuable.
+   * Coarse product classification: `subagent` for a subagent child, `side` for
+   * a side conversation forked from another Session. Absence means an ordinary
+   * Session. This is presentation metadata, not proof that the Session is continuable.
    */
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   /**
    * Delegation depth: absent (zero) for a top-level session, parent depth + 1
    * for a subagent child. Persisted so a recursion budget survives restart and
@@ -235,7 +236,7 @@ interface SessionHeaderMeta {
   readonly parentSession?: SessionId
   readonly createdAt?: number
   readonly isSeeded?: boolean
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   readonly delegationDepth?: number
   readonly agentPreset?: string
 }
@@ -353,7 +354,7 @@ The optional `eventCount`/`sizeBytes` fields remain cheap backend observations f
 The shipped providers implement the abstract `SessionPersistence` contract (`create`/`open`/`stat`/`list`, with per-session `SessionHandle`s carrying `read`/`append`/`flush`/`close` and optional cancellation throughout) and pass the shared persistence contract suite:
 
 - **[dsh-session-persistence-jsonl](../../packages/session/session-persistence-jsonl)** — an append-only logical JSONL log per session, stored as checksummed concatenated Zstandard frames by default or raw lines by configuration, with crash-safe atomic materialization, per-batch `fsync` appends, and torn-tail truncation before the first new append. `stat`/`list` carry `sizeBytes` and a best-effort `fs.stat`-derived revision.
-- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)** — logical JSON event storage with indexed metadata and predecessor-linked Segments; events are stored as frames of JSON lines, Zstandard-compressed by default, and an append merges trailing short frames into full frames. The optional provider imports existing JSONL on first open and coordinates concurrent readers with a single writer per Session; `stat`/`list` do not import history.
+- **[dsh-session-persistence-sqlite](../../packages/session/session-persistence-sqlite)** — logical JSON event storage with indexed metadata and predecessor-linked Segments, each write stored as one frame of JSON lines, Zstandard-compressed by default. The optional provider imports existing JSONL on first open and coordinates concurrent readers with a single writer per Session; `stat`/`list` do not import history.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

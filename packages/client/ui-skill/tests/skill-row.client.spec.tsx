@@ -78,6 +78,7 @@ describe('SkillRow', () => {
     const card = screen.getByLabelText('说明')
     expect(card.textContent).toBe('说明Follow the issue workflow.\nKeep project fields in sync.')
     expect(view.container.textContent).not.toContain('{"name":"dsh-manage-issues"}')
+    expect(screen.getByRole('button', { name: '查看' }).closest('[data-inspect-scope]')).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '查看' }))
     expect(inspect).toHaveBeenCalledTimes(1)
 

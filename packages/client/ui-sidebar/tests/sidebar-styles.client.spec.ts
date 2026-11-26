@@ -27,6 +27,11 @@ function declarations(selector: string): Map<string, string> | undefined {
   return undefined
 }
 
+/** Declarations of the reduced-motion block, which disables every sidebar transition. */
+function reducedMotion(): string {
+  return css.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\n\}/u)?.[1] ?? ''
+}
+
 describe('SidebarRoot.module.css', () => {
   it('uses a compact expanded navigation gap without shrinking the collapsed rail spacing', () => {
     expect(declarations('.panelList')?.get('gap')).toBe('2px')
@@ -99,6 +104,27 @@ describe('SidebarRoot.module.css', () => {
     expect(declarations(':global([data-windows-titlebar]) .root:not(.collapsed) .newSessionRow')?.has('margin-left')).toBe(false)
     expect(declarations('.topStrip')?.get('height')).toBe('52px')
     expect(declarations('.root.collapsed')?.get('padding')).toBe('18px 10px 6px')
+  })
+
+  it('fades macOS control colors and the scroll fade between windowed and fullscreen materials', () => {
+    const darwin = ":global([data-platform='darwin'])"
+    const windowed = ":global([data-platform='darwin']:not([data-fullscreen]))"
+    const root = ":where(.root:not([role='dialog']))"
+    expect(declarations(`${windowed} ${root} .newSession`)?.get('background')).toBe('var(--dsw-specific-sidebar-glass-fill)')
+    expect(declarations(`${windowed} ${root}.collapsed .newSession`)?.get('background')).toBe('var(--dsw-specific-sidebar-glass-collapsed-fill)')
+    expect(declarations(`${darwin} ${root} .newSession`)?.get('transition')).toBe(
+      'background-color var(--ds-transition-duration) var(--ds-ease-in-out)',
+    )
+    expect(declarations(`${darwin} .scrollFade`)?.get('transition')).toBe(
+      'opacity var(--ds-transition-duration) var(--ds-ease-in-out)',
+    )
+    expect(declarations(`${darwin} .scrollFade`)?.get('opacity')).toBe('1')
+    expect(declarations(`${windowed} .scrollFade`)?.get('opacity')).toBe('0')
+    expect(declarations(`${windowed} .scrollFade`)?.has('display')).toBe(false)
+    expect(declarations('.collapsed .scrollFade')?.get('display')).toBe('none')
+    expect(reducedMotion()).toContain(`${darwin} ${root} .newSession`)
+    expect(reducedMotion()).toContain(`${darwin} .scrollFade`)
+    expect(reducedMotion()).toContain('transition: none;')
   })
 
   it('moves the upper controls while the settings seat only fades', () => {

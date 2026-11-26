@@ -15,6 +15,7 @@ import type { ShareAccessStateFrame, TunnelShareSpec, TunnelWorkerEvent } from '
 import { TunnelWorker } from '../src/host/tunnel-worker.ts'
 import {
   INITIAL_RETRY_BACKOFF,
+  RESTART_BACKOFF_MAX_MS,
   RETRY_BACKOFF_MAX_MS,
   retryBackoffNext,
   retryBackoffSettled,
@@ -344,21 +345,21 @@ describe('Committed access-state restart intent', () => {
 
 })
 
-describe('Liveshare reconnect schedule', () => {
-  it('doubles the delay up to a ceiling', () => {
-    const delays: number[] = []
+describe('Liveshare restart schedule', () => {
+  it('caps worker restarts at ten seconds independently of Relay reconnects', () => {
     let state = INITIAL_RETRY_BACKOFF
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      delays.push(state.delayMs)
-      state = retryBackoffNext(state)
+    for (const delayMs of [1_000, 2_000, 4_000, 8_000, 10_000, 10_000]) {
+      state = retryBackoffNext(state, RESTART_BACKOFF_MAX_MS)
+      expect(state.delayMs).toBe(delayMs)
     }
-    expect(delays).toEqual([500, 1_000, 2_000, 4_000, 8_000, RETRY_BACKOFF_MAX_MS])
-    expect(state).toEqual({ delayMs: RETRY_BACKOFF_MAX_MS, attempt: 6 })
+    expect(retryBackoffNext({ delayMs: 120_000, attempt: 9 }, RETRY_BACKOFF_MAX_MS))
+      .toEqual({ delayMs: 180_000, attempt: 10 })
   })
 
   it('starts the delays over once a connection has proven stable', () => {
-    const grown = retryBackoffNext(retryBackoffNext(INITIAL_RETRY_BACKOFF))
-    expect(grown.delayMs).toBe(2_000)
+    const doubled = retryBackoffNext(INITIAL_RETRY_BACKOFF, RETRY_BACKOFF_MAX_MS)
+    expect(doubled.delayMs).toBe(Math.min(INITIAL_RETRY_BACKOFF.delayMs * 2, RETRY_BACKOFF_MAX_MS))
+    expect(doubled.attempt).toBe(1)
     expect(retryBackoffSettled()).toEqual(INITIAL_RETRY_BACKOFF)
   })
 })

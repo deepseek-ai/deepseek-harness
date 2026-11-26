@@ -63,7 +63,8 @@ html[data-platform='darwin'] body {
    manifest is the list of rows that must carry the mark. Electron composes
    app-regions from geometry, not hit testing, so covering overlays must subtract
    their boxes after the row in document order. Body portals sit after #root;
-   their root boxes are excluded below. */
+   their root boxes are excluded below, including the children of a box-less
+   `[data-document-portal]` wrapper. */
 html[data-platform='darwin'] [data-window-drag] {
   -webkit-app-region: drag;
 }
@@ -80,7 +81,8 @@ html[data-platform='darwin'] [data-window-drag-recall] {
   -webkit-app-region: no-drag;
 }
 
-html[data-platform='darwin'] body > :not(#root) {
+html[data-platform='darwin'] body > :not(#root),
+html[data-platform='darwin'] body > [data-document-portal] > * {
   -webkit-app-region: no-drag;
 }
 
@@ -93,8 +95,8 @@ html[data-platform='darwin'] [data-window-drag-exclude] {
 
 /* Controls subtract themselves only inside a chrome row. Scrollable content
    outside those rows needs no region, even when it is keyboard-focusable.
-   Covering overlays own their no-drag box through the body rule above or an
-   explicit component declaration. A controls scope also covers the onboarding
+   Covering overlays own their no-drag box through the body-portal rule above
+   or an explicit component declaration. A controls scope also covers the onboarding
    stage whose window-wide drag band is a preceding sibling. */
 html[data-platform='darwin'] :where([data-window-drag], [data-window-drag-controls]) :is(
   button, a, input, select, textarea, summary, [contenteditable='true'], [tabindex],

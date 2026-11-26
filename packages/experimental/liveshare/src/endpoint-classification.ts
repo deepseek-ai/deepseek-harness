@@ -256,6 +256,7 @@ export const VIEWER_ENDPOINT_CLASSES = {
   'liveshareShares/addSessions': 'owner-only',
   'liveshareShares/identity': 'owner-only',
   'liveshareShares/list': 'owner-only',
+  'liveshareShares/reconnect': 'owner-only',
   'liveshareShares/relay': 'owner-only',
   'liveshareShares/setCapabilities': 'owner-only',
   'liveshareShares/setRelay': 'owner-only',

@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlatformOverlay } from '../src/client/PlatformOverlay.tsx'
 import { acquireOverlayInert } from '../src/client/overlay-inert.ts'
 import { OnboardingSurface } from '../src/client/OnboardingSurface.tsx'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 let appRoot: HTMLDivElement
 
@@ -20,11 +24,9 @@ afterEach(() => {
 })
 
 describe('OnboardingSurface', () => {
-  it('portals the overlay chrome to document.body around its content', () => {
+  it('renders the overlay chrome around its content for the owner to portal', () => {
     const view = render(<OnboardingSurface><p>step content</p></OnboardingSurface>)
-    // Portaled: the overlay is a body child, not inside the render container.
-    expect(view.container.querySelector('[class*="onboardingOverlay"]')).toBeNull()
-    const overlay = document.body.querySelector('[class*="onboardingOverlay"]')
+    const overlay = view.container.querySelector('[class*="onboardingOverlay"]')
     expect(overlay).not.toBeNull()
     expect(overlay!.firstElementChild).toBe(overlay!.querySelector('[class*="dragBand"]'))
     const stage = overlay!.querySelector('[class*="onboardingStage"]')
@@ -86,7 +88,7 @@ it('restores interaction when onboarding and its recharge overlay unmount togeth
   try {
     const bridge = { open: async () => {}, close: async () => {}, setBounds: async () => {} }
     const view = render(<><OnboardingSurface>onboarding</OnboardingSurface>
-      <PlatformOverlay bridge={bridge} page="top-up" backLabel="Back" loadingLabel="Loading" failureLabel="Failed" retryLabel="Retry" onClose={() => {}} /></>)
+      <PlatformOverlay Portal={Portal} bridge={bridge} page="top-up" backLabel="Back" loadingLabel="Loading" failureLabel="Failed" retryLabel="Retry" onClose={() => {}} /></>)
     expect(appRoot.inert).toBe(true)
     view.unmount()
     expect(appRoot.inert).toBe(false)

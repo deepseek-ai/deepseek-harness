@@ -29,7 +29,7 @@ import {
 } from '@deepseek-ai/dsh-experimental-webworker-runtime'
 import picomatch from 'picomatch'
 import { parseEntryYaml, stringifyEntryYaml, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
-import { PROFILE_PATCH_FILENAME } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_PATCH_FILENAME, PROFILES_DIR } from '@deepseek-ai/dsh-app-boot'
 import { WRAPPER_CONTRACT, type ImageFiles, type TransformOutcome } from './transform-image.ts'
 import { EXCLUDE, EXCLUDE_WORKSPACE, IMAGE_ENTRY_SEEDS, PAGE_ASSETS } from './rules.ts'
 
@@ -40,6 +40,16 @@ export const MANIFEST_PATH: string = IMAGE_MANIFEST_PATH
 
 /** Image path of the home patch: `$DSH_HOME/cordis.patch.yml` under the Worker home. */
 export const HOME_PATCH_PATH = `${IMAGE_HOME_DIRECTORY}/${PROFILE_PATCH_FILENAME}`
+
+/**
+ * Image path of one profile's patch: `$DSH_HOME/profiles/<profile>/cordis.patch.yml` under the Worker home. The image's
+ * app-boot keeps an existing patch when it initializes the profile, and ConfigEditor writes this file.
+ * @param profile - Profile name.
+ * @returns Image path of the profile patch.
+ */
+export function profilePatchPath(profile: string): string {
+  return `${IMAGE_HOME_DIRECTORY}/${PROFILES_DIR}/${profile}/${PROFILE_PATCH_FILENAME}`
+}
 
 /** Exclude matcher over tree-root-relative paths ({@link EXCLUDE}). */
 const excluded = picomatch([...EXCLUDE], { dot: true })
@@ -99,6 +109,11 @@ export interface PackOptions {
   readonly emptyDirectories?: readonly string[]
   /** Patch rows written to {@link HOME_PATCH_PATH}, which the image's app-boot reads as the home layer. */
   readonly homePatch?: readonly PatchOptions[]
+  /**
+   * Patch rows written to {@link profilePatchPath} for {@link profile}: the editable profile layer the image's app-boot
+   * reads after the bundle layers and before the home layer.
+   */
+  readonly profilePatch?: readonly PatchOptions[]
   /**
    * Extra sweep roots: image specifiers requested by code outside the image.
    * Defaults to the worker assembly's own entries.
@@ -697,6 +712,9 @@ export function packVfsImage(options: PackOptions): PackResult {
   }
   if (options.homePatch !== undefined && options.homePatch.length > 0) {
     files[HOME_PATCH_PATH] = encoder.encode(stringifyEntryYaml(options.homePatch))
+  }
+  if (options.profilePatch !== undefined && options.profilePatch.length > 0) {
+    files[profilePatchPath(options.profile)] = encoder.encode(stringifyEntryYaml(options.profilePatch))
   }
 
   for (const tree of configTrees) collectTree(tree.directory, files, tree.mount, relativePath => !excluded(relativePath))

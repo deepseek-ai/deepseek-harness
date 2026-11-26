@@ -138,7 +138,7 @@ function LoadedImage({
   readonly scrollportRef: ImageBodyProps['scrollportRef']
   readonly t: ImageBodyProps['t']
 }): ReactNode {
-  const releasePan = useRef<() => void>()
+  const releasePan = useRef<() => void>(undefined)
   const attachImage = useCallback((image: HTMLImageElement | null): void => {
     releasePan.current?.()
     releasePan.current = image === null ? undefined : bindImagePan(image)

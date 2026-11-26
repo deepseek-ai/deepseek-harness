@@ -73,7 +73,7 @@ function deferred<T>() {
 /** New side of `src/app.ts`, whose one hunk replaces its fourth line. */
 const APP_TEXT = ['const a1 = 1', 'const a2 = 2', 'const a3 = 3', 'const y = 4', 'const a5 = 5'].join('\n') + '\n'
 const APP: ForgeDiffFile = {
-  path: 'src/app.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation',
+  path: 'src/app.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation',
   digest: 'digest', additions: 1, deletions: 1,
   hunks: [{
     oldStart: 3, oldLines: 3, newStart: 3, newLines: 3, lines: [' const a3 = 3', '-const x = 4', '+const y = 4', ' const a5 = 5'],
@@ -93,6 +93,7 @@ function changesFaces(threads: readonly ForgeReviewThread[] = []): ReviewChanges
   const local = async (): Promise<never> => await Promise.reject(new Error('no local changes'))
   return {
     localDiff: vi.fn(local),
+    localWrite: vi.fn(local),
     diffBases: vi.fn(local),
     localText: vi.fn(local),
     localCommits: vi.fn(local),

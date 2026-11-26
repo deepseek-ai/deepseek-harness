@@ -1636,6 +1636,8 @@ interface ForgeDiffFile {
   readonly oversized: boolean
   /** Whether Git does not track the file yet; only local diffs list such files. */
   readonly untracked: boolean
+  /** Whether the path is a submodule, whose change is the commit recorded for it and whose hunks hold no file content. */
+  readonly submodule: boolean
   /** Lines added. */
   readonly additions: number
   /** Lines deleted. */
@@ -1661,6 +1663,49 @@ interface ForgeLocalDiff {
   readonly files: readonly ForgeDiffFile[]
   /** Untracked files left out beyond `maxUntrackedFiles`. */
   readonly omitted: number
+}
+```
+
+`localWrite(session, write)` 对 Session 检出中的整个文件进行暂存、取消暂存或还原，或把暂存区条目恢复到更早的 tree。调用方按下按钮就是授权，所以它的 Git 命令不受 Session 沙箱策略约束，在任何访问模式下都运行。`stage` 和 `restore` 为每个文件带上读者所见改动的 digest；重新读取的 `unstaged` 范围列出的改动不同时，以 `forgePanel/local-stale` 拒绝整次写入。已删除文件的路径上是一个目录时，两者都以 `forgePanel/local-path-replaced` 拒绝；`restore` 还拒绝 `submodule` 为 true 的文件。`stage` 或 `unstage` 的结果带有写入之前的暂存区 tree，对同一批路径执行 `reindex` 即可恢复到它。
+
+```ts type-equiv
+/** One file of a local write, as the `unstaged` scope listed it for the reader. */
+interface ForgeLocalWriteFile {
+  /** Path relative to the repository root, as the diff names it. */
+  readonly path: string
+  /** Digest of the change the reader saw. */
+  readonly digest: string
+}
+```
+
+```ts type-equiv
+/**
+ * A write a person makes from the changes view to the index or the working tree of the Session's checkout, on whole
+ * files. The person's press authorizes it, so the Session's access mode does not bound it.
+ */
+type ForgeLocalWrite =
+  /** Copy the working-tree state of the files into the index, adding untracked files and recording deletions. */
+  | { readonly kind: 'stage'; readonly files: readonly ForgeLocalWriteFile[] }
+  /** Return the index entries of the paths to HEAD; a staged rename names both of its paths. */
+  | { readonly kind: 'unstage'; readonly paths: readonly string[] }
+  /**
+   * Return the working-tree files to their index entries and delete untracked files. A file Git tracks without
+   * content yet, as `git add --intent-to-add` leaves it, is refused, because its index entry is empty; so is a
+   * submodule, whose checkout a restore leaves as it is.
+   */
+  | { readonly kind: 'restore'; readonly files: readonly ForgeLocalWriteFile[] }
+  /** Return the index entries of the paths to `tree`, the {@link ForgeLocalWriteResult.undo} of an earlier write. */
+  | { readonly kind: 'reindex'; readonly tree: string; readonly paths: readonly string[] }
+```
+
+```ts type-equiv
+/** What a local write left for undoing it. */
+interface ForgeLocalWriteResult {
+  /**
+   * Object name of the index as a tree before a `stage` or `unstage`, which a `reindex` of the same paths returns to;
+   * null for other writes and while the index holds unmerged entries.
+   */
+  readonly undo: string | null
 }
 ```
 
@@ -2649,6 +2694,23 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * the checkout, binary content, or a failed read.
  */
 @Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Stage, unstage, or restore whole files in the checkout of the Session's current directory, or return index
+ * entries to the tree an earlier write reported. The caller's press authorizes the write, so Git runs without the
+ * Session's sandbox policy and under any access mode. The Session's panel inspects the checkout again afterwards,
+ * whether or not the write succeeded.
+ * @param session - Session whose checkout is written.
+ * @param write - the write; `stage` and `restore` name each file with the digest of the change the reader saw.
+ * @param signal - request cancellation.
+ * @returns the index before a `stage` or `unstage` as a tree, for undoing it.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/local-stale` before anything is written when a
+ * file's unstaged change is not the one the reader saw; `forgePanel/local-path-replaced` before anything is written
+ * when a deleted file's path holds a directory; the errors of {@link ForgePanelController.localDiff} for the
+ * `unstaged` scope; an error for a path outside the checkout, a tree that is not a full object name, a restore of a
+ * submodule or of a file without index content, or a Git failure.
+ */
+@Remote async localWrite(session: Session, write: ForgeLocalWrite, signal: AbortSignal): Promise<ForgeLocalWriteResult>
 
 /**
  * Load complete checks for the change request whose list the user opened.

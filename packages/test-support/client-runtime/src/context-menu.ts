@@ -4,13 +4,15 @@ import { createContextMenuBindings } from '@deepseek-ai/dsh-client-ui-context-me
 
 /**
  * Supply the global hook to a component mounted outside the Slot renderer.
- * @param open - Observe captured targets; an unstubbed activation throws.
+ * @param open - Observe captured targets and opener ids; an unstubbed activation throws.
  * @returns Stable hook using the production pointer and keyboard handlers.
  */
 export function contextMenuHook<Target extends object = ContextMenuTarget>(
-  open: (target: Target, point: MenuPoint) => void = () => { throw new Error('Unexpected context menu') },
+  open: (target: Target, point: MenuPoint, opener?: string) => void = () => { throw new Error('Unexpected context menu') },
 ): () => {
-  getTriggerProps: (target: Target | (() => Target) | undefined, handlers?: ContextMenuTriggerProps) => ContextMenuTriggerProps
+  getTriggerProps: (
+    target: Target | (() => Target) | undefined, handlers?: ContextMenuTriggerProps, opener?: string,
+  ) => ContextMenuTriggerProps
 } {
   const bindings = createContextMenuBindings(open, () => true)
   return () => bindings

@@ -255,6 +255,29 @@ describe('session.search', () => {
     })
   })
 
+  it('gives no result slot to subagent children or side conversations', async () => {
+    const ctx = await baseContext()
+    const hidden = Array.from({ length: 20 }, (_, index) => {
+      const item = hit(`child-${index}`, index)
+      return { ...item, header: { ...item.header, origin: index % 2 === 0 ? 'side' as const : 'subagent' as const } }
+    })
+    const ordinary = hit('ordinary', 20)
+    for (const item of [...hidden, ordinary]) ctx.sessions.create(item.header.id, { meta: item.header })
+    const searchSessions = vi.fn()
+      .mockResolvedValueOnce({ items: hidden, nextCursor: 'page-2' })
+      .mockResolvedValueOnce({ items: [ordinary] })
+    await installSearchQuery(ctx, searchSessions)
+    const response = await (await createSessionTestRemote(ctx, defaults)).search(
+      request('match'),
+      new AbortController().signal,
+    )
+
+    expect(response).toEqual({
+      ok: true,
+      value: { items: [{ sessionId: 'ordinary', snippet: 'match 20' }], hasMore: false },
+    })
+  })
+
   it('pages the globally ranked stream until the 20-item Host boundary is known', async () => {
     const ctx = await baseContext()
     const items = Array.from({ length: 22 }, (_, index) => hit(`visible-${index}`, index))

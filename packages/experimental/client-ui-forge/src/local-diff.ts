@@ -478,8 +478,12 @@ async function bounded(output: Promise<GitOutput>): Promise<GitOutput> {
   }
 }
 
-/** Whether a diff path stays inside the checkout: relative, without NUL, and without a `..` segment. */
-function insideCheckout(path: string): boolean {
+/**
+ * Whether a diff path stays inside the checkout: relative, without NUL, and without a `..` segment.
+ * @param path - path as a diff names it.
+ * @returns whether Git and the filesystem may receive it relative to the checkout root.
+ */
+export function insideCheckout(path: string): boolean {
   if (path.length === 0 || path.includes('\0') || path.startsWith('/') || /^[A-Za-z]:/.test(path)) return false
   return path.split(/[/\\]/).every(segment => segment !== '..')
 }

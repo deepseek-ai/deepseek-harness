@@ -36,8 +36,8 @@ export function assertReleasedV4Header(header: unknown): void {
       throw new SessionFormatError(`format v4 header ${key} must be a string`)
     }
   }
-  if (header.origin !== undefined && header.origin !== 'subagent') {
-    throw new SessionFormatError('format v4 header origin must be "subagent"')
+  if (header.origin !== undefined && header.origin !== 'subagent' && header.origin !== 'side') {
+    throw new SessionFormatError('format v4 header origin must be "subagent" or "side"')
   }
 }
 

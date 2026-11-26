@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import type { ShortcutCatalogEntry, ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,6 +53,9 @@ type AttentionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useSe
 type ConnectionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionState']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionStatus: SettingsRootComponentProps['useSessionStatus'] = selector => selector(noAttention)
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 function mount({
   shortcuts = [],
@@ -122,7 +126,7 @@ function mount({
     useWorkspaces: unusedHook,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks({ portal: Portal }),
     wide,
     reconnect,
     openDesktopUpdate: () => {},
@@ -373,7 +377,8 @@ describe('SettingsPanel close paths', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reference control' }))
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     const settings = screen.getByRole('dialog', { name: 'Settings Title' })
-    expect(settings.parentElement?.parentElement).toBe(document.body)
+    // The overlay sits in the application document portal's wrapper, a body child after the reference Modal.
+    expect(settings.parentElement?.parentElement?.parentElement).toBe(document.body)
     expect(reference.parentElement!.compareDocumentPosition(settings.parentElement!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'General' }))
     fireEvent.keyDown(document, { key: 'Escape' })

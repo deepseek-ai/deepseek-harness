@@ -92,7 +92,7 @@ export function ModelRow(props: ModelRowProps): ReactNode {
         props.order.onOver(rowHalf(event))
       }}
       onDragLeave={(event) => {
-        if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
         props.order.onLeave()
       }}
       onDrop={(event) => {

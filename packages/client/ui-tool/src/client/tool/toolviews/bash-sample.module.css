@@ -200,54 +200,11 @@
   color: var(--dsw-alias-state-warn-label);
 }
 
-/* Hover-revealed Inspect pill under the expanded terminal's bottom-left —
-   ToolRow's .bodyWrap/.inspectButton treatment, replicated per the registrant
-   posture: real flow (it reserves its line), revealed by hovering anywhere on
-   the tool call — title row included — or by keyboard focus. */
+/* Expanded terminal + Inspect pill wrapper, as in ToolRow's .bodyWrap. */
 .bodyWrap {
   display: flex;
   flex-direction: column;
 }
-
-.inspectButton {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  margin: 4px 0 2px 4px;
-  padding: 2px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 999px;
-  corner-shape: round;
-  /* Base background, not bg-overlay: the overlay token reads too heavy. */
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.inspectButton:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: hover) {
-  .card:hover .inspectButton {
-    opacity: 1;
-  }
-}
-
-/* Solid hover fill: the pill floats over terminal output, so a translucent
-   hover token would let the text underneath bleed through. */
-@media (hover: hover) {
-  .inspectButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover-solid);
-    color: var(--dsw-alias-label-primary);
-  }
-}
-
 
 .visuallyHidden {
   position: absolute;
@@ -256,8 +213,4 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-@media (hover: none) {
-  .inspectButton { opacity: 1; }
 }

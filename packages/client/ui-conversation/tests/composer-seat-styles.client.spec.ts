@@ -50,6 +50,11 @@ describe('docked composer seat styles', () => {
   it('keeps scroll anchoring off composer content', () => {
     expect(seat).toMatch(/overflow-anchor:\s*none;/)
   })
+
+  it('turns off the scrollport overscroll and scroll anchoring that a View marks inside it', () => {
+    expect(rule(conversationCss, ".scrollBody:has([data-conversation-overscroll='none'])")).toMatch(/overscroll-behavior-y:\s*none;/)
+    expect(rule(conversationCss, ".scrollBody:has([data-conversation-scroll-anchor='none'])")).toMatch(/overflow-anchor:\s*none;/)
+  })
 })
 
 describe('composer statistics row styles', () => {

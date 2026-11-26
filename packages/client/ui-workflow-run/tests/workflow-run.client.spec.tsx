@@ -370,6 +370,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
     useGroupAction: () => { throw new Error('unused') },
     openFile: () => {},
     inspectCall: () => {},
+    inspectRequest: () => {},
     forkAt: () => {},
     loadImage: () => Promise.reject(new Error('not used')),
     openSession,

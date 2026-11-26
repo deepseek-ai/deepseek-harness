@@ -14,7 +14,7 @@ import { InspectorJsonTree, InspectorObjectTree } from './InspectorObjectTree.ts
 import type { InspectorChatTarget, InspectorObjects, InspectorObjectReference } from './objects.ts'
 import { InspectorTableLayout, INSPECTOR_ROW_HEIGHT, type InspectorRowAnchor } from './table-layout.ts'
 import { InspectorTypeFilter } from './type-filter.ts'
-import { TypeFilter } from './TypeFilter.tsx'
+import { TypeFilter, type DocumentPortal } from './TypeFilter.tsx'
 import css from './inspector.module.css'
 
 /** Framework-bound row sources and Session pagination command. */
@@ -43,6 +43,8 @@ export type InspectorTableProps = Pick<ConvViewProps, 'useSession'> & InjectFace
     }
     readonly pickedRow?: { readonly key: string } | undefined
     readonly notice?: string | undefined
+    /** Portal that places the type-filter editor in the application document's body. */
+    readonly Portal: DocumentPortal
   }
 
 interface RowProps extends Pick<InspectorTableProps, 'useRecord' | 't' | 'flash' | 'showTime'> {
@@ -106,11 +108,11 @@ const DataRow = memo(function DataRow({ row, selected, branch, collapsed, added,
 
 /**
  * Render a paged hierarchy with stable virtual row keys and live JSON details.
- * @param props - Framework hooks, pagination, locale, and the view's highlight policy.
+ * @param props - Framework hooks, pagination, locale, the view's highlight policy, and the document portal for the type filter.
  * @returns Virtual table and selected raw data.
  */
 export function InspectorTable({ title, flash, showTime, modeSelector, objects, navigation, pickedRow, notice,
-  useRows, useRecord, useSession, loadOlder, typeOf, t }: InspectorTableProps) {
+  useRows, useRecord, useSession, loadOlder, typeOf, t, Portal }: InspectorTableProps) {
   const allRows = useRows(value => value)
   const hasMore = useSession(value => value.hasMore)
   const loading = useSession(value => value.loadingOlder)
@@ -123,7 +125,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   const objectTarget = objectHistory?.references.at(-1)
   const [reveal, setReveal] = useState<{ key: string; pulse: number } | null>(null)
   const appliedReveal = useRef<typeof reveal>(null)
-  const appliedPick = useRef<typeof pickedRow>()
+  const appliedPick = useRef<typeof pickedRow>(undefined)
   const [disclosures, setDisclosures] = useState<ReadonlyMap<string, InspectorDisclosure>>(new Map())
   const [typeQuery, setTypeQuery] = useState('')
   const typeFilter = useMemo(() => new InspectorTypeFilter(typeQuery), [typeQuery])
@@ -132,7 +134,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   const scroller = useRef<HTMLDivElement>(null)
   const followMode = useRef<'tail' | 'scroll' | 'manual'>('tail')
   const viewport = useRef({ offset: 0, height: 600 })
-  const disclosureAnchor = useRef<InspectorRowAnchor>()
+  const disclosureAnchor = useRef<InspectorRowAnchor>(undefined)
   const [spacingGeneration, resetSpacing] = useState(0)
   const toggle = useCallback((row: InspectorRow, element: HTMLTableRowElement) => {
     // oxlint-disable-next-line typescript/no-non-null-assertion -- Row disclosure runs only inside the mounted scrollport.
@@ -203,7 +205,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   }, [pickedRow, allRows, revealRow])
   const hierarchy = useMemo(() => new InspectorTableHierarchy(filtered.rows, disclosures), [filtered.rows, disclosures])
   const rows = hierarchy.rows
-  const committed = useRef<{ layout: InspectorTableLayout; disclosures: typeof disclosures; spacingGeneration: number }>()
+  const committed = useRef<{ layout: InspectorTableLayout; disclosures: typeof disclosures; spacingGeneration: number }>(undefined)
   const layout = useMemo(() => new InspectorTableLayout(hierarchy,
     committed.current?.disclosures === disclosures && committed.current.spacingGeneration === spacingGeneration
       ? committed.current.layout : undefined, viewport.current, disclosureAnchor.current), [hierarchy, disclosures, spacingGeneration])
@@ -221,7 +223,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
   const keyOf = useCallback((index: number) => layout.items[index]!.key, [layout])
   // oxlint-disable-next-line typescript/no-non-null-assertion -- Virtualizer indexes are bounded by this layout's item count.
   const sizeOf = useCallback((index: number) => layout.items[index]!.size, [layout])
-  const virtualRef = useRef<Virtualizer<HTMLDivElement, HTMLTableRowElement>>()
+  const virtualRef = useRef<Virtualizer<HTMLDivElement, HTMLTableRowElement>>(undefined)
   const extractRange = useCallback((range: Range) => {
     // oxlint-disable-next-line typescript/no-non-null-assertion -- The enabled Virtualizer initializes its offset before range extraction.
     const offset = anchoredOffset ?? virtualRef.current!.scrollOffset!
@@ -297,7 +299,7 @@ export function InspectorTable({ title, flash, showTime, modeSelector, objects, 
     }}>
       <table className={css.table} aria-label={title} aria-rowcount={rows.length + 1}>
         <thead><tr><th className={css.idColumn}>{t('table.id')}</th><th className={css.typeColumn}>
-          <span className={css.typeHeader}>{t('table.type')}<TypeFilter value={typeQuery} suggest={suggestTypes} apply={applyTypeFilter} t={t} /></span>
+          <span className={css.typeHeader}>{t('table.type')}<TypeFilter value={typeQuery} suggest={suggestTypes} apply={applyTypeFilter} t={t} Portal={Portal} /></span>
         </th>
         <th className={css.locationColumn}>{t('table.location')}</th>
         {showTime && <th className={css.timeColumn}>{t('table.time')}</th>}<th>{t('table.data')}</th></tr></thead>

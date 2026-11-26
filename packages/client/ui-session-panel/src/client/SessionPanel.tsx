@@ -26,13 +26,11 @@ function useOverlayDismissal(panel: { readonly current: HTMLElement | null }, op
   useEffect(() => {
     if (!open) return
     const composition = observeComposition(document)
-    const inside = (target: EventTarget | null): boolean => target instanceof Element && (
-      panel.current?.contains(target) === true
+    const inside = (target: Node): boolean => panel.current?.contains(target) === true
       || document.getElementById(toggleId)?.contains(target) === true
-      || target.closest('[role="menu"]') !== null
-    )
+      || (target as Partial<Element>).closest?.('[role="menu"]') != null
     const onPointerDown = (event: PointerEvent): void => {
-      if (!inside(event.target)) close()
+      if (!inside(event.target as Node)) close()
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || composition.guards(event) || event.defaultPrevented || isBehindModal(panel.current)) return
@@ -73,7 +71,7 @@ function useFocusReturn(hidden: boolean, toggleId: string): {
     onFocus: () => { inside.current = true },
     onBlur: (event) => {
       // Removal can report no next target; only a move to another element leaves the panel.
-      if (event.relatedTarget instanceof Element && !event.currentTarget.contains(event.relatedTarget)) inside.current = false
+      if (event.relatedTarget !== null && !event.currentTarget.contains(event.relatedTarget)) inside.current = false
     },
   }), [])
 }

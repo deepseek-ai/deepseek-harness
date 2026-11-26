@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { DraftSnapshot } from '../src/client/contract/draft-editor.ts'
-import { createConversationStore, readConversationDraft, readConversationViewPreference } from '../src/client/stores.ts'
+import {
+  createConversationStore, readConversationDraft, readConversationViewPreference, restoredViewRequest,
+} from '../src/client/stores.ts'
 
 const KEY = 'dsh.conversation'
 
@@ -28,13 +30,26 @@ describe('createConversationStore', () => {
       viewRequest: null,
     })
 
-    store.actions.openView('trajectory', 'call-1')
+    store.actions.openView('trajectory', { kind: 'tool-call', callId: 'call-1' })
     expect(store.store.getSnapshot()).toMatchObject({
       view: 'trajectory',
-      viewRequest: { view: 'trajectory', focus: 'call-1' },
+      viewRequest: { view: 'trajectory', focus: { kind: 'tool-call', callId: 'call-1' } },
     })
     store.actions.completeViewRequest()
     expect(store.store.getSnapshot().viewRequest).toBeNull()
+  })
+
+  it('drops a restored View request whose focus has no kind tag', () => {
+    localStorage.setItem(`${KEY}.legacy`, JSON.stringify({
+      draft: '', view: 'trajectory', viewRequest: { view: 'trajectory', focus: 'call-1' },
+    }))
+    const legacy = createConversationStore().create('legacy')
+    expect(restoredViewRequest(legacy.store.getSnapshot().viewRequest)).toBeNull()
+    for (const malformed of [null, 'trajectory', { focus: { kind: 'tool-call' } }, { view: 'trajectory' }, { view: 'trajectory', focus: null }, { view: 'trajectory', focus: { callId: 'x' } }]) {
+      expect(restoredViewRequest(malformed)).toBeNull()
+    }
+    const request = { view: 'trajectory', focus: { kind: 'request', turn: 3, step: 2 } }
+    expect(restoredViewRequest(request)).toBe(request)
   })
 
   it('persists per Session scope and clears the persisted value', () => {

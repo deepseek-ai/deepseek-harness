@@ -88,9 +88,9 @@ function TerminalScreen({ state, model, visible, label, theme }: {
   theme: ThemeSnapshot
 }): ReactNode {
   const element = useRef<HTMLDivElement>(null)
-  const terminal = useRef<Terminal>()
-  const fit = useRef<FitAddon>()
-  const colors = useRef<TerminalTheme>()
+  const terminal = useRef<Terminal>(undefined)
+  const fit = useRef<FitAddon>(undefined)
+  const colors = useRef<TerminalTheme>(undefined)
   const lastRevision = useRef(0)
   const fontFamily = terminalFontFamily(theme.fontFamilies.terminal)
   const fontSize = theme.fontSizes.terminal

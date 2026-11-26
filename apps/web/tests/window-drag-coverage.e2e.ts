@@ -786,6 +786,34 @@ describe('web e2e: macOS window drag coverage', () => {
     }
   }, 120_000)
 
+  it('keeps the header draggable and the sidebar row unpinned while the title context menu is open', async () => {
+    const { page, tripwire } = await desktopPage()
+    try {
+      await connectTranscriptWorkspace(page, 'title-menu-drag')
+      await settled(page)
+      const header = page.locator('[data-slot="conversation.header"] > header')
+      const box = await rectOf(page, '[data-slot="conversation.header"] > header')
+      const blank = [box.x + box.width - 160, box.y + 8] as const
+      const sessionId = await page.locator('[data-conversation-session]').getAttribute('data-conversation-session')
+      const sessionRow = page.locator(`[data-row-key="session:${sessionId}"]`)
+      await sessionRow.waitFor()
+      await header.locator('nav [tabindex]').last().click({ button: 'right' })
+      const menu = page.locator('[data-context-menu][role="menu"]')
+      await menu.waitFor()
+      expect(isDraggableAt(await collectedRegions(page, INTERACTIVE_SELECTOR), ...blank), 'the blank header run under an open menu').toBe(true)
+      expect(await sessionRow.locator('[data-context-menu-trigger]').isVisible(), 'the sidebar row actions for a menu opened elsewhere')
+        .toBe(false)
+      await page.keyboard.press('Escape')
+      await menu.waitFor({ state: 'detached' })
+      expect(tripwire.pageErrors).toEqual([])
+    } catch (error) {
+      await saveFailureShot(page, 'window-drag-coverage-title-menu')
+      throw error
+    } finally {
+      await page.close()
+    }
+  }, 120_000)
+
   it('keeps the drawer titlebar draggable without swallowing its close button', async () => {
     const { page, tripwire } = await desktopPage()
     try {
@@ -989,7 +1017,8 @@ describe('web e2e: macOS window drag coverage', () => {
         const overlay = element.parentElement
         const rect = overlay?.getBoundingClientRect()
         return {
-          parentIsBody: overlay?.parentElement === document.body,
+          // The application document portal's wrapper is the body child.
+          parentIsBody: overlay?.parentElement?.matches('body > [data-document-portal]') === true,
           coversWindow: rect !== undefined && rect.top <= 0 && rect.bottom >= innerHeight,
         }
       })

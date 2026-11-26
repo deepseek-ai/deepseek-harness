@@ -28,14 +28,16 @@ function hasIntrinsicConstructor(prototype: object, name: 'Array' | 'Object'): b
   }
 }
 
-/** Whether a candidate is one realm's intrinsic `Object.prototype`. */
+/** Whether a candidate is this or another realm's intrinsic `Object.prototype`. */
 function isIntrinsicObjectPrototype(value: object): boolean {
-  return Object.getPrototypeOf(value) === null && hasIntrinsicConstructor(value, 'Object')
+  return value === Object.prototype
+    || Object.getPrototypeOf(value) === null && hasIntrinsicConstructor(value, 'Object')
 }
 
 /** Whether an array uses one realm's intrinsic `Array.prototype`, not a subclass or forged prototype. */
 function hasPlainArrayPrototype(value: unknown[]): boolean {
   const prototype: unknown = Object.getPrototypeOf(value)
+  if (prototype === Array.prototype) return true
   if (!Array.isArray(prototype) || !hasIntrinsicConstructor(prototype, 'Array')) return false
   const objectPrototype: unknown = Object.getPrototypeOf(prototype)
   return typeof objectPrototype === 'object'
@@ -48,6 +50,20 @@ function hasPlainObjectPrototype(value: object): boolean {
   const prototype: unknown = Object.getPrototypeOf(value)
   return prototype === null
     || typeof prototype === 'object' && isIntrinsicObjectPrototype(prototype)
+}
+
+/**
+ * Test whether a value is a plain array or record from any JavaScript realm, such as an iframe:
+ * an array whose prototype is a realm's intrinsic `Array.prototype`, which inherits that realm's
+ * `Object.prototype`, or a non-array object whose prototype is `null` or a realm's intrinsic
+ * `Object.prototype`. Class instances, built-in objects, and objects that inherit any other
+ * prototype, which could supply `toJSON`, fail. Elements and property values are not inspected.
+ * @param value - candidate value from any realm.
+ * @returns whether the value is a plain array or a plain or null-prototype record.
+ */
+export function hasPlainPrototype(value: unknown): value is unknown[] | Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false
+  return Array.isArray(value) ? hasPlainArrayPrototype(value) : hasPlainObjectPrototype(value)
 }
 
 /** Return every JSON-visible object key, or reject own data JSON would discard. */

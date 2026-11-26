@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RemoteError, responsiveHooks, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -12,6 +12,10 @@ import { ModelSelect } from '../src/client/ModelSelect.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 // The seat's key domain is model ∪ common; the stub mirrors the real lookup
 // chain: package dictionary, then common vocabulary, then the key.
@@ -453,7 +457,7 @@ describe('ModelSelect reasoning effort', () => {
   it('anchors the body portal with CSS and closes only on truly-outside mousedown', () => {
     const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     onTestFinished(() => { measure.mockRestore() })
-    const { container } = render(<ModelSelect {...responsiveHooks()} renderSlot={renderLabel}
+    const { container } = render(<ModelSelect {...responsiveHooks({ portal: Portal })} renderSlot={renderLabel}
       locked={false}
       available
       directory={createSnapshotStore(state())}
@@ -466,7 +470,7 @@ describe('ModelSelect reasoning effort', () => {
     const menu = screen.getByRole('menu')
     // Outside the composer subtree — column overflow clips cannot crop it.
     expect(container.contains(menu)).toBe(false)
-    expect(menu.parentElement).toBe(document.body)
+    expect(document.body.contains(menu)).toBe(true)
     const anchor = trigger.style.getPropertyValue('--dsh-model-anchor')
     expect(anchor).toMatch(/^--dsh-model-/)
     expect(menu.style.getPropertyValue('--dsh-model-anchor')).toBe(anchor)
@@ -593,6 +597,31 @@ describe('ModelSelect keyboard walk', () => {
     // Text inputs keep their default so the caret can still be placed.
     expect(fireEvent.mouseDown(search)).toBe(true)
     expect(screen.getAllByRole('menu').length).toBeGreaterThan(0)
+  })
+
+  it('keeps presses and search acceptance working on a page of another window', () => {
+    // A script-isolated plugin runs in its own window while its menu belongs to the page.
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    onTestFinished(() => { frame.remove() })
+    const page = frame.contentDocument!
+    expect(page.defaultView!.Element).not.toBe(Element)
+    // jsdom implements no scrolling; the page's elements need the same stub as this window's.
+    Object.defineProperty(page.defaultView!.Element.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    const select = vi.fn().mockResolvedValue({ ok: true, value: undefined })
+    render(<ModelSelect {...responsiveHooks({ portal: createDocumentPortal(page) })} renderSlot={renderLabel} locked={false} available
+      directory={createSnapshotStore(state({ groups: modelGroups(5) }))}
+      load={vi.fn()} resolveText={resolveText} select={select} t={t}
+    />, { container: page.body.appendChild(page.createElement('div')) })
+    const view = within(page.body)
+    fireEvent.click(view.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(view.getByRole('menuitem', { name: /^模型/ }))
+    // false = preventDefault ran, so the browser keeps focus where it was.
+    expect(fireEvent.mouseDown(page.querySelector<HTMLElement>('[data-menu-group-heading]')!)).toBe(false)
+    const search = view.getByRole('searchbox')
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'Enter' })
+    expect(select).toHaveBeenCalledWith({ provider: 'deepseek-official', model: 'model-2' })
   })
 
   it('↑↓ walk the rows of the shown pane, wrapping, and stay open', () => {

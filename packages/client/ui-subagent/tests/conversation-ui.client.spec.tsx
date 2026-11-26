@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
@@ -19,6 +20,10 @@ import { SubagentReadOnlyComposer } from '../src/client/SubagentReadOnlyComposer
 import { createSubagentsSectionStore } from '../src/client/subagents-store.ts'
 import { en, zh } from '../src/client/locales.ts'
 import type { PanelDetailsProps, PanelFoldProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
+
 
 afterEach(() => {
   cleanup()
@@ -112,7 +117,7 @@ function props(
     useResource: unused,
     ...allowAllAccess,
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks({ portal: Portal }),
     useProjection: unused,
     useConversation: unused,
     useInput: unused,

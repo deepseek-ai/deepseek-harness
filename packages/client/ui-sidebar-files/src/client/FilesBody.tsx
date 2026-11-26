@@ -116,7 +116,7 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
           {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
         </div>
       </div>
-      <div className={css.content} data-files-content data-files-navigator-row>{navigator}</div>
+      <div className={css.content} data-files-content>{navigator}</div>
     </div>
   )
 }

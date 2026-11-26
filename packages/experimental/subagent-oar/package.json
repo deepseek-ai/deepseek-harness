@@ -52,7 +52,8 @@
     "@earendil-works/pi-coding-agent": "^1.3.0",
     "cross-spawn": "^7.0.6",
     "undici": "8.12.4",
-    "which": "^2.0.2"
+    "which": "^2.0.2",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@botiverse/oar": "0.67.0",

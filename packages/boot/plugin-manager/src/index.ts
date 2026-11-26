@@ -755,8 +755,8 @@ export class PluginManager extends TypertRemoteService {
    * @param name Installed profile dependency name.
    * @param version Exact version newer than the installed one.
    * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
-   * only by a bundle `listBundles` lists with `update: 'git'`; and the request id naming the progress and the target
-   * installation's logs and cancellation.
+   * only by a bundle `listBundles` lists with `update: 'git'`; the request id naming the progress and the target
+   * installation's logs and cancellation; and the pending build scripts to allow, saved before anything is removed.
    * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
    */
   @Remote
@@ -783,14 +783,33 @@ export class PluginManager extends TypertRemoteService {
     if ('code' in planned) return refusedBefore(planned)
     const { spec, registry, saveExact } = planned
     const { enabled } = bundle
+    const approved = options?.approvedBuilds
+    // The approval is saved before anything is removed: `pnpm remove` drops the undecided entries it would decide.
+    const approve = async (): Promise<ManagementError | undefined> => {
+      if (approved === undefined) return undefined
+      try {
+        await withFileLock(join(this.profile.dir, 'package.json'), async () => {
+          // A manager disposed while the update was checked writes nothing.
+          this.abort.signal.throwIfAborted()
+          await approveBuilds(this.profile.dir, approved)
+        }, { waitMs: this.lockWaitMs })
+      }
+      catch (error) { return managementError(error) }
+      return undefined
+    }
     // A lock timeout or disposal rejects instead of reporting; it reads as the failed step it is.
     const settled = (stage: ChangeResult['stage'], target: string, operation: Promise<ChangeResult>): Promise<ChangeResult> =>
       operation.catch((error: unknown) => ({ changed: false, application: 'failed', stage, target, error: managementError(error) }))
-    const installTarget = (): Promise<ChangeResult> => settled('install', spec, this.installBundle(spec, {
-      saveExact, enabled, expected: { name, version },
-      ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
-    }))
+    const installTarget = async (): Promise<ChangeResult> => {
+      const result = await settled('install', spec, this.installBundle(spec, {
+        saveExact, enabled, expected: { name, version },
+        ...registry === undefined ? {} : { registry }, ...requestId === undefined ? {} : { requestId },
+      }))
+      return approved === undefined ? result : { ...result, approvedBuilds: approved }
+    }
     if (this.ownerContext.get('hmr') === undefined) {
+      const refusal = await approve()
+      if (refusal !== undefined) return refusedBefore(refusal)
       announce('installing')
       return { from, to: version, step: 'install', result: await installTarget() }
     }
@@ -805,6 +824,8 @@ export class PluginManager extends TypertRemoteService {
         },
       }
     }
+    const refusal = await approve()
+    if (refusal !== undefined) return refusedBefore(refusal)
     // The removed version is installed again where it came from, else over the configured plan, as its removal asks.
     const previousRegistry = this.installedFrom.get(name)
     announce('removing')

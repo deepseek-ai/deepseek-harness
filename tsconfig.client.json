@@ -43,6 +43,7 @@
     "scripts/shipped-locales.ts",
     "scripts/bundle-input-isolation.ts",
     "scripts/experimental-package-policy.ts",
+    "scripts/test-css-identifier.ts",
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",
     "scripts/client-bundle-purity.spec.ts"
@@ -96,6 +97,7 @@
     { "path": "./packages/experimental/inspector/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare-protocol/tsconfig.client.json" },
     { "path": "./packages/experimental/liveshare/tsconfig.client.json" },
+    { "path": "./packages/experimental/client-ui-sidechat" },
     { "path": "./packages/experimental/session-inspector" },
     { "path": "./packages/experimental/client-ui-forge/tsconfig.client.json" },
     { "path": "./packages/client/config" },

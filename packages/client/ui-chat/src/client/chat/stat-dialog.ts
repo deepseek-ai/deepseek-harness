@@ -23,7 +23,7 @@ export function useStatDialog(): StatDialogSeat {
   const rootRef = useRef<HTMLSpanElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
-  const anchorName = `--dsh-stat-${useId().replaceAll(':', '')}`
+  const anchorName = `--dsh-stat-${useId().replace(/[^\w-]/g, '')}`
 
   // Outside pointerdown closes through the shared primitive; the portaled
   // panel counts as inside. An outside click also closes, because keyboard

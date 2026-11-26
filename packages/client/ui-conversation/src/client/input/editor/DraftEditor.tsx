@@ -1,6 +1,6 @@
 /** Text-area presentation over the InputBar's borrowed editor. */
 import { useId } from 'react'
-import type { CSSProperties, KeyboardEventHandler, ReactNode, RefObject } from 'react'
+import type { CSSProperties, KeyboardEventHandler, ReactNode, Ref } from 'react'
 import type { LexicalEditor } from 'lexical'
 import clsx from 'clsx'
 import { HoverCardGroup } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -14,7 +14,7 @@ import { DecoratorPortals } from './DecoratorPortals.tsx'
 export interface DraftEditorProps {
   readonly classNames: Readonly<Record<string, string>>
   readonly editor: LexicalEditor | null
-  readonly scrollRef: RefObject<HTMLDivElement>
+  readonly scrollRef: Ref<HTMLDivElement>
   readonly editable: boolean
   readonly editorDisabled: boolean
   readonly phase: InputState['phase'] | 'inert'

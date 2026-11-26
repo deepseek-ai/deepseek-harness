@@ -114,6 +114,22 @@ describe('parseDiff', () => {
     expect(parseDiff(binary)[0]?.digest).not.toBe(parseDiff(binary.replace('2222222', '3333333'))[0]?.digest)
   })
 
+  it('marks a submodule by the mode of its header, whether its commit changed or it was added or removed', () => {
+    const moved = ['diff --git a/sub b/sub', 'index 1111111..2222222 160000', '--- a/sub', '+++ b/sub', '@@ -1 +1 @@',
+      '-Subproject commit 1111111', '+Subproject commit 2222222', ''].join('\n')
+    const added = ['diff --git a/sub b/sub', 'new file mode 160000', 'index 0000000..2222222', '--- /dev/null', '+++ b/sub', '@@ -0,0 +1 @@',
+      '+Subproject commit 2222222', ''].join('\n')
+    const removed = added.replace('new file mode', 'deleted file mode').replace('--- /dev/null', '--- a/sub').replace('+++ b/sub', '+++ /dev/null')
+      .replace('@@ -0,0 +1 @@', '@@ -1 +0,0 @@').replace('+Subproject', '-Subproject')
+    // A file whose text names a submodule commit is a file: only the header carries the mode.
+    const text = moved.replace(' 160000', ' 100644')
+    expect([moved, added, removed, text].map(patch => parseDiff(patch).map(file => [file.status, file.submodule]))).toEqual([
+      [['modified', true]], [['added', true]], [['deleted', true]], [['modified', false]],
+    ])
+    // Without a Git header for every section, no section is taken for a submodule.
+    expect(parseDiff(`--- a/y\n+++ b/y\n@@ -1 +1 @@\n-a\n+b\n${moved}`).map(file => file.submodule)).toEqual([false, false])
+  })
+
   it('takes paths without a prefix as they are and skips a section without a path', () => {
     expect(parseDiff('--- old\n+++ new\n@@ -1 +1 @@\n-a\n+b\n').map(file => [file.path, file.status])).toEqual([['new', 'modified']])
     expect(parseDiff('')).toEqual([])
@@ -128,7 +144,8 @@ describe('untrackedFile', () => {
   ])('adds every line of a text file with %s', (_label, text, lines) => {
     const { digest, ...added } = untrackedFile('notes/new.md', new TextEncoder().encode(text))
     expect(added).toEqual({
-      path: 'notes/new.md', previousPath: null, status: 'added', binary: false, oversized: false, untracked: true, additions: 2, deletions: 0,
+      path: 'notes/new.md', previousPath: null, status: 'added', binary: false, oversized: false, untracked: true, submodule: false,
+      additions: 2, deletions: 0,
       hunks: [{ oldStart: 1, oldLines: 0, newStart: 1, newLines: 2, lines }],
     })
     expect(digest).toMatch(/^[0-9a-f]{32}$/)

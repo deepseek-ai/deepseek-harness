@@ -14,6 +14,8 @@ import type {
   TunnelWorkerCommand,
   TunnelWorkerEvent,
 } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import { RELAY_TRANSIENT_ATTEMPT_LIMIT, RELAY_TRANSIENT_WINDOW_MS } from '../src/owner-gateway/relay-refusal.ts'
+import { INITIAL_RETRY_BACKOFF, RETRY_BACKOFF_MAX_MS } from '../src/owner-gateway/retry-backoff.ts'
 import { runGatewayWorker } from '../src/owner-gateway/worker.ts'
 import { FakeWebSocket } from './gateway-worker-fake-ws.ts'
 
@@ -363,6 +365,100 @@ describe('Liveshare gateway worker Relay refusal and transport failures', () => 
     expect(sockets()).toHaveLength(1)
   })
 
+  it('stops reconnecting a share once a transient status has repeated to the limit', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    // Every failure before the limit keeps the reconnect schedule: a Relay that is down may come back.
+    for (let attempt = 1; attempt < RELAY_TRANSIENT_ATTEMPT_LIMIT; attempt += 1) {
+      const socket = latest()
+      socket.refuseHandshake(503)
+      expect(socket.terminated).toBe(true)
+      vi.advanceTimersByTime(RETRY_BACKOFF_MAX_MS)
+      expect(sockets()).toHaveLength(attempt + 1)
+    }
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('worker stopped share=share'))
+
+    // The twentieth consecutive failure stops the share with the status the Relay kept answering, so
+    // an owner republish is the way back in instead of a retry every three minutes until the window.
+    const last = latest()
+    last.refuseHandshake(503)
+    expect(console.warn).toHaveBeenCalledWith('[liveshare] worker stopped share=share automatic reconnect attempts exhausted: relay answered registration status=503')
+    // The Host hears the worker's verdict, not only the raw answer of the last attempt.
+    expect(eventsOf(worker, 'share-error').at(-1)).toMatchObject({ message: 'automatic reconnect attempts exhausted: relay answered registration status=503', reconnectStopped: true })
+    vi.advanceTimersByTime(3_600_000)
+    expect(sockets()).toHaveLength(RELAY_TRANSIENT_ATTEMPT_LIMIT)
+
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    expect(sockets()).toHaveLength(RELAY_TRANSIENT_ATTEMPT_LIMIT + 1)
+  })
+
+  it('ends a stalled handshake at the deadline without touching its replacement', () => {
+    worker = startWorker()
+    const token = registrationToken()
+    worker.command({ type: 'add-share', registrationToken: token, share: shareSpec() })
+    const stalled = latest()
+    vi.advanceTimersByTime(RELAY_TRANSIENT_WINDOW_MS - 1)
+    expect(eventsOf(worker, 'share-error')).toEqual([])
+    vi.advanceTimersByTime(1)
+    expect(stalled.readyState).toBe(FakeWebSocket.CLOSED)
+    expect(eventsOf(worker, 'share-error')).toEqual([{ type: 'share-error', registrationToken: token,
+      shareId: 'share', reconnectStopped: true, message: 'automatic reconnect deadline reached' }])
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    latest().open()
+    stalled.reportClose()
+    expect(eventsOf(worker, 'share-error')).toHaveLength(1)
+    expect(eventsOf(worker, 'share-connected')).toHaveLength(1)
+  })
+
+  it('cancels the old deadline when replacing an unadmitted registration', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    vi.advanceTimersByTime(RELAY_TRANSIENT_WINDOW_MS - 1)
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    vi.advanceTimersByTime(1)
+    expect(eventsOf(worker, 'share-error')).toEqual([])
+    latest().open()
+    expect(eventsOf(worker, 'share-connected')).toHaveLength(1)
+  })
+
+  it('caps the reconnect delay at the schedule ceiling once a transient status keeps repeating', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    const firstCappedRetry = Math.ceil(Math.log2(RETRY_BACKOFF_MAX_MS / INITIAL_RETRY_BACKOFF.delayMs))
+    for (let retry = 0; retry <= firstCappedRetry + 1; retry++) {
+      const delay = Math.min(INITIAL_RETRY_BACKOFF.delayMs * 2 ** retry, RETRY_BACKOFF_MAX_MS)
+      latest().refuseHandshake(503)
+      vi.advanceTimersByTime(delay - 1)
+      expect(sockets()).toHaveLength(retry + 1)
+      vi.advanceTimersByTime(1)
+      expect(sockets()).toHaveLength(retry + 2)
+    }
+  })
+
+  it('counts a transient failure only until the Relay admits the share', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    for (let attempt = 1; attempt < RELAY_TRANSIENT_ATTEMPT_LIMIT; attempt += 1) {
+      latest().refuseHandshake(503)
+      vi.advanceTimersByTime(RETRY_BACKOFF_MAX_MS)
+    }
+    // A Relay that admits the share ends the failure sequence, so the next outage starts over.
+    latest().open()
+    expect(eventsOf(worker, 'share-connected')).toHaveLength(1)
+    const admitted = latest()
+    admitted.close(1006, 'reconnect')
+    vi.advanceTimersByTime(RETRY_BACKOFF_MAX_MS)
+
+    const socketsBefore = sockets().length
+    const next = latest()
+    next.refuseHandshake(503)
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('worker stopped share=share'))
+    // The admitted connection ended before it was old enough to reset the delay, so the schedule
+    // continues from where the failures left it rather than restarting at the first delay.
+    vi.advanceTimersByTime(RETRY_BACKOFF_MAX_MS)
+    expect(sockets()).toHaveLength(socketsBefore + 1)
+  })
+
   it('retries a transient handshake failure and reports the socket error that carries the status', async () => {
     worker = startWorker()
     worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
@@ -378,6 +474,48 @@ describe('Liveshare gateway worker Relay refusal and transport failures', () => 
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('gateway-error relay answered registration status=500'))
     vi.advanceTimersByTime(500)
     expect(sockets()).toHaveLength(2)
+  })
+
+  it('stops reconnecting a share whose socket never opened at the attempt limit', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    // A Relay that is unreachable or whose TLS handshake fails never answers with a status, so the
+    // socket closes before it opens. Without counting that, this share would retry for as long as the
+    // worker lives.
+    for (let attempt = 1; attempt < RELAY_TRANSIENT_ATTEMPT_LIMIT; attempt += 1) {
+      latest().fail(new Error('connect ECONNREFUSED 127.0.0.1:443'))
+      vi.advanceTimersByTime(RETRY_BACKOFF_MAX_MS)
+      expect(sockets()).toHaveLength(attempt + 1)
+    }
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('worker stopped share=share'))
+
+    // The failure at the limit stops the share, and its diagnostic names what the socket failed with
+    // because the Relay never answered with a status.
+    latest().fail(new Error('connect ECONNREFUSED 127.0.0.1:443'))
+    expect(console.warn).toHaveBeenCalledWith(
+      '[liveshare] worker stopped share=share automatic reconnect attempts exhausted: gateway-error connect ECONNREFUSED 127.0.0.1:443',
+    )
+    expect(eventsOf(worker, 'share-error').at(-1)).toMatchObject({
+      shareId: 'share', reconnectStopped: true, message: 'automatic reconnect attempts exhausted: gateway-error connect ECONNREFUSED 127.0.0.1:443',
+    })
+    vi.advanceTimersByTime(3_600_000)
+    expect(sockets()).toHaveLength(RELAY_TRANSIENT_ATTEMPT_LIMIT)
+  })
+
+  it('does not count the close of a connection that had opened', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    // Each connection is admitted and then drops on its own: normal use, not a failed registration,
+    // so no sequence of failures accumulates and the share keeps reconnecting.
+    const connections = RELAY_TRANSIENT_ATTEMPT_LIMIT * 2
+    for (let attempt = 1; attempt <= connections; attempt += 1) {
+      const socket = latest()
+      socket.open()
+      socket.close(1006, 'lost')
+      vi.advanceTimersByTime(RETRY_BACKOFF_MAX_MS)
+    }
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining('worker stopped share=share'))
+    expect(sockets()).toHaveLength(connections + 1)
   })
 
   it('reports a socket failure without a handshake status and reconnects with backoff', () => {

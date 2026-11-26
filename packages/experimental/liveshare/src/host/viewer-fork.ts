@@ -170,6 +170,11 @@ export function createViewerFork(input: ViewerForkDeps): ViewerFork {
         body: { error: 'fork-session-required', message: 'a fork request must name the session it branches from' },
       }
     }
+    // A viewer's child is an ordinary Session the owner sees in the left sidebar: an `origin` would hide it
+    // from the owner's lists, so the field is refused before an operation is reserved or the owner is asked.
+    if (viewerRequestTarget(body)?.origin !== undefined) {
+      return { status: 400, body: { error: 'fork-origin-unsupported', message: 'a viewer fork cannot set an origin' } }
+    }
     const atSeq = requestedBoundary(body)
     const request: ForkRequest = {
       shareId,

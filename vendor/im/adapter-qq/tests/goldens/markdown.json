@@ -49,7 +49,7 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "@Alice please take a look"
+          "content": "<qqbot-at-user id=\"u-alice\" /> please take a look"
         }
       }
     ]
@@ -60,7 +60,7 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "@所有人 build is green again"
+          "content": "<qqbot-at-everyone /> build is green again"
         }
       }
     ]
@@ -460,7 +460,7 @@
       {
         "msg_type": 2,
         "markdown": {
-          "content": "**Everything at once**\n\n— subtitle text\n\nplain **bold***italic*under~~strike~~secret`inline-code`link-text@Alice@所有人@在线成员@Admins​#general:party:green-text\nafter the break![inline image #0px #0px](qqbot-media://file_info:image:https://example.com/media/inline.png)\n\n# Heading one\n\n## Heading two\n\n**Heading three**\n\n**Heading four**\n\n**Heading five**\n\n**Heading six**\n\n- first item\n- ☑ done task\n- parent item\n  - child item\n\n3. third item\n4. fourth item\n\n> quoted line\n>\n> > deeper quote\n\n```ts\nconst answer = 42\n```\n\n***\n\nName: apple\nQty: 3\nsecond paragraph\n\n**▸ More information**\n\nhidden body text\n\n— fine print note\n\n![block image #0px #0px](qqbot-media://file_info:image:https://example.com/media/block.png)"
+          "content": "**Everything at once**\n\n— subtitle text\n\nplain **bold***italic*under~~strike~~secret`inline-code`link-text<qqbot-at-user id=\"u-alice\" /><qqbot-at-everyone />@在线成员@Admins​#general:party:green-text\nafter the break![inline image #0px #0px](qqbot-media://file_info:image:https://example.com/media/inline.png)\n\n# Heading one\n\n## Heading two\n\n**Heading three**\n\n**Heading four**\n\n**Heading five**\n\n**Heading six**\n\n- first item\n- ☑ done task\n- parent item\n  - child item\n\n3. third item\n4. fourth item\n\n> quoted line\n>\n> > deeper quote\n\n```ts\nconst answer = 42\n```\n\n***\n\nName: apple\nQty: 3\nsecond paragraph\n\n**▸ More information**\n\nhidden body text\n\n— fine print note\n\n![block image #0px #0px](qqbot-media://file_info:image:https://example.com/media/block.png)"
         }
       },
       {

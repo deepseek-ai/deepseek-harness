@@ -6,6 +6,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { InspectorTable, type InspectorTableProps } from '../src/client/views/InspectorTable.tsx'
 import type { InspectorRecord, InspectorRow } from '../src/client/views/table-model.ts'
 import { en } from '../src/client/locales.ts'
@@ -13,6 +14,9 @@ import { installInspectorTableGeometry } from './table-geometry.client.ts'
 
 beforeEach(() => { installInspectorTableGeometry() })
 afterEach(cleanup)
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 it('filters only on confirmation, preserves contextual ancestors, and reveals picked rows', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: true }))
@@ -36,7 +40,7 @@ it('filters only on confirmation, preserves contextual ancestors, and reveals pi
     useRecord: ((key: string) => records.get(key)),
     typeOf: key => records.get(key)?.type,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('filter-session' as SessionId))),
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   const trigger = ui.getByRole('button', { name: 'Filter types' })

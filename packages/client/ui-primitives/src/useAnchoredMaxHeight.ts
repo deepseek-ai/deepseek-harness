@@ -25,7 +25,7 @@ const MARGIN = 12
  *   raise it past their chrome's height.
  * @returns the max-height to apply inline, in px.
  */
-export function useAnchoredMaxHeight(ref: RefObject<HTMLElement>, cap: number, signal: unknown, margin: number = MARGIN): number {
+export function useAnchoredMaxHeight(ref: RefObject<HTMLElement | null>, cap: number, signal: unknown, margin: number = MARGIN): number {
   const [maxHeight, setMaxHeight] = useState(cap)
   useLayoutEffect(() => {
     const el = ref.current

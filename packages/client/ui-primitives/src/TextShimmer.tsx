@@ -5,6 +5,13 @@ import css from './TextShimmer.module.css'
 
 const DecorativeCopy = createContext<boolean | undefined>(undefined)
 
+/**
+ * Inert attribute for the decorative copy. React 18 forwards `inert` only as a string, and React 19
+ * treats an empty string as false; a non-empty string sets the attribute under both. Typed `object`
+ * because React 18's DOM types omit `inert` and React 19's declare it boolean.
+ */
+const INERT: object = { inert: 'inert' }
+
 /** Text and activity supplied by the owning row. */
 export interface TextShimmerProps {
   /** Text or presentational children with text in nested TextShimmer instances. No effects or element ids. */
@@ -44,8 +51,7 @@ export const TextShimmer = memo(function TextShimmer({ children, active = false,
         <span className={clsx(css.content, contentClassName)}>{content}</span>
       </DecorativeCopy.Provider>
       {active && (
-        // React 18 forwards inert as an empty string; a boolean is dropped.
-        <span className={css.decoration} aria-hidden="true" {...{ inert: '' }}>
+        <span className={css.decoration} aria-hidden="true" {...INERT}>
           <span className={css.sweep}>
             <DecorativeCopy.Provider value>
               <span className={clsx(css.content, css.highlight, contentClassName)}>{content}</span>

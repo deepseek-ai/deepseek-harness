@@ -23,7 +23,7 @@ import type {
   SessionListState, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  ConversationGroupedView,
+  ConversationFocus, ConversationGroupedView,
   ConversationSnapshot, ConversationViewSnapshotStore, GroupKey, GroupSnapshot,
   MessageImagesOwnerProps, NodeKey, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -445,7 +445,7 @@ function makeHarness(
   const loadThrough = vi.fn<(seq: number) => Promise<void>>().mockResolvedValue(undefined)
   // Mutable outline holder: tests swap the value and drive a re-render via set().
   let outlineValue: unknown
-  const openView = vi.fn<(view: string, focus: string) => void>()
+  const openView = vi.fn<(view: string, focus: ConversationFocus) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
   let savedScroll: ReturnType<ChatViewSlotProps['chatScroll']['read']> = null
   const chatScroll: ChatViewSlotProps['chatScroll'] = {
@@ -577,7 +577,8 @@ function makeHarness(
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
     renderSlot: renderSlot as ChatViewSlotProps['renderSlot'],
     SessionProvider: SessionProviderStub,
-    inspectCall: (callId: string) => { openView('trajectory', callId) },
+    inspectCall: (callId: string) => { openView('trajectory', { kind: 'tool-call', callId }) },
+    inspectRequest: (turn: number, step: number) => { openView('trajectory', { kind: 'request', turn, step }) },
     viewRequest: null,
     openView,
     completeViewRequest: () => {},
@@ -2725,7 +2726,7 @@ describe('ChatView', () => {
     } as const satisfies ConversationNode
     const h = makeHarness({ nodes: [user(1, 'try'), retryNode] }, { running: true })
     const view = render(<h.ChatView {...h.props} />)
-    const disclosure = view.container.querySelector('details') as HTMLDetailsElement
+    const disclosure = view.container.querySelector('[data-retry-row]') as HTMLElement
     expect(disclosure.dataset.active).toBe('true')
     expect(within(disclosure).getByRole('status').textContent).toBe('正在重试模型请求（1/2） · 1s')
 
@@ -2733,7 +2734,7 @@ describe('ChatView', () => {
       h.setChat({ nodes: [user(1, 'try'), nextRetry] })
     })
     expect(within(disclosure).getAllByRole('status')).toHaveLength(1)
-    expect(view.container.querySelector('details')).toBe(disclosure)
+    expect(view.container.querySelector('[data-retry-row]')).toBe(disclosure)
     expect(within(disclosure).getByRole('status').textContent).toBe('正在重试模型请求（2/2） · 1s')
 
     act(() => {
@@ -2754,7 +2755,7 @@ describe('ChatView', () => {
       h.setChat({ nodes: [user(1, 'try'), { ...retry(6), retryState: 'cancelled' }] })
       h.setSession({ running: true })
     })
-    const cancelledDisclosure = view.container.querySelector('details') as HTMLDetailsElement
+    const cancelledDisclosure = view.container.querySelector('[data-retry-row]') as HTMLElement
     expect(cancelledDisclosure.dataset.active).toBeUndefined()
     expect(within(cancelledDisclosure).getByRole('status').textContent).toContain('重试已取消')
   })
@@ -2798,13 +2799,31 @@ describe('ChatView', () => {
     expect(h.toolOwners.at(-1)?.inspectCall).toBeTypeOf('function')
   })
 
+  it('opens a retried request in the trajectory from the expanded retry row', () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), { ...retry(2), retryState: 'started' }] })
+    const view = render(<h.ChatView {...h.props} />)
+    const row = view.container.querySelector('[data-retry-row] [data-disclosure-row]') as HTMLElement
+    fireEvent.click(row)
+    expect(view.getByRole('button', { name: '查看' }).closest('[data-inspect-scope]')).not.toBeNull()
+    fireEvent.click(view.getByRole('button', { name: '查看' }))
+    const node = retry(2)
+    expect(h.openView).toHaveBeenCalledWith('trajectory', { kind: 'request', turn: node.turn, step: node.step })
+  })
+
+  it('omits the retry row inspect action without an inspection target', () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), { ...retry(2), retryState: 'started' }] })
+    const view = render(<h.ChatView {...h.props} inspectRequest={undefined} />)
+    fireEvent.click(view.container.querySelector('[data-retry-row] [data-disclosure-row]') as HTMLElement)
+    expect(view.queryByRole('button', { name: '查看' })).toBeNull()
+  })
+
   it('hands the trajectory callback to the Tool seat', () => {
     const h = makeHarness({
       nodes: [toolResult(3, 'a')],
     })
     render(<h.ChatView {...h.props} />)
     h.toolOwners[0]?.inspectCall?.('a')
-    expect(h.openView).toHaveBeenCalledWith('trajectory', 'a')
+    expect(h.openView).toHaveBeenCalledWith('trajectory', { kind: 'tool-call', callId: 'a' })
   })
 
   it('shows assistant IconActions only on the last content message of each turn', () => {
@@ -4128,7 +4147,7 @@ describe('ChatView', () => {
     owner.openFile('src/a.ts')
     expect(h.openFile).toHaveBeenCalledWith('src/a.ts')
     owner.inspectCall?.('a')
-    expect(h.openView).toHaveBeenCalledWith('trajectory', 'a')
+    expect(h.openView).toHaveBeenCalledWith('trajectory', { kind: 'tool-call', callId: 'a' })
   })
 
   it('shows a Host open refusal with the reason and retries the same path', async () => {
@@ -4354,6 +4373,9 @@ describe('ChatView', () => {
     const backButton = view.getByLabelText('回到底部')
     expect(backButton).toBeTruthy()
     expect(view.container.querySelector('[data-chat-following-tail]')).toBeNull()
+    // A host scrollport keeps its scroll anchoring while the reader is away from the tail.
+    expect(view.container.querySelector('[data-conversation-scroll-anchor]')).toBeNull()
+    expect(view.container.querySelector('[data-conversation-overscroll="none"]')).not.toBeNull()
     // Streaming growth must NOT drag a scrolled-away reader down.
     act(() => {
       h.setChat({ partial: { turn: 1, step: 1, blocks: [{ kind: 'text', text: 'grow' }] } })
@@ -4362,6 +4384,7 @@ describe('ChatView', () => {
     fireEvent.click(backButton)
     expect(scroller.scrollTop).toBe(700)
     expect(view.container.querySelector('[data-chat-following-tail]')).not.toBeNull()
+    expect(view.container.querySelector('[data-conversation-scroll-anchor="none"]')).not.toBeNull()
     // At the bottom again: follow re-arms and the button unmounts.
     expect(view.queryByLabelText('回到底部')).toBeNull()
   })

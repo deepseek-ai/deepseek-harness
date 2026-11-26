@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApprovalCard } from '../src/client/ApprovalCard.tsx'
 import { ApprovalWarning } from '../src/client/ApprovalWarning.tsx'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import { ApprovalPanel } from '../src/client/ApprovalPanel.tsx'
@@ -120,6 +121,9 @@ async function setupPlugin(): Promise<PluginBench> {
     },
   }
 }
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 const id = (value: string): SessionId => value as SessionId
 
@@ -339,7 +343,7 @@ function panelProps(
   return {
     matched: pending,
     renderFactorySlot: (_name: string, input: ApprovalCardInput) => <ApprovalCard {...{ ...input, renderSlot,
-      t: (key: string) => messages[key] ?? key } as FactoryComponentPropsOf<'conversation.approval.card'>} />,
+      t: (key: string) => messages[key] ?? key, useDocumentPortal: () => Portal } as FactoryComponentPropsOf<'conversation.approval.card'>} />,
     resolveReason: (reason: NonNullable<PendingApproval['displayReason']>) => reason.en,
     t: (key: string) => messages[key] ?? key,
   } as ApprovalComposerProps
@@ -525,7 +529,7 @@ it.each(['allow', 'reject', 'always', 'keyboard'] as const)('settles a fixed app
     requestKey: 'app-approval', title: 'Control this app?', description: 'Only for this task.',
     subject: { name: 'Calculator', ...choice === 'keyboard' ? {} : { icon: 'data:image/png;base64,aWNvbg==' } }, allowLabel: 'Allow for this task',
     canAnswer: () => true, onAllow, onReject, onAlways, renderSlot: vi.fn(() => null),
-    t: (key: string) => ({ reject: 'Reject', allowAlways: 'Always allow' })[key] ?? key,
+    t: (key: string) => ({ reject: 'Reject', allowAlways: 'Always allow' })[key] ?? key, useDocumentPortal: () => Portal,
   } as FactoryComponentPropsOf<'conversation.approval.card'>} />)
   expect(screen.getByText('Calculator')).toBeTruthy()
   if (choice === 'keyboard') expect(document.querySelector('img')).toBeNull()
@@ -552,6 +556,7 @@ it('opens and dismisses risk details without answering the approval', () => {
     requestKey: 'risk-approval', title: 'Control this app?',
     warning: { label: 'Risks', title: 'Computer use risks', detail: 'Background control.\n\nAccount restrictions.\n\nStop in DSH.' },
     canAnswer: () => true, onAllow, onReject, renderSlot: () => null, t: (key: string) => key,
+    useDocumentPortal: () => Portal,
   } as FactoryComponentPropsOf<'conversation.approval.card'>
   const view = render(<ApprovalCard {...props} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
@@ -581,7 +586,7 @@ it('opens and dismisses risk details without answering the approval', () => {
 it('keeps risk details readable across the pointer gap and after a touch tap', () => {
   vi.useFakeTimers()
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener() {}, removeEventListener() {} })))
-  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
+  render(<ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
   const pointer = (target: Element, type: string, pointerType = 'mouse') => {
     const event = new Event(type, { bubbles: true })
@@ -609,7 +614,7 @@ it('keeps risk details readable across the pointer gap and after a touch tap', (
 
 it('leaves Escape to composition and dismisses risk details when a modal takes focus', () => {
   const onClose = vi.fn()
-  const warning = <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
+  const warning = <ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
   const view = render(warning)
   fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
   fireEvent.compositionStart(document)
@@ -635,7 +640,7 @@ it('leaves Escape to composition and dismisses risk details when a modal takes f
 it('keeps risk details open for keyboard focus and closes when focus leaves', () => {
   vi.useFakeTimers()
   render(<>
-    <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
+    <ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
     <button>Outside</button>
   </>)
   const trigger = screen.getByRole('button', { name: 'Risks' })
@@ -666,7 +671,7 @@ it('keeps risk details open for keyboard focus and closes when focus leaves', ()
 
 it('dismisses pointer-focused risk details when the pointer leaves', () => {
   vi.useFakeTimers()
-  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
+  render(<ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Risks' }))
   const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
   vi.spyOn(dialog, 'matches').mockReturnValue(false)
@@ -677,7 +682,7 @@ it('dismisses pointer-focused risk details when the pointer leaves', () => {
 })
 
 it('ignores repeated Escape and restores focus when dismissing focused risk details', () => {
-  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
+  render(<ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
   fireEvent.click(trigger)
   const dialog = screen.getByRole('dialog', { name: 'Computer use risks' })
@@ -693,7 +698,7 @@ it('ignores repeated Escape and restores focus when dismissing focused risk deta
 it('dismisses hover-open risks when focus moves elsewhere without taking focus on open', () => {
   render(<>
     <button>Before</button>
-    <ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
+    <ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />
     <button>After</button>
   </>)
   const before = screen.getByRole('button', { name: 'Before' })
@@ -708,7 +713,7 @@ it('dismisses hover-open risks when focus moves elsewhere without taking focus o
 })
 
 it.each(['window blur', 'hidden tab'] as const)('dismisses risk details on %s without restoring focus', (reason) => {
-  render(<ApprovalWarning warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
+  render(<ApprovalWarning Portal={Portal} warning={{ label: 'Risks', title: 'Computer use risks', detail: 'Background control.' }} />)
   const trigger = screen.getByRole('button', { name: 'Risks' })
   fireEvent.click(trigger)
   fireEvent(document, new Event('visibilitychange'))

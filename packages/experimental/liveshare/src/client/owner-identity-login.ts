@@ -88,8 +88,8 @@ export function useOwnerIdentityLogin(options: OwnerIdentityLoginOptions): Owner
   const [ownerIdentity, setOwnerIdentity] = useState<OwnerIdentityStatus>(UNKNOWN_OWNER_IDENTITY)
   const [identityRead, setIdentityRead] = useState(0)
   const [login, setLogin] = useState<OwnerLoginAttempt>()
-  const loginAttempt = useRef<{ cancel(): void }>()
-  const activeRelay = useRef<string>()
+  const loginAttempt = useRef<{ cancel(): void }>(undefined)
+  const activeRelay = useRef<string>(undefined)
 
   // A saved address gets a fresh sign-in row before paint. Cancel reports synchronously, so retire
   // the old address first, both when switching and when the dialog closes.

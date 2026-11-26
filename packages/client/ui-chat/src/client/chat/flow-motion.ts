@@ -4,7 +4,7 @@
  * policy, uses CSS transitions. Motion is opt-in under `[data-chat-motion]`, respects reduced motion,
  * and clears temporary styles.
  */
-import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, type MutableRefObject, type RefObject } from 'react'
 import { useSearchableHidden, type HiddenTransition } from './searchable-hidden.ts'
 
 const FADE_OUT_MS = 70
@@ -533,7 +533,9 @@ function useFlowTransition(motion: FlowMotionRows | undefined, grow: boolean): H
  * @param motion - owning viewport's row callbacks; undefined applies visibility synchronously.
  * @returns the stable subtree ref.
  */
-export function useFlowHidden(hidden: boolean, reveal: () => void, motion: FlowMotionRows | undefined): RefObject<HTMLDivElement> {
+export function useFlowHidden(
+  hidden: boolean, reveal: () => void, motion: FlowMotionRows | undefined,
+): MutableRefObject<HTMLDivElement | null> {
   return useSearchableHidden(hidden, reveal, useFlowTransition(motion, false))
 }
 

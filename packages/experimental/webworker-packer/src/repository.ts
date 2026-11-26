@@ -36,6 +36,25 @@ const BIN_NAME = 'dsh-pack-vfs-image'
 /** Repository-owned deterministic filesystem content offered by the preview. */
 const PREVIEW_EXAMPLE_ROOT = 'packages/experimental/webworker-runtime/tests/fixtures/vfs-example'
 
+/** Keyless model row the preview's profile patch inserts, so a fresh preview answers without a provider key. */
+const PREVIEW_MOCK_ROW = {
+  id: 'llm-mock',
+  name: '@deepseek-ai/dsh-llm-mock',
+  config: {
+    // The first line doubles as the generated Session title, which this route also answers.
+    reply: 'Mock model reply\n\nThis Preview starts on a mock model that needs no API key. To chat with a real model, add an API key in Settings → Models, then select its model.',
+  },
+}
+
+/**
+ * Config fields the preview's profile patch sets over composed rows, by row id: new Agents start on the mock route,
+ * and the first-run credential prompt stays closed while Models settings remain available.
+ */
+const PREVIEW_ENTRY_CONFIG: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
+  'agent-default-model': { provider: 'mock', model: 'mock' },
+  'ui-settings-models': { credentialOnboarding: false },
+}
+
 /** Config directory metadata owned by the CLI image packer, not the public plugin manifest. */
 interface ConfigTreeDeclaration {
   /** Non-empty destination path in the image; mount values must be unique. */
@@ -91,14 +110,15 @@ export function indexWorkspacePackages(repoRoot: string): Map<string, string> {
 export interface ProfileRoster {
   /** The profile template's bundles, then the installation's optional bundles. */
   readonly bundles: readonly string[]
-  /** Those bundle packages plus every package their patch rows name, deduplicated. */
+  /** Those bundle packages, every package their patch rows name, and the preview's mock model package, deduplicated. */
   readonly roster: readonly string[]
 }
 
 /**
  * Read what one shipped profile offers from the installation the launcher boots:
  * the template's bundles and every optional bundle, each resolved from the CLI
- * manifest as the launcher resolves them, and the packages their patch files name.
+ * manifest as the launcher resolves them, the packages their patch files name, and
+ * the mock model package the preview profile patch inserts.
  * Machine state never contributes, so the same tree always packs the same roster.
  * @param repoRoot - Absolute repository root.
  * @param profile - Shipped profile template name.
@@ -110,6 +130,7 @@ export function profileRoster(repoRoot: string, profile: string): ProfileRoster 
   const bundles = [...new Set([...template.bundles, ...OPTIONAL_BUNDLES])]
   const names = new Set<string>(bundles)
   for (const bundle of bundles) collectModuleNames(bundlePatches(repoRoot, bundle), names)
+  collectModuleNames([PREVIEW_MOCK_ROW], names)
   return { bundles, roster: [...names] }
 }
 
@@ -123,13 +144,41 @@ export function profileRoster(repoRoot: string, profile: string): ProfileRoster 
  * @throws When the profile has no shipped template, or a bundle does not resolve or declares no patch.
  */
 export function platformHomePatch(repoRoot: string, profile: string): PatchOptions[] {
-  const composed: unknown = composeEntries([shippedTemplate(profile).bundles.flatMap(bundle => bundlePatches(repoRoot, bundle))])
-  return Object.entries(PLATFORM_ENTRY_CONFIG).flatMap(([id, fields]) => {
+  return overrideRows(composedRows(repoRoot, profile), PLATFORM_ENTRY_CONFIG)
+}
+
+/**
+ * The profile patch the preview image seeds: the keyless mock model row, and each `PREVIEW_ENTRY_CONFIG` row with
+ * the config the template's bundle layers compose for it and the preview fields over that config. The profile patch
+ * is the layer ConfigEditor writes, so users can still select, save, and configure other models.
+ * @param repoRoot - Absolute repository root.
+ * @param profile - Shipped profile template name.
+ * @returns Profile patch rows; a row the composition lacks contributes none.
+ * @throws When the profile has no shipped template, or a bundle does not resolve or declares no patch.
+ */
+export function previewProfilePatch(repoRoot: string, profile: string): PatchOptions[] {
+  return [{ insert: [PREVIEW_MOCK_ROW] }, ...overrideRows(composedRows(repoRoot, profile), PREVIEW_ENTRY_CONFIG)]
+}
+
+/**
+ * Patch rows that set `fields` over each named row's composed config. A patch replaces a row's whole config, so the
+ * composed fields are copied first; a row the composition lacks contributes none.
+ */
+function overrideRows(composed: unknown, fieldsById: Readonly<Record<string, Readonly<Record<string, unknown>>>>): PatchOptions[] {
+  return Object.entries(fieldsById).flatMap(([id, fields]) => {
     const row = findRow(composed, id)
-    if (row === undefined) return []
-    const config = typeof row.config === 'object' && row.config !== null && !Array.isArray(row.config) ? row.config : {}
-    return [{ id, config: { ...config, ...fields } }]
+    return row === undefined ? [] : [{ id, config: { ...configOf(row), ...fields } }]
   })
+}
+
+/** The rows the template's bundle layers compose for one profile. */
+function composedRows(repoRoot: string, profile: string): unknown {
+  return composeEntries([shippedTemplate(profile).bundles.flatMap(bundle => bundlePatches(repoRoot, bundle))])
+}
+
+/** A row's object config, or an empty one. */
+function configOf(row: { config?: unknown }): object {
+  return typeof row.config === 'object' && row.config !== null && !Array.isArray(row.config) ? row.config : {}
 }
 
 /** Find one Loader row by id, inside group configs too. */
@@ -188,6 +237,7 @@ export function packRepositoryImage(repoRoot: string, profile: string, root?: st
     resolveFrom: repoRoot,
     configTrees: configTrees(repoRoot),
     homePatch: platformHomePatch(repoRoot, profile),
+    profilePatch: previewProfilePatch(repoRoot, profile),
   })
 }
 

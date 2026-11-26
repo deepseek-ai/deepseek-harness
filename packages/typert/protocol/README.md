@@ -124,7 +124,7 @@ Every namespace, method, lookup, and Context segment must satisfy `isTypertRemot
 | [`src/index.ts`](src/index.ts) | Decorators, Gateway bindings, `remoteMethods`, segment validation |
 | [`src/principal.ts`](src/principal.ts) | `principalOf`, the caller principal a Remote-call producer records |
 | [`src/remote-access.ts`](src/remote-access.ts) | `RemoteAccessResource`, `RemoteAccessResourceKind`, and `RemoteAccessResourceOf` over `TypertResourceMap` |
-| [`src/json-value.ts`](src/json-value.ts) | `isRemoteJsonValue` and `isRemoteUplinkItem`, the lossless JSON checks every carrier shares |
+| [`src/json-value.ts`](src/json-value.ts) | `isRemoteJsonValue` and `isRemoteUplinkItem`, the lossless JSON checks every carrier shares; plain arrays and records from any JavaScript realm pass |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` and the structural `remoteErrorOf` recognizer |
 | [`src/remote-info.ts`](src/remote-info.ts) | Pure lazy info factory and direct-method type guard |
 | [`src/types.ts`](src/types.ts) | Protocol maps, `RemoteErrorDetailsMap`, `RemoteResult`, `RemoteStream`, `RemoteStreamHandle`, `PrincipalMap`, `Principal`, `PeerScope`, `RemoteInvocation`, `InvocationDescriptor`, codecs, provider contracts, registry interfaces, `TypertClientRemote` |

@@ -37,24 +37,25 @@
   container-type: inline-size;
 }
 
-.scroll,
-:global([data-conversation-scroll]):has(.root) {
+.scroll {
   overscroll-behavior-y: none;
 }
 
-.root[data-chat-following-tail] .scroll,
-:global([data-conversation-scroll]):has(.root[data-chat-following-tail]) {
+.root[data-chat-following-tail] .scroll {
   overflow-anchor: none;
 }
 
-:global([data-conversation-scroll]) .frame,
-:global([data-conversation-scroll]) .root {
+/* Inside a Conversation scrollport the root asks that scrollport for the same
+   two behaviors with ui-conversation's data-conversation-overscroll and
+   data-conversation-scroll-anchor marks, and the transcript grows with it. */
+.frame:is(:global([data-conversation-scroll]) *),
+.root:is(:global([data-conversation-scroll]) *) {
   flex: 0 0 auto;
   min-height: auto;
   height: auto;
 }
 
-:global([data-conversation-scroll]) .scroll {
+.scroll:is(:global([data-conversation-scroll]) *) {
   /* A host scrollport still owns vertical overflow; horizontal overflow is
      clipped for the same reason as the self-scrolled case above. */
   overflow-x: clip;
@@ -95,6 +96,26 @@
 :is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-group-part="response"]:not([hidden]):not(:empty)
   + :not([hidden]):not(.flowItem:is(:empty, :has(> [data-slot="conversation.chat.node"]:empty))):not(.running):not(:has(> [data-slot="conversation.chat.node"] > [data-chat-steering-batch])) {
   --dsh-chat-flow-gap: 12px;
+}
+
+/* A message bubble below a process row takes the 12px response gap. The
+   listed process rows always render content, so none of them is an empty
+   Seat. */
+.flowItem[data-chat-flow-kind="question-reply"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :is([data-chat-group-key], .flowItem:is([data-chat-flow-kind="compaction"], [data-chat-flow-kind="manual-compaction"], [data-chat-flow-kind="command"], [data-chat-flow-kind="context"], [data-chat-flow-kind="model-retry"], [data-chat-flow-kind="turn-error"], [data-chat-flow-kind="turn-max-tokens"])):not([hidden])
+  + .flowItem[data-chat-flow-kind="user"] {
+  --dsh-chat-flow-gap: 12px;
+}
+
+/* Below a message's actions row, whose 28px height separates the two, the
+   next question reply or response takes the 4px process gap. These rules
+   override the 12px set above and by the response rule; in a folded Turn a
+   hidden process group sits between the two rows. */
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"], [data-chat-flow-kind="question-reply"]) + .flowItem[data-chat-flow-kind="question-reply"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > :is([data-chat-flow-kind="user"], [data-chat-flow-kind="steering"], [data-chat-flow-kind="question-reply"]) + [hidden] + .flowItem[data-chat-flow-kind="question-reply"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + .flowItem[data-chat-group-part="response"],
+:is(.column, :global([data-slot="conversation.chat.flow"])) > [data-chat-flow-kind="question-reply"] + [hidden] + .flowItem[data-chat-group-part="response"] {
+  --dsh-chat-flow-gap: 4px;
 }
 
 /* Settled-flow identity boundary. It is neutral until it becomes the natural
@@ -386,7 +407,7 @@
   );
 }
 
-:global([data-conversation-scroll]) .asideSlot {
+.asideSlot:is(:global([data-conversation-scroll]) *) {
   position: sticky;
 }
 
@@ -410,7 +431,7 @@
   pointer-events: none;
 }
 
-:global([data-conversation-scroll]) .toBottomSlot {
+.toBottomSlot:is(:global([data-conversation-scroll]) *) {
   position: sticky;
   /* Clears the sticky composer stack (docks + input card + stats): the live
      height rides --dsh-composer-height (ConversationRoot's seat observer) so

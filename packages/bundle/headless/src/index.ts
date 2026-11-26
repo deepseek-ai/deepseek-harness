@@ -22,7 +22,7 @@ import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { APPROVAL_POLICIES, setApprovalPolicy, type ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId, SessionLogOffset, SessionOrigin } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from '@deepseek-ai/dsh-session-query'
 // Empty type imports carry the loader Context merge for the settlement await,
 // the cmdline Context merge for the appExit host value, and the sessionQuery
@@ -171,7 +171,7 @@ function streamReasoning(
 /** The Session facts that decide whether the runner may drive it directly. */
 interface AdoptableHeader {
   cwd?: string | undefined
-  origin?: 'subagent' | undefined
+  origin?: SessionOrigin | undefined
 }
 
 /**

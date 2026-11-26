@@ -1854,6 +1854,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`; `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside the checkout, binary content, or a failed read.'],
       },
       {
+        signature: '@Remote async localWrite(session: Session, write: ForgeLocalWrite, signal: AbortSignal): Promise<ForgeLocalWriteResult>',
+        description: 'Stage, unstage, or restore whole files in the checkout of the Session\'s current directory, or return index entries to the tree an earlier write reported. The caller\'s press authorizes the write, so Git runs without the Session\'s sandbox policy and under any access mode. The Session\'s panel inspects the checkout again afterwards, whether or not the write succeeded.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is written.' }, { name: 'write', description: 'the write; `stage` and `restore` name each file with the digest of the change the reader saw.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the index before a `stage` or `unstage` as a tree, for undoing it.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/local-stale` before anything is written when a file\'s unstaged change is not the one the reader saw; `forgePanel/local-path-replaced` before anything is written when a deleted file\'s path holds a directory; the errors of {@link ForgePanelController.localDiff} for the `unstaged` scope; an error for a path outside the checkout, a tree that is not a full object name, a restore of a submodule or of a file without index content, or a Git failure.'],
+      },
+      {
         signature: '@Remote async changeRequestChecks(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>',
         description: 'Load complete checks for the change request whose list the user opened.',
         parameters: [{ name: 'session', description: 'Session retaining the visible binding.' }, { name: 'url', description: 'binding URL.' }, { name: 'headSha', description: 'commit displayed by the card; a different head rejects the result.' }, { name: 'signal', description: 'cancellation when the list closes.' }],
@@ -2564,6 +2571,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Every share this host publishes.',
       },
       {
+        signature: '@Remote(\'reconnect\') reconnect(request: ReconnectShareRequest): Promise<void>',
+        description: 'Reconnect an unexpired owner share at its original address. An online share needs no registration.',
+        parameters: [{ name: 'request', description: 'Share whose existing link is to be reconnected.' }],
+        returns: 'Completion when connected; rejects if the share is gone, expired, or cannot reconnect.',
+      },
+      {
         signature: '@Remote(\'stop\') stop(request: StopShareRequest): Promise<StopShareResult>',
         description: 'Stop one share locally, revoke its forks, and delete its row on the Liveshare server when reachable.',
         parameters: [{ name: 'request', description: 'Share to stop.' }],
@@ -3125,7 +3138,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: '@Remote async updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>',
         description: 'Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from; with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads a Git package only while installing it, so its bundle and compatibility are checked then. Either target installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running version and the result reports the restart.',
-        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; and the request id naming the progress and the target installation\'s logs and cancellation.' }],
+        parameters: [{ name: 'name', description: 'Installed profile dependency name.' }, { name: 'version', description: 'Exact version newer than the installed one.' }, { name: 'options', description: 'The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted only by a bundle `listBundles` lists with `update: \'git\'`; the request id naming the progress and the target installation\'s logs and cancellation; and the pending build scripts to allow, saved before anything is removed.' }],
         returns: 'The versions, the last step that ran with its result, and the reinstallation when one ran.',
       },
       {
@@ -3683,9 +3696,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the accepted title and durable event sequence.',
       },
       {
-        signature: '@Remote(\'fork\') async fork(request: SessionForkRequest): Promise<SessionForkValue>',
+        signature: '@Remote(\'fork\') fork(request: SessionForkRequest): Promise<SessionForkValue>',
         description: 'Fork one cold-readable exact event prefix into a new Session. An omitted boundary selects the latest completed-turn prefix; an open cut receives synthetic fork closers.',
-        parameters: [{ name: 'request', description: 'source Session, optional exact inclusive event boundary, and migration preflight choice.' }],
+        parameters: [{ name: 'request', description: 'source Session, optional exact inclusive event boundary, migration preflight choice, and child origin.' }],
         returns: 'the new Session identity.',
       },
       {
@@ -7612,7 +7625,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n    };\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: SessionOrigin;\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly parentSource?: {\n        readonly sessionId: SessionId;\n        readonly endSeq: SessionLogOffset;\n    };\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
     name: 'CreatedShare',
@@ -8056,7 +8069,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeDiffFile',
-    declaration: 'export interface ForgeDiffFile {\n    readonly path: string;\n    readonly previousPath: string | null;\n    readonly status: ForgeDiffStatus;\n    readonly binary: boolean;\n    readonly oversized: boolean;\n    readonly untracked: boolean;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly hunks: readonly ForgeDiffHunk[];\n    readonly layer: ForgeFileLayer;\n    readonly digest: string;\n}',
+    declaration: 'export interface ForgeDiffFile {\n    readonly path: string;\n    readonly previousPath: string | null;\n    readonly status: ForgeDiffStatus;\n    readonly binary: boolean;\n    readonly oversized: boolean;\n    readonly untracked: boolean;\n    readonly submodule: boolean;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly hunks: readonly ForgeDiffHunk[];\n    readonly layer: ForgeFileLayer;\n    readonly digest: string;\n}',
   },
   {
     name: 'ForgeDiffHunk',
@@ -8137,6 +8150,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeLocalScope',
     declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n    readonly base: string | null;\n    readonly commits: ForgeCommitRange | null;\n} | {\n    readonly kind: \'uncommitted\';\n} | {\n    readonly kind: \'unstaged\';\n} | {\n    readonly kind: \'staged\';\n};',
+  },
+  {
+    name: 'ForgeLocalWrite',
+    declaration: 'export type ForgeLocalWrite = {\n    readonly kind: \'stage\';\n    readonly files: readonly ForgeLocalWriteFile[];\n} | {\n    readonly kind: \'unstage\';\n    readonly paths: readonly string[];\n} | {\n    readonly kind: \'restore\';\n    readonly files: readonly ForgeLocalWriteFile[];\n} | {\n    readonly kind: \'reindex\';\n    readonly tree: string;\n    readonly paths: readonly string[];\n};',
+  },
+  {
+    name: 'ForgeLocalWriteFile',
+    declaration: 'export interface ForgeLocalWriteFile {\n    readonly path: string;\n    readonly digest: string;\n}',
+  },
+  {
+    name: 'ForgeLocalWriteResult',
+    declaration: 'export interface ForgeLocalWriteResult {\n    readonly undo: string | null;\n}',
   },
   {
     name: 'ForgeMissingWorktree',
@@ -9572,7 +9597,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OwnerShareView',
-    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionIds: readonly string[];\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerPluginAccess?: ViewerPluginAccess;\n    readonly viewerPlugins: readonly ViewerPluginPolicy[];\n    readonly online: boolean;\n    readonly access?: ShareAccess;\n}',
+    declaration: 'export interface OwnerShareView {\n    readonly shareId: string;\n    readonly sessionId: string;\n    readonly sessionIds: readonly string[];\n    readonly sessionTitle: string;\n    readonly link: string;\n    readonly createdAt: string;\n    readonly expiresAt?: string;\n    readonly allowsFork: boolean;\n    readonly sessionMode: \'view\' | \'write\';\n    readonly viewerPluginAccess?: ViewerPluginAccess;\n    readonly viewerPlugins: readonly ViewerPluginPolicy[];\n    readonly online: boolean;\n    readonly reconnectStopped?: boolean;\n    readonly access?: ShareAccess;\n}',
   },
   {
     name: 'PackageResult',
@@ -10053,6 +10078,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ReconnectConfig',
     declaration: 'export interface ReconnectConfig {\n    enabled?: boolean;\n    initialDelayMs?: number;\n    maxDelayMs?: number;\n    maxAttempts?: number;\n}',
+  },
+  {
+    name: 'ReconnectShareRequest',
+    declaration: 'export interface ReconnectShareRequest {\n    readonly shareId: string;\n}',
   },
   {
     name: 'RecurringScheduleRecord',
@@ -10692,7 +10721,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionForkRequest',
-    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n}',
+    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n    readonly origin?: \'side\';\n}',
   },
   {
     name: 'SessionForkSource',
@@ -10724,11 +10753,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionHeader',
-    declaration: 'export interface SessionHeader {\n    readonly version: typeof SESSION_FORMAT_VERSION;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionHeader {\n    readonly version: typeof SESSION_FORMAT_VERSION;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: SessionOrigin;\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionHeaderMeta',
-    declaration: 'export interface SessionHeaderMeta {\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly createdAt?: number;\n    readonly isSeeded?: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionHeaderMeta {\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly createdAt?: number;\n    readonly isSeeded?: boolean;\n    readonly origin?: SessionOrigin;\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionHistoryRecord',
@@ -10837,6 +10866,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionOpenWorkspacePathValue',
     declaration: 'export interface SessionOpenWorkspacePathValue {\n    readonly opened: true;\n}',
+  },
+  {
+    name: 'SessionOrigin',
+    declaration: 'export type SessionOrigin = \'subagent\' | \'side\';',
   },
   {
     name: 'SessionPage',
@@ -11064,7 +11097,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSummary',
-    declaration: 'export interface SessionSummary {\n    readonly agentAvailable: boolean;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly projections?: SessionProjectionHints;\n}',
+    declaration: 'export interface SessionSummary {\n    readonly agentAvailable: boolean;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: SessionOrigin;\n    readonly cwd?: string;\n    readonly projections?: SessionProjectionHints;\n}',
   },
   {
     name: 'SessionSurface',
@@ -11156,7 +11189,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionWireHeader',
-    declaration: 'export interface SessionWireHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionWireHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: SessionOrigin;\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
   },
   {
     name: 'SessionWorkspacePathApplication',
@@ -12336,7 +12369,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'UpdateBundleOptions',
-    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n}',
+    declaration: 'export interface UpdateBundleOptions {\n    readonly registry?: Registry;\n    readonly spec?: string;\n    readonly requestId?: PluginInstallRequestId;\n    readonly approvedBuilds?: string[];\n}',
   },
   {
     name: 'UpdateSharePermissionsRequest',
