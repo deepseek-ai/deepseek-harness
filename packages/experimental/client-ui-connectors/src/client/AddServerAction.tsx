@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Button, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { CustomServersFace } from './custom-servers-store.ts'
+import css from './CustomServers.module.css'
 
 /** Action props: the tab's view change, the dictionary, and the injected face. */
 export type AddServerActionProps = PropsRuntime<'connectors.actions'> & PropsLocale<'connectors'> & InjectFace<CustomServersFace>
@@ -17,7 +18,8 @@ export function AddServerAction(props: AddServerActionProps): ReactNode {
   const unavailable = props.useCustomServers(state => state.status === 'unavailable')
   if (unavailable) return null
   return (
-    <Button variant="outline" size="sm" icon={<IconPlusOutlineRegular size={13} />} onClick={() => { setView({ kind: 'new' }) }}>
+    <Button variant="primary" size="sm" className={css.addServer} icon={<IconPlusOutlineRegular size={13} />}
+      onClick={() => { setView({ kind: 'new' }) }}>
       {t('custom.add')}
     </Button>
   )

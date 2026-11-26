@@ -1,6 +1,6 @@
 /** The custom servers section: the MCP server rows in a list, and one server's page with its form. */
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, RiskConfirmation, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconSettingsOutlineRegular, PluginArtworkDefault, RiskConfirmation, Switch, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-connector-account/client'
 import type { CustomServer, CustomServersFace } from './custom-servers-store.ts'
@@ -119,19 +119,21 @@ export function CustomServersSection(props: CustomServersSectionProps): ReactNod
           const { raw } = server
           return (
             <li key={server.id} className={css.server} data-custom-server={server.name}>
+              <span className={css.icon} aria-hidden="true"><PluginArtworkDefault size={36} /></span>
               <div className={css.main}>
                 <span className={css.name}>{server.name}</span>
                 <span className={css.summary}>{summary(server, t)}</span>
-                {server.state === 'failed' ? <span className={css.failure}>{t('custom.failed', { message: server.error })}</span> : null}
+                {server.state === 'failed' ? <span className={css.reason}>{t('custom.failed', { message: server.error })}</span> : null}
               </div>
               <div className={css.actions}>
                 {raw?.oauth === undefined || server.state !== 'on'
                   ? null
                   : renderFactorySlot('connector.account', { account: `mcp:${server.name}`, presentation: 'status' })}
-                <Button variant="ghost" size="sm" aria-label={t('custom.settingsLabel', { name: server.name })}
-                  disabled={raw === undefined} onClick={() => { setView({ kind: 'server', id: server.id }) }}>
-                  {t('custom.settings')}
-                </Button>
+                <Tooltip label={t('custom.settings')} side="bottom" portal delayMs={300} disabled={raw === undefined}>
+                  <Button variant="ghost" size="sm" icon={<IconSettingsOutlineRegular size={14} />}
+                    aria-label={t('custom.settingsLabel', { name: server.name })} disabled={raw === undefined}
+                    onClick={() => { setView({ kind: 'server', id: server.id }) }} />
+                </Tooltip>
                 <Switch checked={server.state !== 'off'} disabled={raw === undefined} label={t('custom.enableLabel', { name: server.name })}
                   onChange={(next) => { switchServer(server, next) }} />
               </div>

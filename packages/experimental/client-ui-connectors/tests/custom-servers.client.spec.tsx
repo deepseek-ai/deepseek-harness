@@ -94,7 +94,7 @@ describe('CustomServersSection', () => {
     expect(within(item('files')).getByText('npx')).toBeTruthy()
     expect(within(item('odd')).getByText(en['custom.unreadable'])).toBeTruthy()
     expect(within(item('wiki')).getByText(t('custom.failed', { message: 'connection refused' }))).toBeTruthy()
-    expect(item('docs').textContent).toBe(`docshttps://docs.example/mcp${en['custom.settings']}`)
+    expect(item('docs').textContent).toBe('docshttps://docs.example/mcp')
     expect(renderFactorySlot.mock.calls).toEqual([['connector.account', { account: 'mcp:docs', presentation: 'status' }]])
     expect(item('docs').querySelector('[data-account="mcp:docs"]')).not.toBeNull()
     expect(within(item('docs')).queryByRole('button', { name: en['custom.probe'] })).toBeNull()
@@ -102,7 +102,13 @@ describe('CustomServersSection', () => {
 
     expect(within(item('odd')).getByRole('button', { name: t('custom.settingsLabel', { name: 'odd' }) })).toHaveProperty('disabled', true)
     expect(within(item('odd')).getByRole('switch')).toHaveProperty('disabled', true)
-    expect(within(item('docs')).getByRole('button', { name: t('custom.settingsLabel', { name: 'docs' }) }).textContent).toBe(en['custom.settings'])
+    // The settings button is an icon; keyboard focus shows its name.
+    const settings = within(item('docs')).getByRole('button', { name: t('custom.settingsLabel', { name: 'docs' }) })
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    fireEvent.focus(settings)
+    expect(screen.getByRole('tooltip').textContent).toBe(en['custom.settings'])
+    fireEvent.blur(settings)
+    expect(screen.queryByRole('tooltip')).toBeNull()
     expect(within(item('files')).getByRole('switch').getAttribute('aria-checked')).toBe('false')
     expect(within(item('wiki')).getByRole('switch').getAttribute('aria-checked')).toBe('true')
     fireEvent.click(within(item('docs')).getByRole('switch', { name: t('custom.enableLabel', { name: 'docs' }) }))
