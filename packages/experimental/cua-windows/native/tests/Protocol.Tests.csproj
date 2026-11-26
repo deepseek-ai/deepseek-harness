@@ -12,7 +12,6 @@
 	<ProjectReference Include="../protocol/CuaProtocol.csproj" />
 	<Compile Include="../entry/PatternActions.cs" Link="PatternActions.cs" />
     <Compile Include="../entry/ApplicationAuthorization.cs" Link="ApplicationAuthorization.cs" />
-    <Compile Include="../entry/KnownApplications.cs" Link="KnownApplications.cs" />
     <Compile Include="../entry/NativeConfig.cs" Link="NativeConfig.cs" />
     <Compile Include="../entry/NotificationCleanup.cs" Link="NotificationCleanup.cs" />
     <Compile Include="../entry/NotificationBuffer.cs" Link="NotificationBuffer.cs" />

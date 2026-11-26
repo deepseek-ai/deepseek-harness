@@ -116,9 +116,10 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
             if (request.Method == "getApp")
             {
                 var selected = await DesktopWindows.Select(String(parameters, "selector"), context);
+                var authorization = DesktopWindows.ReadAuthorization(selected, context);
                 state.Apps[selected.Handle] = selected;
                 var result = new Dictionary<string, object> { ["appHandle"] = selected.Handle, ["name"] = selected.Name,
-                    ["running"] = selected.IsRunning, ["authorization"] = selected.Authorization };
+                    ["running"] = selected.IsRunning, ["authorization"] = authorization };
                 var icon = await sta.Invoke(_ => ApplicationIcons.Read(selected.Authorization.IconPath), cancellation);
                 if (icon is not null) result["applicationIcon"] = icon;
                 return result;

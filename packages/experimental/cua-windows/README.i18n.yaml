@@ -21,14 +21,14 @@
   en: 13ff5154e3ed57cf
   zh: b6a976028b104068
 /deepseek-ai-dsh-cua-windows/interface-semantics/application-discovery:
-  en: 3688f415a2383d49
-  zh: 7be7be589c0a2ed2
+  en: 86d55776fdb1ae59
+  zh: e78c8dec693a829a
 /deepseek-ai-dsh-cua-windows/interface-semantics/application-and-window-selection:
-  en: e52a7587a39c12d7
-  zh: 814f231a967d60f1
-/deepseek-ai-dsh-cua-windows/interface-semantics/known-application-aliases:
-  en: 0ed4c03d4ce57164
-  zh: bd786443948f163b
+  en: 2795b008c0d1711d
+  zh: 6478de4d58913c24
+/deepseek-ai-dsh-cua-windows/interface-semantics/permission-attributes:
+  en: 9bfd0de38ced33ac
+  zh: 21234b323583acda
 /deepseek-ai-dsh-cua-windows/interaction-rules:
   en: cf2de5ea4584e508
   zh: 9e589b0b6d43189a

@@ -33,7 +33,7 @@ In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to 
 
 `cua.listApps()` aggregates applications from eligible visible top-level windows in the current Windows session. Name searches and empty `cua.findApps` queries return installed applications from the StartApps catalog, enumerated through AppsFolder. Window observations supplement those catalog entries with running state and known executable paths. The catalog may be incomplete; if an application is missing, ask the user for its location.
 
-Discovery results contain `id`, `identity: null`, and `isRunning`, with `name` in `listApps` and `displayName` in `findApps`. A window's ID comes from its explicit AUMID, then the package process AUMID, then the executable path. Only identical ID strings merge, using case-sensitive equality, after the [known application aliases](#known-application-aliases) are applied to path fallbacks. Pass the returned ID unchanged to `cua.getApp`, or supply an existing absolute `.exe` path. Shell names, process names and executable metadata provide display labels; labels do not determine identity.
+Discovery results contain `id`, `identity: null`, and `isRunning`, with `name` in `listApps` and `displayName` in `findApps`. A window's ID comes from its explicit AUMID, then the package process AUMID, then the executable path. Only identical ID strings merge, using case-sensitive equality. Pass the returned ID unchanged to `cua.getApp`, or supply an existing absolute `.exe` path. Shell names, process names and executable metadata provide display labels; labels do not determine identity.
 
 `listApps` results have `isRunning: true`. In `findApps` results, `isRunning` indicates an associated window; a catalog application without a window reports `false`. Inaccessible windows or processes are omitted. Failure to read the application catalog fails name and empty `findApps` queries. `listApps` and explicit path selection do not read the application catalog. `cua.getState().apps` comes from `listApps()`.
 
@@ -43,9 +43,9 @@ Discovery results contain `id`, `identity: null`, and `isRunning`, with `name` i
 
 The first time a conversation selects an application without a saved grant, the approval card offers **Reject**, **Allow for this session**, and, when the profile can save grants, **Always allow**. **Always allow** is the primary button. Selecting it grants access across conversations in the same profile until revoked on the Computer Use plugin page. Pressing Enter in the approval details grants access for the current conversation.
 
-Application consent follows the selected ID. Versions and copies with the same AUMID share consent regardless of executable location or signing. Explicit path selection uses the canonical executable path, with only the known application aliases below applied; it does not search for an AUMID. Other launcher and runtime executables can require separate grants. AUMIDs and path aliases do not authenticate publishers or signatures.
+Application consent uses the [permission attributes](#permission-attributes) observed at selection. Versions and copies sharing an attribute can share consent regardless of executable location or signing. Permission equivalence does not merge discovery IDs, change launch targets or associate additional windows. A launcher and its runtime may share consent while remaining separate native application objects.
 
-The approval card and permission list use the shared Computer Use presentation and copy, showing the application name and icon. Reusing an application's consent within a conversation preserves its saved name and icon lookup target. Only an explicit **Always allow** choice saves a cross-conversation grant; existing session consent is not upgraded. Selecting an executable path retains that launch target even when its application ID is shared with other copies.
+The approval card and permission list use the shared Computer Use presentation and copy, showing the application name and icon. Reusing an application's consent within a conversation preserves its saved name and icon lookup target. Only an explicit **Always allow** choice saves a cross-conversation grant; existing session consent is not upgraded. Selecting an executable path retains that launch target even when its consent is shared with other copies.
 
 - `cua.getApp(id)` requests application consent and returns an App on success. It does not read accessibility state or activate the application. Stopped applications are launched through Explorer after consent.
 - `app.getWindows()` reads the application's current window list. One application can have multiple windows across multiple processes. Previously admitted HWNDs remain listed while valid, including hidden windows.
@@ -57,17 +57,14 @@ The approval card and permission list use the shared Computer Use presentation a
 - `app.launch()` requests a new application instance and waits for the selected application's HWND set to change or the launch wait limit to expire. A single-instance program may only activate its existing instance, and a launched instance may belong to another application ID.
 - `app.activate()` explicitly requests foreground activation. `app.show()` restores a default window without requesting activation; `window.show()` restores the named window. An absent default returns `WINDOW_NOT_FOUND`; an ambiguous default returns `AMBIGUOUS_WINDOW`.
 
-<a id="known-application-aliases"></a>
-### Known application aliases
+<a id="permission-attributes"></a>
+### Permission attributes
 
-The maintained list in [KnownApplications.cs](native/entry/KnownApplications.cs) maps these executable layouts to their Start menu IDs. It applies only when a window has no explicit or package AUMID, or when selecting an explicit executable path. An existing AUMID takes precedence.
+Selection supplies the existing authorization digest and optional AUMIDs and executable paths to the shared [consent matcher](../cua/README.md#permission-controls). Window, package and Shell-resolved AUMIDs occupy one attribute set and compare case-sensitively; executable paths occupy another and compare case-insensitively. Empty or unavailable values do not match. Names, icons, publisher signatures, installation directories and process ancestry do not contribute.
 
-| Application | Paths below an installation directory | Shared ID |
-|---|---|---|
-| Feishu | `Feishu\Feishu.exe`, `Feishu\app\Feishu.exe`, `Feishu\<version>\Feishu.exe` | `com.electron.Feishu` |
-| GitHub Desktop | `GitHubDesktop\GitHubDesktop.exe`, `GitHubDesktop\app-<version>\GitHubDesktop.exe` | `com.squirrel.GitHubDesktop.GitHubDesktop` |
+The optional [Shell resolver](native/entry/ApplicationResolver.cs) queries a selected executable path's registered shortcut and selected windows on the STA thread. Its undocumented Windows 8+ interface can be unavailable; failed queries contribute no value and leave the other attributes usable. Application enumeration and window ownership never call it. There is no product-specific list.
 
-`<version>` has three or four numeric components separated by dots. Installation parents may vary; the product directory, executable name and listed subdirectory layout must match, ignoring path case. Other executables, including `Update.exe`, uninstallers and helpers, do not inherit this mapping. Directory membership, process ancestry and signing do not extend it. See the [Windows identity decision](../../../.agents/notes/implemented/architecture/2026-11-25-windows-cua-application-aliases.md) and [upgrade guide](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.md).
+These attributes group permissions, not authenticated publishers. An application declaring an already authorized AUMID can share that grant. Missing shared attributes still require separate consent. See the [permission matching decision](../../../.agents/notes/implemented/architecture/2026-11-26-cua-permission-attributes.md) and [upgrade guide](../../../docs/upgrade-guide/v0.2.3-alpha.2/windows-cua-identities/guide.md).
 
 <a id="interaction-rules"></a>
 ## Interaction rules

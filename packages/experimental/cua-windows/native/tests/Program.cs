@@ -33,7 +33,13 @@ Check(original.Id == Convert.ToHexStringLower(System.Security.Cryptography.SHA25
 Check(ApplicationAuthorization.Create(originalPath, "Editor", originalPath).Id
     != ApplicationAuthorization.Create(movedPath, "Editor", movedPath).Id,
     "Unidentified applications use separate canonical paths");
-KnownApplicationChecks.Run(Check);
+var observed = ApplicationAuthorization.Create(originalPath, "Editor", originalPath,
+    [editorId, null, "", editorId, "Shell.Editor"], [originalPath, originalPath.ToUpperInvariant(), movedPath]);
+Check(observed.Attributes["windows.aumid"].SequenceEqual(new[] { editorId, "Shell.Editor" }),
+    "Window, package and Shell AUMIDs contribute nonempty distinct permission attributes");
+Check(observed.Attributes["windows.executablePath"].Length == 2, "Permission paths ignore case and retain distinct locations");
+Check(observed.Id == ApplicationAuthorization.Create(originalPath, "Editor", originalPath).Id,
+    "Additional permission attributes do not replace the native application identifier");
 
 var handshakeConfig = new JsonObject
 {
