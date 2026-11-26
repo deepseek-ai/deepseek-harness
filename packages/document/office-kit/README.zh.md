@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-在宿主计算机上将 Office 文档渲染为 PDF 或 PNG 图片、在格式之间转换，以及重算工作簿。声明了原生 LibreOffice 引擎的目标使用原生引擎，其余目标使用 Node WASM。预览支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX；操作还支持 OpenDocument 格式，图片渲染还支持 PDF，subprocess 提供方能找到 Poppler 的 `pdftoppm` 时用它渲染 PDF。OOXML 操作返回缺失字体名称；二进制 Office 操作返回空列表。
+在宿主计算机上将 Office 文档渲染为 PDF 或 PNG 图片、在格式之间转换，以及重算工作簿。转换使用 kit 为目标声明的原生 LibreOffice 引擎（Linux 上为 `linux-<arch>-glibc`）；未声明原生引擎的目标不安装引擎包。预览支持 DOC、DOCX、XLS、XLSX、PPT 和 PPTX；操作还支持 OpenDocument 格式，图片渲染还支持 PDF，subprocess 提供方能找到 Poppler 的 `pdftoppm` 时用它渲染 PDF。OOXML 操作返回缺失字体名称；二进制 Office 操作返回空列表。
 
 ## 目录
 
@@ -42,7 +42,7 @@ kind: "package-reference"
 
 Poppler 渲染 PDF 页面时不占用 LibreOffice 转换器槽位，但仍共用队列准入、并发和源字节预留。每个进程从 stdin 读取 PDF，提供方与进程之间不传递任何文件。一个 `pdfinfo` 报告页数，取其最后一行 `Pages:`，因为标题等文档属性先输出。随后提供方按 LibreOffice 路径的错误码检查选择：页数超过 `maxImages` 为 `output-too-large`，页码超出文档为 `invalid-request`。每段连续页码由一个 `pdftoppm -cropbox` 按所请求的 DPI（默认 144）渲染，把 PNG 图片首尾相接写到 stdout。提供方在数据到达时按 PNG chunk 边界切分，字节数超过剩余的 `maxBytes` 时终止 `pdftoppm` 并报 `output-too-large`，并要求该段每页恰好一张图片。页面像素与尺寸上限只在渲染后按每张图片的 PNG 头校验：超过 `maxPixels` 或 `maxDimension` 的图片以 `output-too-large` 失败。结果的 `missingFonts` 为空列表。退出码 1 映射为 `invalid-document`，超过 `timeoutMs` 期限映射为 `timeout`，其他失败映射为 `failed`。
 
-此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `0.2.3`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
+此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `0.2.4`。应用打包选择 kit 的 `optionalDependencies` 中为目标声明的匹配原生包（Linux 目标按架构选择 `linux-<arch>-glibc`）；目标引擎未声明或缺失时拒绝打包，不回退到 WASM。未声明原生引擎的宿主从源码安装时不安装引擎包。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
 Kit 缺失时提供方照常注册，例如未下载 Office sidecar 就启动的 Python SDK 可执行程序。此时需要新转换器的转换以代码为 `unavailable` 的 `OfficeKitError` 拒绝，提供方通过 `ctx.logger` 对每种不同的失败只报告一次。Kit 入口导入失败时行为相同。提供方只保留成功的导入，因此之后的转换会重新定位并导入 Kit。Office 预览对 `document-render/failed` 原因显示本地化的 `unavailable` 提示。
 

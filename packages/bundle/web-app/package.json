@@ -244,7 +244,7 @@
     "@deepseek-ai/dsh-tool-testkit": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-typert-registry": "workspace:*",
-    "@deepseek-ai/libreoffice-kit": "0.2.3",
+    "@deepseek-ai/libreoffice-kit": "0.2.4",
     "@deepseek-ai/dsh-otel": "workspace:*"
   }
 }

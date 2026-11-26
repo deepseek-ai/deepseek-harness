@@ -70,6 +70,8 @@ const LIBREOFFICE_PACKAGES = new Set([
   '@deepseek-ai/libreoffice-kit-darwin-x64',
   '@deepseek-ai/libreoffice-kit-win32-arm64',
   '@deepseek-ai/libreoffice-kit-win32-x64',
+  '@deepseek-ai/libreoffice-kit-linux-arm64-glibc',
+  '@deepseek-ai/libreoffice-kit-linux-x64-glibc',
 ])
 
 /**
