@@ -132,10 +132,13 @@ interface PluginBench {
   readonly localeRegister: ReturnType<typeof vi.fn>
   readonly binding: ReturnType<typeof vi.fn>
   readonly loadOlder: ReturnType<typeof vi.fn>
+  readonly consumeOlder: ReturnType<typeof vi.fn>
   readonly imageUrl: ReturnType<typeof vi.fn>
   readonly setOpenState: (state: 'cold' | 'open' | 'error') => void
   readonly settleOnNextSubscribe: () => void
   readonly setHasMore: (value: boolean) => void
+  /** Force the history status the Session reports after a request. */
+  readonly setHistoryStatus: (value: 'idle' | 'pendingConsumption') => void
   readonly setLoadingOlder: (value: boolean) => void
   readonly entries: () => readonly StoredEntry[]
   readonly setSnapshot: (next: StatsSnapshot | undefined) => void
@@ -168,10 +171,27 @@ async function mountPlugin(): Promise<PluginBench> {
   let loadingOlder = false
   let openListener: (() => void) | undefined
   let settleOnSubscribe = false
+  // A deferred page stays unpublished until the view publishes it, as the
+  // controller reports through pendingConsumption.
+  let historyLoadStatus: 'idle' | 'pendingConsumption' = 'idle'
+  // A forced status models a request that prepared nothing to publish.
+  let forcedStatus = false
+  const consumeOlder = vi.fn(() => {
+    const published = historyLoadStatus === 'pendingConsumption'
+    historyLoadStatus = 'idle'
+    return published
+  })
   const sessionBinding = {
     session: {
-      loadOlder,
-      getSnapshot: () => ({ openState, hasMore, loadingOlder }),
+      loadOlder: async (options?: { deferConsumption?: boolean }) => {
+        await loadOlder()
+        // A test may force the status to model a busy or invalidated request.
+        if (!forcedStatus) {
+          historyLoadStatus = options?.deferConsumption === true ? 'pendingConsumption' : 'idle'
+        }
+      },
+      consumeOlder,
+      getSnapshot: () => ({ openState, hasMore, loadingOlder, historyLoadStatus }),
       subscribe: (next: () => void) => {
         openListener = next
         if (settleOnSubscribe) {
@@ -215,6 +235,7 @@ async function mountPlugin(): Promise<PluginBench> {
     localeRegister,
     binding,
     loadOlder,
+    consumeOlder,
     imageUrl,
     setOpenState: (state: 'cold' | 'open' | 'error') => {
       openState = state
@@ -222,6 +243,10 @@ async function mountPlugin(): Promise<PluginBench> {
     },
     settleOnNextSubscribe: () => { settleOnSubscribe = true },
     setHasMore: (value: boolean) => { hasMore = value },
+    setHistoryStatus: (value: 'idle' | 'pendingConsumption') => {
+      forcedStatus = true
+      historyLoadStatus = value
+    },
     setLoadingOlder: (value: boolean) => { loadingOlder = value },
     entries: () => ctx.slots.entries('conversation.view'),
     setSnapshot: (next) => { snapshot = next },
@@ -409,6 +434,35 @@ describe('browser plugin registration', () => {
     expect(bench.localeDispose).toHaveBeenCalledTimes(1)
   })
 
+  it('stores a footer choice for every view of the plugin', async () => {
+    // The browser store rehydrates and writes through localStorage; supply the
+    // minimal storage this Node test environment lacks.
+    const entries = new Map<string, string>()
+    const storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> = {
+      getItem: key => entries.get(key) ?? null,
+      setItem: (key, value) => { entries.set(key, value) },
+      removeItem: (key) => { entries.delete(key) },
+    }
+    vi.stubGlobal('localStorage', storage)
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => StatsViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    expect(injected.hooks.preferences.getSnapshot().showTotals).toBe(false)
+    injected.setPreferences({ showTotals: true, contextMode: 'cumulative' })
+    // The same handle reaches the next mount of the view.
+    expect(injectEntry!(SID).hooks.preferences.getSnapshot()).toMatchObject({
+      showTotals: true,
+      contextMode: 'cumulative',
+    })
+    // And the choice outlives the process, because the store persists it.
+    expect(JSON.parse(storage.getItem('dsh.stats.preferences') ?? '{}')).toMatchObject({
+      showTotals: true,
+      contextMode: 'cumulative',
+    })
+    await bench.fiber.dispose()
+    vi.unstubAllGlobals()
+  })
+
   it('settles when the subscription resolves while it is being set up', async () => {
     const bench = await mountPlugin()
     const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => StatsViewInjected) | undefined
@@ -419,7 +473,7 @@ describe('browser plugin registration', () => {
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
     // A no-progress page with older history left is surfaced, not hidden as exhausted.
     bench.setHasMore(true)
-    expect(await injected.loadOlder()).toBe('retry')
+    expect(await injected.loadOlder()).toBe('prepared')
     await bench.fiber.dispose()
   })
 
@@ -457,7 +511,7 @@ describe('browser plugin registration', () => {
     expect(second).toBe(first)
     await Promise.resolve()
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
-    expect(await first).toBe('retry')
+    expect(await first).toBe('prepared')
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
 
     // Chat/Trajectory may own the next page; do not start a second request or
@@ -466,8 +520,19 @@ describe('browser plugin registration', () => {
     expect(await injected.loadOlder()).toBe('retry')
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
     bench.setLoadingOlder(false)
-    expect(await injected.loadOlder()).toBe('retry')
+    expect(await injected.loadOlder()).toBe('prepared')
     expect(bench.loadOlder).toHaveBeenCalledTimes(2)
+    await bench.fiber.dispose()
+  })
+
+  it('keeps the gesture retryable when no page was prepared', async () => {
+    const bench = await mountPlugin()
+    const injectEntry = bench.entries()[0]!.inject as ((sessionId: SessionId) => StatsViewInjected) | undefined
+    const injected = injectEntry!(SID)
+    bench.setHasMore(true)
+    // A busy or invalidated request leaves nothing pending for the view to place.
+    bench.setHistoryStatus('idle')
+    expect(await injected.loadOlder()).toBe('retry')
     await bench.fiber.dispose()
   })
 
@@ -507,19 +572,25 @@ describe('browser plugin registration', () => {
     bench.notify()
     expect(listener).toHaveBeenCalledTimes(1)
     unsubscribe()
-    // A page that grew the published snapshot reports progress.
+    // While history lasts the page is prepared for the view to publish.
+    bench.setHasMore(true)
     bench.loadOlder.mockImplementationOnce(() => {
       bench.setSnapshot({ turns: [], stepCount: 0 })
       bench.notify()
     })
-    expect(await injected.loadOlder()).toBe('grew')
+    expect(await injected.loadOlder()).toBe('prepared')
     expect(bench.loadOlder).toHaveBeenCalledTimes(1)
-    // A page that leaves the snapshot unchanged and has no history left is exhausted.
+    // End of history comes from the Session, so the final page reports it even
+    // though it grew the window.
+    bench.setHasMore(false)
     expect(await injected.loadOlder()).toBe('exhausted')
     expect(bench.loadOlder).toHaveBeenCalledTimes(2)
-    // A no-progress page with older history left is surfaced, not hidden as exhausted.
+    // With history left the gesture keeps preparing the next page.
     bench.setHasMore(true)
-    expect(await injected.loadOlder()).toBe('retry')
+    expect(await injected.loadOlder()).toBe('prepared')
+    // The view publishes the prepared page through the same injected face.
+    expect(injected.consumeOlder()).toBe(true)
+    expect(bench.consumeOlder).toHaveBeenCalled()
     // The source is cached per Session binding; a second injection reuses it.
     expect(injectEntry!(SID).hooks.stats).toBe(injected.hooks.stats)
     expect(() => injectEntry!('stats-missing' as SessionId)).toThrow(/unavailable/)

@@ -8,15 +8,16 @@
  * varies one field and asserts visible labels.
  */
 
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { StatsView } from '../src/client/StatsView.tsx'
 import { zh } from '../src/client/locales.ts'
+import { createStatsPreferences, type StatsPreferences } from '../src/client/stats-preferences.ts'
 import css from '../src/client/stats.module.css'
 import {
   barShare, formatChars, formatClock, formatDateTime, formatDateTimeMs, formatDateTimeShort, formatMs, formatPercent,
@@ -229,6 +230,26 @@ function imageRef(id = 'sha256:image'): ImageAttachmentRef {
   }
 }
 
+/** Remembered footer choices a test starts from; every field defaults to the shipped choice. */
+function preferences(overrides: Partial<StatsPreferences> = {}): StatsPreferences {
+  return {
+    mode: 'newest',
+    showTotals: false,
+    showEvents: false,
+    showContextDelta: false,
+    contextMode: 'latest',
+    ...overrides,
+  }
+}
+
+/** A view mounting with the given stored preferences and recording every write. */
+interface MountedPreferences {
+  readonly store: SnapshotStore<StatsPreferences>
+  readonly setPreferences: ReturnType<typeof vi.fn>
+  /** Every patch the mounted view wrote, in call order. */
+  readonly writes: Partial<StatsPreferences>[]
+}
+
 /** Render the view with every prop it consumes. */
 function mount(
   snapshot: StatsSnapshot,
@@ -236,12 +257,38 @@ function mount(
   loadImage: (attachment: ImageAttachmentRef) => Promise<string> = async () => 'blob:image',
   useProjection?: (key: string) => unknown,
   cancel: () => void = () => {},
+  stored: Partial<StatsPreferences> = {},
 ): ReturnType<typeof createSnapshotStore<StatsSnapshot>> {
   const store = createSnapshotStore<StatsSnapshot>(snapshot)
+  const preferenceStore = mountPreferences(stored)
   const useStats = bindSnapshotSelector(store)
   const projection = useProjection ?? (() => undefined)
-  render(createElement(StatsView, { useStats, t, loadOlder, loadImage, useProjection: projection, cancel } as never))
+  render(createElement(StatsView, {
+    useStats,
+    usePreferences: preferenceStore.use,
+    setPreferences: preferenceStore.setPreferences,
+    t,
+    loadOlder,
+    // The real loader prepares a page; these views publish it as they receive it.
+    consumeOlder: () => true,
+    loadImage,
+    useProjection: projection,
+    cancel,
+  } as never))
   return store
+}
+
+/** Bind one preference source the way the renderer binds an inject hook. */
+function mountPreferences(stored: Partial<StatsPreferences> = {}): MountedPreferences & {
+  readonly use: ReturnType<typeof bindSnapshotSelector<StatsPreferences>>
+} {
+  const store = createSnapshotStore<StatsPreferences>(preferences(stored))
+  const writes: Partial<StatsPreferences>[] = []
+  const setPreferences = vi.fn((patch: Partial<StatsPreferences>) => {
+    writes.push(patch)
+    store.update((draft) => { Object.assign(draft, patch) })
+  })
+  return { store, setPreferences, writes, use: bindSnapshotSelector(store) }
 }
 
 /** The scrollport that owns the table's viewport. */
@@ -369,17 +416,21 @@ describe('empty state and footer', () => {
     mount({ turns: [], stepCount: 0 })
     expect(screen.getByText(say('empty'))).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
-    expect(screen.getByText(say('summary', { turns: 0, steps: 0 }))).toBeTruthy()
+    // The footer carries controls only: the totals row owns the counts.
+    expect(screen.queryByText(say('summary', { turns: 0, steps: 0 }))).toBeNull()
     expect(button(say('expand.all')).disabled).toBe(true)
     expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
   })
 
   it('renders every published turn with a summary and an expand-all button', () => {
     mount({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 0 })
-    expect(screen.getByText(say('summary', { turns: 3, steps: 0 }))).toBeTruthy()
+    // A loaded window alone does not report a count: the totals row does, over
+    // everything loaded, so the footer stays free of a second, partial figure.
+    expect(screen.queryByText(say('summary', { turns: 3, steps: 0 }))).toBeNull()
     expect(bodyRows()).toHaveLength(3)
     expect(button(say('expand.all')).disabled).toBe(false)
-    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
+    // Paging is a gesture: the table carries no load-earlier control at all.
+    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
   })
 
   it('toggles one turn row and all turns from the footer', () => {
@@ -402,21 +453,106 @@ describe('empty state and footer', () => {
   })
 })
 
+describe('remembered footer choices', () => {
+  it('rehydrates the stored choices and writes each change back', () => {
+    localStorage.setItem('dsh.stats.preferences', JSON.stringify({ showTotals: true, contextMode: 'cumulative' }))
+    const stored = createStatsPreferences()
+    // Seeded only with the keys the earlier version stored; absent ones keep their shipped default.
+    expect(stored.getSnapshot()).toMatchObject({ showTotals: true, contextMode: 'cumulative' })
+    stored.set({ ...stored.getSnapshot(), showEvents: true })
+    expect(JSON.parse(localStorage.getItem('dsh.stats.preferences') ?? '{}')).toMatchObject({
+      showTotals: true, showEvents: true, contextMode: 'cumulative',
+    })
+    localStorage.removeItem('dsh.stats.preferences')
+  })
+
+  /** Two turns so the totals row and the fold controls both have content. */
+  function twoTurnRows(): StatsSnapshot {
+    return {
+      turns: [turn({ turn: 1, context: 200, output: 30 }), turn({ turn: 2, context: 300, output: 40 })],
+      stepCount: 2,
+    }
+  }
+
+  it('opens with the choices another view stored', () => {
+    mount(twoTurnRows(), undefined, undefined, undefined, () => {}, {
+      mode: 'all',
+      showTotals: true,
+      showEvents: true,
+      showContextDelta: true,
+      contextMode: 'cumulative',
+    })
+    expect(screen.getByRole('switch', { name: say('table.showTotals') }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('switch', { name: say('event.show') }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('switch', { name: say('context.delta.show') }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('tab', { name: say('contextMode.cumulative') }).getAttribute('aria-selected')).toBe('true')
+    // Turns are remembered open, so the fold control now offers the collapse.
+    expect(screen.getByRole('button', { name: say('collapse.all') })).toBeTruthy()
+  })
+
+  it('stores every footer choice for other views and the next open', () => {
+    const stored = mountPreferences()
+    const view = (snapshot: StatsSnapshot): ReactElement => createElement(StatsView, {
+      useStats: bindSnapshotSelector(createSnapshotStore<StatsSnapshot>(snapshot)),
+      usePreferences: stored.use,
+      setPreferences: stored.setPreferences,
+      t,
+      loadOlder: async () => 'exhausted',
+      loadImage: async () => 'blob:image',
+      useProjection: () => undefined,
+      cancel: () => {},
+    } as never)
+    render(view(twoTurnRows()))
+    fireEvent.click(screen.getByRole('switch', { name: say('table.showTotals') }))
+    fireEvent.click(screen.getByRole('switch', { name: say('event.show') }))
+    fireEvent.click(screen.getByRole('switch', { name: say('context.delta.show') }))
+    fireEvent.click(screen.getByRole('tab', { name: say('contextMode.cumulative') }))
+    fireEvent.click(screen.getByRole('button', { name: say('expand.all') }))
+    expect(stored.writes).toEqual([
+      { showTotals: true },
+      { showEvents: true },
+      { showContextDelta: true },
+      { contextMode: 'cumulative' },
+      { mode: 'all' },
+    ])
+
+    // Another tab changes a stored choice while this view stays mounted.
+    act(() => {
+      stored.store.set({ ...stored.store.getSnapshot(), showEvents: false, contextMode: 'latest' })
+    })
+    expect(screen.getByRole('switch', { name: say('event.show') }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('tab', { name: say('contextMode.latest') }).getAttribute('aria-selected')).toBe('true')
+    expect(stored.writes).toHaveLength(5)
+
+    // Switching tabs remounts the view over the same browser-wide source.
+    cleanup()
+    render(view(twoTurnRows()))
+    expect(screen.getByRole('switch', { name: say('table.showTotals') }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('switch', { name: say('event.show') }).getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByRole('switch', { name: say('context.delta.show') }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('tab', { name: say('contextMode.latest') }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('button', { name: say('collapse.all') })).toBeTruthy()
+  })
+})
+
 describe('older history', () => {
   /** Two settled turns, so one scroll can request an older page. */
   function twoTurns(): StatsSnapshot {
     return { turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 }
   }
 
-  it('prefetches one older page on the first content commit in a real scrollport', async () => {
+  it('waits for the reader to reach the top instead of loading history on open', async () => {
     vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(800)
-    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'grew')
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'prepared')
+    const initial = stubInitialScroll(1_200)
     mount(twoTurns(), loadOlder)
     await act(async () => {})
-    expect(loadOlder).toHaveBeenCalledTimes(1)
+    // Opening lands on the newest turn and pulls nothing, as the Trajectory table does.
+    expect(initial.top).toBe(1_200)
+    expect(loadOlder).not.toHaveBeenCalled()
   })
 
-  it('loads near the top, reports the load, and stops after an exhausted page', async () => {
+  it('loads near the top without reporting progress, and stops after an exhausted page', async () => {
     const gate = deferred<LoadOlderResult>()
     const loadOlder = vi.fn(() => gate.promise)
     mount(twoTurns(), loadOlder)
@@ -425,7 +561,9 @@ describe('older history', () => {
 
     fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('status').textContent).toBe(say('loadOlder.loading'))
+    // Nothing announces paging, so the table never shows a transient strip.
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('group')).toBeNull()
     expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
 
     // A second scroll while the page is in flight must not start another load.
@@ -433,46 +571,113 @@ describe('older history', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1)
 
     await act(async () => { gate.resolve('exhausted') })
-    expect(screen.getByText(say('loadOlder.done'))).toBeTruthy()
+    expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
     expect(screen.queryByRole('status')).toBeNull()
 
     fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(1)
   })
 
-  it('loads from the visible button and stops once a page reports no progress', async () => {
+  it('keeps pulling pages while the table is shorter than the viewport', async () => {
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'prepared')
+    // A short table has nothing to scroll, so the gesture can never fire; the
+    // view asks for the next page itself until the table fills.
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(800)
+    Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, get: () => 400 })
+    const store = mount(twoTurns(), loadOlder)
+    await act(async () => { store.set({ turns: [turn({ turn: 1 })], stepCount: 1 }) })
+    expect(loadOlder).toHaveBeenCalled()
+  })
+
+  it('does not keep paging when a landed page leaves the reader above the top', async () => {
+    const gate = deferred<LoadOlderResult>()
     let pages = 0
     const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => {
       pages += 1
-      return pages === 1 ? 'grew' : 'exhausted'
+      return pages === 1 ? gate.promise : 'prepared'
     })
-    mount(twoTurns(), loadOlder)
-
-    fireEvent.click(screen.getByRole('button', { name: say('loadOlder') }))
+    const layout = { height: 1_000, top: 0 }
+    Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, get: () => 300 })
+    Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, get: () => layout.height })
+    const store = mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => layout.top,
+      set: (next: number) => { layout.top = next },
+    })
+    fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('status').textContent).toBe(say('loadOlder.loading'))
-    await act(async () => {})
-    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
-    expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
+    // The page lands but the reader is no longer at the top, so nothing follows.
+    layout.top = 400
+    layout.height = 1_500
+    await act(async () => {
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 })
+      gate.resolve('prepared')
+    })
+    // A repaint of the same turns reaches the follow-up check with nothing owed.
+    await act(async () => { fireEvent.scroll(scroller) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: say('loadOlder') }))
+  it('keeps the gesture available when the prepared page cannot be published', async () => {
+    const gate = deferred<LoadOlderResult>()
+    const loadOlder = vi.fn(() => gate.promise)
+    render(createElement(StatsView, {
+      useStats: bindSnapshotSelector(createSnapshotStore<StatsSnapshot>(twoTurns())),
+      usePreferences: mountPreferences().use,
+      setPreferences: () => {},
+      t,
+      loadOlder,
+      // An invalidated page publishes nothing, so no row will arrive for it.
+      consumeOlder: () => false,
+      loadImage: async () => 'blob:image',
+      useProjection: () => undefined,
+      cancel: () => {},
+    } as never))
+    const scroller = scrollRegion()
+    scrollDouble(scroller, 1_000, 0)
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    await act(async () => { gate.resolve('prepared') })
+    // The reader reaching the top again must still be able to page.
+    loadOlder.mockImplementationOnce(async () => 'retry')
+    fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(2)
-    await act(async () => {})
-    expect(screen.getByText(say('loadOlder.done'))).toBeTruthy()
-    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
+  })
 
-    fireEvent.scroll(scrollRegion())
+  it('keeps asking on each new reach of the top until a page reports no history left', async () => {
+    let pages = 0
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => {
+      pages += 1
+      return pages === 1 ? 'prepared' : 'exhausted'
+    })
+    const store = mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    scrollDouble(scroller, 1_000, 0)
+
+    await act(async () => { fireEvent.scroll(scroller) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    // The prepared page renders, and the reader reaches the top again for the next.
+    act(() => {
+      store.set({ turns: [turn({ turn: 0 }), turn({ turn: 1 })], stepCount: 2 })
+    })
+    await act(async () => { fireEvent.scroll(scroller) })
+    expect(loadOlder).toHaveBeenCalledTimes(2)
+    // A page with no history left retires the gesture for good.
+    await act(async () => {})
+    await act(async () => { fireEvent.scroll(scroller) })
     expect(loadOlder).toHaveBeenCalledTimes(2)
   })
 
   it('ignores a scroll away from the top and keeps an empty snapshot quiet', () => {
-    const emptyLoad = vi.fn(async (): Promise<LoadOlderResult> => 'grew')
+    const emptyLoad = vi.fn(async (): Promise<LoadOlderResult> => 'prepared')
     mount({ turns: [], stepCount: 0 }, emptyLoad)
     fireEvent.scroll(scrollRegion())
     expect(emptyLoad).not.toHaveBeenCalled()
 
     cleanup()
-    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'grew')
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'prepared')
     mount(twoTurns(), loadOlder)
     const scroller = scrollRegion()
     const metrics = scrollDouble(scroller, 1_000, 200)
@@ -483,16 +688,87 @@ describe('older history', () => {
     expect(loadOlder).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the trigger retryable when the Session reports a busy page', async () => {
+  it('answers an upward wheel at the top, and ignores every other wheel', async () => {
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => 'prepared')
+    mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    const metrics = scrollDouble(scroller, 1_000, 0)
+
+    // A downward wheel asks for nothing.
+    fireEvent.wheel(scroller, { deltaY: 120 })
+    expect(loadOlder).not.toHaveBeenCalled()
+    // Nor does an upward wheel away from the top.
+    metrics.top = 400
+    fireEvent.wheel(scroller, { deltaY: -120 })
+    expect(loadOlder).not.toHaveBeenCalled()
+    // At the top, an upward wheel is the gesture: the offset cannot move further,
+    // so no scroll event would follow it.
+    metrics.top = 0
+    await act(async () => { fireEvent.wheel(scroller, { deltaY: -120 }) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+  })
+
+  it('follows a landing page while the reader keeps flicking, and only then', async () => {
+    const gate = deferred<LoadOlderResult>()
+    let pages = 0
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => {
+      pages += 1
+      return pages === 1 ? gate.promise : 'prepared'
+    })
+    const store = mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    scrollDouble(scroller, 1_000, 0)
+    await act(async () => { fireEvent.wheel(scroller, { deltaY: -120 }) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    // The page lands and shows its rows; the flick that carried the reader there
+    // is still arriving, so the commit that renders the page asks for the next.
+    await act(async () => {
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 })
+      gate.resolve('prepared')
+    })
+    await act(async () => { fireEvent.wheel(scroller, { deltaY: -120 }) })
+    expect(loadOlder).toHaveBeenCalledTimes(2)
+  })
+
+  it('asks for the next page in the commit that renders a landing page at the top', async () => {
+    let pages = 0
+    const loadOlder = vi.fn(async (): Promise<LoadOlderResult> => {
+      pages += 1
+      return 'prepared'
+    })
+    const metrics = { height: 1_000, top: 0 }
+    const store = mount(twoTurns(), loadOlder)
+    const scroller = scrollRegion()
+    Object.defineProperty(scroller, 'scrollHeight', { configurable: true, get: () => metrics.height })
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => metrics.top,
+      set: (next: number) => { metrics.top = next },
+    })
+    // A flick at the top asks for a page, and a further flick proves it continues.
+    await act(async () => { fireEvent.wheel(scroller, { deltaY: -120 }) })
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      metrics.height = 1_500
+      fireEvent.wheel(scroller, { deltaY: -120 })
+    })
+    // The rows render while the flick is still arriving: the follow-up asks again.
+    await act(async () => {
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 })], stepCount: 2 })
+    })
+    expect(pages).toBeGreaterThan(1)
+  })
+
+  it('stays retryable when the Session reports a busy page', async () => {
     const loadOlder = vi.fn(async () => 'retry' as const)
     mount(twoTurns(), loadOlder)
     const scroller = scrollRegion()
     scrollDouble(scroller, 1_000, 0)
     await act(async () => { fireEvent.scroll(scroller) })
     expect(loadOlder).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText(say('loadOlder.done'))).toBeNull()
-    expect(screen.getByRole('button', { name: say('loadOlder') })).toBeTruthy()
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: say('loadOlder') })) })
+    // A busy page is not the end of history: the gesture keeps working.
+    expect(screen.queryByRole('button', { name: say('loadOlder') })).toBeNull()
+    await act(async () => { fireEvent.scroll(scroller) })
     expect(loadOlder).toHaveBeenCalledTimes(2)
   })
 
@@ -517,28 +793,133 @@ describe('older history', () => {
     expect(loadOlder).toHaveBeenCalledTimes(2)
   })
 
-  it('restores the reading position when older turns prepend above the viewport', async () => {
+  it('leaves the reading position alone when the older page arrives', async () => {
     const gate = deferred<LoadOlderResult>()
     const loadOlder = vi.fn(() => gate.promise)
+    // One measured layout from the first commit on, so the open and the page agree.
+    const layout = { height: 1_000, top: 0, rowTop: 100 }
+    const box = (top: number): DOMRect => ({
+      top, bottom: top + 60, left: 0, right: 0, width: 0, height: 60, x: 0, y: 0, toJSON: () => ({}),
+    })
+    Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, get: () => 800 })
+    Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, get: () => layout.height })
+    Object.defineProperty(Element.prototype, 'scrollTop', {
+      configurable: true,
+      get: () => layout.top,
+      set: (next: number) => { layout.top = next },
+    })
+    // The reading line is above the table: the captured first row sits 100px down,
+    // and the page then pushes it to 600px, the height the content gained.
+    const positioned = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      return box(this.matches('tr[data-turn]') ? layout.rowTop : 0)
+    })
     const store = mount({ turns: [turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 2 }, loadOlder)
     const scroller = scrollRegion()
-    const metrics = scrollDouble(scroller, 1_000, 0)
-
+    // Inside the paging zone but not pinned at the top: this is where a prepend
+    // must be held still.
+    layout.top = 50
     fireEvent.scroll(scroller)
     expect(loadOlder).toHaveBeenCalledTimes(1)
-    // The older page commits before the promise settles, and the content grows.
+    // The older page renders first, then its rows reach the scrollport.
+    layout.rowTop = 600
     act(() => {
       store.set({
         turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })],
         stepCount: 3,
       })
     })
-    metrics.height = 1_500
-    await act(async () => { gate.resolve('grew') })
-    expect(metrics.top).toBe(500)
+    layout.height = 1_500
+    await act(async () => { gate.resolve('prepared') })
+    positioned.mockRestore()
+    // Inside the paging zone the reader is reading the older end, so the page
+    // appends in place instead of holding a row still.
+    expect(layout.top).toBe(50)
+  })
+
+  it('carries a reader at the top into the older page instead of appending under them', async () => {
+    const gate = deferred<LoadOlderResult>()
+    const loadOlder = vi.fn(() => gate.promise)
+    const layout = { height: 1_000, top: 0 }
+    const box = (top: number): DOMRect => ({
+      top, bottom: top + 60, left: 0, right: 0, width: 0, height: 60, x: 0, y: 0, toJSON: () => ({}),
+    })
+    Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, get: () => 800 })
+    Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, get: () => layout.height })
+    Object.defineProperty(Element.prototype, 'scrollTop', {
+      configurable: true,
+      get: () => layout.top,
+      set: (next: number) => { layout.top = next },
+    })
+    const positioned = vi.spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) { return box(100) })
+    const store = mount({ turns: [turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 2 }, loadOlder)
+    const scroller = scrollRegion()
+    // The scrollport carries the metrics the view reads; the top is offset 0.
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => layout.top,
+      set: (next: number) => { layout.top = next },
+    })
+    // The reader is held at the top of the loaded window.
+    layout.top = 0
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    layout.height = 1_500
+    await act(async () => {
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 3 })
+      gate.resolve('prepared')
+    })
+    positioned.mockRestore()
+    // The page inserted 500px, so the offset follows it: the rows in view stay put
+    // and the new page comes in from above rather than appearing underneath.
+    expect(layout.top).toBe(500)
+  })
+  it('moves a mid-table reader by the height the older page inserted', async () => {
+    const gate = deferred<LoadOlderResult>()
+    const loadOlder = vi.fn(() => gate.promise)
+    // The reading line sits 100px into the scrollport; turn 3's row starts there.
+    // Rows are laid out top down from a bottom edge that tracks the newest turn.
+    const layout = { height: 1_000, top: 0, bottom: 120 }
+    const at = (top: number): DOMRect => ({
+      top, bottom: top + 60, left: 0, right: 0, width: 0, height: 60, x: 0, y: 0, toJSON: () => ({}),
+    })
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this === scroller) return at(100)
+      const index = [...this.ownerDocument.querySelectorAll('tr[data-turn]')].indexOf(this)
+      return at(layout.bottom - layout.top - (2 - index) * 60)
+    })
+    vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(() => layout.height)
+    vi.spyOn(Element.prototype, 'scrollTop', 'set').mockImplementation((next: number) => { layout.top = next })
+    const store = mount({ turns: [turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 2 }, loadOlder)
+    // The mount hand-off (opening at the newest row) refreshes the prototype getter,
+    // so the scrollport pins its own position for the scroll that follows.
+    const scroller = scrollRegion()
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => layout.top,
+      set: (next: number) => { layout.top = next },
+    })
+    // The reader requested this page from the paging zone, then kept scrolling up
+    // past it before the page arrived.
+    layout.top = 64
+    fireEvent.scroll(scroller)
+    expect(loadOlder).toHaveBeenCalledTimes(1)
+    // The page renders at its new height in the same commit that restores.
+    layout.top = 200
+    layout.height = 1_500
+    await act(async () => {
+      store.set({ turns: [turn({ turn: 1 }), turn({ turn: 2 }), turn({ turn: 3 })], stepCount: 3 })
+      gate.resolve('prepared')
+    })
+    rect.mockRestore()
+    // Above the zone the page inserted 500px above the reader, and their own
+    // further scrolling is preserved rather than reset to the captured offset.
+    expect(layout.top).toBe(700)
   })
 
   it('opens at the newest turn on first mount and when the first turns arrive', () => {
+    // The commit-time open only runs in a scrollport with real layout.
+    vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(800)
     const initial = stubInitialScroll(1_200)
     mount(twoTurns())
     expect(initial.top).toBe(1_200)

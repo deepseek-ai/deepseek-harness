@@ -19,6 +19,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { de, en, es, fr, ja, NS, pt, ru, zh } from './locales.ts'
 import type { LoadOlderResult, StatsSnapshot } from './stats-contract.ts'
 import { registerStatsDefinitions } from './stats-definition.ts'
+import { createStatsPreferences } from './stats-preferences.ts'
 import { EMPTY_STATS_SNAPSHOT, registerStatsConversationView } from './stats-snapshot-builder.ts'
 import { StatsView, type StatsViewInjected } from './StatsView.tsx'
 
@@ -53,6 +54,8 @@ async function whenOpened(session: SessionFace, signal: AbortSignal): Promise<vo
 
 /** Snapshot hook name; `InjectFace` turns it into the component's `useStats` prop. */
 const HOOK = 'stats'
+/** Preference hook name; the view's `usePreferences` prop. */
+const PREFERENCES_HOOK = 'preferences'
 
 /**
  * Client plugin body: register the locale dictionaries, the event Definitions,
@@ -66,6 +69,9 @@ export function apply(ctx: Context): void {
   // One page request per Session binding; Chat/Trajectory may still own the
   // Session's in-flight page, which loadOlder observes through loadingOlder.
   const pages = new WeakMap<SessionBinding, Promise<LoadOlderResult>>()
+  // Browser-wide table preferences: one handle for every Session and every
+  // remount of the tab, persisted under a storage key that outlives both.
+  const preferences = createStatsPreferences()
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, de, es, fr, pt, ru }), 'client-ui-stats: dictionaries')
   // Registration-time text (the tab label) reads through the bound translate as
   // a thunk, so it follows the active locale without re-registration.
@@ -95,29 +101,37 @@ export function apply(ctx: Context): void {
         sources.set(binding, source)
       }
       return {
-        hooks: { [HOOK]: source },
+        hooks: { [HOOK]: source, [PREFERENCES_HOOK]: preferences },
+        setPreferences: (patch) => { preferences.update((draft) => { Object.assign(draft, patch) }) },
         cancel: () => { lifecycle.abort() },
         loadOlder: (): Promise<LoadOlderResult> => {
           const pending = pages.get(binding)
           if (pending !== undefined) return pending
           const task = (async (): Promise<LoadOlderResult> => {
-            const before = source.getSnapshot()
             // A view can mount before the Session finishes opening; paging before
             // that is a no-op, so wait for open unless the view is gone.
             await whenOpened(session, lifecycle.signal)
             if (lifecycle.signal.aborted) return 'retry'
+            // A page prepared for an earlier gesture and never published would
+            // keep the Session busy forever: publish it first so this request
+            // starts from a settled window.
+            if (session.getSnapshot().historyLoadStatus === 'pendingConsumption') session.consumeOlder()
             if (session.getSnapshot().loadingOlder) return 'retry'
-            await session.loadOlder()
-            if (source.getSnapshot() !== before) return 'grew'
+            // The page is prepared but stays unpublished until the view can place
+            // it; publishing first would render rows above the reading line.
+            await session.loadOlder({ deferConsumption: true })
             const after = session.getSnapshot()
-            // A page can grow the Session window without adding a stats node. Only
-            // an exhausted Session may hide the trigger; otherwise keep it retryable.
-            return after.hasMore ? 'retry' : 'exhausted'
+            // Nothing was prepared (a busy or invalidated page): keep the gesture.
+            if (after.historyLoadStatus !== 'pendingConsumption') return 'retry'
+            // Exhaustion comes from the Session, not from this page's own growth.
+            return after.hasMore ? 'prepared' : 'exhausted'
           })()
           const promise = task.finally(() => { pages.delete(binding) })
           pages.set(binding, promise)
           return promise
         },
+        // Publish the prepared page in the commit that can keep the reading line.
+        consumeOlder: () => session.consumeOlder(),
         // The shared Conversation cache reads the durable bytes once per Session
         // and owns the resulting browser URL until its binding is released.
         loadImage: (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),

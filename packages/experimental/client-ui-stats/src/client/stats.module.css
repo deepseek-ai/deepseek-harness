@@ -15,6 +15,7 @@
 }
 
 .scroll {
+  position: relative;
   box-sizing: border-box;
   flex: 1;
   height: 100%;
@@ -23,11 +24,16 @@
   /* No top padding: a sticky header sits at the scrollport top, and padding
      here would leave a strip where rows scroll above it. */
   padding: 0 20px 16px;
+  /* A boundary overscroll moves the whole scrollport, header included: the sticky
+     cell is positioned inside the painted content, so the rubber band carries it
+     and the damping eases it back. Refusing the bounce keeps the header on the
+     viewport edge, as Chat's transcript does. */
+  overscroll-behavior-y: none;
 }
 
-.scroll > :first-child {
-  margin-top: 12px;
-}
+/* No top gap on any child: a margin above the table leaves a band above the
+   sticky header, so the header sits at the table's margin when the table has not
+   reached the top yet and snaps to the scrollport when it has. */
 
 .empty {
   padding: 24px 0;
@@ -145,10 +151,22 @@
 }
 
 /* Older-history control above the table: the keyboard fallback and load state. */
+/* Floats over the scrollport: a strip that appears and disappears would change
+   the height the reader pages through. It must not be sticky, because the header
+   row owns the sticky slot and would move whenever this shared it. */
 .older {
+  position: absolute;
+  top: 8px;
+  right: 20px;
+  left: 20px;
+  z-index: 3;
   display: flex;
   justify-content: center;
-  padding: 2px 0 10px;
+  pointer-events: none;
+}
+
+.older > * {
+  pointer-events: auto;
 }
 
 .olderStatus {
@@ -895,12 +913,8 @@
   font: var(--dsw-font-xxs-12);
 }
 
-.summary {
-  margin-right: auto;
-  color: var(--dsw-alias-label-secondary);
-}
-
 .controls {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;

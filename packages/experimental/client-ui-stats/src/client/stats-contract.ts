@@ -6,7 +6,12 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /** Outcome of one older-history request. */
-export type LoadOlderResult = 'grew' | 'exhausted' | 'retry'
+/**
+ * Outcome of one older-page request: 'prepared' holds a page the view must publish
+ * in the commit that keeps the reading line, 'exhausted' ends history, and 'retry'
+ * leaves the gesture available without a page to place.
+ */
+export type LoadOlderResult = 'prepared' | 'exhausted' | 'retry'
 
 /** Token usage counts one assistant message reported. */
 export interface StatsUsage {
