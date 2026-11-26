@@ -172,6 +172,13 @@ const FAKE_GIT = `#!/bin/sh
 printf 'To github.com:octo/demo.git\\n * [new branch]      feat -> feat\\n' >&2
 `
 
+/**
+ * Deadline of one forge-session discovery or reference lookup in this composition. Lookups run after the tool result
+ * that starts them, often past the end of the turn, and one that exceeds this deadline fails without a binding, so
+ * waits for the bindings lookups record take the same bound.
+ */
+const LOOKUP_TIMEOUT_MS = 20_000
+
 /** One scripted model step: the tool call it makes, or the final text when undefined. */
 type ScriptedCall = Omit<ToolCallBlock, 'type' | 'id'> | undefined
 
@@ -278,7 +285,7 @@ async function load(mode: 'native' | 'ptc' = 'native') {
     '@deepseek-ai/dsh-experimental-forge': ['activeIntervalMs: 600000', 'idleIntervalMs: 600000'],
     '@deepseek-ai/dsh-experimental-forge-github': [`ghCommand: ${JSON.stringify(join(bin, 'gh'))}`],
     '@deepseek-ai/dsh-forge-gitlab': [`glabCommand: ${JSON.stringify(join(bin, 'glab'))}`, 'hosts: [gitlab.example.test]'],
-    '@deepseek-ai/dsh-experimental-forge-session': ['discoveryTimeoutMs: 20000'],
+    '@deepseek-ai/dsh-experimental-forge-session': [`discoveryTimeoutMs: ${LOOKUP_TIMEOUT_MS}`],
   }
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [...modules.keys()].flatMap(name => [
@@ -371,10 +378,12 @@ async function expectScriptedBindings(ctx: Context, session: Session, root: stri
     const record = pluginRecordOf(event)
     return record === undefined ? [] : [record.data]
   })
+  // The push's discovery and the view's reference lookup each run a `gh` process; a program's lookups start only once
+  // its root call settles.
   await vi.waitFor(() => { expect(records()).toEqual(expect.arrayContaining([
     { action: 'discover', url: 'https://github.com/octo/demo/pull/7' },
     { action: 'reference', url: 'https://github.com/octo/demo/pull/9' },
-  ])) })
+  ])) }, { timeout: LOOKUP_TIMEOUT_MS })
   const github = (number: number) => ({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number })
   expect(byUrl(ctx.forgeSession.changeRequests(session))).toEqual([
     { url: 'https://github.com/octo/demo/pull/7', origin: 'discovered', ref: github(7), update: null },
@@ -558,7 +567,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
       ref: { repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'group', name: 'app' }, number },
     })
     // Two of the five are bound by shell lookups, and a program's lookups start only once its root call settles.
-    await vi.waitFor(() => { expect(ctx.forgeSession.changeRequests(agent.session)).toHaveLength(5) }, { timeout: 10_000 })
+    await vi.waitFor(() => { expect(ctx.forgeSession.changeRequests(agent.session)).toHaveLength(5) }, { timeout: LOOKUP_TIMEOUT_MS })
     expect(byUrl(ctx.forgeSession.changeRequests(agent.session))).toEqual([5, 6, 7, 8, 9].map(number => ({
       ...merge(number), origin: number === 5 ? 'created' : 'referenced', update: null,
     })))
