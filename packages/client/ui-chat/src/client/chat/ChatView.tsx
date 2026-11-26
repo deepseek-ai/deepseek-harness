@@ -65,7 +65,7 @@ const MOTION_TAIL_MS = 800
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
-  loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
+  loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, inspectRequest, chatScroll, forkAt,
   usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
@@ -244,7 +244,8 @@ export function ChatView({
         />
       )}
       <ChatAside renderSlot={renderSlot} />
-      <div className={css.root} data-chat-following-tail={scroll.followingTail ? '' : undefined}>
+      <div className={css.root} data-chat-following-tail={scroll.followingTail ? '' : undefined}
+        data-conversation-overscroll="none" data-conversation-scroll-anchor={scroll.followingTail ? 'none' : undefined}>
         <div ref={scroll.listRef} className={css.scroll}>
           <div ref={scroll.columnRef} className={css.column} data-chat-flow=""
             data-chat-motion={deferCompletedTurns && scroll.initialized
@@ -285,7 +286,7 @@ export function ChatView({
             >
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
-                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage,
+                cwd, openFile: requestOpenFile, inspectCall, inspectRequest, forkAt, loadImage,
               }, { hookContext: flowContext })}
             </MarkdownDelegateProvider>
             <div ref={interactionSurfaceRef} className={css.textInteraction} data-text-interaction-surface=""

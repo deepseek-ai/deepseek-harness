@@ -16,19 +16,32 @@ permissions:
   statuses: write
 
 concurrency:
-  group: weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
+  # Events the publisher skips take a run-scoped group so they cannot replace queued scoring
+  # work; a base-branch retarget is not skipped.
+  group: >-
+    weighted-approval-${{ ((github.event_name == 'pull_request_target' && (github.event.pull_request.state != 'open' ||
+    (github.event.action == 'edited' && github.event.changes.base.ref == null))) ||
+    (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success') ||
+    (github.event_name == 'issue_comment' && (!github.event.issue.pull_request || github.event.issue.state != 'open' ||
+    (!contains(github.event.comment.body, '/delegate') && !contains(github.event.changes.body.from, '/delegate'))))) &&
+    format('ignored:{0}', github.run_id) ||
+    ((github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) ||
+    github.event.workflow_run.display_title) }}
   cancel-in-progress: false
 
 jobs:
   publish-status:
     if: >-
       (github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') &&
+      (github.event_name != 'pull_request_target' || github.event.action != 'edited' || github.event.changes.base.ref != null) &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
       (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&
         (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))
     name: weighted approval publisher
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      dismissed: ${{ steps.publish.outputs.dismissed }}
     steps:
       # SECURITY: the status-writing job executes policy from the trusted default
       # branch and reads pull-request reviews and comments only as API data.
@@ -70,6 +83,7 @@ jobs:
         if: steps.revoke.outputs.active == 'true'
         run: python3 -m pip install -r .github/review-ownership/requirements.txt
       - name: Publish weighted approval status
+        id: publish
         if: steps.revoke.outputs.active == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -85,3 +99,21 @@ jobs:
           DECISION_APP_SLUG: ${{ vars.DSH_APPROVAL_APP_SLUG }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs error
+
+  # The legacy publisher is the only writer of delegated-review dismissals. A GITHUB_TOKEN
+  # dismissal starts no review workflow, so the machine pilot re-evaluates here after the
+  # dismissal is visible instead of waiting for another review, push, or manual dispatch.
+  # The called job uses a distinct machine-user concurrency group, so this run holds only the
+  # legacy group while it waits and does not collide with the pilot's group.
+  evaluate-machine:
+    needs: publish-status
+    # always(): a failure after the confirmed dismissal still needs the pilot to see the new state.
+    # The called workflow owns the review scope and the event filters, so this caller adds none.
+    if: always() && needs.publish-status.outputs.dismissed == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/weighted-approval-machine.yml
+    # Forward only this name. The called job receives the value from its protected environment.
+    secrets:
+      DSH_APPROVAL_BOT_TOKEN: ${{ secrets.DSH_APPROVAL_BOT_TOKEN }}

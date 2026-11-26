@@ -60,8 +60,14 @@ import { WorktreeSettings } from './WorktreeSettings.tsx'
 import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from './worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
-/** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace']
+/**
+ * Services required before the Remote contribution mounts, including the `uiResponsive` owner of the `useMediaQuery`
+ * prop that the change requests section and the review page read.
+ */
+export const inject = [
+  'remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace',
+  'uiResponsive',
+]
 
 /** The Forge bundle, whose page on the Plugins page lists the rows below. */
 export const FORGE_BUNDLE = '@deepseek-ai/dsh-experimental-forge-bundle'
@@ -391,9 +397,10 @@ function registerUi(ctx: Context): void {
       changesLens: (request, signal) => ctx.remote.forgePanel.changesLens(sessionId, request, signal),
       reconnect: store.panel.reconnect,
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
-      diffBases: (query, signal) => ctx.remote.forgePanel.diffBases(sessionId, query, signal),
+      localWrite: write => ctx.remote.forgePanel.localWrite(sessionId, write),
+      diffBases: (head, query, signal) => ctx.remote.forgePanel.diffBases(sessionId, head, query, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
-      localCommits: (base, signal) => ctx.remote.forgePanel.localCommits(sessionId, base, signal),
+      localCommits: (head, base, signal) => ctx.remote.forgePanel.localCommits(sessionId, head, base, signal),
       changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),
       changeRequestCommits: (url, signal) => ctx.remote.forgePanel.changeRequestCommits(sessionId, url, signal),
       viewedFiles: store.viewed,

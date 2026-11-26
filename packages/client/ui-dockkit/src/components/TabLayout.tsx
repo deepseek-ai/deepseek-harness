@@ -119,7 +119,7 @@ function TabHost({ state, callbacks, intents, tab, pane, column, floats, focusRe
  */
 export function TabLayout(props: LayoutProps): ReactNode {
   const { state, callbacks, preview } = props
-  const focusRequest = useRef<{ readonly tabId: TabId; readonly origin: Element | null }>()
+  const focusRequest = useRef<{ readonly tabId: TabId; readonly origin: Element | null }>(undefined)
   // Each pane's strip remounts under the newly selected tab's host.
   const [offsets] = useState(() => new Map<PaneId, number>())
   const tabCallbacks: PaneCallbacks = {

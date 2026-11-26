@@ -16,6 +16,9 @@ const BINARY_PROBE_BYTES = 8000
 /** Blob names of both sides on a Git `index` header line, which identify a binary change that carries no hunks. */
 const INDEX_LINE = /^index ([0-9a-f]+\.\.[0-9a-f]+)/m
 
+/** A header line that carries the file mode of a submodule entry: the `index` line of a change, or a creation or deletion. */
+const SUBMODULE_LINE = /^(?:index [0-9a-f]+\.\.[0-9a-f]+ 160000|(?:new|deleted) file mode 160000)$/m
+
 /**
  * Parse a Git-style unified patch, as `git diff` or a code host prints it,
  * with `a/` and `b/` path prefixes. Hunk ranges follow jsdiff: a range that
@@ -48,13 +51,13 @@ export function parseDiff(patch: string): ParsedDiffFile[] {
     const hunks = section.hunks.map(({ oldStart, oldLines, newStart, newLines, lines }) => (
       { oldStart, oldLines, newStart, newLines, lines }))
     // Each header matches its parsed section only when every section starts with a Git header.
-    const header = binary && headers.length === parsed.length ? String(headers[index]) : ''
-    const blobs = INDEX_LINE.exec(header)?.[1] ?? ''
+    const header = headers.length === parsed.length ? String(headers[index]) : ''
+    const blobs = binary ? INDEX_LINE.exec(header)?.[1] ?? '' : ''
     // A mode change, such as `chmod +x`, shows only in the `old mode` and `new mode` header lines.
     const modes = `${section.oldMode ?? ''}..${section.newMode ?? ''}`
     return [{
-      path, previousPath, status, binary, oversized: false, untracked: false, additions, deletions, hunks,
-      digest: changeDigest(path, previousPath, status, hunks, blobs, modes),
+      path, previousPath, status, binary, oversized: false, untracked: false, submodule: SUBMODULE_LINE.test(header), additions, deletions,
+      hunks, digest: changeDigest(path, previousPath, status, hunks, blobs, modes),
     }]
   })
 }
@@ -104,7 +107,7 @@ function addedFile(path: string, hunks: readonly ForgeDiffHunk[], { binary, over
   readonly content: string
 }): ParsedDiffFile {
   return {
-    path, previousPath: null, status: 'added', binary, oversized, untracked: true,
+    path, previousPath: null, status: 'added', binary, oversized, untracked: true, submodule: false,
     additions: hunks[0]?.newLines ?? 0, deletions: 0, hunks, digest: changeDigest(path, null, 'added', hunks, content, ''),
   }
 }

@@ -128,7 +128,7 @@ export function useShareEdit({
   /** The share whose stored record this dialog edits; nothing until the host lists one. */
   const [editableShare, setEditableShare] = useState<string>()
   /** The same share, readable from the polling closure without re-subscribing it on every adoption. */
-  const permissionShare = useRef<string>()
+  const permissionShare = useRef<string>(undefined)
   /** Whether the owner holds unsaved picks, readable from that same closure. */
   const unsaved = useRef(false)
 

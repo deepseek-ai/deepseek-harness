@@ -44,7 +44,11 @@ const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
 
-async function setup(choice = 'Allow for this session', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
+async function setup(choice = 'Allow for this session', options: {
+  writable?: boolean
+  questions?: boolean
+  initial?: readonly CuaApplicationGrant[]
+} = {}) {
   native.instances.length = 0
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
@@ -384,6 +388,67 @@ it('skips native icon work for an empty application list and propagates icon fai
   await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', accessibility: false })
+})
+
+it('loads a saved Shell icon without requiring an executable path', async () => {
+  const f = await setup('Always allow'), iconPath = 'shell:AppsFolder\\Package!App'
+  await f.save([{ id: identity.id, name: identity.name, iconPath }])
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  control.request.mockResolvedValueOnce({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({ [iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [iconPath] }, expect.any(AbortSignal))
+})
+
+it('keeps refused applications visible without an icon target', async () => {
+  const f = await setup('Deny')
+  const application = { ...identity, name: 'Windows application', executablePath: 'C:\\App.exe' }
+  await expect(f.access.select(f.agent, f.client, handle, application, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  const current = await f.ctx.cuaAccess.applications()
+  expect(current.allowedApps).toEqual([])
+  expect(current.blockedApps).toEqual([{ id: application.id, name: application.name, executablePath: application.executablePath }])
+  expect(native.instances).toHaveLength(1)
+  expect(native.instances[0]!.request).not.toHaveBeenCalled()
+  await f.ctx.cuaAccess.retryApproval(application.id)
+  expect((await f.ctx.cuaAccess.applications()).blockedApps).toEqual([])
+  expect(f.answer).toHaveBeenCalledOnce()
+})
+
+it('publishes new Windows grants and revocations while icons are pending', async () => {
+  const f = await setup('Always allow')
+  const previous = { id: identity.id, name: 'Previous label', executablePath }
+  const current = { ...identity, iconPath: executablePath }
+  await f.save([previous])
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  const pending = Promise.withResolvers<Record<string, string>>()
+  onTestFinished(() => { pending.resolve({}) })
+  control.request.mockReturnValueOnce(pending.promise)
+  const icons = f.ctx.cuaAccess.applicationIcons()
+  await vi.waitFor(() => { expect(control.request).toHaveBeenCalledWith('applicationIcons', { paths: [executablePath] }, expect.any(AbortSignal)) })
+  await f.access.select(f.agent, f.client, handle, current, signal)
+  expect(await f.ctx.cuaAccess.applications()).toMatchObject({
+    allowedApps: [expect.objectContaining({ id: current.id, name: current.name, iconPath: current.iconPath })],
+  })
+  await f.ctx.cuaAccess.revoke(current.id)
+  expect(await f.ctx.cuaAccess.applications()).toMatchObject({ allowedApps: [] })
+  pending.resolve({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
+  expect(await icons).toEqual({ [executablePath]: 'data:image/png;base64,aWNvbg==' })
+  expect(control.request).toHaveBeenCalledTimes(2)
+  expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [executablePath] }, expect.any(AbortSignal))
+})
+
+it('keeps a saved Windows app current when only its Shell icon target is available', async () => {
+  const grant = { id: identity.id, name: identity.name, iconPath: 'shell:AppsFolder\\Package!App' }
+  const f = await setup('Always allow', { initial: [grant] })
+  await f.ctx.cuaAccess.systemStatus()
+  const control = native.instances.at(-1)!
+  control.request.mockResolvedValueOnce({ [grant.iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(await f.ctx.cuaAccess.applications()).toMatchObject({ allowedApps: [grant] })
+  expect(await f.ctx.cuaAccess.applicationIcons()).toEqual({ [grant.iconPath]: 'data:image/png;base64,aWNvbg==' })
+  expect(control.request).toHaveBeenCalledTimes(2)
+  expect(control.request).toHaveBeenLastCalledWith('applicationIcons', { paths: [grant.iconPath] }, expect.any(AbortSignal))
+  expect(f.answer).not.toHaveBeenCalled()
 })
 
 it('keeps pathless grants manageable without requesting their icons', async () => {

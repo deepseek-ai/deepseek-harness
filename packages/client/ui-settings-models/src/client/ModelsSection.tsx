@@ -2,8 +2,10 @@
  * Models settings section: the provider rows joined from the configurable
  * directory, settings namespaces, and credential states, with one editor
  * card at a time. Rows retain the account-first order supplied by the store
- * and expose only confirmed API-key state through accessible
- * solid configured or missing dots. A whole-section provider without a
+ * and expose only confirmed API-key state: a solid dot when the key is
+ * configured, and a dot beside its wording when it is missing. A row whose
+ * editor is open becomes the editing surface itself, under its own name, and
+ * offers no second Edit. A whole-section provider without a
  * configured key renders as its open setup card instead of a row, but only in
  * the first-run posture — no provider on the page can serve requests yet — and
  * only until the user closes that card. The add flow is one card behind one
@@ -115,7 +117,7 @@ interface CatalogDraft {
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
-  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose'
+  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose' | 'hideTitle'
 > {
   target: EditorTarget
   row: ProviderRow
@@ -451,6 +453,11 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
             return (
               <li key={row.entry.provider} className={styles['setupCard']}>
                 {error}
+                {renderSlot(
+                  'settings.models.provider-card',
+                  { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
+                  { entryKey: row.adapterNs },
+                )}
                 {renderProviderEditor({
                   target,
                   row,
@@ -461,11 +468,6 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   readOnly: !state.writable,
                   onClose: (changed) => { closeSetup(changed, target) },
                 })}
-                {renderSlot(
-                  'settings.models.provider-card',
-                  { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
-                  { entryKey: row.adapterNs },
-                )}
               </li>
             )
           }
@@ -475,10 +477,14 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
             && row.apiKeyEnv !== undefined
             && row.credential?.configured === false
           return (
-            <li key={row.entry.provider} className={styles['rowCard']}>
+            <li key={row.entry.provider} className={`${styles['rowCard']} ${open ? styles['rowCardOpen'] : ''}`}>
               <div className={styles['rowHead']}>
                 <span className={styles['rowIdentity']}>
                   <span className={styles['rowName']}>{row.entry.displayName}</span>
+                  {/* The open card edits this route, so it names the id its settings are stored under. */}
+                  {open && row.entry.provider !== row.entry.displayName
+                    ? <span className={styles['editorRoute']}>{row.entry.provider}</span>
+                    : null}
                   {/* Only the adapter can tell a hand-declared route from a
                       shipped one it also has a stored profile for, so the tag
                       follows its answer and stays off when it gives none. */}
@@ -505,33 +511,33 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     )
                     : credentialMissing
                       ? (
-                        <span
-                          className={`${styles['credentialDot']} ${styles['credentialDotMissing']}`}
-                          role="img"
-                          aria-label={t('credentialMissing')}
-                          title={t('credentialMissing')}
-                        />
+                        // A missing key is the one state the reader must act on, so it is worded.
+                        <span className={styles['credentialMissing']}>
+                          <span className={`${styles['credentialDot']} ${styles['credentialDotMissing']}`} aria-hidden="true" />
+                          {t('credentialMissing')}
+                        </span>
                       )
                       : null}
                 </span>
                 <span className={styles['rowActions']}>
-                  {/* The account catalog comes from the account listing; its model overrides live in cordis.patch.yml. */}
-                  {row.entry.provider === 'deepseek-account'
+                  {/* The account catalog comes from the account listing; its model overrides live in cordis.patch.yml.
+                      An open card is dismissed by its own Cancel. */}
+                  {row.entry.provider === 'deepseek-account' || open
                     ? null
                     : (
                       <button
                         type="button"
                         className={styles['secondaryButton']}
                         aria-label={providerCopy(t('editProvider'), target)}
-                        disabled={!open && state.status !== 'ready'}
+                        disabled={state.status !== 'ready'}
                         onClick={() => {
-                          if (!open && controller.store.getSnapshot().status !== 'ready') return
+                          if (controller.store.getSnapshot().status !== 'ready') return
                           setSavedTarget(undefined)
                           // One card at a time: the add card closes with whatever
                           // it held, since closing either card would otherwise
                           // discard the other's draft.
                           setAddOpen(false)
-                          setEditing(open ? undefined : target)
+                          setEditing(target)
                         }}
                       >
                         {t('edit')}
@@ -576,6 +582,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   schema,
                   operations,
                   t,
+                  hideTitle: true,
                   readOnly: !state.writable,
                   onClose: (changed) => { closeEditor(changed, target) },
                 })
@@ -654,6 +661,13 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                         ))}
                       </select>
                     </div>
+                    {addRow === undefined
+                      ? null
+                      : renderSlot(
+                        'settings.models.provider-card',
+                        { provider: addRow.entry, configured: addRow.configured, keyConfigured: keyConfiguredOf(addRow) },
+                        { entryKey: addRow.adapterNs },
+                      )}
                     <ProviderEditor
                       key={draft.target.provider}
                       provider={draft.target.provider}
@@ -672,13 +686,6 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       onClose={(changed) => { closeEditor(changed, draft.target) }}
                       onBusyChange={setCatalogBusy}
                     />
-                    {addRow === undefined
-                      ? null
-                      : renderSlot(
-                        'settings.models.provider-card',
-                        { provider: addRow.entry, configured: addRow.configured, keyConfigured: keyConfiguredOf(addRow) },
-                        { entryKey: addRow.adapterNs },
-                      )}
                   </div>
                 )
                 : null}

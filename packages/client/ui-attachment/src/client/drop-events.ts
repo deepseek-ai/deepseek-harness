@@ -40,7 +40,7 @@ export function installDocumentDropEvents(
     const dataTransfer = event.dataTransfer
     if (dataTransfer === null || (!dataTransfer.types.includes('Files') && !dataTransfer.types.includes(FILE_DRAG_TOKEN_TYPE))) return null
     if (dataTransfer.types.includes(FILE_DRAG_TOKEN_TYPE)
-      && (!(event.target instanceof Element) || event.target.closest('[data-composer-card]') === null)) return null
+      && (event.target as Partial<Element>).closest?.('[data-composer-card]') == null) return null
     return dataTransfer
   }
   const reset = (): void => {

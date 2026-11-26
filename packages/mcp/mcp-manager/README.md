@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-manager` manages a live fleet of MCP servers from two sources: entries in `config.servers` on its profile entry (also editable through Settings), and entries that installed plugins register for their own lifetime. The manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances live as either source changes. `ctx.mcpManager` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, `probe` tests an entry without touching the live instances, and `watch` streams the server list to Remote clients. `${credential:REF}` templates keep secrets out of entries; mcp-client handles credential rotation inside each instance.
+`dsh-mcp-manager` manages a live fleet of MCP servers from two sources: entries in `config.servers` on its profile entry (editable through Settings), and entries that plugins and `@deepseek-ai/dsh-mcp-manager/server` rows register for their own lifetime. The manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances live as either source changes. `ctx.mcpManager` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, `probe` tests an entry without touching the live instances, and `watch` streams the server list to Remote clients. `${credential:REF}` templates keep secrets out of entries; mcp-client handles credential rotation inside each instance.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the manager once per Host. It creates its own MCP client host, the only way it validates, mounts, probes, and authorizes servers. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md), and the SDK profile mounts the same row through [`dsh-sdk-app`](../../bundle/sdk-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
+Mount the manager once per Host. It creates its own MCP client host, the only way it validates, mounts, probes, and authorizes servers. The Web and Desktop profiles mount it as the `mcp-manager` row of [`dsh-web-app`](../../bundle/web-app/README.md), and the SDK profile mounts the same row through [`dsh-sdk-app`](../../bundle/sdk-app/README.md). Its volatile `config.servers` holds configured entries; Settings uses the owning entry id as its namespace (`mcp` in the examples below). A server can instead be [its own row](#declaring-a-server-as-its-own-row) beside the manager row. Credential templates and OAuth grants resolve through the credentials provider, so compose the row with `inject: [credentials]` wherever entries may use them.
 
 ### When to choose it
 
-Choose the manager when the server set changes at runtime: a settings edit or a management surface adds, reconfigures, disables, or deletes configured servers, or an installed plugin brings its own server. Keep plain `dsh-mcp-client` rows instead when a deployment pins its servers in the composition, or when a server belongs to one agent preset rather than the whole Host; the manager governs the global plane only.
+Choose the manager when the server set changes at runtime: a settings edit or a management surface adds, reconfigures, disables, or deletes configured servers, or an installed plugin brings its own server. Keep plain `dsh-mcp-client` rows instead when a deployment pins its servers in the composition, or when a server belongs to one agent preset rather than the whole Host; the manager governs the global plane only. Among managed servers, declare a server as [its own row](#declaring-a-server-as-its-own-row) when composition layers add, change, or switch servers independently, and keep `servers` for the set that Settings edits.
 
 ### Minimal configuration
 
@@ -75,6 +75,48 @@ A profile’s `cordis.patch.yml` replaces the entry’s complete `servers` map. 
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
 
+<a id="declaring-a-server-as-its-own-row"></a>
+### Declaring a server as its own row
+
+A `@deepseek-ai/dsh-mcp-manager/server` row declares one server beside the manager row. Its config is `serverName` and the fields of one `servers` entry except `enabled`:
+
+```yaml
+- id: mcp
+  name: '@deepseek-ai/dsh-mcp-manager'
+  inject: [credentials]
+
+- id: mcp-server-github
+  name: '@deepseek-ai/dsh-mcp-manager/server'
+  config:
+    serverName: github
+    transport: stdio
+    command: npx
+    args: ['-y', '@modelcontextprotocol/server-github']
+    env:
+      GITHUB_TOKEN: '${credential:GITHUB_TOKEN}'
+```
+
+A later composition layer — a bundle patch, the profile’s `cordis.patch.yml`, or a `--patch` overlay — changes one server without restating the others, which a layer that sets `servers` cannot do. `insert` adds a row, and an entry naming an existing row’s `id` overrides the keys it lists: `disabled: true` switches that server off, and a listed `config` replaces that row’s complete config.
+
+```yaml
+- insert:
+    - id: mcp-server-internal
+      name: '@deepseek-ai/dsh-mcp-manager/server'
+      config:
+        serverName: internal
+        transport: streamable-http
+        url: https://mcp.example.com/mcp
+        headers:
+          Authorization: 'Bearer ${credential:MCP_TOKEN}'
+
+- id: mcp-server-github
+  disabled: true
+```
+
+A server row is an ordinary Loader entry that registers its server for the row's lifetime, so composition changes are the server operations. A new row registers and mounts its server. A row whose `config` changes restarts alone: the manager unmounts and remounts that one server while the other servers keep running. `disabled: true`, or a composition that no longer lists the row, unloads it: the manager unmounts the server, withdraws its tools, and stops listing it. A broken row — a missing `command`, a cross-transport field, a malformed template, or a `serverName` or `oauth.credentialKey` another server already uses — fails alone: the Host warns that the row did not activate, and the other servers start. [Profiles](../../boot/app-boot/README.md#profiles) documents the patch files and when a running Host applies them; [startup and reload failures](../../boot/app-boot/README.md#startup-and-reload-failures) documents the warning.
+
+Rows and `servers` entries share one namespace of server names. A row that names a server a `servers` entry holds fails, including an entry with `enabled: false`, and the entry keeps serving; a `servers` write that names a server a running row holds is refused. A layer that deletes a `servers` entry and adds the row of the same name in one edit moves the server to the row. A row takes no `enabled` field and fails when its config carries one, so an `enabled: false` copied from a `servers` entry cannot start the server; the row's `disabled` is its switch. Settings lists no server row: a row has no volatile field, so every edit of a row restarts it.
+
 ### Managing configured servers
 
 Settings writes persist through ConfigEditor with revision checks; Loader updates the volatile configuration without remounting the manager. Every committed configuration change reconciles the fleet: a new enabled entry mounts, a removed entry unmounts, `enabled: false` unmounts while keeping the entry listed, and any other field change rebuilds that one instance while unchanged siblings keep running. Through Settings, inherited servers can be overridden or disabled; deleting an inherited server restores its base configuration. Only servers added by the user layer are removable. A broken entry — a missing `command`, a cross-transport field, a malformed template, or a name a plugin already registers — is refused at the write, so the document never stores a server the manager cannot act on.
@@ -101,7 +143,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-`register(name, entry)` accepts every configured-entry field except `enabled` and applies the same validation. A registration lasts for the calling plugin's lifetime: disabling or uninstalling the plugin through the plugin manager unloads it, and the registration's disposal unmounts the server and withdraws its tools before the plugin's disposal settles. Values the server resolved stay in the credentials provider. A registered name must differ from every configured entry and every other registration; the registration and a later settings write both refuse a collision. Settings does not edit registered entries.
+`register(name, entry)` accepts every configured-entry field except `enabled` and applies the same validation; a server row makes this call for the server its config declares. A registration lasts for the calling plugin's lifetime: disabling or uninstalling the plugin through the plugin manager unloads it, and the registration's disposal unmounts the server and withdraws its tools before the plugin's disposal settles. Values the server resolved stay in the credentials provider. A registered name must differ from every configured entry and every other registration; the registration and a later settings write both refuse a collision. Settings does not edit registered entries.
 
 ### Observing and recovering
 
@@ -109,7 +151,7 @@ export function apply(ctx: Context): void {
 
 `whenSettled(signal)` resolves once `list()` reports no server as `connecting` with `attempt: 0`, the first attempt of a connection. Every later state counts, including a failed attempt, a reconnect attempt, and waiting for credentials or authorization; servers that join during the wait are included. It returns the names still in their first attempt when the signal aborts or the manager is disposed, and an empty list once settled. The [SDK server](../../sdk/server/README.md) uses it to hold `initialize` for at most its `startupWaitMs`. It is a Host method; Remote clients observe the same states through `watch`.
 
-Reconnection stays inside mcp-client. `restart(name)` replaces an instance and resets its reconnect budget, including after that budget runs out. Unconfirmed transport closure or a local cleanup error blocks replacement and further probes for that server; restart the Host to recover. `probe(name, options)` resolves templates, connects, reads server identity and tool names, and closes without registering tools or reserving a namespace. Disabled entries can be probed. On an OAuth entry, a probe may refresh an expired grant and save the new tokens. The probe has its own deadline and cancellation signal, and reports connection/listing success separately from closure and cleanup results.
+Reconnection stays inside mcp-client. `restart(name)` replaces an instance and resets its reconnect budget, including after that budget runs out. Unconfirmed transport closure or a local cleanup error blocks replacement and further probes for that server; restart the Host to recover. `probe(name, options)` resolves templates, connects, reads server identity and tool names, and closes without registering tools or reserving a namespace. Disabled entries can be probed; a switched-off server row is not loaded, so `probe` does not know its server. On an OAuth entry, a probe may refresh an expired grant and save the new tokens. The probe has its own deadline and cancellation signal, and reports connection/listing success separately from closure and cleanup results.
 
 <a id="oauth-authorization"></a>
 ### OAuth authorization
@@ -136,8 +178,9 @@ This section explains the design decisions and points at the code; the observabl
 
 ### Design philosophy
 
-- **Two sources own the server set.** The current volatile Config value (schema defaults → inherited profile configuration → user patch) determines configured entries; registrations add plugin-owned entries. Runtime records retain instance ownership, active probes, and cleanup failures. External file edits and management-surface writes take the same path.
+- **Two sources own the server set.** The current volatile Config value (schema defaults → inherited profile configuration → user patch) determines configured entries; registrations add the entries of server rows and other plugins. Runtime records retain instance ownership, active probes, and cleanup failures. External file edits and management-surface writes take the same path.
 - **Registrations are effects.** A registration is an effect of the calling plugin, so its owner's lifecycle decides when the server exists; no plugin writes another plugin's configuration or leaves an entry behind on removal.
+- **A server row is a registration.** The row plugin is a second entry of this package that calls `register()` with its config, so the Loader's handling of rows decides that server: composition layers add and remove it, `disabled` switches it, and the row validates and restarts alone. The manager adds no code for rows.
 - **One serialized operation tail.** Reconciles and restarts queue on one chain, so two lifecycle operations cannot interleave one instance's unmount/mount. Probes run independently; entry changes and disposal cancel them before waiting for the operation tail and owned cleanup.
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
 - **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not. The MCP client host validates the fields mcp-client owns — the entry key as `serverName`, template tokens, `reconnect`, and `oauth` — through each transport's own schema, so those refusals name the field too; the manager's schema passes `reconnect` and `oauth` through unresolved.
@@ -149,6 +192,8 @@ This section explains the design decisions and points at the code; the observabl
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | The service: schema, validation, registrations, reconcile, restart, probe, watch, status registry |
+| [`src/entry.ts`](src/entry.ts) | The fields of one entry and the schema that the service and the server row share |
+| [`src/server-row.ts`](src/server-row.ts) | The server row plugin (`./server`): one row registers one server |
 | [`src/types.ts`](src/types.ts) | The status union, list view, and the `mcp-manager/status` event declaration (`./types`) |
 
 ### Lifecycle notes
@@ -166,9 +211,11 @@ Read these pages when the package-level contract is not enough.
 
 - [mcp-client README](../mcp-client/README.md) — the per-instance bridge: naming, reconnect policy, tool execution, status surface.
 - [Settings package README](../../settings/settings/README.md) — the Config forms, inheritance, revision checks, and profile writes the manager uses.
+- [App-boot README](../../boot/app-boot/README.md#profiles) — the composition layers and patch files that add, edit, and switch off server rows.
 - [Credentials group README](../../credentials/README.md) — the credential references `${credential:…}` templates resolve.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) — every accepted config field.
 - [MCP manager Agent Note](../../../.agents/notes/implemented/feature/2026-08-31-mcp-manager-plugin.md) — the design decisions, peer-product survey, and rejected alternatives.
+- [Server rows Agent Note](../../../.agents/notes/implemented/architecture/2026-11-24-mcp-manager-server-rows.md) — why a server can be its own row beside `servers`, and the alternatives.
 
 -----
 
@@ -191,6 +238,9 @@ These limits describe what you cannot do with this manager today. They are curre
 - **Global plane only** — instances mounted by agent presets or static `cordis.yml` rows are neither listed nor governed; a static instance shows up only as a `serverName` collision when a managed entry tries to reuse its name.
 - **A rebuild has a tool gap** — a changed entry is disposed and remounted, so its tools disappear from the model's set until the new instance finishes its initial sync; there is no keep-serving-until-replacement handover.
 - **Registered entries are fixed by their plugin** — Settings cannot override a registered entry's budgets; the registering plugin exposes any tunable it needs in its own configuration.
+- **Server rows have no management surface** — rows are added, edited, switched off, and removed in the composition files; Settings edits only the `servers` dictionary, and the manager's Remote has no method that writes a row.
+- **A switched-off row is not listed** — a row with `disabled: true` is unloaded, so the manager cannot list, probe, or authorize its server until the row loads again; a `servers` entry with `enabled: false` stays listed as `disabled`.
+- **An invalid `servers` entry stops every server** — the dictionary is validated as one value when the manager starts, so the manager row fails and its server rows wait for it; an invalid server row fails alone.
 - **Probe output is capped** — a probe defaults to 16 listing pages and 512 tool names, reporting truncation beyond those limits; callers can set `maxPages` and `maxToolNames`.
 
 <a id="dev-note"></a>

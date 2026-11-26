@@ -38,6 +38,7 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
@@ -51,6 +52,7 @@
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-package-manifest": "workspace:*",
     "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-skill": "workspace:*"
@@ -59,7 +61,9 @@
     "zod": "4.6.6",
     "@deepseek-ai/dsh-client-ui-plugin-recommendations": "workspace:*",
     "@deepseek-ai/dsh-action-cards": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-action-cards": "workspace:*",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
+    "@deepseek-ai/dsh-util-values": "workspace:*"
   },
   "files": [
     "icon.svg",

@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-client-modules": "workspace:*",
     "@types/picomatch": "^4.0.3"
   },
   "peerDependencies": {

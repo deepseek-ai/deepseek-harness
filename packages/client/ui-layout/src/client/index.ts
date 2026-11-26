@@ -135,6 +135,11 @@ export interface SidebarOwnerProps {
   width: number
   /** Present the retained sidebar content as an overlay drawer. */
   drawer: boolean
+  /**
+   * True while the frame eases its column tracks after a collapse, expand, or fold change, and false during a
+   * resize drag or a viewport change; a sidebar that sets its own width eases it on the same curve meanwhile.
+   */
+  animating: boolean
 }
 
 /** Right column owner share: resolved normal geometry and opening eligibility. */

@@ -6,6 +6,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { InspectorTable, type InspectorTableProps } from '../src/client/views/InspectorTable.tsx'
 import type { InspectorRecord, InspectorRow } from '../src/client/views/table-model.ts'
 import type { InspectorObjectReference } from '../src/client/views/objects.ts'
@@ -15,6 +16,9 @@ import { installInspectorTableGeometry } from './table-geometry.client.ts'
 
 beforeEach(() => { installInspectorTableGeometry() })
 afterEach(cleanup)
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
 
 it('uses the merged reasoning preview only when folded and preserves raw block-start fields', () => {
   const rows = createSnapshotStore<readonly InspectorRow[]>([
@@ -26,11 +30,11 @@ it('uses the merged reasoning preview only when folded and preserves raw block-s
     ['delta', { type: 'reasoning-delta', identity: '1', location: '1/1', value: { type: 'reasoning-delta', index: 7, text: 'merged deltas' } }],
   ])
   const props: InspectorTableProps = {
-    title: 'Session Log', flash: false, showTime: true, useRows: bindSnapshotSelector(rows),
+    title: 'Session Log', flash: false, reducedMotion: false, showTime: true, useRows: bindSnapshotSelector(rows),
     useRecord: ((key: string) => records.get(key)),
     typeOf: key => records.get(key)?.type,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('fold-preview' as SessionId))),
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   fireEvent.click(ui.getByRole('button', { name: 'blockType: reasoning · merged deltas' }))
@@ -50,11 +54,11 @@ it('omits type and sequence fields only from the horizontal data preview', () =>
     data: { type: 'reasoning', seq: 2, sequence: 3, text: 'delta' },
   } }
   const props: InspectorTableProps = {
-    title: 'Session Log', flash: false, showTime: true, useRows: bindSnapshotSelector(rows),
+    title: 'Session Log', flash: false, reducedMotion: false, showTime: true, useRows: bindSnapshotSelector(rows),
     useRecord: ((key: string) => key === 'event' ? record : undefined),
     typeOf: key => key === 'event' ? record.type : undefined,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('preview-session' as SessionId))),
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   expect(ui.getByRole('columnheader', { name: 'Time (UTC)' })).toBeTruthy()
@@ -69,7 +73,7 @@ it('omits type and sequence fields only from the horizontal data preview', () =>
   expect(ui.container.querySelectorAll('details:not([open])')).toHaveLength(0)
 })
 
-it('virtualizes the table and updates the selected row in place with an animation', () => {
+it('virtualizes the table and updates the selected row in place, animating unless motion is reduced', () => {
   const previous = Object.getOwnPropertyDescriptor(Element.prototype, 'animate')
   const cancel = vi.fn()
   const animate = vi.fn(() => ({ cancel }))
@@ -78,17 +82,15 @@ it('virtualizes the table and updates the selected row in place with an animatio
     if (previous === undefined) Reflect.deleteProperty(Element.prototype, 'animate')
     else Object.defineProperty(Element.prototype, 'animate', previous)
   })
-  vi.stubGlobal('matchMedia', () => ({ matches: false }))
-  onTestFinished(() => { vi.unstubAllGlobals() })
   const rows = createSnapshotStore<readonly InspectorRow[]>(Array.from({ length: 1000 }, (_, index) => ({ key: String(index), depth: 0 })))
   const records = new Map(rows.getSnapshot().map(row => [row.key, {
     type: `node-${row.key}`, identity: row.key, location: '1/1', value: { text: `original-${row.key}` },
   } satisfies InspectorRecord]))
   const recordHook = () => ((key: string) => records.get(key)) as InspectorTableProps['useRecord']
   const props: InspectorTableProps = {
-    title: 'Chat Node', flash: true, showTime: false, useRows: bindSnapshotSelector(rows), useRecord: recordHook(),
+    title: 'Chat Node', flash: true, reducedMotion: false, showTime: false, useRows: bindSnapshotSelector(rows), useRecord: recordHook(),
     typeOf: key => records.get(key)?.type,
-    useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('table-session' as SessionId))), loadOlder: vi.fn(async () => {}), t: makeTranslate(en),
+    useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('table-session' as SessionId))), loadOlder: vi.fn(async () => {}), t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   expect(ui.queryByRole('columnheader', { name: 'Time (UTC)' })).toBeNull()
@@ -106,6 +108,10 @@ it('virtualizes the table and updates the selected row in place with an animatio
   expect(ui.getByRole('button', { name: `node-${key}` }).closest('tr')).toBe(row)
   expect(ui.getByText('"updated"', { exact: false })).toBeTruthy()
   expect(animate).toHaveBeenCalledOnce()
+  records.set(key, { type: `node-${key}`, identity: key, location: '1/1', value: { text: 'quiet' } })
+  ui.rerender(<InspectorTable {...props} reducedMotion useRecord={recordHook()} />)
+  expect(ui.getByText('"quiet"', { exact: false })).toBeTruthy()
+  expect(animate).toHaveBeenCalledOnce()
   ui.unmount()
   expect(cancel).toHaveBeenCalled()
 })
@@ -120,11 +126,11 @@ it('opens cyclic raw nodes, contains formatter errors, and permits closing and r
     } }],
   ])
   const props: InspectorTableProps = {
-    title: 'Chat Node', flash: false, showTime: false, useRows: bindSnapshotSelector(rows),
+    title: 'Chat Node', flash: false, reducedMotion: false, showTime: false, useRows: bindSnapshotSelector(rows),
     useRecord: ((key: string) => records.get(key)),
     typeOf: key => records.get(key)?.type,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('details-session' as SessionId))),
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   fireEvent.click(ui.getByRole('button', { name: 'assistant' }))
@@ -154,11 +160,11 @@ it('shows the complete row identity in a tooltip outside the table clipping area
   const rows = createSnapshotStore<readonly InspectorRow[]>([{ key: identity, depth: 0 }])
   const record: InspectorRecord = { type: 'assistant', identity, location: '', value: {} }
   const props: InspectorTableProps = {
-    title: 'Chat Node', flash: false, showTime: false, useRows: bindSnapshotSelector(rows),
+    title: 'Chat Node', flash: false, reducedMotion: false, showTime: false, useRows: bindSnapshotSelector(rows),
     useRecord: ((key: string) => key === identity ? record : undefined),
     typeOf: key => key === identity ? record.type : undefined,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('tooltip-session' as SessionId))),
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   const id = ui.getByText(identity)
@@ -172,17 +178,15 @@ it('shows the complete row identity in a tooltip outside the table clipping area
 })
 
 it('handles empty history, pagination retry, loading state, and removal of the selected record', async () => {
-  vi.stubGlobal('matchMedia', () => ({ matches: true }))
-  onTestFinished(() => { cleanup(); vi.unstubAllGlobals() })
   const rows = createSnapshotStore<readonly InspectorRow[]>([])
   const session = createSnapshotStore({ ...sessionSnapshot('paging-session' as SessionId), hasMore: true })
   const records = new Map<string, InspectorRecord>()
   const retried = Promise.withResolvers<undefined>()
   const loadOlder = vi.fn<() => Promise<void>>().mockRejectedValueOnce(new Error('page unavailable')).mockReturnValueOnce(retried.promise)
   const props: InspectorTableProps = {
-    title: 'Session Log', flash: false, showTime: true,
+    title: 'Session Log', flash: false, reducedMotion: true, showTime: true,
     useRows: bindSnapshotSelector(rows), useSession: bindSnapshotSelector(session), useRecord: (key: string) => records.get(key),
-    typeOf: key => records.get(key)?.type, loadOlder, t: makeTranslate(en),
+    typeOf: key => records.get(key)?.type, loadOlder, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   expect(ui.getByText(en['table.empty'])).toBeTruthy()
@@ -211,20 +215,18 @@ it('handles empty history, pagination retry, loading state, and removal of the s
 })
 
 it('keeps reference details navigable after their table row has disappeared', () => {
-  vi.stubGlobal('matchMedia', () => ({ matches: true }))
-  onTestFinished(() => { cleanup(); vi.unstubAllGlobals() })
   const child = { text: 'reference value' }
   const reference: InspectorObjectReference = { id: 'retired', kind: 'node', identity: 'retired',
     rowKey: 'removed-row', target: {}, read: () => child }
   const rows = createSnapshotStore<readonly InspectorRow[]>([{ key: 'original', depth: 0 }])
   const record: InspectorRecord = { type: 'node', identity: 'original', location: '', value: { linked: child } }
   const props: InspectorTableProps = {
-    title: 'Chat Node', flash: false, showTime: false, useRows: bindSnapshotSelector(rows),
+    title: 'Chat Node', flash: false, reducedMotion: true, showTime: false, useRows: bindSnapshotSelector(rows),
     useRecord: (key: string) => key === 'original' ? record : undefined, typeOf: () => 'node',
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('retired-row-session' as SessionId))),
     objects: { sessionId: 'retired-row-session' as SessionId, updates: createSnapshotStore<object>({}),
       reference: value => value === child ? reference : undefined, row: () => undefined },
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   fireEvent.click(ui.getByRole('button', { name: 'node' }))

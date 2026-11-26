@@ -14,7 +14,7 @@
   pointer-events: none;
 }
 
-:global([data-conversation-scroll]) .slot {
+.slot:is(:global([data-conversation-scroll]) *) {
   position: sticky;
 }
 

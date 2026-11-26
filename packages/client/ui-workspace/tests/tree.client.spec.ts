@@ -453,6 +453,20 @@ describe('deriveGroups', () => {
     ).items[0]).toMatchObject({ id: parent.id, runningSubagentCount: 1 })
   })
 
+  it('hides side-origin sessions from groups, the flat list, and title search', () => {
+    const source = summary('source', 1)
+    const side = { ...summary('source side', 2), origin: 'side' as const }
+    const sessions = list(source, side)
+    const groups = deriveGroups(sessions, [workspace('first', ['source', 'source side'])], noRows, noAttention, view(['first']))
+
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([source.id])
+    expect(groups[0]!.sessionCount).toBe(1)
+    expect(deriveFlat(sessions, visibleSessionIds(sessions, noArchive, 'default'), noRows, noAttention)
+      .map(node => node.id)).toEqual([source.id])
+    expect(searchResults(sessions, [], 'source', noArchive, 'default', noAttention, { items: [], hasMore: false }, 10)
+      .items.map(item => item.id)).toEqual([source.id])
+  })
+
   it('uses current child status only for members of the direct parent catalog', () => {
     const parent = summary('parent', 1)
     const child = { ...summary('child', 2), running: false }

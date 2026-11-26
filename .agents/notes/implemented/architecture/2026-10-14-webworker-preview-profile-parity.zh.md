@@ -27,6 +27,7 @@ Status: implemented
   - 镜像里放一份只含清单的 `node_modules/@deepseek-ai/dsh/package.json`（原样复制 `apps/cli/package.json`），作为安装锚点，镜像 manifest 在 `installation` 里记录它。
   - 镜像不带组合好的配置，也没有 `config/cordis.yml`；镜像 manifest 记录 Worker 要启动的 `profile`。
   - 镜像带一份 home patch `home/cordis.patch.yml`：对运行时 `PLATFORM_ENTRY_CONFIG` 列出的每一行（`session-persistence-jsonl`），写入模板各 bundle 层合成出的配置，并在其上设置所需字段（`compression: none`）。补丁会整体替换一行的配置，所以保留合成出的字段；打包时读取的 bundle 文件就是镜像里的那些。
+  - 镜像预置 profile patch `home/profiles/<profile>/cordis.patch.yml`，写入 Preview 无需密钥的模型默认值：插入 [`llm-mock`](../../../../packages/experimental/llm-mock/README.zh.md) 行，把 `agent-default-model` 设为 `mock` 路由，并在 `ui-settings-models` 上设置 `credentialOnboarding: false`。App-boot 初始化 profile 时保留已有的 profile patch，ConfigEditor 写入该层，因此用户仍可在模型设置中选择并保存其他模型、添加提供方密钥。Profile 恢复流程把该 patch 移走时，这些默认值也会一并丢失。
 - **Worker**
   - 用镜像里 app-boot 的 `loadProfile` 从模板初始化 `home/profiles/<profile>`，写空的根 `cordis.yml`，用 `readProfilePatches` 组合。
   - profileContext 按 `runProfile` 填写：name、dir、patchPath、installAnchor、startedBundles、cwd、home，overlay 列表为空，因此 Worker 与不带 `--patch` 的启动器一样只调用一次 `readProfilePatches`。
@@ -51,7 +52,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 
 ### 懒加载 chunk 独立归档
 
-- **分类**：client 构建预设只以 `require.async("./client.<name>.js")` 的形式产出包内 chunk 请求，`verify-client-packages` 禁止同步 require chunk。packer 的 `lazyChunksOf` 扫描清扫后镜像里的每个页面资源（各包的 `lib/client.js` 和 `lib/client.*.js`）中的这些字面量，因此 chunk 引用的 chunk 不必从 `./client` 入口沿请求追踪也能找到。在任一条件下被某个包的 `./client` 导出指向的目标（如 `client.browser.js`）会被立即加载，留在基础镜像；其余目标移出基础镜像。请求包未发布的 chunk 会让打包失败。
+- **分类**：client 构建预设只以 `require.async("./client.<name>.js")` 的形式产出异步的包内 chunk 请求，可选带上 `{ deps: [...] }` 预取提示，列出该请求需要的其他所有 chunk（[分片依赖](2026-11-26-package-local-chunk-dependencies.zh.md)）。packer 的 `lazyChunksOf` 扫描清扫后镜像里的每个页面资源（各包的 `lib/client.js` 和 `lib/client.*.js`）中的这些字面量，包括提示中的项，因此 chunk 引用的 chunk 不必从 `./client` 入口沿请求追踪也能找到。在任一条件下被某个包的 `./client` 导出指向的目标（如 `client.browser.js`）会被立即加载，留在基础镜像；其余目标移出基础镜像。请求包未发布的 chunk 会让打包失败。
 - **归档**：每个 chunk 一个确定性 tar.gz，按压缩后归档的 SHA-256 命名为 `lazy/<sha256>.tar.gz`。基础 manifest 的 `lazy` 列表把每个 archive 记录为 `{ archive, files: [{ path, size }] }`，不记录文件 mode。不设大小阈值。
 - **登记**：Worker 用 `MemoryVfs.deferArchive` 登记列出的每个文件，同时创建其父目录，并赋予 VFS 默认文件 mode；列出懒加载 archive 的镜像必须从 URL 拉取，archive 名相对这个 URL 解析。`exists`、`stat`、`readdir` 依据登记同步作答。
 - **拉取**：Worker 的 `node:fs` 和 `node:fs/promises` 中读取已登记文件的异步接口会等待其 archive：`fs.promises.readFile`、`fs.promises.open`（因此每个 FileHandle 都在到达后才打开）、`fs.promises.cp` 和 `fs.createReadStream`。其中第一个调用拉取 archive、解压，校验其中恰好是登记的路径和登记的大小，再物化文件；并发读取方共用一次拉取。archive 名里的摘要不做校验。拉取失败只让等待它的读取失败；文件保持登记，下一次异步读取再次拉取。
@@ -81,7 +82,7 @@ Worker 的结构化 stub 抛出带 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 的错�
 
 ## 后果
 
-Preview 启动的组合与正式 Web 相同。不开 bundle 时，Worker 组合与正式 Web 只差 jsonl 的平台覆盖；开任一 bundle 都没有被跳过的补丁。插件页列出全部 `OPTIONAL_BUNDLES`，每个都显示标题和图标，没有元信息错误。11 个 optional bundle 逐个开启再关闭，两次都返回 `applied`；开启后它改动的每个启用行都是 active，关闭后插件列表恢复原样。启用 session-titles 会禁用 `@deepseek-ai/dsh-session-title-first-prompt-llm`（行 `session-title-llm`）并启用 `@deepseek-ai/dsh-session-title-all-prompts-llm`，与正式 Web 一致；启用 inspector-profile 后 Session Inspector 运行，NodeJS Inspector 降级启动。降级以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 为前提，所以正常 `dsh web` 运行完整的 Inspector。
+Preview 启动的组合与正式 Web 相同。不开 bundle 时，Worker 组合与正式 Web 只差 jsonl 的平台覆盖和预置 profile patch 中无需密钥的模型默认值；开任一 bundle 都没有被跳过的补丁。插件页列出全部 `OPTIONAL_BUNDLES`，每个都显示标题和图标，没有元信息错误。11 个 optional bundle 逐个开启再关闭，两次都返回 `applied`；开启后它改动的每个启用行都是 active，关闭后插件列表恢复原样。启用 session-titles 会禁用 `@deepseek-ai/dsh-session-title-first-prompt-llm`（行 `session-title-llm`）并启用 `@deepseek-ai/dsh-session-title-all-prompts-llm`，与正式 Web 一致；启用 inspector-profile 后 Session Inspector 运行，NodeJS Inspector 降级启动。降级以 `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM` 为前提，所以正常 `dsh web` 运行完整的 Inspector。
 
 体积（MiB，实测）：基础镜像 9.20（打包期组合且 chunk 随启动下载时为 12.79，−28%），含 11 个 optional bundle；另有 5 个 lazy tar 共 4.45（pdf 2.88、excel 1.39、terminal 0.13、frontmatter 0.05、inspector 底部面板 0.00）。基础镜像不含懒加载 chunk，页面请求 chunk 时才拉取对应 archive。
 

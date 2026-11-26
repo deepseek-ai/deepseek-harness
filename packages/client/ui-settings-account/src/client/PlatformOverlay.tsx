@@ -1,7 +1,7 @@
 /** Desktop Platform viewport; the native child owns remote content and credentials. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Button, IconChevronLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PlatformPage } from './platform-pages.ts'
 import css from './PlatformOverlay.module.css'
 import { acquireOverlayInert } from './overlay-inert.ts'
@@ -16,8 +16,8 @@ export interface PlatformBridge {
   close(this: void): Promise<void>
 }
 
-/** @param props - native commands, localized copy, and return action. @returns full-window Platform container. */
-export function PlatformOverlay({ bridge, page, backLabel, loadingLabel, failureLabel, retryLabel, onClose }: {
+/** Native commands, localized copy, and return action of the Platform container. */
+interface PlatformLayerProps {
   bridge: PlatformBridge
   page: PlatformPage
   backLabel: string
@@ -25,7 +25,20 @@ export function PlatformOverlay({ bridge, page, backLabel, loadingLabel, failure
   failureLabel: string
   retryLabel: string
   onClose: () => void
+}
+
+/**
+ * @param props - native commands, localized copy, return action, and the owner's application document portal.
+ * @returns full-window Platform container in the application document's body.
+ */
+export function PlatformOverlay({ Portal, ...props }: PlatformLayerProps & {
+  Portal: ReturnType<GlobalStandardProps['useDocumentPortal']>
 }) {
+  // The layer's own effects run once the portal has placed it.
+  return <Portal><PlatformLayer {...props} /></Portal>
+}
+
+function PlatformLayer({ bridge, page, backLabel, loadingLabel, failureLabel, retryLabel, onClose }: PlatformLayerProps) {
   const layer = useRef<HTMLDivElement>(null)
   const back = useRef<HTMLButtonElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
@@ -34,9 +47,10 @@ export function PlatformOverlay({ bridge, page, backLabel, loadingLabel, failure
   // Restore inertness and focus in the layout cleanup, so a Modal mounted by the
   // same commit records the restored focus before it takes its own.
   useLayoutEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const background = Array.from(document.body.children).filter((element): element is HTMLElement =>
-      element instanceof HTMLElement && element !== layer.current).map(element => acquireOverlayInert(element))
+    const previousFocus = document.activeElement as HTMLElement | null
+    // The layer's portal wrapper is the body child that stays interactive.
+    const background = Array.from(document.body.children as HTMLCollectionOf<HTMLElement>)
+      .filter(element => !element.contains(layer.current)).map(element => acquireOverlayInert(element))
     back.current?.focus()
     return () => {
       for (const release of background) release()
@@ -66,7 +80,7 @@ export function PlatformOverlay({ bridge, page, backLabel, loadingLabel, failure
       })
     }
   }, [bridge, page, attempt])
-  return createPortal(<div ref={layer} className={css.overlay} role="dialog" aria-modal="true" aria-label={backLabel}
+  return <div ref={layer} className={css.overlay} role="dialog" aria-modal="true" aria-label={backLabel}
     data-shortcut-modal="platform">
     <header className={css.header} data-window-drag>
       <div className={css.controls}>
@@ -84,5 +98,5 @@ export function PlatformOverlay({ bridge, page, backLabel, loadingLabel, failure
         </> : <span className={css.spinner} aria-hidden="true" />}
       </div>}
     </div>
-  </div>, document.body)
+  </div>
 }

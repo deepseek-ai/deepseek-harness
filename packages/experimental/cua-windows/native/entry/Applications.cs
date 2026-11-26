@@ -1,30 +1,18 @@
-// Process identity, executable metadata, and the authorized application's own window state.
+// Executable metadata, helper verification, and the selected application's window state.
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
 
-internal sealed record RunningApplication(int Pid, long Started, string Path, string Name);
-
-internal sealed record ApplicationAuthorization(string Id, string Name,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ExecutablePath)
-{
-    /// <summary>Not eligible for a permanent grant; the Host still persists conversation grants and denials.</summary>
-    public bool Persistable => false;
-
-    internal static ApplicationAuthorization Create(string appId, string name, string? executablePath)
-        => new(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("windows-aumid\0" + appId))), name, executablePath);
-}
-
 internal sealed class AppState(string handle, string appId, string name, ApplicationAuthorization authorization,
-    bool isRunning) : IDisposable
+    bool isRunning, string launchTarget) : IDisposable
 {
     internal string Handle { get; } = handle;
     internal string AppId { get; } = appId;
+    internal string LaunchTarget { get; } = launchTarget;
     internal string Name { get; } = name;
     internal bool IsRunning { get; } = isRunning;
     internal ApplicationAuthorization Authorization { get; } = authorization;
@@ -48,37 +36,16 @@ internal static class Applications
         var paths = parameters.GetProperty("paths");
         if (paths.ValueKind != JsonValueKind.Array)
             throw new NativeFailure("INVALID_ARGUMENT", "paths must be an array");
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var element in paths.EnumerateArray())
         {
             context.Check();
             if (element.ValueKind != JsonValueKind.String || string.IsNullOrEmpty(element.GetString()))
                 throw new NativeFailure("INVALID_ARGUMENT", "paths must contain nonempty strings");
             var path = element.GetString()!;
-            try
-            {
-                using var icon = System.Drawing.Icon.ExtractAssociatedIcon(path);
-                if (icon is null) continue;
-                using var original = icon.ToBitmap();
-                using var bitmap = new System.Drawing.Bitmap(original, new System.Drawing.Size(64, 64));
-                using var stream = new MemoryStream();
-                bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
-                result[path] = "data:image/png;base64," + Convert.ToBase64String(stream.ToArray());
-            }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException
-                or System.ComponentModel.Win32Exception)
-            {
-                // Missing or unreadable executable metadata has no icon; application access is unchanged.
-            }
+            if (ApplicationIcons.Read(path) is { } icon) result[path] = icon;
         }
         return result;
-    }
-
-    internal static long Started(System.Diagnostics.Process process)
-    {
-        if (!Win32.GetProcessTimes(process.SafeHandle, out var created, out _, out _, out _))
-            throw new NativeFailure("STALE_APP", "The process lifetime is unavailable; select the application again");
-        return created;
     }
 
     internal static string CanonicalPath(string path)
@@ -127,13 +94,27 @@ internal static class Applications
         }
     }
 
+    internal static string DisplayName(string path)
+    {
+        try
+        {
+            var product = FileVersionInfo.GetVersionInfo(path).ProductName;
+            if (!string.IsNullOrWhiteSpace(product)) return product;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+        {
+            // File metadata is optional; the file name still labels the selected executable.
+        }
+        return Path.GetFileNameWithoutExtension(path);
+    }
+
     internal static string Digest(string path)
     {
         using var file = File.OpenRead(path);
         return Convert.ToHexStringLower(SHA256.HashData(file));
     }
 
-    internal static RunningApplication Running(int pid)
+    internal static string RunningExecutable(int pid)
     {
         try
         {
@@ -142,7 +123,7 @@ internal static class Applications
                 throw new NativeFailure("UNSUPPORTED_SESSION", "Select an application in this interactive desktop session");
             var path = process.MainModule?.FileName
                 ?? throw new NativeFailure("APP_IDENTITY_UNAVAILABLE", "The application executable is unavailable");
-            return new(pid, Started(process), CanonicalPath(path), process.ProcessName);
+            return CanonicalPath(path);
         }
         catch (System.ComponentModel.Win32Exception)
         {

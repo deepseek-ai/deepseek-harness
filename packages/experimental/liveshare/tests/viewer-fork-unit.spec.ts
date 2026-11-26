@@ -157,6 +157,14 @@ describe('fork preparation and admission', () => {
     expect(h.dispatch).not.toHaveBeenCalled()
   })
 
+  it('refuses a viewer fork that sets an origin before reserving or dispatching it', async () => {
+    const h = harness()
+    await expect(h.fork.answerFork('share-1', '/api/session/fork', body({ origin: 'side' }), viewer))
+      .resolves.toEqual({ status: 400, body: { error: 'fork-origin-unsupported', message: 'a viewer fork cannot set an origin' } })
+    expect(h.forks.reserveOperation).not.toHaveBeenCalled()
+    expect(h.dispatch).not.toHaveBeenCalled()
+  })
+
   it('refuses a body naming a child without a bound operation identity', async () => {
     const h = harness()
     await expect(h.fork.answerFork('share-1', '/api/session/fork', body({ childSessionId: 'child-9' }), viewer))

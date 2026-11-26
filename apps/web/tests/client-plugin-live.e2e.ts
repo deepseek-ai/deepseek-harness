@@ -366,6 +366,42 @@ it('keeps a failed client download local and retries without changing Host enabl
   }
 }, 90_000)
 
+it('keeps the sync failure retry label on one line inside its button at desktop and phone widths', async () => {
+  const scaffold = await launchWebScaffold({ extraInstallAnchors: [join(FIXTURE, 'package.json')] })
+  onTestFinished(() => scaffold.close())
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const page = await newEnglishPage(browser)
+  onTestFailed(() => saveFailureShot(page, 'web-e2e-client-sync-notice-layout'))
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  await page.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+  await page.locator('[data-plugin-body]').waitFor({ timeout: 10_000 })
+  // An aborted bundle download reports a failure message of several hundred characters.
+  await page.route(url => url.pathname.startsWith('/plugins/') && url.search.includes('@fixture/live-client/client.js'), route => route.abort())
+  await scaffold.ctx.loader.create({ name: '@fixture/live-client' })
+  const retry = page.locator('[data-client-sync-failure]').getByRole('button', { name: 'Retry this page', exact: true })
+  await retry.waitFor()
+  for (const width of [1680, 390]) {
+    await page.setViewportSize({ width, height: 1000 })
+    // The frame turns the docked sidebar into a drawer after the resize, so the page's width settles later.
+    await expect.poll(() => retry.evaluate((button) => {
+      const range = document.createRange()
+      range.selectNodeContents(button)
+      const label = [...range.getClientRects()]
+      const box = button.getBoundingClientRect()
+      const notice = button.closest('[data-client-sync-failure]')!
+      const noticeBox = notice.getBoundingClientRect()
+      return {
+        labelLines: new Set(label.map(rect => Math.round(rect.top))).size,
+        labelInsideButton: label.every(rect =>
+          rect.top >= box.top && rect.bottom <= box.bottom && rect.left >= box.left && rect.right <= box.right),
+        buttonInsideNotice: box.left >= noticeBox.left && box.right <= noticeBox.right,
+        noticeOverflow: notice.scrollWidth - notice.clientWidth,
+      }
+    }), { message: `viewport width ${width}` }).toEqual({ labelLines: 1, labelInsideButton: true, buttonInsideNotice: true, noticeOverflow: 0 })
+  }
+}, 90_000)
+
 it('recovers an uncreated client entry with rebuilt factory code without navigation', async () => {
   const fixture = await mkdtemp(join(tmpdir(), 'dsh-client-rebuild-'))
   // Finished hooks unwind in reverse order, so the Host closes before its fixture is removed.

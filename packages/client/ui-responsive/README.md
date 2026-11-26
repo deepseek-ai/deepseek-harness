@@ -34,7 +34,7 @@ The Web application bundle mounts this Client plugin without configuration field
 
 ### Compose and test
 
-The composer, the right Sidebar expand button, the agent-preset chip, the desktop onboarding flow, the model selector, and the Session panel read these props. Each of their plugins injects the `uiResponsive` service that this package provides, so it starts only after both props are published and unloads with them; a plugin whose components read either prop does the same. The service has no public members. A custom Web roster that keeps any of these plugins keeps this package as well; without it, those plugins wait for `uiResponsive` and do not start. A component test that builds props by hand spreads `responsiveHooks(options?)` from the [client test runtime](../../test-support/client-runtime/README.md), whose `SlotTestRuntime` provides a `uiResponsive` stand-in with those defaults.
+Plugins whose components read these props, among them the composer and the Session panel, inject the `uiResponsive` service that this package provides, so each starts only after both props are published and unloads with them; a plugin whose components read either prop does the same. The service has no public members. A custom Web roster keeps this package whenever it keeps such a plugin; without it, those plugins wait for `uiResponsive` and do not start. A component test that builds props by hand spreads `responsiveHooks(options?)` from the [client test runtime](../../test-support/client-runtime/README.md), whose `SlotTestRuntime` provides a `uiResponsive` stand-in with those defaults.
 
 -----
 

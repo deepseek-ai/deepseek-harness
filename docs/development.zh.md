@@ -203,7 +203,7 @@ pnpm run start:desktop   # launch built Desktop artifacts
 pnpm run dev:desktop     # build, then launch Desktop
 ```
 
-Web 命令后面的参数会传给 `dsh web`，例如 `pnpm run dev:web --no-open --port 3081`；`dev:web` 还接受 `--skip-build` 复用现有产物树，以及 `--no-serve` 只运行重建 watcher、配合别处启动的服务器。要测试 [Client 包隔离](../packages/client/modules/README.zh.md#script-isolated-packages)，每个 Loader 条目传一次 `--isolate <entry-id>[:mode]`。只写条目 id 时使用 `script`；`--isolate=ui-schedule:style` 仅限制样式作用域，`scriptandstyle` 同时启用脚本和样式隔离。临时 overlay 作为最后一个 `--patch` 传入；找不到条目时会记录 `patch: entry "<id>" not found`，不应用该补丁。两个 Web 命令使用正常的 Harness home，而 Desktop 命令使用 [Desktop README](../apps/desktop/README.zh.md) 描述的隔离开发 home。根目录 `Makefile` 以 `make web`、`make dev-web`、`make desktop`、`make dev-desktop` 和 `make build` 命名同一套命令；`ARGS='--no-open'` 用于转发参数。
+Web 命令后面的参数会传给 `dsh web`，例如 `pnpm run dev:web --no-open --port 3081`；`dev:web` 还接受 `--skip-build` 复用现有产物树，以及 `--no-serve` 只运行重建 watcher、配合别处启动的服务器。要测试 [Client 包隔离](../packages/client/modules/README.zh.md#script-isolated-packages)，每个 Loader 条目传一次 `--isolate <entry-id>[:mode]`。只写条目 id 时使用 `script`；`--isolate=ui-schedule:style` 仅限制样式作用域，`scriptandstyle` 同时启用脚本和样式隔离。临时 overlay 作为最后一个 `--patch` 传入；找不到条目时会记录 `patch: entry "<id>" not found`，不应用该补丁。Web 与 Desktop 命令都使用正常的 Harness home；[Desktop README](../apps/desktop/README.zh.md) 说明 Desktop 何时继续使用本地开发 home。根目录 `Makefile` 以 `make web`、`make dev-web`、`make desktop`、`make dev-desktop` 和 `make build` 命名同一套命令；`ARGS='--no-open'` 用于转发参数。
 
 ### TODO 标记
 

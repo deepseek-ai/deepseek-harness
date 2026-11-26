@@ -324,8 +324,15 @@
    or a menu highlights as a whole; the trailing part and the menu sit above
    the action's press area. A menu part that renders nothing counts as
    absent: it takes no room and does not make the row highlight. A rule for
-   a part has the specificity of one class, so a row's own class adjusts it. */
-.panel :where([data-session-panel-row]) {
+   a part has the specificity of one class, so a row's own class adjusts it.
+
+   The fold control renders inside the `conversation.session.panel.fold`
+   Factory, which a section of another package calls, so `.panel` can lie
+   outside this package's style scope. The control therefore carries its own
+   class, `.fold`, and each rule it needs names it beside the `.panel` form
+   at the same specificity. */
+.panel :where([data-session-panel-row]),
+.fold {
   position: relative;
   display: flex;
   align-items: center;
@@ -339,7 +346,8 @@
   font: var(--dsw-font-xs-13);
 }
 
-.panel :where([data-session-panel-row] > [data-row-part='body']) {
+.panel :where([data-session-panel-row] > [data-row-part='body']),
+.fold > :where([data-row-part='body']) {
   display: flex;
   flex: 1 1 auto;
   align-items: center;
@@ -348,7 +356,8 @@
   height: 28px;
 }
 
-.panel :where([data-session-panel-row] > button[data-row-part='body']) {
+.panel :where([data-session-panel-row] > button[data-row-part='body']),
+.fold > :where(button[data-row-part='body']) {
   margin: 0;
   padding: 0;
   border: 0;
@@ -359,23 +368,27 @@
   cursor: pointer;
 }
 
-.panel :where([data-session-panel-row] > button[data-row-part='body'])::after {
+.panel :where([data-session-panel-row] > button[data-row-part='body'])::after,
+.fold > :where(button[data-row-part='body'])::after {
   position: absolute;
   inset: 0;
   border-radius: inherit;
   content: '';
 }
 
-.panel :where([data-session-panel-row] > button[data-row-part='body']:focus-visible) {
+.panel :where([data-session-panel-row] > button[data-row-part='body']:focus-visible),
+.fold > :where(button[data-row-part='body']:focus-visible) {
   outline: none;
 }
 
-.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:focus-visible)) {
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:focus-visible)),
+.fold:where(:has(> button[data-row-part='body']:focus-visible)) {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
 }
 
-.panel :where([data-session-panel-row] [data-row-part='icon']) {
+.panel :where([data-session-panel-row] [data-row-part='icon']),
+.fold :where([data-row-part='icon']) {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -389,7 +402,8 @@
   height: 16px;
 }
 
-.panel :where([data-session-panel-row] [data-row-part='content']) {
+.panel :where([data-session-panel-row] [data-row-part='content']),
+.fold :where([data-row-part='content']) {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -476,7 +490,8 @@
   .panel :where([data-session-panel-row]:hover:is(
     :has(> button[data-row-part='body']),
     :has(> [data-row-part='menu']:not(:empty)):not(:has(> [data-row-part='menu'] > [data-slot-factory]:only-child:empty))
-  )) {
+  )),
+  .fold:where(:hover) {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 
@@ -509,7 +524,8 @@
   color: var(--dsw-alias-label-primary);
 }
 
-.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:active)) {
+.panel :where([data-session-panel-row]:has(> button[data-row-part='body']:active)),
+.fold:where(:has(> button[data-row-part='body']:active)) {
   background: var(--dsw-alias-interactive-bg-active);
 }
 
@@ -519,23 +535,23 @@
    section titles, with a 14px chevron in the icon column and the text where
    the row names start. These rules follow the row rules they adjust, since
    every rule for a part has the same specificity. */
-.panel :where([data-session-panel-row='fold']) {
+.fold {
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
   font-variant-numeric: tabular-nums;
 }
 
-.panel :where([data-session-panel-row='fold'] [data-row-part='icon']) svg {
+.fold :where([data-row-part='icon']) svg {
   width: 14px;
   height: 14px;
 }
 
-.panel :where([data-session-panel-row='fold']:has(> button:focus-visible)) {
+.fold:where(:has(> button:focus-visible)) {
   color: var(--dsw-alias-label-secondary);
 }
 
 @media (hover: hover) {
-  .panel :where([data-session-panel-row='fold']:hover) {
+  .fold:where(:hover) {
     color: var(--dsw-alias-label-secondary);
   }
 }

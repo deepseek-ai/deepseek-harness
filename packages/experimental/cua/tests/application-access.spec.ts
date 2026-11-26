@@ -44,6 +44,10 @@ const identity = ApplicationAuthorizationResult.parse({ id: 'a'.repeat(64), name
 const handle = 'fixture-app' as CuaAppHandle
 const signal = new AbortController().signal
 
+const alias = (letter: string, attributes: Record<string, string[]>) => ApplicationAuthorizationResult.parse({
+  ...identity, id: letter.repeat(64), attributes,
+})
+
 async function setup(choice = 'Allow for this session', options: { writable?: boolean; questions?: boolean; initial?: readonly CuaApplicationGrant[] } = {}) {
   native.instances.length = 0
   const ctx = new Context()
@@ -60,11 +64,133 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }
 
+it('learns permission attributes across observations without requiring a common attribute in the first and last', async () => {
+  const f = await setup('Always allow')
+  const launcher = alias('a', { 'windows.aumid': ['Example.App'] })
+  const runtime = alias('b', { 'windows.aumid': ['Example.App'], 'windows.executablePath': ['C:\\APP\\APP.EXE'] })
+  const later = alias('c', { 'windows.executablePath': ['C:\\APP\\APP.EXE'] })
+  await f.access.select(f.agent, f.client, handle, launcher, signal)
+  await f.access.select(f.agent, f.client, 'runtime' as CuaAppHandle, runtime, signal)
+  const next = await f.ctx.agents.create({ sessionId: brandString<SessionId>('attribute-next-session') })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  await f.access.select(next.agent, client, 'later' as CuaAppHandle, later, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+  expect((await f.access.status()).allowedApps).toHaveLength(1)
+  expect(f.grants()[0]).not.toHaveProperty('attributes')
+  await f.access.revoke(launcher.id)
+  await expect(f.access.run(f.client, handle, signal, async () => 'read')).rejects.toThrow('APP_ACCESS_REVOKED')
+  await expect(f.access.run(client, 'later' as CuaAppHandle, signal, async () => 'read')).rejects.toThrow('APP_ACCESS_REVOKED')
+  const fresh = await f.ctx.agents.create({ sessionId: brandString<SessionId>('attribute-after-revoke') })
+  await f.access.select(fresh.agent, new NativeClient(f.ctx, nativeConfig, unusedConnector), handle, later, signal)
+  expect(f.answer).toHaveBeenCalledTimes(2)
+})
+
+it('keeps learned session permissions scoped to the session', async () => {
+  const f = await setup()
+  await f.access.select(f.agent, f.client, handle, alias('a', { 'windows.aumid': ['Example.App'] }), signal)
+  const runtime = alias('b', { 'windows.aumid': ['Example.App'], 'windows.executablePath': ['C:\\APP.EXE'] })
+  await f.access.select(f.agent, f.client, 'runtime' as CuaAppHandle, runtime, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+  expect(f.grants()).toEqual([])
+  const next = await f.ctx.agents.create({ sessionId: brandString<SessionId>('attribute-new-session') })
+  await f.access.select(next.agent, new NativeClient(f.ctx, nativeConfig, unusedConnector), handle, runtime, signal)
+  expect(f.answer).toHaveBeenCalledTimes(2)
+  expect(f.grants()).toEqual([])
+})
+
+it('does not equate equal values from different attributes or match display names', async () => {
+  const f = await setup('Always allow')
+  await f.access.select(f.agent, f.client, handle, alias('a', { 'windows.aumid': ['same-text'] }), signal)
+  await f.access.select(f.agent, f.client, 'other' as CuaAppHandle, alias('b', { 'other.attribute': ['same-text'] }), signal)
+  await f.access.select(f.agent, f.client, 'empty' as CuaAppHandle, alias('c', {}), signal)
+  expect(f.answer).toHaveBeenCalledTimes(3)
+  expect(ApplicationAuthorizationResult.safeParse({ ...identity, attributes: { 'windows.aumid': [''] } }).success).toBe(false)
+  expect(ApplicationAuthorizationResult.safeParse({ ...identity, attributes: { 'cua.id': ['b'.repeat(64)] } }).success).toBe(false)
+})
+
+it('revokes all existing grants connected by a later observation', async () => {
+  const f = await setup('Always allow')
+  const first = alias('a', { 'windows.aumid': ['A'] })
+  const second = alias('b', { 'windows.executablePath': ['B'] })
+  await f.access.select(f.agent, f.client, handle, first, signal)
+  await f.access.select(f.agent, f.client, 'second' as CuaAppHandle, second, signal)
+  await f.access.select(f.agent, f.client, 'bridge' as CuaAppHandle,
+    alias('c', { 'windows.aumid': ['A'], 'windows.executablePath': ['B'] }), signal)
+  expect(f.answer).toHaveBeenCalledTimes(2)
+  expect((await f.access.status()).allowedApps).toHaveLength(1)
+  await f.access.revoke(second.id)
+  expect((await f.access.status()).allowedApps).toEqual([])
+  await expect(f.access.run(f.client, handle, signal, async () => 'read')).rejects.toThrow('APP_ACCESS_REVOKED')
+  await expect(f.access.run(f.client, 'second' as CuaAppHandle, signal, async () => 'read')).rejects.toThrow('APP_ACCESS_REVOKED')
+})
+
+it('revokes a record connected after revocation computed its group', async () => {
+  const f = await setup('Always allow')
+  const first = alias('a', { 'windows.aumid': ['A'] })
+  const second = alias('b', { 'windows.executablePath': ['B'] })
+  await f.access.select(f.agent, f.client, handle, first, signal)
+  await f.access.select(f.agent, f.client, 'second' as CuaAppHandle, second, signal)
+  const withApplication = f.store.withApplication.bind(f.store)
+  vi.spyOn(f.store, 'withApplication').mockImplementationOnce(async (id, lockSignal, operation) => {
+    await f.store.withState(lockSignal, async (transaction) => {
+      const app = transaction.state.applications[second.id]!
+      await transaction.save({ ...transaction.state, applications: { ...transaction.state.applications,
+        [second.id]: { ...app, attributes: { ...app.attributes, 'windows.aumid': ['A'] } } } })
+    })
+    return withApplication(id, lockSignal, operation)
+  })
+  await f.access.revoke(first.id)
+  expect((await f.access.status()).allowedApps).toEqual([])
+  await expect(f.access.run(f.client, 'second' as CuaAppHandle, signal, async () => 'read')).rejects.toThrow('APP_ACCESS_REVOKED')
+})
+
+it('rejects reselecting a retained handle after its record is revoked', async () => {
+  const f = await setup('Always allow')
+  await f.access.select(f.agent, f.client, handle, identity, signal)
+  await f.save([])
+  await expect(f.access.select(f.agent, f.client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
+  expect(f.answer).toHaveBeenCalledOnce()
+  expect(f.client.disposed).toBe(true)
+})
+
+it('queues concurrent selections sharing a permission attribute behind one approval', async () => {
+  const f = await setup('Always allow')
+  const asked = Promise.withResolvers<undefined>()
+  const answer = Promise.withResolvers<AskUserQuestionAnswer>()
+  onTestFinished(() => { answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] }) })
+  f.answer.mockImplementationOnce(() => { asked.resolve(undefined); return answer.promise })
+  const first = f.access.select(f.agent, f.client, handle, alias('a', { 'windows.aumid': ['A'] }), signal)
+  await asked.promise
+  const second = f.access.select(f.agent, f.client, 'second' as CuaAppHandle, alias('b', { 'windows.aumid': ['A'] }), signal)
+  answer.resolve({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] })
+  await Promise.all([first, second])
+  expect(f.answer).toHaveBeenCalledOnce()
+})
+
 it('refuses raw handle dispatch until getApp obtains consent', async () => {
   const f = await setup()
   const dispatch = vi.fn(async () => null)
   await expect(f.access.run(f.client, handle, signal, dispatch)).rejects.toThrow('APP_ACCESS_REQUIRED')
   expect(dispatch).not.toHaveBeenCalled()
+})
+
+it('reuses saved application consent across versions and copies and revokes every handle', async () => {
+  const f = await setup('Always allow')
+  const first = { ...identity, iconPath: 'C:\\versions\\one\\App.exe' }
+  await f.access.select(f.agent, f.client, handle, first, signal)
+  const other = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cua-second-version') })
+  const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
+  const nextHandle = 'other-copy' as CuaAppHandle
+  const updated = { ...first, name: 'Updated name', executablePath: 'C:\\versions\\two\\App.exe' }
+  await f.access.select(other.agent, client, nextHandle, updated, signal)
+  expect(f.answer).toHaveBeenCalledOnce()
+  expect(f.grants()).toEqual([expect.objectContaining({ id: identity.id, executablePath: updated.executablePath })])
+  await expect(f.access.run(f.client, handle, signal, async () => 'first')).resolves.toBe('first')
+  await expect(f.access.run(client, nextHandle, signal, async () => 'second')).resolves.toBe('second')
+  await f.access.revoke(identity.id)
+  expect(f.grants()).toEqual([])
+  await expect(f.access.run(f.client, handle, signal, async () => 'first')).rejects.toThrow('APP_ACCESS_REVOKED')
+  await expect(f.access.run(client, nextHandle, signal, async () => 'second')).rejects.toThrow('APP_ACCESS_REVOKED')
 })
 
 it('reads cached activity outside the desktop lock and discards it if another writer revokes consent', async () => {
@@ -153,11 +279,14 @@ it('reuses session consent across application handles and connections without gr
 
 it.each(['Allow for this session', 'Always allow'])('shares %s across installation paths and revokes both handles', async (choice) => {
   const f = await setup(choice)
-  const copy = { ...identity, name: 'Second version', executablePath: '/Applications/Fixture Beta.app/Contents/MacOS/Fixture' }
+  const copy = { ...identity, name: 'Second version', executablePath: '/Applications/Fixture Beta.app/Contents/MacOS/Fixture',
+    iconPath: '/Applications/Fixture Beta.app' }
   const secondHandle = 'second-installation' as CuaAppHandle
   await f.access.select(f.agent, f.client, handle, identity, signal)
+  const saved = await f.store.withState(signal, async ({ state }) => state.applications[identity.id])
   await f.access.select(f.agent, f.client, secondHandle, copy, signal)
   expect(f.answer).toHaveBeenCalledOnce()
+  expect(await f.store.withState(signal, async ({ state }) => state.applications[identity.id])).toEqual(saved)
   for (const selected of [handle, secondHandle]) {
     await expect(f.access.run(f.client, selected, signal, async () => 'read')).resolves.toBe('read')
   }
@@ -463,7 +592,12 @@ it('retains conversation consent when the provider is recreated over the same st
   expect(f.answer).toHaveBeenCalledOnce()
 })
 
-it('restores consent after a complete context restart only for the original conversation', async () => {
+it.each([
+  { choice: 'Allow for this session', first: identity, second: identity, last: identity },
+  { choice: 'Always allow', first: alias('a', { 'windows.aumid': ['A'] }),
+    second: alias('b', { 'windows.aumid': ['A'], 'windows.executablePath': ['B'] }),
+    last: alias('c', { 'windows.executablePath': ['B'] }) },
+])('restores $choice after a complete context restart with its original scope', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'cua-conversation-consent-'))
   const directory = join(root, 'profile')
   await mkdir(directory)
@@ -473,7 +607,7 @@ it('restores consent after a complete context restart only for the original conv
     await rm(root, { recursive: true, force: true })
   })
   const open = async () => {
-    const f = await setup()
+    const f = await setup(scenario.choice)
     contexts.push(f.ctx)
     f.ctx.provide('profileContext', { dir: directory })
     await f.ctx.plugin(Storage)
@@ -483,18 +617,24 @@ it('restores consent after a complete context restart only for the original conv
     return { ...f, access }
   }
   const first = await open()
-  await first.access.select(first.agent, first.client, handle, identity, signal)
+  await first.access.select(first.agent, first.client, handle, scenario.first, signal)
+  await first.access.select(first.agent, first.client, 'second' as CuaAppHandle, scenario.second, signal)
   expect(first.answer).toHaveBeenCalledOnce()
   await first.ctx.fiber.dispose()
   const restored = await open()
-  await restored.access.select(restored.agent, restored.client, handle, identity, signal)
+  await restored.access.select(restored.agent, restored.client, handle, scenario.last, signal)
   expect(restored.answer).not.toHaveBeenCalled()
   await expect(restored.access.run(restored.client, handle, signal, async () => 'read')).resolves.toBe('read')
   const other = await restored.ctx.agents.create({ sessionId: brandString<SessionId>('another-conversation') })
   const client = new NativeClient(restored.ctx, nativeConfig, unusedConnector)
-  await restored.access.select(other.agent, client, handle, identity, signal)
-  expect(restored.answer).toHaveBeenCalledOnce()
-  expect((await restored.access.status()).allowedApps).toEqual([])
+  await restored.access.select(other.agent, client, handle, scenario.last, signal)
+  expect(restored.answer).toHaveBeenCalledTimes(scenario.choice === 'Always allow' ? 0 : 1)
+  expect((await restored.access.status()).allowedApps).toHaveLength(scenario.choice === 'Always allow' ? 1 : 0)
+  await restored.access.revoke(scenario.first.id)
+  const afterRevoke = await open()
+  const newConversation = await afterRevoke.ctx.agents.create({ sessionId: brandString<SessionId>('after-restart-and-revoke') })
+  await afterRevoke.access.select(newConversation.agent, afterRevoke.client, handle, scenario.last, signal)
+  expect(afterRevoke.answer).toHaveBeenCalledOnce()
 })
 
 

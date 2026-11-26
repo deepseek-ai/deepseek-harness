@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ShortcutCatalogEntry, ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -42,7 +42,7 @@ const useSessionStatus: SidebarRootComponentProps['useSessionStatus'] = selector
 function makeHeaderProps(): HeaderLeadingControlsProps {
   return {
     useContextMenu: contextMenuHook(),
-    ...responsiveHooks(),
+    ...responsiveHooks(), ...themeHooks(),
     useSessions: neverHook, useSessionStatus, useSessionRetainInfo: neverHook,
     usePanelInfo, useResource, useWorkspaces: neverHook, ...allowAllAccess,
     usePanels: selector => selector([]), useShortcuts: selector => selector([]),
@@ -71,16 +71,16 @@ function mountShell({ collapsed = false, width = 300, drawer = false, shortcuts 
   let sessionActionChildren: ReactNode
   const brandMark = <span data-testid="custom-brand-mark">M</span>
   const brandName = <span data-testid="custom-brand-name">Custom Brand</span>
-  let current = { collapsed, width, drawer }
+  let current = { collapsed, width, drawer, animating: false }
   const root = () => (
     <SidebarRoot
-      drawer={current.drawer}
+      drawer={current.drawer} animating={current.animating}
       collapsed={current.collapsed} width={current.width}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector(panels)} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector(shortcuts)}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={startSession} toggleSidebar={toggleSidebar} trackEntryClick={trackEntryClick} t={t}
       renderFactorySlot={() => null}
@@ -158,6 +158,17 @@ describe('SidebarRoot shell', () => {
     expect(viewport.contains(screen.getByTestId('footer-action-seat'))).toBe(false)
   })
 
+  it('marks its column while the frame reports that its tracks ease', () => {
+    const shell = mountShell()
+    expect(document.querySelector('[data-sidebar-animating]')).toBeNull()
+    shell.rerender({ animating: true })
+    const marked = document.querySelector('[data-sidebar-animating]')
+    expect(marked?.contains(document.querySelector('[data-sidebar-scrollport]'))).toBe(true)
+    expect(marked?.parentElement?.closest('[data-sidebar-animating]')).toBeNull()
+    shell.rerender({ animating: false })
+    expect(document.querySelector('[data-sidebar-animating]')).toBeNull()
+  })
+
   it('hands the section a stable scroller hook bound to this sidebar viewport', () => {
     const shell = mountShell()
     const scroller = shell.regionContext().useSectionScroller()
@@ -190,7 +201,7 @@ describe('SidebarRoot shell', () => {
     render(<HeaderLeadingControls toggleSidebar={vi.fn()} startSession={vi.fn()} selectPanel={vi.fn()} trackEntryClick={vi.fn()} t={t}
       usePanelInfo={neverHook} useSessions={neverHook} useSessionStatus={neverHook}
       useSessionRetainInfo={neverHook} useContextMenu={contextMenuHook()} useResource={useResource} useWorkspaces={neverHook}
-      {...responsiveHooks()}
+      {...responsiveHooks()} {...themeHooks()}
       {...allowAllAccess}
       usePanels={select => select([])} useEntryPins={select => select([])}
       useEntryActions={select => select(false)} setPinned={vi.fn()} useShortcuts={select => select([shortcut])} />)
@@ -233,12 +244,12 @@ describe('SidebarRoot shell', () => {
     const startSession = vi.fn()
     const useRemoteAccess = vi.fn((action: string) => action !== 'session/create')
     render(<SidebarRoot
-      collapsed={false} width={300} drawer={false}
+      collapsed={false} width={300} drawer={false} animating={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector([])}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       useRemoteAccess={useRemoteAccess}
       startSession={startSession} toggleSidebar={toggleSidebar} trackEntryClick={vi.fn()} t={t}
@@ -265,13 +276,13 @@ describe('SidebarRoot shell', () => {
     vi.stubEnv('DSH_CLIENT_GIT_DIRTY', 'true')
     vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
     const { container } = render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector([])}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} trackEntryClick={vi.fn()} t={t}
       renderFactorySlot={() => null}
@@ -290,13 +301,13 @@ describe('SidebarRoot shell', () => {
   ])('omits unavailable build-version suffixes from %j', (environment, expected) => {
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value)
     render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector([])}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} trackEntryClick={vi.fn()} t={t}
       renderFactorySlot={() => null}
@@ -320,12 +331,12 @@ describe('SidebarRoot shell', () => {
     const startSession = vi.fn()
     const trackEntryClick = vi.fn<SidebarRootComponentProps['trackEntryClick']>()
     render(<SidebarRoot
-      collapsed={false} width={300} drawer={false}
+      collapsed={false} width={300} drawer={false} animating={false}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector([])}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={startSession} toggleSidebar={vi.fn()} trackEntryClick={trackEntryClick} t={t}
       renderFactorySlot={() => null}
@@ -371,13 +382,13 @@ describe('SidebarRoot shell', () => {
 
   it('retains the local-build fallback without complete build metadata', () => {
     render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector([])}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} trackEntryClick={vi.fn()} t={t}
       renderFactorySlot={() => null}
@@ -443,13 +454,13 @@ describe('SidebarRoot shell', () => {
   it('shows only the badge bubble while the rail badge is hovered inside the toggle', () => {
     vi.useFakeTimers()
     render(<SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed width={56}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
       useEntryActions={selector => selector(false)} setPinned={vi.fn()}
       useShortcuts={selector => selector([])}
-      useContextMenu={contextMenuHook()} {...responsiveHooks()} useResource={useResource} useWorkspaces={neverHook}
+      useContextMenu={contextMenuHook()} {...responsiveHooks()} {...themeHooks()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
       startSession={vi.fn()} toggleSidebar={vi.fn()} trackEntryClick={vi.fn()} t={t}
       renderFactorySlot={() => null}

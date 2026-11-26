@@ -11,7 +11,7 @@ import { DesktopOnboarding } from './DesktopOnboarding.tsx'
 
 /** Observable sources and actions supplied by the account plugin's apply closure. */
 export interface DesktopOnboardingInjected
-  extends Omit<DesktopOnboardingProps, 'state' | 'account' | 't' | 'exiting' | 'locale' | 'reducedMotion'> {
+  extends Omit<DesktopOnboardingProps, 'state' | 'account' | 't' | 'exiting' | 'locale' | 'colorScheme' | 'reducedMotion'> {
   /** Publish whether onboarding covers the workspace. @param visible - includes loading, saving, and exit animation. */
   setVisible: (visible: boolean) => void
   hooks: {
@@ -25,9 +25,11 @@ export interface DesktopOnboardingInjected
  * @param props - shell overlay bindings and account-owned actions.
  * @returns the unfinished flow, retained briefly after successful completion unless motion is reduced.
  */
-export function DesktopOnboardingEntry({ useOnboarding, useAccount, useMediaQuery, setVisible, ...props }:
+export function DesktopOnboardingEntry({ useOnboarding, useAccount, useMediaQuery, useTheme, useDocumentPortal, setVisible, ...props }:
   PropsRuntime<'shell.overlay'> & PropsLocale<'settings.account'> & InjectFace<DesktopOnboardingInjected>) {
+  const Portal = useDocumentPortal()
   const locale = props.t('onboardingArtworkLocale')
+  const colorScheme = useTheme(snapshot => snapshot.active.colorScheme)
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const state = useOnboarding(value => value)
   const account = useAccount(value => value)
@@ -60,8 +62,9 @@ export function DesktopOnboardingEntry({ useOnboarding, useAccount, useMediaQuer
   const displayed = state.visible ? state : exiting || pendingCompletion ? lastVisible : null
   const visible = displayed !== null || state.status === 'loading'
   useLayoutEffect(() => { setVisible(visible) }, [setVisible, visible])
-  if (displayed === null) return state.status === 'loading'
-    ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface> : null
-  return <DesktopOnboarding {...props} locale={locale} state={pendingCompletion ? { ...displayed, status: 'saving' } : displayed}
-    account={account} exiting={exiting} reducedMotion={reducedMotion} />
+  if (!visible) return null
+  return <Portal>{displayed === null
+    ? <OnboardingSurface><div role="status">{props.t('onboardingLoading')}</div></OnboardingSurface>
+    : <DesktopOnboarding {...props} locale={locale} colorScheme={colorScheme} state={pendingCompletion ? { ...displayed, status: 'saving' } : displayed}
+      account={account} exiting={exiting} reducedMotion={reducedMotion} />}</Portal>
 }

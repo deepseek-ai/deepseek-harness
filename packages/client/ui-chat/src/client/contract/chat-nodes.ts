@@ -65,6 +65,10 @@ export interface ManualCompactionChatData {
 export interface RetryChatData {
   readonly attempts: readonly ModelRetryNode[]
   readonly current: ModelRetryNode
+  /** The latest retry has started and its Step is still open, so its request is in flight. */
+  readonly inFlight: boolean
+  /** The last retry started in the last Step of a Turn that ended with an error. */
+  readonly failed: boolean
 }
 
 /** One provider/model route that contributed a billed request attempt. */

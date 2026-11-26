@@ -1,6 +1,7 @@
 // Private desktop fixture: commands inspect or arrange only the windows owned by this process.
 using System.Globalization;
 using System.Runtime.InteropServices;
+using DeepSeek.Cua.Windows;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -53,6 +54,16 @@ internal sealed class FixtureForm : Form
     }
 
     internal void PointAtButton() => Cursor.Position = button.PointToScreen(new Point(button.Width / 2, button.Height / 2));
+
+    internal void SetIdentity()
+    {
+        var id = typeof(Win32.IPropertyStore).GUID;
+        Marshal.ThrowExceptionForHR(Win32.SHGetPropertyStoreForWindow(Handle, ref id, out var store));
+        var key = new Win32.PropertyKey { FormatId = new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), PropertyId = 5 };
+        var value = new Win32.PropVariant { ValueType = 31, Pointer = Marshal.StringToCoTaskMemUni("DSH.Fixture." + (long)Handle) };
+        try { Marshal.ThrowExceptionForHR(store!.SetValue(ref key, ref value)); }
+        finally { Win32.PropVariantClear(ref value); Marshal.FinalReleaseComObject(store!); }
+    }
 
     internal void PointOutside()
     {
@@ -142,6 +153,7 @@ internal static class Program
                             case "sibling": sibling.Show(); sibling.Activate(); sibling.Editor.Focus(); Write(sibling.Inspect()); break;
                             case "change-text": form.Editor.Text = "CUA notification sample"; Write(form.Inspect()); break;
                             case "inspect": Write(form.Inspect()); break;
+                            case "identity": form.SetIdentity(); Write(form.Inspect()); break;
                             case "inspect-sibling": Write(sibling.Inspect()); break;
                             case "focus": form.Activate(); form.Editor.Focus(); Write(form.Inspect()); break;
                             case "pointer": form.PointAtButton(); Write(form.Inspect()); break;

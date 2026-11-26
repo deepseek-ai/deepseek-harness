@@ -32,7 +32,8 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-sidebar",
-        "@deepseek-ai/dsh-client-ui-conversation"
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-theme"
       ],
       "platform": "web"
     }
@@ -54,7 +55,9 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-slots": "workspace:*"
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-theme": "workspace:*",
+    "@deepseek-ai/dsh-client-test-runtime": "workspace:*"
   },
   "files": [
     "locale/*.json",

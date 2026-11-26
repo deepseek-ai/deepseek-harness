@@ -639,13 +639,16 @@ function imageMediaType(value: string): ImageMediaType {
   }
 }
 
+/** Raster image MIME types accepted by draft image intake. */
+export const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const
+
 /**
  * Whether a browser-declared MIME selects the image draft path (all other files upload verbatim).
  * @param value - the browser's declared MIME type.
  * @returns whether the file is an accepted raster image.
  */
 export function isImageMediaType(value: string): boolean {
-  return value === 'image/png' || value === 'image/jpeg' || value === 'image/webp' || value === 'image/gif'
+  return (IMAGE_MEDIA_TYPES as readonly string[]).includes(value)
 }
 
 function revokePreview(url: string): void {

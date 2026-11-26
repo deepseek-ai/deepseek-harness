@@ -1325,7 +1325,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:602`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:659`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -2500,6 +2500,23 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-api-key -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-mock -->
+<a id="deepseek-aidsh-llm-mock"></a>
+
+## `@deepseek-ai/dsh-llm-mock`
+
+- `inject`: `llm`
+- `source`: [`packages/experimental/llm-mock/src/index.ts:17`](../packages/experimental/llm-mock/src/index.ts)
+
+```ts config-catalog
+/** Mock route settings. */
+export interface Config {
+  /** Text every model call returns. */
+  reply: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-mock -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-pi-ai -->
 <a id="deepseek-aidsh-llm-pi-ai"></a>
 
@@ -3053,7 +3070,7 @@ export interface McpOAuthConfig {
 
 - `inject`: `tools`
 - `refs`: [`McpOAuthConfigInput`](../packages/mcp/mcp-client/src/index.ts) · [`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:77`](../packages/mcp/mcp-manager/src/index.ts)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:44`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /** Manager configuration with live server entries. */
@@ -3660,7 +3677,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-schedule`
 
 - `inject`: `agents` · `sessions` · `storageDomain` · `sessionPersistence`
-- `source`: [`packages/schedule/schedule/src/index.ts:81`](../packages/schedule/schedule/src/index.ts)
+- `source`: [`packages/schedule/schedule/src/index.ts:87`](../packages/schedule/schedule/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the Host Schedule domain. */
@@ -3743,7 +3760,7 @@ export interface RuntimeProcessEvents {
 
 - `inject`: `deepseekLlmApiExtensions` · `sessions`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/session/session-log-deepseek/src/index.ts:47`](../packages/session/session-log-deepseek/src/index.ts)
+- `source`: [`packages/session/session-log-deepseek/src/index.ts:49`](../packages/session/session-log-deepseek/src/index.ts)
 
 ```ts config-catalog
 /** Session-log request contribution configuration. */
@@ -5988,6 +6005,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-sidebar-files` | — | [`packages/client/ui-sidebar-files/src/index.ts`](../packages/client/ui-sidebar-files/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-sidebar-right` | — | [`packages/client/ui-sidebar-right/src/index.ts`](../packages/client/ui-sidebar-right/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-sidebar-terminal` | — | [`packages/client/ui-sidebar-terminal/src/index.ts`](../packages/client/ui-sidebar-terminal/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-sidechat` | — | [`packages/experimental/client-ui-sidechat/src/index.ts`](../packages/experimental/client-ui-sidechat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-skill` | — | [`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-subagent` | — | [`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-tool` | — | [`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts) |

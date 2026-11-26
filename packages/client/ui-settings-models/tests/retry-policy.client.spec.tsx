@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /** Provider retry-policy fields of the Models editor card. */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
 import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
@@ -59,7 +59,8 @@ function piAiNamespace(): SettingsNamespaceView {
   }
 }
 
-function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
+/** Render the editor as it first appears, with its advanced settings folded. */
+function mount(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   const writeSettings = vi.fn<ModelsOperations['writeSettings']>(() => Promise.resolve({ kind: 'written', view: namespace }))
   const operations: ModelsOperations = {
     storeCredential: vi.fn(() => Promise.resolve(undefined)),
@@ -71,6 +72,13 @@ function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
   render(<ProviderEditor provider="route" displayName="Route" namespace={namespace} schema={settingsSchema}
     settingsPath={settingsPath} operations={operations} t={key => en[key]} readOnly={false} onClose={onClose} />)
   return { writeSettings, onClose }
+}
+
+/** Render the editor and unfold its advanced settings, where the retry fields live. */
+function setup(namespace: SettingsNamespaceView, settingsPath: string[] = []) {
+  const mounted = mount(namespace, settingsPath)
+  fireEvent.click(screen.getByRole('button', { name: en.customized }))
+  return mounted
 }
 
 const mode = () => screen.getByRole<HTMLSelectElement>('combobox', { name: en.retryPolicy })
@@ -87,6 +95,14 @@ const customCode = () => screen.getByRole<HTMLInputElement>('textbox', { name: e
 const addCode = () => screen.getByRole<HTMLButtonElement>('button', { name: en.retryCodeAdd })
 const code_ = (code: string) => screen.getByRole<HTMLInputElement>('checkbox', { name: CODE_LABELS[code] ?? code })
 const apply = () => screen.getByText<HTMLButtonElement>(en.apply)
+const advanced = () => screen.getByRole('button', { name: en.customized })
+/** The retry failure message a reader can see: the one outside a folded section. */
+const failure = () => {
+  const message = document.getElementById('route-retry-failure')
+  return message?.closest('[hidden]') === null ? message : null
+}
+/** Let an accepted Apply run to its close, so a card that is still open was refused. */
+const settled = () => act(() => new Promise<void>((resolve) => { setTimeout(resolve, 0) }))
 
 describe('retry policy fields', () => {
   it('inherits by default and writes an explicitly chosen normal policy', async () => {
@@ -128,8 +144,8 @@ describe('retry policy fields', () => {
     [en.retryMaxDelay, '3000000000', en.retryValueMax.replace('{max}', '2147483647')],
     [en.retryInitialDelay, '20000', en.retryDelayOrder],
     [en.retryJitter, '2', en.retryValueMax.replace('{max}', '1')],
-  ])('refuses %s = %s', (label, value, message) => {
-    setup(deepSeekNamespace())
+  ])('refuses %s = %s', async (label, value, message) => {
+    const { writeSettings } = setup(deepSeekNamespace())
     fireEvent.change(mode(), { target: { value: 'normal' } })
     fireEvent.change(input(label), { target: { value } })
     expect(screen.getByText(message)).toBeTruthy()
@@ -137,19 +153,51 @@ describe('retry policy fields', () => {
     expect(input(label).getAttribute('aria-describedby')).toBe('route-retry-failure')
     const other = label === en.retryJitter ? en.retryMaxRetries : en.retryJitter
     expect(input(other).getAttribute('aria-invalid')).toBe('false')
-    expect(apply().disabled).toBe(true)
+    // Apply stays available; pressing it writes nothing and moves the keyboard to the refused field.
+    expect(apply().disabled).toBe(false)
+    fireEvent.click(apply())
+    expect(document.activeElement).toBe(input(label))
+    expect(writeSettings).not.toHaveBeenCalled()
     fireEvent.change(input(label), { target: { value: '' } })
     expect(screen.queryByText(message)).toBeNull()
-    expect(apply().disabled).toBe(false)
+    fireEvent.click(apply())
+    await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'set', path: ['retryPolicy', 'mode'], value: 'normal' }])
   })
 
-  it('explains a refused stored policy beside the fields, or outside the fold while it is closed', async () => {
-    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } }))
-    expect(apply().disabled).toBe(true)
+  it('unfolds the advanced settings when Apply is refused for a stored policy, and explains it beside the fields', async () => {
+    const { writeSettings, onClose } = mount(deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } }))
+    const section = screen.getByRole('region', { name: en.customized })
+    const notes = apply().closest('[class*="editorFooter"]')?.querySelector('[class*="editorNotes"]')
+
+    // The folded card names no failure, and Apply is what finds it.
+    expect(advanced().getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('combobox', { name: en.retryPolicy })).toBeNull()
+    expect(failure()).toBeNull()
+    expect(apply().disabled).toBe(false)
+
+    fireEvent.click(apply())
+    await settled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(writeSettings).not.toHaveBeenCalled()
+    expect(advanced().getAttribute('aria-expanded')).toBe('true')
     expect(mode().getAttribute('aria-describedby')).toBe('route-retry-failure')
-    expect(document.getElementById('route-retry-failure')?.closest('details')).toBeNull()
-    fireEvent.click(screen.getByText(en.customized))
-    await waitFor(() => { expect(document.getElementById('route-retry-failure')?.closest('details')).not.toBeNull() })
+    expect(failure()?.textContent).toBeTruthy()
+    expect(section.contains(failure())).toBe(true)
+    expect(notes?.textContent).toBe('')
+
+    // Folding the section hides the message with its fields; the next refused Apply unfolds it again.
+    fireEvent.click(advanced())
+    expect(failure()).toBeNull()
+    fireEvent.click(apply())
+    expect(advanced().getAttribute('aria-expanded')).toBe('true')
+    expect(section.contains(failure())).toBe(true)
+
+    fireEvent.change(mode(), { target: { value: 'always' } })
+    expect(failure()).toBeNull()
+    fireEvent.click(apply())
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'set', path: ['retryPolicy', 'mode'], value: 'always' }])
   })
 
   it.each([
@@ -192,11 +240,17 @@ describe('retry policy fields', () => {
     ['a blank code', [''], en.retryCodesInvalid],
     ['a numeric code', [500], en.retryCodesInvalid],
     ['a repeated code', ['SERVER', 'SERVER'], en.retryCodesDuplicate],
-  ])('refuses a stored policy with %s', (_name, codes, message) => {
-    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 'normal', retryableCodes: codes } } }))
+  ])('refuses a stored policy with %s', async (_name, codes, message) => {
+    const { onClose } = mount(deepSeekNamespace({ user: { retryPolicy: { mode: 'normal', retryableCodes: codes } } }))
+    // The message waits with its fields inside the folded section.
+    expect(failure()).toBeNull()
+    fireEvent.click(apply())
+    await settled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(advanced().getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText(message)).toBeTruthy()
     expect(screen.getByRole('group', { name: en.retryCodes }).getAttribute('aria-invalid')).toBe('true')
-    expect(apply().disabled).toBe(true)
+    expect(screen.getByRole('group', { name: en.retryCodes }).getAttribute('aria-describedby')).toBe('route-retry-failure')
   })
 
   it('picks codes from a list, keeps stored custom codes, and inherits an unchanged selection', async () => {
@@ -211,7 +265,7 @@ describe('retry policy fields', () => {
     fireEvent.click(code_('STREAM_CLOSED'))
     fireEvent.click(code_('STREAM_CLOSED'))
     fireEvent.click(code_('CUSTOM'))
-    expect(apply().disabled).toBe(false)
+    expect(failure()).toBeNull()
     fireEvent.click(code_('RATE_LIMIT'))
     fireEvent.click(apply())
     await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
@@ -220,23 +274,31 @@ describe('retry policy fields', () => {
     ])
   })
 
-  it('refuses a stored policy that is not an object', () => {
-    setup(deepSeekNamespace({ user: { retryPolicy: 'sometimes' } }))
+  it('refuses a stored policy that is not an object', async () => {
+    const { onClose } = setup(deepSeekNamespace({ user: { retryPolicy: 'sometimes' } }))
     expect(mode().value).toBe('')
-    expect(apply().disabled).toBe(true)
+    expect(failure()?.textContent).toBeTruthy()
+    fireEvent.click(apply())
+    await settled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('treats a stored null policy as inheriting', () => {
-    setup(deepSeekNamespace({ user: { retryPolicy: null } }))
+  it('treats a stored null policy as inheriting', async () => {
+    const { onClose } = setup(deepSeekNamespace({ user: { retryPolicy: null } }))
     expect(mode().value).toBe('')
-    expect(apply().disabled).toBe(false)
+    expect(failure()).toBeNull()
+    fireEvent.click(apply())
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
   })
 
   it('offers no retry fields on a namespace without a curated editor', () => {
     const namespace = deepSeekNamespace({ user: { retryPolicy: { mode: 'sometimes' } } })
-    setup({ ...namespace, ns: 'llm-plain' })
+    mount({ ...namespace, ns: 'llm-plain' })
+    // Such a card has no advanced settings to unfold, only the pointer to `cordis.patch.yml`.
+    expect(screen.getByText(`${en.advancedHint} (llm-plain)`)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: en.customized })).toBeNull()
     expect(screen.queryByRole('group', { name: en.retryPolicy })).toBeNull()
-    expect(document.getElementById('route-retry-failure')).toBeNull()
+    expect(failure()).toBeNull()
   })
 
   it('drops an uncorrectable retry count when switching to always', async () => {
@@ -246,7 +308,7 @@ describe('retry policy fields', () => {
     fireEvent.change(input(en.retryJitter), { target: { value: '  ' } })
     expect(input(en.retryJitter).value).toBe('')
     fireEvent.change(mode(), { target: { value: 'always' } })
-    expect(apply().disabled).toBe(false)
+    expect(failure()).toBeNull()
     fireEvent.click(apply())
     await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
     expect(writeSettings.mock.calls[0]?.[1]).toEqual([{ op: 'set', path: ['retryPolicy', 'mode'], value: 'always' }])
@@ -311,7 +373,7 @@ describe('retry policy fields', () => {
     fireEvent.change(input('attempts'), { target: { value: '0' } })
     expect(screen.getByText(en.retryValueMin.replace('{min}', '1'))).toBeTruthy()
     fireEvent.change(input('attempts'), { target: { value: '2' } })
-    expect(document.getElementById('route-retry-failure')).toBeNull()
+    expect(failure()).toBeNull()
     fireEvent.click(apply())
     await waitFor(() => { expect(writeSettings).toHaveBeenCalled() })
     expect(writeSettings.mock.calls[0]?.[1]).toEqual([
@@ -379,10 +441,13 @@ describe('retry policy fields', () => {
     expect(code_('SERVER').checked).toBe(false)
   })
 
-  it('refuses a stored policy whose mode is not text', () => {
-    setup(deepSeekNamespace({ user: { retryPolicy: { mode: 5 } } }))
+  it('refuses a stored policy whose mode is not text', async () => {
+    const { onClose } = setup(deepSeekNamespace({ user: { retryPolicy: { mode: 5 } } }))
     expect(mode().value).toBe('')
-    expect(apply().disabled).toBe(true)
+    expect(failure()?.textContent).toBeTruthy()
+    fireEvent.click(apply())
+    await settled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('keeps only the fields the new mode declares when switching modes', async () => {

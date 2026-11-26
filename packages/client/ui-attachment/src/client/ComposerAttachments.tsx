@@ -28,12 +28,14 @@ export interface ComposerAttachmentsInjected {
 /** The owner share and locale seat the attachment rail reads from its slot props. */
 type ComposerAttachmentsInput = Pick<ComposerAttachmentsProps,
   | 'attachments' | 'canAcceptDrop' | 'onAddFiles' | 'onRemoveAttachment' | 'uploads' | 'onRetryFile'
-  | 'uploadFailureText' | 'dropLimits' | 't'>
+  | 'uploadFailureText' | 'dropLimits' | 't' | 'useDocumentPortal'>
 
 /** Draft image previews, pending-file cards, drop target, and original-image preview. */
 export function ComposerAttachments({
   attachments, canAcceptDrop, onAddFiles, onRemoveAttachment, uploads, onRetryFile, uploadFailureText, dropLimits, t, readFileDrag,
+  useDocumentPortal,
 }: ComposerAttachmentsInput & InjectFace<ComposerAttachmentsInjected>) {
+  const Portal = useDocumentPortal()
   const [preview, setPreview] = useState<ComposerImageAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
@@ -55,6 +57,7 @@ export function ComposerAttachments({
     <>
       {dragActive && (
         <DropOverlay
+          Portal={Portal}
           disabled={!canAcceptDrop}
           labels={dropOverlayLabels(t, canAcceptDrop, dropLimits)}
         />

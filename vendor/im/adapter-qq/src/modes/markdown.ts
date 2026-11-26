@@ -72,6 +72,25 @@ function list(el: Element<'ul' | 'ol'>, ctx: RenderContext<QqTypes>): QqNode[] {
   return out
 }
 
+/**
+ * The `<qqbot-at-everyone />` text-chain tag of QQ.
+ *
+ * QQ reads these tags only inside a markdown body (`msg_type: 2`) — a plain text body shows them verbatim — which is
+ * why only this mode declares `<at>`. A message carrying a mention therefore prices the text mode's readable `@name`
+ * fallback and resolves to markdown.
+ */
+const MENTION_ALL = '<qqbot-at-everyone />'
+
+/**
+ * The `<qqbot-at-user>` tag of one person.
+ * @param id - platform user id (the member's `member_openid` in a group).
+ * @returns the tag, or an empty string for an id that names nobody.
+ */
+function mentionTagOf(id: string) {
+  const safe = id.replace(/[^A-Za-z0-9_-]/g, '')
+  return safe ? `<qqbot-at-user id="${safe}" />` : ''
+}
+
 /** Build the `markdown` mode. */
 export function createMarkdownMode(settings: QqModeSettings): Mode<QqTypes> {
   const linkText = (label: string, href: string) => settings.linkPolicy === 'keep'
@@ -82,6 +101,9 @@ export function createMarkdownMode(settings: QqModeSettings): Mode<QqTypes> {
     .register('text', el => escapeMarkdown(el.attrs.content))
     .register('p', (el, ctx) => block(ctx.render(el.children)))
     .register('br', () => '\n')
+    .register('at', el => el.attrs.type === 'all' ? MENTION_ALL : mentionTagOf(el.attrs.id ?? ''), {
+      variants: ['user', 'all'],
+    })
     .register('b', (el, ctx) => wrapInline(ctx.render(el.children), '**', '**'))
     .register('i', (el, ctx) => wrapInline(ctx.render(el.children), '*', '*'))
     .register('s', (el, ctx) => wrapInline(ctx.render(el.children), '~~', '~~'))

@@ -25,10 +25,6 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
-:global([data-animating]:not([data-dragging])) .root {
-  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
-}
-
 /* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
    opaque fill here would sit on top of it and block the window vibrancy. */
 :global([data-platform='darwin']) .root {
@@ -136,13 +132,18 @@
    most of its change in a few frames and reads as a cut. Only the quiet state
    carries the transition, so a reveal is immediate and a pointer that returns
    during the delay sees no change. The collapse rule's `transition: width`
-   outranks this one, so a leave during collapse or expand hides at once. */
+   below replaces this one, so a leave during collapse or expand hides at once. */
 .root.quietBars {
   --dsh-scrollbar-thumb: transparent;
   --dsh-scrollbar-thumb-hover: transparent;
   transition:
     --dsh-scrollbar-thumb 200ms linear 500ms,
     --dsh-scrollbar-thumb-hover 200ms linear 500ms;
+}
+
+/* The width follows the frame's track easing, which its owner props report. */
+.root[data-sidebar-animating] {
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
 }
 
 /* Collapse phase 1: the whole frozen-width content fades out in place over
@@ -167,10 +168,15 @@
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
    render stays static. The New Session row animates each direct output of its
    slot. Only the slot's children outlets are transparent: a layer's own wrapper
-   moves as one item, not together with a second animation on its descendants. */
+   moves as one item, not together with a second animation on its descendants.
+   A layer from another package sits between `.railIn` and this package's
+   content in that outlet, which starts this package's style scope again;
+   naming `:scope` lets `.railIn` match outside the scope, and `:where()`
+   keeps the specificity. The `.collapsed` rules for the New session button
+   below use the same form. */
 .railIn .iconButton,
 .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
-.railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+.railIn .newSessionRow [data-slot-children='sidebar.session.action']:where(:scope, *):not(:where(
   [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
 )) > *,
 .railIn .panelList,
@@ -178,7 +184,7 @@
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
 }
 
-.railIn .newSessionRow [data-slot-children='sidebar.session.action'] {
+.railIn .newSessionRow [data-slot-children='sidebar.session.action']:where(:scope, *) {
   animation: none;
 }
 
@@ -474,15 +480,20 @@
   }
 }
 
+:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+  transition: background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
 /* macOS: the themed elevated fill reads as a foreign slab on the vibrancy
    sidebar; a white wash sits in the glass like native macOS sidebar
-   controls; the glass tokens lower its alpha in dark mode. */
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession {
+   controls; the glass tokens lower its alpha in dark mode. Window fullscreen
+   paints the opaque Web sidebar fill, so the Web control fills return. */
+:global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])) .newSession {
   background: var(--dsw-specific-sidebar-glass-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession:hover {
+  :global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])) .newSession:hover {
     background: var(--dsw-specific-sidebar-glass-hover);
   }
 }
@@ -495,7 +506,7 @@
   margin: 0 0 12px;
 }
 
-.collapsed .newSession {
+.collapsed :where(:scope, *) .newSession {
   flex: none;
   width: 36px;
   height: 36px;
@@ -507,17 +518,17 @@
 }
 
 @media (hover: hover) {
-  .collapsed .newSession:hover {
+  .collapsed :where(:scope, *) .newSession:hover {
     background-color: var(--dsw-alias-interactive-bg-hover);
   }
 }
 
-:global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession {
+:global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])).collapsed .newSession {
   background: var(--dsw-specific-sidebar-glass-collapsed-fill);
 }
 
 @media (hover: hover) {
-  :global([data-platform='darwin']) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
+  :global([data-platform='darwin']:not([data-fullscreen])) :where(.root:not([role='dialog'])).collapsed .newSession:hover {
     background: var(--dsw-specific-sidebar-glass-collapsed-hover);
   }
 }
@@ -528,7 +539,7 @@
   white-space: nowrap;
 }
 
-.collapsed .newSessionLabel {
+.collapsed :where(:scope, *) .newSessionLabel {
   max-width: 0;
 }
 
@@ -628,7 +639,15 @@
   pointer-events: none;
 }
 
-:global([data-platform='darwin']) .scrollFade,
+:global([data-platform='darwin']) .scrollFade {
+  opacity: 1;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+:global([data-platform='darwin']:not([data-fullscreen])) .scrollFade {
+  opacity: 0;
+}
+
 .collapsed .scrollFade,
 .collapsed .scrollArea::before,
 .collapsed .scrollArea::after {
@@ -875,12 +894,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :global([data-animating]:not([data-dragging])) .root,
+  :global([data-platform='darwin']) :where(.root:not([role='dialog'])) .newSession,
+  :global([data-platform='darwin']) .scrollFade,
+  .root[data-sidebar-animating],
   .wide,
   .fading > *,
   .railIn .iconButton,
   .railIn .newSessionRow > :global([data-slot='sidebar.session.action']) > *,
-  .railIn .newSessionRow [data-slot-children='sidebar.session.action']:not(:where(
+  .railIn .newSessionRow [data-slot-children='sidebar.session.action']:where(:scope, *):not(:where(
     [data-slot='sidebar.session.action'] :not([data-slot-children='sidebar.session.action']) *
   )) > *,
   .railIn .panelList,

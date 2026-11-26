@@ -82,6 +82,7 @@ export function ownerSharesDouble(overrides: OwnerSharesOverrides = {}): OwnerSh
     addSessions: async request => accepted({ shareId: request.shareId, sessionIds: request.sessionIds }),
     list: async () => accepted({ shares: [] }),
     stop: async () => accepted({ ok: true }),
+    reconnect: async () => accepted(undefined),
     updatePermissions: async request => accepted({
       shareId: request.shareId,
       sessionMode: request.sessionMode ?? 'view',
@@ -110,6 +111,7 @@ export function ownerSharesDouble(overrides: OwnerSharesOverrides = {}): OwnerSh
     addSessions: async request => record('addSessions', request, () => base.addSessions(request)),
     list: async () => record('list', undefined, () => base.list()),
     stop: async request => record('stop', request, () => base.stop(request)),
+    reconnect: async request => record('reconnect', request, () => base.reconnect(request)),
     updatePermissions: async request => record('updatePermissions', request, () => base.updatePermissions(request)),
     setCapabilities: async request => record('setCapabilities', request, () => base.setCapabilities(request)),
     capabilities: async () => record('capabilities', undefined, () => base.capabilities()),

@@ -1,6 +1,6 @@
 /** Anchor-preserving tooltips; an optional body portal escapes clipping containers and stacking contexts that cap the bubble's z-index. */
 
-import { cloneElement, createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
+import { cloneElement, createContext, useCallback, useContext, useEffect, useId, useRef, useState, version } from 'react'
 import type { FocusEventHandler, MouseEventHandler, MutableRefObject, PointerEventHandler, ReactElement, Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { ShortcutKeys } from './ShortcutKeys.tsx'
@@ -32,6 +32,16 @@ interface AnchorProps {
 }
 
 type TooltipLabel = string | (() => string)
+
+/** React 19 keeps an element's ref in props and warns when code reads `element.ref`, where React 18 keeps it. */
+const REF_IN_PROPS = Number.parseInt(version, 10) >= 19
+
+/** Read the ref the anchor element was created with. */
+function anchorRef(anchor: ReactElement<AnchorProps>): Ref<HTMLElement> | undefined {
+  /* v8 ignore next -- React 19 arm; the unit suite runs against the single installed React major. */
+  if (REF_IN_PROPS) return anchor.props.ref
+  return (anchor as ReactElement<AnchorProps> & { ref?: Ref<HTMLElement> }).ref
+}
 
 function clipped(anchor: HTMLElement): boolean {
   return [anchor, ...anchor.querySelectorAll<HTMLElement>('*')]
@@ -74,9 +84,8 @@ export function Tooltip({ label, shortcutKeys, side = 'right', align = 'center',
   const id = useId()
   const [pinned, setPinned] = useState(false)
   const anchor = useRef<HTMLElement | null>(null)
-  // React 18 keeps the element's ref outside props; forward it so wrapping an
-  // anchor in Tooltip never silently severs the owner's ref.
-  const childRef = (children as ReactElement<AnchorProps> & { ref?: Ref<HTMLElement> }).ref
+  // Forward the anchor's own ref so wrapping it in Tooltip never silently severs the owner's ref.
+  const childRef = anchorRef(children)
   const mergedRef = useCallback((el: HTMLElement | null) => {
     anchor.current = el
     if (typeof childRef === 'function') childRef(el)

@@ -28,6 +28,15 @@ describe('owner share Remote', () => {
     expect(addSessions).toHaveBeenCalledWith({ shareId: 'share-one', sessionIds: ['session-two'] })
   })
 
+  it('delegates reconnection and preserves a failed registration', async () => {
+    const failure = new Error('registration unavailable')
+    const reconnect = vi.fn().mockRejectedValue(failure)
+    ctx = new Context()
+    const remote = new LiveshareShares(ctx, { reconnect } as never)
+    await expect(remote.reconnect({ shareId: 'share-one' })).rejects.toBe(failure)
+    expect(reconnect).toHaveBeenCalledWith({ shareId: 'share-one' })
+  })
+
   it('reads one share’s Relay audit trail through the operations implementation', async () => {
     const audit = vi.fn(async () => ({ events: [] }))
     ctx = new Context()

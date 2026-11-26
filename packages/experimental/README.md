@@ -49,6 +49,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`webhook`](webhook/README.md) | Authenticated delivery dispatch and Workspace Session creation | `ctx.webhookRuntime` |
 | [`webhook-github`](webhook-github/README.md) | Signed GitHub webhook ingress | — |
 | [`session-title-all-prompts-llm`](session-title-all-prompts-llm/README.md) | Session titles from all human prompts | — |
+| [`llm-mock`](llm-mock/README.md) | Keyless mock model route with a fixed reply | — |
 | [`tool-terminal`](tool-terminal/README.md) | Persistent terminal tools | — |
 | [`terminal-panel`](terminal-panel/README.md) | Agent terminals in the Web sidebar and read-only user terminal tools | — |
 | [`tool-ralph`](tool-ralph/README.md) | Bounded repeated delegated tasks | — |
@@ -71,6 +72,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`client-ui-read-aloud`](client-ui-read-aloud/README.md) | Read aloud control in the message action row | — |
 | [`read-aloud-bundle`](read-aloud-bundle/README.md) | Default-disabled optional read-aloud composition | — |
 | [`client-ui-stats`](client-ui-stats/README.md) | Per-turn and per-step context, timing, cache, and tool cost for Web | — |
+| [`client-ui-sidechat`](client-ui-sidechat/README.md) | `/side` forks the conversation into a side conversation in the right Sidebar | — |
 | [`auto-review`](auto-review/README.md) | Explicit Web layer for same-model review before each native or PTC inner tool call | — |
 | [`subagent-oar`](subagent-oar/README.md) | Run standalone external coding-agent tasks through OAR | `ctx.subagents` |
 | [`tool-subagent-oar`](tool-subagent-oar/README.md) | Select a configured external agent for each delegated task | `ctx.tools` |

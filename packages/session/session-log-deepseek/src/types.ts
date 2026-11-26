@@ -27,7 +27,7 @@ export interface DeepSeekSessionLogWireHeader {
   readonly parentSession?: string
   /** Exact inherited prefix length; absent for an unseeded Session. */
   readonly seedLength?: number
-  readonly origin?: 'subagent'
+  readonly origin?: 'subagent' | 'side'
   readonly delegationDepth?: number
   readonly agentPreset?: string
 }
@@ -87,6 +87,13 @@ export interface DeepSeekSessionLogExtension {
 declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions/types' {
   interface DeepSeekLlmApiExtensionMap {
     dsh_session_log: DeepSeekSessionLogExtension
+  }
+
+  interface DeepSeekLlmApiHeaderMap {
+    /** Sent when the requesting Session has `origin: subagent`. */
+    'x-deepseek-harness-session-type': 'subagent'
+    /** Direct creator recorded by the requesting subagent Session, including for nested subagents. */
+    'x-deepseek-harness-subagent-parent-session-id': string
   }
 }
 

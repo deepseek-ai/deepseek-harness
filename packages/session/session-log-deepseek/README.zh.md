@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-用于 DeepSeek 官方 LLM（大语言模型）API 请求的增量规范会话日志上传。该函数插件注入 `ctx.sessions` 与 `ctx.deepseekLlmApiExtensions`，并拥有 `dsh_session_log` 请求字段以及用于派生接受水位的持久 `session-log-deepseek/delivery-accepted` 事件。仅当官方 API 不得接收会话日志后缀时才禁用它。
+用于 DeepSeek 官方 LLM（大语言模型）API 请求的增量规范会话日志上传。该函数插件注入 `ctx.sessions` 与 `ctx.deepseekLlmApiExtensions`，并拥有 `dsh_session_log` 请求字段、subagent 请求标头以及用于派生接受水位的持久 `session-log-deepseek/delivery-accepted` 事件。官方 API 不得接收会话日志后缀时，将 `enabled` 设为 `false`；移除该插件还会停止发送 subagent 标头。
 
 ## 目录
 
@@ -17,6 +17,7 @@ kind: "package-reference"
 - [请求字段](#request-field)
 - [上传排除条件](#upload-exclusions)
 - [接受与重试](#acceptance-and-retry)
+- [Subagent 标头](#subagent-headers)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -69,6 +70,11 @@ DeepSeek 适配器会在 HTTP 2xx 后、消费 SSE（Server-Sent Events）正文
 
 缺少存活会话的直接请求会省略 `dsh_session_log`。普通 agent（智能体）、压缩（compaction）、会话标题与 Auto 审查调用都会携带存活会话 id，并应用相同的上传资格判断。
 
+<a id="subagent-headers"></a>
+## Subagent 标头
+
+插件通过 `ctx.deepseekLlmApiExtensions.registerHeader()` 注册 `x-deepseek-harness-session-type` 与 `x-deepseek-harness-subagent-parent-session-id`。请求对应的存活会话具有 `origin: subagent` 时，前者为 `subagent`，后者为记录的 `parentSession`，即该 subagent 的直接创建者，且父会话不必存活。根会话、fork 会话、侧边会话、直接请求和已失效的会话 id 都不发送这两个标头。HTTP 无法原样携带父会话 id 时，注册表省略该标头并保留类型标头。`enabled` 只控制日志字段，因此禁用上传时仍发送这两个标头。[DeepSeek 协议参考](../../../docs/deepseek-llm-api-wire-extensions.zh.md)将它们与其他请求标头一并列出。
+
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -86,6 +92,20 @@ DeepSeek 适配器会在 HTTP 2xx 后、消费 SSE（Server-Sent Events）正文
 
 无；模型可见请求前缀保持不变。
 
+### Subagent 标头
+
+#### 模型看到的内容
+
+无。这些标头是请求正文之外的 HTTP 请求元数据。
+
+#### Token 影响
+
+模型输入 token 为零。
+
+#### KV Cache 影响
+
+无；模型可见请求前缀保持不变。
+
 ## 已知限制与暂缓事项
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -94,6 +114,7 @@ DeepSeek 适配器会在 HTTP 2xx 后、消费 SSE（Server-Sent Events）正文
 - **缺少存活会话就没有字段**——直接调用或陈旧会话调用没有可供快照的规范日志；显式缺失语义仍暂缓处理。
 - **超限事件会让上传停住**——字段单独就超过 `maxBytes` 的事件不会发送，后续事件也排在它后面，直到上限调高；根本无法序列化的事件会一直阻塞上传。
 - **提供方拒绝会让请求失败**——提供方因该字段拒绝请求时，模型请求失败，游标保持不变，而非截断日志。
+- **进程外 subagent 不携带 subagent 标头**——`dsh-subagent-dsh-sdk` 子级在独立进程中运行一个不带 `origin: subagent` 的新会话，因此其请求不发送这两个标头。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -16,7 +16,7 @@ Status: implemented
 
 **配置由 volatile Config 提供，CRUD 不需要新 API。** Settings 按管理器条目的 Loader id 展示其 Config；ConfigEditor 拥有 profile 持久化、继承和 revision 检查。Settings 编辑保留继承的服务器，重置继承条目会恢复其基层值。直接编写 profile patch 会替换完整 `servers` 映射。Loader 先提交引用，再通知管理器现有的协调队列。
 
-**插件以副作用注册服务器。** `register(name, entry)` 为调用方插件的生命周期加入一台服务器，并返回该副作用的释放函数；条目接受除 `enabled` 外的全部配置字段，并通过相同校验。因此插件管理器已有的启用、停用和卸载操作决定插件的服务器何时存在；注册的释放会等待实例卸载，插件的释放完成时工具已撤回。注册名与配置名共用一个命名空间：注册拒绝已配置的名字，设置写入拒绝已注册的名字。注册不进入 Settings。
+**插件以副作用注册服务器。** `register(name, entry)` 为调用方插件的生命周期加入一台服务器，并返回该副作用的释放函数；条目接受除 `enabled` 外的全部配置字段，并通过相同校验。`@deepseek-ai/dsh-mcp-manager/server` 行就是这样一个插件：它注册其配置声明的服务器。因此插件管理器已有的启用、停用和卸载操作决定插件的服务器何时存在；注册的释放会等待实例卸载，插件的释放完成时工具已撤回。注册名与配置名共用一个命名空间：注册拒绝已配置的名字，设置写入拒绝已注册的名字。注册不进入 Settings。
 
 **扁平条目 schema，跨字段校验。** 条目是带 `transport` 判别字段的扁平结构，写入期校验在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下，且拒绝会点名出错字段，union 的形状错误做不到。
 
@@ -38,7 +38,7 @@ Status: implemented
 
 ## 曾考虑的替代方案
 
-**把每台服务器作为独立 Loader 条目管理。** 否决：管理器需要包含状态、restart 与 probe 的统一服务器列表。Settings 与 ConfigEditor 已经为其字典提供继承、校验和 revision 检查；运行期子实例不需要独立持久化条目。
+**把每台服务器作为独立 Loader 条目管理。** 否决：管理器需要包含状态、restart 与 probe 的统一服务器列表。Settings 与 ConfigEditor 已经为其字典提供继承、校验和 revision 检查；运行期子实例不需要独立持久化条目。[MCP 管理器 `servers` 字典之外的服务器行](../architecture/2026-11-24-mcp-manager-server-rows.zh.md)部分取代了这一条：部署也可以把服务器声明为独立的一行，由它通过 `register()` 注册，字典保持不变。
 
 **把 `startConnection()` 当库调用而不挂子插件。** 否决：这会让生命周期与静态组合实例分叉，丢掉预留冲突检查，还要重造插件已在测试下证明的激活/销毁静默。
 

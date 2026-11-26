@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest'
-import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import { makeTranslate, RemoteError, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OfficeKitGeneration } from '@deepseek-ai/dsh-office-kit/types'
 import type { DocumentPreviewDefinition } from '../src/client/document/registry.ts'
@@ -114,7 +114,7 @@ function setup() {
   const slots: TextPreviewProps['renderSlot'] = (key: string, input: unknown, options?: { hookContext?: unknown }) => {
     if (key === 'sidebar.right.tab.document.action') {
       return <OfficeFontAction {...{ ...input as OwnerOf<'sidebar.right.tab.document.action'>, useTabInfo: options?.hookContext, useStore: useOffice,
-        actions: office.actions, t: makeTranslate(en) } as OfficeFontActionProps} />
+        actions: office.actions, t: makeTranslate(en), ...responsiveHooks() } as OfficeFontActionProps} />
     }
     if (key !== 'sidebar.right.tab.document') return null
     const owner = input as OwnerOf<'sidebar.right.tab.document'>

@@ -95,7 +95,7 @@ function tooltipAfterHover(anchor: Element): { readonly early: string | null; re
 
 function file(path: string, overrides: Partial<ForgeDiffFile> = {}): ForgeDiffFile {
   return {
-    path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 0, deletions: 0, hunks: [],
+    path, previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation', digest: 'digest', additions: 0, deletions: 0, hunks: [],
     ...overrides,
   }
 }
@@ -314,6 +314,7 @@ function mount(options: MountOptions = {}) {
   const faces: Faces = {
     reconnect: vi.fn<ChangesTabInjected['reconnect']>(),
     localDiff: vi.fn<ChangesTabInjected['localDiff']>(async () => ok(LOCAL)),
+    localWrite: vi.fn<ChangesTabInjected['localWrite']>(async () => ok({ undo: 'tree-1' })),
     diffBases: vi.fn<ChangesTabInjected['diffBases']>(async () => ok(BASES)),
     localText: vi.fn<ChangesTabInjected['localText']>(async () => ok(APP_TEXT)),
     changeRequestDiff: vi.fn<ChangesTabInjected['changeRequestDiff']>(async () => ok(CHANGE)),
@@ -536,7 +537,6 @@ describe('ChangesTab keyboard file navigation', () => {
     const menuItem = m.view.getByRole('menuitem', { name: 'Copy path' })
     fireEvent.keyDown(menuItem, { key: 'ArrowRight' })
     fireEvent.keyDown(menuItem, { key: 'Escape' })
-    fireEvent.keyDown(m.section('src/app.ts').querySelector('svg')!, { key: 'ArrowRight' })
     expect(scrolled).not.toHaveBeenCalled()
     const selection = window.getSelection()!
     const range = document.createRange()
@@ -875,7 +875,7 @@ describe('ChangesTab base branch', () => {
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
     await settle()
-    expect(m.faces.diffBases).toHaveBeenCalledWith('', expect.any(AbortSignal))
+    expect(m.faces.diffBases).toHaveBeenCalledWith(null, '', expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref, commits: null }, expect.any(AbortSignal))
@@ -2499,7 +2499,7 @@ describe('ChangesTab commits', () => {
       })
     } })
     await settle()
-    expect(m.faces.localCommits).toHaveBeenCalledWith(null, expect.any(AbortSignal))
+    expect(m.faces.localCommits).toHaveBeenCalledWith(null, null, expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
     await settle()
     fireEvent.click(within(document.body).getByRole('menuitem', { name: /^2222222/ }))
@@ -3053,5 +3053,452 @@ describe('ChangesTab extensions before the Host reports them', () => {
     await settle()
     expect(m.paths()).toHaveLength(6)
     expect(m.view.container.querySelector('[data-forge-annotation]')).toBeNull()
+  })
+})
+
+describe('ChangesTab local writes', () => {
+  /** A mounted view that shows one local scope. */
+  async function scoped(scope: 'unstaged' | 'staged' | 'uncommitted', options: MountOptions = {}) {
+    const m = mount(options)
+    await settle()
+    act(() => { m.store.actions.scoped(TAB, scope) })
+    await settle()
+    return m
+  }
+  /** The writes each file header offers, by path. */
+  const offered = (m: ReturnType<typeof mount>): Record<string, string[]> => {
+    const writes: Record<string, string[]> = {}
+    for (const section of m.view.container.querySelectorAll('[data-forge-diff-file]')) {
+      writes[section.getAttribute('data-forge-diff-file') ?? ''] = [...section.querySelectorAll('[data-forge-write]')]
+        .map(button => button.getAttribute('data-forge-write') ?? '')
+    }
+    return writes
+  }
+  /** The last notice the view reported: its key, its options without the undo, and the undo. */
+  const noticed = (m: ReturnType<typeof mount>) => {
+    const [key, options] = m.faces.report.mock.lastCall ?? []
+    const { undo, ...rest } = options ?? {}
+    return { key, options: rest, undo }
+  }
+  const tool = (m: ReturnType<typeof mount>, path: string, kind: string): HTMLButtonElement => {
+    const button = m.section(path).querySelector(`[data-forge-write="${kind}"]`)
+    if (!(button instanceof HTMLButtonElement)) throw new Error(`${path} offers no ${kind}`)
+    return button
+  }
+  const bulk = (m: ReturnType<typeof mount>): HTMLButtonElement | null => m.view.container.querySelector('[data-forge-write-all]')
+  /** Labels of a file's menu rows after opening it. */
+  const menu = (m: ReturnType<typeof mount>, path: string): string[] => {
+    fireEvent.click(within(m.section(path)).getByRole('button', { name: `More actions for ${path.slice(path.lastIndexOf('/') + 1)}` }))
+    return m.view.getAllByRole('menuitem').map(item => item.textContent ?? '')
+  }
+
+  it('offers staging and restoring in the unstaged scope, unstaging in the staged scope, and no write in another scope', async () => {
+    const m = mount()
+    await settle()
+    expect(offered(m)).toMatchObject({ 'src/app.ts': [] })
+    expect(bulk(m)).toBeNull()
+
+    act(() => { m.store.actions.scoped(TAB, 'unstaged') })
+    await settle()
+    // A rename in this scope is a file the index tracks without content, which a restore would empty.
+    expect(offered(m)).toEqual({
+      'src/app.ts': ['restore', 'stage'], 'src/new.ts': ['restore', 'stage'], 'assets/logo.png': ['restore', 'stage'],
+      'docs/gone.txt': ['restore', 'stage'], 'lib/b.txt': ['stage'], 'logs/big.log': ['restore', 'stage'],
+    })
+    expect(tool(m, 'src/app.ts', 'stage').getAttribute('aria-label')).toBe('Stage app.ts')
+    expect(tool(m, 'src/app.ts', 'restore').getAttribute('aria-label')).toBe('Restore app.ts')
+    expect(tooltipAfterHover(tool(m, 'src/app.ts', 'stage'))).toEqual({ early: null, at500: 'Stage file' })
+    expect(tooltipAfterHover(tool(m, 'src/app.ts', 'restore'))).toEqual({ early: null, at500: 'Restore file' })
+    expect(bulk(m)?.textContent).toBe('Stage all')
+    expect(m.section('src/app.ts').querySelector(`.${css.fileHeader}`)?.getAttribute('data-forge-file-writes')).toBe('unstaged')
+
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    expect(offered(m)).toMatchObject({ 'src/app.ts': ['unstage'], 'lib/b.txt': ['unstage'] })
+    expect(tool(m, 'src/app.ts', 'unstage').getAttribute('aria-label')).toBe('Unstage app.ts')
+    expect(tooltipAfterHover(tool(m, 'src/app.ts', 'unstage'))).toEqual({ early: null, at500: 'Unstage file' })
+    expect(bulk(m)?.textContent).toBe('Unstage all')
+
+    act(() => { m.store.actions.scoped(TAB, 'uncommitted') })
+    await settle()
+    expect(offered(m)).toMatchObject({ 'src/app.ts': [] })
+    expect(bulk(m)).toBeNull()
+    expect(m.section('src/app.ts').querySelector(`.${css.fileHeader}`)?.hasAttribute('data-forge-file-writes')).toBe(false)
+  })
+
+  it('keeps the header button of a checkout without a repository to create a change request in, and ends the header of a scope without writes after its note', async () => {
+    const m = await scoped('unstaged', { state: { ...LOCAL_STATE, repository: null } })
+    expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+    expect(bulk(m)?.textContent).toBe('Stage all')
+    expect(m.view.container.querySelector(`.${css.headerEnd}`)?.hasAttribute('data-forge-header-buttons')).toBe(true)
+
+    act(() => { m.store.actions.scoped(TAB, 'uncommitted') })
+    await settle()
+    expect(m.view.container.querySelector(`.${css.headerEnd}`)).toBeNull()
+  })
+
+  it('stages a file, rereads the scope before another write, and undoes it by returning the index entries', async () => {
+    const m = await scoped('unstaged')
+    const write = deferred<RemoteResult<{ undo: string | null }>>()
+    m.faces.localWrite.mockReturnValueOnce(write.promise)
+    const reread = deferred<RemoteResult<ForgeLocalDiff>>()
+    m.faces.localDiff.mockReturnValueOnce(reread.promise)
+    const reads = m.faces.localDiff.mock.calls.length
+
+    fireEvent.click(tool(m, 'src/app.ts', 'stage'))
+    // A second press in the same frame, before the buttons redraw as disabled.
+    fireEvent.click(tool(m, 'src/new.ts', 'stage'))
+    expect(m.faces.localWrite.mock.calls).toEqual([[{ kind: 'stage', files: [{ path: 'src/app.ts', digest: 'digest' }] }]])
+    expect(tool(m, 'src/new.ts', 'stage').disabled).toBe(true)
+    expect(bulk(m)?.disabled).toBe(true)
+    // The menu keeps the writes as rows that cannot be activated, so a write in flight asks for no restoration.
+    menu(m, 'src/new.ts')
+    const rows = (): boolean[] => ['Stage file', 'Restore file…'].map(name => (m.view.getByRole('menuitem', { name }) as HTMLButtonElement).disabled)
+    expect(rows()).toEqual([true, true])
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Restore file…' }))
+    expect(m.view.queryByRole('dialog')).toBeNull()
+    expect(m.faces.localWrite).toHaveBeenCalledOnce()
+
+    await act(async () => { write.settle(ok({ undo: 'tree-1' })) })
+    expect(m.faces.localDiff.mock.calls.length).toBe(reads + 1)
+    expect(noticed(m)).toMatchObject({ key: 'toast.staged', options: { tone: 'success', params: { name: 'app.ts', count: 1 } } })
+    const { undo } = noticed(m)
+    // The shown files are the ones the write already changed until the reread ends: neither a button nor a menu row
+    // starts a write, which would replace the notice and its undo.
+    expect(tool(m, 'src/new.ts', 'stage').disabled).toBe(true)
+    expect(rows()).toEqual([true, true])
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Stage file' }))
+    expect(m.faces.localWrite).toHaveBeenCalledOnce()
+    expect(noticed(m).undo).toBe(undo)
+    await act(async () => { reread.settle(ok({ ...LOCAL, files: [ADDED] })) })
+    expect(m.paths()).toEqual(['src/new.ts'])
+    expect(tool(m, 'src/new.ts', 'stage').disabled).toBe(false)
+    expect(rows()).toEqual([false, false])
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    act(() => { undo?.() })
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({ kind: 'reindex', tree: 'tree-1', paths: ['src/app.ts'] })
+    await settle()
+    expect(m.faces.localDiff.mock.calls.length).toBe(reads + 2)
+    expect(m.faces.report).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an undo that failed, and one asked for during another write', async () => {
+    const m = await scoped('unstaged')
+    fireEvent.click(tool(m, 'src/app.ts', 'stage'))
+    await settle()
+    const { undo } = noticed(m)
+    m.faces.localWrite.mockResolvedValueOnce({ ok: false, error: new RemoteError('forgePanel/diff-failed', 'tree is gone', {}) })
+    act(() => { undo?.() })
+    await settle()
+    expect(m.faces.report).toHaveBeenLastCalledWith('toast.undoFailed')
+
+    const write = deferred<RemoteResult<{ undo: string | null }>>()
+    m.faces.localWrite.mockReturnValueOnce(write.promise)
+    fireEvent.click(tool(m, 'src/new.ts', 'stage'))
+    m.faces.report.mockClear()
+    const sent = m.faces.localWrite.mock.calls.length
+    act(() => { undo?.() })
+    expect(m.faces.report.mock.calls).toEqual([['toast.undoFailed']])
+    expect(m.faces.localWrite.mock.calls.length).toBe(sent)
+    await act(async () => { write.settle(ok({ undo: null })) })
+  })
+
+  it('stages every shown file from the header, leaving the files a filter hides, and reports no undo without a tree', async () => {
+    const SPEC = file('src/app.spec.ts', { layer: 'test', digest: 'spec-1' })
+    const m = await scoped('unstaged', { setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files: [APP, ADDED, SPEC] })) } })
+    act(() => { m.store.actions.toggledTests(TAB) })
+    m.faces.localWrite.mockResolvedValueOnce(ok({ undo: null }))
+
+    fireEvent.click(bulk(m)!)
+    await settle()
+
+    expect(m.faces.localWrite).toHaveBeenCalledWith({
+      kind: 'stage', files: [{ path: 'src/app.ts', digest: 'digest' }, { path: 'src/new.ts', digest: 'digest' }],
+    })
+    expect(m.faces.report).toHaveBeenLastCalledWith('toast.stagedMany', { tone: 'success', params: { name: 'app.ts', count: 2 } })
+  })
+
+  it('offers a submodule staging and no restore, on its header and in its menu', async () => {
+    const SUB = file('vendor/sub', { submodule: true, additions: 1, deletions: 1 })
+    const m = await scoped('unstaged', { setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files: [APP, SUB] })) } })
+    expect(offered(m)).toEqual({ 'src/app.ts': ['restore', 'stage'], 'vendor/sub': ['stage'] })
+    expect(menu(m, 'vendor/sub')).toEqual([en['diff.copyPath'], en['diff.openFileInSidebar'], 'Stage file'])
+  })
+
+  it('disables the header button while the scope shows no file', async () => {
+    const m = await scoped('staged', { setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ ...LOCAL, files: [] })) } })
+    expect(bulk(m)?.disabled).toBe(true)
+    fireEvent.click(bulk(m)!)
+    expect(m.faces.localWrite).not.toHaveBeenCalled()
+  })
+
+  it('unstages a renamed file by both of its paths, and every shown file from the header', async () => {
+    const m = await scoped('staged')
+    fireEvent.click(tool(m, 'lib/b.txt', 'unstage'))
+    await settle()
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({ kind: 'unstage', paths: ['lib/a.txt', 'lib/b.txt'] })
+    expect(noticed(m)).toMatchObject({ key: 'toast.unstaged', options: { tone: 'success', params: { name: 'b.txt', count: 1 } } })
+    expect(noticed(m).undo).toBeTypeOf('function')
+
+    fireEvent.click(bulk(m)!)
+    await settle()
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({
+      // Files in the order the view lists them, which is the file tree's.
+      kind: 'unstage', paths: ['assets/logo.png', 'docs/gone.txt', 'lib/a.txt', 'lib/b.txt', 'logs/big.log', 'src/app.ts', 'src/new.ts'],
+    })
+    expect(noticed(m)).toMatchObject({ key: 'toast.unstagedMany', options: { params: { name: 'logo.png', count: 6 } } })
+    act(() => { noticed(m).undo?.() })
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({
+      kind: 'reindex', tree: 'tree-1', paths: ['assets/logo.png', 'docs/gone.txt', 'lib/a.txt', 'lib/b.txt', 'logs/big.log', 'src/app.ts', 'src/new.ts'],
+    })
+    await settle()
+  })
+
+  it('asks before restoring a file, saying what happens to it, and restores it on confirmation', async () => {
+    const m = await scoped('unstaged')
+
+    fireEvent.click(tool(m, 'src/app.ts', 'restore'))
+    const asked = m.view.getByRole('dialog', { name: 'Restore this file?' })
+    expect(within(asked).getByText(en['diff.restore.modified'].replace('{path}', 'src/app.ts'))).toBeTruthy()
+    fireEvent.click(within(asked).getByRole('button', { name: 'Cancel' }))
+    expect(m.view.queryByRole('dialog')).toBeNull()
+    expect(m.faces.localWrite).not.toHaveBeenCalled()
+
+    fireEvent.click(tool(m, 'docs/gone.txt', 'restore'))
+    expect(m.view.getByText(en['diff.restore.deleted'].replace('{path}', 'docs/gone.txt'))).toBeTruthy()
+    fireEvent.click(m.view.getByRole('button', { name: 'Restore' }))
+    expect(m.view.queryByRole('dialog')).toBeNull()
+    await settle()
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({ kind: 'restore', files: [{ path: 'docs/gone.txt', digest: 'digest' }] })
+    expect(m.faces.report).toHaveBeenLastCalledWith('toast.fileRestored', { tone: 'success', params: { name: 'gone.txt' } })
+
+    fireEvent.click(tool(m, 'src/new.ts', 'restore'))
+    expect(m.view.getByText(en['diff.restore.untracked'].replace('{path}', 'src/new.ts'))).toBeTruthy()
+    fireEvent.click(m.view.getByRole('button', { name: 'Restore' }))
+    await settle()
+    expect(m.faces.report).toHaveBeenLastCalledWith('toast.fileDeleted', { tone: 'success', params: { name: 'new.ts' } })
+  })
+
+  it.each([
+    ['forgePanel/local-stale', 'toast.writeStale'],
+    ['forgePanel/local-path-replaced', 'toast.writeReplaced'],
+    ['forgePanel/diff-failed', 'toast.writeFailed'],
+  ] as const)('reports a write refused as %s and rereads the scope', async (code, key) => {
+    const m = await scoped('unstaged')
+    m.faces.localWrite.mockResolvedValueOnce({ ok: false, error: new RemoteError(code, 'git add failed', {}) })
+    const reads = m.faces.localDiff.mock.calls.length
+
+    fireEvent.click(tool(m, 'src/app.ts', 'stage'))
+    await settle()
+
+    expect(m.faces.report).toHaveBeenLastCalledWith(key, { params: { message: 'git add failed' } })
+    expect(m.faces.localDiff.mock.calls.length).toBe(reads + 1)
+    expect(tool(m, 'src/app.ts', 'stage').disabled).toBe(false)
+  })
+
+  it('offers the header\'s writes again in the file menu', async () => {
+    const m = await scoped('unstaged')
+    expect(menu(m, 'src/app.ts')).toEqual([en['diff.copyPath'], en['diff.openFileInSidebar'], 'Stage file', 'Restore file…'])
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Restore file…' }))
+    expect(m.view.getByRole('dialog', { name: 'Restore this file?' })).toBeTruthy()
+    fireEvent.click(m.view.getByRole('button', { name: 'Close' }))
+    expect(m.view.queryByRole('dialog')).toBeNull()
+
+    expect(menu(m, 'docs/gone.txt')).toEqual([en['diff.copyPath'], 'Stage file', 'Restore file…'])
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(menu(m, 'lib/b.txt')).toEqual([en['diff.copyPath'], en['diff.openFileInSidebar'], 'Stage file'])
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Stage file' }))
+    await settle()
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({ kind: 'stage', files: [{ path: 'lib/b.txt', digest: 'digest' }] })
+
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    expect(menu(m, 'src/app.ts')).toEqual([en['diff.copyPath'], en['diff.openFileInSidebar'], 'Unstage file'])
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Unstage file' }))
+    await settle()
+    expect(m.faces.localWrite).toHaveBeenLastCalledWith({ kind: 'unstage', paths: ['src/app.ts'] })
+  })
+
+  it('draws the viewed mark as an empty ring, and as a check in a ring once the file is viewed', async () => {
+    const m = mount()
+    await settle()
+    const mark = (): Element | null => m.section('src/app.ts').querySelector(`.${css.viewed}`)
+    expect(mark()?.querySelector('[data-forge-file-mark="unviewed"]')).not.toBeNull()
+    expect(mark()?.hasAttribute('data-checked')).toBe(false)
+
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }))
+
+    expect(mark()?.querySelector('[data-forge-file-mark]')).toBeNull()
+    expect(mark()?.querySelector('svg')).not.toBeNull()
+    expect(mark()?.hasAttribute('data-checked')).toBe(true)
+  })
+})
+
+describe('ChangesTab heads', () => {
+  const CACHE_ROOT = '/work/repo/.agents/worktrees/cache'
+  /** `cache` is checked out in a worktree of the repository; no worktree has `topic`. */
+  const CACHE: ForgeBaseBranch = { ref: 'refs/heads/cache', name: 'cache', worktree: CACHE_ROOT }
+  const CACHE_HEAD = { ref: CACHE.ref, name: 'cache', worktree: CACHE_ROOT }
+  const TOPIC_HEAD = { ref: TOPIC.ref, name: 'topic', worktree: null }
+  const head = (m: ReturnType<typeof mount>): HTMLElement | null => m.view.container.querySelector('[data-forge-head]')
+  /** The Host reads `cache` in its worktree and every other branch from its commits. */
+  const worktrees = (faces: Faces): void => {
+    faces.diffBases.mockImplementation(async () => ok({ ...BASES, local: [TOPIC, CACHE] }))
+    faces.localDiff.mockImplementation(async scope => ok(scope.head === CACHE.ref ? { ...LOCAL, worktree: CACHE_ROOT } : LOCAL))
+  }
+
+  it('shows a branch that a worktree has checked out with every scope, read-only and without other plugins\' additions', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]), setup: worktrees })
+    await settle()
+    expect(m.view.getByRole('button', { name: en['changes.local.create'] })).toBeTruthy()
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).not.toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch shown: main' }))
+    await settle()
+    // The branches a reader can show are those of the Session's own checkout.
+    expect(m.faces.diffBases).toHaveBeenLastCalledWith(null, '', expect.any(AbortSignal))
+    m.slotCalls.length = 0
+    fireEvent.click(m.view.getByRole('menuitem', { name: /^cache/ }))
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toEqual(CACHE_HEAD)
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: CACHE.ref, base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(head(m)?.textContent).toBe('cache')
+    expect(head(m)?.getAttribute('data-forge-head')).toBe(CACHE.ref)
+    expect(m.view.getByRole('button', { name: 'Base branch: origin/main' })).toBeTruthy()
+    expect(m.view.getByText(en['diff.base.uncommitted'])).toBeTruthy()
+    expect(m.faces.localCommits).toHaveBeenLastCalledWith(CACHE.ref, null, expect.any(AbortSignal))
+    expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+    expect(m.slotCalls).toEqual([])
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(m.faces.diffBases).toHaveBeenLastCalledWith(CACHE.ref, '', expect.any(AbortSignal))
+    expect(within(document.body).getByText(en['diff.base.note'])).toBeTruthy()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    // The other scopes keep the picker and offer no write in a checkout the Session does not own.
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    act(() => { m.store.actions.scoped(TAB, 'unstaged') })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'unstaged', head: CACHE.ref }, expect.any(AbortSignal))
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'unstaged', head: CACHE_HEAD })
+    expect(head(m)?.textContent).toBe('cache')
+    expect(m.view.getByText(en['diff.scopeNote.unstaged'])).toBeTruthy()
+    expect(m.view.container.querySelector('[data-forge-write], [data-forge-write-all]')).toBeNull()
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'More actions for app.ts' }))
+    expect(m.view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([en['diff.copyPath']])
+    expect(m.slotCalls).toEqual([])
+  })
+
+  it('shows the committed content of a branch without a worktree in the branch scope alone, then the own checkout again', async () => {
+    const m = mount()
+    await settle()
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'branch', head: TOPIC_HEAD, base: null, commits: null })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: TOPIC.ref, base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(head(m)?.getAttribute('data-forge-head')).toBe(TOPIC.ref)
+    expect(m.view.container.querySelector('[data-forge-scope]')).toBeNull()
+    expect(m.view.queryByText(en['diff.base.uncommitted'])).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(within(document.body).getByText(en['diff.base.noteCommitted'])).toBeTruthy()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    act(() => { m.store.actions.headed(TAB, null) })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    expect(head(m)?.textContent).toBe('main')
+  })
+
+  it('follows a worktree added or removed since the branch was listed', async () => {
+    const m = mount({ setup: worktrees })
+    await settle()
+    // The listing said no worktree has `cache`; the read found one, so every scope becomes available.
+    act(() => { m.store.actions.headed(TAB, { ...CACHE_HEAD, worktree: null }) })
+    await settle()
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toEqual(CACHE_HEAD)
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    expect(m.view.getByText(en['diff.base.uncommitted'])).toBeTruthy()
+
+    // The worktree is gone by the next read of its unstaged changes, which the Host refuses.
+    const refused = { ok: false as const, error: new RemoteError('forgePanel/no-working-tree', 'no working tree', {}) }
+    m.faces.localDiff.mockImplementation(async scope => scope.kind === 'branch' ? ok(LOCAL) : refused)
+    act(() => { m.store.actions.scoped(TAB, 'unstaged') })
+    await settle()
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'branch', head: { ...CACHE_HEAD, worktree: null } })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: CACHE.ref, base: null, commits: null }, expect.any(AbortSignal))
+    expect(m.view.container.querySelector('[data-forge-scope]')).toBeNull()
+    expect(m.paths()).toContain('src/app.ts')
+    expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
+  })
+
+  it('names the base another head compared with only once its changes loaded', async () => {
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async scope => scope.head === undefined ? ok(LOCAL) : new Promise(() => {}))
+    } })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    await settle()
+    expect(m.view.getByRole('button', { name: 'Base branch: Default' })).toBeTruthy()
+  })
+
+  it('offers the Session\'s own checkout when the head is gone', async () => {
+    const gone = { ok: false as const, error: new RemoteError('forgePanel/head-missing', 'gone', {}) }
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async scope => scope.head === undefined ? ok(LOCAL) : gone)
+    } })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(m.view.getByText('cache was not found; it may have been deleted')).toBeTruthy()
+    expect(head(m)?.classList.contains(baseCss.missing ?? '')).toBe(true)
+    expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.head.back'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toBeNull()
+    await settle()
+    expect(m.paths()).toContain('src/app.ts')
+    expect(head(m)?.classList.contains(baseCss.missing ?? '')).toBe(false)
+  })
+
+  it('keeps viewed marks and quoted comments of one head apart from another\'s', async () => {
+    const m = mount({ setup: worktrees })
+    await settle()
+    const viewed = (): HTMLInputElement => within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' })
+    /** Quote line R4 of `src/app.ts` into the input, returning the source the comment records. */
+    const quote = (): unknown => {
+      const section = within(m.section('src/app.ts'))
+      fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
+      fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+      fireEvent.change(section.getByRole('textbox'), { target: { value: 'Why?' } })
+      fireEvent.click(section.getByRole('button', { name: 'Add to input' }))
+      return m.faces.addReviewToInput.mock.lastCall?.[0].source
+    }
+    fireEvent.click(viewed())
+    expect(viewed().checked).toBe(true)
+
+    // A comment quoted from a head records the branch, and the worktree when one was read.
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(false)
+    expect(quote()).toMatchObject({ kind: 'local', scope: 'branch', head: { key: CACHE.ref, name: 'cache', root: CACHE_ROOT } })
+    expect(m.section('src/app.ts').textContent).toContain('Why?')
+    fireEvent.click(viewed())
+
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(false)
+    expect(m.section('src/app.ts').textContent).not.toContain('Why?')
+    expect(quote()).toMatchObject({ kind: 'local', scope: 'branch', head: { key: TOPIC.ref, name: 'topic', root: null } })
+
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(true)
   })
 })

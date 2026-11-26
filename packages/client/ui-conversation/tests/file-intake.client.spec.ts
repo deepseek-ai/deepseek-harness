@@ -189,6 +189,24 @@ describe('composer paste route', () => {
     expect(main.add).not.toHaveBeenCalled()
   })
 
+  it('leaves a paste to an editable control on a page of another window', () => {
+    // A script-isolated plugin runs in its own window while the composer belongs to the page.
+    const frame = document.createElement('iframe')
+    document.body.append(frame)
+    const page = frame.contentDocument!
+    expect(page.defaultView!.Element).not.toBe(Element)
+    const register = createRoute()
+    const main = conversation('main', page.body)
+    register(main.target)
+    const field = page.createElement('textarea')
+    page.body.append(field)
+
+    expect(fireEvent.paste(field, { clipboardData: filePayload(image) })).toBe(true)
+    expect(main.add).not.toHaveBeenCalled()
+    expect(fireEvent.paste(page.body, { clipboardData: filePayload(image) })).toBe(false)
+    expect(main.add).toHaveBeenCalledWith([image], undefined)
+  })
+
   it('removes its document listeners with the last registration', () => {
     const register = createRoute()
     const main = conversation('main')

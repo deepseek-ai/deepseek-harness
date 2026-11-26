@@ -1,0 +1,8 @@
+version: 1
+scenario: connector-recommendations
+profile: web
+composition: web-connector-recommendations
+recording: authored
+header:
+  class: web-connector-recommendations
+  pin: true

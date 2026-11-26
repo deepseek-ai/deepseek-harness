@@ -17,7 +17,7 @@ import {
   WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_COPY, WELCOME_NOTICE_SETTINGS_NAMESPACE,
   WELCOME_NOTICE_VERSION,
 } from './scaffold.ts'
-import { openSettings, ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
+import { credentialOnboardingStarted, openSettings, ZH_BROWSER_LOCALE, connectFreshWorkspaceZh, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/onboarding-deepseek-config', import.meta.url))
 const WELCOME_EXPECTED = join(SNAPSHOT_DIR, 'welcome.expected.md')
@@ -181,10 +181,16 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     })
     const warningsBefore = tripwire.warnings.length
     await page.reload({ waitUntil: 'commit' })
+    // Armed after the commit, so a read from the previous document, whose Models
+    // page loaded in the first scenario, cannot satisfy it. The credential step
+    // mounts once the welcome step has decided; the next scenario opens Settings
+    // on this page without reloading it.
+    const credentialStep = credentialOnboardingStarted(page)
     await page.waitForSelector('[class*="frame"]', { timeout: 15_000 })
     // The app is painted and interactive while the steps are still deciding.
     await page.waitForTimeout(600)
     releaseDescribe()
+    await credentialStep
     await page.waitForTimeout(400)
     await page.unroute('**/api/settings/describe')
     acknowledgeReloadConnectionLoss(tripwire, warningsBefore)
@@ -206,12 +212,16 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     const deepSeek = settings.getByText('DeepSeek API', { exact: true }).first()
     await deepSeek.waitFor({ timeout: 10_000 })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    await settings.getByText('自定义设置').click()
-    expect(await settings.getByLabel('模型 ID 1').inputValue()).toBe('deepseek-flash')
-    expect(await settings.getByLabel('显示名称 1').inputValue()).toBe('DeepSeek-V4.1-Flash')
-    expect(await settings.getByLabel('模型 ID 2').inputValue()).toBe('deepseek-v4-pro')
+    // A folded row names its model as text; its fields exist once it is unfolded.
+    const rows = settings.locator('[data-row-key]')
+    await rows.nth(0).getByText('deepseek-flash', { exact: true }).waitFor({ timeout: 10_000 })
+    await rows.nth(0).getByText('DeepSeek-V4.1-Flash', { exact: true }).waitFor({ timeout: 10_000 })
+    await rows.nth(1).getByText('deepseek-v4-pro', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await settings.getByRole('textbox', { name: /^(模型 ID|显示名称) / }).count()).toBe(0)
     expect(await settings.getByRole('button', { name: /删除模型/ }).count()).toBe(2)
     await settings.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await settings.getByLabel('模型 ID 1').inputValue()).toBe('deepseek-flash')
+    expect(await settings.getByLabel('显示名称 1').inputValue()).toBe('DeepSeek-V4.1-Flash')
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(true)
     await assertModelInputLayout(page, settings)
     const defaultModels = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
@@ -234,7 +244,6 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       name: 'DeepSeek-V4-Pro', inputModalities: ['text'],
     })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    await settings.getByText('自定义设置').click()
     for (let index = 0; index < 2; index++) {
       await settings.getByRole('button', { name: /删除模型/ }).first().click()
     }
@@ -266,7 +275,6 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
       inputModalities: ['text', 'image'],
     })
     await deepSeek.locator('xpath=ancestor::li').getByRole('button', { name: '编辑' }).click()
-    await settings.getByText('自定义设置').click()
     await settings.getByRole('button', { name: '模型选项 1' }).click()
     expect(await settings.getByRole('group', { name: '输入类型 1' }).getByRole('checkbox', { name: '图片' }).isChecked()).toBe(true)
     await settings.getByRole('button', { name: '取消', exact: true }).click()

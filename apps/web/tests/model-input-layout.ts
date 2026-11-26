@@ -41,14 +41,14 @@ export async function assertModelInputLayout(page: Page, editor: Locator): Promi
       expect(name.y).toBeGreaterThanOrEqual(id.y + id.height)
       expect(name.width).toBeGreaterThan(id.width)
       expect(context.y).toBeGreaterThanOrEqual(name.y + name.height)
-      expect(geometry.buttons).toHaveLength(3)
-      const available = geometry.rowWidth - geometry.buttons.reduce((sum, width) => sum + width, 0) - 3 * geometry.gap
+      expect(geometry.buttons).toHaveLength(2)
+      const available = geometry.rowWidth - geometry.buttons.reduce((sum, width) => sum + width, 0) - 2 * geometry.gap
       expect(Math.abs(id.width - available)).toBeLessThan(1)
     } else {
       expect(Math.abs(id.y - name.y)).toBeLessThan(1)
       expect(name.x).toBeGreaterThanOrEqual(id.x + id.width)
     }
-    const overflowing = await editor.getByRole('region', { name: '模型目录', exact: true }).evaluate((region) => {
+    const overflowing = await editor.getByRole('region', { name: '模型', exact: true }).evaluate((region) => {
       const widths = []
       for (let element: Element | null = region; element !== null; element = element.parentElement) {
         if (element === region || /auto|scroll/.test(getComputedStyle(element).overflowY)) {

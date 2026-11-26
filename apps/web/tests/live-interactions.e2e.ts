@@ -299,22 +299,22 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
         backoff: { initialDelayMs: 60_000, maxDelayMs: 60_000, jitterRatio: 0 } })
     await scaffold!.ctx.settings.update('ui-theme', { fontSize: 17 })
     const { settled } = await sendPrompt(90_000)
-    const retry = page.locator('details[data-active="true"]')
+    const retry = page.locator('[data-retry-row][data-active="true"]')
     await retry.waitFor()
     const originalStyle = await retry.getAttribute('style')
     try {
       const geometry = await retry.evaluate((element) => {
         element.style.width = '200px'
-        const summary = element.querySelector('summary')!
-        const status = summary.querySelector('[role="status"]')!
-        return { width: summary.getBoundingClientRect().width,
-          scrollWidth: summary.scrollWidth, clientWidth: summary.clientWidth,
-          height: status.getBoundingClientRect().height,
-          lineHeight: Number.parseFloat(getComputedStyle(status).lineHeight) }
+        const row = element.querySelector<HTMLElement>('[data-disclosure-row]')!
+        return { width: row.getBoundingClientRect().width,
+          scrollWidth: row.scrollWidth, clientWidth: row.clientWidth,
+          height: row.getBoundingClientRect().height,
+          minHeight: Number.parseFloat(getComputedStyle(row).minHeight) }
       })
       expect(geometry.width).toBeLessThanOrEqual(200)
       expect(geometry.scrollWidth).toBe(geometry.clientWidth)
-      expect(geometry.height).toBeGreaterThan(geometry.lineHeight)
+      // The status wraps: the row grows past its single-line height.
+      expect(geometry.height).toBeGreaterThan(geometry.minHeight)
       expect(await retry.getByRole('status').textContent()).toContain('Retrying')
     } finally {
       await retry.evaluate((element, style) => {

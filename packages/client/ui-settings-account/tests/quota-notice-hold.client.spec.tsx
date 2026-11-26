@@ -14,7 +14,6 @@ import type { SessionLiveEventEntry, SessionReference } from '@deepseek-ai/dsh-a
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
-import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import {
   apply as applyConversation, inject as injectConversation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -53,16 +52,12 @@ const storedView: AccountView = {
   status: 'credential-stored', attempt: null,
   links: { usageUrl: 'http://localhost:8081/usage', topUpUrl: 'http://localhost:8081/top_up' },
 }
-const theme: ThemeSnapshot = {
-  preference: 'light', fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' }, active: { id: 'light', colorScheme: 'light', tokens: {} }, themes: [], revision: 0,
-}
 
 /** The account settings commands, trimmed to what this composition renders. */
 function sectionOperations(account: AccountSnapshot, pages: PlatformPages): AccountSectionInjected {
   return {
     hooks: {
       account: { getSnapshot: () => account, subscribe: () => () => {} },
-      theme: { getSnapshot: () => theme, subscribe: () => () => {} },
     },
     openPlatformPage: pages.open,
     refreshAccount: async () => {},

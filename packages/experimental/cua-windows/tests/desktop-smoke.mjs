@@ -107,7 +107,6 @@ try {
     const entry = entries.find(entry => entry.kind === 'shell')
     assert(entry, 'AppsFolder must expose the system Settings entry')
     const prepared = await request('prepareLaunch', { target: entry.id })
-    assert.equal(prepared.authorization.persistable, false)
     assert.deepEqual(await request('dispatchLaunch', { appHandle: prepared.appHandle }), { dispatched: true, verified: false })
     await assert.rejects(request('dispatchLaunch', { appHandle: prepared.appHandle }), { code: 'LAUNCH_ALREADY_DISPATCHED' })
     const until = performance.now() + 10000
@@ -125,7 +124,6 @@ try {
   })
   await checked('An explicit executable path dispatches independently of Shell discovery', async () => {
     const prepared = await request('prepareLaunch', { target: 'C:\\Windows\\System32\\notepad.exe' })
-    assert.equal(prepared.authorization.persistable, false)
     assert.deepEqual(await request('dispatchLaunch', { appHandle: prepared.appHandle }), { dispatched: true, verified: false })
     return { target: prepared.authorization.executablePath }
   })

@@ -2,6 +2,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { isRemoteJsonValue } from '@deepseek-ai/dsh-typert-protocol'
+import { hasPlainPrototype } from '@deepseek-ai/dsh-util-values'
 
 /** Exact WebSocket route carrying every Typert Remote stream. */
 export const REMOTE_STREAM_MUX_PATH = '/api/remote.mux'
@@ -332,9 +333,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value)) return false
-  const prototype: unknown = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
+  return hasPlainPrototype(value) && !Array.isArray(value)
 }
 
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {

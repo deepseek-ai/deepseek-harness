@@ -86,16 +86,22 @@ describe('web e2e: session drag scrolling', () => {
     expect((await scrollTops()).viewport).toBeGreaterThan(0)
     await rest((await listEdges()).top + 4, async () => (await scrollTops()).list === 0)
     await rest((await listEdges()).bottom - 4, async () => (await scrollTops()).list > 300)
-    // Drop onto a row that was out of view when the drag started.
+    // Drop onto a row that was out of view when the drag started; leaving the edge band stops the scrolling.
     const middle = (await listEdges()).top + 200
     await page.mouse.move(x, middle, { steps: 3 })
-    // The point can rest on the gap between rows while the drop indicator settles, so read again until it names a row.
+    // Rows sit 2px apart and the scrolling stops at a timing-dependent offset, so `middle` can fall between
+    // two rows. Rest on the center of the first row that ends below it, measured on each attempt.
+    const listRows = page.locator('[data-sidebar-list-area] [role="treeitem"]:not([aria-expanded])')
     let target = ''
     await expect.poll(async () => {
-      await page.mouse.move(x + 1, middle)
-      await page.mouse.move(x, middle)
+      const center = await listRows.evaluateAll((elements, point) => {
+        const box = elements.map(row => row.getBoundingClientRect()).find(row => row.bottom > point)
+        return box === undefined ? point : box.top + box.height / 2
+      }, middle)
+      await page.mouse.move(x + 1, center)
+      await page.mouse.move(x, center)
       target = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)
-        ?.closest('[role="treeitem"]')?.querySelector('[class*="title"]')?.textContent ?? '', { x, y: middle })
+        ?.closest('[role="treeitem"]')?.querySelector('[class*="title"]')?.textContent ?? '', { x, y: center })
       return target
     }, { timeout: 15_000 }).toMatch(/^Conversation (\d{2}|[89])$/)
     await page.mouse.up()

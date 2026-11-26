@@ -216,7 +216,7 @@ export function ConversationSessionHeader({
               {renderSlot('conversation.session.header.utilities', {})}
               {renderFactorySlot('contextMenu.button', {
                 target: { kind: 'sessionHeader', value: { sessionId } },
-                label: t('header.more'), className: css.headerMenuButton, size: 'sm',
+                label: t('header.more'), size: 'sm',
               })}
             </div>
           </>

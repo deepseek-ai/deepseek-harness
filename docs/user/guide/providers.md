@@ -12,7 +12,7 @@ Open **Settings → Models**. The DeepSeek API card exposes one API-key field; e
 
 Keys are write-only. The page receives a redacted descriptor after saving, never the literal secret. The key is stored in `$DSH_HOME/.credentials.yaml`, while settings retain only its credential reference.
 
-With a key saved and the default endpoint, DeepSeek's models follow the list the DeepSeek API publishes. The list loads when the models are first needed, refreshes in the background about every ten minutes while they are in use, and falls back to the built-in models when it cannot load. Editing **Models** under **Customized settings** keeps your own list instead and stops following the published one; **Restore defaults** follows it again and reloads it. While the published list is in use, the card shows the built-in models, so a newly published model appears only in the model picker. The [API-key provider reference](../../../packages/llm/llm-deepseek-api-key/README.md) owns the listing, fallback, and gating rules.
+With a key saved and the default endpoint, DeepSeek's models follow the list the DeepSeek API publishes. The list loads when the models are first needed, refreshes in the background about every ten minutes while they are in use, and falls back to the built-in models when it cannot load. Editing **Models** keeps your own list instead and stops following the published one; **Restore defaults** follows it again and reloads it. While the published list is in use, the card shows the built-in models, so a newly published model appears only in the model picker. The [API-key provider reference](../../../packages/llm/llm-deepseek-api-key/README.md) owns the listing, fallback, and gating rules.
 
 ## Add a third-party provider
 
@@ -34,7 +34,7 @@ The Provider ID is permanent because requests, saved sessions, model defaults, a
 
 ### Discover models
 
-Under **Model catalog**, choose **Fetch available models** to ask the endpoint which models it serves. The request uses the base URL, protocol, and key currently in the form, or a saved provider's stored key, and the reply opens a searchable picker: models already in the list start ticked, so search, tick the models to add, untick the ones to remove, and choose **Update list**. Configured models the endpoint does not list stay. Nothing is stored until you save or create the provider.
+Under **Models**, choose **Fetch available models** to ask the endpoint which models it serves. The request uses the base URL, protocol, and key currently in the form, or a saved provider's stored key, and the reply opens a searchable picker: models already in the list start ticked, so search, tick the models to add, untick the ones to remove, and choose **Update list**. Configured models the endpoint does not list stay. Nothing is stored until you save or create the provider.
 
 Discovery reads the listing formats common gateways publish, but not every endpoint answers in one of them, so treat it as a convenience rather than a guarantee: when it fails or lists nothing, add the model ids by hand and they work just the same. A built-in provider is always answered from the installed catalog, even when its base URL points at a gateway, so fetch through a custom provider to see what the gateway really serves.
 
@@ -42,7 +42,7 @@ Discovery reads the listing formats common gateways publish, but not every endpo
 
 Configured providers appear in the model picker. Selecting a model also makes it the default for new sessions. A session that has already sent a request retains the model recorded in its own log.
 
-To change a provider’s model order, edit it in **Settings → Models**, open **Customized settings**, and drag a model’s three-line handle. You can also focus the handle and press the up or down arrow key. **Apply** keeps the order; **Cancel** discards it. The model picker follows the saved order within that provider.
+To change a provider’s model order, edit it in **Settings → Models** and drag a folded model row; fold an unfolded model before dragging it. Reordering needs a mouse. **Apply** keeps the order; **Cancel** discards it. The model picker follows the saved order within that provider.
 
 If a saved default names a provider that was deleted, the composer displays **Select model** and blocks input until another model is selected.
 
@@ -58,7 +58,7 @@ For the standard Web UI launch with `dsh web`, `<profile>` is `web`, so the path
 
 ### Image input
 
-In **Settings → Models**, edit the provider, open **Customized settings**, and expand the model's **Model options**. **Input types** occupies its own row below the capacity fields. Select **Image** for a model that accepts images, and save. **Text** starts selected for a new custom model with no inherited image capability. At least one type must remain selected; select Image before clearing Text for an image-only model.
+In **Settings → Models**, edit the provider and expand the model's **Model options**. **Input types** occupies its own row below the capacity fields. Select **Image** for a model that accepts images, and save. **Text** starts selected for a new custom model with no inherited image capability. At least one type must remain selected; select Image before clearing Text for an image-only model.
 
 The checkboxes save `input` for pi-ai models and `inputModalities` for the direct DeepSeek adapter. You can also edit the model in `$DSH_HOME/profiles/<profile>/cordis.patch.yml`; for example, this custom pi-ai provider declares one text-only model and one vision model:
 
@@ -135,7 +135,7 @@ A model that needs a newer DeepSeek Harness fails with `CLIENT_UPGRADE_REQUIRED`
 
 The model picker offers an **Effort** menu for a model that declares reasoning levels. A built-in provider's models inherit their levels from the installed catalog, and DeepSeek's models keep the adapter's levels. A model you enter by hand declares none until you add them, so until then the Effort entry does not appear in the menu and the endpoint's own default decides whether the model thinks.
 
-On a built-in or custom model API provider, declare the levels in **Settings → Models**: edit the provider, open **Customized settings**, expand the model's **Model options**, and turn on **Reasoning levels**. The rows start with off, low, medium, and high. Each row pairs a level with the **API value** sent for it, which defaults to the level name; change it only where the model provider's API documentation spells the level differently. Add or delete rows to match what the endpoint supports, keep at least one level besides off, and save. Levels declared for a built-in provider's model replace the ones it inherits. Turning the switch off removes the declaration, and a built-in provider's model then inherits its levels again.
+On a built-in or custom model API provider, declare the levels in **Settings → Models**: edit the provider, expand the model's **Model options**, and turn on **Reasoning levels**. The rows start with off, low, medium, and high. Each row pairs a level with the **API value** sent for it, which defaults to the level name; change it only where the model provider's API documentation spells the level differently. Add or delete rows to match what the endpoint supports, keep at least one level besides off, and save. Levels declared for a built-in provider's model replace the ones it inherits. Turning the switch off removes the declaration, and a built-in provider's model then inherits its levels again.
 
 The page writes `reasoningEfforts` in `$DSH_HOME/profiles/<profile>/cordis.patch.yml`, where you can also declare the levels directly:
 

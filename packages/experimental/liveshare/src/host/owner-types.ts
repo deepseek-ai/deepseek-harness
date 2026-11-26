@@ -71,5 +71,7 @@ export interface OwnerShare {
   readonly viewerPlugins?: readonly ViewerPluginPolicy[]
   /** Whether every installed plugin's methods are open; absent reads as none. */
   readonly viewerPluginAccess?: ViewerPluginAccess
+  /** True while the worker has stopped automatically reconnecting this offline share. Not persisted. */
+  reconnectStopped?: boolean
   online: boolean
 }

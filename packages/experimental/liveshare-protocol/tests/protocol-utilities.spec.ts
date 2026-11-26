@@ -255,6 +255,10 @@ describe('tunnel worker events', () => {
     expect(parseTunnelWorkerEvent({
       type: 'share-error', registrationToken: REGISTRATION, shareId: 'share-one', message: 'nope',
     })).toEqual({ type: 'share-error', registrationToken: REGISTRATION, shareId: 'share-one', message: 'nope' })
+    const stopped = { type: 'share-error', registrationToken: REGISTRATION, shareId: 'share-one',
+      message: 'deadline reached', reconnectStopped: true }
+    expect(parseTunnelWorkerEvent(stopped)).toEqual(stopped)
+    expect(parseTunnelWorkerEvent({ ...stopped, reconnectStopped: false })).toBeUndefined()
     expect(parseTunnelWorkerEvent({
       type: 'share-error', registrationToken: REGISTRATION, shareId: 'share-one',
     })).toBeUndefined()

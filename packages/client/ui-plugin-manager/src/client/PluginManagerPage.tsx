@@ -8,8 +8,7 @@
  * the page declares.
  */
 
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { PluginInstallFailureKind, Registry } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   Button, IconCheckCircleFillRegular, IconChevronDownOutlineRegular, IconChevronLeftOutlineMedium,
@@ -22,7 +21,9 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  GlobalStandardProps, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
+} from '@deepseek-ai/dsh-client-ui-slots'
 import { EXTENSION_BUNDLES, HIDDEN_BUNDLES, MORE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { localizedValues, TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { createNavigationStore } from './navigation-store.ts'
@@ -41,6 +42,7 @@ import { UpdateDialog, VersionSection } from './versions.tsx'
 import { BuildApproval } from './BuildApproval.tsx'
 import { BundleDetailSection } from './BundleDetailSection.tsx'
 import { ClientSyncNotice } from './ClientSyncNotice.tsx'
+import { FailureNotice } from './FailureNotice.tsx'
 import css from './PluginManagerPage.module.css'
 
 /** Full component props assembled by the main slot renderer. */
@@ -1071,10 +1073,12 @@ function useInstallComposition(active: boolean) {
  */
 function InstallDialog({
   install, t, onClose, onEditSpec, onRun, onCancel, onReconcile, onToggleDetails, onEnableNow, onApproveBuilds,
-  onToggleRegistry, onChooseRegistry, onChangeRegistry, onUseGithubMirror,
+  onToggleRegistry, onChooseRegistry, onChangeRegistry, onUseGithubMirror, Portal,
 }: {
   readonly install: InstallState
   readonly t: Translate
+  /** Portal that places the registry options in the application document's body. */
+  readonly Portal: ReturnType<GlobalStandardProps['useDocumentPortal']>
   readonly onClose: () => void
   readonly onEditSpec: (text: string) => void
   readonly onRun: () => void
@@ -1105,23 +1109,18 @@ function InstallDialog({
   const registryShown = install.registryOpen && phase === 'idle'
   const specComposition = useInstallComposition(install.open && phase === 'idle')
   const registryComposition = useInstallComposition(install.open && registryShown)
-  const registryAnchorName = `--dsh-registry-${registryId.replaceAll(':', '')}`
+  const registryAnchorName = `--dsh-registry-${registryId.replace(/[^\w-]/g, '')}`
   useEffect(() => {
     if (registryShown && install.registryError) registryCustomRef.current?.focus()
   }, [registryShown, install.registryError])
   // The hook only ever asks to close.
   useDismissOnOutsidePointer(registryToggleRef, registryShown, onToggleRegistry, registryPanelRef)
-  useEffect(() => {
-    if (!registryShown) return
-    // Escape folds the options and goes no further: the dialog under them listens for the same key.
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') return
-      event.stopPropagation()
-      onToggleRegistry()
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => { document.removeEventListener('keydown', onKeyDown, true) }
-  }, [registryShown, onToggleRegistry])
+  // Escape folds the options and goes no further: the dialog under them listens for the same key.
+  const onRegistryKeyDown = useCallback((event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return
+    event.stopPropagation()
+    onToggleRegistry()
+  }, [onToggleRegistry])
   if (githubRecoveryRegistry(install) !== undefined) {
     const anotherWay = asksMirror(install)
     return (
@@ -1302,89 +1301,86 @@ function InstallDialog({
               </div>
             )
             : null}
-          {registryShown
-            ? createPortal(
-              <fieldset
-                ref={registryPanelRef}
-                id={registryId}
-                className={css.registry}
-                style={{ positionAnchor: registryAnchorName }}
-                data-install-registry
-                aria-label={t('registryLegend')}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.nativeEvent.isComposing) return
-                  event.preventDefault()
-                  event.stopPropagation()
-                  const radio = event.currentTarget.querySelector<HTMLInputElement>('input[type="radio"]:checked')
-                  const field = registryCustomRef.current
-                  if (event.shiftKey && event.target === field) radio?.focus()
-                  else if (!event.shiftKey && event.target !== field) field?.focus()
-                  else {
-                    onToggleRegistry()
-                    registryToggleRef.current?.focus()
-                  }
-                }}
-              >
-                {offeredRegistries(install.registries).map((registry) => {
-                  const checked = choice.kind === 'offered' && choice.registry === registry
-                  return (
-                    <label key={registry ?? ''} className={css.registryOption} data-checked={checked}>
-                      <input type="radio" name={registryId} checked={checked} onChange={() => {
-                        if (choice.kind === 'custom') setCustomRegistryDraft(choice.url)
-                        onChooseRegistry({ kind: 'offered', registry })
-                      }} />
-                      <span className={css.registryTitle}>{registryOption(registry, t, resolved)}</span>
-                    </label>
-                  )
-                })}
-                <div className={css.registryOption} data-checked={choice.kind === 'custom'}
-                  onClick={(event) => {
-                    // Keep label activation from moving focus back to the radio.
-                    if (!(event.target instanceof HTMLInputElement)) event.preventDefault()
-                    registryCustomRef.current?.focus()
-                  }}>
-                  <label className={css.registryCustomPick}>
-                    <input
-                      type="radio"
-                      name={registryId}
-                      checked={choice.kind === 'custom'}
-                      onChange={() => {
-                        onChooseRegistry({ kind: 'custom', url: customRegistryDraft })
-                        registryCustomRef.current?.focus()
-                      }}
-                    />
-                    <span className={css.registryTitle}><span>{t('registryCustom')}</span></span>
+          {registryShown && <Portal onKeyDownCapture={onRegistryKeyDown}>
+            <fieldset
+              ref={registryPanelRef}
+              id={registryId}
+              className={css.registry}
+              style={{ positionAnchor: registryAnchorName }}
+              data-install-registry
+              aria-label={t('registryLegend')}
+              onKeyDown={(event) => {
+                if (event.key !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.nativeEvent.isComposing) return
+                event.preventDefault()
+                event.stopPropagation()
+                const radio = event.currentTarget.querySelector<HTMLInputElement>('input[type="radio"]:checked')
+                const field = registryCustomRef.current
+                if (event.shiftKey && event.target === field) radio?.focus()
+                else if (!event.shiftKey && event.target !== field) field?.focus()
+                else {
+                  onToggleRegistry()
+                  registryToggleRef.current?.focus()
+                }
+              }}
+            >
+              {offeredRegistries(install.registries).map((registry) => {
+                const checked = choice.kind === 'offered' && choice.registry === registry
+                return (
+                  <label key={registry ?? ''} className={css.registryOption} data-checked={checked}>
+                    <input type="radio" name={registryId} checked={checked} onChange={() => {
+                      if (choice.kind === 'custom') setCustomRegistryDraft(choice.url)
+                      onChooseRegistry({ kind: 'offered', registry })
+                    }} />
+                    <span className={css.registryTitle}>{registryOption(registry, t, resolved)}</span>
                   </label>
+                )
+              })}
+              <div className={css.registryOption} data-checked={choice.kind === 'custom'}
+                onClick={(event) => {
+                  // Keep label activation from moving focus back to the radio.
+                  if ((event.target as Partial<Element>).matches?.('input') !== true) event.preventDefault()
+                  registryCustomRef.current?.focus()
+                }}>
+                <label className={css.registryCustomPick}>
                   <input
-                    ref={registryCustomRef}
-                    type="text"
-                    className={css.registryCustomField}
-                    aria-label={t('registryCustom')}
-                    placeholder={t('registryCustomPlaceholder')}
-                    value={choice.kind === 'custom' ? choice.url : customRegistryDraft}
-                    aria-invalid={install.registryError}
-                    aria-describedby={install.registryError ? registryErrorId : undefined}
-                    onFocus={() => {
-                      if (pointerModality() && choice.kind !== 'custom') onChooseRegistry({ kind: 'custom', url: customRegistryDraft })
-                    }}
-                    onChange={(event) => { onChooseRegistry({ kind: 'custom', url: event.currentTarget.value }) }}
-                    onCompositionStart={registryComposition.onCompositionStart}
-                    onCompositionEnd={registryComposition.onCompositionEnd}
-                    onBlur={registryComposition.onBlur}
-                    onKeyDown={(event) => {
-                      if (registryComposition.isComposing(event.nativeEvent)) return
-                      if (event.key === 'Enter' && !empty) onRun()
+                    type="radio"
+                    name={registryId}
+                    checked={choice.kind === 'custom'}
+                    onChange={() => {
+                      onChooseRegistry({ kind: 'custom', url: customRegistryDraft })
+                      registryCustomRef.current?.focus()
                     }}
                   />
-                  {install.registryError
-                    ? <p id={registryErrorId} className={css.inputError} role="alert">{t('registryCustomInvalid')}</p>
-                    : null}
-                  <span className={css.registryHint}>{t('registryCustomHint')}</span>
-                </div>
-              </fieldset>,
-              document.body,
-            )
-            : null}
+                  <span className={css.registryTitle}><span>{t('registryCustom')}</span></span>
+                </label>
+                <input
+                  ref={registryCustomRef}
+                  type="text"
+                  className={css.registryCustomField}
+                  aria-label={t('registryCustom')}
+                  placeholder={t('registryCustomPlaceholder')}
+                  value={choice.kind === 'custom' ? choice.url : customRegistryDraft}
+                  aria-invalid={install.registryError}
+                  aria-describedby={install.registryError ? registryErrorId : undefined}
+                  onFocus={() => {
+                    if (pointerModality() && choice.kind !== 'custom') onChooseRegistry({ kind: 'custom', url: customRegistryDraft })
+                  }}
+                  onChange={(event) => { onChooseRegistry({ kind: 'custom', url: event.currentTarget.value }) }}
+                  onCompositionStart={registryComposition.onCompositionStart}
+                  onCompositionEnd={registryComposition.onCompositionEnd}
+                  onBlur={registryComposition.onBlur}
+                  onKeyDown={(event) => {
+                    if (registryComposition.isComposing(event.nativeEvent)) return
+                    if (event.key === 'Enter' && !empty) onRun()
+                  }}
+                />
+                {install.registryError
+                  ? <p id={registryErrorId} className={css.inputError} role="alert">{t('registryCustomInvalid')}</p>
+                  : null}
+                <span className={css.registryHint}>{t('registryCustomHint')}</span>
+              </div>
+            </fieldset>
+          </Portal>}
         </div>
       </Modal>
     )
@@ -1587,6 +1583,7 @@ function ConfirmDialog({ name, t, onConfirm, onCancel }: {
 /** Render the plugin manager: the official plugins and installed bundles, their pages, the install dialog, and the confirmation. */
 export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
   const { t, ensure, renderSlot, resolveText } = props
+  const Portal = props.useDocumentPortal()
   const configurations = props.useConfigurations(snapshot => snapshot.view?.namespaces)
   const formFor = (id: string): ConfigPageForm | undefined => {
     if (!configurations?.some(view => view.ns === id)) return undefined
@@ -1819,12 +1816,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
           )}
         {!showsCards && state.status === 'error' && !refreshing
           ? (
-            <div className={css.failure}>
-              <p className={css.statusWithDot} role="alert">
-                <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
-              </p>
-              <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
-            </div>
+            <FailureNotice message={t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')} retryLabel={t('retry')} onRetry={props.refresh} />
           )
           : null}
         {onInstalled && loaded && openPkg !== undefined && openRow !== undefined
@@ -1899,12 +1891,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
                     first-load failure, and after the kept cards when a refresh fails over stale data. */}
                 {state.status === 'error' && !refreshing
                   ? (
-                    <div className={css.failure}>
-                      <p className={css.statusWithDot} role="alert">
-                        <StateDot state="error" />{t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')}
-                      </p>
-                      <Button variant="outline" size="sm" onClick={props.refresh}>{t('retry')}</Button>
-                    </div>
+                    <FailureNotice message={t(state.refreshStatus === 'failed' ? 'refreshError' : 'error')} retryLabel={t('retry')} onRetry={props.refresh} />
                   )
                   : null}
               </div>
@@ -1934,6 +1921,7 @@ export function PluginManagerPage(props: PluginManagerPageProps): ReactNode {
       <InstallDialog
         install={state.install}
         t={t}
+        Portal={Portal}
         onClose={props.closeInstall}
         onEditSpec={props.editInstallSpec}
         onRun={props.runInstall}

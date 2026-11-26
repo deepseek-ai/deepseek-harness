@@ -28,6 +28,7 @@ export type ReviewSource =
   /**
    * Local changes in a scope. `base` names what the `branch` scope compared with for the reader, and is null for
    * other scopes; `baseRef` identifies the comparison: the chosen ref, or null for the automatic fork point and other scopes.
+   * `head` is absent for the Session's own checkout.
    */
   | {
     readonly kind: 'local'
@@ -35,6 +36,7 @@ export type ReviewSource =
     readonly base: string | null
     readonly baseRef: string | null
     readonly commits: ForgeCommitRange | null
+    readonly head?: ReviewHead
   }
   /** A change request; `headSha` is the commit the shown changes end at: the head, or the last chosen commit. */
   | { readonly kind: 'change'; readonly url: string; readonly headSha: string; readonly commits: ForgeCommitRange | null }
@@ -43,6 +45,16 @@ export type ReviewSource =
 export interface ReviewSelection {
   readonly source: ReviewSource
   readonly comment: ReviewComment
+}
+
+/** The branch local changes showed in place of the Session's checked-out one when a comment was written. */
+export interface ReviewHead {
+  /** Identity of the head among the heads of one Session: the branch's full ref name. */
+  readonly key: string
+  /** Branch name without its ref prefix. */
+  readonly name: string
+  /** Top-level directory of the worktree the changes were read in, or null for a branch read from its commits. */
+  readonly root: string | null
 }
 
 /**
@@ -103,8 +115,14 @@ export function formatReviewComment(selection: ReviewSelection, index: number): 
   const commits = source.commits === null ? ''
     : `\nCommits: ${source.commits.from === source.commits.to ? source.commits.from : `${source.commits.from}^..${source.commits.to}`}`
   const origin = source.kind === 'change' ? `Source: ${source.url}\nCommit: ${source.headSha}${commits}`
-    : `Source: Local (${source.scope})${source.base === null ? '' : `\nBase: ${source.base}`}${commits}`
+    : `Source: Local (${source.scope})${headLines(source.head)}${source.base === null ? '' : `\nBase: ${source.base}`}${commits}`
   return `## User Comment ${index}\nFile: ${comment.path}\nSide: ${comment.side}\nLines: ${range}\n${origin}\nDiff hunk:\n${fence}diff\n${comment.hunk}\n${fence}\nComment:\n${comment.body}`
+}
+
+/** The lines that say whose code a local comment quotes when it is not the Session's own checkout. */
+function headLines(head: ReviewHead | undefined): string {
+  if (head === undefined) return ''
+  return head.root === null ? `\nBranch: ${head.name} (committed content)` : `\nWorktree: ${head.root}\nBranch: ${head.name}`
 }
 
 /**

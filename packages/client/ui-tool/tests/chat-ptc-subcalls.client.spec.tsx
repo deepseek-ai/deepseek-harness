@@ -87,6 +87,7 @@ function snapshotWith(
 type AppRootProps = PropsRenderSlots<'conversation.view'>
 const VIEW_OWNER: ConvViewOwnerProps = {
   inspectCall: undefined,
+  inspectRequest: undefined,
   viewRequest: null,
   openView: () => {},
   completeViewRequest: () => {},

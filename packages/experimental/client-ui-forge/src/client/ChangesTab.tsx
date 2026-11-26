@@ -17,9 +17,9 @@ import {
 import clsx from 'clsx'
 import {
   Button, IconBranchOutlineRegular, IconChevronDownOutlineRegular, IconChevronsUpDownOutlineRegular, IconCompareSplitOutlineRegular,
-  IconInfoOutlineRegular, IconFilesDiffOutlineRegular, IconNowrapFillRegular, IconWorkspaceTreeOutlineRegular,
+  IconInfoOutlineRegular, IconNowrapFillRegular, IconWorkspaceTreeOutlineRegular,
   IconWrapFillRegular,
-  Menu, Tooltip,
+  Menu, Modal, Tooltip,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
@@ -29,8 +29,9 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeExtensionState, ForgeLensFrame,
-  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
+  ForgeLensKeep, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgeLocalWrite, ForgeLocalWriteResult,
 } from '../types.ts'
+import { restorable } from '../restore.ts'
 import { lensVersion } from '../lens-version.ts'
 import type {
   ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
@@ -40,10 +41,11 @@ import { sameReviewSource, type RemovedRecord, type ReviewQueue } from './review
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { SubmitReview } from './SubmitReview.tsx'
-import type { QuoteCopy, ReviewSelection, ReviewSource } from './review.ts'
+import type { QuoteCopy, ReviewHead, ReviewSelection, ReviewSource } from './review.ts'
 import { BaseMenu } from './BaseMenu.tsx'
+import { HeadMenu } from './HeadMenu.tsx'
 import { parseChangesAddress, type ChangesSource, type ChangesTarget } from './changes-address.ts'
-import type { ChangesLens, createChangesStore } from './changes-store.ts'
+import type { ChangesHead, ChangesLens, createChangesStore } from './changes-store.ts'
 import { CommitMenu } from './CommitMenu.tsx'
 import { HideTestsSwitch, LensControl, LensMenu, LENSES, ViewedProgress } from './ReviewControls.tsx'
 import { viewedStateOf, type ViewedFiles, type ViewedMarks } from './viewed-files.ts'
@@ -56,6 +58,7 @@ import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from
 import { ChangesLoading } from './ChangesLoading.tsx'
 import { drawnLines, matchesHunks, revealGap, textLines, type GapExpansion, type GapReveal } from './diff-rows.ts'
 import { ChangeRequestGlyph, ForgeGlyph } from './glyphs.tsx'
+import { useLocalWrites } from './local-writes.ts'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { useForgeCopy } from './forge-copy.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
@@ -112,12 +115,20 @@ export interface ChangesTabInjected {
   readonly reconnect: () => void
   /** Read the local changes of one scope; `signal` aborts the read. */
   readonly localDiff: (scope: ForgeLocalScope, signal: AbortSignal) => Promise<RemoteResult<ForgeLocalDiff>>
-  /** Read the branches the `branch` scope can compare with, whose names contain `query`; `signal` aborts the read. */
-  readonly diffBases: (query: string, signal: AbortSignal) => Promise<RemoteResult<ForgeBaseBranches>>
+  /** Stage, unstage, or restore files of the local changes, or return index entries to an earlier tree; never retried. */
+  readonly localWrite: (write: ForgeLocalWrite) => Promise<RemoteResult<ForgeLocalWriteResult>>
+  /**
+   * Read the branches the `branch` scope of the head branch `head`, by its full ref, or of the Session's own checkout
+   * for null, can compare with, whose names contain `query`; `signal` aborts the read.
+   */
+  readonly diffBases: (head: string | null, query: string, signal: AbortSignal) => Promise<RemoteResult<ForgeBaseBranches>>
   /** Read the new side of one file in a local scope. */
   readonly localText: (scope: ForgeLocalScope, path: string) => Promise<RemoteResult<string>>
-  /** List the commits of the `branch` scope compared with `base`, or with the automatic fork point for null; `signal` aborts the read. */
-  readonly localCommits: (base: string | null, signal: AbortSignal) => Promise<RemoteResult<ForgeLocalCommits>>
+  /**
+   * List the commits of the `branch` scope of the head branch `head`, or of the Session's own checkout for null,
+   * compared with `base`, or with the automatic fork point for null; `signal` aborts the read.
+   */
+  readonly localCommits: (head: string | null, base: string | null, signal: AbortSignal) => Promise<RemoteResult<ForgeLocalCommits>>
   /** Read the changes of a change request, or of consecutive commits of it, by its binding URL; `signal` aborts the read. */
   readonly changeRequestDiff: (
     url: string, commits: ForgeCommitRange | null, signal: AbortSignal,
@@ -197,6 +208,10 @@ type ChangesData =
     readonly files: readonly ForgeDiffFile[]
     /** Scope the files were read in. */
     readonly scope: ForgeLocalScope
+    /** The branch the files show in place of the Session's checked-out one, or null for the Session's own checkout. */
+    readonly head: ChangesHead | null
+    /** Top-level directory of the worktree the files were read in for `head`, or null when they come from its commits. */
+    readonly worktree: string | null
     /** Name of what the `branch` scope compared with; null for other scopes. */
     readonly base: string | null
     /** Untracked files left out. */
@@ -272,6 +287,9 @@ const FAILURE: Partial<Record<string, ForgePanelKey>> = {
   'forgePanel/commits-not-linear': 'commits.notLinear',
 }
 
+/** Git's name for the checked-out commit, shown for a checkout that has neither a branch nor a commit yet. */
+const GIT_HEAD = 'HEAD'
+
 /** Failures of a chosen base branch, which offer the automatic fork point instead of a retry. */
 const BASE_FAILURE: Partial<Record<string, ForgePanelKey>> = {
   'forgePanel/base-missing': 'diff.baseMissing',
@@ -295,6 +313,7 @@ function baseFailureOf(failed: string | null, base: ForgeBaseBranch | null, t: T
  * status, beside the diff; marks read at another head refuse the read as the diff refuses a moved head.
  * @param source - local changes or a change request.
  * @param scope - local scope to read.
+ * @param localHead - the branch the local scope shows in place of the Session's checked-out one, or null.
  * @param commits - chosen commits of a change request, or null for all of it.
  * @param head - head commit of the change request's latest status, or null.
  * @param fresh - whether the viewed marks are read from the code host although the host keeps some, as after a refresh.
@@ -305,6 +324,7 @@ function baseFailureOf(failed: string | null, base: ForgeBaseBranch | null, t: T
 async function readChanges(
   source: ChangesSource,
   scope: ForgeLocalScope,
+  localHead: ChangesHead | null,
   commits: ForgeCommitRange | null,
   head: string | null,
   fresh: boolean,
@@ -314,8 +334,8 @@ async function readChanges(
   if (source.kind === 'local') {
     const result = await reads.localDiff(scope, signal)
     if (!result.ok) return result
-    const { files, base, omitted } = result.value
-    return { ok: true, value: { kind: 'local', files, scope, base, omitted } }
+    const { files, base, omitted, worktree } = result.value
+    return { ok: true, value: { kind: 'local', files, scope, head: localHead, worktree: worktree ?? null, base, omitted } }
   }
   const [result, marks] = await Promise.all([
     reads.changeRequestDiff(source.url, commits, signal),
@@ -328,6 +348,11 @@ async function readChanges(
   return { ok: true, value: { kind: 'change', files, url: source.url, headSha, commits, localAhead, fileUrls, viewed } }
 }
 
+/** The sentence that says what restoring a file of the `unstaged` scope does to it. */
+function restoreCopyOf(file: ForgeDiffFile): ForgePanelKey {
+  return file.untracked ? 'diff.restore.untracked' : file.status === 'deleted' ? 'diff.restore.deleted' : 'diff.restore.modified'
+}
+
 /** The ref that identifies a comparison: the chosen base branch, or null for the automatic fork point and other scopes. */
 function baseRefOf(scope: ForgeLocalScope): string | null {
   return scope.kind === 'branch' ? scope.base : null
@@ -338,21 +363,28 @@ function commitsOf(scope: ForgeLocalScope): ForgeCommitRange | null {
   return scope.kind === 'branch' ? scope.commits : null
 }
 
-/** The source review comments on loaded changes record: the change request head, or the local scope with its base. */
+/**
+ * The source review comments on loaded changes record: the change request head, or the local scope with its base and,
+ * for another branch than the Session's checked-out one, that branch with the worktree the changes were read in.
+ */
 function reviewSourceOf(data: ChangesData): ReviewSource {
-  return data.kind === 'local'
-    ? { kind: 'local', scope: data.scope.kind, base: data.base, baseRef: baseRefOf(data.scope), commits: commitsOf(data.scope) }
-    : { kind: 'change', url: data.url, headSha: data.headSha, commits: data.commits }
+  if (data.kind === 'change') return { kind: 'change', url: data.url, headSha: data.headSha, commits: data.commits }
+  const head: ReviewHead | undefined = data.head === null ? undefined : { key: data.head.ref, name: data.head.name, root: data.worktree }
+  return {
+    kind: 'local', scope: data.scope.kind, base: data.base, baseRef: baseRefOf(data.scope), commits: commitsOf(data.scope),
+    ...(head === undefined ? {} : { head }),
+  }
 }
 
 /**
- * Identity of a diff source for viewed marks: the change request or local scope with its base ref and chosen commits.
+ * Identity of a diff source for viewed marks: the change request or local scope with its base ref and chosen commits,
+ * and the head while it is not the Session's own checkout, whose marks keep the identity they had before heads.
  * A change request's marks stay across head commits, so a file whose change a new push altered reads as changed.
  */
 function viewedSourceOf(source: ReviewSource): string {
-  return JSON.stringify(source.kind === 'local'
-    ? ['local', source.scope, source.baseRef, source.commits]
-    : ['change', source.url, source.commits])
+  if (source.kind === 'change') return JSON.stringify(['change', source.url, source.commits])
+  const local = ['local', source.scope, source.baseRef, source.commits]
+  return JSON.stringify(source.head === undefined ? local : [...local, source.head.key])
 }
 
 /**
@@ -438,43 +470,61 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
 }
 
 /**
- * The local view's header: for the `branch` scope, the checked-out branch, the base branch picker, and a note
- * that uncommitted changes count; for another scope, what it compares.
+ * The local view's header: the head picker, then for the `branch` scope the base branch picker and, while a working
+ * tree is read, a note that uncommitted changes count; for another scope, what it compares. Writes and the create
+ * button belong to the Session's own checkout.
  */
-function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, commitMenu, createChangeRequest, t }: {
+function LocalHeader({
+  state, scope, head, headMissing, base, baseLabel, missing, visible, diffBases, chooseHead, choose, commitMenu, bulk, createChangeRequest,
+  t,
+}: {
   readonly state: ChangesPanelState | null
   /** Commit picker of the `branch` scope, left of the create button. */
   readonly commitMenu: ReactNode
+  /** The write of every shown file that the scope offers, or null for a scope, head, or Session without writes. */
+  readonly bulk: { readonly label: string; readonly disabled: boolean; readonly run: () => void } | null
   readonly scope: ScopeKind
+  /** The branch the view shows in place of the Session's checked-out one, or null for the Session's own checkout. */
+  readonly head: ChangesHead | null
+  /** Whether the chosen head no longer exists. */
+  readonly headMissing: boolean
   readonly base: ForgeBaseBranch | null
+  /** Name of the base another head's loaded `branch` scope compared with, or null before it loaded; the panel names the own checkout's. */
+  readonly baseLabel: string | null
   /** Whether the chosen base branch no longer exists. */
   readonly missing: boolean
   readonly visible: boolean
   readonly diffBases: ChangesTabInjected['diffBases']
+  readonly chooseHead: (head: ChangesHead | null) => void
   readonly choose: (base: ForgeBaseBranch | null) => void
   readonly createChangeRequest: () => void
   readonly t: Translate
 }): ReactNode {
-  const creatable = state !== null && state.repository !== null && openChangeRequestOf(state) === undefined
+  const creatable = head === null && state !== null && state.repository !== null && openChangeRequestOf(state) === undefined
   const checkout = state?.checkout.state === 'ready' ? state.checkout.checkout : null
-  const head = checkout?.branch ?? checkout?.commit ?? 'HEAD'
+  const headRef = head?.ref ?? null
+  const listBases = useCallback((query: string, signal: AbortSignal) => diffBases(headRef, query, signal), [diffBases, headRef])
+  // Branches a reader can show: every branch but the one the Session has checked out, which is its own checkout's row.
+  const listHeads = useCallback((query: string, signal: AbortSignal) => diffBases(null, query, signal), [diffBases])
+  // A branch that no worktree has checked out is read from its commits; a checkout's comparison counts its uncommitted changes.
+  const committedOnly = head !== null && head.worktree === null
   return (
     <div className={css.header}>
+      <span className={css.headerIcon}><IconBranchOutlineRegular size={15} /></span>
+      <HeadMenu chosen={head} own={checkout?.branch ?? checkout?.commit ?? GIT_HEAD} missing={headMissing} visible={visible}
+        list={listHeads} choose={chooseHead} t={t} />
       {scope === 'branch' ? <>
-        <span className={css.headerIcon}><IconBranchOutlineRegular size={15} /></span>
-        <Tooltip label={head} side="bottom" delayMs={500}>
-          <span className={css.headerHead} tabIndex={0} data-forge-head="">{head}</span>
-        </Tooltip>
         <span className={css.headerArrow} aria-hidden="true">→</span>
-        <BaseMenu chosen={base} label={base?.name ?? state?.local?.base ?? t('diff.base.automatic')} missing={missing}
-          visible={visible} list={diffBases} choose={choose} t={t} />
-        <span className={clsx(css.headerNote, css.headerSuffix)}>{t('diff.base.uncommitted')}</span>
-      </> : <>
-        <span className={css.headerIcon}><IconFilesDiffOutlineRegular size={15} /></span>
-        <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>
-      </>}
-      {(scope === 'branch' || creatable) && <span className={css.headerEnd}>
+        <BaseMenu chosen={base} label={base?.name ?? (head === null ? state?.local?.base : baseLabel) ?? t('diff.base.automatic')}
+          missing={missing} note={t(committedOnly ? 'diff.base.noteCommitted' : 'diff.base.note')}
+          visible={visible} list={listBases} choose={choose} t={t} />
+        {!committedOnly && <span className={clsx(css.headerNote, css.headerSuffix)}>{t('diff.base.uncommitted')}</span>}
+      </> : <span className={css.headerNote}>{t(SCOPE_NOTE[scope])}</span>}
+      {(scope === 'branch' || creatable || bulk !== null) && <span className={css.headerEnd} data-forge-header-buttons={scope === 'branch' ? undefined : ''}>
         {scope === 'branch' && commitMenu}
+        {bulk !== null && (
+          <Button size="sm" variant="outline" className={css.headerAction} disabled={bulk.disabled} data-forge-write-all="" onClick={bulk.run}>{bulk.label}</Button>
+        )}
         {creatable && <Button size="sm" variant="outline" className={css.headerAction} onClick={createChangeRequest}>{t('changes.local.create')}</Button>}
       </span>}
     </div>
@@ -567,8 +617,8 @@ export function ChangesTab({ useTabInfo, sessionId, usePanel, useAnnotations, ..
  * @returns the view body.
  */
 export function ChangesView({
-  tab, source, target, snapshot, annotations: viewAnnotations, openFile, quoteCopy, useStore, actions, reconnect, localDiff, diffBases,
-  localText,
+  tab, source, target: viewTarget, snapshot, annotations: viewAnnotations, openFile, quoteCopy, useStore, actions, reconnect, localDiff,
+  localWrite, diffBases, localText,
   localCommits, changeRequestDiff, changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles,
   changeRequestViewed, setFileViewed, openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue,
   submitReview, report, useLenses, useExtensions, changesLens, renderSlot, t: translate,
@@ -697,15 +747,25 @@ export function ChangesView({
   const chosenCommits = choices?.commits ?? null
   const lens = choices?.lens ?? 'all'
   const hideTests = choices?.hideTests ?? false
-  const localScope = useMemo((): ForgeLocalScope => scope === 'branch'
-    ? { kind: 'branch', base: base?.ref ?? null, commits: chosenCommits } : { kind: scope }, [scope, base, chosenCommits])
+  // The branch local changes show in place of the Session's checked-out one; a change request view has none.
+  const localHead = source.kind === 'local' ? choices?.head ?? null : null
+  const headRef = localHead?.ref ?? null
+  // The Session's own checkout names no head, so its scopes keep the identity they had before heads.
+  const localScope = useMemo((): ForgeLocalScope => {
+    const shown = headRef === null ? {} : { head: headRef }
+    return scope === 'branch' ? { kind: 'branch', ...shown, base: base?.ref ?? null, commits: chosenCommits } : { kind: scope, ...shown }
+  }, [scope, headRef, base, chosenCommits])
+  // Other plugins contribute to the Session's own local changes; another head shows without their slots and annotations.
+  const target = localHead === null ? viewTarget : null
   const changeCommits = source.kind === 'change' ? chosenCommits : null
   const changeUrlOf = source.kind === 'change' ? source.url : ''
   const listChangeCommits = useCallback(
     (signal: AbortSignal) => changeRequestCommits(changeUrlOf, signal), [changeRequestCommits, changeUrlOf],
   )
   const baseRef = base?.ref ?? null
-  const listLocalCommits = useCallback((signal: AbortSignal) => localCommits(baseRef, signal), [localCommits, baseRef])
+  const listLocalCommits = useCallback(
+    (signal: AbortSignal) => localCommits(headRef, baseRef, signal), [localCommits, headRef, baseRef],
+  )
   const split = choices?.split ?? true
   const wrap = choices?.wrap ?? true
   // A read starts once the panel state arrives and again when what it describes moves. A change request's read
@@ -720,7 +780,7 @@ export function ChangesView({
   const headCommit = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.commit : null
   // The commits change with the head of a change request, with the local HEAD, branch, or base, and on a refresh.
   const commitsVersion = `${attempt}\n${source.kind === 'local'
-    ? `${baseRef ?? ''}\n${headCommit ?? ''}\n${JSON.stringify(state?.local ?? null)}` : head ?? ''}`
+    ? `${headRef ?? ''}\n${baseRef ?? ''}\n${headCommit ?? ''}\n${JSON.stringify(state?.local ?? null)}` : head ?? ''}`
   const dataKey = source.kind === 'local' ? JSON.stringify(localScope) : `change\n${JSON.stringify(changeCommits)}`
   const [loaded, setLoaded] = useState<{ readonly key: string; readonly data: ChangesData } | null>(null)
   const [failure, setFailure] = useState<{ readonly key: string; readonly code: string } | null>(null)
@@ -743,7 +803,7 @@ export function ChangesView({
     const readAt = latestStatusAt.current
     const fresh = finishedAttempt.current !== attempt
     const reads = { localDiff, changeRequestDiff, changeRequestViewed }
-    void readChanges(source, localScope, changeCommits, head, fresh, reads, controller.signal)
+    void readChanges(source, localScope, localHead, changeCommits, head, fresh, reads, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return
         if (!result.ok && result.error.code === 'forgePanel/stale-head') {
@@ -751,18 +811,30 @@ export function ChangesView({
           setFailure(null)
           return
         }
+        // The worktree that had the shown branch checked out is gone, so the tab falls back to the branch's commits,
+        // read again because what it loaded for the `branch` scope counted that worktree's files.
+        if (!result.ok && result.error.code === 'forgePanel/no-working-tree') {
+          setFinished(null)
+          setLoaded(null)
+          actions.rooted(tab.id, null)
+          return
+        }
         finishedAttempt.current = attempt
         setFinished(read)
         if (result.ok) {
           setLoaded({ key: dataKey, data: result.value })
           setFailure(null)
+          // A worktree added or removed since the branch was listed decides which scopes the branch has.
+          if (result.value.kind === 'local' && localHead !== null && result.value.worktree !== localHead.worktree) {
+            actions.rooted(tab.id, result.value.worktree)
+          }
         } else {
           setFailure({ key: dataKey, code: result.error.code })
         }
       })
     return () => { controller.abort() }
-  }, [tab.visible, read, refused, waiting, source, localScope, changeCommits, head, attempt, dataKey, localDiff, changeRequestDiff,
-    changeRequestViewed])
+  }, [tab.visible, tab.id, actions, read, refused, waiting, source, localScope, localHead, changeCommits, head, attempt, dataKey, localDiff,
+    changeRequestDiff, changeRequestViewed])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   // Threads show only while they were read at the head of the latest status and, for the whole change request, at
   // the head the shown diff was read at, so their positions number the shown files.
@@ -839,7 +911,7 @@ export function ChangesView({
     }
     return map
   }, [allFiles, kept, shownPaths, foldTitle])
-  const annotations = viewAnnotations ?? NO_ANNOTATIONS
+  const annotations = (localHead === null ? viewAnnotations : undefined) ?? NO_ANNOTATIONS
   // Annotations wait for the Host's limit.
   const annotationLimit = extensions?.maxAnnotationsPerFile
   const shownSource = useMemo(() => data === null ? null : reviewSourceOf(data), [data])
@@ -919,16 +991,25 @@ export function ChangesView({
     setWanted(null)
   }, [tab.visible, wanted, data, allFiles, lens, hideTests, kept, actions, tab.id])
   const refresh = (): void => { setAttempt(value => value + 1) }
+  const writes = useLocalWrites({ localWrite, report, reread: refresh, rereading })
+  // Staging and restoring act on the `unstaged` scope and unstaging on `staged`; in the other scopes a write could leave
+  // the shown diff unchanged. Writes reach the Session's own checkout only, so another head offers none.
+  const writeSide = data?.kind === 'local' && data.head === null && (data.scope.kind === 'unstaged' || data.scope.kind === 'staged')
+    ? data.scope.kind : undefined
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
   const baseFailure = baseFailureOf(failed, source.kind === 'local' && scope === 'branch' ? base : null, t)
   // Configuration reads may recover after the user fixes Git settings or raises the output limit.
   const message = failed === null ? undefined : FAILURE[failed]
-  const failureText = baseFailure ?? t(message ?? 'diff.error')
   const changeUrl = source.kind === 'change' ? entry?.snapshot?.url ?? source.url : null
-  const retry = baseFailure === undefined && (message === undefined || failed === 'forgePanel/filter-config-failed')
+  // A head that is gone offers the Session's own checkout instead of a retry.
+  const headMissing = failed === 'forgePanel/head-missing' && localHead !== null
+  const failureText = baseFailure ?? (headMissing ? t('diff.headMissing', { head: localHead.name }) : t(message ?? 'diff.error'))
+  const retry = baseFailure === undefined && !headMissing && (message === undefined || failed === 'forgePanel/filter-config-failed')
   const automaticBase = baseFailure !== undefined ? (
     <Button size="sm" variant="outline" onClick={() => { actions.based(tab.id, null) }}>{t('diff.useAutomaticBase')}</Button>
+  ) : headMissing ? (
+    <Button size="sm" variant="outline" data-forge-head-own="" onClick={() => { actions.headed(tab.id, null) }}>{t('diff.head.back')}</Button>
   ) : (failed === 'forgePanel/commits-missing' || failed === 'forgePanel/commits-not-linear') && (
     <Button size="sm" variant="outline" onClick={() => { actions.committed(tab.id, null) }}>{t('commits.showAll')}</Button>
   )
@@ -979,14 +1060,23 @@ export function ChangesView({
   }
   const fileActions = (owner: ChangesData, file: ForgeDiffFile): DiffFileAction[] => {
     const list: DiffFileAction[] = [{ label: 'diff.copyPath', run: () => { copyPath(file.path) } }]
-    if (file.status === 'deleted') return list
-    if (owner.kind === 'local') {
-      if (root !== null && openFile !== undefined) {
-        list.push({ label: 'diff.openFileInSidebar', run: () => { openFile(`${root}/${file.path}`) } })
+    if (file.status !== 'deleted') {
+      if (owner.kind === 'local') {
+        // The path names the Session's own working tree, which holds another head's file in another version or not at all.
+        if (owner.head === null && root !== null && openFile !== undefined) {
+          list.push({ label: 'diff.openFileInSidebar', run: () => { openFile(`${root}/${file.path}`) } })
+        }
+      } else {
+        const url = owner.fileUrls[file.path]
+        if (url !== undefined) list.push({ label: 'diff.openFileInBrowser', run: () => { openLink(url) } })
       }
-    } else {
-      const url = owner.fileUrls[file.path]
-      if (url !== undefined) list.push({ label: 'diff.openFileInBrowser', run: () => { openLink(url) } })
+    }
+    // The header's writes again, for a narrow pane on a device without hover, where the header hides them.
+    if (writeSide === 'unstaged') {
+      list.push({ label: 'diff.stageFile', separated: true, disabled: writes.writing, run: () => { writes.write('stage', [file]) } })
+      if (restorable(file)) list.push({ label: 'diff.restoreFileMenu', disabled: writes.writing, run: () => { writes.write('restore', [file]) } })
+    } else if (writeSide === 'staged') {
+      list.push({ label: 'diff.unstageFile', separated: true, disabled: writes.writing, run: () => { writes.write('unstage', [file]) } })
     }
     return list
   }
@@ -1058,7 +1148,7 @@ export function ChangesView({
   }
   const recordActions: ReviewActions = {
     source: shownSource ?? (source.kind === 'local'
-      ? { kind: 'local', scope, base: null, baseRef: baseRefOf(localScope), commits: commitsOf(localScope) }
+      ? reviewSourceOf({ kind: 'local', files: [], scope: localScope, head: localHead, worktree: localHead?.worktree ?? null, base: null, omitted: 0 })
       : { kind: 'change', url: source.url, headSha: '', commits: changeCommits }),
     records: queue, addToInput: addReviewToInput, openLink, quoteCopy, onRemoved: reportRemoved,
   }
@@ -1142,8 +1232,9 @@ export function ChangesView({
   /** Whether a key press belongs to a field, a comment, a menu, or a text selection rather than to the file list. */
   const typing = (container: HTMLElement, origin: EventTarget): boolean => {
     const selection = window.getSelection()
-    return !(origin instanceof HTMLElement) || !container.contains(origin)
-      || origin.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-forge-comment], [role="menu"]') !== null
+    // A target other than an element has no `closest`, so it counts as typing.
+    return !container.contains(origin as Node)
+      || (origin as Partial<Element>).closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-forge-comment], [role="menu"]') !== null
       || (selection !== null && !selection.isCollapsed)
   }
   const navigateFiles = (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -1177,8 +1268,10 @@ export function ChangesView({
   }
   /** The shown file whose section holds an element or a text node, if any. */
   const fileAt = (target: EventTarget | null | undefined): ForgeDiffFile | undefined => {
-    const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null
-    const path = element?.closest('[data-forge-diff-file]')?.getAttribute('data-forge-diff-file')
+    // A text node has no `closest`, so its parent element answers.
+    const node = target as Partial<Element> | null | undefined
+    const section = node?.closest?.('[data-forge-diff-file]') ?? node?.parentElement?.closest('[data-forge-diff-file]')
+    const path = section?.getAttribute('data-forge-diff-file')
     return files.find(file => file.path === path)
   }
   // `V` marks or clears the file being read, from anywhere in the tab except fields, comments, and menus: the file
@@ -1200,7 +1293,7 @@ export function ChangesView({
   // props and state, which the retried render assigns again.
   const callbacks = {
     data, expandedByDefault, expand, readContext, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread,
-    lensTitle, renderSlot, kept, reportRemoved, t,
+    lensTitle, renderSlot, kept, reportRemoved, t, write: writes.write,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1225,6 +1318,7 @@ export function ChangesView({
       /* v8 ignore next -- sections render only while changes are loaded */
       if (owner !== null) mark(owner, file, viewed)
     },
+    write: (file, kind) => { live.current.write(kind, [file]) },
     actions: (file) => {
       const { data: owner, fileActions: list } = live.current
       /* v8 ignore next -- sections render only while changes are loaded */
@@ -1334,6 +1428,8 @@ export function ChangesView({
               viewedNote={host === null ? t('viewed.hint') : host.unavailable ? t('viewed.unavailable')
                 : host.saving(path) ? t('viewed.saving') : t('viewed.hintHost')}
               viewedDisabled={host !== null && (host.unavailable || host.saving(path))}
+              writes={writeSide}
+              writing={writes.writing}
               handlers={handlers}
               t={t}
             />
@@ -1375,8 +1471,15 @@ export function ChangesView({
   return (
     <div className={css.root} data-forge-changes={source.kind} onKeyDown={toggleViewed}>
       {source.kind === 'local'
-        ? <LocalHeader state={state} scope={scope} base={base} missing={failed === 'forgePanel/base-missing'} visible={tab.visible}
-          diffBases={diffBases} choose={(next) => { actions.based(tab.id, next) }} commitMenu={commitMenu}
+        ? <LocalHeader state={state} scope={scope} head={localHead} headMissing={headMissing} base={base}
+          baseLabel={data?.kind === 'local' ? data.base : null} missing={failed === 'forgePanel/base-missing'} visible={tab.visible}
+          diffBases={diffBases} chooseHead={(next) => { actions.headed(tab.id, next) }}
+          choose={(next) => { actions.based(tab.id, next) }} commitMenu={commitMenu}
+          bulk={writeSide === undefined ? null : {
+            label: t(writeSide === 'unstaged' ? 'diff.stageAll' : 'diff.unstageAll'),
+            disabled: writes.writing || files.length === 0,
+            run: () => { writes.write(writeSide === 'unstaged' ? 'stage' : 'unstage', files) },
+          }}
           createChangeRequest={createChangeRequest} t={t} />
         : <ChangeHeader url={source.url} entry={entry} openLink={openLink} commitMenu={commitMenu}
           reviewCount={(pendingReview?.comments ?? 0) + reviewState.comments.length}
@@ -1393,7 +1496,9 @@ export function ChangesView({
         {/* Above the file tree, the lens spans the tree's width; elsewhere a menu in the toolbar takes its place. */}
         {treeShown && <div className={css.lensCell}><LensControl {...lensProps} need={setLensWidth} /></div>}
         <div ref={toolbarRow} className={css.toolbarMain}>
-          {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
+          {/* A branch that no worktree has checked out has neither a working tree nor an index, so it has the `branch` scope alone. */}
+          {tab.visible && source.kind === 'local' && (localHead === null || localHead.worktree !== null)
+            && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
           {tab.visible && (
             <span className={css.filesSlot}><ChangedFilesMenu {...navigator} loading={data === null && failed === null} visible /></span>
           )}
@@ -1516,6 +1621,17 @@ export function ChangesView({
             openLink={openLink} forge={family} close={closeThreadList} t={t} />
         )}
       </div>
+      {writes.restoring !== null && (
+        <Modal open tone="warning" title={t('diff.restore.title')} closeLabel={t('review.close')} onClose={writes.restoring.cancel}
+          footer={(
+            <>
+              <Button variant="outline" data-modal-autofocus onClick={writes.restoring.cancel}>{t('review.cancel')}</Button>
+              <Button variant="primary" onClick={writes.restoring.confirm}>{t('diff.restore.confirm')}</Button>
+            </>
+          )}>
+          <p className={css.restoreText}>{t(restoreCopyOf(writes.restoring.file), { path: writes.restoring.file.path })}</p>
+        </Modal>
+      )}
     </div>
   )
 }

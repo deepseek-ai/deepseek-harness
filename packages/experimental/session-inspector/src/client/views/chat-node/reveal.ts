@@ -99,8 +99,9 @@ export class InspectorChatRevealer {
     let quiet: number | undefined
     let settledFrame: number | undefined
     const targetOf = (event: Event): Element | undefined => {
-      const target = event.target === document ? document.scrollingElement : event.target
-      return target instanceof Element && parents.has(target) ? target : undefined
+      // A scroll targets the document, whose scrolling element moves, or the scrolled element.
+      const target = (event.target === document ? document.scrollingElement : event.target) as Element | null
+      return target !== null && parents.has(target) ? target : undefined
     }
     const cleanup = (): void => {
       pending = false
@@ -145,7 +146,9 @@ export class InspectorChatRevealer {
       }
     }
     const interrupt = (event: Event): void => {
-      if (event instanceof KeyboardEvent && !SCROLL_KEYS.has(event.key)) return
+      // Of the interrupting events only a key press carries `key`.
+      const key = (event as Partial<KeyboardEvent>).key
+      if (key !== undefined && !SCROLL_KEYS.has(key)) return
       cancel()
       this.dispose()
     }

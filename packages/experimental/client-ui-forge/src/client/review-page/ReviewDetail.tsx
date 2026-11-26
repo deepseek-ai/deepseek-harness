@@ -94,6 +94,8 @@ export interface ReviewDetailProps extends ReviewSummaryFace {
   readonly renderChat: (frame: ForgeReviewChangeRequest) => ReactNode
   /** Quotes added to the conversation while the chat tab was not shown. */
   readonly unseenQuotes: number
+  /** Whether the page's primary pointer is coarse, which keeps the reviewer search from focusing its field. */
+  readonly coarsePointer: boolean
   /** Forge panel copy. */
   readonly t: Translate
 }
@@ -240,7 +242,7 @@ function LinkActions({ url, forge, actions, onRefresh, t }: {
 }
 
 /** The summary tab: the description and the activity beside the card rows. */
-function Summary({ frame, snapshot, description, readActivity, addComment, onOpenChanges, now, locale, actions, t }: {
+function Summary({ frame, snapshot, description, readActivity, addComment, onOpenChanges, now, locale, actions, coarsePointer, t }: {
   readonly frame: ForgeReviewChangeRequest
   readonly snapshot: ChangeRequestSnapshot
   readonly description: ReturnType<typeof useDescription>
@@ -250,6 +252,7 @@ function Summary({ frame, snapshot, description, readActivity, addComment, onOpe
   readonly now: number
   readonly locale: string
   readonly actions: ChangeRequestActions
+  readonly coarsePointer: boolean
   readonly t: Translate
 }): ReactNode {
   const labels = useMemo(() => ({
@@ -287,7 +290,8 @@ function Summary({ frame, snapshot, description, readActivity, addComment, onOpe
           t={t} />
       </div>
       <aside className={css.facts} aria-label={t('reviewPage.status')}>
-        <ReviewStatus frame={frame} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
+        <ReviewStatus frame={frame} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale}
+          coarsePointer={coarsePointer} t={t} />
       </aside>
     </div>
   )
@@ -295,12 +299,12 @@ function Summary({ frame, snapshot, description, readActivity, addComment, onOpe
 
 /**
  * Render the detail of one change request.
- * @param props - the change request stream, the tab, actions, and copy.
+ * @param props - the change request stream, the tab, actions, the pointer accuracy, and copy.
  * @returns the detail.
  */
 export function ReviewDetail({
   url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, readActivity, addComment, onAddHost,
-  renderChanges, renderChat, unseenQuotes, t,
+  renderChanges, renderChat, unseenQuotes, coarsePointer, t,
 }: ReviewDetailProps): ReactNode {
   const frame = read.frame
   const snapshot = frame?.snapshot ?? null
@@ -448,7 +452,7 @@ export function ReviewDetail({
         aria-labelledby={`forge-review-tab-${tab}`}>
         {tab === 'summary' && (
           <Summary frame={frame} snapshot={snapshot} description={description} readActivity={readActivity} addComment={addComment}
-            onOpenChanges={() => { onTab('changes') }} now={now} locale={locale} actions={actions} t={t} />
+            onOpenChanges={() => { onTab('changes') }} now={now} locale={locale} actions={actions} coarsePointer={coarsePointer} t={t} />
         )}
         <div className={css.changes} hidden={tab !== 'changes'}>{renderChanges(frame)}</div>
         {tab === 'chat' && renderChat(frame)}

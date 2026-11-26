@@ -35,6 +35,16 @@ describe('V4 framing and restoration', () => {
     expect(restoreReleasedV4Artifact(artifact, types)).toBe(artifact)
   })
 
+  it('round trips the V4 side origin without admitting it to the released V2 codec', () => {
+    const side = { ...header, origin: 'side' as const }
+    const physical = releasedV4SessionFormatCodec.encodeHeader(side, 0)
+    expect(physical).toEqual({ type: 'session', ...side })
+    expect(releasedV4SessionFormatCodec.decodeHeader(physical)).toEqual(side)
+    expect(releasedV4SessionFormatCodec.createDecoder(physical, 'strict').header).toEqual(side)
+    expect(sessionFormatCatalog.readHeader(physical)).toMatchObject({ status: 'current', header: side })
+    expect(() => releasedV2SessionFormatCodec.decodeHeader({ ...physical, version: 2 })).toThrow('origin must be "subagent"')
+  })
+
   it('rejects mismatched versions and malformed logical and physical metadata', () => {
     expect(() => { assertReleasedV4Header({ ...header, version: 3 }) }).toThrow('v4 header')
     expect(() => { assertReleasedV4Header({ ...header, createdAt: -1 }) }).toThrow('createdAt')
@@ -54,7 +64,7 @@ describe('V4 framing and restoration', () => {
       [{ ...header, cwd: 7 }, 'cwd must be absolute'],
       [{ ...header, parentSession: 7 }, 'parentSession must be a string'],
       [{ ...header, agentPreset: 7 }, 'agentPreset must be a string'],
-      [{ ...header, origin: 'parent' }, 'origin must be "subagent"'],
+      [{ ...header, origin: 'parent' }, 'origin must be "subagent" or "side"'],
     ] as const
     for (const [value, message] of malformed) {
       expect(() => { assertReleasedV4Header(value) }).toThrow(message)

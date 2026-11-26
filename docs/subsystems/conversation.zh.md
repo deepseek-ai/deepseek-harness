@@ -25,7 +25,7 @@ Chat 与 Trajectory 可以识别同一个持久 event family，但各自保留�
 
 每个 Session 都保留单调增长的 active target 集合。创建或读取 target source 不会激活它。shell 会显式激活持久化选择或新选择的 View，其他消费者则通过 target source 的首个订阅激活 target。首次激活会创建该 target 的 builder，并从当前按 target 索引的 Context 调用一次 `replace()`。后续 flush 对每个 active target 调用 `apply()`，取消订阅不会移除 target。
 
-shell 拥有 View 选择，并在 binding 创建、被选为 current 或 View roster 变化时，于渲染前解析已注册的偏好 View 或 Chat fallback。assembler 只接收解析后的 target id，不自行选择 Chat 或其他默认 target。第三方 View 使用相同的选择与激活操作。View Definition 可以提供 `toolCallFocus(callId)`；shell 仅为声明了此能力且可见的目标提供 Inspect，由目标将调用 id 映射为自己的焦点标识。
+shell 拥有 View 选择，并在 binding 创建、被选为 current 或 View roster 变化时，于渲染前解析已注册的偏好 View 或 Chat fallback。assembler 只接收解析后的 target id，不自行选择 Chat 或其他默认 target。第三方 View 使用相同的选择与激活操作。View Definition 可以在 `accepts` 中列出自己接受的焦点类型，例如 `tool-call` 与 `request`。shell 仅为接受该类型且可见的目标提供对应的 Inspect 回调，并向其发送以 `kind` 区分的 `ConversationFocus` 值。插件通过声明合并向 `ConversationFocusMap` 添加类型；由于待处理的请求随 Conversation store 持久化，每个焦点值都保持可 JSON 序列化。还原出的请求若焦点没有 `kind` 标记，则被丢弃。
 
 <a id="group-definitions"></a>
 ## Group Definition

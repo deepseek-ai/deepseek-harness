@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -108,7 +108,7 @@ function mount(
       usePanelInfo={usePanelInfo} useContextMenu={contextMenuHook()} useResource={useResource}
       useWorkspaces={hook(workspaceState(currentItems))}
       {...allowAllAccess}
-      {...responsiveHooks()}
+      {...responsiveHooks()} {...themeHooks()}
       onPick={onPick}
       onClose={onClose}
       createWorkspace={createWorkspace}
@@ -399,7 +399,7 @@ describe('WorkspacePicker', () => {
         useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useContextMenu={contextMenuHook()} useResource={useResource}
         {...allowAllAccess}
-        {...responsiveHooks()}
+        {...responsiveHooks()} {...themeHooks()}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,
@@ -419,7 +419,7 @@ describe('WorkspacePicker', () => {
         useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useContextMenu={contextMenuHook()} useResource={useResource}
         {...allowAllAccess}
-        {...responsiveHooks()}
+        {...responsiveHooks()} {...themeHooks()}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
         useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
       />,

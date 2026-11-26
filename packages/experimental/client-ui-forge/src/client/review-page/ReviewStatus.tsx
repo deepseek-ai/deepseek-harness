@@ -133,7 +133,7 @@ function Checks({ frame, snapshot, actions, t }: StatusProps): ReactNode {
  * latest outcome or pending request. When the signed-in user may request reviews of an open change request, its last
  * line opens the menu that asks a reviewer again or searches for someone else.
  */
-function Reviewers({ frame, snapshot, actions, t }: StatusProps): ReactNode {
+function Reviewers({ frame, snapshot, actions, coarsePointer, t }: StatusProps & { readonly coarsePointer: boolean }): ReactNode {
   const [all, setAll] = useState(false)
   const [open, setOpen] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -181,7 +181,7 @@ function Reviewers({ frame, snapshot, actions, t }: StatusProps): ReactNode {
               )}>
               {searching || again.length === 0
                 ? (
-                  <ReviewerSearch url={snapshot.url} list={requesting.list} t={t} choose={(login) => {
+                  <ReviewerSearch url={snapshot.url} list={requesting.list} coarsePointer={coarsePointer} t={t} choose={(login) => {
                     close()
                     run(() => requesting.ask(frame, [{ kind: 'user', login }]))
                   }} />
@@ -216,13 +216,15 @@ export interface StatusProps {
 /**
  * Render the status column.
  * @param props - the change request, its snapshot, how rows name it, the current time, the actions, the number
- * locale, and copy.
+ * locale, whether the page's primary pointer is coarse, which keeps the reviewer search from focusing its field, and
+ * copy.
  * @returns the blocks.
  */
-export function ReviewStatus({ frame, snapshot, name, now, actions, locale, t }: StatusProps & {
+export function ReviewStatus({ frame, snapshot, name, now, actions, locale, coarsePointer, t }: StatusProps & {
   readonly name: string
   readonly now: number
   readonly locale: string
+  readonly coarsePointer: boolean
 }): ReactNode {
   const changes = <ChangesRow entry={frame} snapshot={snapshot} name={name} actions={actions} locale={locale} t={t} />
   if (snapshot.state !== 'open') {
@@ -234,7 +236,9 @@ export function ReviewStatus({ frame, snapshot, name, now, actions, locale, t }:
             {changes}
           </div>
         </div>
-        {snapshot.reviewers.length > 0 && <Reviewers frame={frame} snapshot={snapshot} actions={actions} t={t} />}
+        {snapshot.reviewers.length > 0 && (
+          <Reviewers frame={frame} snapshot={snapshot} actions={actions} coarsePointer={coarsePointer} t={t} />
+        )}
       </>
     )
   }
@@ -247,7 +251,8 @@ export function ReviewStatus({ frame, snapshot, name, now, actions, locale, t }:
       </div>
       {/* A new head starts both blocks afresh: their folds, and the checks read for the previous head. */}
       <Checks key={`checks:${snapshot.headSha}`} frame={frame} snapshot={snapshot} actions={actions} t={t} />
-      <Reviewers key={`reviewers:${snapshot.headSha}`} frame={frame} snapshot={snapshot} actions={actions} t={t} />
+      <Reviewers key={`reviewers:${snapshot.headSha}`} frame={frame} snapshot={snapshot} actions={actions}
+        coarsePointer={coarsePointer} t={t} />
       <div className={css.statusCard} data-forge-review-changes="">
         <div className={css.statusRows}>
           {changes}

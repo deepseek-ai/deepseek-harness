@@ -230,7 +230,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
     }
   })
 
-  it('accepts the session-log and plugin-package request extension fields', async () => {
+  it('accepts subagent headers alongside the session-log and plugin-package request fields', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(Loader)
@@ -243,7 +243,10 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
     await ctx.plugin(PluginPackageInventoryDeepSeek)
     await ctx.plugin(DeepSeekAuth)
     await ctx.plugin(LlmDeepSeek, { baseURL: Protocol.PUBLIC_BASE_URL, thinking: 'disabled' })
-    const session = ctx.sessions.create(brandString<SessionId>('real-extension-fields'))
+    const parent = ctx.sessions.create()
+    const session = ctx.sessions.create(brandString<SessionId>('real-extension-fields'), {
+      meta: { origin: 'subagent', parentSession: parent.id },
+    })
     session.append('turn/start', { turn: 1 })
 
     const result = await assemble(ctx, {

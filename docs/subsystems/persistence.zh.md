@@ -172,10 +172,11 @@ interface SessionHeader {
    */
   readonly isSeeded: boolean
   /**
-   * Coarse product classification for a session created as a subagent child.
-   * This is presentation metadata, not proof that the child is continuable.
+   * Coarse product classification: `subagent` for a subagent child, `side` for
+   * a side conversation forked from another Session. Absence means an ordinary
+   * Session. This is presentation metadata, not proof that the Session is continuable.
    */
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   /**
    * Delegation depth: absent (zero) for a top-level session, parent depth + 1
    * for a subagent child. Persisted so a recursion budget survives restart and
@@ -235,7 +236,7 @@ interface SessionHeaderMeta {
   readonly parentSession?: SessionId
   readonly createdAt?: number
   readonly isSeeded?: boolean
-  readonly origin?: 'subagent'
+  readonly origin?: SessionOrigin
   readonly delegationDepth?: number
   readonly agentPreset?: string
 }

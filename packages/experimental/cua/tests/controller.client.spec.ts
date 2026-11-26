@@ -142,7 +142,9 @@ it('joins a pending read without publishing after disposal or starting queued ac
 it('revokes access while icons are pending, serializes writes, and joins reads on disposal', async () => {
   const f = fixture(), icons = Promise.withResolvers<Record<string, string>>()
   const action = Promise.withResolvers<undefined>(), entered = Promise.withResolvers<undefined>()
-  onTestFinished(async () => { icons.resolve({}); action.resolve(undefined); await f.controller.dispose() })
+  onTestFinished(async () => {
+    icons.resolve({}); action.resolve(undefined); await f.controller.dispose()
+  })
   f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await icons.promise }))
   f.actions.revoke.mockImplementationOnce(async () => {
     entered.resolve(undefined)
@@ -317,7 +319,9 @@ it('publishes each observation before the other queries finish', async () => {
   const system = Promise.withResolvers<CuaSystemPermissionState>()
   const apps = Promise.withResolvers<CuaApplicationState>()
   const icons = Promise.withResolvers<Record<string, string>>()
-  onTestFinished(async () => { system.resolve(value); apps.resolve(applications); icons.resolve({}); await f.controller.dispose() })
+  onTestFinished(async () => {
+    system.resolve(value); apps.resolve(applications); icons.resolve({}); await f.controller.dispose()
+  })
   f.actions.systemStatus.mockImplementationOnce(async () => ({ ok: true, value: await system.promise }))
   f.actions.applications.mockImplementationOnce(async () => ({ ok: true, value: await apps.promise }))
   f.actions.applicationIcons.mockImplementationOnce(async () => ({ ok: true, value: await icons.promise }))

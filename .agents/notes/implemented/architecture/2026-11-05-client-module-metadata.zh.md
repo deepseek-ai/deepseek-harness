@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-Client 产物包含 `id` 和 `factory`，可选带有 `meta`，动态包内 chunk 另带 `chunk` 名称。`meta()` 返回资源描述；可选的 `stylesheets` 是以路径为键的字典，每个值提供独立求值的 `text(context)` 函数。资源路径标识样式表，而不是组件。当前没有样式表依赖字段。
+Client 产物包含 `id` 和 `factory`，可选带有 `meta`，动态包内 chunk 另带 `chunk` 名称，factory 同步 require 的 chunk 列在 [`deps`](2026-11-26-package-local-chunk-dependencies.zh.md) 中。`meta()` 返回资源描述；可选的 `stylesheets` 是以路径为键的字典，每个值提供独立求值的 `text(context)` 函数。资源路径标识样式表，而不是组件。当前没有样式表依赖字段。
 
 Modules 拥有 JavaScript 导出、模块身份、owner id 和观察到的依赖边。它保存元信息函数而不求值，发布通用的模块记录变化。Renderer 拥有元信息／文本缓存、依赖有序的样式集合、路径去重与主文档节点。它在 React 挂载前显式安装已有资源，随模块变化更新，并在根卸载后释放样式。组件生命周期不拥有样式。
 

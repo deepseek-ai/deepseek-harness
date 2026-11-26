@@ -12,6 +12,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { clientBundle, requestedExternals, staticLinked } from '../packages/client/tsdown.client.ts'
 import { STATIC_MODULE_MANIFEST_EXPORT } from '../packages/client/web/src/platform.ts'
 import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
+import { cssIdentifier } from './test-css-identifier.ts'
 
 type ResolveId = (source: string) => null | { id: string; external: boolean }
 
@@ -65,7 +66,7 @@ describe('client bundle build faces', () => {
     if (typeof outputOptions !== 'object' || typeof outputOptions.banner !== 'function') {
       throw new Error('client banner missing')
     }
-    expect(outputOptions.banner({ isEntry: true, fileName: 'client.js' } as Rolldown.RenderedChunk))
+    expect(outputOptions.banner({ isEntry: true, fileName: 'client.js', imports: [] as string[] } as Rolldown.RenderedChunk))
       .toBe('window.__ModuleLoader__.load({ id: "@deepseek-ai/dsh-client-fixture", factory: (require) => {')
   })
 
@@ -294,7 +295,7 @@ describe('static Client dependency delivery', () => {
       'src/Panel.module.css', 'src/global.css',
     ])
     expect(stylesheets!['src/Panel.module.css']!.text(require))
-      .toContain(`.${exports.classes.panel}{display:flex}`)
+      .toContain(`.${cssIdentifier(exports.classes.panel)}{display:flex}`)
     expect(stylesheets!['src/global.css']!.text(require))
       .toContain('.overlay{position:fixed}')
   })
@@ -315,7 +316,7 @@ describe('static Client dependency delivery', () => {
     expect(Object.keys(stylesheets ?? {})).toEqual(['src/Panel.module.css'])
     const exports = manifest.factory(unusedRequire) as { classes: { panel: string } }
     expect(stylesheets?.['src/Panel.module.css']?.text(unusedRequire))
-      .toContain(`.${exports.classes.panel}{display:flex}`)
+      .toContain(`.${cssIdentifier(exports.classes.panel)}{display:flex}`)
   })
 })
 

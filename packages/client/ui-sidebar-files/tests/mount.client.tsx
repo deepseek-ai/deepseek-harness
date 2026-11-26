@@ -13,7 +13,7 @@ import type { RenderResult } from '@testing-library/react'
 import { onTestFinished, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import { contextMenuHook, makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, makeTranslate, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SidebarRightTabActions, SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { TreeFixture } from './tree-fixture.client.tsx'
@@ -166,7 +166,7 @@ function harness(placement: Placement, controller: AbortController, book: Worksp
     renderSlot: () => null,
     openMenu,
     useContextMenu: contextMenuHook(openMenu),
-    ...responsiveHooks(),
+    ...responsiveHooks(), ...themeHooks(),
     renderFactorySlot: (name: string, input: object) => name === 'sidebar.files.tree' ? <TreeFixture {...input as FileTreeInput} t={t} /> : null,
     sessionId: SESSION,
     useSessions: <S,>(sel: (s: SessionListState) => S) => sel(sessionsAt(placement.cwd)),

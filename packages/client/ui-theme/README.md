@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Users switch the color scheme, font sizes, and fonts from rows in Settings (General section); the choices persist across restarts in every authenticated browser. Feature plugins consume the current snapshot through `ctx.theme` and read the `--dsw-*` tokens in CSS; they do not manage theme state themselves.
+Users switch the color scheme, font sizes, and fonts from rows in Settings (General section); the choices persist across restarts in every authenticated browser. Feature plugins read the `--dsw-*` tokens in CSS and do not manage theme state themselves. A Slot component reads the current snapshot through the global `useTheme(selector)` standard prop, which this plugin publishes before it provides `ctx.theme`; a plugin whose components read it injects `theme`. The apply layer reads `ctx.theme.getTheme()` and the `theme/change` event. Light and dark branches test `active.colorScheme`, never `preference` (which may be `system`) or the theme id. `s => s.active` changes when the theme or a token override layer changes; while an override layer exists, a font change also yields a new object.
 
 ### Appearance and font size
 

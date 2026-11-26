@@ -57,11 +57,45 @@ describe('changesDefinition', () => {
 })
 
 describe('createChangesStore', () => {
+  it('shows another branch with its automatic base and every commit, and the branch scope alone without a worktree', () => {
+    const store = createChangesStore().create()
+    const tab = (): unknown => store.getSnapshot().byTab['tab-1']
+    store.actions.navigated('tab-1', 1)
+    store.actions.scoped('tab-1', 'staged')
+    store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
+    store.actions.committed('tab-1', { from: 'a'.repeat(40), to: 'b'.repeat(40) })
+    const checkedOut = { ref: 'refs/heads/cache', name: 'cache', worktree: '/work/cache' }
+    store.actions.headed('tab-1', checkedOut)
+    expect(tab()).toMatchObject({ scope: 'staged', head: checkedOut, base: null, commits: null })
+    const committed = { ref: 'refs/heads/topic', name: 'topic', worktree: null }
+    store.actions.headed('tab-1', committed)
+    expect(tab()).toMatchObject({ scope: 'branch', head: committed })
+    store.actions.headed('tab-1', null)
+    expect(tab()).toMatchObject({ scope: 'branch', head: null })
+  })
+
+  it('records the worktree a read found for the shown branch, and the branch scope once it has none', () => {
+    const store = createChangesStore().create()
+    const tab = (): unknown => store.getSnapshot().byTab['tab-1']
+    store.actions.navigated('tab-1', 1)
+    store.actions.scoped('tab-1', 'unstaged')
+    // The Session's own checkout has no worktree to record.
+    store.actions.rooted('tab-1', '/work/cache')
+    expect(tab()).toMatchObject({ scope: 'unstaged', head: null })
+
+    store.actions.headed('tab-1', { ref: 'refs/heads/topic', name: 'topic', worktree: null })
+    store.actions.rooted('tab-1', '/work/topic')
+    expect(tab()).toMatchObject({ scope: 'branch', head: { ref: 'refs/heads/topic', name: 'topic', worktree: '/work/topic' } })
+    store.actions.scoped('tab-1', 'unstaged')
+    store.actions.rooted('tab-1', null)
+    expect(tab()).toMatchObject({ scope: 'branch', head: { ref: 'refs/heads/topic', name: 'topic', worktree: null } })
+  })
+
   it('seeds a tab on its first navigation, keeps its choices, and forgets it', () => {
     const store = createChangesStore().create()
     store.actions.navigated('tab-1', 1)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'branch', base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
+      scope: 'branch', head: null, base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
     })
     store.actions.scoped('tab-1', 'staged')
     store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
@@ -72,7 +106,7 @@ describe('createChangesStore', () => {
     store.actions.filtered('tab-1', 'fixture/exports')
     store.actions.navigated('tab-1', 2)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
+      scope: 'staged', head: null, base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
       hideTests: true, split: false, wrap: false, navigated: 2,
     })
     store.actions.navigated('tab-2', 1)

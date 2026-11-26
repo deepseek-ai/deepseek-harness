@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore, defineStore, shallowEqual } from '../src/index.ts'
 
@@ -291,5 +292,40 @@ describe('shallowEqual', () => {
     expect(shallowEqual({ x: 1, y: { deep: 1 } }, { x: 1, y: { deep: 1 } })).toBe(false)
     expect(shallowEqual([1, 2], [1, 2])).toBe(true)
     expect(shallowEqual([1, 2], [2, 1])).toBe(false)
+    expect(shallowEqual({ x: 1 }, { x: 1, y: 2 })).toBe(false)
+    expect(shallowEqual({ x: undefined }, { y: undefined })).toBe(false)
+  })
+
+  it('compares scalars by Object.is and never equates an object with a scalar', () => {
+    expect(shallowEqual(Number.NaN, Number.NaN)).toBe(true)
+    expect(shallowEqual(0, -0)).toBe(false)
+    expect(shallowEqual('a', 'a')).toBe(true)
+    expect(shallowEqual({}, null)).toBe(false)
+    expect(shallowEqual(null, {})).toBe(false)
+    expect(shallowEqual(1, {})).toBe(false)
+  })
+
+  it('compares Map entries and Set members one level deep', () => {
+    const leaf = { deep: 1 }
+    expect(shallowEqual(new Map([['a', leaf]]), new Map([['a', leaf]]))).toBe(true)
+    expect(shallowEqual(new Map([['a', 1]]), new Map([['a', 2]]))).toBe(false)
+    expect(shallowEqual(new Map([['a', leaf]]), new Map([['a', { deep: 1 }]]))).toBe(false)
+    expect(shallowEqual(new Map([['a', 1]]), new Map([['a', 1], ['b', 2]]))).toBe(false)
+    expect(shallowEqual(new Map([['a', undefined]]), new Map([['b', undefined]]))).toBe(false)
+    expect(shallowEqual(new Set([1, leaf]), new Set([leaf, 1]))).toBe(true)
+    expect(shallowEqual(new Set([1]), new Set([2]))).toBe(false)
+    expect(shallowEqual(new Set([1]), new Set([1, 2]))).toBe(false)
+    expect(shallowEqual(new Map([['a', 1]]), { a: 1 })).toBe(false)
+  })
+
+  it('recognizes Maps and Sets another realm built', () => {
+    // An isolated plugin's iframe returns collections whose prototypes belong to that realm.
+    const map = (entries: string): unknown => runInNewContext(`new Map(${entries})`)
+    const set = (members: string): unknown => runInNewContext(`new Set(${members})`)
+    expect(shallowEqual(map('[[1, 1]]'), map('[[1, 2]]'))).toBe(false)
+    expect(shallowEqual(map('[[1, 1]]'), map('[[2, 1]]'))).toBe(false)
+    expect(shallowEqual(map('[[1, "a"]]'), new Map([[1, 'a']]))).toBe(true)
+    expect(shallowEqual(set('[1]'), set('[2]'))).toBe(false)
+    expect(shallowEqual(set('[1, 2]'), new Set([2, 1]))).toBe(true)
   })
 })

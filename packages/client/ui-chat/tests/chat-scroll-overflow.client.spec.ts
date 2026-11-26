@@ -19,6 +19,6 @@ describe('Transcript scroll overflow', () => {
     // transcript while the tail is pinned.
     const css = read('ChatView.module.css')
     expect(rule(css, '.scroll')).toMatch(/overflow-x:\s*clip/)
-    expect(rule(css, ':global([data-conversation-scroll]) .scroll')).toMatch(/overflow-x:\s*clip/)
+    expect(rule(css, '.scroll:is(:global([data-conversation-scroll]) *)')).toMatch(/overflow-x:\s*clip/)
   })
 })

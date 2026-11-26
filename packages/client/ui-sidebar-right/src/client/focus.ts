@@ -109,11 +109,12 @@ export function observeSidebarFocus(document: Document): () => void {
     if (event.relatedTarget === null && focused?.element.isConnected) { focused = undefined; removal.disconnect() }
   }
   const pointer = (event: PointerEvent): void => {
-    const element = event.composedPath().find(value => value instanceof Element)
-    if (!(element instanceof Element)) return
-    const pane = element.closest<HTMLElement>('[data-sidebar-right-session] [data-dockkit-pane], [data-sidebar-right-session] [data-dockkit-float]')
+    // A target other than an element has no `closest` and changes nothing.
+    const element = event.composedPath()[0] as Partial<Element> | undefined
+    const pane = element?.closest?.<HTMLElement>('[data-sidebar-right-session] [data-dockkit-pane], [data-sidebar-right-session] [data-dockkit-float]')
+    if (pane === undefined) return
     if (pane === null) { focused = undefined; removal.disconnect() }
-    const control = element.closest('button, input, textarea, select, a, [contenteditable], [tabindex], iframe')
+    const control = element?.closest?.('button, input, textarea, select, a, [contenteditable], [tabindex], iframe')
     if (pane !== null && (control === null || control === pane)) {
       pane.focus({ preventScroll: true })
     }

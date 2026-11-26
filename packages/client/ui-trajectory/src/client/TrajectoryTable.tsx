@@ -445,6 +445,8 @@ export interface TrajectoryTableProps {
   onToggleTool: (id: string) => void
   /** One-shot cross-view inspect: open and scroll to this call's record. */
   inspectCallId?: string | null
+  /** One-shot cross-view inspect: open this model request's record. */
+  inspectRequest?: { readonly turn: number; readonly step: number } | null
   /** Acknowledge a consumed (or unresolvable) inspect request. */
   onInspectApplied?: (() => void) | undefined
 }
@@ -2286,6 +2288,7 @@ export function TrajectoryTable({
   collapsedTools,
   onToggleTool,
   inspectCallId = null,
+  inspectRequest = null,
   onInspectApplied,
 }: TrajectoryTableProps) {
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
@@ -2298,6 +2301,7 @@ export function TrajectoryTable({
   const detailsResizeDrag = useRef<DetailsResizeDrag | null>(null)
   const appliedRecordSelection = useRef<TrajectoryTableProps['recordSelection']>(null)
   const appliedRecordFocus = useRef<TrajectoryTableProps['recordFocus']>(null)
+  const appliedRequestFocus = useRef<TrajectoryTableProps['inspectRequest']>(null)
   const tabHistory = useRef<Set<DetailTab>>(new Set(['overview']))
   const rootRef = useRef<HTMLDivElement>(null)
   const tablePaneRef = useRef<HTMLDivElement>(null)
@@ -2658,6 +2662,23 @@ export function TrajectoryTable({
         assertNever(kind)
     }
   }
+
+  // Cross-view request handoff: select the requested model request and
+  // scroll to its first record. A request whose record has not rendered yet
+  // stays pending; `allRecords` in the deps retries as the history window grows.
+  useEffect(() => {
+    if (inspectRequest === null || appliedRequestFocus.current === inspectRequest) return
+    const request = sessionRequestNumbers?.find(candidate =>
+      candidate.purpose !== 'compaction' && candidate.turn === inspectRequest.turn && candidate.step === inspectRequest.step)
+    const firstIndex = request === undefined ? undefined : requestBoundaries.get(requestKey(request.turn, request.group))
+    const first = allRecords.find(record => record.cell.index === firstIndex)
+    if (request === undefined || first === undefined) return
+    appliedRequestFocus.current = inspectRequest
+    if (request.turn !== null && collapsedTurns.has(request.turn)) onToggleTurn(request.turn)
+    selectRequest({ identity: requestIdentity(request) })
+    pendingScrollRecordId.current = trajectoryRecordId(first.cell)
+    onInspectApplied?.()
+  }, [inspectRequest, sessionRequestNumbers, requestBoundaries, allRecords, collapsedTurns, onToggleTurn, onInspectApplied])
 
   // Cross-view inspect handoff: resolve the requested call to its record,
   // open its summary, and remember the row to scroll once the un-collapsed

@@ -1,0 +1,11 @@
+- region "Feishu":
+  - text: Recommended plugin Official
+  - strong: Feishu
+  - paragraph: Use Feishu documents, messages, and other authorized features in conversations.
+  - status: These packages have install scripts that pnpm did not run. Once allowed, the scripts run here with your permissions, and the permission is saved in this profile. Allow only packages you trust.
+  - list:
+    - listitem:
+      - code: "@larksuite/cli@1.0.97"
+  - text: Available in all conversations when enabled
+  - button "Not now"
+  - button "Allow these scripts and retry"

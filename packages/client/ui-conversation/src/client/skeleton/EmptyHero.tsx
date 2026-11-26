@@ -2,7 +2,7 @@
 // phase does not remount its textarea.
 
 import { useState } from 'react'
-import type { ReactNode, RefObject } from 'react'
+import type { ReactNode, Ref } from 'react'
 import {
   FISH_LOGO_PATH, FISH_LOGO_VIEWBOX, IconChevronDownOutlineRegular, IconFolderCloseRegular, IconFolderOpenRegular,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -36,7 +36,7 @@ export function workspaceLabel(cwd: string): string {
  * @returns the chip button element.
  */
 export function WorkspaceChip({ buttonRef, label, menuOpen = false, onClick, t }: {
-  buttonRef?: RefObject<HTMLButtonElement>
+  buttonRef?: Ref<HTMLButtonElement>
   label?: string | undefined
   menuOpen?: boolean
   onClick?: () => void
@@ -148,7 +148,7 @@ export function HeroShell({ t, renderSlot, headline, children }: HeroShellProps)
             }}
             onPointerLeave={() => { setHovering(false) }}
           >
-            {renderSlot('conversation.hero.brand.mark', { size: 34, className: css.fish }, {
+            {renderSlot('conversation.hero.brand.mark', { size: 34 }, {
               fallback: <HeroFish hovering={hovering} />,
             })}
           </span>

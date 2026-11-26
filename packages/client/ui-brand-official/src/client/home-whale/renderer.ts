@@ -9,11 +9,16 @@ const ATLAS = { width: 192, height: 108, columns: 12, frames: 137 } as const
 export interface PixelWhaleHandle {
   /** Request one playback; ignored while playing, failed, hidden, or under reduced motion. */
   play: () => void
+  /**
+   * Repaint at the next frame with the canvas's current computed ink, coalescing calls and ignored after disposal.
+   * The owner calls it when the theme palette changes; size changes are observed here.
+   */
+  redraw: () => void
   /** Release frame work, atlas pixels, and observers; late atlas loads are ignored. */
   dispose: () => void
 }
 
-const NO_WHALE: PixelWhaleHandle = { play: () => {}, dispose: () => {} }
+const NO_WHALE: PixelWhaleHandle = { play: () => {}, redraw: () => {}, dispose: () => {} }
 
 /**
  * Bind one noninteractive, initially transparent home decoration.
@@ -197,11 +202,8 @@ export function attachPixelWhale(canvas: HTMLCanvasElement, options: WhaleArtwor
     visible = entry?.isIntersecting ?? false
     resume()
   })
-  const themeObserver = new MutationObserver(scheduleResize)
   sizeObserver.observe(canvas)
   visibilityObserver.observe(canvas)
-  themeObserver.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'style'] })
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-ds-theme-source', 'style'] })
   document.addEventListener('visibilitychange', resume)
   media.addEventListener('change', resume)
   resize()
@@ -217,9 +219,8 @@ export function attachPixelWhale(canvas: HTMLCanvasElement, options: WhaleArtwor
     code = undefined
     sizeObserver.disconnect()
     visibilityObserver.disconnect()
-    themeObserver.disconnect()
     document.removeEventListener('visibilitychange', resume)
     media.removeEventListener('change', resume)
   }
-  return { play, dispose }
+  return { play, redraw: scheduleResize, dispose }
 }

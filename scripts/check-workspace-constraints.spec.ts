@@ -397,6 +397,21 @@ describe('package payload constraints', () => {
       .toContainEqual(expect.stringContaining('exports["./provider/locale/*.json"] must be'))
   })
 
+  it('publishes the MCP server row plugin and its locale resources under the manager package\'s server subpath', () => {
+    const dir = 'packages/mcp/mcp-manager'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    const errorsWith = (change: Partial<WorkspaceManifest['manifest']>): string[] =>
+      checkWorkspaceManifest({ dir, manifest: { ...manifest, ...change } })
+    const without = (file: string): string[] => manifest.files!.filter(listed => listed !== file)
+    expect(errorsWith({})).toEqual([])
+    expect(errorsWith({ files: without('lib/server-row.js') })).toContainEqual(expect.stringContaining('package.json files must be'))
+    expect(errorsWith({ files: without('locale/server/*.json') })).toContainEqual(expect.stringContaining('package.json files must be'))
+    expect(errorsWith({ exports: { ...manifest.exports, './server': { types: './lib/types/server-row.d.ts', default: './lib/index.js' } } }))
+      .toContainEqual(expect.stringContaining('exports["./server"] must expose'))
+    expect(errorsWith({ exports: { ...manifest.exports, './server/locale/*.json': './locale/*.json' } }))
+      .toContainEqual(expect.stringContaining('exports["./server/locale/*.json"] must be'))
+  })
+
   it('publishes the directory of each locale detail document after the locale resources', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
     onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })

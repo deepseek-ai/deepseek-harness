@@ -6,6 +6,11 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { PaneId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { trackSessionDrags } from '../src/client/sidebar-chat/index.tsx'
 import { SessionDropZone, type SessionDrag, type SessionDropZoneProps } from '../src/client/sidebar-chat/SessionDropZone.tsx'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
+
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
+
 
 const MAIN = 'main' as SessionId
 const OTHER = 'other' as SessionId
@@ -150,6 +155,7 @@ describe('Session drop zone', () => {
       useSessionDrag: <T,>(select: (value: SessionDrag | undefined) => T) => select(source.getSnapshot()),
       openAside,
       t: (key: string) => key === 'open.sidebar' ? 'Open in sidebar' : key,
+      useDocumentPortal: () => Portal,
     } as Partial<SessionDropZoneProps> as SessionDropZoneProps
     const view = render(<SessionDropZone {...props} />)
     return {
@@ -177,9 +183,9 @@ describe('Session drop zone', () => {
     const label = screen.getByText('Open in sidebar')
     // The zone portals to the body so it stacks above the narrow-window drawer mask.
     const zone = document.querySelector<HTMLElement>('[data-session-drop-zone]')!
-    expect(zone.parentElement).toBe(document.body)
+    expect(document.body.contains(zone)).toBe(true)
     expect([zone.style.left, zone.style.top, zone.style.width, zone.style.height]).toEqual(['924px', '0px', '516px', '800px'])
-    expect(view.container.innerHTML).toBe('')
+    expect(view.container.contains(zone)).toBe(false)
     expect(zone.hasAttribute('data-active')).toBe(false)
 
     const over = fire(zone, 'dragOver')

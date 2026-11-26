@@ -1,0 +1,26 @@
+# This in-process delivery scenario does not use generated Remote reflection metadata.
+- id: typert-loader
+  disabled: true
+- id: llm-deepseek
+  disabled: true
+- id: plugin-package-inventory-deepseek
+  disabled: true
+# Search is outside this scenario and must not vary with replay's placeholder credentials.
+- id: tool-web
+  config:
+    search: false
+- id: agent-default-model
+  config:
+    provider: source-fixture
+    model: deterministic
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: source-fixture
+            name: Source fixture
+            models:
+              - id: deterministic
+    - id: source-task-input
+      name: './source-task-input.ts'

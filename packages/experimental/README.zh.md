@@ -49,6 +49,7 @@ kind: "package-group"
 | [`webhook`](webhook/README.zh.md) | 已认证投递分发与 Workspace Session 创建 | `ctx.webhookRuntime` |
 | [`webhook-github`](webhook-github/README.zh.md) | 带签名的 GitHub webhook 入口 | — |
 | [`session-title-all-prompts-llm`](session-title-all-prompts-llm/README.zh.md) | 根据所有人类提示生成会话标题 | — |
+| [`llm-mock`](llm-mock/README.zh.md) | 返回固定回复、无需密钥的模拟模型路由 | — |
 | [`tool-terminal`](tool-terminal/README.zh.md) | 持久终端工具 | — |
 | [`terminal-panel`](terminal-panel/README.zh.md) | Web 侧栏中的 Agent 终端与只读的用户终端工具 | — |
 | [`tool-ralph`](tool-ralph/README.zh.md) | 有界重复委派任务 | — |
@@ -71,6 +72,7 @@ kind: "package-group"
 | [`client-ui-read-aloud`](client-ui-read-aloud/README.zh.md) | 消息操作栏中的朗读按钮 | — |
 | [`read-aloud-bundle`](read-aloud-bundle/README.zh.md) | 默认禁用的可选朗读组合 | — |
 | [`client-ui-stats`](client-ui-stats/README.zh.md) | Web 端按轮次与步骤展示上下文、耗时、缓存与工具成本 | — |
+| [`client-ui-sidechat`](client-ui-sidechat/README.zh.md) | `/side` 把对话分出为右侧栏中的侧栏对话 | — |
 | [`auto-review`](auto-review/README.zh.md) | 显式 Web 层，在每个原生或 PTC inner 工具调用前使用同一模型审查 | — |
 | [`subagent-oar`](subagent-oar/README.zh.md) | 通过 OAR 执行外部编程智能体的独立任务 | `ctx.subagents` |
 | [`tool-subagent-oar`](tool-subagent-oar/README.zh.md) | 为每项委派任务选择配置的外部代理 | `ctx.tools` |

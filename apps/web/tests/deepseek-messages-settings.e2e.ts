@@ -82,11 +82,12 @@ it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', '
       await dialog.getByRole('button', { name: '模型', exact: true }).click()
       const edit = dialog.getByRole('button', { name: `编辑 ${messages ? 'DeepSeek API (deepseek-official)' : provider}`, exact: true })
       await edit.click()
-      // This row's card alone. Between the credential delete and the profile
+      // This row's card alone, found by the row's name because an open row has
+      // no Edit button. Between the credential delete and the profile
       // write that restores native auth, google's row reports no usable
       // provider and the page mounts the DeepSeek first-run setup card, whose
       // key field would answer a dialog-wide count.
-      const card = edit.locator('xpath=ancestor::li')
+      const card = dialog.locator('li').filter({ has: page.getByText(messages ? 'DeepSeek API' : provider, { exact: true }) })
       const key = card.getByLabel('API 密钥', { exact: true })
       const clear = card.getByRole('button', { name: '清除 API 密钥', exact: true })
       await clear.click()
@@ -111,7 +112,7 @@ it.skipIf(webSnapshotMode() === 'record').each(['deepseek-official', 'google', '
       expect(await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8')).not.toContain('fixture-saved-key')
       await edit.click()
       await dialog.getByText(`已检测到环境变量（${envRef}）`, { exact: true }).waitFor()
-      await dialog.getByText('自定义设置', { exact: true }).click()
+      await dialog.getByRole('button', { name: '高级设置', exact: true }).click()
       expect(await dialog.getByLabel('API 地址', { exact: true }).inputValue()).toBe(baseURL)
       expect(await clear.count()).toBe(0)
     } finally {
@@ -145,7 +146,10 @@ it.skipIf(webSnapshotMode() === 'record').each([{ name: 'Chromium', engine: chro
       await dialog.getByRole('button', { name: '模型', exact: true }).click()
       const edit = dialog.getByRole('button', { name: '编辑 anthropic', exact: true })
       await edit.click()
-      const card = edit.locator('xpath=ancestor::li')
+      // This row's card alone, found by the row's name because an open row has
+      // no Edit button: the dialog can show another provider's card, with its
+      // own key field, beside this row.
+      const card = dialog.locator('li').filter({ has: page.getByText('anthropic', { exact: true }) })
       const key = card.getByLabel('API 密钥', { exact: true })
       const replace = card.getByRole('button', { name: '更换 API 密钥', exact: true })
       const clear = card.getByRole('button', { name: '清除 API 密钥', exact: true })
@@ -227,7 +231,6 @@ it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webki
       const dialog = page.getByRole('dialog', { name: '设置', exact: true })
       await dialog.getByRole('button', { name: '模型', exact: true }).click()
       const setup = dialog.getByText('DeepSeek API', { exact: true }).locator('xpath=ancestor::li')
-      await setup.getByText('自定义设置', { exact: true }).click()
       await dialog.getByRole('button', { name: '添加模型提供商' }).click()
       await dialog.getByRole('tab', { name: '自定义模型 API' }).click()
       const custom = dialog.getByRole('tabpanel', { name: '自定义模型 API' })
@@ -235,10 +238,13 @@ it.each([{ name: 'Chromium', engine: chromium }, { name: 'WebKit', engine: webki
       const target = custom.getByLabel('模型 ID 1', { exact: true })
       await target.fill('foreign-model')
       const before = scaffold.ctx.settings.describe({ redactSecrets: true }).map(row => ({ ns: row.ns, value: row.value }))
-      const source = setup.getByRole('button', { name: '调整模型顺序 1', exact: true })
+      const rows = setup.locator('[data-row-key]')
+      const order = await rows.evaluateAll(rows => rows.map(row => row.textContent))
+      expect(order[0]).toContain('deepseek-flash')
+      const source = rows.first().getByText('deepseek-flash', { exact: true })
       await source.dragTo(target)
       expect(await target.inputValue()).toBe('foreign-model')
-      expect(await setup.getByLabel('模型 ID 1', { exact: true }).inputValue()).toBe('deepseek-flash')
+      expect(await rows.evaluateAll(rows => rows.map(row => row.textContent))).toEqual(order)
       expect(scaffold.ctx.settings.describe({ redactSecrets: true }).map(row => ({ ns: row.ns, value: row.value }))).toEqual(before)
       expect(tripwire.pageErrors).toEqual([])
     } finally {
@@ -294,7 +300,7 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     const replace = messages.getByRole('button', { name: '更换 API 密钥', exact: true })
     await messages.getByText(`sk-messa${'•'.repeat(10)}ding`, { exact: true }).waitFor()
     expect(await key.count()).toBe(0)
-    await messages.getByText('自定义设置', { exact: true }).click()
+    await messages.getByRole('button', { name: '高级设置', exact: true }).click()
     expect(await messages.getByLabel('API 地址', { exact: true }).getAttribute('placeholder'))
       .toBe('https://api.deepseek.com/anthropic（默认使用环境 DEEPSEEK_BASE_URL）')
     await compareOrRefreshGolden(join(EXPECTED, 'cards.expected.md'),
@@ -302,6 +308,7 @@ describe.skipIf(webSnapshotMode() === 'record')('web e2e: DeepSeek Messages sett
     await replace.click()
     await key.fill('sk-e2e-messages')
     await messages.getByLabel('API 地址', { exact: true }).fill('https://messages.example/anthropic')
+    await messages.getByRole('button', { name: '模型选项 1', exact: true }).click()
     expect(await messages.getByLabel('模型 ID 1').inputValue()).toBe('deepseek-flash')
     await messages.getByLabel('显示名称 1', { exact: true }).fill('Messages Flash')
     await messages.getByRole('button', { name: '保存', exact: true }).click()

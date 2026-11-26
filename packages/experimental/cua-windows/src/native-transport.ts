@@ -20,7 +20,7 @@ export interface WindowsConnection {
  * @param subprocess Managed process owner for the WSL bridge.
  * @param config Helper executable and connection/cleanup limits.
  * @param endpoint Named pipe reported by the verified service lease.
- * @param runtimeKey Expected executable digest, verified again by the Windows bridge.
+ * @param runtimeKey Expected helper artifact digest, verified again by the Windows bridge.
  * @param transport Native pipe or standard streams through WSL interoperation.
  * @returns Owned connection; disposal joins the bridge process after stream closure.
  */

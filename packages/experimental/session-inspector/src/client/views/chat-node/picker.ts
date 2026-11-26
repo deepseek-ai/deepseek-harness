@@ -152,7 +152,7 @@ export class InspectorChatPicker {
     this.suppress(event)
     const hit = this.hit(event)
     for (let element: Element | null = hit?.element ?? null; element !== null; element = element.parentElement) {
-      if (!(element instanceof HTMLElement) || !element.matches('[data-conversation-scroll], [data-step-process-body]')) continue
+      if (!element.matches('[data-conversation-scroll], [data-step-process-body]')) continue
       const vertical = event.deltaY < 0 ? element.scrollTop > 0 : element.scrollTop + element.clientHeight < element.scrollHeight
       const horizontal = event.deltaX < 0 ? element.scrollLeft > 0 : element.scrollLeft + element.clientWidth < element.scrollWidth
       if (!(event.deltaY !== 0 && vertical || event.deltaX !== 0 && horizontal)) continue

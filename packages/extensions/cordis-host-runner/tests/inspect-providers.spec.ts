@@ -5,6 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
+import { queryServiceApi } from '../src/api-catalog.ts'
 import DynamicCordisRunnerService from '../src/index.ts'
 import { hostInspectProviders } from '../src/inspect-providers.ts'
 
@@ -26,6 +27,24 @@ async function host(): Promise<Context> {
 }
 
 describe('the first-party Host inspect providers', () => {
+  it('exposes Schedule submission, candidate text, and persistence acknowledgement', () => {
+    const result = queryServiceApi('schedule')
+    const acknowledgement: unknown = expect.stringContaining(
+      'Resolves when the Session inbox and task receipt are both persisted, not when the model responds.',
+    )
+    expect(result).toHaveProperty('service.access.hardDependency', {
+      inject: ['schedule'], expression: 'ctx.schedule',
+    })
+    expect(result).toHaveProperty('service.methods', expect.arrayContaining([expect.objectContaining({
+      signature: 'async submit(id: ScheduleId, candidate: AutomationCandidate): Promise<void>',
+      returns: acknowledgement,
+    })]))
+    const declaration: unknown = expect.stringMatching(/\breadonly text:\s*string;/)
+    expect(result).toHaveProperty('referencedTypes', expect.arrayContaining([expect.objectContaining({
+      name: 'AutomationCandidate', declaration,
+    })]))
+  })
+
   it('registers with the runner and withdraws on disposal', async () => {
     const ctx = await host()
     const fiber = ctx.plugin(DynamicCordisRunnerService, {})

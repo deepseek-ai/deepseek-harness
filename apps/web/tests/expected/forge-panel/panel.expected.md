@@ -2,6 +2,9 @@
   - region "环境":
     - heading "环境" [level=2]
     - text: dsh-{{worktree}} {{cwd}}/workspace/.agents/worktrees dsh-{{worktree}} 工作树 · 基于 release
+    - button "本地变更 · 0 个文件，新增 0 行，删除 0 行": 本地变更
+    - text: +0 −0
+    - button "本地变更操作"
   - region "变更请求":
     - heading "变更请求" [level=2]
     - text: "1"

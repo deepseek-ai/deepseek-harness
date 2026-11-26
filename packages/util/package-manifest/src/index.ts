@@ -8,6 +8,7 @@ export type {
   ClientModuleStyleContext,
   ClientModuleMeta,
   ClientModuleMetaFactory,
+  ClientAsyncRequireOptions,
   ClientBundleRequire,
   ClientModuleFactory,
   DshClientModuleManifest,

@@ -69,6 +69,7 @@ export interface SessionRetainInfo {
 | `mainView` | ui-session 声明，ui-workspace 调用 | `{ conversation: true }` |
 | `sidebarView` | ui-sidebar-right | `{ conversation: true }` |
 | `sidebarChat` | ui-subagent | `{ conversation: true }` |
+| `sidechat` | client-ui-sidechat（实验） | `{ conversation: true }` |
 | `recentViews` | ui-workspace | 不写：只保连接 |
 | `draft` | ui-conversation | `{ connection: false }` |
 | `using()` 调用方 | 各自的包 | 不写 |

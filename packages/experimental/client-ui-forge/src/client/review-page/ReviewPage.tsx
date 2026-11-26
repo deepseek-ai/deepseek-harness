@@ -6,7 +6,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  GlobalStandardProps, HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsStore,
+} from '@deepseek-ai/dsh-client-ui-slots'
+// Type-only: the `useMediaQuery` standard prop merge.
+import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeReviewChangeRequest, ForgeReviewFrame } from '../../types.ts'
@@ -71,6 +75,7 @@ export interface ReviewPageInjected extends ReviewSummaryFace {
 /** Full props of the review page. */
 export type ReviewPageProps = InjectFace<ReviewPageInjected> & PropsStore<ReturnType<typeof createReviewStore>>
   & Pick<PropsRenderSlots<'forge.review.conversation'>, 'renderSlot' | 'SessionProvider'> & PropsLocale<typeof NS>
+  & Pick<GlobalStandardProps, 'useMediaQuery'>
 
 /** Selector hooks over a fixed value, for the parts of the changes view the review page does not offer. */
 function fixedHook<T>(value: T): SnapshotSelectorHook<T> {
@@ -139,6 +144,7 @@ interface DetailPaneProps {
   readonly conversationId: SessionId | undefined
   readonly onConversation: (sessionId: SessionId | null) => void
   readonly unseenQuotes: number
+  readonly coarsePointer: boolean
   readonly page: ReviewPageProps
 }
 
@@ -149,7 +155,7 @@ interface DetailPaneProps {
  * @returns the detail.
  */
 function DetailPane({
-  url, read, tab, listHidden, now, locale, cardActions, conversationId, onConversation, unseenQuotes, page,
+  url, read, tab, listHidden, now, locale, cardActions, conversationId, onConversation, unseenQuotes, coarsePointer, page,
 }: DetailPaneProps): ReactNode {
   const { actions, changes, chat, quoteReview, quoteThread, readDescription, readActivity, addComment, renderSlot } = page
   const { SessionProvider, useStore, t } = page
@@ -194,6 +200,7 @@ function DetailPane({
           renderSlot={renderSlot} SessionProvider={SessionProvider} t={t} />
       )}
       unseenQuotes={unseenQuotes}
+      coarsePointer={coarsePointer}
       t={t}
     />
   )
@@ -201,12 +208,13 @@ function DetailPane({
 
 /**
  * Render the review page.
- * @param props - the Host streams and reads, the card actions, the page store, and copy.
+ * @param props - the Host streams and reads, the card actions, the page store, the media query hook, and copy.
  * @returns the page.
  */
 export function ReviewPage(props: ReviewPageProps): ReactNode {
   const { useLocale, openLists, openChangeRequest, subscribeReset, refresh, actionsFor, copyText, useStore, actions, t } = props
   const locale = useLocale(value => value)
+  const coarsePointer = props.useMediaQuery('(pointer: coarse)')
   const now = useMinuteClock()
   const selected = useStore(state => state.selected)
   const tab = useStore(state => state.tab)
@@ -291,6 +299,7 @@ export function ReviewPage(props: ReviewPageProps): ReactNode {
               conversationId={conversation}
               onConversation={onConversation}
               unseenQuotes={unseenQuotes}
+              coarsePointer={coarsePointer}
               page={props}
             />
           )}

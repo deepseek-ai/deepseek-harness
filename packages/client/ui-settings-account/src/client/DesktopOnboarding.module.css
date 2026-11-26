@@ -97,9 +97,6 @@
 .welcomeArtwork { position: absolute; left: -67px; top: -40px; width: 1331px; height: auto; }
 
 .illustration img { display: block; width: 100%; height: auto; }
-.illustration .darkIllustration { display: none; }
-:global(body[data-ds-dark-theme]) .lightIllustration { display: none; }
-:global(body[data-ds-dark-theme]) .darkIllustration { display: block; }
 
 .credit {
   display: grid;

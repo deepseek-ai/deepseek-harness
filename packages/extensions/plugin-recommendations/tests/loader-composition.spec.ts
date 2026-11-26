@@ -34,14 +34,20 @@ class Model extends LlmAdapter {
   }
 }
 
-it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
+/** The shipped optional plugin the cards enable; the installation provides it switched off. */
+const SEARCH = '@deepseek-ai/dsh-experimental-session-search'
+
+/**
+ * Boot a profile whose base bundle composes the real services, with {@link SEARCH} in the installation and `connector`,
+ * when given, as a profile dependency that is switched off.
+ */
+async function bootProfile(connector?: string) {
   const home = await mkdtemp(join(tmpdir(), 'dsh-recommendations-'))
   let owner: Context | undefined
   onTestFinished(async () => { await owner?.fiber.dispose(); await rm(home, { recursive: true, force: true }) })
   const dir = join(home, 'profiles', 'test')
   const anchor = join(home, 'package.json')
-  const name = '@deepseek-ai/dsh-experimental-session-search'
-  await writeFile(anchor, JSON.stringify({ name: 'installation', dependencies: { [name]: '1.0.0' } }))
+  await writeFile(anchor, JSON.stringify({ name: 'installation', dependencies: { [SEARCH]: '1.0.0' } }))
   initProfile(dir, ['fixture-base'])
   async function bundle(root: string, name: string, patch: string) {
     const path = join(root, 'node_modules', name)
@@ -53,9 +59,21 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
     await writeFile(join(path, 'cordis.patch.yml'), patch)
     return path
   }
+  /** A bundle whose one row, `id`, provides `service` once the bundle is switched on. */
+  async function probe(root: string, name: string, id: string, service: string) {
+    const path = await bundle(root, name, JSON.stringify([{ insert: [{ id, name: './plugin.mjs' }] }]))
+    await writeFile(join(path, 'plugin.mjs'), `export function apply(ctx) { ctx.provide(${JSON.stringify(service)}, true) }\n`)
+  }
   await bundle(dir, 'fixture-base', await readFile(new URL('./fixtures/cordis.yml', import.meta.url), 'utf8'))
-  const plugin = await bundle(home, name, JSON.stringify([{ insert: [{ id: 'recommendation-probe', name: './plugin.mjs' }] }]))
-  await writeFile(join(plugin, 'plugin.mjs'), 'export function apply(ctx) { ctx.provide("recommendationProbe", true) }\n')
+  await probe(home, SEARCH, 'recommendation-probe', 'recommendationProbe')
+  if (connector !== undefined) {
+    // Bundle directories resolve from the installation first, where this copy then stands in for the workspace's own
+    // connector package; declaring it in the profile makes it an installed bundle whose selection stays off.
+    await probe(home, connector, 'connector-probe', 'connectorProbe')
+    const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as { dependencies: Record<string, string> }
+    manifest.dependencies[connector] = '1.0.0'
+    await writeFile(join(dir, 'package.json'), JSON.stringify(manifest))
+  }
   await writeFile(join(dir, 'cordis.yml'), '[]\n')
   const profile: ProfileContext = {
     name: 'test', dir, home, cwd: home, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: anchor,
@@ -76,6 +94,12 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
   await ctx.hmr.runExclusive(async () => {})
   expect([...ctx.loader.entries()].filter(entry => entry.options.id === 'action-cards')).toHaveLength(1)
+  return { ctx, dir }
+}
+
+it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader/HMR queue: %s', async (scenario) => {
+  const { ctx, dir } = await bootProfile()
+  const name = SEARCH
   const model = new Model()
   ctx.llm.registerAdapter(['mock'], model)
   const agent = await ctx.agentLoop.create(brandString<SessionId>('recommendation-live'), { provider: 'mock', model: 'test' })
@@ -122,4 +146,15 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   await agent.whenIdle()
   expect(model.requests).toHaveLength(1)
   expect(JSON.stringify(model.requests[0]?.messages)).toContain('enabled means the plugin is on now')
+})
+
+it('composes the skill\'s catalog entry from the real profile, and again after a Plugin Manager change', async () => {
+  const linear = '@deepseek-ai/dsh-linear'
+  const { ctx } = await bootProfile(linear)
+  const entry = async () => (await ctx.skills.list()).find(skill => skill.name === 'official-plugins')?.description
+  // Linear is installed and switched off, so a card could still offer it beside the six connectors the profile lacks.
+  expect(await entry()).toContain('; or a task needs Feishu, WeCom, DingTalk, Tencent Meeting, Notion, Tencent Docs or Linear. ')
+  expect((await ctx.pluginManager.setBundleEnabled(linear, true)).application).toBe('applied')
+  expect([...ctx.loader.entries()].find(item => item.options.id === 'connector-probe')?.fiber).toBeDefined()
+  expect(await entry()).toContain('; or a task needs Feishu, WeCom, DingTalk, Tencent Meeting, Notion or Tencent Docs. ')
 })

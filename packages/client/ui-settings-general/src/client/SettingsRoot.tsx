@@ -14,7 +14,6 @@
  * mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   ConnectionIndicator, Tooltip, useModalLayer,
@@ -52,9 +51,10 @@ type PanelProps = {
 }
 
 /**
- * Body-portaled modal layer: full-viewport mask + centered panel. Close paths: the
- * header button, a mask click, and document-level Escape (mounted only while
- * open, so the listener lifetime is the panel's).
+ * Modal layer the root places in the application document's body: full-viewport
+ * mask + centered panel. Close paths: the header button, a mask click, and
+ * document-level Escape (mounted only while open, so the listener lifetime is
+ * the panel's).
  */
 function SettingsPanel({ rows, renderSlot, renderFactorySlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
@@ -68,8 +68,7 @@ function SettingsPanel({ rows, renderSlot, renderFactorySlot, activeId, onSelect
   // Portalled beside #root like the Modal primitive: a covering surface mounted
   // inside the root would precede the columns' chrome in document order, so a
   // chrome row that declares window drag after it would override its subtraction.
-  // Beside the root, base.css's `body > :not(#root)` rule subtracts it instead.
-  return createPortal((
+  return (
     <div className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div ref={panel} tabIndex={-1} data-shortcut-modal="settings" className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -112,7 +111,7 @@ function SettingsPanel({ rows, renderSlot, renderFactorySlot, activeId, onSelect
         </div>
       </div>
     </div>
-  ), document.body)
+  )
 }
 
 /**
@@ -123,8 +122,9 @@ function SettingsPanel({ rows, renderSlot, renderFactorySlot, activeId, onSelect
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
     wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, renderFactorySlot, t,
-    useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts,
+    useDesktopUpdate, openDesktopUpdate, useStore, actions, useShortcuts, useDocumentPortal,
   } = props
+  const Portal = useDocumentPortal()
   const { open, activeId } = useStore(state => state)
   const shortcut = useShortcuts(rows => rows.find(row => row.id === 'settings.open'))
   const { close, openSection } = actions
@@ -261,14 +261,16 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
           t={t} view={desktopUpdate} onOpen={openDesktopUpdate} />
       </div>
       {open && (
-        <SettingsPanel
-          rows={rows}
-          renderSlot={renderSlot}
-          renderFactorySlot={renderFactorySlot}
-          activeId={activeId}
-          onSelect={actions.select}
-          onClose={close}
-        />
+        <Portal>
+          <SettingsPanel
+            rows={rows}
+            renderSlot={renderSlot}
+            renderFactorySlot={renderFactorySlot}
+            activeId={activeId}
+            onSelect={actions.select}
+            onClose={close}
+          />
+        </Portal>
       )}
       {/* Dialog chrome and `#root` inert ownership live inside each step's
           visible branch. A step still deciding (private facts loading)

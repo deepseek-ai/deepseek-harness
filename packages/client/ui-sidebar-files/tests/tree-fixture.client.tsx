@@ -1,7 +1,7 @@
 /** Direct component fixture for the tree's framework seats; integration specs use the real renderer. */
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { makeTranslate, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { FactoryComponentPropsOf, FactoryLocalComponent } from '@deepseek-ai/dsh-client-ui-slots'
 import { FileTree } from '../src/client/FileTree.tsx'
 import type { FileTreeInput, TreeEntry } from '../src/client/FileTree.tsx'
@@ -26,7 +26,7 @@ const seats = {
   usePanelInfo: unused,
   useResource: unused,
   useContextMenu: unused,
-  ...responsiveHooks(),
+  ...responsiveHooks(), ...themeHooks(),
 }
 
 /** Supply selected local Components through the same local-props-only binding as the renderer. */

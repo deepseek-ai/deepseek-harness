@@ -33,6 +33,8 @@ export interface DesktopOnboardingProps {
   retry(this: void): Promise<boolean>
   /** Active interface language selects the matching illustration artwork. */
   locale: string
+  /** Resolved palette of the active theme; selects the light or dark illustration artwork. */
+  colorScheme: 'light' | 'dark'
   /** Whether the page asks for reduced motion; step changes then skip the fade-out. */
   reducedMotion: boolean
   t: (key: AccountKey) => string

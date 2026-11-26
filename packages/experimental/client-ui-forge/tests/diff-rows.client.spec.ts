@@ -26,7 +26,7 @@ function brief(segment: DiffSegment): unknown {
 
 function file(overrides: Partial<ForgeDiffFile> = {}): ForgeDiffFile {
   return {
-    path: 'src/a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest',
+    path: 'src/a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, submodule: false, layer: 'implementation', digest: 'digest',
     additions: 2, deletions: 2, hunks: HUNKS, ...overrides,
   }
 }

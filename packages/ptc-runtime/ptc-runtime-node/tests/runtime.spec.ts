@@ -218,13 +218,16 @@ describe.each(modes)('Node program process in $executionMode with scoped REPL $r
   })
 
   it.each([{}, { timeoutMs: null }] as const)('cancels a live program and closes its managed process with %j', async (timing) => {
-    const { run } = await setup()
-    const entered = Promise.withResolvers<undefined>()
+    const { run, cwd } = await setup()
     const controller = new AbortController()
-    const active = run({ ...timing, program: 'void tools.enter({}); for (;;) {}', signal: controller.signal, bindings: bindings({ enter: async () => { entered.resolve(undefined); return null } }) })
-    await entered.promise
-    controller.abort('stop')
-    expect((await active).error).toEqual({ kind: 'abort', message: retained ? 'execution canceled; retained variables were cleared' : 'stop' })
+    // On Windows a control message queued behind an unfinished pipe write waits for the child's event loop,
+    // which this program never runs again; readiness is therefore a synchronous file write.
+    const active = run({ ...timing, program: 'const fs = await import("node:fs"); fs.writeFileSync("entered-loop", "ready"); for (;;) {}', signal: controller.signal, bindings: [] })
+    try {
+      await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
+      controller.abort('stop')
+      expect((await active).error).toEqual({ kind: 'abort', message: retained ? 'execution canceled; retained variables were cleared' : 'stop' })
+    } finally { controller.abort(); await active }
   })
 
   // A retained process keeps its descendants between programs until its owner is released.
@@ -293,7 +296,8 @@ describe.each(modes)('Node program process in $executionMode with scoped REPL $r
     'const fs = await import("node:fs"); fs.writeSync(7,JSON.stringify({t:"q",i:"forged",m:"invoke",a:[1,"tools","undeclared",[]]})+"\\n"); await new Promise(()=>{});',
   ])('refuses hostile program control traffic', async (program) => {
     const { run } = await setup({ maxMessageBytes: 1024 })
-    expect((await run({ program, bindings: [] })).error?.kind).toBe('protocol')
+    const { error } = await run({ program, bindings: [] })
+    expect(error, error?.message).toMatchObject({ kind: 'protocol' })
   })
 
   it.skipIf(!sandboxUsable)('applies read-only confinement to direct Node filesystem writes', async () => {

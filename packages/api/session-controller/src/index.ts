@@ -416,19 +416,11 @@ export class SessionController extends TypertRemoteService {
    * Fork one cold-readable exact event prefix into a new Session. An omitted
    * boundary selects the latest completed-turn prefix; an open cut receives
    * synthetic fork closers.
-   * @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
+   * @param request - source Session, optional exact inclusive event boundary, migration preflight choice, and child origin.
    * @returns the new Session identity.
    */
   @Remote('fork')
-  async fork(request: SessionForkRequest): Promise<SessionForkValue> {
-    if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === undefined) {
-      const stored = await this.ctx.get('sessionPersistence')?.stat(request.sessionId)
-      if (stored?.formatStatus === 'migration-required' && this.ctx.sessions.get(request.sessionId) === undefined) {
-        throw new RemoteError('session/migration-required', 'Open the source Session to complete migration before forking', {
-          sessionId: request.sessionId,
-        })
-      }
-    }
+  fork(request: SessionForkRequest): Promise<SessionForkValue> {
     return this.commands.fork(request)
   }
 

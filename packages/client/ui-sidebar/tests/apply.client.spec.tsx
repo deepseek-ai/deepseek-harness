@@ -22,7 +22,7 @@ afterEach(async () => {
 })
 
 function SidebarFrame({ renderSlot }: PropsRenderSlots<'sidebar'>) {
-  return renderSlot('sidebar', { collapsed: false, width: 300, drawer: false })
+  return renderSlot('sidebar', { collapsed: false, width: 300, drawer: false, animating: false })
 }
 
 async function bench(declare = true) {

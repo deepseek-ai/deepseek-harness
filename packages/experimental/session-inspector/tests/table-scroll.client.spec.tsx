@@ -6,6 +6,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createDocumentPortal } from '@deepseek-ai/dsh-client-ui-renderer/src/client/document-portal.tsx'
 import { InspectorTable, type InspectorTableProps } from '../src/client/views/InspectorTable.tsx'
 import type { InspectorRecord, InspectorRow } from '../src/client/views/table-model.ts'
 import { en } from '../src/client/locales.ts'
@@ -20,6 +21,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** The renderer's portal into this test document, as a mounted Slot receives it. */
+const Portal = createDocumentPortal(document)
+
 function renderTable(initial: readonly InspectorRow[]) {
   installInspectorTableGeometry()
   const rows = createSnapshotStore(initial)
@@ -27,11 +31,11 @@ function renderTable(initial: readonly InspectorRow[]) {
     type: row.key, identity: row.key, location: '', value: { value: `detail:${row.key}` },
   } satisfies InspectorRecord]))
   const props: InspectorTableProps = {
-    title: 'Session Log', flash: false, showTime: true, useRows: bindSnapshotSelector(rows),
+    title: 'Session Log', flash: false, reducedMotion: false, showTime: true, useRows: bindSnapshotSelector(rows),
     useRecord: ((key: string) => records.get(key)),
     typeOf: key => records.get(key)?.type,
     useSession: bindSnapshotSelector(createSnapshotStore(sessionSnapshot('scroll-session' as SessionId))),
-    loadOlder: async () => {}, t: makeTranslate(en),
+    loadOlder: async () => {}, t: makeTranslate(en), Portal,
   }
   const ui = render(<InspectorTable {...props} />)
   const scroller = ui.getByRole('table').parentElement!

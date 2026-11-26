@@ -18,7 +18,7 @@ import { ApiKeyInput } from '../src/client/ApiKeyInput.tsx'
 import { ProviderEditor, pathOps } from '../src/client/ProviderEditor.tsx'
 import type { ProviderEditorProps } from '../src/client/ProviderEditor.tsx'
 import {
-  DeepSeekModelsEditor, formatCapacity, modelDrafts, parseCapacity, validateDeepSeekModels,
+  DeepSeekModelsEditor, formatCapacity, modelDrafts, modelRowFailures, parseCapacity, validateDeepSeekModels,
 } from '../src/client/DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from '../src/client/apiKey.ts'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -37,9 +37,43 @@ const openaiCopy = (template: string): string => providerCopy(template, OPENAI_T
 const DEEPSEEK_TARGET = { provider: 'deepseek-official', displayName: 'DeepSeek' }
 const deepSeekCopy = (template: string): string => providerCopy(template, DEEPSEEK_TARGET)
 
-/** Open one row's capacity disclosure (1-based, as the labels read). */
+/** One model row's fold button (1-based, as the labels read). */
+function rowToggle(position: number): HTMLElement {
+  return screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`)
+}
+
+/** Unfold one model row, where its fields live; a row that is already unfolded stays so. */
 function expandRow(position: number): void {
-  fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`))
+  const toggle = rowToggle(position)
+  if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle)
+}
+
+/** The model ID each folded row names in its text, in row order. */
+function foldedModelIds(): (string | null)[] {
+  return [...document.querySelectorAll('[data-row-key] [class*="modelSummaryId"]')].map(id => id.textContent)
+}
+
+/** The footer of the one editor card on the page, found by its commit label: its notes and its two actions. */
+function editorFooter(submitLabel: string = en.apply): HTMLElement {
+  const footer = screen.getByText(submitLabel).closest<HTMLElement>('[class*="editorFooter"]')
+  if (footer === null) throw new Error('the editor card has no footer')
+  return footer
+}
+
+/** The notes of the one editor card on the page: what its footer says before its actions. */
+function editorNotes(submitLabel: string = en.apply): string | null {
+  return editorFooter(submitLabel).querySelector('[class*="editorNotes"]')?.textContent ?? null
+}
+
+/**
+ * The reason a refused save put under one model field: the text the invalid
+ * input is described by, inside the input's own label. Null while the field is
+ * not marked.
+ */
+function refusalOf(field: HTMLElement): string | null {
+  if (field.getAttribute('aria-invalid') !== 'true') return null
+  const reason = field.closest('label')?.querySelector(`[id="${field.getAttribute('aria-describedby') ?? ''}"]`)
+  return reason?.textContent ?? null
 }
 
 /** The capacity inputs of every open row, in row order. */
@@ -410,8 +444,9 @@ describe('ModelsSection', () => {
     expect(screen.queryByRole('button', { name: providerCopy(en.removeProvider, TEAM_TARGET) })).toBeNull()
 
     const edit = screen.getByRole('button', { name: providerCopy(en.editProvider, TEAM_TARGET) })
-    fireEvent.click(edit)
+    // The open row drops its Edit button, so the row is found before the click.
     const card = edit.closest('li')!
+    fireEvent.click(edit)
     fireEvent.click(within(card).getByText(en.customized))
     // The profile's own layers say nothing about a row that a later layer adds, so a cleared field returns to the
     // running value; the protocols offered are the ones of the row's own form.
@@ -427,8 +462,9 @@ describe('ModelsSection', () => {
   it('stores a key typed for a pi-ai provider row under the reference the row names, without a settings write', async () => {
     const { mutate, set } = await mountFace(await withProviderRows())
     const edit = screen.getByRole('button', { name: providerCopy(en.editProvider, TEAM_TARGET) })
-    fireEvent.click(edit)
+    // The open row drops its Edit button, so the row is found before the click.
     const card = edit.closest('li')!
+    fireEvent.click(edit)
     fireEvent.change(within(card).getByLabelText<HTMLInputElement>(en.keyInput), { target: { value: 'sk-team' } })
     fireEvent.click(within(card).getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledWith('TEAM_KEY', 'sk-team') })
@@ -439,8 +475,9 @@ describe('ModelsSection', () => {
     const { mutate } = await mountFace(await withProviderRows())
     expect(screen.queryByRole('button', { name: providerCopy(en.removeProvider, BUNDLE_TARGET) })).toBeNull()
     const edit = screen.getByRole('button', { name: providerCopy(en.editProvider, BUNDLE_TARGET) })
-    fireEvent.click(edit)
+    // The open row drops its Edit button, so the row is found before the click.
     const card = edit.closest('li')!
+    fireEvent.click(edit)
     fireEvent.click(within(card).getByText(en.customized))
     const url = within(card).getByLabelText<HTMLInputElement>(en.baseUrl)
     // A bundle's row keeps the composed base as the layer a cleared field returns to.
@@ -455,10 +492,12 @@ describe('ModelsSection', () => {
   it('starts a fresh draft when another provider row begins to serve the route being edited', async () => {
     const scripted = await withProviderRows()
     const { controller } = await mountFace(scripted)
-    const edit = (): HTMLElement => screen.getByRole('button', { name: providerCopy(en.editProvider, TEAM_TARGET) })
-    fireEvent.click(edit())
-    fireEvent.click(within(edit().closest('li')!).getByText(en.customized))
-    const url = (): HTMLInputElement => within(edit().closest('li')!).getByLabelText<HTMLInputElement>(en.baseUrl)
+    // The open row drops its Edit button, so the row is found before the click; the refresh keeps the row's element.
+    const edit = screen.getByRole('button', { name: providerCopy(en.editProvider, TEAM_TARGET) })
+    const card = within(edit.closest('li')!)
+    fireEvent.click(edit)
+    fireEvent.click(card.getByText(en.customized))
+    const url = (): HTMLInputElement => card.getByLabelText<HTMLInputElement>(en.baseUrl)
     fireEvent.change(url(), { target: { value: 'https://typed.example/v1' } })
     expect(url().value).toBe('https://typed.example/v1')
 
@@ -466,7 +505,7 @@ describe('ModelsSection', () => {
     // written into the second row's namespace.
     await withProviderRows(scripted, 'hub-team-2')
     await act(async () => { await controller.load() })
-    fireEvent.click(within(edit().closest('li')!).getByText(en.customized))
+    fireEvent.click(card.getByText(en.customized))
     expect([url().value, url().placeholder]).toEqual(['', 'https://hub-2.example/v1'])
   })
 
@@ -475,8 +514,9 @@ describe('ModelsSection', () => {
     scripted.face.credentials.describe.mockResolvedValue(remoteFail('credentials unavailable', 'gateway/internal'))
     await mountFace(scripted)
     const edit = screen.getByRole('button', { name: openaiCopy(en.editProvider) })
-    fireEvent.click(edit)
+    // The open row drops its Edit button, so the row is found before the click.
     const row = within(edit.closest('li')!)
+    fireEvent.click(edit)
     expect(row.getByText(en.keyFallbackUnchecked)).toBeTruthy()
     expect(row.queryByText(en.keyFallbackMissing.replace('{hint}', 'OPENAI_API_KEY'))).toBeNull()
   })
@@ -607,10 +647,13 @@ describe('ModelsSection', () => {
     fireEvent.change(key, { target: { value: 'sk-unsaved-draft' } })
     act(() => { controller.store.update((state) => { state.status = 'loading' }) })
     expect((key as HTMLInputElement).value).toBe('sk-unsaved-draft')
-    expect((edit as HTMLButtonElement).disabled).toBe(false)
-    fireEvent.click(edit)
+    // The open row offers no Edit, and no other row opens over the draft until the refresh lands.
+    expect(screen.queryByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeNull()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: openaiCopy(en.editProvider) }).disabled).toBe(true)
+    // The card's own Cancel still dismisses it during the refresh.
+    fireEvent.click(screen.getByText(en.cancel))
     expect(screen.queryByLabelText(en.keyInput)).toBeNull()
-    expect((edit as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: deepSeekCopy(en.editProvider) }).disabled).toBe(true)
   })
 
   it('checks current readiness before adding or starting removal from rendered rows', async () => {
@@ -847,8 +890,11 @@ describe('ModelsSection', () => {
     expect(configured.getAttribute('title')).toBe(en.credentialConfigured)
     expect(configured.className).toContain('credentialDotConfigured')
     expect(configured.closest('li')?.textContent).toContain('openai')
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
+    // A missing key is worded beside its dot; the dot alone carries no name.
+    const missing = screen.getByText(en.credentialMissing)
     expect(missing.closest('li')?.textContent).toContain('DeepSeek')
+    expect(missing.querySelector('[aria-hidden="true"]')?.className).toContain('credentialDotMissing')
+    expect(screen.queryByRole('img', { name: en.credentialMissing })).toBeNull()
     // The card is still one click away.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
@@ -870,12 +916,13 @@ describe('ModelsSection', () => {
       renderSlot={() => null}
     />)
 
-    const missing = screen.getByRole('img', { name: en.credentialMissing })
-    expect(missing.getAttribute('title')).toBe(en.credentialMissing)
-    expect(missing.className).toContain('credentialDotMissing')
+    const missing = screen.getByText(en.credentialMissing)
+    expect(missing.querySelector('[aria-hidden="true"]')?.className).toContain('credentialDotMissing')
     expect(missing.closest('li')?.textContent).toContain('openai')
     expect(screen.queryByRole('img', { name: en.credentialConfigured })).toBeNull()
-    expect(screen.getByText('zombie').closest('li')?.querySelector('[role="img"]')).toBeNull()
+    const unmarked = screen.getByText('zombie').closest('li')
+    expect(unmarked?.querySelector('[role="img"]')).toBeNull()
+    expect(unmarked?.textContent).not.toContain(en.credentialMissing)
   })
 
   it('turns the setup card into a row once the credential reports configured', async () => {
@@ -970,6 +1017,7 @@ describe('ModelsSection', () => {
     }))
     const { face, mutate } = scriptedFace({ set })
     const onClose = vi.fn()
+    const onSubmitCredential = vi.fn()
     const { ProviderEditor } = await import('../src/client/ProviderEditor.tsx')
 
     render(<ProviderEditor
@@ -989,6 +1037,7 @@ describe('ModelsSection', () => {
       submitLabelKey="onboardingSave"
       submitBusyLabelKey="onboardingSaving"
       onClose={onClose}
+      onSubmitCredential={onSubmitCredential}
     />)
 
     const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
@@ -998,18 +1047,36 @@ describe('ModelsSection', () => {
     expect(save.disabled).toBe(true)
     expect(screen.getByText(en.onboardingLater)).toBeTruthy()
     expect(screen.queryByText(en.customized)).toBeNull()
+    expect(screen.queryByText(en.models)).toBeNull()
     expect(screen.queryByLabelText(en.baseUrl)).toBeNull()
+    // A form this short never scrolls its actions out of view, so its footer does not stick.
+    expect(editorFooter(en.onboardingSave).className).not.toContain('editorFooterSticky')
 
     fireEvent.change(key, { target: { value: '   ' } })
     expect(screen.getByText(en.keyRequired)).toBeTruthy()
     expect(key.getAttribute('aria-invalid')).toBe('true')
     expect(save.disabled).toBe(true)
 
+    // An ill-formed key leaves Save available; pressing it stores nothing and
+    // returns the keyboard to the field.
+    fireEvent.change(key, { target: { value: 'DEEPSEEK_API_KEY=sk-onboarding' } })
+    expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
+    expect(key.getAttribute('aria-invalid')).toBe('true')
+    expect(save.disabled).toBe(false)
+    save.focus()
+    fireEvent.click(save)
+    expect(document.activeElement).toBe(key)
+    expect(onSubmitCredential).not.toHaveBeenCalled()
+    expect(set).not.toHaveBeenCalled()
+
     fireEvent.change(key, { target: { value: '  sk-onboarding  ' } })
     expect(screen.queryByText(en.keyRequired)).toBeNull()
+    expect(screen.queryByText(en.keyIllegalCharacters)).toBeNull()
+    expect(key.getAttribute('aria-invalid')).toBe('false')
     expect(save.disabled).toBe(false)
     fireEvent.click(save)
 
+    expect(onSubmitCredential).toHaveBeenCalledOnce()
     expect(await screen.findByText(en.onboardingSaving)).toBeTruthy()
     expect(set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'sk-onboarding')
     expect(mutate).not.toHaveBeenCalled()
@@ -1048,17 +1115,21 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
-    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
-    expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
-      .toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    // An inherited list carries no state text and nothing to restore, and its
+    // rows read as text until one is unfolded.
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(screen.queryByText(en.resetModels)).toBeNull()
+    expect(foldedModelIds()).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    expect(screen.queryByLabelText(new RegExp(en.modelId))).toBeNull()
 
     fireEvent.click(screen.getByText(en.addModel))
-    const ids = screen.getAllByLabelText(new RegExp(en.modelId))
-    const names = screen.getAllByLabelText(new RegExp(en.modelName))
-    expandRow(3)
-    fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'private-preview' } })
-    fireEvent.change(names[2] as HTMLInputElement, { target: { value: 'Private Preview' } })
+    // The row without an ID joins unfolded, since only its fields can name it;
+    // the named rows stay folded.
+    expect(rowToggle(3).getAttribute('aria-expanded')).toBe('true')
+    expect(foldedModelIds()).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
+    expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 3`), { target: { value: 'private-preview' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 3`), { target: { value: 'Private Preview' } })
     // Only row 3 is open, so its capacity is addressed by its own label.
     fireEvent.change(screen.getByLabelText(`${en.contextWindow} 3`), { target: { value: '131072' } })
     fireEvent.click(within(screen.getByRole('group', { name: `${en.modelInputTypes} 3` })).getByRole('checkbox', { name: en.modelInputImage }))
@@ -1108,6 +1179,7 @@ describe('ModelsSection', () => {
     expect(screen.getByText(en.deepSeekEndpointHint)).toBeTruthy()
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-messages-test' } })
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://messages.example/anthropic' } })
+    expandRow(1)
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Messages Flash' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'sk-messages-test') })
@@ -1126,14 +1198,84 @@ describe('ModelsSection', () => {
 
   it('rejects duplicate DeepSeek model ids before writing', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     fireEvent.click(screen.getByText(en.addModel))
-    const ids = screen.getAllByLabelText(new RegExp(en.modelId))
-    fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'deepseek-v4-flash' } })
-    fireEvent.click(screen.getByText(en.apply))
+    const id = screen.getByLabelText<HTMLInputElement>(`${en.modelId} 3`)
+    fireEvent.change(id, { target: { value: 'deepseek-v4-flash' } })
+    // Nothing is marked while the row is typed, and Apply stays available.
+    expect(refusalOf(id)).toBeNull()
+    expect(screen.queryByText(en.modelIdDuplicate)).toBeNull()
+    expect(screen.getByText<HTMLButtonElement>(en.apply).disabled).toBe(false)
 
-    await screen.findByText(`Model 3: ${en.modelIdDuplicate}`)
+    fireEvent.click(screen.getByText(en.apply))
+    // The refused field says why under its own input and takes the keyboard;
+    // the footer that stays in view names no row.
+    expect(refusalOf(id)).toBe(en.modelIdDuplicate)
+    expect(id.closest('[data-row-key]')?.hasAttribute('data-invalid')).toBe(true)
+    expect(document.activeElement).toBe(id)
+    expect(editorNotes()).toBe('')
+    expect(editorFooter().className).toContain('editorFooterSticky')
     expect(mutate).not.toHaveBeenCalled()
+
+    fireEvent.change(id, { target: { value: 'deepseek-v4-max' } })
+    expect(refusalOf(id)).toBeNull()
+    expect(screen.queryByText(en.modelIdDuplicate)).toBeNull()
+    expect(id.closest('[data-row-key]')?.hasAttribute('data-invalid')).toBe(false)
+  })
+
+  it('marks every refused model field on its own row, unfolds what hides them, and writes once each is fixed', async () => {
+    const { mutate } = await mountDeepSeekCard({
+      mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
+    })
+    const field = (label: string, position: number) => screen.getByLabelText<HTMLInputElement>(`${label} ${String(position)}`)
+    const marked = () => [...document.querySelectorAll('[data-row-key]')].map(row => row.hasAttribute('data-invalid'))
+    // An output cap nobody can read on a row that is folded again, a row with
+    // no ID, and a row repeating the first row's ID, all under a folded list.
+    expandRow(2)
+    fireEvent.change(field(en.maxTokens, 2), { target: { value: 'plenty' } })
+    fireEvent.click(rowToggle(2))
+    fireEvent.click(screen.getByText(en.addModel))
+    fireEvent.click(screen.getByText(en.addModel))
+    fireEvent.change(field(en.modelId, 4), { target: { value: 'deepseek-v4-flash' } })
+    fireEvent.click(screen.getByRole('button', { name: en.models }))
+    expect(marked()).toEqual([false, false, false, false])
+
+    fireEvent.click(screen.getByText(en.apply))
+    expect(mutate).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: en.models }).getAttribute('aria-expanded')).toBe('true')
+    // A row that passes stays folded and unmarked.
+    expect(rowToggle(1).getAttribute('aria-expanded')).toBe('false')
+    expect(marked()).toEqual([false, true, true, true])
+    expect(refusalOf(field(en.maxTokens, 2))).toBe(en.modelMaxTokensInvalid)
+    expect(refusalOf(field(en.contextWindow, 2))).toBeNull()
+    expect(refusalOf(field(en.modelId, 3))).toBe(en.modelIdRequired)
+    expect(refusalOf(field(en.modelId, 4))).toBe(en.modelIdDuplicate)
+    expect(document.activeElement).toBe(field(en.maxTokens, 2))
+
+    // Each mark leaves with its own fault.
+    fireEvent.change(field(en.maxTokens, 2), { target: { value: '64K' } })
+    expect(marked()).toEqual([false, false, true, true])
+    fireEvent.change(field(en.modelId, 3), { target: { value: 'private-preview' } })
+    expect(marked()).toEqual([false, false, false, true])
+    expect(refusalOf(field(en.modelId, 4))).toBe(en.modelIdDuplicate)
+    fireEvent.change(field(en.modelId, 4), { target: { value: 'private-preview-2' } })
+    expect(document.querySelector('[aria-invalid="true"]')).toBeNull()
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(mutate.mock.calls[0]).toEqual([
+      'llm-deepseek',
+      [{
+        op: 'set',
+        path: ['models'],
+        value: [
+          DEFAULT_DEEPSEEK_MODELS[0],
+          { ...DEFAULT_DEEPSEEK_MODELS[1], maxTokens: 64_000 },
+          { id: 'private-preview' },
+          { id: 'private-preview-2' },
+        ],
+      }],
+      0,
+    ])
   })
 
   it('validates every adapter-owned model catalog invariant', () => {
@@ -1158,6 +1300,25 @@ describe('ModelsSection', () => {
     expect(validateDeepSeekModels([{ id: 'model', maxTokens: 0 }]))
       .toEqual({ index: 0, key: 'modelMaxTokensInvalid' })
     expect(validateDeepSeekModels([{ id: 'model', maxTokens: 8192 }])).toBeUndefined()
+  })
+
+  it('reports every failing field of every row, and the first of them as the catalog failure', () => {
+    const models = [
+      { id: 'model', name: '', maxTokens: 0 },
+      { id: 'fine', contextWindow: 131_072 },
+      { id: ' model ', contextWindow: 1.5, maxTokens: null },
+      {},
+    ]
+    expect(modelRowFailures(models).map(row => [...row])).toEqual([
+      [['name', 'modelNameInvalid'], ['maxTokens', 'modelMaxTokensInvalid']],
+      [],
+      [['id', 'modelIdDuplicate'], ['contextWindow', 'modelContextInvalid'], ['maxTokens', 'modelMaxTokensInvalid']],
+      [['id', 'modelIdRequired']],
+    ])
+    expect(validateDeepSeekModels(models)).toEqual({ index: 0, key: 'modelNameInvalid' })
+    // A value that is not a list has no rows to refuse.
+    expect(modelRowFailures(undefined)).toEqual([])
+    expect(modelRowFailures('models')).toEqual([])
   })
 
   it('reads context windows written as counts, thousands, or millions', () => {
@@ -1198,7 +1359,6 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -1236,7 +1396,6 @@ describe('ModelsSection', () => {
 
   it('keeps unreadable context-window text on screen and refuses the write', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -1248,8 +1407,17 @@ describe('ModelsSection', () => {
     expect((windows[0] as HTMLInputElement).value).toBe('1 gazillion')
 
     fireEvent.click(screen.getByText(en.apply))
-    await screen.findByText(`Model 1: ${en.modelContextInvalid}`)
     expect(mutate).not.toHaveBeenCalled()
+    // The reason sits under the text it refuses, which takes the keyboard.
+    expect(refusalOf(windows[0] as HTMLInputElement)).toBe(en.modelContextInvalid)
+    expect(refusalOf(windows[1] as HTMLInputElement)).toBeNull()
+    expect(document.activeElement).toBe(windows[0])
+    expect((windows[0] as HTMLInputElement).value).toBe('1 gazillion')
+    expect(editorNotes()).toBe('')
+
+    fireEvent.change(windows[0] as HTMLInputElement, { target: { value: '512K' } })
+    expect(refusalOf(windows[0] as HTMLInputElement)).toBeNull()
+    expect(screen.queryByText(en.modelContextInvalid)).toBeNull()
   })
 
   it.each([
@@ -1283,15 +1451,15 @@ describe('ModelsSection', () => {
       readOnly={false}
       onClose={() => {}}
     />)
-    fireEvent.click(screen.getByText(en.customized))
     expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
-    expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
-      .toEqual(['user-only-model'])
+    expect(foldedModelIds()).toEqual(['user-only-model'])
 
     fireEvent.click(screen.getByText(en.resetModels))
 
-    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
-    expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
+    // An inherited list has no state to name and nothing to restore.
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(screen.queryByText(en.resetModels)).toBeNull()
+    expect(foldedModelIds())
       .toEqual(base === undefined ? ['deepseek-v4-flash', 'deepseek-v4-pro'] : ['pinned-by-deployment'])
   })
 
@@ -1300,7 +1468,6 @@ describe('ModelsSection', () => {
     // the first, which then fell back to rendering its stored NaN as `NaN` —
     // losing the text the user was told they could still correct.
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -1314,16 +1481,16 @@ describe('ModelsSection', () => {
 
   it('re-keys the typed text around a removed row', async () => {
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
     const windows = (): HTMLInputElement[] => capacityInputs(en.contextWindow)
     const removeRow = (at: number): void => {
       fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[at] as HTMLElement)
     }
-    // Three rows, with text parked on the outer two.
+    // Three rows, with text parked on the outer two. The added row has no ID
+    // yet and is already unfolded.
     fireEvent.click(screen.getByText(en.addModel))
     expandRow(1)
     expandRow(2)
-    expandRow(3)
+    expect(rowToggle(3).getAttribute('aria-expanded')).toBe('true')
     fireEvent.change(windows()[0] as HTMLInputElement, { target: { value: 'top text' } })
     fireEvent.blur(windows()[0] as HTMLInputElement)
     fireEvent.change(windows()[2] as HTMLInputElement, { target: { value: 'bottom text' } })
@@ -1350,7 +1517,6 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     const windows = capacityInputs(en.contextWindow)
     fireEvent.change(windows[0] as HTMLInputElement, { target: { value: 'garbage' } })
@@ -1373,7 +1539,6 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     expandRow(1)
     expandRow(2)
     // The profile's own cap is the placeholder both rows inherit.
@@ -1386,9 +1551,10 @@ describe('ModelsSection', () => {
     // Dropping the row above carries the cap text down with its own row.
     fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[0] as HTMLElement)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).value).toBe('64K')
-    // The disclosure closes on a second press.
-    expandRow(1)
+    // A second press folds the row back to its text.
+    fireEvent.click(rowToggle(1))
     expect(screen.queryByLabelText(`${en.maxTokens} 1`)).toBeNull()
+    expect(foldedModelIds()).toEqual(['deepseek-v4-pro'])
 
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
@@ -1405,14 +1571,14 @@ describe('ModelsSection', () => {
 
   it('settles a pasted id and refuses whitespace that would never match', async () => {
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
-    const ids = screen.getAllByLabelText<HTMLInputElement>(new RegExp(en.modelId))
-    fireEvent.change(ids[0] as HTMLInputElement, { target: { value: '  deepseek-v4-flash  ' } })
-    fireEvent.blur(ids[0] as HTMLInputElement)
-    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-v4-flash')
+    expandRow(1)
+    const id = screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`)
+    fireEvent.change(id, { target: { value: '  deepseek-v4-flash  ' } })
+    fireEvent.blur(id)
+    expect(id.value).toBe('deepseek-v4-flash')
     // A settled id needs no second trim.
-    fireEvent.blur(ids[0] as HTMLInputElement)
-    expect((ids[0] as HTMLInputElement).value).toBe('deepseek-v4-flash')
+    fireEvent.blur(id)
+    expect(id.value).toBe('deepseek-v4-flash')
 
     // An id that is only whitespace is as absent as an empty one, and a padded
     // id is a duplicate of its trimmed twin.
@@ -1429,11 +1595,17 @@ describe('ModelsSection', () => {
       defaultMaxTokens={undefined}
       t={t}
       disabled={true}
+      attempt={0}
       onChange={vi.fn()}
       onReset={vi.fn()}
     />)
+    // A folded row without an ID reads as the field's own name, marked as a
+    // stand-in; pressing the text unfolds the row as its button does.
+    const unnamed = screen.getByText(en.modelId)
+    expect(unnamed.hasAttribute('data-unnamed')).toBe(true)
+    fireEvent.click(unnamed)
+    expect(rowToggle(1).getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('')
-    expandRow(1)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.contextWindow} 1`).placeholder)
       .toBe(en.contextWindowPlaceholder)
     expect(screen.getByLabelText<HTMLInputElement>(`${en.maxTokens} 1`).placeholder)
@@ -1444,15 +1616,17 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
     fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[0] as HTMLElement)
     fireEvent.click(screen.getByLabelText(new RegExp(en.removeModel)))
     expect(screen.getByText(en.modelsEmpty)).toBeTruthy()
+    expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
     fireEvent.click(screen.getByText(en.resetModels))
-    expect(screen.getByText(en.modelsInherited)).toBeTruthy()
+    expect(screen.queryByText(en.modelsEmpty)).toBeNull()
+    expect(screen.queryByText(en.modelsCustomized)).toBeNull()
+    expect(foldedModelIds()).toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
 
-    const names = screen.getAllByLabelText(new RegExp(en.modelName))
     expandRow(1)
+    const names = screen.getAllByLabelText(new RegExp(en.modelName))
     const windows = capacityInputs(en.contextWindow)
     fireEvent.change(names[0] as HTMLInputElement, { target: { value: '' } })
     fireEvent.change(windows[0] as HTMLInputElement, { target: { value: '' } })
@@ -1859,19 +2033,118 @@ describe('ModelsSection', () => {
     expect(screen.getByText<HTMLButtonElement>(en.add).disabled).toBe(true)
   })
 
-  it('toggles the row editor closed on a second edit click and on cancel', async () => {
+  it('makes an open row the editing surface under its own name, closed by its own cancel', async () => {
     const { mutate } = await mountSection()
-    const edit = screen.getByRole('button', { name: openaiCopy(en.editProvider) })
-    const keyFields = () => screen.queryAllByRole('button', { name: en.keyReplace })
-    fireEvent.click(edit)
-    await waitFor(() => { expect(keyFields().length).toBe(1) })
-    fireEvent.click(edit)
-    expect(keyFields()).toHaveLength(0)
-    fireEvent.click(edit)
-    await waitFor(() => { expect(keyFields().length).toBe(1) })
-    fireEvent.click(screen.getByText(en.cancel))
-    expect(keyFields()).toHaveLength(0)
+    const row = screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }).closest('li')!
+    expect(row.className).not.toContain('rowCardOpen')
+    expect(within(row).queryByText('deepseek-official')).toBeNull()
+
+    fireEvent.click(within(row).getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    // The row head names the card and the route id its settings are stored
+    // under, so the editor adds no title of its own and the row no second Edit.
+    expect(row.className).toContain('rowCardOpen')
+    expect(within(row).getAllByText('DeepSeek')).toHaveLength(1)
+    expect(within(row).getByText('deepseek-official').className).toContain('editorRoute')
+    expect(within(row).getByLabelText(en.keyInput)).toBeTruthy()
+    expect(within(row).queryByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeNull()
+
+    fireEvent.click(within(row).getByText(en.cancel))
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(row.className).not.toContain('rowCardOpen')
+    expect(within(row).queryByText('deepseek-official')).toBeNull()
+    expect(within(row).getByRole('button', { name: deepSeekCopy(en.editProvider) })).toBeTruthy()
     expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('names an open row once when its route id is its name, and keeps its remove action', async () => {
+    await mountSection()
+    const row = screen.getByRole('button', { name: openaiCopy(en.editProvider) }).closest('li')!
+    fireEvent.click(within(row).getByRole('button', { name: openaiCopy(en.editProvider) }))
+    expect(within(row).getByRole('button', { name: en.keyReplace })).toBeTruthy()
+    expect(within(row).getAllByText('openai')).toHaveLength(1)
+    expect(within(row).queryByRole('button', { name: openaiCopy(en.editProvider) })).toBeNull()
+    expect(within(row).getByRole('button', { name: openaiCopy(en.removeProvider) })).toBeTruthy()
+  })
+
+  it('folds the model list and the advanced settings without discarding what they hold', async () => {
+    await mountDeepSeekCard()
+    const models = screen.getByRole('button', { name: en.models })
+    const advanced = screen.getByRole('button', { name: en.customized })
+    // The list starts in view. The advanced fields start folded: mounted, but
+    // out of reach of the pointer, the keyboard and assistive technology.
+    expect(models.getAttribute('aria-expanded')).toBe('true')
+    expect(advanced.getAttribute('aria-expanded')).toBe('false')
+    const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
+    expect(screen.queryByRole('textbox', { name: en.baseUrl })).toBeNull()
+
+    fireEvent.click(advanced)
+    expect(advanced.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('textbox', { name: en.baseUrl })).toBe(url)
+    fireEvent.change(url, { target: { value: 'https://kept.example' } })
+    fireEvent.click(advanced)
+    expect(advanced.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('textbox', { name: en.baseUrl })).toBeNull()
+    expect(url.value).toBe('https://kept.example')
+
+    // An unfolded row and its typed text stay as they were under a folded list.
+    expandRow(1)
+    fireEvent.change(screen.getByLabelText(`${en.contextWindow} 1`), { target: { value: 'half typed' } })
+    fireEvent.click(models)
+    expect(models.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('textbox', { name: `${en.contextWindow} 1` })).toBeNull()
+    expect(screen.queryByRole('button', { name: en.addModel })).toBeNull()
+    fireEvent.click(models)
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: `${en.contextWindow} 1` }).value).toBe('half typed')
+    expect(screen.getByRole('button', { name: en.addModel })).toBeTruthy()
+  })
+
+  it('points a fold heading\'s chevron right while folded and down while unfolded', async () => {
+    await mountDeepSeekCard()
+    const chevron = (title: string): string | null | undefined =>
+      screen.getByRole('button', { name: title }).querySelector('[data-icon]')?.getAttribute('data-icon')
+    // The chevron adds nothing to the heading's name, which stays the title.
+    expect(chevron(en.models)).toBe('dsw-icon-chevron-down-outline-regular')
+    expect(chevron(en.customized)).toBe('dsw-icon-chevron-right-outline-regular')
+    fireEvent.click(screen.getByRole('button', { name: en.models }))
+    fireEvent.click(screen.getByRole('button', { name: en.customized }))
+    expect(chevron(en.models)).toBe('dsw-icon-chevron-right-outline-regular')
+    expect(chevron(en.customized)).toBe('dsw-icon-chevron-down-outline-regular')
+  })
+
+  it('keeps the model list of the create card in view under a heading that does not fold', async () => {
+    await mountSection()
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
+    fireEvent.click(screen.getByRole('tab', { name: en.addCustom }))
+    const panel = within(screen.getByRole('tabpanel', { name: en.addCustom }))
+    const list = within(panel.getByRole('region', { name: en.models }))
+    expect(list.getByText(en.models)).toBeTruthy()
+    expect(list.queryByRole('button', { name: en.models })).toBeNull()
+    expect(list.getByRole('button', { name: en.addModel })).toBeTruthy()
+  })
+
+  it('seats the provider-card extension above the editor in the setup card and the add card', async () => {
+    const { view, controller, face } = await mountFirstRun()
+    view.unmount()
+    render(<ModelsSection
+      controller={controller}
+      useSnapshot={bindSnapshotSelector(controller.store)}
+      operations={operationsWith(face)}
+      schema={settingsSchema}
+      t={t}
+      renderSlot={name => name === 'settings.models.provider-card' ? <span data-testid="provider-card-seat" /> : null}
+    />)
+    const precedes = (first: Element, second: Element): boolean =>
+      (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+
+    const setupKey = screen.getByLabelText(en.keyInput)
+    expect(precedes(within(setupKey.closest('li')!).getByTestId('provider-card-seat'), setupKey)).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
+    const panel = within(screen.getByRole('tabpanel', { name: en.addCatalog }))
+    const seat = panel.getByTestId('provider-card-seat')
+    // Below the provider it describes, above the fields that edit it.
+    expect(precedes(panel.getByLabelText(en.provider), seat)).toBe(true)
+    expect(precedes(seat, panel.getByLabelText(en.keyInput))).toBe(true)
   })
 
   it('opens the add card on the catalog mode with both modes offered', async () => {
@@ -2157,10 +2430,10 @@ describe('ModelsSection', () => {
     fireEvent.click(screen.getAllByText(en.cancel)[0] as HTMLElement)
     // The add card kept its draft…
     expect(screen.getByLabelText(en.provider)).toBeTruthy()
-    // …and DeepSeek collapsed to an ordinary row carrying the missing-key dot.
+    // …and DeepSeek collapsed to an ordinary row that words its missing key.
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
-    expect(screen.getAllByRole('img', { name: en.credentialMissing })
-      .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
+    expect(screen.getAllByText(en.credentialMissing)
+      .some(mark => mark.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
     // Its card reopens through Edit, which closes the add card as any row does.
     fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
@@ -2422,10 +2695,14 @@ it('returns a valid replacement to read-only text with Enter and focuses the rep
   expect(document.activeElement).toBe(screen.getByRole('button', { name: en.keyReplace }))
 })
 
-it('keeps the input and its error when a failing replacement loses focus', () => {
-  renderPiAiEditor('openai', piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' }), {
-    credential: { configured: true, source: 'file', writable: true, masked: '••••••••' },
-  })
+it('keeps the input and its error when a failing replacement loses focus, and refuses its save there', () => {
+  const { face, set } = scriptedFace()
+  const closed = vi.fn()
+  render(<ProviderEditor provider="openai" displayName="OpenAI"
+    namespace={piAiNamespaceWith('openai', { apiKeyEnv: 'OPENAI_API_KEY' })}
+    settingsPath={['providers', 'openai']} schema={settingsSchema} operations={operationsWith(face)}
+    t={t} readOnly={false} onClose={closed}
+    credential={{ configured: true, source: 'file', writable: true, masked: '••••••••' }} />)
   const input = replaceSavedKey()
   fireEvent.change(input, { target: { value: '"sk-abc"' } })
   expect(input.getAttribute('aria-invalid')).toBe('true')
@@ -2433,11 +2710,49 @@ it('keeps the input and its error when a failing replacement loses focus', () =>
   expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(true)
   expect(screen.getByLabelText(en.keyInput)).toBe(input)
   expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
-  expect(screen.getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(true)
+  // The refused save writes nothing and returns the keyboard to the input that stayed open.
+  input.blur()
+  fireEvent.click(screen.getByRole('button', { name: en.apply }))
+  expect(document.activeElement).toBe(input)
+  expect(set).not.toHaveBeenCalled()
+  expect(closed).not.toHaveBeenCalled()
   fireEvent.change(input, { target: { value: 'sk-abc' } })
   fireEvent.blur(input)
   expect(screen.queryByLabelText(en.keyInput)).toBeNull()
-  expect(screen.getByRole<HTMLButtonElement>('button', { name: en.apply }).disabled).toBe(false)
+  expect(screen.queryByText(en.keyIllegalCharacters)).toBeNull()
+})
+
+it('shows a key the route\'s protocol requires as a hint, and as an error once Apply was refused for it', async () => {
+  const { face, set, mutate } = scriptedFace()
+  const closed = vi.fn()
+  render(<ProviderEditor provider="gemini-gateway" displayName="Gemini gateway" declared
+    namespace={piAiNamespaceWith('gemini-gateway', { api: 'google-generative-ai', baseURL: 'https://gemini.example/v1beta' })}
+    settingsPath={['providers', 'gemini-gateway']} schema={settingsSchema} operations={operationsWith(face)}
+    t={t} readOnly={false} onClose={closed} />)
+  const key = screen.getByLabelText<HTMLInputElement>(en.keyInput)
+  const apply = screen.getByRole<HTMLButtonElement>('button', { name: en.apply })
+  // A requirement still to meet: stated, not yet a fault, and no reason to hold Apply.
+  expect(key.required).toBe(true)
+  expect(key.getAttribute('aria-invalid')).toBe('false')
+  expect(screen.getByText(en.keyRequired).className).toContain('advancedHint')
+  expect(apply.disabled).toBe(false)
+
+  fireEvent.click(apply)
+  expect(screen.getByText(en.keyRequired).className).toContain('error')
+  expect(key.getAttribute('aria-invalid')).toBe('true')
+  expect(document.activeElement).toBe(key)
+  expect(mutate).not.toHaveBeenCalled()
+  expect(set).not.toHaveBeenCalled()
+
+  fireEvent.change(key, { target: { value: 'gemini-key' } })
+  expect(screen.queryByText(en.keyRequired)).toBeNull()
+  expect(key.getAttribute('aria-invalid')).toBe('false')
+  fireEvent.click(apply)
+  await waitFor(() => { expect(closed).toHaveBeenCalledWith(true) })
+  expect(set).toHaveBeenCalledExactlyOnceWith('GEMINI_GATEWAY_API_KEY', 'gemini-key')
+  expect(mutate.mock.calls).toEqual([[
+    'llm-pi-ai', [{ op: 'set', path: ['providers', 'gemini-gateway', 'apiKeyEnv'], value: 'GEMINI_GATEWAY_API_KEY' }], 0,
+  ]])
 })
 
 it('hides the reveal control and masks a disabled key draft', () => {

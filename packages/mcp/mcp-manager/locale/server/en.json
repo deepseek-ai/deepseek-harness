@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP server",
+    "description": "Connect one MCP server through the MCP server manager and make its tools available."
+  }
+}

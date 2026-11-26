@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { contextMenuHook, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
+import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
 /**
  * Pointer-revealed scrollbars, the shell's half: which class state the column
  * carries as the pointer crosses it. The stylesheet rule that state drives is
@@ -40,7 +40,7 @@ afterEach(() => {
 function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
   const view = render(
     <SidebarRoot
-      drawer={false}
+      drawer={false} animating={false}
       collapsed={false} width={300}
       useSessions={neverHook} useSessionStatus={useSessionStatus} useSessionRetainInfo={neverHook}
       usePanelInfo={usePanelInfo} selectPanel={() => {}} usePanels={selector => selector([])} useEntryPins={selector => selector([])}
@@ -48,7 +48,7 @@ function mountColumn(): { column: HTMLElement; quiet: () => boolean } {
       useShortcuts={selector => selector([])}
       useContextMenu={contextMenuHook()} useResource={useResource} useWorkspaces={neverHook}
       {...allowAllAccess}
-      {...responsiveHooks()}
+      {...responsiveHooks()} {...themeHooks()}
       startSession={vi.fn()} toggleSidebar={vi.fn()} trackEntryClick={vi.fn()} t={t}
       renderFactorySlot={() => null}
       renderSlot={((_key: string, owner: SidebarSectionOwnerProps) =>

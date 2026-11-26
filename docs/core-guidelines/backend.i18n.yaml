@@ -27,5 +27,29 @@
   en: 7f393573202d4fea
   zh: e2a0d17845f54639
 /b-backend/b-1-drive-plugin-work-from-lifecycle-events-not-loops-that-poll-agent-state/enforcement:
-  en: 16aa3658da190766
-  zh: a6e8e205720df251
+  en: 90f9924a3420d1bf
+  zh: c7284abb80203efe
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config:
+  en: a58d9d0c58340388
+  zh: ff0c9f99ee5f5dbf
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/reason:
+  en: 50e92965b823817b
+  zh: bfbca3dc030b3d77
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/example-bad:
+  en: f13fd6532a2c4af8
+  zh: 1652bd0441c21c76
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/example:
+  en: 6dda24eb3313e3be
+  zh: 2f5317608ed26048
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/alternative:
+  en: 513adb9fa0120382
+  zh: 96cc323501865ede
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/exception:
+  en: 13eab487c11fc991
+  zh: dcc4b99f7c17f51e
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/note:
+  en: 03f00af1f00b6d37
+  zh: b65befe60ed184cc
+/b-backend/b-2-register-independent-entries-through-a-registry-instead-of-listing-them-in-one-plugin-s-config/enforcement:
+  en: 3dc281ce28609b07
+  zh: fa791c60e1efa396

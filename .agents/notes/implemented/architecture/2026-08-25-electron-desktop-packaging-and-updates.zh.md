@@ -24,7 +24,7 @@ Electron 拥有 `.dsh/profiles/desktop` 保留 profile。[内置运行时决策]
 
 一个 Desktop 发布号同时标识 Electron 产物及其精确的 `@deepseek-ai/dsh` 与 `@deepseek-ai/dsh-desktop-host` 依赖。发布不能在构建或运行时选择不同的核心版本。因此，即使壳代码没有变化，更新 dsh 也必须产生新的 Electron 发布。
 
-Desktop Host 为保留 profile 提供共享 Web 插件管理器，并通过启动器信息提供内置 pnpm。CLI 保留 `desktop` 名称的所有大小写变体，并拒绝针对它的启动、配置 dump 和插件管理请求。Electron 在 profile 恢复或 Host 启动前获取进程生命周期单实例锁；后续启动只会聚焦或重建主窗口，不会接触 profile 状态。
+Desktop Host 为保留 profile 提供共享 Web 插件管理器，并通过启动器信息提供内置 pnpm。CLI 保留 `desktop` 名称的所有大小写变体，并拒绝针对它的启动、配置 dump 和插件管理请求。Electron 在 profile 恢复或 Host 启动前获取按其 `userData` 目录区分的进程生命周期单实例锁；使用相同 `userData` 的后续启动只会聚焦或重建主窗口，不会接触 profile 状态。`userData` 不同的应用（例如已安装应用与 `dev:desktop`）可以同时运行在同一个 profile 上。
 
 ## 归属
 
@@ -63,7 +63,7 @@ Desktop Host 为保留 profile 提供共享 Web 插件管理器，并通过启�
 
 共享 Web 插件管理器负责 profile 包操作。Electron 保留启动准备和原生恢复；[Web 薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)负责这一职责划分。
 
-Electron 进程生命周期锁是 Desktop 的权威所有者。profile 准备和原生恢复使用记录 Electron PID 的排他锁；存活的所有者阻止竞争操作，失效 PID 可被回收。Web 包操作使用共享插件管理器的锁。
+在共享同一 `userData` 目录的 Desktop 进程之间，Electron 进程生命周期锁是权威所有者。profile 准备和原生恢复使用记录 Electron PID 的排他锁；存活的所有者阻止竞争操作，失效 PID 可被回收。Web 包操作使用共享插件管理器的锁。
 
 核心物化、首次启动、插件安装和共享模块解析遵循[内置运行时决策](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md)。实际 Host 启动时会组合已启用且提供 `dsh.client` 代码的桌面插件。
 
@@ -106,7 +106,7 @@ Windows 应用替换遵循[目录安装参考](../../../../apps/desktop/packagin
 | 包状态 | Electron RunAsNode 执行不可变核心资源；内置 pnpm 只修改 Desktop profile 中的外部插件依赖图。 |
 | 资格验证 | macOS 打包要求已配置的公司身份与公证凭据可用，在生成清单前验证每个原生运行时文件，验证完整应用签名，并要求应用和 DMG 都完成公证且通过 Gatekeeper。Windows 打包要求已配置的公开证书、SafeNet 私钥容器、Token Password 与 SignTool，并验证生成的每个签名。更新托管、跨上一版本的已安装产物测试和各平台 GUI 录制仍是发布环境门槛。 |
 
-`dev:desktop` 会构建当前 workspace，把已构建 CLI 包、私有 Desktop Host 包及其依赖链接投影为一次性项目，使用隔离的 Harness home，打开 Main、Renderer 和 Host 调试器，并在不准备发布资源的情况下启动未打包 Electron。开发运行时为独立的插件 profile 提供工作区链接；插件管理和恢复使用与打包应用相同的流程。固定的 macOS arm64、macOS x64 与 Windows x64 打包命令会把同一目标传给运行时准备、dsh 准备和 electron-builder；每条命令还提供未封装安装器的变体，用于在生成安装器前验证发布路径。
+`dev:desktop` 会构建当前 workspace，把已构建 CLI 包、私有 Desktop Host 包及其依赖链接投影为一次性项目，使用正常的 Harness home，打开 Main、Renderer 和 Host 调试器，并在不准备发布资源的情况下启动未打包 Electron。一次性项目提供工作区链接；`$DSH_HOME/profiles/desktop` 插件 profile 及其插件管理和恢复与已安装应用共享，因此工作区构建可能安装插件或写入已安装版本拒绝的数据格式。固定的 macOS arm64、macOS x64 与 Windows x64 打包命令会把同一目标传给运行时准备、dsh 准备和 electron-builder；每条命令还提供未封装安装器的变体，用于在生成安装器前验证发布路径。
 
 ## 考虑过的替代方案
 
