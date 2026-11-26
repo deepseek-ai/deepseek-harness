@@ -685,7 +685,7 @@ describe('same-session goal driving', () => {
     expect(test.ctx.goals.get(test.agent)).toMatchObject({ phase: 'paused' })
   })
 
-  it('fails closed when a downstream pre-step hook throws', async () => {
+  it('disarms the goal and leaves the round queued when a downstream pre-step hook throws', async () => {
     const test = await harness([])
     // Registered after goal-round-driver's own listener: the throw propagates back
     // through goal-round-driver's next() await, dropping the whole step proposal.
@@ -702,7 +702,8 @@ describe('same-session goal driving', () => {
     const goal = await waitForGoal(test.ctx, test.agent, current => current?.activation === 'disarmed')
     expect(goal).toMatchObject({ phase: 'active', roundsStarted: 0 })
     expect(test.adapter.requests).toHaveLength(0)
-    expect(test.agent.inbox.nextTurn).toHaveLength(0)
+    expect(test.agent.inbox.nextTurn.map(message => message.source))
+      .toEqual([expect.objectContaining({ kind: 'goal', round: 1 })])
   })
 
   it('a retry turn on a non-goal failure leaves the goal reservation untouched', async () => {

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-24-inbox-returns-claims-for-an-unopened-step.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-24-inbox-returns-claims-for-an-unopened-step.md
+/agent-note-the-inbox-returns-claims-for-an-unopened-step:
+  en: 81ec156a8858dca8
+  zh: e1df8434740ec7ed
+/agent-note-the-inbox-returns-claims-for-an-unopened-step/problem:
+  en: 667606a473836db2
+  zh: 739a1c89fb03bd8d
+/agent-note-the-inbox-returns-claims-for-an-unopened-step/decision:
+  en: f161ce6c957b1faf
+  zh: 2da23b8d7e218585
+/agent-note-the-inbox-returns-claims-for-an-unopened-step/alternatives-considered:
+  en: 7c9c9cdbaf17d7a1
+  zh: 6e092d062c37d366
+/agent-note-the-inbox-returns-claims-for-an-unopened-step/verification:
+  en: d22b662bda139375
+  zh: 674a5273b17fd7ba
+/agent-note-the-inbox-returns-claims-for-an-unopened-step/consequences:
+  en: a8e476738851dd3a
+  zh: bcf85dade8bff207

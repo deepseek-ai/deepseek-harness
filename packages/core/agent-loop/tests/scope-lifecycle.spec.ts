@@ -286,7 +286,7 @@ describe('agent scope lifecycle', () => {
     const { ctx, loopFiber } = await harnessWithLoop()
     onTestFinished(() => ctx.fiber.dispose())
     const cold = ctx.sessions.create(brandString<SessionId>('projection-before-any-agent'))
-    expect(ctx.sessionProjections.checkpoint(cold).inbox?.val).toEqual({ 'next-turn': [], 'next-step': [] })
+    expect(ctx.sessionProjections.snapshot(cold).values.inbox).toEqual({ 'next-turn': [], 'next-step': [] })
     let first!: Awaited<ReturnType<typeof ctx.agents.create>>
     let second!: Awaited<ReturnType<typeof ctx.agents.create>>
     const firstOwner = await ctx.plugin(Object.assign(async (inner: Context) => {

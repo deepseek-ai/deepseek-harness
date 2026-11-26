@@ -261,9 +261,12 @@ describe('Session Controller access', () => {
     }, signal)
     await expect(prompt(GUEST, 'guest-1')).resolves.toEqual({ accepted: true })
     await expect(prompt(OWNER, 'owner-1')).resolves.toEqual({ accepted: true })
-    // The durable Inbox splice records each accepted message with its source.
+    // The durable Inbox splice records each accepted message with its source. This
+    // harness routes no model, so each prompt's Turn fails and returns it, logging
+    // the same source again; the first insertion of each is the acceptance.
     const logged = shared.session.snapshotEvents()
       .flatMap(event => event.type === 'agent/inbox/spliced' ? event.data.inserted.map(item => item.source) : [])
+      .filter((source, index, all) => all.findIndex(other => JSON.stringify(other) === JSON.stringify(source)) === index)
     expect(logged).toEqual([
       { kind: 'user', rpcId: 'guest-1', principal: GUEST },
       { kind: 'user', rpcId: 'owner-1' },

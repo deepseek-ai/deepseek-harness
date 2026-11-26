@@ -50,15 +50,17 @@ describe('plan-mode activation', () => {
       name: 'PlanModeError', code: 'PLAN_STATE_UNAVAILABLE', message: expect.stringMatching(/plan.*not ready/) as string,
     }))
     expect(agent.session.snapshotEvents().filter(event => event.type === 'request/header')).toHaveLength(0)
+    expect(agent.inbox.nextTurn).toEqual([prompt])
 
     release.resolve(undefined)
     await fiber
-    agent.followup(prompt)
+    agent.steer(createUserMessage({ content: [{ type: 'text', text: 'try now' }], source: { kind: 'user' } }))
     await agent.whenIdle()
     expect(adapter.requests).toHaveLength(1)
     expect((adapter.requests[0]?.tools ?? []).some(tool => tool.name === 'exit_plan_mode')).toBe(active)
     const text = adapter.requests[0]?.messages.flatMap(message => message.content)
       .filter(block => block.type === 'text').map(block => block.text).join('\n')
+    expect(text).toContain('continue the task')
     expect(text?.includes('Plan the work before executing it.')).toBe(active)
     expect(ctx.planMode.get(agent)).toEqual({ active })
   })

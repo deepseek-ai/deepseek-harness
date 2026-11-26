@@ -228,6 +228,19 @@ describe('installModelSelection()', () => {
     })
   })
 
+  it('places the notice after the input and before a context snapshot', async () => {
+    const h = await harness()
+    h.header(INITIAL)
+    installModelSelection(h.ctx)
+    const context = createUserMessage({
+      content: [{ type: 'text', text: '<system-reminder>now</system-reminder>' }],
+      source: { kind: 'time-context', form: 'snapshot', sections: [{ name: 'time-context', text: 'now' }] },
+    })
+    await expect(preStep(h.agent, { provider: 'beta', model: 'b1' }, { messages: [INPUT, context] })).resolves.toMatchObject({
+      messages: [INPUT, expectedNotice('alpha/a0', 'beta/b1'), context],
+    })
+  })
+
   it('does not announce initial, same-route, effort-only, rejected, aborted, or disposed steps', async () => {
     const h = await harness()
     const dispose = installModelSelection(h.ctx)

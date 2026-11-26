@@ -165,8 +165,8 @@ describe('Agent.cancel()', () => {
     expect(agent.session.snapshotEvents().some(e => e.type === 'turn/end')).toBe(true)
   })
 
-  it('cancel({ keepInbox: true }) does not restore work already claimed by a waking send', async () => {
-    const adapter = new MockAdapter([textResponse('wake reply')])
+  it('cancel({ keepInbox: true }) returns work a waking send claimed to the head of next-turn, without waking', async () => {
+    const adapter = new MockAdapter([textResponse('preserved reply'), textResponse('wake reply')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
@@ -174,23 +174,24 @@ describe('Agent.cancel()', () => {
       content: [{ type: 'text', text: 'preserved' }],
       source: { kind: 'user' },
     }))
-    // A waking send starts and claims synchronously, so keepInbox has no
-    // pending item to preserve by the time this cancellation runs.
+    // A waking send starts and claims synchronously; the cancellation ends
+    // the Turn before the step logs the claim, and the Turn returns it.
     agent.cancel({ kind: 'user' }, { keepInbox: true })
     expect(agent.session.snapshotEvents().some(event =>
       event.type === 'agent/inbox/spliced' && event.data.outcome === 'canceled')).toBe(false)
     await agent.whenIdle()
-    expect(agent.inbox.nextTurn).toHaveLength(0)
+    expect(agent.inbox.nextTurn.map(message => message.content)).toEqual([[{ type: 'text', text: 'preserved' }]])
     expect(userTexts(agent)).toEqual([])
     expect(adapter.requests).toHaveLength(0)
     expect(agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')?.data.reason)
       .toEqual({ kind: 'aborted', reason: { kind: 'user' } })
 
+    // The next wake runs the returned prompt first, then the waking one.
     const idle = waitForIdle(ctx, agent)
     send(agent, 'wake it')
     await idle
-    expect(userTexts(agent)).toEqual(['wake it'])
-    expect(adapter.requests).toHaveLength(1)
+    expect(userTexts(agent)).toEqual(['preserved', 'wake it'])
+    expect(adapter.requests).toHaveLength(2)
   })
 
   it('cancel({ keepInbox: true }) parks queued work after an active turn aborts', async () => {

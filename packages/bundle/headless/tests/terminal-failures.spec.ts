@@ -132,9 +132,17 @@ describe('headless terminal failures', () => {
     }).mockResolvedValue(false)
     test.ctx.provide('subagents', { waitForTreeWork } as never)
 
+    // The failed Turn returned the first child result to next-turn; the next
+    // wake runs it, then the second delivery runs in its own Turn, so neither
+    // result is lost to the hook failure and the last answer is the final one.
     await expect(test.run()).resolves.toEqual(recover
-      ? { code: 0, out: 'summary\n', err: '' }
+      ? { code: 0, out: 'recovered\n', err: '' }
       : { code: 1, out: 'waiting\n', err: 'dsh: UNKNOWN: summary hook failed\n' })
+    const [agent] = test.ctx.agents.list()
+    const admitted = (agent?.session.snapshotEvents() ?? [])
+      .flatMap(event => event.type === 'user/message' && event.data.source.kind === 'user' ? [event.data.content] : [])
+    expect(admitted.flatMap(content => content.flatMap(block => block.type === 'text' ? [block.text] : [])))
+      .toEqual(recover ? ['delegate', 'child result', 'child result'] : ['delegate'])
   })
 
   it.each(['turn/start', 'turn/end'] as const)('accepts a recovered summary after a missing %s', async (failedEvent) => {

@@ -148,9 +148,11 @@ function modelSwitchNotice(previous: ModelSelection, selected: ModelSelection) {
 }
 
 /**
- * Append a model-switch notice when the step's fixed route differs from the
- * last request header. Effort-only changes and empty no-request decisions add
- * no notice; a failure before header persistence repeats it on the next step.
+ * Add a model-switch notice when the step's fixed route differs from the
+ * last request header. The notice follows the step's input and precedes any
+ * context snapshot, so it stays adjacent to the history it describes. Effort-only
+ * changes and empty no-request decisions add no notice; a failure before header
+ * persistence repeats it on the next step.
  * Install in the selected Agent's unpublished setup scope.
  * @param agentCtx - The selected Agent's scoped context.
  * @returns Disposer for the scoped pre-step listener.
@@ -168,7 +170,11 @@ export function installModelSelection(agentCtx: Context): () => void {
         previous === undefined
         || (modelSelection.provider === previous.provider && modelSelection.model === previous.model)
       ) return decision
-      return { ...decision, messages: [...decision.messages, modelSwitchNotice(previous, modelSelection)] }
+      const admitted = decision.messages
+      // Context snapshots (runtime, time, tmux) trail the input; the notice goes before the first one.
+      const snapshot = admitted.findIndex(message => 'form' in message.source && message.source.form === 'snapshot')
+      const at = snapshot === -1 ? admitted.length : snapshot
+      return { ...decision, messages: [...admitted.slice(0, at), modelSwitchNotice(previous, modelSelection), ...admitted.slice(at)] }
     },
     { prepend: true },
   )

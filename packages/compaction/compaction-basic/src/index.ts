@@ -11,8 +11,9 @@ import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compa
 import type { EpochHeader, Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, LlmError } from '@deepseek-ai/dsh-llm'
+import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
+import type { Agent, ModelSelection, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 // Type-only: makes the optional sibling service available to `ctx.get()`.
 import type {} from '@deepseek-ai/dsh-compaction-tool-result-pruner'
@@ -52,6 +53,23 @@ function completeRoute(route: { provider?: string; model?: string } | undefined)
   if (route?.provider === undefined || route.provider.length === 0
     || route.model === undefined || route.model.length === 0) return undefined
   return { provider: route.provider, model: route.model }
+}
+
+/**
+ * The header a step on a newly selected route will request under, or undefined
+ * when the selection keeps the latest durable route. The previous reasoning
+ * effort never carries over; a previous output cap carries over only when the
+ * caller set it, so the destination adapter materializes its own defaults.
+ */
+function switchedHeader(previous: EpochHeader | undefined, selection: Readonly<ModelSelection>): EpochHeader | undefined {
+  if (previous === undefined || completeRoute(previous.config) === undefined) return undefined
+  if (previous.config.provider === selection.provider && previous.config.model === selection.model) return undefined
+  const config: LlmCallConfig = { ...previous.config, ...selection }
+  if (selection.reasoningEffort === undefined) delete config.reasoningEffort
+  if (previous.adapterDefaults?.maxTokens === true) delete config.maxTokens
+  const header: EpochHeader = { ...previous, config }
+  delete header.adapterDefaults
+  return header
 }
 
 /** Resolve the exact provider/model durably routed for the latest request. */
@@ -156,8 +174,9 @@ export class BasicCompactionEngine extends CompactionEngine {
 
   /**
    * Register between-step pressure, model-switch pressure, and request-overflow
-   * recovery. Pre-step and overflow listeners dispatch through `compactIfNeeded`;
-   * model switches price the proposed header directly. All summaries use `summarize`.
+   * recovery. Pressure and overflow dispatch through `compactIfNeeded`; a model
+   * switch prices the step's selected route at pre-step, before the claimed
+   * input is committed to the step. All summaries use `summarize`.
    */
   private _registerAutomaticCompaction(): void {
     const { ctx } = this
@@ -170,53 +189,46 @@ export class BasicCompactionEngine extends CompactionEngine {
     }
 
     ctx.on('agent/pre-step', async (
-      { agent, signal },
+      { agent, signal, modelSelection },
       next,
     ): Promise<PreStepDecision> => {
-      if (!signal.aborted) {
+      if (signal.aborted) return next()
+      const switched = switchedHeader(agent.session.requestHeader(), modelSelection)
+      if (switched !== undefined) {
+        // The step's route is fixed here, and the claimed input is still
+        // recoverable: a failure returns it to the queue instead of losing it
+        // behind `step/start`. The previous route summarizes the history.
         try {
-          const result = await this.compactIfNeeded(agent, 'pressure', signal)
-          if (result !== null) logResult(result, 'step pressure')
+          const result = await this.compactPressure(agent, switched, signal, true)
+          if (result !== null) logResult(result, 'model switch')
         } catch (error: unknown) {
-          if (error instanceof TargetPressureConfigError) {
-            if (this.warnedPressureConfigTargets.has(error.targetKey)) return next()
-            this.warnedPressureConfigTargets.add(error.targetKey)
-          }
+          signal.throwIfAborted()
           const message = error instanceof Error ? error.message : String(error)
-          ctx.logger.warn(`step compaction failed: ${message}; continuing the turn`)
+          throw new LlmError(
+            `Cannot switch to ${modelSelection.provider}/${modelSelection.model}: context compaction failed: ${message}. `
+            + 'The previous request model is preserved; retry or select a model with a larger context window.',
+            'MODEL_SWITCH_COMPACTION_FAILED',
+            { cause: error },
+          )
         }
+        return next()
+      }
+      try {
+        const result = await this.compactIfNeeded(agent, 'pressure', signal)
+        if (result !== null) logResult(result, 'step pressure')
+      } catch (error: unknown) {
+        if (error instanceof TargetPressureConfigError) {
+          if (this.warnedPressureConfigTargets.has(error.targetKey)) return next()
+          this.warnedPressureConfigTargets.add(error.targetKey)
+        }
+        const message = error instanceof Error ? error.message : String(error)
+        ctx.logger.warn(`step compaction failed: ${message}; continuing the turn`)
       }
       return next()
     })
-
     ctx.on('agent/status', ({ agent, status }) => {
       if (status === 'idle') this.overflowRetries.delete(agent)
     })
-
-    // Prepend wraps routing listeners: await their final selection while the
-    // committed header still identifies the model that can summarize the history.
-    ctx.on('agent/request', async ({ agent, signal }, next) => {
-      const config = await next()
-      const previous = agent.session.requestHeader()
-      if (signal.aborted || previous === undefined || config.provider === '' || config.model === ''
-        || (previous.config.provider === config.provider && previous.config.model === config.model)) return config
-      try {
-        const header = { ...previous, config }
-        const result = await this.compactPressure(agent, header, signal, true)
-        if (result !== null) logResult(result, 'model switch')
-      } catch (error: unknown) {
-        signal.throwIfAborted()
-        const message = error instanceof Error ? error.message : String(error)
-        throw new LlmError(
-          `Cannot switch to ${config.provider}/${config.model}: context compaction failed: ${message}. `
-          + 'The previous request model is preserved; retry or select a model with a larger context window.',
-          'MODEL_SWITCH_COMPACTION_FAILED',
-          { cause: error },
-        )
-      }
-      return config
-    }, { prepend: true })
-
     // A successful response starts a fresh overflow-recovery sequence even
     // when tool calls continue the same turn into another request.
     ctx.on('session/event', (session, event) => {

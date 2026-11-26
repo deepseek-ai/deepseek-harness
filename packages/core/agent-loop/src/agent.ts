@@ -14,7 +14,6 @@ import type {
   ModelSelection,
   ModelSelectionProjectionState,
   InboxTarget,
-  InboxState,
   PreStepDecision,
   RequestErrorAction,
 } from '@deepseek-ai/dsh-agent'
@@ -37,7 +36,7 @@ import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import { ToolActivationError, ToolBatchExecutionError } from '@deepseek-ai/dsh-tools'
 import type { ResolvedToolSet } from '@deepseek-ai/dsh-tools'
 import type { Context } from '@deepseek-ai/cordis'
-import { ReactLoopInbox } from './inbox.ts'
+import { ReactLoopInbox, type InboxProjectionState } from './inbox.ts'
 import { RuntimeContextProjection } from './runtime-context.ts'
 import { AssistantStreamAttempt } from './assistant-stream.ts'
 
@@ -46,7 +45,7 @@ interface LoopProjections {
   /** Current model selection, including pending changes. */
   readonly modelSelection: () => ModelSelectionProjectionState
   /** Current queued and claimed input. */
-  readonly inbox: () => InboxState
+  readonly inbox: () => InboxProjectionState
 }
 
 type Phase =
@@ -398,19 +397,25 @@ export class ReactLoopAgent implements Agent {
     } catch (error: unknown) {
       // A cause is present exactly while the signal is aborted.
       const cause = abortedCancelCause(signal)
-      if (cause !== undefined) {
-        turnEnds = { kind: 'aborted', reason: cause }
-        throw error
-      }
       // Every failure is structured: an `LlmError` keeps its facts, a tool
       // activation failure keeps its code, and anything else flattens to
       // `errorChain` text under the `UNKNOWN` code.
-      turnEnds = {
-        kind: 'error',
-        error: error instanceof LlmError
-          ? error.failure
-          : { message: errorChain(error), code: error instanceof ToolActivationError ? error.code : 'UNKNOWN' },
+      turnEnds = cause === undefined
+        ? {
+          kind: 'error',
+          error: error instanceof LlmError
+            ? error.failure
+            : { message: errorChain(error), code: error instanceof ToolActivationError ? error.code : 'UNKNOWN' },
+        }
+        : { kind: 'aborted', reason: cause }
+      // Before `turn/end` settles the claim, the inbox returns it unless the queue was cleared.
+      try {
+        this.inbox.returnClaims()
+      } catch (returnError: unknown) {
+        // kick() contains only reported failures; the original error is in `turn/end`.
+        this.throwError(returnError)
       }
+      if (cause !== undefined) throw error
       this.throwError(error)
     } finally {
       try {

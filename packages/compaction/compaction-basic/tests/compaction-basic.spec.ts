@@ -17,7 +17,7 @@ import {
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import LlmRuntime, { createUserMessage, type ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
-import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -1804,10 +1804,18 @@ describe('default one-shot summarizer', () => {
 })
 
 describe('model-switch pressure', () => {
-  function request(ctx: Context, session: Session, config: LlmCallConfig, signal = SIGNAL) {
-    return agentEvents(ctx, agent(session, MODEL)).waterfall(
-      'agent/request', { turn: 5, step: 1, signal }, () => Promise.resolve(config),
+  /** Propose a step on `config`'s route; resolves to that config once pre-step admits the step. */
+  async function request(ctx: Context, session: Session, config: LlmCallConfig, signal = SIGNAL) {
+    const { provider, model, reasoningEffort } = config
+    await agentEvents(ctx, agent(session, MODEL)).waterfall(
+      'agent/pre-step',
+      {
+        turn: 5, step: 1, signal, messages: [],
+        modelSelection: { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } },
+      },
+      () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
     )
+    return config
   }
 
   function harness(
@@ -1828,16 +1836,15 @@ describe('model-switch pressure', () => {
     return { ctx, adapter, compact }
   }
 
-  it('checks the newly routed window and summarizes with the previous model before returning it', async () => {
+  it('checks the newly selected window and summarizes with the previous model before the step opens', async () => {
     const { ctx, adapter } = harness()
     const session = conversation(4, 'fixture '.repeat(80))
     const previous = session.requestHeader()
     const selected = { provider: 'small', model: 'small' }
     const before = ctx.tokenMeter.measure(session).totalTokens
     expect(before).toBeGreaterThan(1_000)
-    ctx.on('agent/request', async (_payload, next) => ({ ...await next(), ...selected }))
 
-    await expect(request(ctx, session, { provider: MODEL, model: MODEL })).resolves.toEqual(selected)
+    await expect(request(ctx, session, selected)).resolves.toEqual(selected)
 
     expect(adapter.lastOptions).toMatchObject({ provider: MODEL, model: MODEL, purpose: 'compaction' })
     expect(ctx.tokenMeter.measure(session, { config: selected }).totalTokens).toBeLessThan(500)
@@ -1846,15 +1853,29 @@ describe('model-switch pressure', () => {
       .toHaveLength(1)
   })
 
-  it('uses the proposed output reservation and the destination retention policy', async () => {
+  it('carries a caller-set output reservation into the destination window with its retention policy', async () => {
     const { ctx, adapter } = harness({
       modelPolicies: [{ provider: 'small', model: 'small', retainTokens: 0 }],
     })
     const session = conversation(2)
+    session.append('request/header', { header: { config: { provider: MODEL, model: MODEL, maxTokens: 700 } }, reason: 'change' })
     expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(500)
-    await request(ctx, session, { provider: 'small', model: 'small', maxTokens: 700 })
+    await request(ctx, session, { provider: 'small', model: 'small', reasoningEffort: brandString<ReasoningEffortId>('low') })
     expect(adapter.lastOptions).toBeDefined()
     expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(300)
+  })
+
+  it('drops an adapter-defaulted output reservation so the destination materializes its own', async () => {
+    const { ctx, adapter } = harness({
+      modelPolicies: [{ provider: 'small', model: 'small', retainTokens: 0 }],
+    })
+    const session = conversation(2)
+    session.append('request/header', {
+      header: { config: { provider: MODEL, model: MODEL, maxTokens: 700 }, adapterDefaults: { maxTokens: true } },
+      reason: 'change',
+    })
+    await request(ctx, session, { provider: 'small', model: 'small' })
+    expect(adapter.lastOptions).toBeUndefined()
   })
 
   it.each([false, true])('requires a valid small-window policy even for short history (override: %s)', async (override) => {
@@ -1951,14 +1972,11 @@ describe('model-switch pressure', () => {
     expect(adapter.lastOptions).toMatchObject({ provider: 'summary', model: 'summary' })
   })
 
-  it('skips initial, incomplete, unchanged, below-threshold, disabled and already cancelled requests', async () => {
+  it('skips initial, unchanged, below-threshold, disabled and already cancelled steps', async () => {
     const { ctx, adapter } = harness()
     const selected = { provider: 'small', model: 'small' }
     await request(ctx, Session.create(brandString<SessionId>('initial-switch')), selected)
     await request(ctx, conversation(4), { provider: MODEL, model: MODEL })
-    for (const config of [{ provider: '', model: 'small' }, { provider: 'small', model: '' }]) {
-      await expect(request(ctx, conversation(4), config)).resolves.toEqual(config)
-    }
     await request(ctx, conversation(1), selected)
     await request(ctx, conversation(4), selected, AbortSignal.abort('cancelled'))
     expect(adapter.lastOptions).toBeUndefined()
@@ -2041,7 +2059,7 @@ describe('model-switch pressure', () => {
 describe('automatic listener and loader composition', () => {
   function preStep(ctx: Context, owner: Agent, signal = SIGNAL) {
     return agentEvents(ctx, owner).waterfall(
-      'agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, messages: [], turn: 1, step: 1, signal },
+      'agent/pre-step', { modelSelection: { provider: MODEL, model: MODEL }, messages: [], turn: 1, step: 1, signal },
       () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
     )
   }

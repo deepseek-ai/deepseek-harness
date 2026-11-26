@@ -233,7 +233,7 @@ Goal-round messages and tool results append to retained history under the native
 These limits define when the plugin needs special operational care. They are current package constraints, not a comparison with other serving approaches or a task backlog.
 
 - **The wire has no per-session close or prompt-cancel method** — SDK-created agents remain live until process shutdown.
-- **There is no per-prompt result** — `MessageId` identifies inbox admission only; clients that own an automation interval must define and observe that interval themselves.
+- **There is no per-prompt result** — `MessageId` identifies inbox admission only. Clients that own an automation interval must define and observe it themselves. If a turn fails before the claimed prompt's step starts, the prompt returns to the head of the queue and runs on the next prompt. The wire has no queue-management method to remove it.
 - **stdout purity is deployment-enforced** — a surrounding config can still load a stdout logger and corrupt the JSON-RPC channel; this plugin does not inspect or veto sibling loggers.
 - **Automatic adapter mounting is DeepSeek-specific** — `initialize` can reuse any pre-registered model adapter, but its only fallback mounts the DeepSeek adapter.
 

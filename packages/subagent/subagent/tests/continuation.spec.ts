@@ -4075,7 +4075,7 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it('reports a turn that failed before reaching its first step', async () => {
+  it('keeps input from a failed pre-step parked until the caller clears it', async () => {
     const releaseFirst = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([
       { chunks: textResponse('the answer'), gate: releaseFirst.promise },
@@ -4092,12 +4092,18 @@ describe('continuable settlement delivery', () => {
 
     const started = await ctx.subagents.startActivation({ ...startSpec(parent), delivery: 'parent' })
     await queuePrompt(ctx, started.childId, message('second task'))
+    const liveChild = ctx.agents.get(started.childId)!
     releaseFirst.resolve(undefined)
+    await liveChild.whenIdle()
+    await passSettlementCheck(ctx, started.childId)
+    const [queued] = liveChild.inbox.nextTurn
+    expect(queued?.content).toEqual(message('second task'))
+    expect(ctx.agents.get(started.childId)).toBe(liveChild)
+    expect(settlementNotices(parent)).toHaveLength(0)
+    expect(liveChild.inbox.remove(queued!.id)).toBe(true)
     await waitNoActivation(ctx, started.childId)
 
     await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
-    // The parent must not be told the child finished: the delivery it is still
-    // waiting on was claimed out of the inbox and then swallowed by the failure.
     const child = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(hasUserText(child.events, 'second task')).toBe(false)
     expect(settlementNotices(parent)[0]!.text).toBe(
@@ -4166,7 +4172,7 @@ describe('continuable settlement delivery', () => {
     )
   })
 
-  it('reports a child an ancestor interrupted before its first step as stopped', async () => {
+  it('keeps an ancestor-stopped child resident while its first input is queued', async () => {
     const atCheckpoint = Promise.withResolvers<undefined>()
     const releaseCheckpoint = Promise.withResolvers<undefined>()
     const adapter = new GatedAdapter([{ chunks: textResponse('parent ack') }])
@@ -4183,7 +4189,14 @@ describe('continuable settlement delivery', () => {
     // The shipped interrupt path: nothing about it runs inside this manager, so
     // no pre-cancel sample could see it — the child's own log has to say so.
     ctx.subagents.interrupt(started.childId, { kind: 'ancestor', agent: parent })
+    const child = ctx.agents.get(started.childId)!
     releaseCheckpoint.resolve(undefined)
+    await child.whenIdle()
+    await passSettlementCheck(ctx, started.childId)
+    expect(child.inbox.nextTurn).toHaveLength(1)
+    expect(ctx.agents.get(started.childId)).toBe(child)
+    expect(settlementNotices(parent)).toHaveLength(0)
+    child.inbox.clear()
     await waitNoActivation(ctx, started.childId)
 
     await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })

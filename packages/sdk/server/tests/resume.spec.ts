@@ -6,6 +6,8 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
+import * as GoalRoundDriver from '@deepseek-ai/dsh-goal-round-driver'
 import { createUserMessage, type ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
 import PermissionPresetService from '@deepseek-ai/dsh-permission-presets'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
@@ -330,6 +332,52 @@ describe('SDK persisted session resume', () => {
     expect(restored.snapshotEvents().at(-1)).toMatchObject({
       type: 'turn/end', data: { turn: 3, reason: { kind: 'completed' } },
     })
+  })
+
+  it('leaves the first prompt queued when a resumed goal round is rejected', async () => {
+    const root = await storageRoot()
+    const { ctx, server, adapter } = await initialized(root)
+    await ctx.plugin(GoalService)
+    await ctx.plugin(GoalRoundDriver)
+    const sessionId = brandString<SessionId>('interrupted-goal')
+    const goal = {
+      id: GoalId('saved-goal'),
+      revision: 1,
+      phase: 'active' as const,
+      objective: 'Finish the saved goal',
+      maxGoalRounds: 2,
+    }
+    const round = createUserMessage({
+      content: [{ type: 'text', text: 'Continue the saved goal' }],
+      source: { kind: 'goal', goalId: goal.id, revision: goal.revision, round: 1 },
+    })
+    const stored = await ctx.sessionPersistence.create(ctx.sessions.prepare(sessionId, { meta: { cwd: root } }).header)
+    try {
+      await stored.append([
+        { type: 'goal/change', seq: SessionSeq(0), time: 1,
+          data: { kind: 'goal/change', version: 1, operation: 'create', goal, roundsStarted: 0, createdAt: 1, updatedAt: 1 } },
+        { type: 'agent/inbox/spliced', seq: SessionSeq(1), time: 2,
+          data: { target: 'next-turn', start: 0, inserted: [round] } },
+        { type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 1 } },
+        { type: 'agent/inbox/spliced', seq: SessionSeq(3), time: 4,
+          data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [] } },
+      ])
+    } finally {
+      await stored.close()
+    }
+
+    await server.resume({ sessionId })
+    expect(adapter.requests).toHaveLength(0)
+    const { messageId } = await server.prompt({ sessionId, contentBlocks: [{ type: 'text', text: 'First prompt after resume' }] })
+    await server.wait({ sessionId })
+
+    const agent = ctx.agents.get(sessionId)!
+    expect(adapter.requests).toHaveLength(0)
+    expect(agent.inbox.nextTurn.map(message => message.id)).toEqual([messageId])
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+      type: 'turn/end', data: { turn: 2, reason: { kind: 'blocked' } },
+    })
+    expect(ctx.goals.get(agent)).toMatchObject({ ...goal, activation: 'disarmed', roundsStarted: 0 })
   })
 
   it('rejects missing history and releases a failed resume for retry', async () => {

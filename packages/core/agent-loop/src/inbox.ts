@@ -6,7 +6,7 @@
 
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import type { Session, SessionEventMap, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionEventMap, UserMessage } from '@deepseek-ai/dsh-session'
 import type {
   AgentEventDispatch,
   Inbox as InboxContract,
@@ -16,52 +16,117 @@ import type {
 } from '@deepseek-ai/dsh-agent'
 import { z } from 'zod'
 
-/** Wire validation for pending agent input reconstructed from durable inbox splices. */
-export const inboxProjectionSchema = z.object({
-  'next-turn': z.array(z.custom<UserMessage>()).readonly(),
-  'next-step': z.array(z.custom<UserMessage>()).readonly(),
+const messages = z.array(z.custom<UserMessage>(
+  value => typeof value === 'object' && value !== null && typeof Reflect.get(value, 'id') === 'string',
+)).readonly()
+
+const inboxProjectionSchema = z.object({
+  'next-turn': messages,
+  'next-step': messages,
 }).readonly()
 
-/** Standard fold that reconstructs pending input and rejects invalid durable splice history. */
+/** Claims for an unopened step: the current batch, and the batch an interrupted turn left behind. */
+const inboxClaimSchema = z.object({
+  pending: messages,
+  interrupted: messages,
+}).readonly()
+
+/** `queues` is the wire view; one object lets the view reuse its reference across claim-only changes. */
+const inboxStateSchema = z.object({
+  queues: inboxProjectionSchema,
+  claim: inboxClaimSchema,
+}).readonly()
+
+/** Pending queues and the claims for an unopened step. */
+export type InboxProjectionState = z.infer<typeof inboxStateSchema>
+
+type InboxSplice = SessionEventMap['agent/inbox/spliced']
+
+/** Apply a normalized splice and check message identities across both queues. */
+function spliceQueue(inbox: InboxState, splice: InboxSplice, removedCount: number) {
+  const { target, start, inserted } = splice
+  const queue = inbox[target].slice()
+  const removed = queue.splice(start, removedCount, ...inserted)
+  const queues = { ...inbox, [target]: queue }
+  const ids = new Set<MessageId>()
+  for (const pending of [queues['next-turn'], queues['next-step']]) {
+    for (const { id } of pending) {
+      if (ids.has(id)) throw new Error(`message "${id}" is already pending`)
+      ids.add(id)
+    }
+  }
+  return { queues, removed }
+}
+
+function foldInboxSplice(state: InboxProjectionState, event: SessionEvent<'agent/inbox/spliced'>): InboxProjectionState {
+  const { data: splice, seq } = event
+  try {
+    const { start, target, inserted, outcome } = splice
+    const removedCount = splice.removedCount ?? 0
+    const length = state.queues[target].length
+    if (!Number.isSafeInteger(start) || start < 0 || start > length
+      || !Number.isSafeInteger(removedCount) || removedCount < 0 || start + removedCount > length) {
+      throw new Error('invalid inbox splice')
+    }
+    const { queues, removed } = spliceQueue(state.queues, splice, removedCount)
+    if (removed.length === 0) return { ...state, queues }
+    const { claim } = state
+    // A removal without an outcome records a claim.
+    if (outcome !== 'canceled') {
+      return { queues, claim: { ...claim, pending: [...claim.pending, ...removed] } }
+    }
+
+    const discarded = new Set(removed.map(message => message.id))
+    for (const { id } of inserted) discarded.delete(id)
+    const keep = (message: UserMessage) => !discarded.has(message.id)
+    return { queues, claim: { pending: claim.pending.filter(keep), interrupted: claim.interrupted.filter(keep) } }
+  } catch (error: unknown) {
+    throw new Error(`invalid persisted inbox splice at session seq ${seq}`, { cause: error })
+  }
+}
+
+/** The Session log stores losslessly serializable messages. Reuse the queue object for wire change detection. */
+function toInboxWireState(state: InboxState): InboxWireState {
+  return state as unknown as InboxWireState
+}
+
+/** Reconstruct the queues and claim settlement from the same validated splices. */
 export const inboxProjectionDefinition = {
   key: 'inbox',
-  stateSchema: inboxProjectionSchema,
-  init: (): InboxState => ({ 'next-turn': [], 'next-step': [] }),
-  apply(state: InboxState, event) {
-    if (event.type !== 'agent/inbox/spliced') return state
-    const splice = event.data
-    try {
-      const inbox = state[splice.target]
-      const removedCount = splice.removedCount ?? 0
-      if (!Number.isSafeInteger(splice.start) || splice.start < 0 || splice.start > inbox.length
-        || !Number.isSafeInteger(removedCount) || removedCount < 0
-        || splice.start + removedCount > inbox.length) {
-        throw new Error('invalid inbox splice')
+  stateSchema: inboxStateSchema,
+  init: (): InboxProjectionState => ({
+    queues: { 'next-turn': [], 'next-step': [] },
+    claim: { pending: [], interrupted: [] },
+  }),
+  apply(state: InboxProjectionState, event): InboxProjectionState {
+    switch (event.type) {
+      case 'agent/inbox/spliced':
+        return foldInboxSplice(state, event)
+      case 'step/start':
+        if (state.claim.pending.length === 0) return state
+        return { ...state, claim: { ...state.claim, pending: [] } }
+      case 'turn/end': {
+        const { pending, interrupted } = state.claim
+        if (pending.length === 0 && interrupted.length === 0) return state
+        return { ...state, claim: { pending: [], interrupted: event.data.reason.kind === 'interrupted' ? pending : [] } }
       }
-      const next = inbox.toSpliced(splice.start, removedCount, ...splice.inserted)
-      const ids = new Set<string>()
-      for (const message of splice.target === 'next-turn'
-        ? [...next, ...state['next-step']]
-        : [...state['next-turn'], ...next]) {
-        if (ids.has(message.id)) throw new Error(`message "${message.id}" is already pending`)
-        ids.add(message.id)
+      case 'session/end-seed': {
+        // A fork inherits its parent's queue, never a claim the parent's turn left unopened.
+        const { pending, interrupted } = state.claim
+        if (event.data.inherited !== true || (pending.length === 0 && interrupted.length === 0)) return state
+        return { ...state, claim: { pending: [], interrupted: [] } }
       }
-      return splice.target === 'next-turn'
-        ? { 'next-turn': next, 'next-step': state['next-step'] }
-        : { 'next-turn': state['next-turn'], 'next-step': next }
-    } catch (error: unknown) {
-      throw new Error(`invalid persisted inbox splice at session seq ${event.seq}`, { cause: error })
+      default:
+        // Other Session events leave the inbox unchanged.
+        return state
     }
   },
   wire: {
-    // The wire value is the fold state itself: every pending message already
-    // round-trips the session log as lossless JSON. Only the static type
-    // narrows to the JSON-safe projection table entry.
     viewSchema: inboxProjectionSchema as unknown as z.ZodType<InboxWireState>,
-    view: (state: InboxState) => state as unknown as InboxWireState,
+    view: ({ queues }) => toInboxWireState(queues),
   },
-  stateVersion: 1,
-} satisfies ProjectionDefinition<'inbox', InboxState>
+  stateVersion: 3,
+} satisfies ProjectionDefinition<'inbox', InboxProjectionState>
 
 /**
  * Driver-owned durable Inbox implementation used by ReactLoopAgent and focused
@@ -71,30 +136,58 @@ export const inboxProjectionDefinition = {
  * @param dispatch - agent-scoped notifications for Inbox lifecycle events.
  */
 export class ReactLoopInbox implements InboxContract {
+  /** Whether {@link clear} discarded the batch taken by the latest {@link claim}. */
+  private claimDiscarded = false
+
   constructor(
-    private readonly readState: () => InboxState,
+    private readonly readState: () => InboxProjectionState,
     private readonly session: Session,
     private readonly dispatch: AgentEventDispatch,
   ) {}
 
   /** Prompts awaiting individual turns. */
   get nextTurn(): readonly UserMessage[] {
-    return this.readState()['next-turn']
+    return this.readState().queues['next-turn']
   }
 
   /** Input awaiting the next step boundary. */
   get nextStep(): readonly UserMessage[] {
-    return this.readState()['next-step']
+    return this.readState().queues['next-step']
+  }
+
+  /**
+   * Return the batch claimed for an unopened step to the next-turn head when
+   * the turn ends before `step/start`, unless {@link clear} discarded it.
+   * Call before `turn/end` settles the claim.
+   * @throws when the Session refuses the return; the claim stays settled by `turn/end`.
+   */
+  returnClaims(): void {
+    if (!this.claimDiscarded) this.returnClaim('pending')
+  }
+
+  /** Return the claim an interrupted turn left for an unopened step; a no-op after a completed turn. */
+  restoreInterrupted(): void {
+    this.returnClaim('interrupted')
+  }
+
+  /** Prepend one claim list in order, skipping any occurrence already queued. */
+  private returnClaim(source: keyof InboxProjectionState['claim']): void {
+    const state = this.readState()
+    const claims = state.claim[source]
+    if (claims.length === 0) return
+    const queued = new Set([...state.queues['next-turn'], ...state.queues['next-step']].map(message => message.id))
+    this.splice('next-turn', 0, 0, claims.filter(message => !queued.has(message.id)))
   }
 
   /** Whether either pending-message list contains work. */
   get hasPending(): boolean {
-    const state = this.readState()
-    return state['next-turn'].length > 0 || state['next-step'].length > 0
+    const { queues } = this.readState()
+    return queues['next-turn'].length > 0 || queues['next-step'].length > 0
   }
 
   /** Durably cancel all pending input, clearing next-step before next-turn. */
   clear(): void {
+    this.claimDiscarded = true
     this.splice('next-step', 0, this.nextStep.length, [])
     this.splice('next-turn', 0, this.nextTurn.length, [])
   }
@@ -106,6 +199,7 @@ export class ReactLoopInbox implements InboxContract {
    * @returns next-step input followed by the queued turn, when requested.
    */
   claim(target: InboxTarget, turn: number): UserMessage[] {
+    this.claimDiscarded = false
     const claimed = this.mutate('next-step', 0, this.nextStep.length, [], false)
     if (target === 'next-turn') claimed.push(...this.mutate('next-turn', 0, 1, [], false))
     for (const message of claimed) this.dispatch.emit('agent/inbox/claimed', { message, turn })
@@ -118,7 +212,7 @@ export class ReactLoopInbox implements InboxContract {
    * @param message - message to append.
    */
   append(target: InboxTarget, message: UserMessage): void {
-    this.splice(target, this.readState()[target].length, 0, [message])
+    this.splice(target, this.readState().queues[target].length, 0, [message])
   }
 
   /**
@@ -174,9 +268,9 @@ export class ReactLoopInbox implements InboxContract {
 
   /** Locate one pending identity across both owned lists. */
   private locate(messageId: MessageId): { target: InboxTarget; index: number } | undefined {
-    const state = this.readState()
+    const { queues } = this.readState()
     for (const target of ['next-turn', 'next-step'] as const) {
-      const index = state[target].findIndex(message => message.id === messageId)
+      const index = queues[target].findIndex(message => message.id === messageId)
       if (index >= 0) return { target, index }
     }
     return undefined
@@ -190,8 +284,8 @@ export class ReactLoopInbox implements InboxContract {
     inserted: UserMessage[],
     discardRemoved: boolean,
   ): UserMessage[] {
-    const state = this.readState()
-    const inbox = state[target]
+    const { queues } = this.readState()
+    const inbox = queues[target]
     const truncatedStart = Math.trunc(start)
     const offset = Number.isNaN(truncatedStart) ? 0 : truncatedStart
     const actualStart = offset < 0
@@ -203,23 +297,15 @@ export class ReactLoopInbox implements InboxContract {
       inbox.length - actualStart,
     )
     if (actualDeleteCount === 0 && inserted.length === 0) return []
-    const candidate = inbox.toSpliced(actualStart, actualDeleteCount, ...inserted)
-    const ids = new Set<string>()
-    for (const message of target === 'next-turn'
-      ? [...candidate, ...state['next-step']]
-      : [...state['next-turn'], ...candidate]) {
-      if (ids.has(message.id)) throw new Error(`message "${message.id}" is already pending`)
-      ids.add(message.id)
-    }
     const outcome = discardRemoved && actualDeleteCount > 0 ? 'canceled' as const : undefined
-    const splice: SessionEventMap['agent/inbox/spliced'] = {
+    const splice: InboxSplice = {
       target,
       start: actualStart,
       ...(actualDeleteCount === 0 ? {} : { removedCount: actualDeleteCount }),
       inserted,
       ...(outcome === undefined ? {} : { outcome }),
     }
-    const removed = inbox.slice(actualStart, actualStart + actualDeleteCount)
+    const { removed } = spliceQueue(queues, splice, actualDeleteCount)
     const event = this.session.append('agent/inbox/spliced', splice)
     if (discardRemoved) {
       for (const message of removed) this.dispatch.emit('agent/inbox/discarded', { message })

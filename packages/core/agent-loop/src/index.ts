@@ -21,7 +21,6 @@ import type {
   SessionStartSource,
   ModelSelection,
   ModelSelectionProjectionState,
-  InboxState,
 } from '@deepseek-ai/dsh-agent'
 import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import { errorChain, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -33,7 +32,7 @@ import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionHandle, SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { ReactLoopAgent } from './agent.ts'
-import { inboxProjectionDefinition } from './inbox.ts'
+import { inboxProjectionDefinition, type InboxProjectionState } from './inbox.ts'
 import { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'
 import type {} from './runtime-context.ts'
 
@@ -311,7 +310,7 @@ export class AgentLoop extends Service implements AgentFactory {
   /** Plain holder prevents Cordis from re-tracing the factory's dependency context through a caller shadow. */
   private readonly runtime: { ctx: Context }
   private modelProjectionHandle!: ProjectionHandle<ModelSelectionProjectionState>
-  private inboxProjectionHandle!: ProjectionHandle<InboxState>
+  private inboxProjectionHandle!: ProjectionHandle<InboxProjectionState>
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'agentLoop')
@@ -627,6 +626,9 @@ export class AgentLoop extends Service implements AgentFactory {
           assertLive()
           detachSession = agent.ctx.sessions.enter(session)
           agent.ctx.sessions.announce(session)
+          assertLive()
+          // Writes are open after announce; a fresh Session holds no interrupted claim.
+          agent.inbox.restoreInterrupted()
           assertLive()
           const setupCommit = await raceAbort(setup?.(agent.ctx, agent), abort.signal, id)
           assertLive()

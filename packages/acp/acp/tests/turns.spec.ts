@@ -185,12 +185,59 @@ describe('ACP prompt lifecycle', () => {
     expect(messageText(harness)).toBe('')
   })
 
-  it('rejects an ordinary plugin failure through the same prompt boundary', async () => {
-    harness = await makeBridgeHarness({ script: [textResponse('must not run')] })
-    harness.ctx.on('agent/pre-step', () => { throw new Error('plugin pre-step failed') })
+  it('rejects a pre-step failure and runs the queued prompt on the next wake', async () => {
+    harness = await makeBridgeHarness({ script: [textResponse('first ran'), textResponse('second ran')] })
+    const stopFailing = harness.ctx.on('agent/pre-step', () => { throw new Error('plugin pre-step failed') })
     const sessionId = await newSession(harness)
-    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }))
+    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'first' }] }))
       .rejects.toThrow(/turn failed: plugin pre-step failed/)
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
+    expect(agent.inbox.nextTurn.map(message => message.content)).toEqual([[{ type: 'text', text: 'first' }]])
+    expect(messageText(harness)).toBe('')
+
+    stopFailing()
+    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'second' }] }))
+      .resolves.toEqual({ stopReason: 'end_turn' })
+    expect(messageText(harness)).toBe('first ransecond ran')
+    expect(agent.session.snapshotEvents().flatMap(event =>
+      event.type === 'user/message' ? [event.data.content] : [],
+    )).toEqual([
+      [{ type: 'text', text: 'first' }],
+      [{ type: 'text', text: 'second' }],
+    ])
+  })
+
+  it('keeps a rejected prompt queued behind unrelated input', async () => {
+    harness = await makeBridgeHarness({ script: [
+      textResponse('old reminder ran'), textResponse('blocked prompt ran'), textResponse('next prompt ran'),
+    ] })
+    const sessionId = await newSession(harness)
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))!
+    const reminder = createUserMessage({ content: [{ type: 'text', text: 'old reminder' }], source: { kind: 'test' } })
+    const stopFailing = harness.ctx.on('agent/pre-step', ({ messages }, next) => {
+      if (messages.some(message => message.id === reminder.id)) throw new Error('old reminder failed')
+      return next()
+    })
+
+    agent.followup(reminder)
+    await agent.whenIdle()
+    expect(agent.inbox.nextTurn.map(message => message.id)).toEqual([reminder.id])
+    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'blocked prompt' }] }))
+      .rejects.toThrow(/old reminder failed/)
+    expect(agent.inbox.nextTurn.map(message => message.content)).toEqual([
+      reminder.content, [{ type: 'text', text: 'blocked prompt' }],
+    ])
+
+    stopFailing()
+    await expect(harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'next prompt' }] }))
+      .resolves.toEqual({ stopReason: 'end_turn' })
+    expect(agent.session.snapshotEvents().flatMap(event =>
+      event.type === 'user/message' ? [event.data.content] : [],
+    )).toEqual([
+      reminder.content,
+      [{ type: 'text', text: 'blocked prompt' }],
+      [{ type: 'text', text: 'next prompt' }],
+    ])
   })
 
   it('rejects a turn-start failure before the prompt is claimed', async () => {
@@ -417,7 +464,8 @@ describe('ACP prompt lifecycle', () => {
   })
 
   it('does not attribute an unrelated Agent failure during prompt admission', async () => {
-    harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('answer')] })
+    // The unrelated work's failed Turn returns it to next-turn; the prompt's wake runs it first.
+    harness = await makeBridgeHarness({ imageCapable: true, script: [textResponse('unrelated answer'), textResponse('answer')] })
     const validationStarted = Promise.withResolvers<undefined>()
     const releaseValidation = Promise.withResolvers<undefined>()
     harness.attachments!.beforeValidate = () => {
@@ -446,7 +494,8 @@ describe('ACP prompt lifecycle', () => {
     releaseValidation.resolve(undefined)
 
     await expect(prompt).resolves.toEqual({ stopReason: 'end_turn' })
-    expect(messageText(harness)).toBe('answer')
+    // The mirrored transcript carries the returned work's answer, then the prompt's own.
+    expect(messageText(harness)).toBe('unrelated answeranswer')
   })
 
   it('does not queue admitted content into an agent retired during storage', async () => {

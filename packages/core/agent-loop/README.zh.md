@@ -102,7 +102,7 @@ const handle = await ctx.agents.create({
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`AgentLoop` 服务、配置 schema、声明式 agent 启动、工厂注册 |
 | [`src/agent.ts`](src/agent.ts) | 具体 `ReactLoopAgent` 驱动器：收件箱、轮次／步骤状态机、取消 |
-| [`src/inbox.ts`](src/inbox.ts) | 包内部的 `ReactLoopInbox`：持久投影、结构化命令与仅供循环使用的领取状态 |
+| [`src/inbox.ts`](src/inbox.ts) | `ReactLoopInbox` 以及维护队列和领取落定的共享投影 |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | 逐步骤运行时上下文快照处理 |
 
 ### 创建与拆除
@@ -130,6 +130,14 @@ loop 在发布工厂前等待必需的注册完成。它对模型选择和 inbox
 `turn/end` 声明的类型是 `TurnEndCancelCause`；取消时，循环在其中记录一份新的 `AgentCancelCause`，保留调用方的 `kind` 和 hook 的 `reason` 文本。实时 `AbortSignal.reason` 仍是调用方的那个对象，传输层可能向其添加属性——Node 的 fetch 会给它赋一个 `stack`——因此这份拷贝既让该调用栈不进入日志，也让结束事件保持可追加。
 
 最终适配器选择、分发与迭代失败以终止结束的形式到达并进入 `agent/request-error`；处理该失败的监听器返回 `{ kind: 'retry' }` 且不调用 `next()`，未被处理的失败则是终态。Middleware、结果处理、工具及其他扩展失败仍会抛出并直接关闭轮次——插件失败结束的是轮次，不是循环。取消后未分发的模型工具调用会收到合成的 `tool/call` 加 `ABORTED_BEFORE_DISPATCH` 结果对。
+
+<a id="returned-input"></a>
+
+`inbox` 投影从同一组 splice 推导队列和已领取的消息。Host 检查点保存队列以及为尚未开启的步骤领取的消息。这些消息来自当前轮次，或来自因中断而结束的最近一个轮次。客户端视图提供队列。
+
+如果轮次在 `step/start` 前因失败或保留队列的 Stop 而结束，inbox 在循环记录 `turn/end` 前把已领取的整批消息按领取顺序放回 next-turn 队首；inbox 根据自己的 `clear()` 和 `claim()` 调用做决定，循环不持有放回状态。放回的输入等待正常唤醒。步骤开始、轮次被阻止或正常结束、以及清空队列的取消都会落定领取。Session 从中断轮次恢复时，inbox 在 `agent/created` 前放回为尚未开启的步骤领取的消息；fork 保留父会话的队列，但不放回父会话轮次留下的未开启领取。每次唤醒都在步骤开始前失败的消息留在队首，直到原因修复或拥有者移除它。
+
+如果 Goal 驱动拒绝了回到队首的轮次，本次唤醒会结束，其余输入继续排队。
 
 关闭失败步骤之前，驱动器为每个尚无结果的 assistant 工具调用记录错误结果。已有 `tool/call` 记录但尚无已提交结果的调用获得 `TOOL_OUTCOME_UNKNOWN`；没有调用记录的请求获得 `TOOL_NOT_STARTED`。已提交的结果保持完整，已启动的派发先结算再恢复，轮次保留原始失败。这些结果让后续请求使用配对完整的工具历史，而不自动重试结果不明的操作。
 

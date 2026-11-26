@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionLogOffset, SessionSeq, Session, type SessionId, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
+import SessionStore, { buildForkSeed, interruptedTurnClosers, SessionLogOffset, SessionSeq, Session, type SessionId, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -29,6 +29,11 @@ declare module '@deepseek-ai/dsh-llm' {
 
 const dirs: string[] = []
 afterEach(async () => { for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }) })
+
+/** The text blocks of one message, joined. */
+function text(message: { content: readonly { type: string; text?: string }[] }): string {
+  return message.content.flatMap(block => block.type === 'text' && block.text !== undefined ? [block.text] : []).join('')
+}
 
 async function persistentHarness(adapter: MockAdapter): Promise<{ ctx: Context; root: string }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-resume-'))
@@ -534,6 +539,89 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     const stored = await readStoredEvents(ctx2, sessionId)
     expect(stored.map(event => event.type)).toEqual(['turn/start', 'turn/end', 'session/end-seed'])
     expect(stored[1]).toMatchObject({ data: { reason: { kind: 'interrupted' } } })
+    await ctx2.fiber.dispose()
+  })
+
+  it.each([false, true])('resumes interrupted input once, including input already returned (%s)', async (alreadyReturned) => {
+    // Lifecycle 1: a queued prompt was claimed, the process exited during preparation.
+    const sessionId = brandString<SessionId>('interrupted-claim-resume')
+    const { ctx: ctx1, root } = await persistentHarness(new MockAdapter([]))
+    const lost = createUserMessage({ content: [{ type: 'text', text: 'lost to the exit' }], source: { kind: 'user' } })
+    const later = createUserMessage({ content: [{ type: 'text', text: 'queued later' }], source: { kind: 'user' } })
+    const seed: SessionEvent[] = [
+      { type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1, data: { target: 'next-turn', start: 0, inserted: [lost] } },
+      { type: 'turn/start', seq: SessionSeq(1), time: 2, data: { turn: 1 } },
+      { type: 'agent/inbox/spliced', seq: SessionSeq(2), time: 3, data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [] } },
+      { type: 'agent/inbox/spliced', seq: SessionSeq(3), time: 4, data: { target: 'next-turn', start: 0, inserted: [later] } },
+    ]
+    if (alreadyReturned) {
+      seed.push({ type: 'agent/inbox/spliced', seq: SessionSeq(4), time: 5, data: { target: 'next-turn', start: 0, inserted: [lost] } })
+    }
+    await seedStoredSession(ctx1, sessionId, seed)
+    await ctx1.fiber.dispose()
+
+    // Lifecycle 2: the repair closes the Turn interrupted; the return follows, visible at agent/created.
+    const ctx2 = await mountPersistentHarness(root, new MockAdapter([textResponse('ran lost'), textResponse('ran later'), textResponse('ran wake')]))
+    const seenAtCreated: string[][] = []
+    ctx2.on('agent/created', ({ agent }) => { seenAtCreated.push(agent.inbox.nextTurn.map(message => text(message))) })
+    const handle = await ctx2.agents.resume({ resumeSessionId: sessionId, agentOptions: { provider: 'mock', model: 'mock' } })
+    expect(seenAtCreated).toEqual([['lost to the exit', 'queued later']])
+    expect(handle.agent.status).toBe('idle')
+    const returned = handle.agent.session.snapshotEvents().filter(event =>
+      event.type === 'agent/inbox/spliced' && event.data.inserted.some(message => message.id === lost.id))
+    expect(returned).toHaveLength(2)
+    // The next wake runs the returned prompt first.
+    handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'wake' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx2, handle.agent)
+    expect(handle.agent.session.snapshotEvents().flatMap(event => event.type === 'user/message' ? [text(event.data)] : []))
+      .toEqual(['lost to the exit', 'queued later', 'wake'])
+    await handle.dispose()
+    await ctx2.fiber.dispose()
+  })
+
+  it('never restores a claim inherited from a crashed parent, at the fork or on the fork\'s own resume', async () => {
+    // The parent crashed after claiming a prompt; a cold read closes its turn as interrupted inside the inherited prefix.
+    const parentId = brandString<SessionId>('crashed-parent')
+    const { ctx: ctx1, root } = await persistentHarness(new MockAdapter([]))
+    const claimed = createUserMessage({ content: [{ type: 'text', text: 'claimed by the parent' }], source: { kind: 'user' } })
+    const queued = createUserMessage({ content: [{ type: 'text', text: 'still queued in the parent' }], source: { kind: 'user' } })
+    const stored: SessionEvent[] = [
+      { type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1, data: { target: 'next-turn', start: 0, inserted: [claimed, queued] } },
+      { type: 'turn/start', seq: SessionSeq(1), time: 2, data: { turn: 1 } },
+      { type: 'agent/inbox/spliced', seq: SessionSeq(2), time: 3, data: { target: 'next-turn', start: 0, removedCount: 1, inserted: [] } },
+    ]
+    await seedStoredSession(ctx1, parentId, stored)
+    const repaired = [...stored, ...interruptedTurnClosers(stored)]
+    expect(repaired.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'interrupted' } } })
+    const seed = buildForkSeed(repaired, SessionSeq(repaired.length - 1))
+    const inheritedEventCount = SessionLogOffset(repaired.length)
+
+    // Lifecycle 1: the live fork keeps the parent's queue and does not revive its claim.
+    const fork = await ctx1.agents.create({
+      sessionId: brandString<SessionId>('live-fork'),
+      seed,
+      parentSource: { sessionId: parentId, endSeq: inheritedEventCount },
+      inheritedEventCount,
+      meta: { isSeeded: true },
+      agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    expect(fork.agent.inbox.nextTurn.map(message => text(message))).toEqual(['still queued in the parent'])
+    expect(fork.agent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(2)
+    await fork.dispose()
+
+    // Lifecycle 2: a stored fork that never ran a turn resumes without reviving the claim either.
+    const storedForkId = brandString<SessionId>('stored-fork')
+    const detached = ctx1.sessions.prepare(storedForkId, { seed, inheritedEventCount, meta: { isSeeded: true } })
+    const forkHandle = await ctx1.sessionPersistence.create(detached.header, { inheritedEventCount })
+    await forkHandle.append(detached.snapshotEvents())
+    await forkHandle.close()
+    await ctx1.fiber.dispose()
+
+    const ctx2 = await mountPersistentHarness(root, new MockAdapter([]))
+    const handle = await ctx2.agents.resume({ resumeSessionId: storedForkId, agentOptions: { provider: 'mock', model: 'mock' } })
+    expect(handle.agent.inbox.nextTurn.map(message => text(message))).toEqual(['still queued in the parent'])
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced')).toHaveLength(2)
+    await handle.dispose()
     await ctx2.fiber.dispose()
   })
 
@@ -1121,11 +1209,14 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     // Lifecycle 1: run one full turn, persisting it.
     const adapter1 = new MockAdapter([textResponse('first answer')])
     const { ctx: ctx1, root } = await persistentHarness(adapter1)
-    const h1 = await ctx1.agents.create({ sessionId: brandString<SessionId>('sess-resume'), meta: { cwd: '/w' } })
+    const h1 = await ctx1.agents.create({
+      sessionId: brandString<SessionId>('sess-resume'), meta: { cwd: '/w' }, agentOptions: { provider: 'mock', model: 'mock' },
+    })
     const a1 = h1.agent
     a1.followup(createUserMessage({ content: [{ type: 'text', text: 'first question' }], source: { kind: 'user' } }))
     await waitForIdle(ctx1, a1)
     const events1 = a1.session.snapshotEvents()
+    expect(events1.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
     const seqs1 = events1.map(e => e.seq)
     expect(seqs1).toEqual([...seqs1].sort((x, y) => x - y)) // contiguous
     await h1.dispose()

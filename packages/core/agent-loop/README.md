@@ -102,7 +102,7 @@ The loop deep-freezes each derived message identity on its first request and reu
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `AgentLoop` service, config schema, declarative agent startup, factory registration |
 | [`src/agent.ts`](src/agent.ts) | The concrete `ReactLoopAgent` driver: inbox, turn/step machine, cancellation |
-| [`src/inbox.ts`](src/inbox.ts) | Package-internal `ReactLoopInbox`: durable projection, structural commands, and loop-only claim state |
+| [`src/inbox.ts`](src/inbox.ts) | `ReactLoopInbox` and the shared projection for queues and claim settlement |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | Per-step runtime-context snapshot handling |
 
 ### Creation and teardown
@@ -130,6 +130,14 @@ The runtime-context projection compares the ordered names and text in committed 
 `turn/end` declares `TurnEndCancelCause`; cancellation records a fresh `AgentCancelCause` there, retaining the caller's `kind` and the hook's `reason` text. The live `AbortSignal.reason` remains the caller's object, which a transport may extend — Node's fetch assigns a `stack` onto it — so the copy keeps that trace out of the log and keeps the ending appendable.
 
 Final adapter selection, dispatch, and iteration failures arrive as terminal finishes and enter `agent/request-error`; a handling listener returns `{ kind: 'retry' }` without calling `next()`, while an unhandled failure is terminal. Middleware, result-processing, tool, and other extension failures remain thrown and close the turn directly — plugin failure ends the turn, not the loop. Undispatched model tool calls after cancellation receive synthetic `tool/call` plus `ABORTED_BEFORE_DISPATCH` result pairs.
+
+<a id="returned-input"></a>
+
+The `inbox` projection derives queues and claims from the same splices. The Host checkpoint stores the queues and claims for unopened steps. Those claims come from the current turn or from the most recent closed turn if it ended as interrupted. The client view exposes the queues.
+
+If a turn ends before `step/start` because of a failure or a Stop that keeps the queue, the inbox returns the entire claimed batch to the head of next-turn in claim order before the loop records `turn/end`; the inbox decides from its own `clear()` and `claim()` calls, and the loop keeps no return state. Returned input waits for a normal wake. Starting the step, finishing or blocking the turn, or clearing the queue settles the claims. When a Session resumes after an interrupted turn, the inbox restores claims for an unopened step before `agent/created`; a fork keeps its parent's queue but never restores a claim the parent's turn left unopened. A message that fails before step start on every wake stays at the queue head until its cause is fixed or its owner removes it.
+
+If the Goal driver rejects a returned round at the queue head, that wake ends with the remaining input still queued.
 
 Before closing a failed step, the driver records an error result for each unanswered assistant tool call. A recorded `tool/call` without a committed result receives `TOOL_OUTCOME_UNKNOWN`; a request without a call record receives `TOOL_NOT_STARTED`. Committed results remain intact, started dispatches settle before recovery, and the turn retains the original failure. These results let later requests use paired tool history without automatically retrying uncertain operations.
 

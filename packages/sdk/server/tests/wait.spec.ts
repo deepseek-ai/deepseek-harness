@@ -121,10 +121,14 @@ describe('SDK session/wait failures', () => {
         provider: 'local-test', label: 'child failure', delivery: 'caller', signal: new AbortController().signal,
         parent, prompt: [{ type: 'text', text: 'delegated task' }],
       })
-      await expect(child.result).resolves.toMatchObject({ stopReason: 'error' })
+      const parked = ctx.agents.get(child.childId)!
+      await parked.whenIdle()
       expect(observed).toEqual([failure])
+      expect(parked.inbox.nextTurn).toHaveLength(1)
       await expect(server.wait({ sessionId: 'main' })).resolves.toEqual({})
       expect(warnings).not.toHaveBeenCalled()
+      await child.dispose()
+      await expect(child.result).resolves.toMatchObject({ stopReason: 'error' })
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'continue parent' }] })
       await expect(server.wait({ sessionId: 'main' })).resolves.toEqual({})
     } finally {
@@ -189,6 +193,31 @@ describe('SDK session/wait failures', () => {
       const parent = ctx.agents.get(brandString<SessionId>('main'))!
       expect(parent.session.snapshotEvents().findLast(event => event.type === 'turn/end')?.data.reason)
         .toMatchObject({ kind: 'error', error: { message: 'represented failure' } })
+    } finally {
+      await dispose()
+    }
+  })
+
+  it('runs a prompt a failed Turn returned on the next prompt, after the wait reported the failure', async () => {
+    // The wire has no per-prompt result: the failed prompt's message is admission, and
+    // the loop's return keeps it queued for the next wake rather than losing it.
+    let fail = true
+    const { ctx, server, dispose } = await setup()
+    try {
+      ctx.on('agent/pre-step', (_payload, next) => {
+        if (!fail) return next()
+        fail = false
+        throw new Error('represented failure')
+      })
+      const { messageId } = await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'returned' }] })
+      await expect(server.wait({ sessionId: 'main' })).resolves.toEqual({})
+      const parent = ctx.agents.get(brandString<SessionId>('main'))!
+      expect(parent.inbox.nextTurn.map(message => message.id)).toEqual([messageId])
+      await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'next' }] })
+      await expect(server.wait({ sessionId: 'main' })).resolves.toEqual({})
+      expect(parent.session.snapshotEvents().flatMap(event => event.type === 'user/message'
+        ? [event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')]
+        : [])).toEqual(['returned', 'next'])
     } finally {
       await dispose()
     }

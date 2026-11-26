@@ -613,3 +613,58 @@ describe('summary route after a switch to a model that undercounts in the estima
     }
   })
 })
+
+describe('model-switch pressure before the step opens', () => {
+  it('returns the prompt to the queue when Stop interrupts the switch summary', async () => {
+    const ctx = new Context()
+    const summarizing = Promise.withResolvers<undefined>()
+    class StoppableEngine extends BasicCompactionEngine {
+      override async summarize(
+        _input: unknown, _agent: Agent, signal?: AbortSignal,
+      ): Promise<{ summary: ContentBlock[]; provider: string; model: string }> {
+        summarizing.resolve(undefined)
+        await new Promise<never>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+        })
+        throw new Error('unreachable')
+      }
+    }
+    const adapter = new class extends LlmAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({ provider, id: model, name: model, context: { contextWindow: provider === 'small' ? 300 : 100_000 } })
+      }
+
+      override async * stream(): AsyncIterable<StreamChunk> {
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: 'answer '.repeat(200) } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }()
+    try {
+      await mountAgentLoopTestDependencies(ctx)
+      await ctx.plugin(AgentLoop, { agents: [] })
+      await ctx.plugin(TokenMeter)
+      ctx.llm.registerAdapter(['mock', 'small'], adapter)
+      void new StoppableEngine(ctx, { auto: true, headroomTokens: 0, maxTokens: 32, thresholdRatio: 0.5, retainTokens: 0 })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('switch-stop'), { provider: 'mock', model: 'mock' })
+      agent.followup(createUserMessage({ content: [{ type: 'text', text: 'first' }], source: { kind: 'user' } }))
+      await agent.whenIdle()
+      expect(ctx.tokenMeter.measure(agent.session).totalTokens).toBeGreaterThan(300)
+
+      agent.model.select({ provider: 'small', model: 'small' })
+      const stopped = createUserMessage({ content: [{ type: 'text', text: 'after the switch' }], source: { kind: 'user' } })
+      agent.followup(stopped)
+      await summarizing.promise
+      agent.cancel({ kind: 'user' }, { keepInbox: true })
+      await agent.whenIdle()
+
+      const events = agent.session.snapshotEvents()
+      expect(events.filter(event => event.type === 'step/start')).toHaveLength(1)
+      expect(events.some(event => event.type === 'user/message' && event.data.id === stopped.id)).toBe(false)
+      expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'aborted', reason: { kind: 'user' } } } })
+      expect(agent.inbox.nextTurn).toEqual([stopped])
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+})
