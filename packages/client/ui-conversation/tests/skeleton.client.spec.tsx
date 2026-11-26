@@ -734,9 +734,9 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('keeps Chat outside at the narrowest width even when it registers after other Views', () => {
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(180)
     const viewTabs = ['trajectory', 'timeline', 'chat', 'notes'].map(id => ({ id, label: id }))
     const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, entryActions: true })
+    act(() => { fireResize(b.view.getByRole('tablist').parentElement!, 180) })
     expect(within(b.view.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['chat'])
     fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
     expect(b.actionsOwner().entries.map(entry => entry.id)).toEqual(['trajectory', 'timeline', 'notes'])
@@ -746,14 +746,13 @@ describe('ConversationRoot resident composer', () => {
     expect(b.actionsOwner().entries.find(entry => entry.id === 'trajectory')?.active).toBe(true)
   })
 
-  it('calculates the initial tab budget when ResizeObserver is unavailable', () => {
+  it('keeps every preferred View outside when ResizeObserver is unavailable', () => {
     vi.stubGlobal('ResizeObserver', undefined)
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
     const viewTabs = ['chat', 'trajectory', 'timeline'].map(id => ({ id, label: id }))
     const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, entryActions: true, headerOnly: true })
-    expect(within(b.view.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['chat', 'trajectory'])
+    expect(within(b.view.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['chat', 'trajectory', 'timeline'])
     fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
-    expect(b.actionsOwner().entries.map(entry => entry.id)).toEqual(['timeline'])
+    expect(b.actionsOwner().entries).toEqual([])
   })
 
   it('keeps an unpinned View selected without exposing its tab', () => {
@@ -807,8 +806,7 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('reuses the width budget on View roster and selection changes without a window resize listener', () => {
-    let width = 480
-    const readWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+    const readWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000)
     const viewTabs: ViewTab[] = [
       { id: 'chat', label: 'Chat' },
       { id: 'trajectory', label: 'Trajectory' },
@@ -817,6 +815,10 @@ describe('ConversationRoot resident composer', () => {
     ]
     const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, entryActions: true })
     const external = () => within(b.view.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent)
+    const row = b.view.getByRole('tablist').parentElement!
+    // Every preferred View stays outside until the first delivery; the budget never reads layout.
+    expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline', 'Inspector'])
+    act(() => { fireResize(row, 480) })
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
     expect(b.actionsOwner().entries.map(entry => entry.id)).toEqual(['inspector'])
@@ -824,18 +826,13 @@ describe('ConversationRoot resident composer', () => {
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     expect(b.actionsOwner().entries.find(entry => entry.id === 'inspector')?.active).toBe(true)
     expect(b.view.getByRole('button', { name: zh['session.moreViews'] })).toBeTruthy()
-    const row = b.view.getByRole('tablist').parentElement!
-    const rowReads = () => readWidth.mock.contexts.filter(element => element === row).length
-    const reads = rowReads()
-    width = 1000
     fireEvent(window, new Event('resize'))
     act(() => { b.store.actions.setView('timeline') })
-    expect(rowReads()).toBe(reads)
     expect(external()).toEqual(['Chat', 'Trajectory', 'Timeline'])
     viewTabs.splice(1, 1)
     act(() => { b.store.actions.setView('chat') })
     expect(external()).toEqual(['Chat', 'Timeline', 'Inspector'])
-    expect(rowReads()).toBe(reads)
+    expect(readWidth.mock.contexts).not.toContain(row)
     expect(b.actionsOwner().entries).toEqual([])
     expect(b.setPinned).not.toHaveBeenCalled()
   })
@@ -868,9 +865,9 @@ describe('ConversationRoot resident composer', () => {
   })
 
   it('keeps all five Views outside when the sampled width budget is sufficient', () => {
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000)
     const viewTabs = ['chat', 'trajectory', 'timeline', 'inspector', 'notes'].map(id => ({ id, label: id }))
     const b = mount(sessionSnapshotOf(), undefined, undefined, { viewTabs, entryActions: true })
+    act(() => { fireResize(b.view.getByRole('tablist').parentElement!, 1000) })
     expect(within(b.view.getByRole('tablist')).getAllByRole('tab').map(tab => tab.textContent))
       .toEqual(viewTabs.map(tab => tab.label))
     fireEvent.click(b.view.getByRole('button', { name: zh['session.moreViews'] }))
