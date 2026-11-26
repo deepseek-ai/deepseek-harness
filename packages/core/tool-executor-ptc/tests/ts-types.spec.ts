@@ -237,6 +237,7 @@ describe('renderToolsSdk', () => {
     const text = renderToolsSdk([bash])
     expect(text).toContain('inspect(await tools.bash(')
     expect(text).toContain('- Show selected values and images with `inspect(...values)`; every other intermediate result stays out of the conversation, so extract just what you need.')
+    expect(text).toContain('- Inspecting a tool result directly shows the text that tool call returns; for example, `inspect(await tools.read({ file_path: \'README.md\' }))` prints its line-numbered content.')
     expect(text).toContain('body of an async TypeScript function')
     expect(text).not.toContain('TypeScript REPL statements')
   })
