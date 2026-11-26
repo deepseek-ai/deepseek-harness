@@ -265,6 +265,24 @@ describe('pending reviews', () => {
     expect(queue.fileComments('a.ts', based.source).threads).toHaveLength(1)
     expect(queue.fileComments('a.ts', { ...based.source, baseRef: null, commits: null }).threads).toHaveLength(0)
   })
+  it('keeps records of another head apart and restores the head they were written on', () => {
+    const queue = new ReviewQueue('review-test')
+    const own = { kind: 'local' as const, scope: 'branch', base: 'origin/main', baseRef: null, commits: null }
+    const related = { ...own, head: { key: 'refs/heads/cache', name: 'cache', root: '/work/cache' } }
+    const branch = { ...own, head: { key: 'refs/heads/topic', name: 'topic', root: null } }
+    expect(queue.recordAgent({ ...selection, source: related })).toBe(true)
+    expect(queue.fileComments('a.ts', related).threads).toHaveLength(1)
+    expect(queue.fileComments('a.ts', own).threads).toHaveLength(0)
+    expect(queue.fileComments('a.ts', branch).threads).toHaveLength(0)
+    const restored = new ReviewQueue('review-test')
+    expect(restored.getSnapshot().records[0]?.selection.source).toEqual(related)
+    expect(restored.fileComments('a.ts', related).threads).toHaveLength(1)
+
+    const text = (source: ReviewSelection['source']): string => formatReviewComment({ source, comment: selection.comment }, 1)
+    expect(text(related)).toContain('Source: Local (branch)\nWorktree: /work/cache\nBranch: cache\nBase: origin/main\n')
+    expect(text(branch)).toContain('Source: Local (branch)\nBranch: topic (committed content)\nBase: origin/main\n')
+    expect(text(own)).toContain('Source: Local (branch)\nBase: origin/main\n')
+  })
   it('keeps records of chosen commits apart from the whole comparison', () => {
     const queue = new ReviewQueue('review-test')
     const commits = { from: '1'.repeat(40), to: '2'.repeat(40) }

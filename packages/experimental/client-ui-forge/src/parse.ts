@@ -37,16 +37,16 @@ export const BASE_REF_PREFIXES = ['refs/heads/', 'refs/remotes/'] as const
 
 /**
  * Select the branches the `branch` scope can compare with from `git for-each-ref`
- * output, keeping its order and leaving out symbolic refs and the checked-out branch.
+ * output, keeping its order and leaving out symbolic refs and the hidden branches.
  * @param output - stdout of `git for-each-ref --format=%(refname)%00%(symref)` over {@link BASE_REF_PREFIXES}.
- * @param current - checked-out branch, or null when HEAD is detached.
+ * @param hidden - full refs the listing leaves out: the branch the scope shows, and the branch the automatic base stands for.
  * @param query - text the names must contain, ignoring case; empty or blank for every branch.
  * @param limit - most branches in each group.
  * @returns remote-tracking and local branches, at most `limit` of each.
  */
 export function parseBaseBranches(
   output: string,
-  current: string | null,
+  hidden: readonly string[],
   query: string,
   limit: number,
 ): { readonly remote: ForgeBaseBranch[]; readonly local: ForgeBaseBranch[] } {
@@ -60,10 +60,32 @@ export function parseBaseBranches(
     const group = ref.startsWith(heads) ? local : ref.startsWith(remotes) ? remote : undefined
     if (group === undefined || group.length >= limit) continue
     const name = ref.slice(group === local ? heads.length : remotes.length)
-    if (name.length === 0 || (group === local && name === current) || !name.toLowerCase().includes(needle)) continue
+    if (name.length === 0 || hidden.includes(ref) || !name.toLowerCase().includes(needle)) continue
     group.push({ ref, name })
   }
   return { remote, local }
+}
+
+/**
+ * Read which worktree has each branch checked out from `git worktree list --porcelain` output: one block of lines for
+ * each worktree, ended by an empty line. The NUL-separated form of the listing needs Git 2.36, so the lines are read
+ * instead; a directory whose name holds a line break is cut at the break, and Git before 2.31 does not mark a worktree
+ * whose directory is gone, so a caller confirms the directory before it reads there.
+ * @param output - stdout of the listing.
+ * @returns the directory of each worktree by the full ref of its branch, without detached, bare, and prunable entries.
+ */
+export function parseWorktrees(output: string): Map<string, string> {
+  const found = new Map<string, string>()
+  for (const entry of output.split('\n\n')) {
+    const fields = entry.split('\n')
+    const value = (name: string): string | undefined => fields.find(field => field.startsWith(`${name} `))?.slice(name.length + 1)
+    const path = value('worktree')
+    const branch = value('branch')
+    // A prunable entry names a directory that is gone; its branch can only be read from its commits.
+    if (path === undefined || branch === undefined || fields.some(field => field === 'prunable' || field.startsWith('prunable '))) continue
+    found.set(branch, path)
+  }
+  return found
 }
 
 /**

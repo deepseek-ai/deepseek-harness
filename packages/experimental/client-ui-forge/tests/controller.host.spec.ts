@@ -603,7 +603,7 @@ describe('forgePanel local changes', () => {
     expect([automatic.base, paths(automatic)]).toEqual(['origin/main', ['feature.txt', 'notes.md']])
     const chosen = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: 'refs/heads/topic', commits: null }, signal)
     expect([chosen.base, paths(chosen)]).toEqual(['topic', ['notes.md']])
-    await expect(opened.ctx.forgePanel.diffBases(opened.session, '', signal)).resolves.toEqual({
+    await expect(opened.ctx.forgePanel.diffBases(opened.session, null, '', signal)).resolves.toEqual({
       automatic: { name: 'origin/main', worktree: false },
       remote: [{ ref: 'refs/remotes/origin/main', name: 'origin/main' }],
       local: [{ ref: 'refs/heads/topic', name: 'topic' }],
@@ -612,7 +612,7 @@ describe('forgePanel local changes', () => {
       .rejects.toMatchObject({ code: 'forgePanel/base-missing' })
 
     const outside = await open(await plain())
-    await expect(outside.ctx.forgePanel.diffBases(outside.session, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
+    await expect(outside.ctx.forgePanel.diffBases(outside.session, null, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
   })
 
   it('lists the commits of the branch scope and reads chosen ones', async () => {
@@ -627,10 +627,10 @@ describe('forgePanel local changes', () => {
     await writeFile(join(repo, 'notes.md'), 'hello\n')
     const opened = await open(repo, { maxCommits: 2 })
 
-    const listed = await opened.ctx.forgePanel.localCommits(opened.session, null, signal)
+    const listed = await opened.ctx.forgePanel.localCommits(opened.session, null, null, signal)
     expect(listed).toMatchObject({ truncated: true, headSha: await git(repo, 'rev-parse', 'HEAD') })
     expect(listed.commits.map(commit => commit.title)).toEqual(['two', 'three'])
-    await expect(opened.ctx.forgePanel.localCommits(opened.session, 'refs/heads/topic', signal))
+    await expect(opened.ctx.forgePanel.localCommits(opened.session, null, 'refs/heads/topic', signal))
       .resolves.toMatchObject({ truncated: false, commits: [{ title: 'three' }] })
     const [two, three] = listed.commits.map(commit => commit.sha)
     const chosen = await opened.ctx.forgePanel.localDiff(opened.session,
@@ -641,7 +641,7 @@ describe('forgePanel local changes', () => {
     await expect(opened.ctx.forgePanel.localDiff(opened.session,
       { kind: 'branch', base: 'refs/heads/topic', commits: { from: two ?? '', to: three ?? '' } }, signal))
       .rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
-    await expect(opened.ctx.forgePanel.localCommits(opened.session, 'refs/heads/gone', signal)).rejects.toMatchObject({ code: 'forgePanel/base-missing' })
+    await expect(opened.ctx.forgePanel.localCommits(opened.session, null, 'refs/heads/gone', signal)).rejects.toMatchObject({ code: 'forgePanel/base-missing' })
     // A merged side branch lists its commit beside the branch's own, so a run across them is refused.
     await git(repo, 'checkout', '--quiet', '-b', 'side', 'origin/main')
     await writeFile(join(repo, 'side.txt'), 'side\n')
@@ -657,9 +657,9 @@ describe('forgePanel local changes', () => {
 
     const unrelated = await project()
     const lonely = await open(unrelated.repo)
-    await expect(lonely.ctx.forgePanel.localCommits(lonely.session, null, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
+    await expect(lonely.ctx.forgePanel.localCommits(lonely.session, null, null, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
     const outside = await open(await plain())
-    await expect(outside.ctx.forgePanel.localCommits(outside.session, null, signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
+    await expect(outside.ctx.forgePanel.localCommits(outside.session, null, null, signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
   })
 
   it('lists more refs than other Git output may print, up to maxDiffBytes', async () => {
@@ -670,13 +670,13 @@ describe('forgePanel local changes', () => {
     expect(listing.length).toBeGreaterThan(1024)
 
     const limited = await open(repo, { maxOutputBytes: 1024, maxBranches: 3 })
-    await expect(limited.ctx.forgePanel.diffBases(limited.session, '', signal)).resolves.toMatchObject({ remote: { length: 3 } })
-    await expect(limited.ctx.forgePanel.diffBases(limited.session, 'name-39', signal)).resolves.toMatchObject({
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, null, '', signal)).resolves.toMatchObject({ remote: { length: 3 } })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, null, 'name-39', signal)).resolves.toMatchObject({
       remote: [{ name: 'origin/a-long-branch-name-39' }],
     })
 
     const refused = await open(repo, { maxOutputBytes: 1024, maxDiffBytes: 1024 })
-    await expect(refused.ctx.forgePanel.diffBases(refused.session, '', signal)).rejects.toBeInstanceOf(GitOutputTooLarge)
+    await expect(refused.ctx.forgePanel.diffBases(refused.session, null, '', signal)).rejects.toBeInstanceOf(GitOutputTooLarge)
   })
 
   it('reports a directory outside a checkout, a branch without a fork point, and a diff over the limit', async () => {

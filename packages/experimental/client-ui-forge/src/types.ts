@@ -347,11 +347,19 @@ export interface ForgeBaseBranch {
   readonly ref: string
   /** The ref without `refs/heads/` or `refs/remotes/`, such as `master` or `origin/master`. */
   readonly name: string
+  /**
+   * Directory Git registered for the worktree that has this local branch checked out, absent when none has; a scope
+   * that names the branch as its head reads that worktree.
+   */
+  readonly worktree?: string
 }
 
 /** What the `branch` scope compares with while no base branch is chosen. */
 export interface ForgeAutomaticBase {
-  /** The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote. */
+  /**
+   * The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote;
+   * for a scope with a `head`, the Session's checked-out branch, or its abbreviated HEAD commit when detached.
+   */
   readonly name: string
   /** Whether the fork point is the base commit of the worktree the Session created rather than a merge base. */
   readonly worktree: boolean
@@ -363,7 +371,7 @@ export interface ForgeBaseBranches {
   readonly automatic: ForgeAutomaticBase | null
   /** Remote-tracking branches without symbolic refs such as `origin/HEAD`, most recently committed first, at most `maxBranches`. */
   readonly remote: readonly ForgeBaseBranch[]
-  /** Local branches other than the checked-out one, most recently committed first, at most `maxBranches`. */
+  /** Local branches other than the one the scope shows, most recently committed first, at most `maxBranches`. */
   readonly local: readonly ForgeBaseBranch[]
 }
 
@@ -378,21 +386,28 @@ export interface ForgeCommitRange {
   readonly to: string
 }
 
-/** Which local changes a diff covers; each reads the Session's checkout through Git. */
+/**
+ * Which local changes a diff covers. Without `head` each reads the checkout of the Session's current directory through
+ * Git. With `head`, the full ref name of a branch under `refs/heads/` or `refs/remotes/`, it reads that branch in place
+ * of the checked-out one: in the worktree of the repository that has the branch checked out, where every scope applies
+ * and HEAD below is that worktree's, or, when no worktree has it, from the branch's commits, where only the `branch`
+ * scope applies and no uncommitted or untracked file shows.
+ */
 export type ForgeLocalScope =
   /**
-   * The working tree and untracked files against a fork point: the merge base of HEAD with the
-   * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
-   * else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the changes
-   * of those commits between the fork point and HEAD, without uncommitted or untracked files.
+   * The working tree and untracked files against a fork point: the merge base of HEAD with the `base` ref. While
+   * `base` is null, a scope with a `head` uses the merge base with the commit the Session's own HEAD names; a scope
+   * without one uses the base commit of the worktree the Session created, else the merge base of HEAD with the
+   * default branch of the code host remote. With `commits`, only the changes of those commits between the fork
+   * point and HEAD, without uncommitted or untracked files.
    */
-  | { readonly kind: 'branch'; readonly base: string | null; readonly commits: ForgeCommitRange | null }
+  | { readonly kind: 'branch'; readonly head?: string; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
-  | { readonly kind: 'uncommitted' }
+  | { readonly kind: 'uncommitted'; readonly head?: string }
   /** The working tree and untracked files against the index. */
-  | { readonly kind: 'unstaged' }
+  | { readonly kind: 'unstaged'; readonly head?: string }
   /** The index against HEAD. */
-  | { readonly kind: 'staged' }
+  | { readonly kind: 'staged'; readonly head?: string }
 
 /** One hunk of a file diff. */
 export interface ForgeDiffHunk {
@@ -457,6 +472,11 @@ export interface ForgeLocalDiff {
   readonly files: readonly ForgeDiffFile[]
   /** Untracked files left out beyond `maxUntrackedFiles`. */
   readonly omitted: number
+  /**
+   * Top-level directory of the worktree the scope read for its `head`; absent for the Session's own checkout and for
+   * a head read from its commits.
+   */
+  readonly worktree?: string
 }
 
 /** One file of a local write, as the `unstaged` scope listed it for the reader. */
@@ -750,6 +770,13 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/no-fork-point': Record<string, never>
     /** The base branch chosen for the `branch` scope does not exist, as after the branch was deleted. */
     'forgePanel/base-missing': Record<string, never>
+    /** The branch a local scope reads in place of the checked-out one does not exist, as after the branch was deleted. */
+    'forgePanel/head-missing': Record<string, never>
+    /**
+     * A scope other than `branch` named a branch that no worktree has checked out, as after its worktree was removed;
+     * only the `branch` scope reads such a branch.
+     */
+    'forgePanel/no-working-tree': Record<string, never>
     /** Filter configuration could not be read completely; no comparison ran. Correct Git settings or the output limit before retrying. */
     'forgePanel/filter-config-failed': Record<string, never>
     /**

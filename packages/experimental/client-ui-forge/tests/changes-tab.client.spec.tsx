@@ -875,7 +875,7 @@ describe('ChangesTab base branch', () => {
     await settle()
     fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
     await settle()
-    expect(m.faces.diffBases).toHaveBeenCalledWith('', expect.any(AbortSignal))
+    expect(m.faces.diffBases).toHaveBeenCalledWith(null, '', expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('menuitem', { name: 'topic' }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toEqual(TOPIC)
     expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: TOPIC.ref, commits: null }, expect.any(AbortSignal))
@@ -2499,7 +2499,7 @@ describe('ChangesTab commits', () => {
       })
     } })
     await settle()
-    expect(m.faces.localCommits).toHaveBeenCalledWith(null, expect.any(AbortSignal))
+    expect(m.faces.localCommits).toHaveBeenCalledWith(null, null, expect.any(AbortSignal))
     fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
     await settle()
     fireEvent.click(within(document.body).getByRole('menuitem', { name: /^2222222/ }))
@@ -3332,5 +3332,173 @@ describe('ChangesTab local writes', () => {
     expect(mark()?.querySelector('[data-forge-file-mark]')).toBeNull()
     expect(mark()?.querySelector('svg')).not.toBeNull()
     expect(mark()?.hasAttribute('data-checked')).toBe(true)
+  })
+})
+
+describe('ChangesTab heads', () => {
+  const CACHE_ROOT = '/work/repo/.agents/worktrees/cache'
+  /** `cache` is checked out in a worktree of the repository; no worktree has `topic`. */
+  const CACHE: ForgeBaseBranch = { ref: 'refs/heads/cache', name: 'cache', worktree: CACHE_ROOT }
+  const CACHE_HEAD = { ref: CACHE.ref, name: 'cache', worktree: CACHE_ROOT }
+  const TOPIC_HEAD = { ref: TOPIC.ref, name: 'topic', worktree: null }
+  const head = (m: ReturnType<typeof mount>): HTMLElement | null => m.view.container.querySelector('[data-forge-head]')
+  /** The Host reads `cache` in its worktree and every other branch from its commits. */
+  const worktrees = (faces: Faces): void => {
+    faces.diffBases.mockImplementation(async () => ok({ ...BASES, local: [TOPIC, CACHE] }))
+    faces.localDiff.mockImplementation(async scope => ok(scope.head === CACHE.ref ? { ...LOCAL, worktree: CACHE_ROOT } : LOCAL))
+  }
+
+  it('shows a branch that a worktree has checked out with every scope, read-only and without other plugins\' additions', async () => {
+    const annotation = { key: 'n1', place: { side: 'R' as const, startLine: 4, endLine: 4 }, version: 1 }
+    const m = mount({ annotations: new Map([['src/app.ts', [{ source: 'notes', annotation }]]]), setup: worktrees })
+    await settle()
+    expect(m.view.getByRole('button', { name: en['changes.local.create'] })).toBeTruthy()
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).not.toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch shown: main' }))
+    await settle()
+    // The branches a reader can show are those of the Session's own checkout.
+    expect(m.faces.diffBases).toHaveBeenLastCalledWith(null, '', expect.any(AbortSignal))
+    m.slotCalls.length = 0
+    fireEvent.click(m.view.getByRole('menuitem', { name: /^cache/ }))
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toEqual(CACHE_HEAD)
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: CACHE.ref, base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(head(m)?.textContent).toBe('cache')
+    expect(head(m)?.getAttribute('data-forge-head')).toBe(CACHE.ref)
+    expect(m.view.getByRole('button', { name: 'Base branch: origin/main' })).toBeTruthy()
+    expect(m.view.getByText(en['diff.base.uncommitted'])).toBeTruthy()
+    expect(m.faces.localCommits).toHaveBeenLastCalledWith(CACHE.ref, null, expect.any(AbortSignal))
+    expect(m.view.queryByRole('button', { name: en['changes.local.create'] })).toBeNull()
+    expect(m.slotCalls).toEqual([])
+    expect(m.section('src/app.ts').querySelector('[data-forge-annotation]')).toBeNull()
+
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(m.faces.diffBases).toHaveBeenLastCalledWith(CACHE.ref, '', expect.any(AbortSignal))
+    expect(within(document.body).getByText(en['diff.base.note'])).toBeTruthy()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    // The other scopes keep the picker and offer no write in a checkout the Session does not own.
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    act(() => { m.store.actions.scoped(TAB, 'unstaged') })
+    await settle()
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'unstaged', head: CACHE.ref }, expect.any(AbortSignal))
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'unstaged', head: CACHE_HEAD })
+    expect(head(m)?.textContent).toBe('cache')
+    expect(m.view.getByText(en['diff.scopeNote.unstaged'])).toBeTruthy()
+    expect(m.view.container.querySelector('[data-forge-write], [data-forge-write-all]')).toBeNull()
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'More actions for app.ts' }))
+    expect(m.view.getAllByRole('menuitem').map(item => item.textContent)).toEqual([en['diff.copyPath']])
+    expect(m.slotCalls).toEqual([])
+  })
+
+  it('shows the committed content of a branch without a worktree in the branch scope alone, then the own checkout again', async () => {
+    const m = mount()
+    await settle()
+    act(() => { m.store.actions.scoped(TAB, 'staged') })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'branch', head: TOPIC_HEAD, base: null, commits: null })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: TOPIC.ref, base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(head(m)?.getAttribute('data-forge-head')).toBe(TOPIC.ref)
+    expect(m.view.container.querySelector('[data-forge-scope]')).toBeNull()
+    expect(m.view.queryByText(en['diff.base.uncommitted'])).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: 'Base branch: origin/main' }))
+    await settle()
+    expect(within(document.body).getByText(en['diff.base.noteCommitted'])).toBeTruthy()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+
+    act(() => { m.store.actions.headed(TAB, null) })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', base: null, commits: null }, expect.any(AbortSignal))
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    expect(head(m)?.textContent).toBe('main')
+  })
+
+  it('follows a worktree added or removed since the branch was listed', async () => {
+    const m = mount({ setup: worktrees })
+    await settle()
+    // The listing said no worktree has `cache`; the read found one, so every scope becomes available.
+    act(() => { m.store.actions.headed(TAB, { ...CACHE_HEAD, worktree: null }) })
+    await settle()
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toEqual(CACHE_HEAD)
+    expect(m.view.container.querySelector('[data-forge-scope]')).not.toBeNull()
+    expect(m.view.getByText(en['diff.base.uncommitted'])).toBeTruthy()
+
+    // The worktree is gone by the next read of its unstaged changes, which the Host refuses.
+    const refused = { ok: false as const, error: new RemoteError('forgePanel/no-working-tree', 'no working tree', {}) }
+    m.faces.localDiff.mockImplementation(async scope => scope.kind === 'branch' ? ok(LOCAL) : refused)
+    act(() => { m.store.actions.scoped(TAB, 'unstaged') })
+    await settle()
+    expect(m.store.getSnapshot().byTab[TAB]).toMatchObject({ scope: 'branch', head: { ...CACHE_HEAD, worktree: null } })
+    expect(m.faces.localDiff).toHaveBeenLastCalledWith({ kind: 'branch', head: CACHE.ref, base: null, commits: null }, expect.any(AbortSignal))
+    expect(m.view.container.querySelector('[data-forge-scope]')).toBeNull()
+    expect(m.paths()).toContain('src/app.ts')
+    expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
+  })
+
+  it('names the base another head compared with only once its changes loaded', async () => {
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async scope => scope.head === undefined ? ok(LOCAL) : new Promise(() => {}))
+    } })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    await settle()
+    expect(m.view.getByRole('button', { name: 'Base branch: Default' })).toBeTruthy()
+  })
+
+  it('offers the Session\'s own checkout when the head is gone', async () => {
+    const gone = { ok: false as const, error: new RemoteError('forgePanel/head-missing', 'gone', {}) }
+    const m = mount({ setup: (faces) => {
+      faces.localDiff.mockImplementation(async scope => scope.head === undefined ? ok(LOCAL) : gone)
+    } })
+    await settle()
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(m.view.getByText('cache was not found; it may have been deleted')).toBeTruthy()
+    expect(head(m)?.classList.contains(baseCss.missing ?? '')).toBe(true)
+    expect(m.view.queryByRole('button', { name: en.retry })).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.head.back'] }))
+    expect(m.store.getSnapshot().byTab[TAB]?.head).toBeNull()
+    await settle()
+    expect(m.paths()).toContain('src/app.ts')
+    expect(head(m)?.classList.contains(baseCss.missing ?? '')).toBe(false)
+  })
+
+  it('keeps viewed marks and quoted comments of one head apart from another\'s', async () => {
+    const m = mount({ setup: worktrees })
+    await settle()
+    const viewed = (): HTMLInputElement => within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' })
+    /** Quote line R4 of `src/app.ts` into the input, returning the source the comment records. */
+    const quote = (): unknown => {
+      const section = within(m.section('src/app.ts'))
+      fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
+      fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+      fireEvent.change(section.getByRole('textbox'), { target: { value: 'Why?' } })
+      fireEvent.click(section.getByRole('button', { name: 'Add to input' }))
+      return m.faces.addReviewToInput.mock.lastCall?.[0].source
+    }
+    fireEvent.click(viewed())
+    expect(viewed().checked).toBe(true)
+
+    // A comment quoted from a head records the branch, and the worktree when one was read.
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(false)
+    expect(quote()).toMatchObject({ kind: 'local', scope: 'branch', head: { key: CACHE.ref, name: 'cache', root: CACHE_ROOT } })
+    expect(m.section('src/app.ts').textContent).toContain('Why?')
+    fireEvent.click(viewed())
+
+    act(() => { m.store.actions.headed(TAB, TOPIC_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(false)
+    expect(m.section('src/app.ts').textContent).not.toContain('Why?')
+    expect(quote()).toMatchObject({ kind: 'local', scope: 'branch', head: { key: TOPIC.ref, name: 'topic', root: null } })
+
+    act(() => { m.store.actions.headed(TAB, CACHE_HEAD) })
+    await settle()
+    expect(viewed().checked).toBe(true)
   })
 })

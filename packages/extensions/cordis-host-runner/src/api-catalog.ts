@@ -1803,11 +1803,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {
-        signature: '@Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>',
-        description: 'List the branches the `branch` scope of the Session\'s current checkout can compare with.',
-        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the automatic fork point and at most `maxBranches` remote-tracking and local branches each, most recently committed first, without the checked-out branch.',
-        throws: ['`forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
+        signature: '@Remote async diffBases(session: Session, head: string | null, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>',
+        description: 'List the branches the `branch` scope can compare with, for the Session\'s current checkout or for a head branch read in its place.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'head', description: 'full ref of the branch the scope reads in place of the checked-out one, or null for the checkout.' }, { name: 'query', description: 'text the branch names must contain, ignoring case; empty for every branch.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the automatic fork point and at most `maxBranches` remote-tracking and local branches each, most recently committed first, without the branch the scope shows and, for a head, without the Session\'s checked-out branch, which the automatic fork point compares with; a local branch that a worktree has checked out names that worktree\'s directory.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head does not exist; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.'],
       },
       {
         signature: '@Remote async track(session: Session, url: string, signal: AbortSignal): Promise<void>',
@@ -1834,24 +1834,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>',
-        description: 'Read the changes one scope covers in the checkout of the Session\'s current directory, with Git using the Session\'s sandbox policy.',
+        description: 'Read the changes one scope covers in the checkout of the Session\'s current directory, or for the head branch the scope names: in the worktree that has it checked out, else from its commits. Git uses the Session\'s sandbox policy.',
         parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'scope', description: 'which changes to read.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the files, the base of the `branch` scope, and the untracked files left out.',
-        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without a fork point; `forgePanel/commits-missing` when chosen commits are not between the fork point and HEAD in order; `forgePanel/commits-not-linear` when a chosen commit\'s first parent is not the commit listed before it; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.'],
+        returns: 'the files, the base of the `branch` scope, the untracked files left out, and the worktree read for a head.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head the scope names does not exist; `forgePanel/no-working-tree` for another scope than `branch` whose head no worktree has checked out; `forgePanel/base-missing` when the base branch chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without a fork point; `forgePanel/commits-missing` when chosen commits are not between the fork point and HEAD in order; `forgePanel/commits-not-linear` when a chosen commit\'s first parent is not the commit listed before it; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.'],
       },
       {
-        signature: '@Remote async localCommits(session: Session, base: string | null, signal: AbortSignal): Promise<ForgeLocalCommits>',
-        description: 'List the commits of the `branch` scope of the Session\'s current checkout, which the changes view can show one or several of instead of the whole scope.',
-        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'base', description: 'the base ref of the `branch` scope, or null for its automatic fork point.' }, { name: 'signal', description: 'request cancellation.' }],
-        returns: 'the newest `maxCommits` commits between the fork point and HEAD, oldest first, and HEAD\'s commit.',
-        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch does not exist; `forgePanel/no-fork-point` without a fork point; the Git error when Git fails or the listing exceeds `maxDiffBytes`.'],
+        signature: '@Remote async localCommits(session: Session, head: string | null, base: string | null, signal: AbortSignal): Promise<ForgeLocalCommits>',
+        description: 'List the commits of the `branch` scope of the Session\'s current checkout or of a head branch read in its place, which the changes view can show one or several of instead of the whole scope.',
+        parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'head', description: 'full ref of the branch the scope reads in place of the checked-out one, or null for the checkout.' }, { name: 'base', description: 'the base ref of the `branch` scope, or null for its automatic fork point.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the newest `maxCommits` commits between the fork point and the shown HEAD or branch, oldest first, and its commit.',
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head does not exist; `forgePanel/base-missing` when the base branch does not exist; `forgePanel/no-fork-point` without a fork point; the Git error when Git fails or the listing exceeds `maxDiffBytes`.'],
       },
       {
         signature: '@Remote async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string>',
-        description: 'Read the new side of one changed file in a scope, which supplies the unchanged lines between its hunks: the index for `staged`, the last chosen commit for chosen commits of the `branch` scope, else the working tree.',
+        description: 'Read the new side of one changed file in a scope, which supplies the unchanged lines between its hunks: the index for `staged`, the last chosen commit for chosen commits of the `branch` scope, the branch for a head read from its commits, else the working tree of the checkout the scope reads.',
         parameters: [{ name: 'session', description: 'Session whose checkout is read.' }, { name: 'scope', description: 'the scope the diff was read in.' }, { name: 'path', description: 'path relative to the checkout\'s top-level directory, as the diff names it.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'the text.',
-        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`; `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside the checkout, binary content, or a failed read.'],
+        throws: ['`forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` and `forgePanel/no-working-tree` as for {@link ForgePanelController.localDiff}; `forgePanel/diff-too-large` over `maxDiffBytes`; `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside the checkout, binary content, or a failed read.'],
       },
       {
         signature: '@Remote async localWrite(session: Session, write: ForgeLocalWrite, signal: AbortSignal): Promise<ForgeLocalWriteResult>',
@@ -7993,7 +7993,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeBaseBranch',
-    declaration: 'export interface ForgeBaseBranch {\n    readonly ref: string;\n    readonly name: string;\n}',
+    declaration: 'export interface ForgeBaseBranch {\n    readonly ref: string;\n    readonly name: string;\n    readonly worktree?: string;\n}',
   },
   {
     name: 'ForgeBaseBranches',
@@ -8145,11 +8145,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeLocalDiff',
-    declaration: 'export interface ForgeLocalDiff {\n    readonly base: string | null;\n    readonly files: readonly ForgeDiffFile[];\n    readonly omitted: number;\n}',
+    declaration: 'export interface ForgeLocalDiff {\n    readonly base: string | null;\n    readonly files: readonly ForgeDiffFile[];\n    readonly omitted: number;\n    readonly worktree?: string;\n}',
   },
   {
     name: 'ForgeLocalScope',
-    declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n    readonly base: string | null;\n    readonly commits: ForgeCommitRange | null;\n} | {\n    readonly kind: \'uncommitted\';\n} | {\n    readonly kind: \'unstaged\';\n} | {\n    readonly kind: \'staged\';\n};',
+    declaration: 'export type ForgeLocalScope = {\n    readonly kind: \'branch\';\n    readonly head?: string;\n    readonly base: string | null;\n    readonly commits: ForgeCommitRange | null;\n} | {\n    readonly kind: \'uncommitted\';\n    readonly head?: string;\n} | {\n    readonly kind: \'unstaged\';\n    readonly head?: string;\n} | {\n    readonly kind: \'staged\';\n    readonly head?: string;\n};',
   },
   {
     name: 'ForgeLocalWrite',

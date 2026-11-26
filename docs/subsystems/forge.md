@@ -1516,7 +1516,7 @@ type ForgeChangeRequestStatesFrame =
   | { readonly type: 'changed'; readonly states: readonly ForgeChangeRequestListState[] }
 ```
 
-The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit, or the `ForgeCommitRange` it names through the provider's `compare`; both return files that the Host parsed into `ForgeDiffFile` hunks, each with its review layer and change digest. `localCommits` and `changeRequestCommits` list the commits a range can name, the latter as null when the provider does not read commits. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the Session panel's local changes row, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
+The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout or of the head branch the scope names, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit, or the `ForgeCommitRange` it names through the provider's `compare`; both return files that the Host parsed into `ForgeDiffFile` hunks, each with its review layer and change digest. `localCommits` and `changeRequestCommits` list the commits a range can name, the latter as null when the provider does not read commits. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the Session panel's local changes row, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
 
 `changeRequestReview(session, url, headSha, fresh)` reads the threads of a bound change request at the head of the diff the view shows and refuses another head with `forgePanel/stale-head`, `forgePanel/review-unsupported` for a provider without review reads, and `forgePanel/review-failed` otherwise. It keeps one read per change request in memory, keyed by head commit and the status's update time and bounded by `maxCachedReviewBytes`, and reads again once the kept read is `reviewRefreshMs` old or when `fresh` asks for it, as the first read after the reader refreshes the view does: on GitHub a new comment or reply changes a pull request's update time, but resolving a thread does not. The changes view asks again at every status it receives while visible, and overlays the threads on the files the [panel README](../../packages/experimental/client-ui-forge/README.md#use-this-package) describes.
 
@@ -1537,22 +1537,33 @@ interface ForgeCommitRange {
 }
 ```
 
+A local scope reads the checkout of the Session's current directory unless it names a `head`: the full ref of a branch under `refs/heads/` or `refs/remotes/` that `show-ref --verify` finds in the Session's repository. The Host reads that branch where it is checked out. When `git worktree list` names a worktree of the repository for the branch and inspection finds a checkout of the same repository with the branch checked out there, Git runs in that worktree under the reading Session's sandbox policy: every scope reads its working tree, and the result names the directory in `worktree`. Otherwise, as for every remote-tracking branch, only the `branch` scope applies, and it compares committed content, with the ref in place of HEAD and without uncommitted or untracked files; another scope rejects with `forgePanel/no-working-tree`. A head that names the Session's own checked-out branch reads the Session's checkout. While a scope with a head names no `base`, its fork point is the merge base of the head with the commit the Session's own HEAD names, so the scope covers what the branch changed since it left the Session's work, also in a repository without a remote; the result names the Session's checked-out branch, or its abbreviated commit on a detached HEAD, as `base`.
+
+`diffBases(session, head, query)` and `localCommits(session, head, base)` take the same head, or null for the Session's own checkout. `diffBases` leaves out the branch the scope shows and, for a head, the Session's checked-out branch, which its automatic base names, and gives each local branch the directory of the worktree that has it checked out, so the page lists the branches a reader can show through the same Remote method with a null head. A head whose branch does not exist rejects a read with `forgePanel/head-missing`. `localWrite` takes no head and writes the Session's own checkout.
+
 ```ts type-equiv
-/** Which local changes a diff covers; each reads the Session's checkout through Git. */
+/**
+ * Which local changes a diff covers. Without `head` each reads the checkout of the Session's current directory through
+ * Git. With `head`, the full ref name of a branch under `refs/heads/` or `refs/remotes/`, it reads that branch in place
+ * of the checked-out one: in the worktree of the repository that has the branch checked out, where every scope applies
+ * and HEAD below is that worktree's, or, when no worktree has it, from the branch's commits, where only the `branch`
+ * scope applies and no uncommitted or untracked file shows.
+ */
 type ForgeLocalScope =
   /**
-   * The working tree and untracked files against a fork point: the merge base of HEAD with the
-   * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
-   * else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the changes
-   * of those commits between the fork point and HEAD, without uncommitted or untracked files.
+   * The working tree and untracked files against a fork point: the merge base of HEAD with the `base` ref. While
+   * `base` is null, a scope with a `head` uses the merge base with the commit the Session's own HEAD names; a scope
+   * without one uses the base commit of the worktree the Session created, else the merge base of HEAD with the
+   * default branch of the code host remote. With `commits`, only the changes of those commits between the fork
+   * point and HEAD, without uncommitted or untracked files.
    */
-  | { readonly kind: 'branch'; readonly base: string | null; readonly commits: ForgeCommitRange | null }
+  | { readonly kind: 'branch'; readonly head?: string; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
-  | { readonly kind: 'uncommitted' }
+  | { readonly kind: 'uncommitted'; readonly head?: string }
   /** The working tree and untracked files against the index. */
-  | { readonly kind: 'unstaged' }
+  | { readonly kind: 'unstaged'; readonly head?: string }
   /** The index against HEAD. */
-  | { readonly kind: 'staged' }
+  | { readonly kind: 'staged'; readonly head?: string }
 ```
 
 ```ts type-equiv
@@ -1562,13 +1573,21 @@ interface ForgeBaseBranch {
   readonly ref: string
   /** The ref without `refs/heads/` or `refs/remotes/`, such as `master` or `origin/master`. */
   readonly name: string
+  /**
+   * Directory Git registered for the worktree that has this local branch checked out, absent when none has; a scope
+   * that names the branch as its head reads that worktree.
+   */
+  readonly worktree?: string
 }
 ```
 
 ```ts type-equiv
 /** What the `branch` scope compares with while no base branch is chosen. */
 interface ForgeAutomaticBase {
-  /** The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote. */
+  /**
+   * The created worktree's base branch or abbreviated base commit, or the default branch of the code host remote;
+   * for a scope with a `head`, the Session's checked-out branch, or its abbreviated HEAD commit when detached.
+   */
   readonly name: string
   /** Whether the fork point is the base commit of the worktree the Session created rather than a merge base. */
   readonly worktree: boolean
@@ -1582,7 +1601,7 @@ interface ForgeBaseBranches {
   readonly automatic: ForgeAutomaticBase | null
   /** Remote-tracking branches without symbolic refs such as `origin/HEAD`, most recently committed first, at most `maxBranches`. */
   readonly remote: readonly ForgeBaseBranch[]
-  /** Local branches other than the checked-out one, most recently committed first, at most `maxBranches`. */
+  /** Local branches other than the one the scope shows, most recently committed first, at most `maxBranches`. */
   readonly local: readonly ForgeBaseBranch[]
 }
 ```
@@ -1659,6 +1678,11 @@ interface ForgeLocalDiff {
   readonly files: readonly ForgeDiffFile[]
   /** Untracked files left out beyond `maxUntrackedFiles`. */
   readonly omitted: number
+  /**
+   * Top-level directory of the worktree the scope read for its `head`; absent for the Session's own checkout and for
+   * a head read from its commits.
+   */
+  readonly worktree?: string
 }
 ```
 
@@ -1845,7 +1869,7 @@ interface ForgeLensKeep {
 }
 ```
 
-`ctx.forgeChanges` also mints and reads changes addresses, names the tab `kinds`, and opens a view with `open(target, { path, lens })` in the Session the sidebar shows. `registerAnnotations(source)` adds line annotations: the source observes each view's annotations by path, and its `forge.diff.line.annotation` entry, keyed by the source's identity, draws each one inside a frame the view draws. Annotations stack on the row of their last line after the comment form, the browser drafts, and the host threads, in the column of their side; whole-file annotations come first, and those written on another `digest` follow the file in their own section. A file shows at most `maxAnnotationsPerFile`, and a file that draws its lines draws no annotation before its section comes within reach of the scrollport. The owner props of every slot live in [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts).
+`ctx.forgeChanges` also mints and reads changes addresses, names the tab `kinds`, and opens a view with `open(target, { path, lens })` in the Session the sidebar shows. `registerAnnotations(source)` adds line annotations: the source observes each view's annotations by path, and its `forge.diff.line.annotation` entry, keyed by the source's identity, draws each one inside a frame the view draws. Annotations stack on the row of their last line after the comment form, the browser drafts, and the host threads, in the column of their side; whole-file annotations come first, and those written on another `digest` follow the file in their own section. A file shows at most `maxAnnotationsPerFile`, and a file that draws its lines draws no annotation before its section comes within reach of the scrollport. A local changes view that shows a `head` branch other than the Session's own checkout draws no annotation and no entry of the `forge.changes.toolbar`, `forge.changes.file.menu`, and `forge.diff.comment.actions` slots. The owner props of every slot live in [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts).
 
 ```ts type-equiv
 /** Where one line annotation sits in a file of a changes view. */
@@ -2601,15 +2625,20 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async worktreeBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeWorktreeBases>
 
 /**
- * List the branches the `branch` scope of the Session's current checkout can compare with.
+ * List the branches the `branch` scope can compare with, for the Session's current checkout or for a head branch
+ * read in its place.
  * @param session - Session whose checkout is read.
+ * @param head - full ref of the branch the scope reads in place of the checked-out one, or null for the checkout.
  * @param query - text the branch names must contain, ignoring case; empty for every branch.
  * @param signal - request cancellation.
  * @returns the automatic fork point and at most `maxBranches` remote-tracking and local branches each,
- * most recently committed first, without the checked-out branch.
- * @throws `forgePanel/not-a-checkout` outside a checkout; the Git error when Git fails or the listed refs exceed `maxDiffBytes`.
+ * most recently committed first, without the branch the scope shows and, for a head, without the Session's
+ * checked-out branch, which the automatic fork point compares with; a local branch that a worktree has checked
+ * out names that worktree's directory.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head does not exist; the
+ * Git error when Git fails or the listed refs exceed `maxDiffBytes`.
  */
-@Remote async diffBases(session: Session, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>
+@Remote async diffBases(session: Session, head: string | null, query: string, signal: AbortSignal): Promise<ForgeBaseBranches>
 
 /**
  * Bind a change request to a Session by URL, or restore a dismissed binding.
@@ -2649,13 +2678,15 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async revisit(sessionId: SessionId, signal: AbortSignal): Promise<void>
 
 /**
- * Read the changes one scope covers in the checkout of the Session's
- * current directory, with Git using the Session's sandbox policy.
+ * Read the changes one scope covers in the checkout of the Session's current directory, or for the head branch the
+ * scope names: in the worktree that has it checked out, else from its commits. Git uses the Session's sandbox policy.
  * @param session - Session whose checkout is read.
  * @param scope - which changes to read.
  * @param signal - request cancellation.
- * @returns the files, the base of the `branch` scope, and the untracked files left out.
- * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch
+ * @returns the files, the base of the `branch` scope, the untracked files left out, and the worktree read for a head.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head the scope names
+ * does not exist; `forgePanel/no-working-tree` for another scope than `branch` whose head no worktree has checked
+ * out; `forgePanel/base-missing` when the base branch
  * chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without
  * a fork point; `forgePanel/commits-missing` when chosen commits are not between the fork point and HEAD in order;
  * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
@@ -2665,27 +2696,30 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async localDiff(session: Session, scope: ForgeLocalScope, signal: AbortSignal): Promise<ForgeLocalDiff>
 
 /**
- * List the commits of the `branch` scope of the Session's current checkout, which the changes view can show one or
- * several of instead of the whole scope.
+ * List the commits of the `branch` scope of the Session's current checkout or of a head branch read in its place,
+ * which the changes view can show one or several of instead of the whole scope.
  * @param session - Session whose checkout is read.
+ * @param head - full ref of the branch the scope reads in place of the checked-out one, or null for the checkout.
  * @param base - the base ref of the `branch` scope, or null for its automatic fork point.
  * @param signal - request cancellation.
- * @returns the newest `maxCommits` commits between the fork point and HEAD, oldest first, and HEAD's commit.
- * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch does not
- * exist; `forgePanel/no-fork-point` without a fork point; the Git error when Git fails or the listing exceeds `maxDiffBytes`.
+ * @returns the newest `maxCommits` commits between the fork point and the shown HEAD or branch, oldest first, and its commit.
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` when the head does not exist;
+ * `forgePanel/base-missing` when the base branch does not exist; `forgePanel/no-fork-point` without a fork point;
+ * the Git error when Git fails or the listing exceeds `maxDiffBytes`.
  */
-@Remote async localCommits(session: Session, base: string | null, signal: AbortSignal): Promise<ForgeLocalCommits>
+@Remote async localCommits(session: Session, head: string | null, base: string | null, signal: AbortSignal): Promise<ForgeLocalCommits>
 
 /**
  * Read the new side of one changed file in a scope, which supplies the
  * unchanged lines between its hunks: the index for `staged`, the last chosen commit for chosen commits of
- * the `branch` scope, else the working tree.
+ * the `branch` scope, the branch for a head read from its commits, else the working tree of the checkout the scope reads.
  * @param session - Session whose checkout is read.
  * @param scope - the scope the diff was read in.
  * @param path - path relative to the checkout's top-level directory, as the diff names it.
  * @param signal - request cancellation.
  * @returns the text.
- * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`;
+ * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/head-missing` and `forgePanel/no-working-tree`
+ * as for {@link ForgePanelController.localDiff}; `forgePanel/diff-too-large` over `maxDiffBytes`;
  * `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside
  * the checkout, binary content, or a failed read.
  */

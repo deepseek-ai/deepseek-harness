@@ -596,10 +596,29 @@ describe('LocalChangesRow', () => {
 
   it.each([
     ['before the first state', null],
-    ['before the branch scope is read', ready()],
-    ['while the branch scope changes nothing', ready({ local: { base: 'origin/main', files: [] } })],
+    ['while the first inspection runs', ready({ checkout: { state: 'pending' } })],
+    ['outside a Git checkout', ready({ checkout: { state: 'none' } })],
   ])('renders nothing %s', (_label, state) => {
     expect(row(state).view.container.innerHTML).toBe('')
+  })
+
+  it('stays in a checkout whose branch scope changes nothing, showing an empty size', () => {
+    const b = row(ready({ local: { base: 'origin/main', files: [] } }))
+    const element = b.view.container.querySelector('[data-forge-local]') as HTMLElement
+    expect(rowParts(element)).toBe('button:body(icon content) trailing menu')
+    expect(element.querySelector('[data-row-part="content"]')?.textContent).toBe(en['changes.local.title'])
+    expect(element.querySelector('[data-row-part="trailing"]')?.textContent).toBe('+0−0')
+    fireEvent.click(within(element).getByRole('button', { name: 'Local changes · 0 files, 0 lines added, 0 lines deleted' }))
+    expect(b.viewLocalChanges).toHaveBeenCalledOnce()
+    expect(b.dismissOverlay).toHaveBeenCalledOnce()
+  })
+
+  it('stays without a size while the branch scope has no fork point, and still opens the view', () => {
+    const b = row(ready())
+    const element = b.view.container.querySelector('[data-forge-local]') as HTMLElement
+    expect(rowParts(element)).toBe('button:body(icon content) menu')
+    fireEvent.click(within(element).getByRole('button', { name: en['changes.local.title'] }))
+    expect(b.viewLocalChanges).toHaveBeenCalledOnce()
   })
 
   it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }))('names the row button with its visible text first in %s', (_locale, copy) => {

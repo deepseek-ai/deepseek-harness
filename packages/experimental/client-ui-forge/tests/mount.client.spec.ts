@@ -255,7 +255,9 @@ async function base() {
     localText: vi.fn(async (_sessionId: SessionId, _scope: ForgeLocalScope, _path: string): Read<string> => ({ ok: true, value: 'a\n' })),
     localWrite: vi.fn(async (_sessionId: SessionId, _write: ForgeLocalWrite): Read<ForgeLocalWriteResult> =>
       ({ ok: true, value: { undo: null } })),
-    diffBases: vi.fn(async (_sessionId: SessionId, _query: string, _signal?: AbortSignal): Read<ForgeBaseBranches> =>
+    diffBases: vi.fn(async (
+      _sessionId: SessionId, _head: string | null, _query: string, _signal?: AbortSignal,
+    ): Read<ForgeBaseBranches> =>
       ({ ok: true, value: { automatic: null, remote: [], local: [] } })),
     changeRequestChecks: vi.fn(async (
       _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
@@ -263,7 +265,9 @@ async function base() {
     changeRequestDiff: vi.fn(async (
       _sessionId: SessionId, _url: string, _commits: ForgeCommitRange | null, _signal?: AbortSignal,
     ): Read<ForgeChangeRequestDiff> => ({ ok: true, value: CHANGE })),
-    localCommits: vi.fn(async (_sessionId: SessionId, _base: string | null, _signal?: AbortSignal): Read<ForgeLocalCommits> =>
+    localCommits: vi.fn(async (
+      _sessionId: SessionId, _head: string | null, _base: string | null, _signal?: AbortSignal,
+    ): Read<ForgeLocalCommits> =>
       ({ ok: true, value: COMMITS })),
     changeRequestCommits: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeCommitList | null> =>
       ({ ok: true, value: COMMITS })),
@@ -1294,8 +1298,9 @@ describe('mountForgePanel changes view', () => {
     const signal = new AbortController().signal
     expect(await view.localDiff({ kind: 'staged' }, signal)).toEqual({ ok: true, value: LOCAL })
     expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })
-    expect(await view.diffBases('rel', signal)).toEqual({ ok: true, value: { automatic: null, remote: [], local: [] } })
-    expect(f.forgePanel.diffBases).toHaveBeenCalledWith(S1, 'rel', signal)
+    const shown = 'refs/heads/topic'
+    expect(await view.diffBases(shown, 'rel', signal)).toEqual({ ok: true, value: { automatic: null, remote: [], local: [] } })
+    expect(f.forgePanel.diffBases).toHaveBeenCalledWith(S1, shown, 'rel', signal)
     expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', null, signal)).toEqual({ ok: true, value: CHANGE })
     expect(await view.changeRequestText('https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')).toEqual({ ok: true, value: 'b\n' })
     expect(f.forgePanel.localDiff).toHaveBeenCalledWith(S1, { kind: 'staged' }, signal)
@@ -1304,8 +1309,8 @@ describe('mountForgePanel changes view', () => {
     expect(f.forgePanel.localWrite).toHaveBeenCalledWith(S1, { kind: 'unstage', paths: ['src/a.ts'] })
     expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', null, signal)
     expect(f.forgePanel.changeRequestText).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')
-    expect(await view.localCommits('refs/heads/topic', signal)).toEqual({ ok: true, value: COMMITS })
-    expect(f.forgePanel.localCommits).toHaveBeenCalledWith(S1, 'refs/heads/topic', signal)
+    expect(await view.localCommits(shown, 'refs/heads/topic', signal)).toEqual({ ok: true, value: COMMITS })
+    expect(f.forgePanel.localCommits).toHaveBeenCalledWith(S1, shown, 'refs/heads/topic', signal)
     expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
     expect(await view.changeRequestReview('https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal))
@@ -1886,9 +1891,9 @@ describe('mountForgePanel review page changes view', () => {
     const refusal = 'forge-panel: the review page shows no local changes'
     await expect(f.view.localDiff({ kind: 'staged' }, signal)).rejects.toThrow(refusal)
     await expect(f.view.localWrite({ kind: 'unstage', paths: ['a.ts'] })).rejects.toThrow(refusal)
-    await expect(f.view.diffBases('', signal)).rejects.toThrow(refusal)
+    await expect(f.view.diffBases(null, '', signal)).rejects.toThrow(refusal)
     await expect(f.view.localText({ kind: 'staged' }, 'a.ts')).rejects.toThrow(refusal)
-    await expect(f.view.localCommits(null, signal)).rejects.toThrow(refusal)
+    await expect(f.view.localCommits(null, null, signal)).rejects.toThrow(refusal)
     const lens: ForgeLensRequest = { source: { kind: 'change', url, commits: null }, version: 'v1', lens: 'exports' }
     expect(() => f.view.changesLens(lens, signal)).toThrow('forge-panel: the review page runs no lenses')
     f.view.createChangeRequest()
