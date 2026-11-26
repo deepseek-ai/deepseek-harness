@@ -6,6 +6,20 @@ const policySource = readFileSync(new URL('approval-policy.json', import.meta.ur
 
 export const HEAD_SHA = '1234567890abcdef1234567890abcdef12345678'
 export const PUBLISHER = { id: 359_032_549, login: 'deepseek-ai-harness' }
+/** Marker the pilot writes on its status comments and approving reviews. */
+export const STATUS_MARKER = '<!-- weighted-approval -->'
+/** GitHub Actions bot account that authors status comments with the workflow token. */
+export const ACTIONS_BOT = { id: 41_898_282, login: 'github-actions[bot]' }
+
+/**
+ * Build a status comment with the Actions bot identity.
+ * @param {string} [body] Comment body; the default starts with the marker.
+ * @param {number} [id] Comment ID.
+ * @returns {object} Comment record.
+ */
+export const actionsBotComment = (body = `${STATUS_MARKER}\nold status`, id = 90) => ({
+  id, body, created_at: '2026-09-15T00:00:00Z', user: { ...ACTIONS_BOT },
+})
 
 const accountIds = new Map()
 
