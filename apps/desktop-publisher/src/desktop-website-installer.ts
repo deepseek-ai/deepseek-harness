@@ -32,6 +32,8 @@ export interface DesktopWebsiteInstaller {
 export async function prepareWebsiteInstaller(directory: string, manifest: DesktopRetainedManifest,
   route: DesktopPublishRoute, repository: string, bucket: string): Promise<DesktopWebsiteInstaller> {
   const source = manifest.source
+  // TODO(#9204): Require source.channel === 'stable' after retained nightly-marked packages retire;
+  // keep website installer upload independent of channel feed publication.
   if (route.preset !== 'production' || source.preset !== 'production'
     || source.repository !== repository || source.runId !== route.runId || source.attempt !== route.attempt
     || source.commit !== route.commit || source.runnerName !== route.runnerName || source.target !== route.target

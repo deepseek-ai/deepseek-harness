@@ -19,39 +19,45 @@ function fixture() {
   return { userData, path: join(directory, 'settings.json') }
 }
 
-it('creates a discoverable default file on first launch without touching other preferences', async () => {
+it('creates a discoverable version 1 default file on first launch without touching other preferences', async () => {
   const { userData, path } = fixture()
   rmSync(join(userData, 'desktop'), { recursive: true })
   writeFileSync(join(userData, 'keybindings.json'), 'existing shortcuts\n')
   expect(await readDesktopSettings(userData)).toEqual({ updates: { allowTestAuthPopupWindow: false } })
-  expect(readFileSync(path, 'utf8')).toBe('{\n  "updates": {\n    "allowTestAuthPopupWindow": false\n  }\n}\n')
+  expect(readFileSync(path, 'utf8')).toBe('{\n  "version": "1",\n  "updates": {\n    "allowTestAuthPopupWindow": false\n  }\n}\n')
   expect(readFileSync(join(userData, 'keybindings.json'), 'utf8')).toBe('existing shortcuts\n')
 })
 
-it.each(['{}', '{"updates": {}}', '{"other": 1, "updates": {"other": true}}'])('defaults an older document without rewriting it: %s', async (raw) => {
+it('migrates unversioned documents to version 1 and resets legacy nightly preferences to stable', async () => {
   const { userData, path } = fixture()
-  writeFileSync(path, raw)
+  writeFileSync(path, '{"other": 1, "updates": {"other": true, "channel": "nightly"}}')
   expect((await readDesktopSettings(userData)).updates.allowTestAuthPopupWindow).toBe(false)
-  expect(readFileSync(path, 'utf8')).toBe(raw)
+  expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({
+    version: '1',
+    other: 1,
+    updates: { other: true, channel: 'stable' },
+  })
 })
 
-it('loads explicit opt-in and opt-out on the next read without changing an earlier process snapshot', async () => {
+it('loads explicit opt-in and opt-out on version 1 documents without rewriting them or changing an earlier snapshot', async () => {
   const { userData, path } = fixture()
   for (const allow of [true, false]) {
-    const raw = JSON.stringify({ updates: { allowTestAuthPopupWindow: allow }, custom: 'preserve' })
+    const raw = JSON.stringify({ version: '1', updates: { allowTestAuthPopupWindow: allow }, custom: 'preserve' })
     writeFileSync(path, raw)
     expect((await readDesktopSettings(userData)).updates.allowTestAuthPopupWindow).toBe(allow)
     expect(readFileSync(path, 'utf8')).toBe(raw)
   }
   const previous = await readDesktopSettings(userData)
-  writeFileSync(path, '{"updates":{"allowTestAuthPopupWindow":true}}')
+  writeFileSync(path, '{"version":"1","updates":{"allowTestAuthPopupWindow":true}}')
   expect(previous.updates.allowTestAuthPopupWindow).toBe(false)
   expect((await readDesktopSettings(userData)).updates.allowTestAuthPopupWindow).toBe(true)
 })
 
-it.each(['', '{', 'null', '[]', '{"updates":null}', '{"updates":[]}',
+it.each([
+  '', '{', 'null', '[]', '{"updates":null}', '{"updates":[]}', '{"version":"2"}', '{"version":1}',
   '{"updates":{"allowTestAuthPopupWindow":"false"}}', '{"updates":{"allowTestAuthPopupWindow":1}}',
-  '{"updates":{"allowTestAuthPopupWindow":null}}'])('reports invalid settings with their path and preserves the original: %s', async (raw) => {
+  '{"updates":{"allowTestAuthPopupWindow":null}}',
+])('reports invalid settings with their path and preserves the original: %s', async (raw) => {
   const { userData, path } = fixture()
   writeFileSync(path, raw)
   expect((await readDesktopSettings(userData)).updates.allowTestAuthPopupWindow).toBe(false)

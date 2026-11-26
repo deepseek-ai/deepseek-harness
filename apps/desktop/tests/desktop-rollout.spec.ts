@@ -35,16 +35,21 @@ async function fixture(target: 'mac-arm64' | 'mac-x64' | 'win-x64' = 'mac-arm64'
     const contents = dump({ version, files: [{ url: payload, ...digest('installer') }],
       path: payload, sha512: digest('installer').sha512, releaseDate: '2026-11-04T00:00:00.000Z' })
     const filename = `${channel}${target === 'win-x64' ? '' : '-mac'}.yml`
+    const installer = `deepseek-harness-${version}-${target}.${target === 'win-x64' ? 'exe' : 'dmg'}`
     const manifest: DesktopRetainedManifest = { schemaVersion: 1, source: {
       repository: 'owner/repo', runId: '42', attempt: '1', commit: 'a'.repeat(40), workflowCommit: 'b'.repeat(40),
       sourceRef: 'dsh-v0.2.2-rc.1', runnerName: 'runner', target, preset, channel,
       productVersion: version, version, testReleaseId: preset === 'test' ? 'a'.repeat(32) : null, qualification: target === 'win-x64' ? 'signed' : 'notarized',
-    }, files: [{ name: filename, ...digest(contents) }, { name: payload, ...digest('installer') }] }
+    }, files: [
+      { name: filename, ...digest(contents) },
+      { name: payload, ...digest('installer') },
+      ...(installer === payload ? [] : [{ name: installer, ...digest('dmg') }]),
+    ] }
     await writeFile(join(directory, filename), contents)
     await writeFile(join(directory, 'manifest.json'), JSON.stringify(manifest))
     const environment = { DSH_DESKTOP_AUTO_UPDATE_ENV: preset, DOWNLOAD_PROD_COS_BUCKET: 'bucket-123',
       DOWNLOAD_TEST_ORIGIN: 'https://test.example.com', DOWNLOAD_TEST_COS_BUCKET: 'test-123', DOWNLOAD_TEST_RELEASE_ID: 'a'.repeat(32) }
-    const plan = await prepareDesktopRollout(directory, manifest, environment)
+    const plan = await prepareDesktopRollout(directory, manifest, environment, channel)
     return { root, directory, manifest, plan, filename, environment }
   } catch (error) { await rm(root, { recursive: true, force: true }); throw error }
 }
@@ -127,7 +132,8 @@ it('rejects changed retained YAML before reading remote metadata', async () => {
   const f = await fixture()
   try {
     await writeFile(join(f.directory, f.filename), 'version: 9.0.0')
-    await expect(prepareDesktopRollout(f.directory, f.manifest, f.environment)).rejects.toThrow(/differs from manifest/u)
+    await expect(prepareDesktopRollout(f.directory, f.manifest, f.environment, f.manifest.source.channel))
+      .rejects.toThrow(/differs from manifest/u)
   } finally { await rm(f.root, { recursive: true, force: true }) }
 })
 
@@ -142,8 +148,25 @@ it('requires initial publication evidence and prepares approval without installe
     }))
     const route = { ...f.manifest.source, runnerLabel: 'dsh-runner' }
     const env = { RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: config,
-      DESKTOP_PUBLISH_ROUTE: JSON.stringify(route), DESKTOP_ROLLOUT_PERCENTAGE: '30', DESKTOP_UPLOAD_WEBSITE: 'false' }
+      DESKTOP_PUBLISH_ROUTE: JSON.stringify(route), DESKTOP_ROLLOUT_STABLE: 'false', DESKTOP_ROLLOUT_NIGHTLY: 'true',
+      DESKTOP_ROLLOUT_PERCENTAGE: '30', DESKTOP_UPLOAD_WEBSITE: 'false' }
     await expect(prepareDesktopRolloutCi(env)).rejects.toThrow(/initial COS/u)
+    // Pure website-only mode does NOT require initial COS feed publication!
+    const configPath = join(config, 'publishing/production.json')
+    const settings = await readDesktopPublishConfig(config, 'production')
+    await expect(prepareDesktopRolloutCi({
+      ...env, DESKTOP_ROLLOUT_NIGHTLY: 'false', DESKTOP_ROLLOUT_PERCENTAGE: '', DESKTOP_UPLOAD_WEBSITE: 'true',
+    })).rejects.toThrow(/edgeOneZoneId/u)
+    await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-example' }))
+    const websiteOnlyEnv = {
+      ...env, DESKTOP_ROLLOUT_NIGHTLY: 'false', DESKTOP_ROLLOUT_PERCENTAGE: '', DESKTOP_UPLOAD_WEBSITE: 'true',
+    }
+    const websiteContext = await prepareDesktopRolloutCi(websiteOnlyEnv)
+    expect(websiteContext.website).toBe(true)
+    expect(websiteContext.plans).toEqual([])
+    await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-changed' }))
+    expect((await prepareDesktopRolloutCi(websiteOnlyEnv)).approval).not.toBe(websiteContext.approval)
+
     const record = await createDesktopPublicationRecord(join(f.root, 'upload-records'), {
       repository: 'owner/repo', runId: '42', attempt: '1',
       destination: `bucket-123/${f.plan.upload.publicUrl}nightly`, actor: 'operator',
@@ -153,18 +176,17 @@ it('requires initial publication evidence and prepares approval without installe
     const context = await prepareDesktopRolloutCi(env)
     expect(context.target).toBe(30)
     expect((await prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: '100' })).approval).not.toBe(context.approval)
-    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: '' })).rejects.toThrow(/select a percentage/u)
+    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: '' })).rejects.toThrow(/percentage is required/u)
+    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_NIGHTLY: 'false', DESKTOP_ROLLOUT_PERCENTAGE: '' }))
+      .rejects.toThrow(/select rollout_stable, rollout_nightly, or upload_website/u)
+    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_NIGHTLY: 'false', DESKTOP_ROLLOUT_PERCENTAGE: '30', DESKTOP_UPLOAD_WEBSITE: 'true' }))
+      .rejects.toThrow(/select rollout_stable or rollout_nightly/u)
+    await expect(prepareDesktopRolloutCi({
+      RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: config,
+      DESKTOP_PUBLISH_ROUTE: JSON.stringify(route), DESKTOP_ROLLOUT_PERCENTAGE: '30',
+    })).rejects.toThrow(/select rollout_stable, rollout_nightly, or upload_website/u)
     await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_ROLLOUT_PERCENTAGE: 'NaN' })).rejects.toThrow(/integer/u)
     await expect(prepareDesktopRolloutCi({ ...env, RUNNER_NAME: 'other' })).rejects.toThrow(/original machine/u)
-    await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_UPLOAD_WEBSITE: 'true' })).rejects.toThrow(/edgeOneZoneId/u)
-    const configPath = join(config, 'publishing/production.json')
-    const settings = await readDesktopPublishConfig(config, 'production')
-    await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-example' }))
-    const websiteEnv = { ...env, DESKTOP_ROLLOUT_PERCENTAGE: '', DESKTOP_UPLOAD_WEBSITE: 'true' }
-    const websiteContext = await prepareDesktopRolloutCi(websiteEnv)
-    expect(websiteContext.website).toBe(true)
-    await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-changed' }))
-    expect((await prepareDesktopRolloutCi(websiteEnv)).approval).not.toBe(websiteContext.approval)
   } finally { await rm(f.root, { recursive: true, force: true }) }
 })
 
@@ -185,6 +207,8 @@ it('keeps rollout approval and website recovery separate without tag creation or
   }
   expect(workflow.name).toBe('Publish Desktop · Rollout & Website')
   expect(workflow.on.workflow_dispatch.inputs.package_run_attempt!.required).toBe(true)
+  expect(workflow.on.workflow_dispatch.inputs.rollout_stable!.default).toBe(false)
+  expect(workflow.on.workflow_dispatch.inputs.rollout_nightly!.default).toBe(false)
   expect(workflow.on.workflow_dispatch.inputs.upload_website!.default).toBe(false)
   expect(workflow.on.workflow_dispatch.inputs.rollout_percentage!.default).toBe('')
   expect(workflow.jobs.publish!.environment).toContain('desktop-production')
@@ -202,11 +226,12 @@ it('keeps rollout approval and website recovery separate without tag creation or
   expect(text).not.toMatch(/create-github-app-token|publish-desktop-ci.ts|resolve-retained-desktop-publish-ci.ts/u)
   expect(text).toContain('publish-desktop-rollout-ci.ts route')
   expect(workflow.jobs.publish!.env!.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
-  expect(text).toContain('steps.website.outputs.rollout-record')
+  expect(workflow.jobs.publish!.env!.DESKTOP_ROLLOUT_STABLE).toBe('${{ inputs.rollout_stable }}')
+  expect(workflow.jobs.publish!.env!.DESKTOP_ROLLOUT_NIGHTLY).toBe('${{ inputs.rollout_nightly }}')
 })
 
 it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('checks approval, current feed and audit at the %s entrypoint', async (scenario) => {
-  const f = await fixture()
+  const f = await fixture('mac-arm64', 'production', 'stable')
   try {
     const config = join(f.root, 'config')
     const credentialsFile = join(f.root, 'credentials.json')
@@ -216,13 +241,18 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
       edgeOneZoneId: 'zone-fixture', bucket: 'bucket-123', origin: 'https://download.deepseek.com', credentialsFile,
       githubApp: { clientId: 'app', privateKeyFile: join(f.root, 'absent-key') },
     }))
-    const record = await createDesktopPublicationRecord(join(f.root, 'upload-records'), {
-      repository: 'owner/repo', runId: '42', attempt: '1', actor: 'operator',
-      destination: `bucket-123/${f.plan.upload.publicUrl}nightly`, operation: 'publish', reason: 'fixture',
-    })
-    await record.record({ type: 'feeds-complete' })
+    if (scenario !== 'website') {
+      const record = await createDesktopPublicationRecord(join(f.root, 'upload-records'), {
+        repository: 'owner/repo', runId: '42', attempt: '1', actor: 'operator',
+        destination: `bucket-123/${f.plan.upload.publicUrl}nightly`, operation: 'publish', reason: 'fixture',
+      })
+      await record.record({ type: 'feeds-complete' })
+    }
+    const nightlyPlan = await prepareDesktopRollout(f.directory, f.manifest, f.environment, 'nightly')
     const env = { RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: config,
       DESKTOP_PUBLISH_ROUTE: JSON.stringify({ ...f.manifest.source, runnerLabel: 'dsh-runner' }),
+      DESKTOP_ROLLOUT_STABLE: 'false',
+      DESKTOP_ROLLOUT_NIGHTLY: scenario === 'website' ? 'false' : 'true',
       DESKTOP_ROLLOUT_PERCENTAGE: scenario === 'website' ? '   ' : '30', DESKTOP_UPLOAD_WEBSITE: scenario === 'website' ? 'true' : 'false',
       GITHUB_OUTPUT: join(f.root, 'output'), GITHUB_STEP_SUMMARY: join(f.root, 'summary') }
     const context = await prepareDesktopRolloutCi(env)
@@ -231,15 +261,15 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
     expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`rollout-requested=${scenario !== 'website'}\n`)
     if (scenario === 'website') {
       const summary = await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')
-      expect(summary).toContain('官网安装包面向所有下载用户，不受自动更新放量比例限制')
+      expect(summary).toContain('仅官网发布跳过渠道首次发布记录校验')
       expect(summary).toContain('固定下载地址无防降级保护，发布较早版本会替换较新安装包')
     }
-    const mock = transport(dump({ ...(load(f.plan.expected) as object), stagingPercentage: 10 }))
+    const mock = transport(dump({ ...(load(nightlyPlan.expected) as object), stagingPercentage: 10 }))
     if (scenario === 'replaced-feed') mock.replace(null)
     const createTransport = vi.spyOn(cosTransport, 'desktopPublishCos').mockReturnValue(mock.api)
     const website = vi.spyOn(websitePublisher, 'publishWebsiteCi').mockImplementation(async (mode) => {
       expect(mode).toBe('upload')
-      expect(mock.reads).toHaveLength(1)
+      expect(mock.reads).toHaveLength(0)
       expect(mock.writes).toHaveLength(0)
     })
     vi.spyOn(process.stdout, 'write').mockReturnValue(true)
@@ -250,16 +280,20 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
       expect(mock.writes).toHaveLength(0)
       expect(website).not.toHaveBeenCalled()
       if (scenario === 'changed-approval') expect(createTransport).not.toHaveBeenCalled()
+    } else if (scenario === 'website') {
+      await execution
+      expect(website).toHaveBeenCalledOnce()
+      expect(createTransport).not.toHaveBeenCalled()
+      expect(mock.reads).toHaveLength(0)
     } else {
       await execution
-      expect(mock.writes).toHaveLength(scenario === 'apply' ? 1 : 0)
-      expect(website).toHaveBeenCalledTimes(scenario === 'website' ? 1 : 0)
+      expect(mock.writes).toHaveLength(1)
+      expect(website).not.toHaveBeenCalled()
       const output = await readFile(env.GITHUB_OUTPUT, 'utf8')
-      const key = scenario === 'website' ? 'rollout-record=' : 'record='
-      const directory = output.split('\n').find(line => line.startsWith(key))!.slice(key.length)
+      const directory = output.split('\n').find(line => line.startsWith('record='))!.slice('record='.length)
       expect(JSON.parse(await readFile(join(directory, 'result.json'), 'utf8'))).toMatchObject({ status: 'complete' })
-      expect(await readFile(join(directory, 'events.jsonl'), 'utf8')).toContain(scenario === 'apply' ? 'put-verified' : 'object-present')
-      expect(await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')).toContain(scenario === 'apply' ? '10% → 30%' : '10% → 10%')
+      expect(await readFile(join(directory, 'events.jsonl'), 'utf8')).toContain('put-verified')
+      expect(await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')).toContain('10% → 30%')
     }
   } finally { vi.restoreAllMocks(); await rm(f.root, { recursive: true, force: true }) }
 })
@@ -348,7 +382,8 @@ it.each(['mac-arm64', 'win-x64'] as const)('accepts %s metadata produced by the 
       schemaVersion: 1, target, version: f.manifest.source.version, channel: 'nightly',
       environment: 'production', publicUrl: f.plan.upload.publicUrl, commit: f.manifest.source.commit, dirty: false,
     }))
-    const original = await createDesktopUploadPlan(target, { artifactsRoot: f.directory, environment: f.environment,
+    const original = await createDesktopUploadPlan(target, { artifactsRoot: f.directory,
+      environment: { ...f.environment, DSH_DESKTOP_UPDATE_CHANNEL: f.manifest.source.channel },
       packagedProductVersion: f.manifest.source.version, stagingPercentage: 10 })
     const feed = original.artifacts.find(artifact => artifact.channelMetadata)!
     const mock = transport(feed.contents!)

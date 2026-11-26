@@ -9,15 +9,25 @@ on:
         description: '打包运行 ID：填写成功的 Package Desktop run ID；发布环境和 release ID 沿用原包'
         type: string
         required: true
+      publish_stable:
+        description: '发布到 stable（正式版）自动更新渠道'
+        type: boolean
+        default: false
+        required: true
+      publish_nightly:
+        description: '发布到 nightly（开发版）自动更新渠道'
+        type: boolean
+        default: false
+        required: true
       staging_percentage:
-        description: '更新灰度比例：0–100 整数，默认 100；留空沿用包内值，作用于原包所属渠道'
+        description: '更新灰度比例：0–100 整数，默认 100；留空沿用包内值，作用于本次勾选的自动更新渠道'
         type: string
         required: false
         default: '100'
       upload_website:
-        description: '同时上传官网安装包并刷新缓存（仅 production）；取消后仅执行版本与自动更新发布'
+        description: '同时上传官网固定安装包并刷新缓存（仅 production；默认不勾选防误触）'
         type: boolean
-        default: true
+        default: false
         required: true
       package_run_attempt:
         description: '打包尝试次数：留空选择最新一次，且必须成功；失败时不会回退到旧包'
@@ -66,11 +76,14 @@ jobs:
     outputs:
       route: ${{ steps.local.outputs.route }}
       preset: ${{ steps.local.outputs.preset }}
+      channels-requested: ${{ steps.check.outputs.channels-requested }}
       approval: ${{ steps.check.outputs.approval }}
       website-approval: ${{ steps.check.outputs.website-approval }}
       website-destination: ${{ steps.check.outputs.website-destination }}
       label: ${{ steps.check.outputs.label }}
     env:
+      DESKTOP_PUBLISH_STABLE: ${{ inputs.publish_stable }}
+      DESKTOP_PUBLISH_NIGHTLY: ${{ inputs.publish_nightly }}
       DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
       DESKTOP_PACKAGE_SELECTION: ${{ needs.route.outputs.selection }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
@@ -109,6 +122,7 @@ jobs:
   publish:
     name: Approve ${{ needs.prepare.outputs.label }}
     needs: [route, prepare]
+    if: needs.prepare.outputs.channels-requested == 'true'
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: ${{ needs.prepare.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}
     concurrency:
@@ -116,7 +130,10 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 90
     env:
+      DESKTOP_PUBLISH_STABLE: ${{ inputs.publish_stable }}
+      DESKTOP_PUBLISH_NIGHTLY: ${{ inputs.publish_nightly }}
       DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
+      DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
       DESKTOP_APPROVED_PACKAGE: ${{ needs.prepare.outputs.approval }}
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DSH_TELEMETRY_DISABLED: '1'
@@ -171,13 +188,13 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: desktop-publication-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.publish.outputs.record }}/
+          path: ${{ steps.publish.outputs.records || format('{0}/', steps.publish.outputs.record) }}
           if-no-files-found: error
           retention-days: 30
 
   upload-website-installer:
     needs: [route, prepare, publish]
-    if: inputs.upload_website && needs.prepare.outputs.preset != 'test'
+    if: ${{ !cancelled() && inputs.upload_website && needs.prepare.result == 'success' && needs.prepare.outputs.preset != 'test' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.prepare.outputs.channels-requested == 'false')) }}
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: desktop-production
     timeout-minutes: 60
@@ -221,7 +238,7 @@ jobs:
 
   purge-website-installer:
     needs: [route, prepare, upload-website-installer]
-    if: inputs.upload_website && needs.prepare.outputs.preset != 'test'
+    if: ${{ !cancelled() && inputs.upload_website && needs.prepare.outputs.preset != 'test' && needs.upload-website-installer.result == 'success' }}
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: desktop-production
     timeout-minutes: 60

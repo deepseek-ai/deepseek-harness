@@ -307,6 +307,10 @@ it('reports a failed developer-tool write and allows retry', async () => {
 })
 
 describe('current version', () => {
+  const inactiveUseChannel = bindSnapshotSelector(
+    createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({ failed: false }),
+  )
+
   it.each([
     ['Current version: 1.2.3-rc.4', en],
     ['当前版本：1.2.3-rc.4', zh],
@@ -317,15 +321,58 @@ describe('current version', () => {
       for (const [name, value] of Object.entries(params ?? {})) text = text.replace(`{${name}}`, String(value))
       return text
     }
-    render(<CurrentVersionRow {...kit} t={translate} />)
+    render(<CurrentVersionRow {...kit} t={translate} useChannel={inactiveUseChannel} />)
     expect(screen.getByText(expected)).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('omits the row when a partial build has no version metadata', () => {
     vi.stubEnv('DSH_CLIENT_VERSION', undefined)
-    const view = render(<CurrentVersionRow {...kit} t={t} />)
+    const view = render(<CurrentVersionRow {...kit} t={t} useChannel={inactiveUseChannel} />)
     expect(view.container.textContent).toBe('')
+  })
+
+  it('unlocks the development channel after 5 clicks and confirmation while keeping Cancel focused first', async () => {
+    vi.stubEnv('DSH_CLIENT_VERSION', '1.2.3-rc.4')
+    const store = createSnapshotStore<import('../src/client/desktop-channel-source.ts').DesktopChannelSnapshot>({
+      failed: false,
+      state: { channel: 'stable', unlocked: false, changing: false },
+    })
+    const unlock = vi.fn(async () => {
+      store.set({
+        failed: false,
+        state: { channel: 'nightly', unlocked: true, changing: false },
+      })
+    })
+    const useChannel = bindSnapshotSelector(store)
+    render(
+      <>
+        <DesktopChannelRow {...kit} t={t} useChannel={useChannel} select={vi.fn(async () => {})} />
+        <CurrentVersionRow {...kit} t={t} useChannel={useChannel} unlock={unlock} />
+      </>,
+    )
+    expect(screen.queryByRole('group', { name: 'Update channel' })).toBeNull()
+    const versionRow = screen.getByText(en['general.currentVersion'])
+    for (let i = 0; i < 4; i++) fireEvent.click(versionRow)
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+
+    fireEvent.click(versionRow)
+    const modal = screen.getByRole('dialog', { name: en['desktop.channel.unlock.title'] })
+    expect(modal.textContent).toContain(en['desktop.channel.unlock.description'])
+    expect(document.activeElement?.textContent).toBe('Cancel')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+    expect(unlock).not.toHaveBeenCalled()
+
+    for (let i = 0; i < 5; i++) fireEvent.click(versionRow)
+    expect(screen.getByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to development' }))
+    await waitFor(() => { expect(unlock).toHaveBeenCalledOnce() })
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Update channel' }).textContent).toBe('Development')
+
+    for (let i = 0; i < 5; i++) fireEvent.click(versionRow)
+    expect(screen.queryByRole('dialog', { name: en['desktop.channel.unlock.title'] })).toBeNull()
   })
 })
 
@@ -392,19 +439,23 @@ describe('Host release change confirmation', () => {
 })
 
 
-it('shows channel load errors and waits for an explicit selection to settle', async () => {
+it('hides the channel row while locked, shows load errors, and waits for an explicit selection to settle', async () => {
   let state: { state?: DesktopChannelState; failed: boolean; pending?: 'stable' } = { failed: false }
   const pending = Promise.withResolvers<undefined>()
   const select = vi.fn(() => pending.promise)
   const props = { ...kit, t, select, useChannel: bindSnapshotSelector(createSnapshotStore(state)) }
   const view = render(<DesktopChannelRow {...props} />)
-  const control = screen.getByRole('button', { name: 'Update channel' })
-  expect(control.hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByRole('button', { name: 'Update channel' })).toBeNull()
+  state = { failed: false, state: { channel: 'stable', unlocked: false, changing: false } }
+  view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  expect(screen.queryByRole('button', { name: 'Update channel' })).toBeNull()
   state = { failed: true }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(screen.getByRole('alert').textContent).toBe(en['desktop.channel.readError'])
-  state = { failed: false, state: { channel: null, packagedChannel: 'nightly', changing: false, error: 'format' } }
+  expect(screen.getByRole('button', { name: 'Update channel' }).hasAttribute('disabled')).toBe(true)
+  state = { failed: false, state: { channel: null, unlocked: false, changing: false, error: 'format' } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
+  const control = screen.getByRole('button', { name: 'Update channel' })
   expect(control.textContent).toContain('Configuration unavailable')
   fireEvent.click(control)
   fireEvent.click(screen.getByRole('menuitem', { name: 'Stable' }))
@@ -414,7 +465,7 @@ it('shows channel load errors and waits for an explicit selection to settle', as
   expect(control.textContent).toBe('Stable')
   expect(control.getAttribute('aria-busy')).toBe('true')
   pending.resolve(undefined)
-  state = { failed: false, state: { channel: 'stable', packagedChannel: 'nightly', changing: false } }
+  state = { failed: false, state: { channel: 'stable', unlocked: true, changing: false } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.textContent).toBe('Stable')
   fireEvent.click(control)
@@ -423,7 +474,7 @@ it('shows channel load errors and waits for an explicit selection to settle', as
   fireEvent.click(control)
   fireEvent.click(screen.getByRole('menuitem', { name: 'Development' }))
   await waitFor(() => { expect(select).toHaveBeenLastCalledWith('nightly') })
-  state = { failed: false, state: { channel: 'nightly', packagedChannel: 'nightly', changing: true } }
+  state = { failed: false, state: { channel: 'nightly', unlocked: true, changing: true } }
   view.rerender(<DesktopChannelRow {...props} useChannel={bindSnapshotSelector(createSnapshotStore(state))} />)
   expect(control.hasAttribute('disabled')).toBe(true)
   state = { ...state, state: { ...state.state!, changing: false } }
@@ -432,7 +483,7 @@ it('shows channel load errors and waits for an explicit selection to settle', as
 })
 
 it('keeps the failure toast after Settings unmounts and rolls back the remounted selector', async () => {
-  const state: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', changing: false }
+  const state: DesktopChannelState = { channel: 'nightly', unlocked: true, changing: false }
   const reply = Promise.withResolvers<DesktopChannelChangeResult>()
   const source = new DesktopChannelSource({ get: async () => state, set: () => reply.promise, subscribe: () => () => {} })
   const useChannel = bindSnapshotSelector(source.store)

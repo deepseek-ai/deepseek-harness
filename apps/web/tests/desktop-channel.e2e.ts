@@ -14,9 +14,8 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
   try {
     const browser = await chromium.launch()
     try {
-      const settings = new DesktopUpdateSettings(join(scaffold.harnessHome, 'shell'), 'nightly')
-      await settings.save('nightly')
-      let state: DesktopChannelState = { channel: 'nightly', packagedChannel: 'nightly', changing: false }
+      const settings = new DesktopUpdateSettings(join(scaffold.harnessHome, 'shell'))
+      let state: DesktopChannelState = { channel: 'stable', unlocked: false, changing: false }
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'en-US' })
       const tripwire = watchConsole(page)
       let detailOpens = 0
@@ -25,7 +24,7 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       await page.exposeFunction('setChannel', async (channel: 'nightly' | 'stable'): Promise<DesktopChannelChangeResult> => {
         try {
           await settings.save(channel)
-          state = { ...state, channel, error: undefined }
+          state = { ...state, channel, unlocked: true, error: undefined }
           return { kind: 'applied', state }
         } catch (_error) { return { kind: 'failed', state, reason: 'format' } }
       })
@@ -44,17 +43,33 @@ it('persists a Desktop channel from Settings and keeps external edits startup-on
       await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await openSettings(page, 'en')
       const row = page.getByRole('group', { name: 'Update channel', exact: true })
+      const versionRow = page.getByText(/^Current version:/u)
+      await versionRow.waitFor()
+      expect(await row.count()).toBe(0)
+      for (let i = 0; i < 4; i++) await versionRow.click()
+      expect(await page.getByRole('dialog', { name: 'Switch to development update channel?', exact: true }).count()).toBe(0)
+      await versionRow.click()
+      const unlockDialog = page.getByRole('dialog', { name: 'Switch to development update channel?', exact: true })
+      await unlockDialog.waitFor()
+      await unlockDialog.getByRole('button', { name: 'Switch to development', exact: true }).click()
       await row.getByText('Development', { exact: true }).waitFor()
+      expect(JSON.parse(await readFile(settings.path, 'utf8'))).toMatchObject({
+        version: '1',
+        updates: { channel: 'nightly', channelUnlocked: true },
+      })
       await row.getByRole('button', { name: 'Update channel', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Stable', exact: true }).click()
       await row.getByText('Stable', { exact: true }).waitFor()
       await page.getByText('Update channel changed', { exact: true }).waitFor()
-      expect(JSON.parse(await readFile(settings.path, 'utf8'))).toMatchObject({ updates: { channel: 'stable' } })
+      expect(JSON.parse(await readFile(settings.path, 'utf8'))).toMatchObject({
+        version: '1',
+        updates: { channel: 'stable', channelUnlocked: true },
+      })
       await compareOrRefreshGolden(fileURLToPath(new URL('./expected/desktop-channel/stable.expected.md', import.meta.url)),
         await captureStableAria(page, '[role="group"][aria-label="Update channel"]', scaffold.workspaceCwd), webSnapshotMode())
-      await writeFile(settings.path, JSON.stringify({ updates: { channel: 'nightly' } }))
+      await writeFile(settings.path, JSON.stringify({ version: '1', updates: { channel: 'nightly', channelUnlocked: true } }))
       expect(await row.getByText('Stable', { exact: true }).count()).toBe(1)
-      expect(await settings.load()).toEqual({ kind: 'ready', channel: 'nightly' })
+      expect(await settings.load()).toEqual({ kind: 'ready', channel: 'nightly', unlocked: true, configVersion: '1' })
       await writeFile(settings.path, '{broken')
       await row.getByRole('button', { name: 'Update channel', exact: true }).click()
       await page.getByRole('menuitem', { name: 'Development', exact: true }).click()

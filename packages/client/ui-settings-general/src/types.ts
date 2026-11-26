@@ -47,7 +47,7 @@ export type DesktopUpdateChannel = 'nightly' | 'stable'
 /** Current runtime selection and application status; failure never implies a successful switch. */
 export interface DesktopChannelState {
   readonly channel: DesktopUpdateChannel | null
-  readonly packagedChannel: DesktopUpdateChannel
+  readonly unlocked: boolean
   readonly changing: boolean
   readonly error?: 'read' | 'format' | 'channel' | 'cleanup'
 }

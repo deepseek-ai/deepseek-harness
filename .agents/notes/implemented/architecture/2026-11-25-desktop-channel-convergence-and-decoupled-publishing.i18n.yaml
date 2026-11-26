@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-11-25-desktop-channel-convergence-and-decoupled-publishing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-25-desktop-channel-convergence-and-decoupled-publishing.md
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication:
+  en: 9b46404145ebf25a
+  zh: f5d41282b5c597ef
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication/problem:
+  en: 62ce0dc6f6370dc0
+  zh: 21d1ced3b1baeb94
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication/decision:
+  en: 02c403bbf265e47b
+  zh: 4af3918c8e6a76d3
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication/channel-vocabulary-and-feed-routing:
+  en: 1b8f22ff61a5d9b2
+  zh: 602e6bd7f1f10ecb
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication/deferred:
+  en: 2a505e0bbc1dbec5
+  zh: f5aab0b728d9bff9
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication/alternatives-considered:
+  en: 293522227bb06f6d
+  zh: b3b2b7912cf6bd9f
+/agent-note-converge-desktop-update-channels-on-stable-and-decouple-target-publication/consequences:
+  en: 544861b475938b1f
+  zh: 97d76c0236250ff9

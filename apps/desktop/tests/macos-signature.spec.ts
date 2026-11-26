@@ -91,7 +91,7 @@ describe('desktop macOS release signature', () => {
       publish: [{
         provider: 'generic',
         url: 'https://desktop-updates.example.com/dsh-desk/0123456789abcdef0123456789abcdef/feeds/mac-arm64/',
-        channel: 'nightly',
+        channel: 'stable',
       }],
     })
     expect(typeof config.artifactBuildCompleted).toBe('function')

@@ -48,3 +48,22 @@ it.each(['arm64', 'x64'])('accepts notarized split %s artifacts and ignores debu
   ])
   expect(preflightDesktopPublish('owner/repo', { package_run_id: '42', package_run_attempt: '2' }, () => [{ artifacts }])).toBe('2')
 })
+
+it('validates decoupled publish and rollout checkbox combinations before contacting GitHub', () => {
+  const unexpectedApi = () => { throw new Error('API must not be called') }
+  expect(() => preflightDesktopPublish('owner/repo', {
+    package_run_id: '42', publish_stable: 'false', publish_nightly: 'false', upload_website: 'false',
+  }, unexpectedApi)).toThrow('select publish_stable, publish_nightly, or upload_website')
+  expect(() => preflightDesktopPublish('owner/repo', {
+    package_run_id: '42', rollout_stable: false, rollout_nightly: false, rollout_percentage: '', upload_website: false,
+  }, unexpectedApi)).toThrow('select rollout_stable, rollout_nightly, or upload_website')
+  expect(() => preflightDesktopPublish('owner/repo', {
+    package_run_id: '42', rollout_stable: 'true', rollout_nightly: 'false', rollout_percentage: '   ', upload_website: 'false',
+  }, unexpectedApi)).toThrow('rollout_percentage is required')
+  expect(() => preflightDesktopPublish('owner/repo', {
+    package_run_id: '42', rollout_stable: 'false', rollout_nightly: 'false', rollout_percentage: '50', upload_website: 'true',
+  }, unexpectedApi)).toThrow('select rollout_stable or rollout_nightly when specifying rollout_percentage')
+  expect(preflightDesktopPublish('owner/repo', {
+    package_run_id: '42', package_run_attempt: '1', rollout_stable: 'false', rollout_nightly: 'false', rollout_percentage: '', upload_website: 'true',
+  }, () => [{ artifacts: [] }])).toBe('1')
+})

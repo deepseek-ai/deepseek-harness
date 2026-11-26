@@ -17,6 +17,7 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client
 // Type-only: pulls the ctx.modules merge.
 import type {} from '@deepseek-ai/dsh-client-modules/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { closeTopModal } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the settings slot declarations plus the ctx.configForms Context
 // merge. Cross-plugin collaboration goes through the service, never a value
@@ -36,14 +37,14 @@ import { createSettingsShellStore } from './shell-store.ts'
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { DesktopUpdateBadge } from './DesktopUpdateIndicator.tsx'
 import type { DesktopUpdateBridge } from '../types.ts'
-import { DesktopChannelSource } from './desktop-channel-source.ts'
+import { DesktopChannelSource, type DesktopChannelSnapshot } from './desktop-channel-source.ts'
 import { DesktopChannelRow, DesktopChannelToast } from './DesktopChannelRow.tsx'
 import { DesktopUpdateSource } from './desktop-update-source.ts'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection, type GeneralSectionInjected } from './GeneralSection.tsx'
 import { SettingsSectionView } from './SettingsSectionView.tsx'
 import { GeneralGroup, DisplayGroup, InteractionGroup, NotificationsGroup, DataGroup, UpdatesGroup } from './GeneralGroup.tsx'
-import { CurrentVersionRow } from './CurrentVersionRow.tsx'
+import { CurrentVersionRow, type CurrentVersionRowInjected } from './CurrentVersionRow.tsx'
 import { DeveloperToolsRow, type DeveloperToolsRowInjected } from './DeveloperToolsRow.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
@@ -100,9 +101,21 @@ export function apply(ctx: ClientContext): void {
       },
     }),
   }, DeveloperToolsRow))
-  // Version information follows the core preferences.
+  // Version information follows the core preferences; Desktop binds hidden 5-click channel unlock.
+  const inactiveChannel = createSnapshotStore<DesktopChannelSnapshot>({ failed: false })
+  let channel: DesktopChannelSource | undefined
   ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
-    name: 'settings.general.group.updates.item', id: 'current-version', order: 101, locale: NS,
+    name: 'settings.general.group.updates.item',
+    id: 'current-version',
+    order: 101,
+    locale: NS,
+    inject: (): CurrentVersionRowInjected => {
+      const desktopChannel = channel
+      return {
+        hooks: { channel: desktopChannel?.store ?? inactiveChannel },
+        ...(desktopChannel === undefined ? {} : { unlock: () => desktopChannel.select('nightly') }),
+      }
+    },
   }, CurrentVersionRow))
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-settings-general: dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
@@ -111,16 +124,17 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => () => { desktopUpdate.dispose() }, 'ui-settings-general: desktop update carrier')
   const channelBridge = carrier?.protocolVersion === 1 ? carrier.updates?.channels : undefined
   if (channelBridge !== undefined) {
-    const channel = new DesktopChannelSource(channelBridge)
-    ctx.effect(() => () => { channel.dispose() }, 'ui-settings-general: desktop channel')
+    const desktopChannel = new DesktopChannelSource(channelBridge)
+    channel = desktopChannel
+    ctx.effect(() => () => { desktopChannel.dispose() }, 'ui-settings-general: desktop channel')
     ctx.slots.inject('settings.general.group.updates.item', () => ctx.slots.register({
       name: 'settings.general.group.updates.item', id: 'desktop-update-channel', order: 100, locale: NS,
-      inject: () => ({ hooks: { channel: channel.store }, select: (value: 'nightly' | 'stable') => channel.select(value) }),
+      inject: () => ({ hooks: { channel: desktopChannel.store }, select: (value: 'nightly' | 'stable') => desktopChannel.select(value) }),
     }, DesktopChannelRow))
     ctx.slots.inject('shell.overlay', () => ctx.slots.register({
       name: 'shell.overlay', id: 'desktop-channel-toast', locale: NS,
-      inject: () => ({ hooks: { channel: channel.store },
-        dismiss: (sequence: number) => { channel.dismissNotice(sequence) }, openConfiguration: () => { desktopUpdate.open() } }),
+      inject: () => ({ hooks: { channel: desktopChannel.store },
+        dismiss: (sequence: number) => { desktopChannel.dismissNotice(sequence) }, openConfiguration: () => { desktopUpdate.open() } }),
     }, DesktopChannelToast))
   }
 

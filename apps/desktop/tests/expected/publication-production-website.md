@@ -7,7 +7,8 @@
 | --- | --- |
 | 发布环境 | <code>production</code> |
 | 版本号 | <code>1.0.0</code> |
-| 升级通道 | <code>stable</code> |
+| 包内渠道标记 | <code>stable</code> |
+| 发布目标渠道 | <code>stable</code> |
 | 更新灰度比例 | 全量（未设置） |
 | 平台 | <code>win-x64</code> |
 | 下载地址预览 | <a href="https&#58;//download.example.com/dsh-desk/bin/win-x64/stable/deepseek-harness-1.0.0-win-x64.exe">https&#58;//download.example.com/dsh-desk/bin/win-x64/stable/deepseek-harness-1.0.0-win-x64.exe</a><br>发布后的目标地址，审批前不保证可下载。 |
@@ -20,8 +21,8 @@
 ### 批准后将执行
 
 1. 重新校验产物与发布目标；若与审批摘要不一致则停止。
-2. 上传缺少的文件，跳过内容一致的已有文件；发现内容冲突则停止。
-3. 更新上述升级 YAML，并保存发布记录。
+2. 逐个所选渠道独立加锁，上传缺少的文件并跳过内容一致的已有文件；发现内容冲突则停止。
+3. 更新上述升级 YAML，并按单渠道保存独立发布记录。
 4. 为实际打包提交创建上述 Git tag；若 tag 创建失败，记录“已发布，待补 tag”。
 
 <details>

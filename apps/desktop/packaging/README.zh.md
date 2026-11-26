@@ -63,7 +63,7 @@ pnpm --dir apps/desktop run package:win:x64 --build-version 0.1.6-alpha.1.202609
 
 production 发布使用产品版本本身，不传 `--build-version`。其上传成功后会把打包所用 commit 打成 `desktop-v<版本>` 标签；来自有改动工作区的构建不打标签，打标签失败也只打印手工命令，不会让已完成的上传变成失败。test 与本地构建有意不留标签，而所有产物的清单都记录 `dshBuildCommit` 与 `dshBuildDirty`，直接分发的构建同样可溯源。
 
-安装包独立于版本和发布环境内置 `DSH_DESKTOP_UPDATE_CHANNEL`（默认 `nightly`，也可选择 `stable`）。该值提供默认渠道；[桌面设置](../README.zh.md#local-desktop-settings)中保存的选择优先，包括安装另一个包之后。操作人员独立于版本后缀选择渠道；两个渠道均接受正式版本和预发布版本。稳定产品可生成 `-test.<date>.<sequence>` 构建，但该版本低于稳定基准，不能升级已安装的更高版本。保持自动降级关闭；稳定修复版需要提升产品版本。CI 版本选择与发布见 [CI 发布](../publishing/ci/README.zh.md#package-and-publish)。
+安装包独立于版本和发布环境内置 `DSH_DESKTOP_UPDATE_CHANNEL`（默认 `stable`，也可选择 `nightly`）作为包内渠道标记；运行时在[桌面设置](../README.zh.md#local-desktop-settings)解锁前固定检查 `stable`，发布工作流也独立于该包内标记选择发布目标渠道。操作人员独立于版本后缀选择目标渠道；两个渠道均接受正式版本和预发布版本。稳定产品可生成 `-test.<date>.<sequence>` 构建，但该版本低于稳定基准，不能升级已安装的更高版本。保持自动降级关闭；稳定修复版需要提升产品版本。CI 版本选择与发布见 [CI 发布](../publishing/ci/README.zh.md#package-and-publish)。
 
 <a id="configuration-and-local-builds"></a>
 
@@ -300,7 +300,7 @@ macOS 签名打包在组装 App 时、代码签名前写入 `Contents/Resources/
 
 Windows 以不带版本后缀的产品名称显示已安装应用，版本保留在单独的版本字段中。Desktop 的 `package.json` 中的 `author.name` 提供安装包发布者和可执行文件公司名称，与签名证书相互独立。Windows 和 macOS 的版权文本仍使用产品名称。重新构建的安装包在安装或升级时写入新元数据；既有安装在此之前保留原值。
 
-一起保留生成的安装包、版本和打包记录。安装前检查签名与运行时验证结果，再按[已安装更新验收流程](../tests/installed-update/README.zh.md)记录安装后启动及升级证据。[Desktop 测试记录](../tests/README.zh.md)维护验证限制；工作流成功本身不代表 production preset、新工作站或已安装升级验收通过。
+一起保留生成的安装包、版本和打包记录，并在安装前检查签名与运行时验证结果。[Desktop 测试记录](../tests/README.zh.md)维护验证限制；工作流成功本身不代表 production preset、新工作站或已安装升级验收通过。
 
 ## 开发备注
 

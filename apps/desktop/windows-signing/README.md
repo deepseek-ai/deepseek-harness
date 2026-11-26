@@ -133,7 +133,7 @@ Use `pnpm --dir apps/desktop run cache:windows-signatures --usage` to inspect st
 
 ## Verification limits
 
-Signing performance evidence and replacement-runner retesting are owned by the [signing concurrency qualification](../tests/signing-concurrency/README.md). Update and installation evidence is owned by the [Desktop qualification record](../tests/README.md) and [installed-update procedure](../tests/installed-update/README.md). This document does not authorize PIN retries, automatic interlock deletion, device initialization or changes to the accepted isolation policy.
+Signing performance evidence and replacement-runner retesting are owned by the [signing concurrency qualification](../tests/signing-concurrency/README.md). Update and installation evidence is owned by the [Desktop qualification record](../tests/README.md). This document does not authorize PIN retries, automatic interlock deletion, device initialization or changes to the accepted isolation policy.
 
 For operator-approved concurrency experiments, run `node apps/desktop/tests/windows-signing-concurrency.perf.ts --execute --config-root <absolute-packaging-directory> --rounds 2`. Without `--execute`, it only prints usage. The default compares serial completion, two completion workers with one hardware request, and two concurrent hardware requests on six synthetic PE copies per batch. The second round reverses mode order.
 

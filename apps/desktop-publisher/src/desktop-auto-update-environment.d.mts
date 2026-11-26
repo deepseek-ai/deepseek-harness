@@ -107,7 +107,7 @@ export function resolveDesktopUploadConfig(
 ): DesktopUploadConfig
 
 /**
- * Resolve the packaged update channel, defaulting omitted local settings to nightly.
+ * Resolve the packaged update channel, defaulting omitted local settings to stable.
  * @param env Packaging settings.
  * @returns Validated channel.
  */

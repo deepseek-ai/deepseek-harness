@@ -206,8 +206,7 @@ export function readDesktopRuntime(root: string): DesktopRuntimeDescriptor {
 /**
  * Verify every packaged runtime file against its recorded bytes and permissions at build time.
  * @param root - Materialized runtime resources.
- * @param expectedVersion - Version the bundled runtime must declare: the product version ordinarily,
- * and a rewritten one for installed-update qualification.
+ * @param expectedVersion - Product version the bundled runtime must declare.
  * @param target - Required execution target; defaults to the current process.
  * @returns Validated runtime descriptor.
  */

@@ -133,7 +133,7 @@ Windows 打包从 `.env.windows` 或所选预设读取 `DSH_DESKTOP_WINDOWS_PACK
 
 ## 验证范围
 
-签名性能证据与更换 runner 后的复测由[签名并发验收](../tests/signing-concurrency/README.zh.md)维护。更新与安装证据由[Desktop 验证记录](../tests/README.zh.md)和[已安装更新流程](../tests/installed-update/README.zh.md)维护。本文档不授权 PIN 重试、自动删除 interlock、设备初始化或改变已接受的隔离策略。
+签名性能证据与更换 runner 后的复测由[签名并发验收](../tests/signing-concurrency/README.zh.md)维护。更新与安装证据由[Desktop 验证记录](../tests/README.zh.md)维护。本文档不授权 PIN 重试、自动删除 interlock、设备初始化或改变已接受的隔离策略。
 
 经操作人员授权后，可运行 `node apps/desktop/tests/windows-signing-concurrency.perf.ts --execute --config-root <打包配置目录的绝对路径> --rounds 2` 做并发实验。不加 `--execute` 只打印用法。默认比较完全串行、两个完成任务共用单路硬件签名，以及两路硬件签名，每批使用六个合成 PE 副本。第二轮反转模式顺序。
 

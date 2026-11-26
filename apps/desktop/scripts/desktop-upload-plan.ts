@@ -42,6 +42,8 @@ export interface DesktopUploadPlanOptions {
   readonly artifactsRoot?: string
   /** Original product version from a verified retained build; absent reads the checkout manifests. */
   readonly packagedProductVersion?: string
+  /** Channel marker embedded during packaging when target publication channels are selected independently. */
+  readonly packagedChannel?: 'nightly' | 'stable'
 }
 
 interface UpdateFileInfo {
@@ -188,15 +190,17 @@ export async function createDesktopUploadPlan(
     throw new Error(`desktop upload: ${targetName} package completion record holds ${recordedVersion}, which is not a build of dsh ${dshVersion}: ${
       error instanceof Error ? error.message : String(error)}`)
   }
+  const expectedPackagedChannel = options.packagedChannel ?? update.channel
   if (buildRecord.schemaVersion !== 1
     || buildRecord.target !== targetName
-    || (buildRecord.channel ?? 'nightly') !== update.channel
+    || (buildRecord.channel ?? 'nightly') !== expectedPackagedChannel
     || buildRecord.environment !== update.environment
     || buildRecord.publicUrl !== update.publicUrl) {
     throw new Error(`desktop upload: ${targetName} package completion record for ${buildVersion} does not match the ${update.environment} update destination`)
   }
 
-  const metadataFilename = desktopUpdateMetadataFilename(buildVersion, target.platform, update.channel)
+  const metadataFilename = desktopUpdateMetadataFilename(buildVersion, target.platform, expectedPackagedChannel)
+  const targetMetadataFilename = desktopUpdateMetadataFilename(buildVersion, target.platform, update.channel)
   const metadataPath = join(artifactsRoot, metadataFilename)
   let metadataValue: unknown
   try {
@@ -250,8 +254,12 @@ export async function createDesktopUploadPlan(
     files: [{ ...object(metadata.files[0], `${metadataFilename}.files[0]`), url: payloadUrl }],
     ...(metadata.path === undefined ? {} : { path: payloadUrl }),
   }
-  const channelArtifact = {
-    ...uploadArtifact(metadataPath, update.keyPrefix, 'application/yaml', true),
+  const channelArtifact: DesktopUploadArtifact = {
+    path: metadataPath,
+    filename: targetMetadataFilename,
+    key: `${update.keyPrefix}/${targetMetadataFilename}`,
+    contentType: 'application/yaml',
+    channelMetadata: true,
     contents: dump(published),
   }
   artifacts.push(channelArtifact)

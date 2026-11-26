@@ -4,11 +4,18 @@ import { dirname, join } from 'node:path'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import { z } from 'zod'
 
+/** Current generation written on startup initialization, legacy migration, and explicit UI saves. */
+export const DESKTOP_SETTINGS_VERSION = '1' as const
+
 const preferencesSchema = z.object({
   allowTestAuthPopupWindow: z.boolean(),
   channel: z.enum(['nightly', 'stable']),
+  channelUnlocked: z.boolean(),
 })
-const documentSchema = z.looseObject({ updates: z.looseObject({}).optional() })
+const documentSchema = z.looseObject({
+  version: z.literal(DESKTOP_SETTINGS_VERSION).optional(),
+  updates: z.looseObject({}).optional(),
+})
 
 /** Known field values before consumers supply defaults for absent fields. */
 export type DesktopUpdatePreferences = z.infer<typeof preferencesSchema>
@@ -39,6 +46,8 @@ export type DesktopSettingsField<T> =
   | { kind: 'valid'; value: T }
   | { kind: 'invalid'; error: DesktopSettingsFileError }
 
+type DesktopSettingsFields = { [K in keyof DesktopUpdatePreferences]: DesktopSettingsField<DesktopUpdatePreferences[K]> }
+
 /** File state and independent field results; a missing file is never implicitly created. */
 export type DesktopSettingsRead =
   | { kind: 'missing' }
@@ -46,7 +55,7 @@ export type DesktopSettingsRead =
   | {
     kind: 'ready'
     document: DesktopSettingsDocument
-    fields: { [K in keyof DesktopUpdatePreferences]: DesktopSettingsField<DesktopUpdatePreferences[K]> }
+    fields: DesktopSettingsFields
   }
 
 function field<T>(schema: z.ZodType<T>, value: unknown, name: keyof DesktopUpdatePreferences, path: string): DesktopSettingsField<T> {
@@ -54,6 +63,19 @@ function field<T>(schema: z.ZodType<T>, value: unknown, name: keyof DesktopUpdat
   const result = schema.safeParse(value)
   return result.success ? { kind: 'valid', value: result.data }
     : { kind: 'invalid', error: new DesktopSettingsFileError({ kind: 'invalid', reason: 'field', field: name }, path) }
+}
+
+function hasInvalidField(fields: DesktopSettingsFields): boolean {
+  return fields.allowTestAuthPopupWindow.kind === 'invalid'
+    || fields.channel.kind === 'invalid'
+    || fields.channelUnlocked.kind === 'invalid'
+}
+
+function migrateLegacyDocument(document: DesktopSettingsDocument): DesktopSettingsDocument {
+  if (document.updates === undefined) return { ...document, version: DESKTOP_SETTINGS_VERSION }
+  const { channelUnlocked: _legacyUnlocked, ...updates } = document.updates
+  const migratedUpdates = updates.channel === 'nightly' ? { ...updates, channel: 'stable' as const } : updates
+  return { ...document, version: DESKTOP_SETTINGS_VERSION, updates: migratedUpdates }
 }
 
 /**
@@ -104,16 +126,23 @@ export class DesktopSettingsFile {
       allowTestAuthPopupWindow: field(preferencesSchema.shape.allowTestAuthPopupWindow,
         document.updates?.allowTestAuthPopupWindow, 'allowTestAuthPopupWindow', this.path),
       channel: field(preferencesSchema.shape.channel, document.updates?.channel, 'channel', this.path),
+      channelUnlocked: field(preferencesSchema.shape.channelUnlocked,
+        document.updates?.channelUnlocked, 'channelUnlocked', this.path),
     } }
   }
 
   /**
-   * Explicit startup initialization; existing files, including invalid ones, are never replaced.
-   * @returns Current file state after exclusive creation if missing, or a structured failure.
+   * Explicit startup initialization: creates version 1 defaults when missing and migrates valid
+   * unversioned documents to version 1 by resetting legacy nightly preferences to stable.
+   * Invalid documents or files with invalid fields are never rewritten.
+   * @returns Current file state after creation or migration, or a structured failure.
    */
   async initialize(): Promise<DesktopSettingsRead> {
     const current = await this.read()
-    if (current.kind !== 'missing') return current
+    if (current.kind === 'error') return current
+    if (current.kind === 'ready' && (current.document.version === DESKTOP_SETTINGS_VERSION || hasInvalidField(current.fields))) {
+      return current
+    }
     try { return await this.mutate({ kind: 'initialize' }) } catch (error) {
       if (!(error instanceof DesktopSettingsFileError)) throw error
       return { kind: 'error', error }
@@ -140,21 +169,32 @@ export class DesktopSettingsFile {
       return await withFileLock(this.path, async () => {
         const current = await this.read()
         if (current.kind === 'error') throw current.error
-        if (request.kind === 'initialize' && current.kind !== 'missing') return current
-        const document = current.kind === 'ready' ? current.document : {}
-        const updates = request.kind === 'initialize' ? { allowTestAuthPopupWindow: false } : request.updates
-        const next = { ...document, updates: { ...document.updates, ...updates } }
-        const raw = `${JSON.stringify(next, null, 2)}\n`
-        effect = 'unknown'
         if (request.kind === 'initialize') {
+          if (current.kind === 'ready') {
+            if (current.document.version === DESKTOP_SETTINGS_VERSION || hasInvalidField(current.fields)) return current
+            const next = migrateLegacyDocument(current.document)
+            const raw = `${JSON.stringify(next, null, 2)}\n`
+            effect = 'unknown'
+            await writeFileAtomic(this.path, raw, { mode: 0o600 })
+            effect = 'written'
+            return this.inspect(next)
+          }
+          const next = { version: DESKTOP_SETTINGS_VERSION, updates: { allowTestAuthPopupWindow: false } }
+          const raw = `${JSON.stringify(next, null, 2)}\n`
+          effect = 'unknown'
           try { await writeFile(this.path, raw, { flag: 'wx', mode: 0o600 }) } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
             effect = 'unchanged'
             return this.read()
           }
-        } else {
-          await writeFileAtomic(this.path, raw, { mode: 0o600 })
+          effect = 'written'
+          return this.inspect(next)
         }
+        const document = current.kind === 'ready' ? current.document : {}
+        const next = { ...document, version: DESKTOP_SETTINGS_VERSION, updates: { ...document.updates, ...request.updates } }
+        const raw = `${JSON.stringify(next, null, 2)}\n`
+        effect = 'unknown'
+        await writeFileAtomic(this.path, raw, { mode: 0o600 })
         effect = 'written'
         return this.inspect(next)
       })

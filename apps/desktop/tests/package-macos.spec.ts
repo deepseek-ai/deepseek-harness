@@ -57,7 +57,7 @@ async function fixture(arch: 'arm64' | 'x64' = 'arm64') {
     await writeFile(join(artifact.output, `${base}.${artifact.format}`), contents)
     if (artifact.format === 'zip') {
       await writeFile(join(artifact.output, `${base}.zip.blockmap`), 'blockmap')
-      await writeFile(join(artifact.output, 'nightly-mac.yml'), 'update metadata')
+      await writeFile(join(artifact.output, 'stable-mac.yml'), 'update metadata')
     }
   }
   return { root, appPath, request, apple, build, base }
@@ -182,7 +182,7 @@ describe('parallel macOS artifacts', () => {
       await expect(packageMacOSArtifacts(f.request, async (artifact) => {
         await f.build(artifact)
         if (failure === 'metadata' && artifact.format === 'zip') {
-          await writeFile(join(artifact.output, 'nightly-mac.yml'), '')
+          await writeFile(join(artifact.output, 'stable-mac.yml'), '')
         }
         if (failure === 'post-update-config' && artifact.format === 'zip') {
           await writeFile(join(artifact.appPath, 'Contents', 'Resources', 'app-update.yml'), '{}')

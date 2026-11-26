@@ -6,11 +6,11 @@
   en: 5056a9b4d24c1880
   zh: 4d0c9d8e5f69d153
 /desktop-local-verification/summary:
-  en: 94559f431b0b2151
-  zh: 1a22166a2bc59686
+  en: 7a8f8cdbd3fbb68d
+  zh: ae2b4cb35982abcd
 /desktop-local-verification/table-of-contents:
-  en: fa9e3048995c0e3c
-  zh: ef30232afa4ba125
+  en: c3e2912b8e4bba4c
+  zh: e4165cc2870db381
 /desktop-local-verification/fault-report-verification:
   en: a418eb04ce93b1ee
   zh: 1ec04872a66ce1b7
@@ -21,11 +21,26 @@
   en: 6f4de4503748f3e2
   zh: 648370375f16e463
 /desktop-local-verification/manual-walkthrough:
-  en: 1f333416e5a3fef1
-  zh: fe0f30418db59cb0
+  en: 149360345ba98ae9
+  zh: af8d878aa17e9014
+/desktop-local-verification/manual-installed-upgrade-testing:
+  en: ab69db01001fbb12
+  zh: 49380c4238fa6d6f
+/desktop-local-verification/manual-installed-upgrade-testing/prepare-the-run:
+  en: 72c20aa4d2061fb8
+  zh: f01b5739e006ad58
+/desktop-local-verification/manual-installed-upgrade-testing/point-the-application-at-a-local-feed:
+  en: 76cbacd1ee879da0
+  zh: 13670cce0ee2dece
+/desktop-local-verification/manual-installed-upgrade-testing/exercise-the-affected-behavior:
+  en: 9c930895a6f4e384
+  zh: 4178b3af0d3628ba
+/desktop-local-verification/manual-installed-upgrade-testing/record-results-and-restore-the-environment:
+  en: 95ae2b077c7b62fb
+  zh: 354a0b9d6c0cea88
 /desktop-local-verification/evidence:
-  en: dcb2473264c825d4
-  zh: cebb2832efa15974
+  en: a320ec99a9b7b2b2
+  zh: 30bf8631c40d1c7c
 /desktop-local-verification/open-verification:
-  en: 20e9ea47acb1ff50
-  zh: acce24b56d57e12c
+  en: b6561846d41c9c4e
+  zh: 60571ed0ceb82b90

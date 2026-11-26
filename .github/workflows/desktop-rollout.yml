@@ -1,26 +1,36 @@
 name: Publish Desktop · Rollout & Website
 
-run-name: Rollout Desktop package ${{ inputs.package_run_id }} / attempt ${{ inputs.package_run_attempt }} · ${{ inputs.rollout_percentage && format('{0}%', inputs.rollout_percentage) || 'website only' }}
+run-name: Rollout Desktop package ${{ inputs.package_run_id }} / attempt ${{ inputs.package_run_attempt }} · ${{ (inputs.rollout_stable || inputs.rollout_nightly) && format('{0}%', inputs.rollout_percentage) || 'website only' }}
 
 on:
   workflow_dispatch:
     inputs:
       package_run_id:
-        description: '已经完成首次 COS 发布的 Package Desktop run ID'
+        description: '打包运行 ID：勾选渠道放量时须已完成对应渠道首次发布；仅上传官网时填生产打包 run ID'
         type: string
         required: true
+      rollout_stable:
+        description: '调整 stable（正式版）自动更新渠道放量比例'
+        type: boolean
+        default: false
+        required: true
+      rollout_nightly:
+        description: '调整 nightly（开发版）自动更新渠道放量比例'
+        type: boolean
+        default: false
+        required: true
       rollout_percentage:
-        description: '目标放量比例：0–100 整数，只允许保持或增加；留空只发布官网'
+        description: '目标放量比例：0–100 整数，只允许保持或增加；仅上传官网时留空'
         type: string
         required: false
         default: ''
       upload_website:
-        description: '上传已发布版本的官网安装包并刷新缓存（仅 production，不要求放量达到 100%）'
+        description: '上传官网固定安装包并刷新缓存（仅 production；不勾选渠道时跳过渠道发布校验）'
         type: boolean
         default: false
         required: true
       package_run_attempt:
-        description: '已发布的原打包 attempt；默认 1，请核对原 run'
+        description: '原打包 attempt；默认 1，请核对原 run'
         type: string
         required: true
         default: '1'
@@ -73,6 +83,8 @@ jobs:
       website-destination: ${{ steps.check.outputs.website-destination }}
       label: ${{ steps.check.outputs.label }}
     env:
+      DESKTOP_ROLLOUT_STABLE: ${{ inputs.rollout_stable }}
+      DESKTOP_ROLLOUT_NIGHTLY: ${{ inputs.rollout_nightly }}
       DESKTOP_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
       DESKTOP_PACKAGE_SELECTION: ${{ needs.route.outputs.selection }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
@@ -119,6 +131,8 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 90
     env:
+      DESKTOP_ROLLOUT_STABLE: ${{ inputs.rollout_stable }}
+      DESKTOP_ROLLOUT_NIGHTLY: ${{ inputs.rollout_nightly }}
       DESKTOP_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
       DESKTOP_ROLLOUT_APPROVAL: ${{ needs.prepare.outputs.approval }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
@@ -156,7 +170,7 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: desktop-publication-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.publish.outputs.record }}/
+          path: ${{ steps.publish.outputs.records || format('{0}/', steps.publish.outputs.record) }}
           if-no-files-found: error
           retention-days: 30
 
@@ -174,6 +188,8 @@ jobs:
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DESKTOP_WEBSITE_APPROVAL: ${{ needs.prepare.outputs.website-approval }}
       DESKTOP_ROLLOUT_APPROVAL: ${{ needs.prepare.outputs.approval }}
+      DESKTOP_ROLLOUT_STABLE: ${{ inputs.rollout_stable }}
+      DESKTOP_ROLLOUT_NIGHTLY: ${{ inputs.rollout_nightly }}
       DESKTOP_ROLLOUT_PERCENTAGE: ${{ inputs.rollout_percentage }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
     steps:
@@ -198,15 +214,6 @@ jobs:
         id: website
         working-directory: website-rollout/apps/desktop-publisher
         run: node --import tsx src/publish-desktop-rollout-ci.ts website-upload
-      - name: Archive website feed verification
-        if: always() && steps.website.outputs.rollout-record != ''
-        continue-on-error: true
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: website-feed-verification-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ steps.website.outputs.rollout-record }}/
-          if-no-files-found: warn
-          retention-days: 30
       - name: Archive website publication diagnostics
         if: always() && steps.website.outputs.record != ''
         continue-on-error: true

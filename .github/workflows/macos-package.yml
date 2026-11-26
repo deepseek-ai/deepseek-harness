@@ -15,10 +15,10 @@ on:
         default: test
         required: true
       update_channel:
-        description: '升级通道：人工选择 nightly 或 stable，与版本后缀无关；默认通道由此打包输入确定'
+        description: '升级通道：包内渠道标记（stable 或 nightly，与版本后缀无关；未解锁客户端运行时固定走 stable）'
         type: choice
-        options: [nightly, stable]
-        default: nightly
+        options: [stable, nightly]
+        default: stable
         required: true
       version_mode:
         description: '版本模式：default 按环境自动选择（test 取 build-number，production 取 follow-dsh）；follow-dsh 跟随 dsh 包版本号；build-number 自动追加构建编号；manual 手填'

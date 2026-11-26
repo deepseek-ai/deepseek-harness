@@ -3,7 +3,7 @@
 import { installFileActions } from './file-actions.ts'
 import { configurationFailure, channelSaveFailure, configurationMessage } from './update-configuration.ts'
 import type { DesktopChannelState, DesktopChannelChangeResult } from '@deepseek-ai/dsh-client-ui-settings-general/types'
-import { DesktopUpdateSettings } from './update-settings.ts'
+import { DesktopUpdateSettings, type DesktopUpdateConfigVersion } from './update-settings.ts'
 import { isDesktopUpdateChannel } from './settings-file.ts'
 import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
@@ -39,7 +39,6 @@ import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
 import type { DesktopMessages } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
-import { desktopUpdateChannel } from './update-channel.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { prepareDesktopUpdateWindow } from './update-window.ts'
 import { DesktopCommandManager } from './command-management.ts'
@@ -701,13 +700,19 @@ async function main(): Promise<void> {
   }
 
   const manifest: unknown = JSON.parse(await readFile(join(app.getAppPath(), 'package.json'), 'utf8'))
-  const packagedChannel = desktopUpdateChannel(manifest)
-  const channelSettings = new DesktopUpdateSettings(app.getPath('userData'), packagedChannel)
+  const channelSettings = new DesktopUpdateSettings(app.getPath('userData'))
   const initialChannel = await channelSettings.load()
-  channelState = { channel: initialChannel.kind === 'ready' ? initialChannel.channel : null,
-    packagedChannel, changing: false,
-    ...(initialChannel.kind === 'error' ? { error: configurationFailure(initialChannel.error) } : {}) }
-  const updateChannel = initialChannel.kind === 'ready' ? initialChannel.channel : packagedChannel
+  let configVersion: DesktopUpdateConfigVersion = initialChannel.kind === 'ready' ? initialChannel.configVersion : '0'
+  channelState = {
+    channel: initialChannel.kind === 'ready' ? initialChannel.channel : null,
+    unlocked: initialChannel.kind === 'ready' ? initialChannel.unlocked : false,
+    changing: false,
+    ...(initialChannel.kind === 'error' ? { error: configurationFailure(initialChannel.error) } : {}),
+  }
+  const updateChannel = initialChannel.kind === 'ready' ? initialChannel.channel : 'stable'
+  let cachedBundledDshVersion: string | undefined
+  const readBundledDshVersion = (): string =>
+    cachedBundledDshVersion ??= app.isPackaged ? readDesktopRuntime(resources.dsh).release.version : app.getVersion()
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
     async () => {
@@ -766,6 +771,8 @@ async function main(): Promise<void> {
     undefined, undefined, undefined,
     (success, reason) => { void track('desktop_upgrade_download_result', { is_success: success, ...reason === undefined ? {} : { error_reason: reason } }) },
     updateChannel,
+    undefined,
+    () => ({ configVersion, unlocked: channelState?.unlocked ?? false, bundledDshVersion: readBundledDshVersion() }),
   )
 
   if (initialChannel.kind === 'error') updates.suspendConfiguration(initialChannel.error.path)
@@ -924,16 +931,33 @@ async function main(): Promise<void> {
     publishChannel({ ...channelState, changing: true })
     try {
       const kind = await updates.switchChannel(channel, async () => {
-        try { await channelSettings.save(channel) } catch (error) {
+        try {
+          await channelSettings.save(channel)
+          configVersion = '1'
+          if (channelState !== undefined) channelState = { ...channelState, unlocked: true }
+        } catch (error) {
           if (channelSaveFailure(error) === 'uncertain') {
+            configVersion = '0'
             updates.suspendConfiguration('desktop update: settings save outcome is unknown')
-            publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: true, error: 'read' })
+            publishChannel({
+              channel: updates.selectedChannel,
+              unlocked: channelState?.unlocked ?? false,
+              changing: true,
+              error: 'read',
+            })
           }
           throw error
         }
       })
       if (kind === 'applied') void mandatoryPolicy?.check('channel-change', true).catch((error: unknown) => { console.error(error) })
-      return { kind, state: publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: --channelRequests > 0 }) }
+      return {
+        kind,
+        state: publishChannel({
+          channel: updates.selectedChannel,
+          unlocked: channelState.unlocked,
+          changing: --channelRequests > 0,
+        }),
+      }
     } catch (error) {
       console.error('desktop update: channel change failed', error)
       const state = publishChannel({ ...channelState, changing: --channelRequests > 0,
@@ -986,11 +1010,18 @@ async function main(): Promise<void> {
               try {
                 const loaded = await channelSettings.load()
                 if (loaded.kind === 'error') {
+                  configVersion = '0'
                   publishChannel({ ...channelState, changing: true, error: configurationFailure(loaded.error) })
                   return false
                 }
+                configVersion = loaded.configVersion
+                channelState = { ...channelState, unlocked: loaded.unlocked }
                 await updates.switchChannel(loaded.channel, async () => {})
-                publishChannel({ channel: updates.selectedChannel, packagedChannel, changing: true })
+                publishChannel({
+                  channel: updates.selectedChannel,
+                  unlocked: loaded.unlocked,
+                  changing: true,
+                })
                 return true
               } catch (error) {
                 console.error('desktop update: settings reload failed', error)
@@ -1574,7 +1605,7 @@ async function main(): Promise<void> {
     mandatoryPolicy = new DesktopMandatoryUpdatePolicy(policyConfig, {
       platform: process.platform as 'win32' | 'darwin', arch: process.arch as 'x64' | 'arm64',
       get channel() { return updates.selectedChannel },
-      bundledDshVersion: app.isPackaged ? readDesktopRuntime(resources.dsh).release.version : app.getVersion(),
+      bundledDshVersion: readBundledDshVersion(),
     }, (state) => {
       if (state.error !== 'authentication-required') policyAuthenticationQueued = false
       if (state.blocking) {

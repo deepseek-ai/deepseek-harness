@@ -305,7 +305,7 @@ it('exposes channel choices and scoped subscriptions without exposing updater ob
   const dispose = api.updates.channels.subscribe(listener)
   const handler = electron.ipcRenderer.on.mock.calls.find(([channel]) => channel === DESKTOP_IPC.updatesChannelChanged)?.[1] as
     (event: unknown, state: unknown) => void
-  const state = { channel: 'stable', packagedChannel: 'nightly', changing: false }
+  const state = { channel: 'stable', unlocked: false, changing: false }
   handler({}, state)
   expect(listener).toHaveBeenCalledWith(state)
   dispose()

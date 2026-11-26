@@ -21,6 +21,8 @@ export function DesktopChannelRow({ useChannel, select, t }:
   PropsRuntime<'settings.general.group.updates.item'> & PropsLocale<'settings'> & InjectFace<DesktopChannelRowInjected>) {
   const { state, failed, pending } = useChannel(value => value)
   const [open, setOpen] = useState(false)
+  const visible = state?.unlocked === true || pending !== undefined || failed || state?.error !== undefined
+  if (!visible) return null
   const busy = pending !== undefined || state?.changing === true
   const channel = pending ?? state?.channel
   return <div className={css.row} role="group" aria-label={t('desktop.channel.title')}>

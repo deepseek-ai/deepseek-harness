@@ -71,7 +71,7 @@ Environment 审批限制此工作流，不限制同一机器账户运行的任�
 
 Windows 打包运行会展示中文参数摘要，列出请求的源码、环境、通道、版本模式、签名方式、压缩等级、测试 release ID 和缓存命名空间，以及工作流标识、检出提交、解析版本和 runner。工作流辅助脚本暂存成功后，即使前序步骤失败仍会生成摘要，并明确标记尚未取得的结果。摘要不读取机器配置；测试 release ID 留空时仅显示选择了机器默认值，不展示其解析值。摘要不代表构建、签名或发布成功。
 
-发布表单支持可选的 `staging_percentage`，取值为 0 到 100 的整数。该值作用于保留包所属的 nightly 或 stable 渠道，显示在审批摘要中，并写入发布的 YAML 和审计记录，不修改保留产物。留空沿用包内默认值（通常为全量）。已完成的发布不能通过重试修改比例；同版本清单内容冲突仍会报错。
+**Publish Desktop · COS** 表单提供独立的布尔复选框 `publish_stable`、`publish_nightly` 和 `upload_website`（默认均为 `false`，至少勾选一项），以及可选的 0 到 100 整数 `staging_percentage`。发布目标渠道独立于保留包的包内 `source.channel`，同一保留构建无需重编即可在各自的频道锁与审计记录下按序发布到 `stable`、`nightly` 或双渠道。`staging_percentage` 作用于所有勾选的目标渠道，显示在审批摘要中，并写入发布的 YAML 和审计记录，不修改保留产物；留空表示全量发布。已完成的渠道发布不能通过重试修改比例；同版本清单内容冲突仍会报错。
 
 发布到 test 或 production 都必须在 Windows 选择 `signing=signed`，或在 macOS 不勾选**跳过公证**。无签名、无公证的包仅限内部调试，不能发布或用于自动更新。托管路由 job 会在安装依赖前，依据所选 run 和 attempt 对应的 artifact 名称拒绝已标明的调试包。仅重跑归档时，artifact 名称保留原构建 attempt，早期检查可能未识别该包；本地清单资格校验仍会在发布前拒绝调试包。缺少 artifact 元数据不代表允许发布：原机器仍会验证留存清单和签名。遇到调试包拒绝提示时，需重新完成签名或公证，再使用新包的 run ID / attempt 发布；重跑发布不能使现有产物获得发布资格。
 
@@ -79,17 +79,17 @@ Windows 打包运行会展示中文参数摘要，列出请求的源码、环境
 
 打包只保留文件。成功后，在 `master` 上打开 **Publish Desktop · COS → Run workflow**，填写打包运行 URL 中的 `package_run_id`，并可填写 `package_run_attempt`。留空选择最新尝试及其成功的 package job；归档重跑继续使用原始构建 attempt，新的构建失败时不回退到较早成功构建。显式填写则选择对应构建，独立的 GitHub 归档失败不取消其资格。Windows 必须完成签名，macOS 必须完成公证和 stapling。GitHub job 证据确定原 runner，本机清单在审批前提供 preset、版本、源码和通道。不会下载安装包或请求 artifact。旧清单的 `publishRequested=false` 不影响发布资格；本机文件缺失或变化会停止发布。
 
-在原 runner 安装依赖前，准备阶段和审批后的发布 job 都会检查所选 `publishing/<preset>.json` 是否为可读取的 JSON。配置缺失时会报告路径；补齐后可使用同一个包重试发布。之后仍会执行完整配置与签名校验。上传前，发布器校验全部留存文件的哈希、版本及目标信息，再复核平台签名。macOS 校验 DMG，并解压 ZIP 校验 app 票据；Windows 校验 Authenticode、配置的签名证书指纹及时间戳。准备阶段生成中文审批摘要，分别展示版本、通道、平台和环境，以及留存的 test release ID、安装包与升级 YAML 的完整 URL、原打包尝试链接、源码 ref/SHA、平台校验结果及拟创建的 tag。折叠详情包含 COS 存储桶，以及实际上传字节的大小和 SHA-256（包括改写后的 YAML）。公开仓库的摘要会公开测试前缀和下载 URL；前缀不提供访问鉴权。两种发布 job 均等待 **Review deployments → Approve and deploy**，随后重新核对已批准的 manifest 与上传计划摘要。文件或目标变化会被拒绝。审批不能修改版本；应拒绝并重新打包。两种环境都上传缺失文件、校验远端字节，再更新 YAML。此工作流没有只上传文件的模式。production 最后为记录的打包提交创建 `desktop-v<version>`；已有 tag 必须指向同一提交。
+在原 runner 安装依赖前，准备阶段和审批后的发布 job 都会检查所选 `publishing/<preset>.json` 是否为可读取的 JSON。配置缺失时会报告路径；补齐后可使用同一个包重试发布。之后仍会执行完整配置与签名校验。勾选一个或两个目标渠道时，发布器一次性校验全部留存文件的哈希、版本及各目标渠道信息，再复核平台签名：macOS 校验 DMG 并解压 ZIP 校验 app 票据，Windows 校验 Authenticode、配置的签名证书指纹及时间戳。准备阶段生成中文审批摘要，分别展示版本、所选目标渠道、平台和环境，以及留存的 test release ID、安装包与升级 YAML 的完整 URL、原打包尝试链接、源码 ref/SHA、平台校验结果及拟创建的 tag。折叠详情包含 COS 存储桶，以及实际上传字节的大小和 SHA-256（包括改写后的 YAML）。公开仓库的摘要会公开测试前缀和下载 URL；前缀不提供访问鉴权。发布 job 等待 **Review deployments → Approve and deploy**，随后重新核对已批准的 manifest 与上传计划摘要。文件或目标变化会被拒绝。审批不能修改版本；应拒绝并重新打包。各所选渠道按序上传缺失文件、校验远端字节并更新 YAML；production 为记录的打包提交创建一次 `desktop-v<version>`（已有 tag 必须指向同一提交），仅勾选 `upload_website` 时跳过渠道发布和打标。
 
 <a id="rollout-and-website-publication"></a>
 
 ## 放量与官网发布
 
-按 10% → 30% → 100% 放量时，先通过 COS 流程以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID 并选择 attempt（默认 1，请与原打包 run 核对）。逐步放量时将 `rollout_percentage` 分别设为 30、100；仅发布官网时留空。`upload_website` 默认为 false；必须填写比例或启用官网发布。在此示例中，最后一轮启用它即可上传生产官网安装器并刷新缓存。官网发布独立于放量比例，不要求达到 100%；官网安装包面向所有下载用户。修改放量比例前审批一次，官网上传前另行审批一次；上传成功后自动刷新缓存，不再重复审批。上传失败或取消时不执行刷新。仅发布官网时跳过放量 job，只需官网审批；上传 job 仍校验当前 feed，不修改放量比例。每个平台使用各自的打包 run。
+按 10% → 30% → 100% 放量时，先通过 COS 流程勾选目标渠道复选框（`publish_stable` 及／或 `publish_nightly`），以 `staging_percentage=10`、`upload_website=false` 完成首次发布，再从 `master` 发起 **Publish Desktop · Rollout & Website**，填写原打包 run ID、选择 attempt（默认 1，请与原打包 run 核对），并勾选布尔复选框 `rollout_stable`、`rollout_nightly`、`upload_website`（默认均为 `false`，至少勾选一项）。勾选 `rollout_stable` 或 `rollout_nightly` 时必须填写 `rollout_percentage`（`0`–`100`，如依次填 `30`、`100`）；未勾选任何放量渠道（仅 `upload_website=true`）时必须将 `rollout_percentage` 留空。官网发布独立于放量比例与渠道首次发布：官网安装包面向所有下载用户。修改放量比例前审批一次，官网上传前另行审批一次；上传成功后自动刷新缓存，上传失败或取消时不执行刷新。仅发布官网时跳过渠道首次发布记录校验和放量 job，只需官网审批。每个平台使用各自的打包 run。
 
-准备阶段检查 GitHub 身份、保留清单、小体积更新 YAML 和已完成的首次发布记录，不重新计算安装包哈希，也不重复检查签名或公证。Environment 审批后，执行阶段读取当前 COS 更新清单，核对版本、安装包 URL、大小、哈希和其他元数据仍对应已发布包，只修改 `stagingPercentage`。更新清单缺失或已被其他包替换时拒绝执行。同一比例重复执行不写入；不允许降低比例。审批展示目标比例，当前比例在执行时从 COS 读取。
+勾选一个或两个放量渠道时，准备阶段检查 GitHub 身份、保留清单、小体积更新 YAML 和各所选目标渠道（`stable` 或 `nightly`）已完成的首次发布记录，不重新计算安装包哈希，也不重复检查签名或公证。Environment 审批后，执行阶段按序读取各所选渠道的当前 COS 更新清单，核对版本、安装包 URL、大小、哈希和其他元数据仍对应已发布包，只修改 `stagingPercentage`。更新清单缺失或已被其他包替换时拒绝执行。同一比例重复执行不写入；不允许降低比例。审批展示目标比例，当前比例在执行时从 COS 读取。
 
-官网上传复用原机保留的安装器，只校验该安装器的哈希，沿用已有上传与刷新恢复记录。Rollout 仅重试缓存刷新时校验准备阶段生成的官网审批摘要和上传记录，不再要求 Environment 审批，不再依赖原更新 YAML 或首次 feed 发布记录。官网上传在安装器校验、上传期间保持频道锁，防止中途被更新的 feed 替换；此时竞争该频道的发布会失败。因此纯放量不需要安装器文件，发布官网则需要。比例变更前后的 YAML 写入独立放量审计记录。此流程必须在首次 COS 发布之后执行，不构建安装包、不上传版本化安装包，也不创建 release tag。
+官网上传复用原机保留的安装器，只校验该安装器的哈希，在校验与上传期间持有官网安装包目标对象锁（`<bucket>/desktop/<installer-filename>`），并沿用已有上传与刷新恢复记录。Rollout 仅重试缓存刷新时校验准备阶段生成的官网审批摘要和上传记录，不再要求 Environment 审批、原更新 YAML 或首次 feed 发布记录。纯放量不需要安装器文件；未勾选 `rollout_stable` 与 `rollout_nightly` 时，官网发布只需安装器文件与 manifest，不要求先完成渠道首次发布。比例变更前后的 YAML 按渠道分别写入放量审计记录；此工作流不构建安装包、不上传版本化安装包，也不创建 release tag。
 
 <a id="recovery-and-records"></a>
 
@@ -99,7 +99,7 @@ Windows 打包运行会展示中文参数摘要，列出请求的源码、环境
 
 打包 workflow 将 `package` 与 `upload-artifact`（GitHub 产物归档）分开。所有打包模式（包括 test 和 unsigned）都要求在打包前配置 `DESKTOP_PUBLISH_RUNNERS`，用于将归档路由到原机器。归档失败后仅重跑 `upload-artifact`；它校验原始 manifest 和 hash，不重新构建、签名或公证。打包诊断归档尽力执行，不改变构建成功状态。归档重跑若一直排队且未分配 runner，应先检查解析出的 runner 标签和上游 package 输出，不能直接认定机器离线。输出缺失时需由操作者从原留存目录和 manifest 恢复文件；重跑整个 workflow 会重新构建，不属于仅归档恢复。Actions 验收须验证输出复用。
 
-生产 COS 发布默认启用官网安装包上传和缓存刷新（`upload_website=true`）。取消后仅发布版本化资源及自动更新清单；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。production nightly 和 stable 包都可以替换官网固定安装包。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
+两个发布工作流的官网安装包上传均为显式勾选项（默认 `upload_website=false`）；test 发布不修改生产官网。`upload-website-installer` 上传固定安装包，`purge-website-installer` 刷新该 URL。官网安装包校验器只需要最终 DMG/EXE 和保留的 manifest，匹配生产资格、构建身份及平台，只计算一次安装包 hash，并通过同一打开的文件句柄上传。在旧的 `nightly` 标记留存包逐步退役期间，两种包内 `source.channel` 标记的生产安装包均可替换官网固定安装包；将官网上传校验收紧为仅允许 `source.channel === 'stable'` 由 #9204 跟踪。操作者负责选择预期版本；固定对象没有防降级保护，重跑旧发布可能覆盖新安装包。勾选官网上传时，审批前摘要展示固定官网 URL、选定版本和无防降级保护的说明。原有版本与自动更新发布保留自身校验。
 
 在每台发布 runner 的 `publishing/production.json` 中将 `edgeOneZoneId` 配置为生产 EdgeOne 站点（例如 `"edgeOneZoneId": "zone-example"`）。官网发布在审批前要求该字段；仅 COS 发布和放量不需要。Actions 不读取仓库变量 `DOWNLOAD_PROD_EO_ZONE_ID`。生产 COS 凭据还需要 `teo:CreatePurgeTask` 和 `teo:DescribePurgeTasks` 权限。官网上传在 Actions 中按 bucket/平台互斥，在原机器上按 bucket/对象互斥；缓存观察单独运行。COS 工作流的版本发布、官网上传和缓存刷新分别使用生产审批 Environment。Rollout 工作流仅在放量修改和官网上传时使用它；缓存刷新跟随已批准的上传执行，不再要求 Environment 审批。重跑带 Environment 的 job 可能需要再次审批。GitHub 每个并发组最多保留一个排队 job，新排队 job 可能取消旧排队 job；重跑前应检查取消记录。
 
@@ -107,7 +107,7 @@ Windows 打包运行会展示中文参数摘要，列出请求的源码、环境
 
 刷新观察每十秒查询一次，最长五分钟；结果未知或观察超时后额外查询一次。明确的 failed、timeout、canceled 结果使 job 失败。仍无法确认时成功退出，并输出 Actions warning 和醒目摘要；持久化状态保持 unknown，不标为完成。诊断 artifact 尽力归档，本地记录仍是恢复依据。模拟服务测试覆盖这些路径；发布操作者必须在生产依赖恢复能力前验证 COS/EdgeOne 权限、job-id 筛选、时间范围查询、任务类型和时间戳格式、Actions 跨 attempt 恢复及实际 CDN 行为。
 
-解决故障后，仅在上文要求的上游输出完整时重跑失败的发布 job，以保持准备阶段选定的打包尝试；否则停止局部重试。新发布可显式选择原打包运行和尝试。尝试留空时重跑所有 job 会重新解析最新打包尝试，并需要重新审批。不要仅为重试上传而重新打包。缺失对象会上传，相同对象跳过，同名但字节不同的对象会停止操作。写入结果不明时通过读取远端字节核对。频道已有更高版本时，旧上传不能替换它。每个包只更新自身内置通道：nightly 写入 `nightly.yml` / `nightly-mac.yml`，stable 写入 `stable.yml` / `stable-mac.yml`。stable 二进制位于目标二进制前缀下的 `stable/` 子目录，与已有 nightly 对象分离。同一源码和版本发布到两个通道需要分别打包；已有发布 tag 仅在源码提交相同时复用。
+解决故障后，仅在上文要求的上游输出完整时重跑失败的发布 job，以保持准备阶段选定的打包尝试；否则停止局部重试。新发布可显式选择原打包运行和尝试。尝试留空时重跑所有 job 会重新解析最新打包尝试，并需要重新审批。不要仅为重试上传而重新打包。缺失对象会上传，相同对象跳过，同名但字节不同的对象会停止操作。写入结果不明时通过读取远端字节核对。频道已有更高版本时，旧上传不能替换它。各所选目标渠道独立于保留包的包内 `source.channel` 更新各自的更新清单与二进制前缀：目标为 `nightly` 时写入 `nightly.yml` / `nightly-mac.yml` 及目标二进制根路径下的版本化文件，目标为 `stable` 时写入 `stable.yml` / `stable-mac.yml` 及 `stable/` 子目录下的文件。将同一保留包发布到双渠道会分别写入单渠道上传记录，并为记录的源码提交复用或创建同一个 `desktop-v<version>` tag。
 
 同级 `upload-records/` 目录保留操作标识、逐行事件和最终结果。频道写入意图同时记录先前和目标 YAML。失败记录阶段、安全错误分类与诊断；COS 失败还标明 `GetObject` 或 `PutObject`，并在可用时记录经过校验的 HTTP 状态码和 request ID。访问拒绝提示会指出需检查的权限。不保存原始服务响应或凭据。审计初始化在文件完整后才可见；遗留的 `.initializing-*` 目录不参与已完成发布的扫描。写入和回读在继续操作前落盘；没有最终结果代表中断，不代表成功。Actions 还将操作记录保存为诊断 artifact，保留 30 天。这些本地记录不防篡改。COS 回读验证存储字节，不代表公开 CDN 行为；公开下载需单独验收。
 
@@ -119,7 +119,7 @@ Windows 打包运行会展示中文参数摘要，列出请求的源码、环境
 
 ## 恢复频道
 
-在发布机器上通过 `node --import tsx` 运行仓库脚本 `apps/desktop/scripts/rollback-desktop-channel.ts`。保持 `GITHUB_REPOSITORY`、`RUNNER_NAME`、`DSH_PACKAGING_CONFIG_DIR` 和 `DESKTOP_PUBLISH_ROUTE` 对应原打包上下文。route JSON 包含 `runId`、`attempt`、`commit`、`runnerName`、`target`、`preset`、`sourceRef` 和 `channel`，可从留存 manifest 的 source 字段取得。`--record` 指定该次成功发布的审计目录，`--expected-version` 指定当前线上版本，`--reason` 填写操作原因。
+在发布机器上通过 `node --import tsx` 运行仓库脚本 `apps/desktop/scripts/rollback-desktop-channel.ts`。保持 `GITHUB_REPOSITORY`、`RUNNER_NAME`、`DSH_PACKAGING_CONFIG_DIR` 和 `DESKTOP_PUBLISH_ROUTE` 对应原打包上下文。route JSON 包含 `runId`、`attempt`、`commit`、`runnerName`、`target`、`preset`、`sourceRef` 和 `channel`；当目标渠道与留存 manifest 的包内 `source.channel` 不同时，`channel` 填写待恢复的目标渠道（`stable` 或 `nightly`）。`--record` 指定该目标渠道成功发布的审计目录，`--expected-version` 指定该渠道当前线上版本，`--reason` 填写操作原因。
 
 不带 `--execute` 时，脚本读取远端对象并打印确切 YAML 变更，不执行写入。预览需要 COS 读取凭据。带 `--execute` 时，脚本校验历史文件，将前后 YAML 保存在新的审计记录中，再次检查当前频道，然后仅恢复 YAML。它不上传二进制文件，也不改变 tag。已经与目标字节完全相同的频道会跳过，其余频道必须匹配预期当前版本，因此可以恢复写完一个 feed 后中断的操作。其他当前版本会中止操作。恢复不是多对象事务；部分失败后需先检查审计记录再继续。
 
