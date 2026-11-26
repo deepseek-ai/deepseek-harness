@@ -1,6 +1,6 @@
 /** Strict per-session header/body content inserted into the resident conversation layout. */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, startTransition } from 'react'
 import clsx from 'clsx'
 import { Button, IconEllipsisOutlineRegular, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -127,10 +127,14 @@ export function ConversationSessionHeader({
     const row = tabRow.current
     if (row === null || !hasEntryActions || typeof ResizeObserver === 'undefined') return
     // The row has padding but no border or scrollbar, so its rounded border-box width equals clientWidth.
+    // A transition keeps React 19 from rendering the fold inside this delivery together with synchronous updates
+    // from other observers, where the resized row would leave a ResizeObserver notification undelivered.
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        for (const size of entry.borderBoxSize) setVisibleViewLimit(Math.max(1, Math.floor((Math.round(size.inlineSize) - 48) / 120)))
-      }
+      startTransition(() => {
+        for (const entry of entries) {
+          for (const size of entry.borderBoxSize) setVisibleViewLimit(Math.max(1, Math.floor((Math.round(size.inlineSize) - 48) / 120)))
+        }
+      })
     })
     observer.observe(row, { box: 'border-box' })
     return () => { observer.disconnect() }
