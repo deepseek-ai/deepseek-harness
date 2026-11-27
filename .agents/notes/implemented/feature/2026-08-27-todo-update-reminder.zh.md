@@ -8,13 +8,13 @@ Status: implemented
 
 `todo_write` 描述会指示模型在工作变化时更新任务状态，但这条指令只存在于工具指引中。模型可能继续使用其他工具并生成许多 assistant 消息，却不校准未完成列表。这样，持久列表会偏离实际进度，同时降低它对模型的规划价值和对读者的进度价值。
 
-提醒必须识别这种偏离，同时不能强制琐碎工作更新 Todo、不能在会话日志之外复制权威任务状态，也不能修改通用 agent loop。它还必须在恢复和压缩后保持节奏，并且不能指示 agent 调用被其作用域工具策略隐藏的工具。
+提醒必须识别这种偏离，同时让 agent 在处理琐碎任务时仍能自行决定是否更新 Todo。提醒机制不能在会话日志之外复制权威任务状态，也不能修改通用 agent loop。它还必须在恢复和压缩后保持节奏，并且不能指示 agent 调用被其作用域工具策略隐藏的工具。
 
 ## 决策
 
 过时列表更新提醒合入 `@deepseek-ai/dsh-tool-todo`（`packages/todo/tool-todo/src/reminder.ts`）的可选 `reminder` 配置块中，默认关闭（`enabled: false`，`intervalSteps: 64`，`maxReminderChars: 16384`），因此 `dsh-base` 与桌面端 preset 在没有配置覆盖（`reminder.enabled: true`）时均不开启提醒。部署与用户可在默认开启前通过配置覆盖选择启用。
 
-启用时，插件向当前工具视图暴露 `todo_write` 的每个 agent 提供建议。它不会创建列表、改变 Todo 状态、阻止模型步骤、拒绝最终回答或推断任务完成情况。
+启用后，只要 agent 能在当前工具视图中看到 `todo_write`，插件就会向它提供建议。插件不会创建列表、改变 Todo 状态、阻止模型步骤、拒绝最终回答或推断任务完成情况。
 
 ## 调度权威
 
