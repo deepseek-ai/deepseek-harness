@@ -51,7 +51,7 @@ export function graphFromRoster(rows: readonly ClientRosterRow[]): WebBootGraph 
   }
 }
 
-/** Module names the shell seeds before any row loads; an inject edge to one of them is satisfied without a row. */
+/** `PLATFORM_MODULES` names, which an in-process roster supplies without rows; an inject edge to one is satisfied. */
 const PLATFORM_SEED: ReadonlySet<string> = new Set(PLATFORM_MODULES)
 
 /** Immutable, name-addressable roster. */
@@ -88,8 +88,8 @@ export class ClientRoster {
 
   /**
    * The named rows plus every row they inject, transitively, in roster order: the rows a spec needs to boot the
-   * named plugins as the bundle composes them. The shell's platform modules (`PLATFORM_MODULES`, seeded statically
-   * rather than loaded as rows) end the walk. An unknown name throws with the roster listed; a row injecting any
+   * named plugins as the bundle composes them. The platform modules (`PLATFORM_MODULES`, supplied without rows)
+   * end the walk. An unknown name throws with the roster listed; a row injecting any
    * other package outside the roster throws, since the bundle itself would not boot.
    * @param names - package names whose dependency cone to keep.
    * @returns sub-roster.

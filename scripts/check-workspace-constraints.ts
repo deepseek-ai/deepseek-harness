@@ -213,13 +213,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   ],
   // Owned Worker bundles import this public bootstrap before their business entry.
   '@deepseek-ai/dsh-app-boot': ['lib/worker/profile-resolution-bootstrap.js'],
-  // Statically linked client libraries keep their stylesheets next to the emitted
-  // JavaScript, which imports them by relative path: the compile shell runs
-  // them through its own CSS pipeline, so the sheets are published artifacts.
-  // The glob covers whichever sheets a package emits; sourcemaps stay
-  // unpublished, as everywhere else in the repository.
-  '@deepseek-ai/dsh-client-ui-primitives': ['lib/**/*.css'],
-  '@deepseek-ai/dsh-client-ui-dockkit': ['lib/**/*.css'],
+  '@deepseek-ai/dsh-client-ui-primitives': ['lib/client.*.js'],
   '@deepseek-ai/dsh-client-ui-sidebar-documentpreview': ['lib/client.*.js'],
   '@deepseek-ai/dsh-client-ui-sidebar-terminal': ['lib/client.*.js'],
   '@deepseek-ai/dsh-client-web': ['lib/**/*.css', 'lib/apply-injections.js'],
@@ -617,12 +611,15 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     if (manifest.main !== 'lib/index.js') {
       errors.push(`${label}: package.json must set "main": "lib/index.js"`)
     }
-    if (manifest.types !== 'lib/types/index.d.ts') {
-      errors.push(`${label}: package.json must set "types": "lib/types/index.d.ts"`)
+    // The package root may reuse the declarations of its own `./client` entry.
+    const clientTypes = exportFields(manifest.exports?.['./client'])?.types
+    const rootTypes = typeof clientTypes === 'string' ? ['./lib/types/index.d.ts', clientTypes] : ['./lib/types/index.d.ts']
+    if (!rootTypes.includes(`./${manifest.types}`)) {
+      errors.push(`${label}: package.json must set "types": ${rootTypes.map(path => `"${path.replace(/^\.\//, '')}"`).join(' or ')}`)
     }
     const rootEntry = exportFields(manifest.exports?.['.'])
-    if (rootEntry?.types !== './lib/types/index.d.ts') {
-      errors.push(`${label}: package.json exports["."].types must be "./lib/types/index.d.ts"`)
+    if (typeof rootEntry?.types !== 'string' || !rootTypes.includes(rootEntry.types)) {
+      errors.push(`${label}: package.json exports["."].types must be ${rootTypes.map(path => `"${path}"`).join(' or ')}`)
     }
     if (rootEntry?.default !== './lib/index.js') {
       errors.push(`${label}: package.json exports["."].default must be "./lib/index.js"`)

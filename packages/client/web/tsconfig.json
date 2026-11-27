@@ -22,15 +22,6 @@
     },
     { "path": "../../util/package-manifest" },
     {
-      "path": "../ui-slots"
-    },
-    {
-      "path": "../ui-primitives"
-    },
-    {
-      "path": "../ui-dockkit"
-    },
-    {
       "path": "../ui-renderer"
     },
     {

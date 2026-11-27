@@ -467,6 +467,7 @@ describe('client bundle purity gate', () => {
     expect(resolveId('@deepseek-ai/dsh-deque')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-util-time')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-util-values')).toBeNull()
+    expect(resolveId('@deepseek-ai/dsh-util-code-language')).toBeNull()
     expect(resolveId('@deepseek-ai/dsh-token-meter/client')).toBeNull()
     expect(() => resolveId('@deepseek-ai/dsh-token-meter')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-token-meter/client/internal')).toThrow(/purity/)
@@ -546,7 +547,6 @@ describe('client bundle purity gate', () => {
   it('throws on any other @deepseek-ai leak', () => {
     expect(() => resolveId('@deepseek-ai/dsh-agent')).toThrow(/purity/)
     expect(() => resolveId('@deepseek-ai/dsh-client-web')).toThrow(/purity/)
-    expect(() => resolveId('@deepseek-ai/dsh-util-code-language')).toThrow(/purity/)
   })
 
   it('throws on cross-plugin value imports — bare plugin names and /client subpaths alike', () => {

@@ -25,6 +25,7 @@ import {
   translationPairSourcePredicate,
 } from './translation-pairing.ts'
 import { githubSlug } from './verify-md-links.ts'
+import { resolveLocal } from './verify-package-dependencies.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const PATHS = translationPairPaths('docs/config-catalog.md')
@@ -71,7 +72,7 @@ export interface CatalogEntry {
   pkg: string
   /** Repo-relative package dir, e.g. `packages/core/agent-loop`. */
   dir: string
-  /** Repo-relative entry file, `<dir>/src/index.ts`. */
+  /** Repo-relative entry file that `./src/index.js` resolves to from `<dir>`, such as `<dir>/src/index.ts`. */
   entry: string
   kind: Kind
   /** Service keys the plugin `inject`s (empty when none declared). */
@@ -762,12 +763,18 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
   const world: World = { scanRoot, cache, pkgDirByName, pkgExportsByName }
 
   for (const { dir, pkg } of manifests) {
-    const entryRel = `${dir}/src/index.ts`
+    // The entry is the source of the built `lib/index.js`, resolved like a local `./src/index.js` import.
+    const entryPath = resolveLocal(resolve(scanRoot, dir, 'package.json'), './src/index.js')
+    if (entryPath === undefined) {
+      violations.push(`${pkg}: entry ${dir}/src/index.js has no source module.`)
+      continue
+    }
+    const entryRel = relative(scanRoot, entryPath).split(sep).join('/')
     let ctx: FileCtx
     try {
-      ctx = loadFile(resolve(scanRoot, entryRel), entryRel, cache)
+      ctx = loadFile(entryPath, entryRel, cache)
     } catch {
-      // A package without src/index.ts cannot be classified — that is the
+      // A package without a readable entry cannot be classified — that is the
       // violation itself; nothing else in this loop body can run without it.
       violations.push(`${pkg}: entry ${entryRel} is missing or unreadable.`)
       continue

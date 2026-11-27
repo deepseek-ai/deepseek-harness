@@ -56,6 +56,8 @@ export interface ClientDeclaration {
   readonly dynamic: boolean
   /** String `dsh.client.platform`; undefined without a row or a string platform. */
   readonly platform: string | undefined
+  /** Whether the row declares `dsh.client.immediately: true`. */
+  readonly immediately: boolean
   readonly external: readonly string[]
   readonly runtimeSourceUses: Readonly<Record<string, readonly string[]>>
   /** Exact runtime specifiers used to validate `dsh.client.external` declarations. */
@@ -319,9 +321,13 @@ function collectModeViolations(facts: ClientPackageFacts): string[] {
   for (const specifier of facts.platformModules) {
     const owner = packageNameOf(specifier)
     if (!workspaceNames.has(owner) || owner === CORDIS || facts.staticLinkedPackages.has(owner)) continue
+    // A dynamic row answers its package name in the module table once the immediately tier has loaded.
+    const row = facts.declarations.find(entry => entry.dynamic && entry.name === specifier)
+    if (row?.immediately === true) continue
     violations.push(
-      PLATFORM_SOURCE + ': seeded workspace module ' + JSON.stringify(specifier)
-      + ' belongs to ' + owner + ', whose build does not use the staticLinked preset',
+      PLATFORM_SOURCE + ': workspace platform module ' + JSON.stringify(specifier)
+      + ' belongs to ' + owner + ', whose build does not use the staticLinked preset,'
+      + ' and has no dsh.client row of the same package name with immediately: true',
     )
   }
 
@@ -543,7 +549,8 @@ function readDeclaration(
   const rawClient = dsh?.client
   const assetExport = isRecord(manifest.exports) ? manifest.exports[PACKAGE_ASSET_EXPORT] : undefined
   const rowless = {
-    name: manifest.name, manifest: manifestPath, dynamic: false, platform: undefined, external: [], inject: [],
+    name: manifest.name, manifest: manifestPath, dynamic: false, platform: undefined, immediately: false,
+    external: [], inject: [],
     runtimeSourceUses: {}, runtimeSourceSpecifiers: {}, assetExport, assetReferences: [],
   } satisfies ClientDeclaration
   if (rawClient === undefined) return rowless
@@ -556,6 +563,7 @@ function readDeclaration(
     manifest: manifestPath,
     dynamic: true,
     platform: typeof rawClient.platform === 'string' ? rawClient.platform : undefined,
+    immediately: rawClient.immediately === true,
     external: stringArray(rawClient.external, manifest.name, manifestPath, 'external', malformed),
     inject: stringArray(rawClient.inject, manifest.name, manifestPath, 'inject', malformed),
     runtimeSourceUses: {},

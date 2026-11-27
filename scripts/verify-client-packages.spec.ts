@@ -37,6 +37,7 @@ function declaration(
     manifest: 'packages/client/' + short.replace(/^.*\//, '') + '/package.json',
     dynamic: true,
     platform: 'web',
+    immediately: false,
     external: [],
     inject: [],
     runtimeSourceUses: {},
@@ -164,17 +165,42 @@ describe('package modes', () => {
     expect(found.join('\n')).toContain('has no supported client package mode')
   })
 
-  it('requires seeded workspace packages to use staticLinked and preloads to name dynamic rows', () => {
+  it('accepts a workspace platform module supplied by an immediately row of the same name', () => {
+    const slots = declaration('ui-slots', { immediately: true })
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [slots, declaration(CORDIS, { dynamic: false })],
+      platformModules: ['react', CORDIS, slots.name],
+    }))).toEqual([])
+  })
+
+  it('accepts a workspace platform module that a statically linked package supplies', () => {
+    const store = declaration('store', { dynamic: false })
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [store],
+      staticLinkedPackages: new Set([store.name]),
+      platformModules: [store.name],
+    }))).toEqual([])
+  })
+
+  it('requires seeded workspace modules to be statically linked or immediately rows, and preloads to name dynamic rows', () => {
     const slots = declaration('ui-slots', { dynamic: false })
+    const store = declaration('store')
     const bootstrap = declaration('bootstrap', { dynamic: false })
     const found = collectClientPackageViolations(facts([], {
-      declarations: [slots, bootstrap],
-      platformModules: [slots.name],
+      declarations: [slots, store, bootstrap],
+      platformModules: [slots.name, store.name],
       preloadedExternals: [bootstrap.name + '/client'],
     }))
-    expect(found).toHaveLength(2)
-    expect(found.join('\n')).toContain('does not use the staticLinked preset')
-    expect(found.join('\n')).toContain('has no dynamic dsh.client row')
+    expect(found).toEqual([
+      'packages/client/web/src/platform.ts: parser-preloaded external "@deepseek-ai/dsh-client-bootstrap/client"'
+      + ' has no dynamic dsh.client row',
+      'packages/client/web/src/platform.ts: workspace platform module "@deepseek-ai/dsh-client-store"'
+      + ' belongs to @deepseek-ai/dsh-client-store, whose build does not use the staticLinked preset,'
+      + ' and has no dsh.client row of the same package name with immediately: true',
+      'packages/client/web/src/platform.ts: workspace platform module "@deepseek-ai/dsh-client-ui-slots"'
+      + ' belongs to @deepseek-ai/dsh-client-ui-slots, whose build does not use the staticLinked preset,'
+      + ' and has no dsh.client row of the same package name with immediately: true',
+    ])
   })
 
   it('requires every preloaded external to have a parser preload row', () => {

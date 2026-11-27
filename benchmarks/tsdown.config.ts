@@ -1,4 +1,29 @@
+import { globSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { defineConfig } from 'tsdown'
+
+const repositoryRoot = join(import.meta.dirname, '..')
+
+/** Names of the workspace packages under `packages/` whose manifest declares `dsh.client`. */
+const DYNAMIC_CLIENT_PACKAGES: ReadonlySet<string> = new Set(
+  globSync('packages/*/*/package.json', { cwd: repositoryRoot }).flatMap((path) => {
+    const manifest = JSON.parse(readFileSync(join(repositoryRoot, path), 'utf8')) as {
+      readonly name?: string
+      readonly dsh?: { readonly client?: unknown }
+    }
+    return manifest.name !== undefined && manifest.dsh?.client !== undefined ? [manifest.name] : []
+  }),
+)
+
+/**
+ * Whether a specifier names the `/client` subpath of a workspace package that declares `dsh.client`. Workers bundle those
+ * from source through the tsconfig paths: such a package builds `lib/client.js` as a registration script for the browser
+ * module loader, which a Node worker does not have.
+ * @param id - Module specifier.
+ * @returns True for `<package>/client` of a package that declares `dsh.client`.
+ */
+const isDynamicClientSubpath = (id: string): boolean =>
+  id.endsWith('/client') && DYNAMIC_CLIENT_PACKAGES.has(id.slice(0, -'/client'.length))
 
 const shared = {
   format: 'esm' as const,
@@ -7,12 +32,15 @@ const shared = {
   fixedExtension: false,
   dts: false,
   deps: {
-    neverBundle: [/^@deepseek-ai\//],
+    neverBundle: (id: string): boolean => id.startsWith('@deepseek-ai/') && !isDynamicClientSubpath(id),
     onlyBundle: false as const,
   },
 }
 
-/** Compile measured benchmark workers while keeping workspace packages on their built `lib` entries. */
+/**
+ * Compile measured benchmark workers while keeping workspace packages on their built `lib` entries, except the `/client`
+ * subpaths of packages that declare `dsh.client`, which are bundled from source.
+ */
 export default defineConfig([
   {
     ...shared,

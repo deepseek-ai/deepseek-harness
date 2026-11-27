@@ -747,13 +747,22 @@ describe('face-aware source classification', () => {
     })).rejects.toThrow('Host export ./assets/index has no source entry')
   })
 
+  it('follows a hand-written src/index.js Host entry', async () => {
+    const facts = await sourceFacts({
+      'src/index.js': "import 'host-only'\nexport function apply() {}",
+      'src/client/index.ts': "import 'library-only'\n",
+    }, { exports: { '.': { types: './lib/types/client/index.d.ts', default: './lib/index.js' } } })
+
+    expect([...facts.hostRuntimeSourceUses.keys()]).toEqual(['host-only'])
+  })
+
   it('fails when a managed Host package has no Host entry', async () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-missing-host-'))
     roots.push(root)
     const subject = pkg('@f/host', 'packages/g/host/package.json')
 
     await expect(readPackageDependencyFacts(root, subject, 'configured-host', new Set([subject.name])))
-      .rejects.toThrow('packages/g/host/package.json: Host runtime entry packages/g/host/src/index.ts does not exist')
+      .rejects.toThrow('packages/g/host/package.json: Host runtime entry ./src/index.js has no source module')
   })
 
   it('classifies Host values, required services, and Client build inputs separately', async () => {
