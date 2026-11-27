@@ -67,8 +67,8 @@ export interface CreateAgentOptions {
   /** The live agent/session identity. */
   readonly sessionId: SessionId
   /**
-   * Session creation metadata: validated absolute `cwd`, `parentSession`
-   * fork lineage, the `isSeeded` fork marker, the coarse `origin`
+   * Session creation metadata: validated absolute `cwd`, the `parentSession`
+   * creator or side source, the `isSeeded` fork marker, the coarse `origin`
    * classification, and the `delegationDepth` recursion budget. Mirrors the
    * `cwd`/`parentSession`/`isSeeded`/`origin`/`delegationDepth` fields of
    * {@link CreateSessionOptions.meta} in dsh-session (the internal-only

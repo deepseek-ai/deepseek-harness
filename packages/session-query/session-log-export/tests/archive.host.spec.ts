@@ -63,7 +63,7 @@ function logText(stored: StoredLog): string {
 }
 
 function node(id: string, ...descendants: SessionLineageNode[]): SessionLineageNode {
-  return { session: { header: header(id, sid('session-root')), live: false, persisted: true }, descendants }
+  return { session: { header: { ...header(id, sid('session-root')), origin: 'subagent' }, live: false, persisted: true }, descendants }
 }
 
 /** One durable image object served by the fake attachment store. */
@@ -387,6 +387,52 @@ describe('session.export download endpoint', () => {
     ])
     expect(strFromU8(files[subagentLogName('child-a')] as Uint8Array))
       .toBe(logText(child))
+  })
+
+  it('leaves side conversations, ordinary forks and their descendants out of the descendant logs', async () => {
+    const side: SessionLineageNode = {
+      session: { header: { ...header('side-a', sid('session-root')), origin: 'side' }, live: false, persisted: true },
+      descendants: [node('side-subagent')],
+    }
+    // A fork created before ordinary forks stopped recording their source keeps the id without an origin.
+    const fork: SessionLineageNode = {
+      session: { header: header('fork-a', sid('session-root')), live: false, persisted: true },
+      descendants: [node('fork-subagent')],
+    }
+    const api = await buildApi({
+      'session-root': log('session-root'),
+      'child-a': log('child-a', sid('session-root')),
+    }, [node('child-a'), side, fork])
+    const response = await toFetchHandler(api).fetch(
+      new Request('http://host/api/session.export?sessionId=session-root&includeDescendants=true'),
+    )
+    expect(response.status).toBe(200)
+    expect(Object.keys(unzipSync(await responseBytes(response))).sort()).toEqual([exportLogName, subagentLogName('child-a')])
+  })
+
+  it('exports a side conversation with its own subagents when it is the root', async () => {
+    const sideHeader = { ...header('side-a', sid('session-root')), origin: 'side' as const }
+    const sideSubagent: SessionLineageNode = {
+      session: { header: { ...header('side-subagent', sid('side-a')), origin: 'subagent' }, live: false, persisted: true },
+      descendants: [],
+    }
+    const api = await buildApi({
+      'side-a': { header: sideHeader, events: [turnStart] },
+      'side-subagent': { header: sideSubagent.session.header, events: [turnStart] },
+    }, [], {
+      traceSession: async () => ({
+        target: { header: sideHeader, live: false, persisted: true },
+        ancestors: [],
+        complete: true,
+        root: { header: header('session-root'), live: false, persisted: true },
+        descendants: [sideSubagent],
+      }),
+    })
+    const response = await toFetchHandler(api).fetch(
+      new Request('http://host/api/session.export?sessionId=side-a&includeDescendants=true'),
+    )
+    expect(response.status).toBe(200)
+    expect(Object.keys(unzipSync(await responseBytes(response))).sort()).toEqual([exportLogName, subagentLogName('side-subagent')])
   })
 
   it('flushes each live root and descendant immediately before reading its log', async () => {

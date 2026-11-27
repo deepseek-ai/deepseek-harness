@@ -10,7 +10,7 @@ Using `parentSession` for both copied history and delegation makes an ordinary f
 
 ## Decision
 
-Ordinary forks preserve their complete selected prefix, `isSeeded`, `inheritedEventCount`, and inherited end-seed marker, but record no source id. Subagents retain their direct creator, including when their backend copies history. `origin: subagent` supplies coarse classification, and `origin: side` marks an ordinary fork created as a side conversation; a valid own-range descriptor separately supplies continuation identity. Historical parent metadata remains readable and unchanged. Runtime Agent ownership remains governed by the [explicit identity decision](2026-08-31-explicit-agent-runtime-identity.md).
+Ordinary forks preserve their complete selected prefix, `isSeeded`, `inheritedEventCount`, and inherited end-seed marker, but record no source id. Subagents retain their direct creator, including when their backend copies history. `origin: subagent` supplies coarse classification, and `origin: side` marks an ordinary fork created as a side conversation, which records its source under the [side conversation source decision](2026-11-26-side-conversation-source.md); a valid own-range descriptor separately supplies continuation identity. Historical parent metadata remains readable and unchanged. Runtime Agent ownership remains governed by the [explicit identity decision](2026-08-31-explicit-agent-runtime-identity.md).
 
 The V4 reader permits another Session's delivery id only inside the validated inherited range. Own-range markers still require the current id, and every active-generation `throughSeq` must precede its marker. These checks do not require a persistent source relationship.
 

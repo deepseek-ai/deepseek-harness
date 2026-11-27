@@ -76,7 +76,7 @@ None; the package does not modify model requests.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Window-local tabs** — open side tabs are part of this window's saved Sidebar layout; another window connected to the same Host does not show the child.
-- **No source record** — the child header records `origin: 'side'` but not its source Session; once its tab is closed, the left sidebar offers no way back to it.
+- **No way back from the left sidebar** — the child header records its source as `parentSession`, but the left sidebar does not list side conversations; once its tab is closed, nothing there reopens it.
 - **Lost fork response** — if the fork response is lost after the Host created the child, the child remains stored without an open tab or a left sidebar row, and the notice reports a failure.
 
 <a id="dev-note"></a>

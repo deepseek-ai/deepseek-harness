@@ -368,7 +368,9 @@ export async function* sessionLogZipEntries(
       for (const node of nodes) {
         signal?.throwIfAborted()
         const id = node.session.header.id
-        if (seen.has(id)) continue
+        // Only delegated subagents are descendant logs; a side conversation or an ordinary fork that retained
+        // its source id is a separate conversation.
+        if (node.session.header.origin !== 'subagent' || seen.has(id)) continue
         seen.add(id)
         await flushLiveSessionLog(deps, id, signal)
         const content = await readSessionLogText(deps.sessionPersistence, id, signal)

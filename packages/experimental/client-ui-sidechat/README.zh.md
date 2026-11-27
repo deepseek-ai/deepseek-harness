@@ -76,7 +76,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-client-ui-sidechat
 <a id="known-limitations-and-deferred-work"></a>
 
 - **窗口本地 tab** — 打开的侧栏 tab 属于当前窗口保存的侧栏布局；连接同一 Host 的另一个窗口不显示子对话。
-- **无来源记录** — 子对话 header 记录 `origin: 'side'`，但不记录其来源 Session；关闭其 tab 后，左侧栏无法再回到该子对话。
+- **左侧栏没有入口** — 子对话 header 把来源记录为 `parentSession`，但左侧栏不列出侧栏对话；关闭其 tab 后，那里没有重新打开它的入口。
 - **fork 响应丢失** — 如果 Host 创建子对话后响应丢失，子对话仍然保存，但没有打开的 tab 和左侧栏行，通知会报告失败。
 
 <a id="dev-note"></a>

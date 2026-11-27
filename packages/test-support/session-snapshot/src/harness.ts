@@ -138,7 +138,7 @@ export interface HarvestedLog {
   id: string
   /** Session creation time (header `createdAt`) — the child-ordering key. */
   createdAt: number
-  /** The parent session id, if this log is a subagent child (header `parentSession`). */
+  /** The creating session id, if this log is a subagent child or side conversation (header `parentSession`). */
   parentSession?: string
   /** The full `.jsonl` file content. */
   content: string
@@ -163,7 +163,7 @@ export interface RunResult {
   /**
    * Every persisted session log harvested after the run, ordered primary-first:
    * the top-level (parent) session — the one with no `parentSession` — then each
-   * subagent child by ascending `createdAt`. A single-session scenario harvests
+   * subagent child or side conversation by ascending `createdAt`. A single-session scenario harvests
    * exactly one; a nested-agent scenario harvests the parent plus one per child.
    */
   sessionLogs: HarvestedLog[]

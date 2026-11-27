@@ -40,13 +40,13 @@ type SessionStatuses = SessionStatusSnapshot
 /**
  * Resolve the browser row that represents the main view's Session.
  * @param list - sessions list snapshot; `mainView` retention marks the viewed Session.
- * @returns the viewed Session, or, for a subagent Session, the first non-subagent ancestor reached through `list`;
- *   a missing parent or a lineage cycle stops at the last subagent Session reached.
+ * @returns the viewed Session, or, for a subagent or side Session, the first ancestor of neither origin reached
+ *   through `list`; a missing parent or a lineage cycle stops at the last such Session reached.
  */
 export function currentRowSessionId(list: SessionListState): SessionId | undefined {
   let session = Object.values(list.byId).find(row => (row.retainedBy.mainView ?? 0) > 0)
   const seen = new Set<SessionId>()
-  while (session?.origin === 'subagent' && session.parentId !== undefined && !seen.has(session.id)) {
+  while ((session?.origin === 'subagent' || session?.origin === 'side') && session.parentId !== undefined && !seen.has(session.id)) {
     seen.add(session.id)
     const parent: SessionSummary | undefined = list.byId[session.parentId]
     if (parent === undefined) break

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-log-export` 让 Web 界面导出会话的完整历史。Session Header 的更多操作菜单提供 `复制会话为 Markdown` 与 `下载 Session 日志`；`/export` 斜杠命令也会启动 ZIP 下载。ZIP 包含会话本身、其子会话与附件。本包拥有两条经过认证的 Host 路由、Markdown 记录格式化器以及浏览器控件和反馈。下载目标位置由浏览器选择，剪贴板由浏览器持有。设置与用法在前，随后说明实现细节。
+`dsh-session-log-export` 让 Web 界面导出会话的完整历史。Session Header 的更多操作菜单提供 `复制会话为 Markdown` 与 `下载 Session 日志`；`/export` 斜杠命令也会启动 ZIP 下载。ZIP 包含会话本身、其 subagent（`origin: 'subagent'`）与附件；侧栏对话和保留了父 id 的普通 fork 是独立的对话，不包含在内。本包拥有两条经过认证的 Host 路由、Markdown 记录格式化器以及浏览器控件和反馈。下载目标位置由浏览器选择，剪贴板由浏览器持有。设置与用法在前，随后说明实现细节。
 
 ## 目录
 

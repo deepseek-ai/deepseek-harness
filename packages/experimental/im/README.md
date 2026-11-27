@@ -88,7 +88,7 @@ The dispatch loop runs the `im/message` waterfall for each pending message: diff
 | `bind(target, bindings)` | Replace the chat bindings of a session |
 | `stop(target)` | Cancel the running turn of a session; returns `false` if the session is not running |
 | `agent(target)` | Open or resume the live `Agent` for a session using its stored composition (serializes behind in-flight `reset()`/`admit()` on the stable `key`; throws `ImError('unavailable')` for a retired `SessionId` or uncommitted reset receipt, opens the new generation by `key`, and throws `ImError('access')` if unhosted) |
-| `of(sessionId)` | Walk the `parent` chain from `sessionId` to find the nearest hosted session record |
+| `of(sessionId)` | Walk the `parent` chain from `sessionId` to find the nearest hosted session record; the walk follows only subagent creators (`origin: 'subagent'`), so a side conversation or an ordinary fork that retained a parent id inherits no chat from its source |
 | `trigger(sessionId)` | Return the `ImMessage` whose delivery started the session's current turn |
 
 Each `ImBinding` grants access to one `chat`, with `writable` controlling publish permission, `home` marking the default chat for tools and output renderers, and `thread` restricting the binding to a specific thread. `deliver` writes the delivery intent to `im_sessions` before opening the agent, and reconciles against `agent/inbox/spliced` events in the session log on recovery so restarts never duplicate inbox messages. `steer` joins a running turn at the next step (or starts a turn if idle), `followup` queues a new turn, and `inject` adds context for the next turn without waking an idle agent.

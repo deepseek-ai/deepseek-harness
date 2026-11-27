@@ -161,7 +161,7 @@ interface SessionHeader {
    */
   readonly cwd?: string
   /**
-   * Direct creator of a subagent Session. Ordinary forks omit this field;
+   * Direct creator of a subagent Session, or the source of a side conversation. Ordinary forks omit this field;
    * historical ordinary forks may retain their source id here. Presence alone
    * does not classify a Session as a subagent; use `origin` for that distinction.
    */
@@ -233,6 +233,7 @@ interface CreateSessionOptions {
  */
 interface SessionHeaderMeta {
   readonly cwd?: string
+  /** Direct creator of a subagent Session or source of a side conversation; see {@link SessionHeader.parentSession}. */
   readonly parentSession?: SessionId
   readonly createdAt?: number
   readonly isSeeded?: boolean

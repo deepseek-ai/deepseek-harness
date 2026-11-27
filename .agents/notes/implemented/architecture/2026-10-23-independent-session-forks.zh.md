@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-普通 fork 保留完整的选定前缀、`isSeeded`、`inheritedEventCount` 及继承结束标记，但不记录来源 ID。子代理保留直接创建者，包括 backend 复制历史的情况。`origin: subagent` 提供粗粒度分类，`origin: side` 标记作为侧栏对话创建的普通 fork；有效的自身区间 descriptor 单独提供继续运行身份。历史父元数据保持可读且不变。运行时 Agent 归属仍遵循[显式身份决策](2026-08-31-explicit-agent-runtime-identity.zh.md)。
+普通 fork 保留完整的选定前缀、`isSeeded`、`inheritedEventCount` 及继承结束标记，但不记录来源 ID。子代理保留直接创建者，包括 backend 复制历史的情况。`origin: subagent` 提供粗粒度分类，`origin: side` 标记作为侧栏对话创建的普通 fork，后者按[侧栏对话来源决策](2026-11-26-side-conversation-source.zh.md)记录来源；有效的自身区间 descriptor 单独提供继续运行身份。历史父元数据保持可读且不变。运行时 Agent 归属仍遵循[显式身份决策](2026-08-31-explicit-agent-runtime-identity.zh.md)。
 
 V4 reader 仅在已验证的继承区间中允许其他 Session 的投递 ID。自身区间标记仍要求当前 ID，每个活动代际的 `throughSeq` 必须早于其标记。这些检查不需要持久来源关系。
 

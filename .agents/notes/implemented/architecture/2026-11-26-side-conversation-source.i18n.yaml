@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-26-side-conversation-source.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-26-side-conversation-source.md
+/agent-note-a-side-conversation-records-its-source-as-parentsession:
+  en: 4d3331ec35975e1e
+  zh: ed991b2e4e3edeb1
+/agent-note-a-side-conversation-records-its-source-as-parentsession/problem:
+  en: f54b289e3c9d5acc
+  zh: 1583b2f3c48a31ab
+/agent-note-a-side-conversation-records-its-source-as-parentsession/decision:
+  en: b5456c2b8640b590
+  zh: 0dfd3de291f117e5
+/agent-note-a-side-conversation-records-its-source-as-parentsession/alternatives-considered:
+  en: e07f4d3cf88c836b
+  zh: 2b2a5f6f320bfdfb
+/agent-note-a-side-conversation-records-its-source-as-parentsession/consequences:
+  en: 510cfe36ff77c8d0
+  zh: 49c38699f52e672f
+/agent-note-a-side-conversation-records-its-source-as-parentsession/testing:
+  en: 5d13b139d30466de
+  zh: 17df3ec3a0ccf144

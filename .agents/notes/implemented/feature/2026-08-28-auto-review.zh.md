@@ -26,7 +26,7 @@ Full access 让有用的项目工作无需反复审批即可继续，但也允�
 
 实际效果不明确或超出已确立范围时按拒绝处理。后续指令只有明确撤销或替换旧指令才能消除冲突；直接父级指令不能覆盖用户限制。历史可以证明对象由本会话创建，但不能授权 medium 操作或解除 high 禁令。
 
-Reviewer 从既有 Session 事实派生权威。`source.kind === 'user'` 的文本定义或替换任务与限制，不区分输入传输。Child 初始直接父级 prompt 在其自身既有创建 descriptor 之后识别；后续 `agent-message` 只有 `senderSessionId` 与 `SessionHeader.parentSession` 匹配时才属于直接父级指令。继承的 child 创建 prompt 与无法验证的 child 创建 prompt 仍是事实。[User-source 接纳](2026-10-18-headless-auto-review.zh.md)定义调用者与恢复历史的语义。直接父级文本在用户限制内定义 child 任务。项目指令只施加约束；checkpoint 恢复有损语境；图片、附件元数据和历史调用提供事实。Compaction 不会把 checkpoint 提升为已经离开 surface 的原文本所拥有的指令权威。
+Reviewer 从既有 Session 事实派生权威。`source.kind === 'user'` 的文本定义或替换任务与限制，不区分输入传输。Child 初始直接父级 prompt 在其自身既有创建 descriptor 之后识别；后续 `agent-message` 只有在 child header 为 `origin: subagent` 且 `senderSessionId` 与 `SessionHeader.parentSession` 匹配时才属于直接父级指令。继承的 child 创建 prompt 与无法验证的 child 创建 prompt 仍是事实。[User-source 接纳](2026-10-18-headless-auto-review.zh.md)定义调用者与恢复历史的语义。直接父级文本在用户限制内定义 child 任务。项目指令只施加约束；checkpoint 恢复有损语境；图片、附件元数据和历史调用提供事实。Compaction 不会把 checkpoint 提升为已经离开 surface 的原文本所拥有的指令权威。
 
 ### 一次完整 reviewer 请求
 

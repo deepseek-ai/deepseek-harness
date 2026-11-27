@@ -958,7 +958,7 @@ describe('fork', () => {
 
     expect(failure).toBeInstanceOf(SessionForkError)
     expect(onCreated).toHaveBeenCalledExactlyOnceWith(sid('child'))
-    expect(b.svc.list.getSnapshot().byId[sid('child')]).toMatchObject({ id: 'child', origin: 'side' })
+    expect(b.svc.list.getSnapshot().byId[sid('child')]).toMatchObject({ id: 'child', origin: 'side', parentId: 'source' })
   })
 
   it('forwards a side origin to the Remote request', async ({ bench }) => {

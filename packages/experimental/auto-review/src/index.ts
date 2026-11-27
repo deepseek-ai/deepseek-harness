@@ -218,11 +218,15 @@ function isCheckpoint(source: MessageSource): boolean {
   return kind === 'compact-checkpoint'
 }
 
-/** Whether this message was durably attributed to the child's direct parent. */
-function isDirectParentInstruction(source: MessageSource, parentSession: string | undefined): boolean {
-  return parentSession !== undefined
+/**
+ * Whether this message was durably attributed to the child's delegating parent. Only a subagent child has
+ * one: a side conversation also records its source as `parentSession`, but that source never delegated a
+ * task to it, so its messages stay facts.
+ */
+function isDirectParentInstruction(source: MessageSource, header: Session['header']): boolean {
+  return header.origin === 'subagent' && header.parentSession !== undefined
     && source.kind === 'agent-message'
-    && (source as { readonly senderSessionId?: unknown }).senderSessionId === parentSession
+    && (source as { readonly senderSessionId?: unknown }).senderSessionId === header.parentSession
 }
 
 interface CreationPrompts {
@@ -264,7 +268,7 @@ function textRole(
   prompts: CreationPrompts,
   session: Session,
 ): ReviewSourceRole {
-  if (seq === prompts.own || isDirectParentInstruction(source, session.header.parentSession)) {
+  if (seq === prompts.own || isDirectParentInstruction(source, session.header)) {
     return 'direct-parent-instruction'
   }
   if (prompts.all.has(seq)) return 'fact'

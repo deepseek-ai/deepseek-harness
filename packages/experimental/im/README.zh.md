@@ -88,7 +88,7 @@ kind: "package-reference"
 | `bind(target, bindings)` | 替换会话的聊天绑定列表 |
 | `stop(target)` | 取消会话当前正在运行的轮次；若无运行中轮次则返回 `false` |
 | `agent(target)` | 按存储的组合配置创建或恢复对应的活动 `Agent`（按稳定 `key` 排在在途 `reset()`/`admit()` 之后；对已退役 `SessionId` 或存在未提交重置回执的代次抛出 `ImError('unavailable')`，按 `key` 调用则打开新代次，未托管时抛出 `ImError('access')`） |
-| `of(sessionId)` | 沿 `parent` 链向上查找最近的托管会话记录 |
+| `of(sessionId)` | 沿 `parent` 链向上查找最近的托管会话记录；只经过 subagent 的创建者（`origin: 'subagent'`），因此侧栏对话或保留了父 id 的普通 fork 都不继承来源的聊天 |
 | `trigger(sessionId)` | 返回启动当前轮次的那条触发消息 `ImMessage` |
 
 每条 `ImBinding` 授予一个聊天的访问权限：`writable` 控制是否可写，`home` 标记未指定聊天时工具和渲染器默认使用的主聊天，`thread` 将绑定限制在指定话题线程内。`deliver` 在接触 agent 之前先将投递记录写入 `im_sessions`，并在恢复时核对会话日志中的 `agent/inbox/spliced` 事件，保证崩溃重启后不会重复写入收件箱。`steer` 会在下一步加入正在运行的轮次（空闲时直接启动新轮次），`followup` 排队等待下一轮，`inject` 仅补充上下文而不唤醒空闲 agent。
