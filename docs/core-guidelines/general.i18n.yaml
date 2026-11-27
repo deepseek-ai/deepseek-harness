@@ -45,5 +45,23 @@
   en: 7b73640586b3aeba
   zh: 577477b5215ee03a
 /g-general/g-2-avoid-callbacks-in-public-interface-parameters/enforcement:
-  en: 90b1409e10d2a31f
-  zh: c54325d63795657e
+  en: 2f96e1777ab0123f
+  zh: 0a447bf7dbb67be8
+/g-general/g-3-add-a-gate-with-every-new-rule-that-a-script-can-check:
+  en: 5eb6e79cacd61a80
+  zh: b3cc05df7914834b
+/g-general/g-3-add-a-gate-with-every-new-rule-that-a-script-can-check/reason:
+  en: ae429347f230be73
+  zh: 5d8d974aa49f270c
+/g-general/g-3-add-a-gate-with-every-new-rule-that-a-script-can-check/example-bad:
+  en: a8fa149391e2bf22
+  zh: 269f2c0ddfd1ed44
+/g-general/g-3-add-a-gate-with-every-new-rule-that-a-script-can-check/example:
+  en: b9b5449b4e5cc2bf
+  zh: fa9be57f4cf4a267
+/g-general/g-3-add-a-gate-with-every-new-rule-that-a-script-can-check/note:
+  en: eb3f42b5e9b91cb5
+  zh: c8e994f5dfaba3d5
+/g-general/g-3-add-a-gate-with-every-new-rule-that-a-script-can-check/enforcement:
+  en: 043274c115537f0f
+  zh: 54c4958ab28a5743

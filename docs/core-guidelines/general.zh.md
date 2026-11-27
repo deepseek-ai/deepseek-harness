@@ -115,3 +115,47 @@ export declare function upload(data: Uint8Array): AsyncIterable<UploadEvent>
 ### 检查方式
 
 审查：在新增或修改的公共接口中，标记任何不属于例外的函数类型参数，或选项参数中的函数类型字段。
+
+<a id="g3"></a>
+## G.3：新增规则如果能用脚本检查，同时加上门禁
+
+### 原因
+
+审查者会忘记规则，同样的违规就会再次出现。门禁自动拦住增量违规。存量违规记在一份列表里，所以规则立即生效，存量代码可以以后再改。
+
+### 反例
+
+```md
+### Enforcement
+
+Review: flag a direct assertion to `unknown`.
+```
+
+脚本能找出每一处直接断言为 `unknown` 的代码，这条规则却要靠每个审查者记住。
+
+### 示例
+
+```md
+### Enforcement
+
+`verify-no-unknown-casts` rejects a direct assertion to `unknown` that `scripts/no-unknown-casts.baseline.json` does not record.
+```
+
+### 注解
+
+不需要人工判断就能找出违规的规则，可以用脚本检查，例如某种语法形式、某个导入或某种文本模式。需要判断的规则只靠审查，例如某个回调是否属于 [G.2](#g2) 的例外。
+
+在新增规则的同一变更中：
+
+- 加上门禁。列表没有记录的违规都会让门禁失败。
+- 写出存量违规列表。没有命令能生成它。
+- 在 `scripts/run-gates.ts` 中注册门禁。
+- 在规则的 `检查方式` 中写明门禁名称。
+
+列表中的条目不再匹配任何代码时，门禁也会失败。审查会拒绝向列表添加条目的变更，所以列表只减不增。
+
+对 TypeScript 或 JavaScript 语法形式，基于 `scripts/baseline-inventory.ts` 编写门禁。它按文件和语法指纹记录每处违规，`--prune` 会删除不再匹配代码的条目。
+
+### 检查方式
+
+审查：标记能用脚本检查却没有门禁的新增规则。标记向门禁列表添加条目的变更。

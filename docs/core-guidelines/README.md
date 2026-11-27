@@ -11,6 +11,7 @@ Rules for writing DeepSeek Harness code, in the style of the [C++ Core Guideline
 - [G: General](general.md)
   - [G.1: Write every rule in the standard format](general.md#g1)
   - [G.2: Avoid callbacks in public interface parameters](general.md#g2)
+  - [G.3: Add a gate with every new rule that a script can check](general.md#g3)
 - [F: Frontend](frontend.md)
 - [B: Backend](backend.md)
   - [B.1: Drive plugin work from lifecycle events, not loops that poll Agent state](backend.md#b1)
@@ -29,6 +30,6 @@ Business-domain rules do not belong here. A rule that describes what one feature
 
 ## Introduction
 
-Before you finish a change, review the code it adds or modifies against every rule in these guidelines. Fix each violation, or state in the change why the rule does not apply. A change does not have to migrate existing code it does not otherwise touch.
+Before you finish a change, review the code it adds or modifies against every rule in these guidelines. Fix each violation, or state in the change why the rule does not apply. A change does not have to migrate existing code it does not otherwise touch, including existing violations that a gate records ([G.3](general.md#g3)).
 
 Cite a rule by its ID, for example "violates G.2". Read the [defensive patterns](../defensive-patterns/README.md) for the artifacts you change as well.
