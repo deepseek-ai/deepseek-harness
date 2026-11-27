@@ -12,7 +12,7 @@ Session listing, search, and statistics all read whole logs today. A store that 
 
 ## Decision
 
-`@deepseek-ai/dsh-session-persistence-sqlite` stores one row per event. The envelope members are columns: `seq`, `type`, `time`, `surface_op`, `source_seqs`, `ignorable`. `data` is JSON text, or one Zstandard frame when its text is at least 1,024 characters and compression shrinks it; `codec` names which. Rows are immutable once written.
+`@deepseek-ai/dsh-session-persistence-sqlite` stores one row per event. The envelope members are columns: `seq`, `type`, `time`, `surface_op`, `source_seqs`, `ignorable`. Inline `data` is JSON text, or one Zstandard frame when its text is at least 1,024 characters and compression shrinks it; `codec` names which. The event and its envelope are immutable; the [cold tier](2026-11-26-sqlite-cold-sessions.md) can move its payload without changing the event row's identity.
 
 `seq` is the Session sequence. A Segment's `base_seq` is its first sequence and therefore the cut in its parent. `segment_paths` holds, for each Segment, itself and every ancestor with the exclusive sequence up to which that member's events belong to its history. A trigger fills it when a Segment is inserted. The `session_*` views join Sessions to events through it, so SQL written against a Session never handles Segments.
 

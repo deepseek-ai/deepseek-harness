@@ -4,9 +4,10 @@ import { createHash, randomUUID } from 'node:crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { DatabaseSync, StatementSync } from 'node:sqlite'
-import { mkdir, open, rename, stat, readdir, realpath } from 'node:fs/promises'
+import { mkdir, open, rename, stat, readdir, realpath, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
+import { isDeepStrictEqual } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
@@ -32,6 +33,10 @@ import type { DerivedRows, Derivation, DerivationFailure } from './derive.ts'
 import { prepareSchema } from './migrations/index.ts'
 import type { SqlFiles } from './sql.ts'
 import type { SqlFile } from './sql.ts'
+import { archiveRow, archiveSession, EVENT_CODEC_COLD, readArchive } from './cold.ts'
+import type { ColdArchive } from './cold.ts'
+import { vacuumStorage } from './vacuum.ts'
+import type { SessionStorageCompaction } from './vacuum.ts'
 
 // SQLite primary result codes; extended result codes retain the low byte.
 const SQLITE_BUSY = 5, SQLITE_CORRUPT = 11, SQLITE_NOTADB = 26
@@ -54,6 +59,11 @@ const LIVE_WRITE_BATCH_MAX_EVENTS = 256
 const COMMIT_GROUP_MAX_EVENTS = 1024
 /** Internal scheduling constant, not deployment configuration: pause before a derived-table rebuild retries a locked database. */
 const REBUILD_BUSY_RETRY_MS = 1000
+const ARCHIVE_INTERVAL_MS = 60 * 60 * 1000
+const ARCHIVE_BATCH = 32
+const archiveCandidate = z.object({ session_key: z.number().int(), session_id: z.string().transform(sessionIdentity),
+  header: z.string(), head_segment_id: z.number().int(), inherited_count: z.number().int().nonnegative(),
+  event_count: z.number().int().positive(), last_opened_at: z.number().int() })
 /** Whether a SQLite failure reports a database locked by another connection. */
 function isBusy(error: unknown): boolean {
   const code = (error as { errcode?: unknown } | null)?.errcode
@@ -160,6 +170,10 @@ export interface SqliteStoreOptions {
    * storage root for an operator to repair. Defaults to `replace`.
    */
   readonly recovery?: Recovery
+  /** Days of inactivity before archiving; `0` or omitted disables archiving. */
+  readonly coldAfterDays?: number
+  /** Report maintenance failures without treating the hot database as unavailable. */
+  readonly reportArchive: (error: unknown) => void
 }
 
 /** Session persistence over private predecessor-linked Segments in one SQLite database. */
@@ -180,6 +194,17 @@ export class SqliteStore {
   private readonly reportSetAside: SqliteStoreOptions['reportSetAside']
   private readonly reportRecovery: SqliteStoreOptions['reportRecovery']
   private readonly recovery: Recovery
+  private readonly coldAfterMs: number | undefined
+  private readonly reportArchive: SqliteStoreOptions['reportArchive']
+  private readonly archiveDirectory: string
+  private readonly archiveStop = new AbortController()
+  private archiving: Promise<void> | undefined
+  private readonly inflightWarms = new Set<Promise<unknown>>()
+  private readonly warming = new Map<SessionId, {
+    promise: Promise<SessionEvent[] | undefined>
+    abort: AbortController
+    waiters: number
+  }>()
   private readonly pendingCreates = new Map<SessionId, {
     header: SessionHeader
     inheritedCount: number
@@ -192,6 +217,7 @@ export class SqliteStore {
   private readonly statements = new Map<SqlFile, StatementSync>()
   private ready: Promise<DatabaseSync> | undefined
   private closing: Promise<void> | undefined
+  private compacting: Promise<SessionStorageCompaction> | undefined
   private failure: Error | undefined
   private readonly chains = new Map<SessionId, { head: number; nodes: Map<number, Segment> }>()
   private readonly handles = new Set<SqliteSessionHandle>()
@@ -210,6 +236,11 @@ export class SqliteStore {
     this.reportSetAside = options.reportSetAside
     this.reportRecovery = options.reportRecovery
     this.recovery = options.recovery ?? 'replace'
+    this.coldAfterMs = options.coldAfterDays !== undefined && options.coldAfterDays > 0
+      ? options.coldAfterDays * 86_400_000
+      : undefined
+    this.reportArchive = options.reportArchive
+    this.archiveDirectory = `${this.path}.cold`
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report
@@ -316,7 +347,10 @@ export class SqliteStore {
     const aside = `${this.path}.unreadable-${stamp}`
     // The journal belongs to the bytes being moved, so a new database must not adopt it. A journal is usually absent, and
     // a move that fails for any other reason means the damaged bytes cannot be preserved.
-    for (const [from, to] of [[this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`]] as const) {
+    for (const [from, to] of [
+      [this.path, aside], [`${this.path}-wal`, `${aside}-wal`], [`${this.path}-shm`, `${aside}-shm`],
+      [this.archiveDirectory, `${aside}.cold`],
+    ] as const) {
       try { await rename(from, to) }
       /* v8 ignore next -- a journal is usually absent, and a volume that refuses the move of a readable file is a
          storage fault no test can stage without changing the process's own filesystem permissions. */
@@ -377,7 +411,7 @@ export class SqliteStore {
       // Readers can acquire a snapshot as soon as schema creation commits.
       // A 16 KiB page cuts the padding that large `data` values leave at the end of a page: 1.3% of a 370 MB store,
       // against 6% more per-page slack in a small one. WAL requires the change before the first write.
-      opened.exec('PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL; PRAGMA page_size = 16384;')
+      opened.exec('PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL; PRAGMA page_size = 16384; PRAGMA journal_size_limit = 67108864;')
       const deadline = performance.now() + BUSY_TIMEOUT_MS
       for (;;) {
         try { opened.exec('PRAGMA journal_mode = WAL'); break }
@@ -400,6 +434,7 @@ export class SqliteStore {
       })
       this.upgrading = false
       this.scheduleRebuild(opened)
+      if (this.coldAfterMs !== undefined) this.scheduleArchive(opened, this.coldAfterMs)
       return opened
     } catch (error: unknown) {
       db?.close()
@@ -472,6 +507,24 @@ export class SqliteStore {
     this.assertHealthy()
   }
 
+  // The worker holds SQLite's write lock during VACUUM. Queue local writes asynchronously instead of
+  // letting SQLite's synchronous busy handler block the Host. WAL reads still use the normal connection.
+  private async waitForCompaction(): Promise<void> {
+    while (this.compacting !== undefined) {
+      await this.compacting.catch((_error: unknown) => { /* A refused compaction does not affect writes. */ })
+    }
+  }
+
+  private async afterCompaction<T>(write: () => T): Promise<T> {
+    await this.waitForCompaction()
+    this.assertHealthy()
+    return write()
+  }
+
+  private commit<T>(db: DatabaseSync, write: () => T): Promise<T> {
+    return this.afterCompaction(() => this.transaction(db, write))
+  }
+
   /** Prepare one SQL file's statement on first use; the store holds a single connection. */
   private statement(db: DatabaseSync, file: SqlFile): StatementSync {
     let statement = this.statements.get(file)
@@ -487,6 +540,217 @@ export class SqliteStore {
     const raw = this.statement(db, 'store/session-by-id').get(id)
     if (raw === undefined) return undefined
     return this.parseMetadata(raw, id)
+  }
+
+  private scheduleArchive(db: DatabaseSync, age: number): void {
+    const { signal } = this.archiveStop
+    this.archiving = (async () => {
+      await setImmediate(undefined, { signal })
+      await this.rebuilding
+      let after = 0
+      for (;;) {
+        await this.waitForCompaction()
+        signal.throwIfAborted()
+        this.assertHealthy()
+        const cutoff = Date.now() - age
+        const candidates = this.statement(db, 'cold/candidates').all(after, cutoff, cutoff, ARCHIVE_BATCH)
+        for (const value of candidates) {
+          signal.throwIfAborted()
+          const candidate = archiveCandidate.parse(value)
+          after = candidate.session_key
+          try { await this.archiveCandidate(db, candidate, signal) }
+          catch (error: unknown) {
+            signal.throwIfAborted()
+            if (!(error instanceof SessionAlreadyOwnedError)) this.reportArchive(error)
+          }
+          await setImmediate(undefined, { signal })
+        }
+        if (candidates.length < ARCHIVE_BATCH) {
+          after = 0
+          await delay(ARCHIVE_INTERVAL_MS, undefined, { signal, ref: false })
+        } else await setImmediate(undefined, { signal })
+      }
+    })().catch((error: unknown) => { if (!signal.aborted) this.reportArchive(error) })
+  }
+
+  private async archiveCandidate(db: DatabaseSync, candidate: z.infer<typeof archiveCandidate>, signal: AbortSignal): Promise<void> {
+    const id = candidate.session_id
+    if ([...this.handles].some(handle => handle.id === id)) return
+    const header = this.parseHeader(id, candidate.header)
+    await this.ensureDirectory(this.archiveDirectory)
+    const archive = await archiveSession(this.archiveDirectory, header, SessionLogOffset(candidate.inherited_count),
+      this.archiveHistory(db, header, candidate.event_count, signal), candidate.event_count, signal)
+    if (archive === undefined) return
+    await this.waitForCompaction()
+    let lease: { release(): Promise<void> } | undefined
+    let retained = false
+    try {
+      lease = await this.acquireWriteLease(header, false)
+      signal.throwIfAborted()
+      retained = await this.commit(db, () => {
+        signal.throwIfAborted()
+        if ([...this.handles].some(handle => handle.id === id)) return false
+        const result = this.statement(db, 'cold/record').run(archive.archive, archive.sha256, archive.bytes,
+          id, candidate.head_segment_id, candidate.event_count, candidate.last_opened_at)
+        if (result.changes === 0) return false
+        if (this.statement(db, 'cold/evict').run(candidate.head_segment_id).changes !== candidate.event_count) {
+          throw new HarnessError('Cold Segment changed during eviction', 'SESSION_STORAGE_CORRUPT')
+        }
+        return true
+      })
+    } finally {
+      // An unknown COMMIT outcome retains the file: the database may already refer to it.
+      try { await lease?.release() }
+      finally { if (!retained && this.failure === undefined) await this.removeArchive(archive.archive) }
+    }
+  }
+
+  private async *archiveHistory(db: DatabaseSync, header: SessionHeader, end: number, signal: AbortSignal): AsyncGenerator<SessionEvent> {
+    try {
+      for (let offset = 0; offset < end; offset += CODEC_GROUP_EVENTS) {
+        await setImmediate(undefined, { signal })
+        if (this.coldRow(db, header.id) !== undefined) return
+        yield* await this.read(header, offset, Math.min(CODEC_GROUP_EVENTS, end - offset), signal)
+      }
+    } finally {
+      if (![...this.handles].some(handle => handle.id === header.id)) this.chains.delete(header.id)
+    }
+  }
+
+  private coldRow(db: DatabaseSync, id: SessionId): z.infer<typeof archiveRow> | undefined {
+    const row = this.statement(db, 'cold/archive-by-session').get(id)
+    if (row === undefined) return undefined
+    try { return archiveRow.parse(row) }
+    catch (error: unknown) { throw this.corruption(`session "${id}": stored SQLite cold archive metadata is invalid`, error) }
+  }
+
+  private async removeArchive(name: string): Promise<void> {
+    try { await rm(join(this.archiveDirectory, `${name}.jsonl.zst`), { force: true }) }
+    catch (error: unknown) { this.reportArchive(error) }
+  }
+
+  private async touch(db: DatabaseSync, id: SessionId): Promise<void> {
+    if (this.coldAfterMs !== undefined) {
+      const now = Date.now()
+      try {
+        await this.afterCompaction(() => {
+          if (this.closing === undefined) this.statement(db, 'cold/touch').run(now, id, now - ARCHIVE_INTERVAL_MS)
+        })
+      }
+      catch (error: unknown) {
+        if (!isBusy(error)) throw error
+        this.reportArchive(error)
+      }
+    }
+  }
+
+  private async archivedEvents(header: SessionHeader, locator: ColdArchive, row: Metadata, signal?: AbortSignal): Promise<SessionEvent[]> {
+    let snapshot: Awaited<ReturnType<typeof readArchive>>
+    try { snapshot = await readArchive(this.archiveDirectory, locator, signal) }
+    catch (error: unknown) {
+      signal?.throwIfAborted()
+      if (error instanceof SessionFormatUnsupportedError) throw error
+      throw this.corruption(`Session "${header.id}" cold archive cannot be read`, error)
+    }
+    if (!isDeepStrictEqual(snapshot.meta, header)
+      || snapshot.inheritedEventCount !== row.inherited_count || snapshot.events.length !== row.event_count) {
+      throw this.corruption(`Session "${header.id}" cold archive does not match its SQLite metadata`, new Error('Archive identity or range mismatch'))
+    }
+    const events = validateStoredEvents(header, snapshot.events, { kind: 'sqlite', path: this.path })
+    assertContiguous(header.id, events, 0)
+    return events
+  }
+
+  private ensureWarm(db: DatabaseSync, header: SessionHeader, row: Metadata,
+    signal: AbortSignal | undefined): Promise<SessionEvent[] | undefined> {
+    signal?.throwIfAborted()
+    let entry = this.warming.get(header.id)
+    if (entry === undefined) {
+      const locator = this.coldRow(db, header.id)
+      if (locator === undefined) return Promise.resolve(undefined)
+      const abort = new AbortController()
+      const combined = AbortSignal.any([this.archiveStop.signal, abort.signal])
+      const created = {
+        abort,
+        waiters: 0,
+        promise: this.warm(db, header, row, locator, combined).finally(() => {
+          this.inflightWarms.delete(created.promise)
+          if (this.warming.get(header.id) === created) this.warming.delete(header.id)
+        }),
+      }
+      this.inflightWarms.add(created.promise)
+      entry = created
+      this.warming.set(header.id, entry)
+    }
+    entry.waiters += 1
+    if (signal === undefined) return entry.promise
+    const active = entry
+    return new Promise<SessionEvent[] | undefined>((resolve, reject) => {
+      const onAbort = (): void => {
+        active.waiters -= 1
+        if (active.waiters === 0) {
+          this.warming.delete(header.id)
+          active.abort.abort(signal.reason)
+        }
+        reject(asError(signal.reason))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      active.promise.then(
+        (value) => { signal.removeEventListener('abort', onAbort); resolve(value) },
+        (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(asError(error)) },
+      )
+    })
+  }
+
+  private async warm(db: DatabaseSync, header: SessionHeader, row: Metadata, locator: z.infer<typeof archiveRow>,
+    signal: AbortSignal): Promise<SessionEvent[] | undefined> {
+    let events: SessionEvent[]
+    try { events = await this.archivedEvents(header, locator, row, signal) }
+    catch (error: unknown) {
+      signal.throwIfAborted()
+      this.check()
+      if (this.coldRow(db, header.id)?.archive !== locator.archive) return undefined
+      throw error
+    }
+    const encoded = await this.encodeBatch(events, signal)
+    await this.waitForCompaction()
+    let lease: { release(): Promise<void> } | undefined
+    try {
+      const until = Date.now() + BUSY_TIMEOUT_MS
+      while (this.coldRow(db, header.id)?.archive === locator.archive) {
+        signal.throwIfAborted()
+        this.check()
+        try { lease = await this.acquireWriteLease(header, false); break }
+        catch (error: unknown) {
+          if (!(error instanceof SessionAlreadyOwnedError)) throw error
+          if (Date.now() >= until) throw new HarnessError('Cold Session is locked by another opener', 'SESSION_STORAGE_LOCKED', { cause: error })
+        }
+        await delay(50, undefined, { signal })
+      }
+      if (lease === undefined) return events
+      const restored = await this.commit(db, () => {
+        this.check(); signal.throwIfAborted()
+        if (this.coldRow(db, header.id)?.archive !== locator.archive) return false
+        const restore = this.statement(db, 'cold/restore')
+        for (const event of encoded) {
+          const { row: restored, derived } = event
+          if (restore.run(restored.codec, restored.data, locator.segment_id, restored.seq,
+            restored.type, restored.time, restored.surface_op, restored.source_seqs, restored.ignorable).changes !== 1) {
+            throw new HarnessError('Cold Segment is incomplete', 'SESSION_STORAGE_CORRUPT')
+          }
+          this.derived.insert(db, locator.segment_id, restored.seq, derived)
+        }
+        this.statement(db, 'cold/forget').run(locator.segment_id)
+        const now = Date.now()
+        this.statement(db, 'cold/touch').run(now, header.id, now)
+        return true
+      })
+      if (restored) await this.removeArchive(locator.archive)
+      return events
+    } catch (error: unknown) {
+      if (isBusy(error)) throw this.lockOutcome(error)
+      throw error
+    } finally { await lease?.release() }
   }
 
   private parseMetadata(raw: unknown, id: SessionId): Metadata {
@@ -520,7 +784,8 @@ export class SqliteStore {
 
   private insertSession(db: DatabaseSync, header: SessionHeader, head: number,
     inheritedCount: number, encoded: readonly EncodedEvent[]): void {
-    this.statement(db, 'store/insert-session').run(header.id, JSON.stringify(header), head, inheritedCount)
+    const openedAt = this.coldAfterMs === undefined ? 0 : Date.now()
+    this.statement(db, 'store/insert-session').run(header.id, JSON.stringify(header), head, inheritedCount, openedAt)
     this.insertEvents(db, head, encoded)
   }
 
@@ -534,10 +799,10 @@ export class SqliteStore {
   }
 
   /** Serialize, compress and derive a batch before its transaction, yielding between groups of a long batch. */
-  private async encodeBatch(batch: readonly SessionEvent[]): Promise<EncodedEvent[]> {
+  private async encodeBatch(batch: readonly SessionEvent[], signal?: AbortSignal): Promise<EncodedEvent[]> {
     const encoded: EncodedEvent[] = []
     for (const [index, event] of batch.entries()) {
-      if (index > 0 && index % CODEC_GROUP_EVENTS === 0) await setImmediate()
+      if (index > 0 && index % CODEC_GROUP_EVENTS === 0) await setImmediate(undefined, { signal })
       encoded.push({ row: encodeRow(event, this.compression), derived: this.derived.rows(event) })
     }
     return encoded
@@ -554,7 +819,7 @@ export class SqliteStore {
         await setImmediate()
         if (this.closing !== undefined || this.failure !== undefined) return
         try {
-          if (!this.transaction(db, () => this.derived.rebuild(db))) return
+          if (!await this.commit(db, () => this.derived.rebuild(db))) return
         } catch (error: unknown) {
           // Another writer held the lock past the busy timeout; its release lets the next attempt through.
           if (!isBusy(error)) throw error
@@ -637,22 +902,34 @@ export class SqliteStore {
     const events = materializeAppendBatch(source.events.slice(source.endSeq))
     assertContiguous(header.id, events, source.endSeq)
     const encoded = await this.encodeBatch(events)
+    const db = await this.database()
     const handle = await this.admit(header, 'write', inheritedCount, false,
       await this.acquireWriteLease(header, true))
     try {
-      const db = await this.database()
-      this.check(); signal?.throwIfAborted()
-      this.transaction(db, () => {
-        if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
-        const parent = this.row(db, source.sessionId)
-        if (parent === undefined) throw new SessionPersistenceNotFoundError(source.sessionId)
-        if (source.endSeq > parent.event_count) {
-          throw new HarnessError(`Parent Session "${source.sessionId}" is not persisted through ${source.endSeq} events`, 'SESSION_FORK_PREFIX_NOT_PERSISTED')
+      for (;;) {
+        if (source.endSeq > 0) {
+          const parentRow = this.row(db, source.sessionId)
+          if (parentRow !== undefined) {
+            await this.ensureWarm(db, this.parseHeader(source.sessionId, parentRow.header), parentRow, signal)
+          }
         }
-        const cut = this.cut(db, parent, source.endSeq)
-        const head = this.newSegment(db, segmentId(randomUUID()), cut.parent, cut.end)
-        this.insertSession(db, header, head, inheritedCount, encoded)
-      })
+        this.check(); signal?.throwIfAborted()
+        const committed = await this.commit(db, () => {
+          this.check(); signal?.throwIfAborted()
+          if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
+          const parent = this.row(db, source.sessionId)
+          if (parent === undefined) throw new SessionPersistenceNotFoundError(source.sessionId)
+          if (source.endSeq > parent.event_count) {
+            throw new HarnessError(`Parent Session "${source.sessionId}" is not persisted through ${source.endSeq} events`, 'SESSION_FORK_PREFIX_NOT_PERSISTED')
+          }
+          if (source.endSeq > 0 && this.coldRow(db, source.sessionId) !== undefined) return false
+          const cut = this.cut(db, parent, source.endSeq)
+          const head = this.newSegment(db, segmentId(randomUUID()), cut.parent, cut.end)
+          this.insertSession(db, header, head, inheritedCount, encoded)
+          return true
+        })
+        if (committed) break
+      }
       await this.route(header.id)
       return handle
     } catch (error: unknown) {
@@ -684,17 +961,39 @@ export class SqliteStore {
     if (row === undefined) throw new SessionPersistenceNotFoundError(id)
     const header = this.parseHeader(id, row.header)
     if (header.id !== id) throw new HarnessError('SQLite Session identity mismatch', 'SESSION_STORAGE_CORRUPT')
-    const handle = await this.admit(header, access, row.inherited_count, false, ownership)
-    try {
-      signal?.throwIfAborted()
-      if (access === 'write') handle.prime(await this.read(handle.header, 0, Number.MAX_SAFE_INTEGER))
-      signal?.throwIfAborted()
-    } catch (error: unknown) {
-      try { await handle.close() }
-      catch (closeError: unknown) { throw new AggregateError([error, closeError], 'SQLite open and handle cleanup failed') }
-      throw error
+    let retriedLease = false
+    for (;;) {
+      this.check(); signal?.throwIfAborted()
+      if (access === 'write' && this.writers.has(id)) throw new SessionAlreadyOwnedError(id)
+      const primed = await this.ensureWarm(db, header, row, signal)
+      let handle: SqliteSessionHandle
+      try {
+        handle = await this.admit(header, access, row.inherited_count, false, ownership)
+      } catch (error: unknown) {
+        if (!(error instanceof SessionAlreadyOwnedError) || retriedLease) throw error
+        retriedLease = true
+        await delay(50, undefined, { signal })
+        continue
+      }
+      try {
+        signal?.throwIfAborted()
+        if (access === 'write' && this.coldRow(db, id) !== undefined) {
+          await handle.close()
+          continue
+        }
+        if (primed === undefined) await this.touch(db, id)
+        if (access === 'write') {
+          handle.prime(primed !== undefined && this.row(db, id)?.event_count === primed.length
+            ? primed : await this.read(handle.header, 0, Number.MAX_SAFE_INTEGER, signal))
+        }
+        this.check(); signal?.throwIfAborted()
+        return handle
+      } catch (error: unknown) {
+        try { await handle.close() }
+        catch (closeError: unknown) { throw new AggregateError([error, closeError], 'SQLite open and handle cleanup failed') }
+        throw error
+      }
     }
-    return handle
   }
 
   /**
@@ -724,7 +1023,8 @@ export class SqliteStore {
     const encoded = await this.encodeBatch(batch)
     const db = await this.database()
     this.check(); signal?.throwIfAborted()
-    this.transaction(db, () => {
+    await this.commit(db, () => {
+      this.check(); signal?.throwIfAborted()
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
       const head = this.newSegment(db, segmentId(randomUUID()), undefined, 0)
       this.insertSession(db, storedHeader, head, inheritedCount, encoded)
@@ -812,9 +1112,10 @@ export class SqliteStore {
    * @param header - selected Session metadata.
    * @param offset - first sequence.
    * @param length - maximum number of events.
+   * @param signal - optional cancellation while reading an archive.
    * @returns independently owned event slice.
    */
-  async read(header: SessionHeader, offset: number, length: number): Promise<SessionEvent[]> {
+  async read(header: SessionHeader, offset: number, length: number, signal?: AbortSignal): Promise<SessionEvent[]> {
     this.assertHealthy()
     if (this.pendingCreates.has(header.id)) return []
     const db = await this.database()
@@ -855,6 +1156,11 @@ export class SqliteStore {
           const row = eventRow.safeParse(raw)
           if (!row.success) throw this.corruption(`session "${header.id}": stored SQLite event row is invalid`, row.error)
           if (row.data.seq !== expected) break
+          if (row.data.codec === EVENT_CODEC_COLD) {
+            const archive = this.coldRow(db, header.id)
+            if (archive === undefined) throw new HarnessError('Cold event has no archive record', 'SESSION_STORAGE_CORRUPT')
+            return { archive, meta }
+          }
           rows.push(row.data)
           expected++
         }
@@ -862,6 +1168,17 @@ export class SqliteStore {
       }
       return { rows, inheritedCount: meta.inherited_count, complete: offset === 0 && stop === meta.event_count }
     }, 'DEFERRED')
+    // Another process may have archived after this read handle opened. Recheck in the same snapshot as the payload read.
+    if (stored.archive !== undefined) {
+      try { return (await this.archivedEvents(header, stored.archive, stored.meta, signal)).slice(offset, offset + length) }
+      catch (error: unknown) {
+        signal?.throwIfAborted()
+        this.check()
+        // A concurrent open may commit the inline payloads and remove the archive before this handle reads it.
+        if (this.coldRow(db, header.id)?.archive !== stored.archive.archive) return this.read(header, offset, length, signal)
+        throw error
+      }
+    }
     const decoded: (SessionFormatEvent & SessionEvent)[] = []
     // One synchronous transaction fetched the rows; decoding yields the event loop between groups,
     // so a long history does not stall it.
@@ -925,7 +1242,7 @@ export class SqliteStore {
       const group = this.takeCommitGroup()
       const failures = new Map<PendingAppend, unknown>()
       try {
-        this.transaction(db, () => {
+        await this.commit(db, () => {
           for (const entry of group) {
             db.exec('SAVEPOINT batch')
             try {
@@ -988,7 +1305,7 @@ export class SqliteStore {
     const pending = this.pendingCreates.get(header.id)
     if (pending === undefined) return
     const db = await this.database()
-    this.transaction(db, () => { this.ensureRow(db, header) })
+    await this.commit(db, () => { this.ensureRow(db, header) })
     this.pendingCreates.delete(header.id)
     await this.route(header.id)
   }
@@ -1041,6 +1358,22 @@ export class SqliteStore {
    * @returns resolves once the database is ready for session operations.
    */
   async start(): Promise<void> { this.check(); await this.database() }
+
+  /** Reclaim space without starting, replacing, or upgrading a database.
+   * @returns byte measurements from the completed SQLite compaction attempt.
+   */
+  async compactStorage(): Promise<SessionStorageCompaction> {
+    this.check()
+    if (this.compacting !== undefined) return this.compacting
+    if (this.ready === undefined) throw new HarnessError('Open the SQLite Session store before compacting it', 'SESSION_STORAGE_NOT_READY')
+    const ready = this.ready
+    this.compacting = (async () => {
+      await ready
+      this.assertHealthy()
+      return await vacuumStorage(this.path, this.sql)
+    })().finally(() => { this.compacting = undefined })
+    return this.compacting
+  }
 
   /**
    * List Sessions, omitting rows whose stored header is corrupt or of an unsupported version.
@@ -1126,6 +1459,9 @@ export class SqliteStore {
   /** Drain admitted handles before closing the database connection. */
   close(): Promise<void> {
     return this.closing ??= (async () => {
+      this.archiveStop.abort(new HarnessError('SQLite persistence is closing', 'SESSION_STORAGE_CLOSED'))
+      await this.compacting?.catch((_error: unknown) => { /* The requesting caller receives the failure. */ })
+      await Promise.allSettled(this.inflightWarms)
       const results = await Promise.allSettled([...this.handles].map(handle => handle.close()))
       const failures = results.filter(result => result.status === 'rejected').map((result): unknown => result.reason)
       if (this.ready !== undefined) {
@@ -1133,6 +1469,7 @@ export class SqliteStore {
         const db = await this.ready.catch((_error: unknown) => undefined)
         // Initialization starts the rebuild, so it is joined only after initialization settles.
         await this.rebuilding
+        await this.archiving
         if (db !== undefined) this.derived.release(db)
         // Write volume during this process changed the tables the analysis sampled at open. `PRAGMA optimize` analyzes
         // only the tables whose rows changed, so the next open starts with statistics that match the stored data.
@@ -1194,7 +1531,7 @@ export class SqliteSessionHandle implements SessionHandle {
     const primed = this.primed
     this.primed = undefined
     const events = primed === undefined
-      ? await this.store.read(this.header, offset, length) : primed.slice(offset, offset + length)
+      ? await this.store.read(this.header, offset, length, options?.signal) : primed.slice(offset, offset + length)
     // The synchronous SQLite read cannot be interrupted; a cancelled read still returns no events.
     options?.signal?.throwIfAborted()
     return { eventState: 'detached' as const, events }

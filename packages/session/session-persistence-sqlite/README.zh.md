@@ -29,12 +29,17 @@ kind: "package-reference"
 
 ### 最小配置
 
-在组合配置中替换 JSONL 提供者的包名，保留其根目录和旧历史编码设置：
+在 profile patch 或 `--patch` 覆盖配置中禁用默认的 JSONL 提供者，并插入使用同一存储根目录的 SQLite 提供者：
 
 ```yaml
-- name: '@deepseek-ai/dsh-session-persistence-sqlite'
-  config:
-    root: './.sessions'
+- id: session-persistence-jsonl
+  disabled: true
+
+- insert:
+    - id: session-persistence-sqlite
+      name: '@deepseek-ai/dsh-session-persistence-sqlite'
+      config:
+        root: !!js dshHomePath('sessions')
 ```
 
 fork 创建先排空本进程中的父写者，再在一个事务内引用已持久化的父前缀，并把 `endSeq` 之后的事件写入新的 Segment。读取打开与 fork 创建会等待本进程中正在关闭的父会话排空；排空或 flush 失败会停止创建。父会话后续写入仍属于父历史。前缀超过父会话已持久化事件数量时会拒绝创建；事务失败会回滚子会话并释放其写租约。若提交后路由发布失败，错误会说明历史仍已存储，可以重新打开 Session。
@@ -47,6 +52,7 @@ fork 创建先排空本进程中的父写者，再在一个事务内引用已持
 | `compression` | `zstd` | 现有 JSONL 历史和新事件行的编码：`zstd` 在事件的 `data` 较大且压缩后更小时压缩它，`none` 存储 JSON 文本。已存的行按各自的 codec 解码。 |
 | `listConcurrency` | `3` | 旧历史元数据及路由记录的并发文件系统读取数。 |
 | `recovery` | `replace` | 数据库已损坏时的打开行为。`replace` 把损坏的文件移到一旁并开始一个空数据库，Session 仍然可用，字节仍可读回；`report` 拒绝打开，把存储根留给人工修复。锁定永远不算损坏，始终直接报告。 |
+| `coldAfterDays` | `30` | 将闲置满指定天数的 Session 归档，设为 `0` 则禁用归档。禁用会停止新增归档，但仍可打开现有归档。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-persistence-sqlite)记录了所有可用字段。
 
@@ -82,6 +88,22 @@ SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type =
 
 活跃的 JSONL 写者保持所有权，直到关闭。SQLite read open 等待该所有权释放；竞争的 write open 会被拒绝。取消或提供者卸载会停止等待。导入后，读者可以在 SQLite 写者仍活跃时打开。`stat()` 和 `list()` 只观察元数据，不导入历史。
 
+<a id="archiving-idle-sessions"></a>
+### 归档闲置 Session
+
+`coldAfterDays` 为正整数时（默认 `30` 天），数据库打开后会启动后台归档，此后每小时检查一次。闲置时间从 Session 创建时间、最后一个事件的时间和上次记录的打开时间中的最新值算起。启用归档时，提供者记录创建与打开时间，每个 Session 每小时最多刷新一次打开水位。共享 SQLite fork 历史的 Session、含升级搁置不可读事件的 Session、没有事件的 Session，以及 JSONL 大于 256 MiB 的日志仍保存在 SQLite 中。
+
+提供者在 `<root>/.segments/sessions.sqlite.cold/` 中为每个归档的 Session 写入一个 Zstandard 12 级压缩的 JSONL 帧。这些内部文件不会替换已导入的 JSONL 代次，`recovery: replace` 在移动损坏数据库时会把归档目录一并移到一旁。数据库保留 Session 元数据、事件信封（`codec` 为 254，`data` 为空 blob）及已有派生行。以读或写方式打开时，提供者先将事件内容恢复至 SQLite 再返回句柄；从已归档 Session fork 非空前缀时也会恢复并把父 Segment 固定为内联存储；`stat()`、`list()` 以及针对信封或派生表的 SQL 查询不执行恢复。另一个进程中已打开的读句柄可直接读取归档，不触发恢复。归档缺失或损坏时拒绝打开，不退回到旧 JSONL 历史。
+
+备份时，请停止所有写入进程，同时备份 SQLite 数据库和归档目录。归档释放的 SQLite 页可以复用，但数据库文件不会缩小。如需向文件系统返还空间，请[显式整理数据库](#compact-the-store)。
+
+<a id="compact-the-store"></a>
+### 整理数据库
+
+归档会在 `sessions.sqlite` 内释放空闲页供后续写入直接复用，但数据库文件本身不会缩小。如需把未用页归还给文件系统，请停止所有使用该存储根目录的 DSH 进程，并在磁盘有余量重写数据库时运行 `sqlite3 <root>/.segments/sessions.sqlite 'VACUUM;'`；该操作不会改动冷归档。
+
+提供者内部同时实现了基于独立线程的 `compactStorage()` 方法（执行 `VACUUM` 与 `PRAGMA wal_checkpoint(TRUNCATE)`，期间本地写入排队等待），不暴露在 `ctx.sessionPersistence` 上；取舍原因见[冷存储决策记录](../../../.agents/notes/implemented/architecture/2026-11-26-sqlite-cold-sessions.zh.md)。
+
 ### 持久化与关闭
 
 直接 append、实时 Session 事件和持久化检查点使用同一个句柄。`flush()` 排空待写事件；写句柄关闭及提供者卸载会完成已接收的写入，再释放所有权。自动写入失败会保留待写批次并暂停自动写入；下一个显式检查点重试，并报告仍然存在的失败。
@@ -98,7 +120,7 @@ SELECT seq, data ->> 'model' FROM session_events WHERE session_id = ? AND type =
 
 插件提供原有持久化服务，并在隔离的服务上下文中使用 JSONL 提供者读取旧历史。导入取得 Session 的文件租约，在数据库事务中提交元数据和事件，然后记录 SQLite 路由。write open 在交接过程中保持租约。
 
-SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`sessions` 以 JSON 保存每个 header，其字段作为生成列；header 损坏时这些列为 NULL。`segments` 记录每个 Segment 的父 Segment 和 `base_seq`，即其第一个事件的 Session 序号，也就是它在父 Segment 中的切点。`segment_paths` 为每个 Segment 列出它自身和每个祖先，以及一个不含端点的序号上界，该成员中序号小于它的事件属于此 Segment 的历史；插入 Segment 时由触发器填充，因此读取和视图都不需要递归。`events` 每个事件一行，以 `(segment_id, seq)` 为键，其中 `seq` 是 Session 序号。Segment 的事件数等于其最后一行的序号加一。读取按该键选出每个 Segment 的范围，在 JavaScript 线程上解码各行，每处理一组事件让出一次；缺失的行、未知的 codec、无法解码的字节或无效的事件都会以存储损坏拒绝读取。触发器拒绝更新和删除事件，也拒绝改动 Segment 的祖先关系。视图 `segment_extents`、`session_heads` 和 `session_segments` 属于提供者内部：前两个供它的语句读取每个 Segment 的事件数，以及每个 Session 的 `head_segment_id` 所指的 Segment；每个 `session_*` 视图出于同样的原因连接 `session_segments`。
+SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`sessions` 以 JSON 保存每个 header，其字段作为生成列；header 损坏时这些列为 NULL。`segments` 记录每个 Segment 的父 Segment 和 `base_seq`，即其第一个事件的 Session 序号，也就是它在父 Segment 中的切点。`segment_paths` 为每个 Segment 列出它自身和每个祖先，以及一个不含端点的序号上界，该成员中序号小于它的事件属于此 Segment 的历史；插入 Segment 时由触发器填充，因此读取和视图都不需要递归。`events` 每个事件一行，以 `(segment_id, seq)` 为键，其中 `seq` 是 Session 序号。Segment 的事件数等于其最后一行的序号加一。读取按该键选出每个 Segment 的范围，在 JavaScript 线程上解码各行，每处理一组事件让出一次；缺失的行、未知的 codec、无法解码的字节或无效的事件都会以存储损坏拒绝读取。触发器拒绝删除事件和改动 Segment 的祖先关系，仅允许在内联存储和冷存储之间移动事件内容。视图 `segment_extents`、`session_heads` 和 `session_segments` 属于提供者内部：前两个供它的语句读取每个 Segment 的事件数，以及每个 Session 的 `head_segment_id` 所指的 Segment；每个 `session_*` 视图出于同样的原因连接 `session_segments`。
 
 派生表由事件填充，提供者自身从不读取。每个 `Derivation` 声明一张以 `(segment_id, seq)` 为键的表、它读取的事件类型，以及一个把事件映射为一行的纯函数；存储会添加 `session_<name>` 视图。`derivations` 记录每张表的版本，以及表落后时已处理到的 `event_no`。表缺失、表的已存版本与其 derivation 不同，或表被加入已有事件的存储（例如升级后的存储）时，会在打开后以有界事务删除并从事件重新填充。已存的表若在当前构建中没有对应的 derivation，会被保留并标记为从该处起落后，待其 derivation 恢复后补齐。derivation 抛出异常，或其表拒绝某一行时，会跳过该行，绝不会导致追加失败；每张表首次出现这类失败时记录一条指明该事件的警告。导致事务终止的失败则会使该次追加连同其事件一起失败。
 
@@ -112,10 +134,12 @@ SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`
 | [migration.ts](src/migration.ts) | 导入排序、所有权交接和取消。 |
 | [sqlite.ts](src/sqlite.ts) | 数据库、Segment 访问、句柄和持久化。 |
 | [schema.ts](src/schema.ts) | 当前的 schema 版本、应用 id，以及每个当前数据库都有的表。 |
-| [resources/sql/](resources/sql/schema/v2.sql) | 全部静态 SQL 文本。`schema/vN.sql` 是版本 N 的完整 schema；`upgrade/A-to-B/` 存放一个升级步骤的语句；`store/` 和 `derived/` 存放存储和派生表运行时的语句。`schema/` 或 `upgrade/` 下的文件，一旦有发布版本写出过它的版本就不再编辑。 |
+| [resources/sql/](resources/sql/schema/v3.sql) | 静态 SQL，包括按版本存放的 schema 脚本，以及事件、派生表和归档查询。已发布的 schema 脚本和升级语句不可修改。 |
 | [sql.ts](src/sql.ts) | `resources/sql/` 的唯一读取方：封闭的文件名列表及其文本。 |
 | [migrations/](src/migrations/index.ts) | 打开数据库：创建、依次执行的升级步骤和拒绝；每种已停用的布局一个模块，它只读取自己的 `upgrade/` 文件和它所写版本的 schema 文件。 |
 | [row.ts](src/row.ts) | 事件行编码：信封列，以及以 JSON 文本或单个 Zstandard 帧存储的 `data`。 |
+| [cold.ts](src/cold.ts) | 整段 Session 的 Zstandard 12 级 JSONL 归档写入与校验读取。 |
+| [vacuum.ts](src/vacuum.ts)、[worker.ts](src/worker.ts) | 在独立线程连接上执行显式 `VACUUM` 与 WAL 截断。 |
 | [derive.ts](src/derive.ts) | 派生表：`Derivation` 接口、随事件写入，以及从事件重建。 |
 | [derivations.ts](src/derivations.ts) | 内置的 derivation 及其读取的事件成员。 |
 
@@ -165,6 +189,11 @@ SQLite 保存 Session 元数据、前驱关联的 Segment 元数据和事件。`
 - 打开时如果遇到其他进程持有的写锁（例如正在进行的升级），所在进程会被阻塞五秒的 busy 超时，随后在所有平台上都以 `SESSION_STORAGE_LOCKED` 失败。SQLite 在进程退出时释放锁，所以超出超时的锁属于仍在运行的写者；替换它的文件会让该写者继续写入没有任何 Session 读取的字节。请关闭另一个进程后重新打开。
 - 恢复是把损坏的数据库移到一旁而不是删除，所以每次恢复都会在存储根留下一份完整副本。不再需要其 Session 后，请删除 `*.unreadable-*` 文件。
 - Session 无法删除，因此 fork 之间共享的存储永远不会回收。
+- 恢复归档 Session 会在一个事务中提交全部内容，不会出现部分恢复。
+- 全文 Session 搜索需要配置持久化索引 `path`；使用 `:memory:` 时启动会重建索引并重新打开每个已建索引的冷 Session。
+- 新建或重建的派生表在 Session 重新打开之前无法从归档内容生成行。
+- 进程中断留下的无引用归档不会自动清理。
+- 在线空间整理（`compactStorage()`）属于本提供者内部方法，不在 `SessionPersistence` 公共服务接口上，因为其他持久化后端不需要 `VACUUM` 式空间回收，且没有外部触发入口调用它。
 - `data` 较大的事件会让其最后一页留有未用空间：4 KiB 页时为存储的 12.8%，16 KiB 页降到 12.2%。
 - 因为逐个压缩事件，存储比帧布局大。在 24.3 万事件的语料上实测为 294.3 MB，帧布局为 186.7 MB；把同样的事件按 64 个一组重新压缩得到 183.8 MB。共享压缩上下文因此能补回全部差额，但一次单事件读取需要解码整个分组：对活跃 Session 的点读慢 19 倍。行布局保留了这些读取的速度，具体数字见[决策记录](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.zh.md)。
 

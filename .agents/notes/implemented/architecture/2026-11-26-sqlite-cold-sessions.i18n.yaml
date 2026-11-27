@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-26-sqlite-cold-sessions.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-26-sqlite-cold-sessions.md
+/agent-note-cold-sqlite-session-payloads:
+  en: 4dce2061ec2fdab0
+  zh: 8cad313db82e77f3
+/agent-note-cold-sqlite-session-payloads/problem:
+  en: 1064e44872447b3b
+  zh: 4fa9ba1708b49487
+/agent-note-cold-sqlite-session-payloads/decision:
+  en: 110d78f3afcc98aa
+  zh: ff649ce285af7ce3
+/agent-note-cold-sqlite-session-payloads/alternatives-considered:
+  en: 2395860ec5e02c8e
+  zh: 0b42ab41f434ceaa
+/agent-note-cold-sqlite-session-payloads/consequences:
+  en: 4c27fa1fea5ee2e6
+  zh: d989313aa8163ab8

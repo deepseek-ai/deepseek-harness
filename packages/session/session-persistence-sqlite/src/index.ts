@@ -13,6 +13,8 @@ export const name = 'session-persistence-sqlite'
 export type Config = JsonlConfigOptions & {
   /** What an open does when the database cannot be used; see {@link Recovery}. */
   recovery?: Recovery
+  /** Days without an open or append before archiving an idle Session, or `0` to disable archiving. Defaults to `30`. */
+  coldAfterDays?: number
 }
 
 /** Validate the storage root, legacy JSONL reader settings, and recovery mode. */
@@ -21,6 +23,7 @@ export const Config: z<Config> = z.object({
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(3),
   recovery: z.union([z.const('replace'), z.const('report')]).default('replace'),
+  coldAfterDays: z.natural().max(36500).default(30),
 })
 
 /**

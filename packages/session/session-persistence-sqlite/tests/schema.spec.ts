@@ -14,6 +14,7 @@ import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { ZodError } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { DerivedTables } from '../src/derive.ts'
+import { cold } from '../src/migrations/cold.ts'
 import { frames } from '../src/migrations/frames.ts'
 import { MIGRATIONS, prepareSchema } from '../src/migrations/index.ts'
 import type { Migration, MigrationOptions } from '../src/migrations/types.ts'
@@ -22,7 +23,7 @@ import { EVENT_CODEC_JSON, EVENT_CODEC_ZSTD } from '../src/row.ts'
 import { APPLICATION_ID, SCHEMA_VERSION } from '../src/schema.ts'
 import { SQL_FILES, SqlFiles } from '../src/sql.ts'
 import type { SqliteStoreOptions } from '../src/sqlite.ts'
-import { forkSession, headSegment, sqliteLogs, storedRows } from './fixtures/store.ts'
+import { DERIVATIONS, forkSession, headSegment, sqliteLogs, storedRows } from './fixtures/store.ts'
 
 const UNBOUNDED = Number.MAX_SAFE_INTEGER
 const header = (id: string, extra: Partial<SessionHeader> = {}): SessionHeader =>
@@ -134,7 +135,7 @@ describe('schema creation', () => {
     await logs.start()
     expect(inspect.prepare('PRAGMA user_version').get()).toEqual({ user_version: SCHEMA_VERSION })
     expect(inspect.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID })
-    expect(objects('table')).toEqual(['compactions', 'derivations', 'events', 'llm_calls', 'segment_paths', 'segments', 'sessions', 'tool_calls', 'tool_results'])
+    expect(objects('table')).toEqual(['cold_segments', 'compactions', 'derivations', 'events', 'llm_calls', 'segment_paths', 'segments', 'sessions', 'tool_calls', 'tool_results'])
     expect(objects('trigger')).toEqual(['events_no_delete', 'events_no_update', 'paths_no_delete', 'paths_no_update', 'segments_index_paths', 'segments_no_reparent'])
     expect(objects('view')).toEqual(expect.arrayContaining(['session_events', 'session_segments', 'session_summary']))
   })
@@ -336,7 +337,7 @@ describe('frame layout conversion', () => {
     writeFrameLayout(inspect)
     await logs.start()
     expect(inspect.prepare('PRAGMA user_version').get()).toEqual({ user_version: SCHEMA_VERSION })
-    expect(objects('table')).toEqual(['compactions', 'derivations', 'events', 'llm_calls', 'segment_paths', 'segments', 'sessions', 'tool_calls', 'tool_results'])
+    expect(objects('table')).toEqual(['cold_segments', 'compactions', 'derivations', 'events', 'llm_calls', 'segment_paths', 'segments', 'sessions', 'tool_calls', 'tool_results'])
     expect(objects('trigger')).toEqual(['events_no_delete', 'events_no_update', 'paths_no_delete', 'paths_no_update', 'segments_index_paths', 'segments_no_reparent'])
     expect(rows('SELECT session_id, inherited_count FROM sessions ORDER BY session_key')).toEqual([
       { session_id: 'tools', inherited_count: 0 }, { session_id: 'grand', inherited_count: 4 },
@@ -424,7 +425,7 @@ describe('frame layout conversion', () => {
       db.prepare("UPDATE frames SET codec = 0, payload = ? WHERE segment_uuid = 'seg-grand'").run(Buffer.from(JSON.stringify(retired)))
     })
     await logs.start()
-    expect(reportUpgrade.mock.calls).toEqual([[1, 2]])
+    expect(reportUpgrade.mock.calls).toEqual([[1, 2], [2, 3]])
     expect(rows("SELECT seq, time, data FROM events WHERE type = 'retired/kind'")).toEqual([{ seq: 4, time: 14, data: '{"kept":true}' }])
     const reader = await logs.open(SessionId('root'), 'read')
     try { expect((await reader.read()).events).toEqual(history.root) } finally { await reader.close() }
@@ -447,7 +448,8 @@ describe('frame layout conversion', () => {
     })
     await persistence.start()
     expect(info.mock.calls.map(([message]) => String(message)))
-      .toEqual(['Upgrading the Session database from schema version 1 to 2; Sessions open when it finishes'])
+      .toEqual(['Upgrading the Session database from schema version 1 to 2; Sessions open when it finishes',
+        'Upgrading the Session database from schema version 2 to 3; Sessions open when it finishes'])
     expect((await persistence.stat(SessionId('root')))?.eventCount).toBe(framed.root.length)
   })
 
@@ -663,7 +665,7 @@ describe('frame layout conversion', () => {
     const before = contents()
     await expect(logs.start()).rejects.toBe(refused)
     await expect(logs.stat(SessionId('root'))).rejects.toBe(refused)
-    expect(reportUpgrade.mock.calls).toEqual([[1, 2]])
+    expect(reportUpgrade.mock.calls).toEqual([[1, 2], [2, 3]])
     expect(contents()).toEqual(before)
   })
 
@@ -720,7 +722,7 @@ describe('frame layout conversion', () => {
     const restarted = sqliteLogs(path, root, { reportUpgrade })
     onTestFinished(() => restarted.close())
     expect((await restarted.stat(SessionId('root')))?.eventCount).toBe(framed.root.length)
-    expect(reportUpgrade.mock.calls).toEqual([[1, 2], [1, 2]])
+    expect(reportUpgrade.mock.calls).toEqual([[1, 2], [1, 2], [2, 3]])
   })
 })
 
@@ -736,7 +738,7 @@ describe('upgrade steps', () => {
   /** A step that records the version it found and, as the last one, creates the current tables. */
   const step = (from: number, seen: number[]): Migration => ({ from, to: from + 1, apply(db) {
     seen.push(Number(stored(db)))
-    if (from + 1 === SCHEMA_VERSION) db.exec(sql.text('schema/v2'))
+    if (from + 1 === SCHEMA_VERSION) db.exec(sql.text('schema/v3'))
   } })
   /** Every schema object with its columns, without SQLite's own objects. */
   const layout = (db: DatabaseSync) => db.prepare(`SELECT m.type, m.name, (SELECT group_concat(c.name, ' ') FROM pragma_table_xinfo(m.name) c) AS columns
@@ -747,16 +749,18 @@ describe('upgrade steps', () => {
       .toEqual(Array.from({ length: SCHEMA_VERSION - 1 }, (_, index) => [index + 1, index + 2]))
   })
 
-  it('creates exactly the version 2 objects and columns, derived tables aside', () => {
+  it('creates exactly the version 3 objects and columns, derived tables aside', () => {
     const fresh = new DatabaseSync(':memory:')
     onTestFinished(() => { fresh.close() })
     prepareSchema(fresh, options)
     expect(layout(fresh)).toEqual([
       ['index', 'events_by_type', null],
+      ['index', 'segments_by_parent', null],
+      ['table', 'cold_segments', 'segment_id archive sha256 bytes'],
       ['table', 'events', 'event_no segment_id seq type time surface_op source_seqs ignorable codec data'],
       ['table', 'segment_paths', 'segment_id member_id end_seq'],
       ['table', 'segments', 'segment_id segment_uuid parent_id base_seq'],
-      ['table', 'sessions', 'session_key session_id header head_segment_id inherited_count created_at cwd parent_session origin agent_preset'],
+      ['table', 'sessions', 'session_key session_id header head_segment_id inherited_count created_at cwd parent_session origin agent_preset last_opened_at'],
       ['trigger', 'events_no_delete', null],
       ['trigger', 'events_no_update', null],
       ['trigger', 'paths_no_delete', null],
@@ -777,11 +781,14 @@ describe('upgrade steps', () => {
     writeFrameLayout(upgraded)
     prepareSchema(upgraded, options)
     prepareSchema(fresh, options)
-    const schema = (db: DatabaseSync) => db.prepare('SELECT type, name, sql FROM sqlite_schema ORDER BY type, name').all().map(row => ({ ...row }))
+    const schema = (db: DatabaseSync) => db.prepare('SELECT type, name, sql FROM sqlite_schema ORDER BY type, name').all().map(row => ({
+      ...row,
+      sql: typeof row.sql === 'string' ? row.sql.replace('\n, ', ',\n  ').replace('DEFAULT 0) STRICT', 'DEFAULT 0\n) STRICT') : row.sql,
+    }))
     expect(schema(upgraded)).toEqual(schema(fresh))
     expect(schema(fresh).length).toBeGreaterThan(0)
     for (const db of [upgraded, fresh]) {
-      expect(stored(db)).toBe(2)
+      expect(stored(db)).toBe(SCHEMA_VERSION)
       expect(db.prepare('PRAGMA application_id').get()).toEqual({ application_id: APPLICATION_ID })
     }
   })
@@ -799,26 +806,59 @@ describe('upgrade steps', () => {
     expect(new Set(names)).toEqual(new Set(['schema/v2', ...SQL_FILES.filter(name => name.startsWith('upgrade/1-to-2/'))]))
   })
 
+  it('upgrades a populated version 2 database with derived views from its own statement files and refuses missing tables', () => {
+    const db = new DatabaseSync(':memory:'), fresh = new DatabaseSync(':memory:'), files = new SqlFiles()
+    onTestFinished(() => { db.close(); fresh.close() })
+    db.exec(`${sql.text('schema/v2')}; PRAGMA application_id = ${APPLICATION_ID}; PRAGMA user_version = 2`)
+    const derived = new DerivedTables(DERIVATIONS, () => {}, sql)
+    derived.install(db, false)
+    db.prepare('INSERT INTO segments (segment_uuid, parent_id, base_seq) VALUES (?, ?, ?)').run('seg-v2', null, 0)
+    db.prepare('INSERT INTO sessions (session_id, header, head_segment_id, inherited_count) VALUES (?, ?, ?, ?)')
+      .run('v2-session', JSON.stringify(header('v2-session')), 1, 0)
+    db.prepare('INSERT INTO tool_calls (segment_id, seq, time, tool, turn, step) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(1, 0, 10, 'bash', 1, 1)
+    const read = vi.spyOn(files, 'text')
+    cold.apply(db, { ...options, sql: files })
+    const names = read.mock.calls.map(([name]) => name)
+    expect(new Set(names)).toEqual(new Set(SQL_FILES.filter(name => name.startsWith('upgrade/2-to-3/'))))
+    prepareSchema(fresh, options)
+    derived.install(fresh, false)
+    const schema = (target: DatabaseSync) => target.prepare('SELECT type, name, sql FROM sqlite_schema WHERE name != \'sqlite_stat1\' ORDER BY type, name').all().map(row => ({
+      ...row,
+      sql: typeof row.sql === 'string' ? row.sql.replace('\n, ', ',\n  ').replace('DEFAULT 0) STRICT', 'DEFAULT 0\n) STRICT') : row.sql,
+    }))
+    expect(schema(db)).toEqual(schema(fresh))
+    expect(db.prepare('SELECT session_id, last_opened_at FROM sessions').all().map(row => ({ ...row })))
+      .toEqual([{ session_id: 'v2-session', last_opened_at: 0 }])
+    expect(db.prepare('SELECT session_id, tool FROM session_tools').all().map(row => ({ ...row })))
+      .toEqual([{ session_id: 'v2-session', tool: 'bash' }])
+    expect(db.prepare('SELECT * FROM session_llm_calls').all()).toEqual([])
+
+    const incomplete = database(2)
+    incomplete.exec('CREATE TABLE notes (body TEXT)')
+    expect(() => { cold.apply(incomplete, options) }).toThrow('schema version 2 is stored without the event-row tables')
+  })
+
   it('applies each step from the stored version in order and stamps the version it reaches', () => {
     const db = database(0), seen: number[] = []
-    prepareSchema(db, options, [step(1, seen), step(0, seen)])
-    expect(seen).toEqual([0, 1])
+    prepareSchema(db, options, [step(1, seen), step(0, seen), step(2, seen)])
+    expect(seen).toEqual([0, 1, 2])
     expect(stored(db)).toBe(SCHEMA_VERSION)
   })
 
   it('tells the owner each step before it runs', () => {
     const db = database(0), order: string[] = []
     const noted = (from: number): Migration => ({ ...step(from, []), apply(target) { order.push(`apply ${from}`); step(from, []).apply(target, options) } })
-    prepareSchema(db, { ...options, onStep: (running) => { order.push(`notice ${running.from} to ${running.to}`) } }, [noted(0), noted(1)])
-    expect(order).toEqual(['notice 0 to 1', 'apply 0', 'notice 1 to 2', 'apply 1'])
+    prepareSchema(db, { ...options, onStep: (running) => { order.push(`notice ${running.from} to ${running.to}`) } }, [noted(0), noted(1), noted(2)])
+    expect(order).toEqual(['notice 0 to 1', 'apply 0', 'notice 1 to 2', 'apply 1', 'notice 2 to 3', 'apply 2'])
   })
 
   it('skips the steps below the stored version and runs none at the current version', () => {
     const db = database(1), seen: number[] = []
-    prepareSchema(db, options, [step(0, seen), step(1, seen)])
-    expect(seen).toEqual([1])
-    prepareSchema(db, options, [step(0, seen), step(1, seen)])
-    expect(seen).toEqual([1])
+    prepareSchema(db, options, [step(0, seen), step(1, seen), step(2, seen)])
+    expect(seen).toEqual([1, 2])
+    prepareSchema(db, options, [step(0, seen), step(1, seen), step(2, seen)])
+    expect(seen).toEqual([1, 2])
   })
 
   it('refuses a version that no step reads', () => {
@@ -830,9 +870,9 @@ describe('upgrade steps', () => {
   })
 
   it('refuses steps that reach the current version without its tables', () => {
-    const db = database(1)
-    expect(() => { prepareSchema(db, options, [{ from: 1, to: 2, apply() {} }]) }).toThrow(expect.objectContaining({ code: 'SESSION_STORAGE_FORMAT',
-      message: refusal(options.path, 'has schema version 2 without its tables') }))
+    const db = database(2)
+    expect(() => { prepareSchema(db, options, [{ from: 2, to: 3, apply() {} }]) }).toThrow(expect.objectContaining({ code: 'SESSION_STORAGE_FORMAT',
+      message: refusal(options.path, 'has schema version 3 without its tables') }))
   })
 
   it('wraps the error of a step that throws and leaves the stored version to the caller\'s rollback', () => {

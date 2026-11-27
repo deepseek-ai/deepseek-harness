@@ -25,6 +25,7 @@
   "files": [
     "locale/*.json",
     "lib/index.js",
+    "lib/worker.cjs",
     "resources/sql/**/*.sql",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",

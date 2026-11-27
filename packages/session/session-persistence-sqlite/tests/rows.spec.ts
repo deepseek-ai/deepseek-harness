@@ -144,9 +144,9 @@ function decoded(value: unknown): object {
 
 describe('plugin configuration', () => {
   it('applies the defaults and validates the storage root, compression, list concurrency and recovery', () => {
-    expect(plugin.Config({ root: 'r' })).toEqual({ root: 'r', compression: 'zstd', listConcurrency: 3, recovery: 'replace' })
+    expect(plugin.Config({ root: 'r' })).toEqual({ root: 'r', compression: 'zstd', listConcurrency: 3, recovery: 'replace', coldAfterDays: 30 })
     expect(plugin.Config({ root: 'r', compression: 'none', listConcurrency: 1, recovery: 'report' }))
-      .toEqual({ root: 'r', compression: 'none', listConcurrency: 1, recovery: 'report' })
+      .toEqual({ root: 'r', compression: 'none', listConcurrency: 1, recovery: 'report', coldAfterDays: 30 })
     expect(() => plugin.Config({ compression: 'none' } as never)).toThrow()
     expect(() => plugin.Config({ root: 'r', compression: 'gzip' } as never)).toThrow()
     expect(() => plugin.Config({ root: 'r', listConcurrency: 0 })).toThrow()

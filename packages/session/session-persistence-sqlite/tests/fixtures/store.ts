@@ -37,7 +37,7 @@ export function sqliteLogs(path: string, root: string, overrides: Partial<Sqlite
   return new SqliteStore({ path, legacyRoot: root, ...STORE_DEFAULTS,
     acquireCreationLease: header => SessionWriteLease.acquire(sessionDir(root, header.cwd, header.id), header.id),
     publish: async () => {}, report: () => {}, reportUpgrade: () => {}, reportSetAside: () => {},
-    reportDerivation: () => {}, reportRecovery: () => {},
+    reportDerivation: () => {}, reportRecovery: () => {}, reportArchive: () => {},
     ...overrides })
 }
 

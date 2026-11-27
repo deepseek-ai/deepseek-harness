@@ -26,7 +26,8 @@ describe('SQL files', () => {
   })
 
   it('names the kebab-case statement files by folder', () => {
-    expect(SQL_FILES.filter(name => !/^(schema\/v\d+|(upgrade\/\d+-to-\d+|store|derived)\/[a-z0-9]+(-[a-z0-9]+)*)$/.test(name))).toEqual([])
+    const path = /^(schema\/v\d+|(upgrade\/\d+-to-\d+|store|derived|cold)\/[a-z0-9]+(-[a-z0-9]+)*)$/
+    expect(SQL_FILES.filter(name => !path.test(name))).toEqual([])
   })
 
   it('reads a file once for each instance', () => {

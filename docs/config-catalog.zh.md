@@ -4013,6 +4013,8 @@ export type JsonlCompression = 'zstd' | 'none'
 export type Config = JsonlConfigOptions & {
   /** What an open does when the database cannot be used; see {@link Recovery}. */
   recovery?: Recovery
+  /** Days without an open or append before archiving an idle Session, or `0` to disable archiving. Defaults to `30`. */
+  coldAfterDays?: number
 }
 
 /** How an open recovers a database it cannot use; see {@link SqliteStoreOptions.recovery}. */

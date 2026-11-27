@@ -15,6 +15,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
 import { SqliteStore, isAbsent } from './sqlite.ts'
+import type { SessionStorageCompaction } from './vacuum.ts'
 import { builtinDerivations } from './derivations.ts'
 import { SqlFiles } from './sql.ts'
 import type { DerivationFailure } from './derive.ts'
@@ -73,6 +74,8 @@ export class SqliteSessionPersistence extends SessionPersistence {
           + `reads that reach it are refused: ${String(error)}`)
       },
       reportRecovery: (detail) => { owner.logger.error(detail) },
+      coldAfterDays: config.coldAfterDays ?? 30,
+      reportArchive: (error) => { owner.logger.warn(`SQLite Session archive maintenance failed: ${String(error)}`) },
       ...config.recovery === undefined ? {} : { recovery: config.recovery },
       reportUpgrade: (from, to) => {
         owner.logger.info(`Upgrading the Session database from schema version ${from} to ${to}; Sessions open when it finishes`)
@@ -242,4 +245,14 @@ export class SqliteSessionPersistence extends SessionPersistence {
   }
 
   async flush(): Promise<void> { await this.sqlite.flush() }
+
+  /**
+   * Reclaim unused SQLite pages and truncate the WAL on an isolated worker connection.
+   *
+   * Explicit temporary design decision: kept internal to the SQLite provider rather than on `SessionPersistence`
+   * because no other persistence backend requires `VACUUM`-style compaction.
+   * @returns byte measurements before and after the rewrite.
+   * @internal
+   */
+  compactStorage(): Promise<SessionStorageCompaction> { return this.sqlite.compactStorage() }
 }

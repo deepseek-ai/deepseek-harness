@@ -45,7 +45,7 @@ describe('SQLite persistence through the production headless profile', () => {
     expect(stderr).not.toContain('UNHANDLED')
     expect(files).toEqual([])
     expect(answers).toEqual({
-      version: [{ user_version: 2 }],
+      version: [{ user_version: 3 }],
       sessions: [{ sessions: 1, stored: 1 }],
       calls: [
         { provider: 'cli-mock', model: 'cli-mock', input_tokens: 11, output_tokens: 3, cache_read_tokens: 2, reasoning_tokens: null },
@@ -56,6 +56,18 @@ describe('SQLite persistence through the production headless profile', () => {
       turns: [{ outcome: 'completed' }],
       behind: [{ behind: 0 }],
       unreadable: [{ rows: 0 }],
+    })
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('archives and reopens a recorded turn without changing its history or tool queries', async () => {
+    await runLoaderSmoke({
+      label: 'sqlite cold archive headless smoke',
+      tempDirPrefix: 'sqlite-cold-archive-e2e-',
+      binScript: driver,
+      libBinScript: driver,
+      configPath,
+      tsconfigPath: repoTsconfig,
+      env: { DSH_TEST_COLD: '1' },
     })
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 })

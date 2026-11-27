@@ -29,12 +29,17 @@ Mount this provider for the storage root whose Sessions should use SQLite.
 
 ### Minimal configuration
 
-Replace the JSONL provider's package name in your composition, preserving its root and legacy encoding settings:
+Disable the default JSONL provider in your profile patch or `--patch` overlay and insert the SQLite provider with the same storage root:
 
 ```yaml
-- name: '@deepseek-ai/dsh-session-persistence-sqlite'
-  config:
-    root: './.sessions'
+- id: session-persistence-jsonl
+  disabled: true
+
+- insert:
+    - id: session-persistence-sqlite
+      name: '@deepseek-ai/dsh-session-persistence-sqlite'
+      config:
+        root: !!js dshHomePath('sessions')
 ```
 
 Fork creation drains a local parent writer, then references the persisted parent prefix and writes the events after `endSeq` into a new Segment in one transaction. Read opens and fork creation wait for a local parent's in-progress close to drain; a drain or flush failure stops creation. Later parent writes remain in the parent history. A prefix beyond the parent's persisted event count rejects creation; a failed transaction rolls back the child and releases its write lease. If routing publication fails after commit, the error reports that history remains stored and the Session can be reopened.
@@ -47,6 +52,7 @@ The database lives at `<root>/.segments/sessions.sqlite`. Application callers co
 | `compression` | `zstd` | Encoding of existing JSONL histories and of new event rows: `zstd` compresses a large event `data` when that is smaller, `none` stores JSON text. Stored rows decode by their own codec. |
 | `listConcurrency` | `3` | Concurrent filesystem reads for legacy metadata and routing records. |
 | `recovery` | `replace` | What an open does when the database is damaged. `replace` moves the damaged file aside and starts an empty database, so Sessions stay available and the bytes remain readable; `report` refuses and leaves the storage root for repair. A lock is never damage and is always reported. |
+| `coldAfterDays` | `30` | Archive Sessions idle for this many whole days, or `0` to disable archiving. Disabling stops new archives and does not prevent reopening existing archives. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-persistence-sqlite) documents all accepted fields.
 
@@ -82,6 +88,22 @@ A first read or write open decodes the selected JSONL generation through its ver
 
 An active JSONL writer retains ownership until it closes. A SQLite read open waits for that ownership; a competing write open rejects. Cancellation or provider disposal stops the wait. After import, readers can open while the SQLite writer remains active. `stat()` and `list()` observe metadata without importing history.
 
+<a id="archiving-idle-sessions"></a>
+### Archiving idle Sessions
+
+When `coldAfterDays` is positive (30 days by default), a background pass starts after the database opens and repeats hourly. It uses the newest of the Session creation time, last event time, and tracked open time. The provider records creation and opens while archiving is enabled, updating an open watermark at most once per hour per Session. Sessions with shared SQLite fork history, sessions with set-aside unreadable events, sessions without events, and logs above 256 MiB of JSONL stay inline.
+
+The provider writes one Zstandard level-12 JSONL frame per archived Session under `<root>/.segments/sessions.sqlite.cold/`. These private files do not replace imported JSONL generations, and `recovery: replace` moves the archive directory aside with a damaged database. The database keeps Session metadata, event envelopes (`codec` 254 with an empty `data` blob), and existing derived rows. Either read or write open restores the payloads into SQLite before returning a handle, and forking a positive prefix from an archived Session restores and pins its parent Segment inline; `stat()`, `list()`, and SQL queries over envelopes or derived tables do not restore them. A read handle already open in another process can read the archive without restoring it. A missing or damaged archive refuses the open rather than returning older JSONL history.
+
+Back up the SQLite database and its archive directory together with all writers stopped. An archive releases pages for reuse but does not shrink the SQLite file. To return that space to the filesystem, use [explicit compaction](#compact-the-store).
+
+<a id="compact-the-store"></a>
+### Compact the store
+
+Archiving frees pages inside `sessions.sqlite` for later writes to reuse without shrinking the file on disk. To return unused pages to the filesystem, stop every DSH process using the storage root and run `sqlite3 <root>/.segments/sessions.sqlite 'VACUUM;'` when the volume has room for a database rewrite; cold archives are untouched.
+
+The provider also carries an internal worker-backed `compactStorage()` method (`VACUUM` plus `PRAGMA wal_checkpoint(TRUNCATE)` while local writes wait) rather than exposing it on `ctx.sessionPersistence`; see the [cold-storage decision record](../../../.agents/notes/implemented/architecture/2026-11-26-sqlite-cold-sessions.md) for the rationale.
+
 ### Durability and shutdown
 
 Direct append, live Session events and durability checkpoints use the same handle. `flush()` drains pending events; writer close and provider disposal finish admitted writes before releasing ownership. An automatic write failure retains its pending batch and pauses automatic writes; the next explicit checkpoint retries and reports any remaining failure.
@@ -98,7 +120,7 @@ Concurrent writers share a transaction when their encoded batches are queued tog
 
 The plugin supplies the existing persistence service and uses a JSONL provider in an isolated service context to read legacy histories. Import acquires the Session's artifact lease, commits its metadata and events in a database transaction, then records SQLite routing. A write open retains the lease through the handoff.
 
-SQLite keeps Session metadata, predecessor-linked Segment metadata and events. `sessions` holds each header as JSON with its fields as generated columns, which are NULL for a header that is damaged. `segments` records each Segment's parent and `base_seq`, the Session sequence of its first event and therefore the cut in its parent. `segment_paths` lists, for every Segment, itself and each ancestor with the exclusive sequence up to which that member's events belong to the Segment's history; a trigger fills it when a Segment is inserted, so reads and views need no recursion. `events` holds one row per event keyed by `(segment_id, seq)`, where `seq` is the Session sequence. A Segment's event count is one past its last row's sequence. Reads select each Segment range by that key and decode rows on the JavaScript thread, yielding between groups of events; a missing row, an unknown codec, undecodable bytes or an invalid event rejects the read as storage corruption. Triggers refuse updates and deletes of events and changes to Segment ancestry. The views `segment_extents` and `session_heads` are internal to the provider: its statements read each Segment's event count and the Segment each Session's `head_segment_id` names through them.
+SQLite keeps Session metadata, predecessor-linked Segment metadata and events. `sessions` holds each header as JSON with its fields as generated columns, which are NULL for a header that is damaged. `segments` records each Segment's parent and `base_seq`, the Session sequence of its first event and therefore the cut in its parent. `segment_paths` lists, for every Segment, itself and each ancestor with the exclusive sequence up to which that member's events belong to the Segment's history; a trigger fills it when a Segment is inserted, so reads and views need no recursion. `events` holds one row per event keyed by `(segment_id, seq)`, where `seq` is the Session sequence. A Segment's event count is one past its last row's sequence. Reads select each Segment range by that key and decode rows on the JavaScript thread, yielding between groups of events; a missing row, an unknown codec, undecodable bytes or an invalid event rejects the read as storage corruption. Triggers refuse event deletes and ancestry changes and allow payload changes only when moving between inline and cold storage. The views `segment_extents` and `session_heads` are internal to the provider: its statements read each Segment's event count and the Segment each Session's `head_segment_id` names through them.
 
 Derived tables are filled from events and never read by the provider. Each `Derivation` declares one table keyed by `(segment_id, seq)`, the event types it reads, and a pure function from an event to a row; the store adds the `session_<name>` view. `derivations` records each table's version and, while a table is behind, the `event_no` it has reached. A table that is missing, whose stored version differs from its derivation, or that is added to a store that already holds events such as an upgraded one, is dropped and refilled from events in bounded transactions after open. A stored table whose derivation this build does not hold is kept and marked behind from that point, so it catches up when its derivation returns. A derivation that throws, or a row its table refuses, skips that row and never fails the append; the first such failure of each table logs a warning that names the event. A failure that ends the transaction fails the append with its events.
 
@@ -112,10 +134,12 @@ WAL is enabled before schema publication so a concurrent reader cannot prevent t
 | [migration.ts](src/migration.ts) | Import sequencing, ownership handoff and cancellation. |
 | [sqlite.ts](src/sqlite.ts) | Database, Segment access, handles and durability. |
 | [schema.ts](src/schema.ts) | The current schema version, the application id, and the tables every current database holds. |
-| [resources/sql/](resources/sql/schema/v2.sql) | All static SQL text. `schema/vN.sql` is the whole schema of version N; `upgrade/A-to-B/` holds the statements of one upgrade step; `store/` and `derived/` hold the statements of the store and of the derived-table runtime. A `schema/` or `upgrade/` file is not edited once a release has written its version. |
+| [resources/sql/](resources/sql/schema/v3.sql) | Static SQL, including versioned schema scripts and queries for event, derived and cold storage. Released schema scripts and upgrade statements are immutable. |
 | [sql.ts](src/sql.ts) | The only reader of `resources/sql/`: the closed list of file names and their text. |
 | [migrations/](src/migrations/index.ts) | Opening a database: creation, the ordered upgrade steps and refusals; one module per retired layout, which reads only its own `upgrade/` files and the schema file of the version it writes. |
 | [row.ts](src/row.ts) | Event row encoding: envelope columns and `data` as JSON text or one Zstandard frame. |
+| [cold.ts](src/cold.ts) | Whole-Session Zstandard level-12 JSONL archive publication and verification. |
+| [vacuum.ts](src/vacuum.ts), [worker.ts](src/worker.ts) | Explicit `VACUUM` and WAL truncation on an isolated worker connection. |
 | [derive.ts](src/derive.ts) | Derived tables: the `Derivation` interface, writes beside events, and rebuilding from events. |
 | [derivations.ts](src/derivations.ts) | The built-in derivations and the event members they read. |
 
@@ -165,6 +189,11 @@ These constraints apply when selecting this provider.
 - An open that meets another process's write lock, such as a running upgrade, blocks its process for the five-second busy timeout and then fails with `SESSION_STORAGE_LOCKED`, on every platform. SQLite releases its locks when a process exits, so a lock that outlives the timeout belongs to a live writer; replacing its file would leave that writer appending to bytes no Session reads. Close the other process and reopen.
 - Recovery moves a damaged database aside instead of deleting it, so a storage root keeps one full copy per recovery. Remove an `*.unreadable-*` file once its Sessions are no longer needed.
 - Sessions cannot be deleted, so storage shared between forks is never reclaimed.
+- Restoring an archived Session commits all payloads in one transaction, so a partial restore cannot occur.
+- Full-text Session search needs a durable index `path`; with `:memory:` the index rebuilds at startup and reopens every indexed cold Session.
+- A new or rebuilt derived table cannot derive rows from archived payloads until those Sessions reopen.
+- Unreferenced archives left by an interrupted process are not removed automatically.
+- Online store compaction (`compactStorage()`) is internal to this provider rather than on `SessionPersistence`, because no other persistence backend requires `VACUUM`-style space reclamation and no external trigger invokes it.
 - Each event with a large `data` leaves part of its last page unused: 12.8% of the store at 4 KiB pages, which a 16 KiB page reduces to 12.2%.
 - The store is larger than the frame layout because each event is compressed on its own. Measured on a 242,523-event corpus, 294.3 MB stored against 186.7 MB for frames; recompressing the same events in groups of 64 gives 183.8 MB. Sharing a compression context therefore recovers the whole difference, but it makes a single-event read decode its whole group: 19× slower for the point reads a live Session makes. The row layout keeps those reads fast, and the [decision record](../../../.agents/notes/implemented/architecture/2026-11-25-sqlite-event-rows-and-derived-tables.md) holds the numbers.
 

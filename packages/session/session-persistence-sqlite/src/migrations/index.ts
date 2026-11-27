@@ -8,11 +8,12 @@ import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { APPLICATION_ID, SCHEMA_VERSION, TABLES } from '../schema.ts'
+import { cold } from './cold.ts'
 import { frames } from './frames.ts'
 import type { Migration, MigrationOptions } from './types.ts'
 
 /** Every step from the first schema version to the current one, in order. */
-export const MIGRATIONS: readonly Migration[] = [frames]
+export const MIGRATIONS: readonly Migration[] = [frames, cold]
 
 /**
  * Bring an opened database to the current schema inside the caller's write

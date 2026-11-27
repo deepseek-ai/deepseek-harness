@@ -19,7 +19,8 @@ async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sqlite-import-sequence-'))
   const sqlite = new SqliteStore({ path: join(root, 'sessions.sqlite'), legacyRoot: root, ...STORE_DEFAULTS,
     acquireCreationLease: async () => ({ release: async () => {} }), publish: async () => {}, report: () => {},
-    reportDerivation: () => {}, reportUpgrade: () => {}, reportSetAside: () => {}, reportRecovery: () => {} })
+    reportDerivation: () => {}, reportUpgrade: () => {}, reportSetAside: () => {}, reportRecovery: () => {},
+    reportArchive: () => {} })
   const jsonl: JsonlBackend = {
     hasStoredJsonl: async () => true, list: async () => [],
     stat: async () => ({ header, revision: SessionPersistenceRevision('legacy'), eventCount: 0 }),

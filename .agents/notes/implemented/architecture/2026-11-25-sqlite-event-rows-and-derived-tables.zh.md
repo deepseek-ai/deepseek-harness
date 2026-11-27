@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`@deepseek-ai/dsh-session-persistence-sqlite` 每个事件存一行。信封成员各占一列：`seq`、`type`、`time`、`surface_op`、`source_seqs`、`ignorable`。`data` 是 JSON 文本；当文本不少于 1,024 个字符且压缩后更小时，是单个 Zstandard 帧；`codec` 标明是哪一种。行一经写入即不可变。
+`@deepseek-ai/dsh-session-persistence-sqlite` 每个事件存一行。信封成员各占一列：`seq`、`type`、`time`、`surface_op`、`source_seqs`、`ignorable`。内联的 `data` 是 JSON 文本；当文本不少于 1,024 个字符且压缩后更小时，是单个 Zstandard 帧；`codec` 标明是哪一种。事件及其信封不可变；[冷存储](2026-11-26-sqlite-cold-sessions.zh.md)可以移动事件内容，不改变事件行的标识。
 
 `seq` 是 Session 序号。Segment 的 `base_seq` 是其第一个序号，因而也是它在父 Segment 中的切点。`segment_paths` 为每个 Segment 保存它自身和每个祖先，以及一个不含端点的序号上界，该成员中序号小于它的事件属于此 Segment 的历史。插入 Segment 时由触发器填充。`session_*` 视图通过它把 Session 与事件连接起来，所以针对 Session 编写的 SQL 从不需要处理 Segment。
 
