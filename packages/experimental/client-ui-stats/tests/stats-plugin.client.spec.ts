@@ -385,6 +385,26 @@ const LOCATION_DATA = {
   source: () => ({ getSnapshot: () => undefined, subscribe: () => () => undefined }),
 } as never
 
+/**
+ * Publish through the map the Assembler keeps for one Context, which holds that
+ * Context's last published node.
+ * @param definition - the Definition under test.
+ * @param start - the Context's start match.
+ * @returns a publisher that records each node it produces.
+ */
+function publisher(
+  definition: ConversationNodeDefinition<StatsStepState>,
+  start: ConversationStartMatch,
+): (state: StatsStepState, matches: readonly ConversationMatch[]) => StatsViewNode | null {
+  const current = new Map<string, StatsViewNode | null>()
+  return (state, matches) => {
+    // The base Definition contract widens the node; this Definition always builds its target's node.
+    const node = definition.buildViewNode!({ ...contextOf(definition, state, matches, start), current }) as StatsViewNode | null
+    if (node !== null) current.set(TARGET, node)
+    return node
+  }
+}
+
 /** Fabricated Turn Location carrying only the number a Definition reads. */
 function turnAt(turn: number): ConversationLocation {
   return {
@@ -644,6 +664,18 @@ describe('snapshot builder', () => {
     })
     expect(upserted.turns[0]?.prompt).toBe('问')
     expect(upserted.stepCount).toBe(1)
+  })
+
+  it('keeps the current snapshot while every upserted node is the published one', () => {
+    const builder = statsViewDefinition.create()
+    const prompt = node('stats-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '问', images: [IMAGE], source: 'user', sender: null })
+    const step = node('stats-step:1:1', { kind: 'step', metrics: measuredStep(1, 1, 1_000, 1_800) })
+    const timeline = { turnOrder: [1], turns: new Map() }
+    const first = builder.apply({ upserts: [prompt, step], timeline })
+    expect(first.turns[0]?.prompt).toBe('问')
+    expect(builder.apply({ upserts: [prompt, step], timeline })).toBe(first)
+    const renamed = node('stats-prompt:1:0', { kind: 'prompt', turn: 1, prompt: '答', images: [IMAGE], source: 'user', sender: null })
+    expect(builder.apply({ upserts: [renamed, step], timeline }).turns[0]?.prompt).toBe('答')
   })
 
   it('registers its target through the conversation view registry', () => {
@@ -1102,13 +1134,15 @@ describe('conversation Definitions', () => {
     const start = locatedStart(startEvent, stepAt(5, 1))
     const update = locatedUpdate(dispatch, stepAt(5, 1))
     const state = codeMode.start(contextOf(codeMode, undefined), start, reader)
-    expect(state.starts).toEqual({ 'sub-1': 8_200 })
+    expect(state.starts).toEqual(new Map([['sub-1', 8_200]]))
     const context: ConversationNodeContext<StatsStepState> & { readonly state: StatsStepState } = {
       ...contextOf(codeMode, state, [start, update], start),
       state,
     }
     const folded = codeMode.update(context, update)
-    expect(folded.calls?.['sub-1']?.name).toBe('grep')
+    expect(folded.calls.get('sub-1')?.name).toBe('grep')
+    // The paired start is consumed by the settle that reads it.
+    expect(folded.starts.size).toBe(0)
     const node = codeMode.buildViewNode!({
       ...contextOf(codeMode, folded, [start, update], start),
     }) as StatsViewNode
@@ -1121,6 +1155,78 @@ describe('conversation Definitions', () => {
     expect(codeMode.buildViewNode!({
       ...contextOf(codeMode, folded, [start, update], locatedStart(startEvent, turnAt(5))),
     })).toBeNull()
+  })
+
+  it('republishes one node while its visible prefix is unchanged', async () => {
+    const definitions = await registeredDefinitions()
+    const codeMode = definitions[3] as ConversationNodeDefinition<StatsStepState>
+    const startEvent = event('tool/ptc-dispatch-start', {
+      rootCallId: 'root-5', parentCallId: 'root-5', subCallId: 'sub-5', name: 'grep', arguments: '{}',
+    }, 9_200)
+    const dispatch = event('tool/ptc-dispatch', {
+      rootCallId: 'root-5', parentCallId: 'root-5', subCallId: 'sub-5', name: 'grep',
+      arguments: '{}', isError: false, content: [],
+    }, 9_300)
+    const later = event('tool/ptc-dispatch', {
+      rootCallId: 'root-5', parentCallId: 'root-5', subCallId: 'sub-6', name: 'read',
+      arguments: '{}', isError: false, content: [],
+    }, 9_400)
+    const start = locatedStart(startEvent, stepAt(7, 1))
+    const update = locatedUpdate(dispatch, stepAt(7, 1))
+    const laterUpdate = locatedUpdate(later, stepAt(7, 1))
+    const state = codeMode.start(contextOf(codeMode, undefined), start, reader)
+    const folded = codeMode.update({ ...contextOf(codeMode, state, [start, update], start), state }, update)
+    const publish = publisher(codeMode, start)
+    const first = publish(folded, [start, update])
+    expect(publish(folded, [start, update])).toBe(first)
+    const next = codeMode.update({ ...contextOf(codeMode, folded, [start, update], start), state: folded }, laterUpdate)
+    const second = publish(next, [start, laterUpdate])
+    expect(second).not.toBe(first)
+    expect(second).toMatchObject({ anchorSeq: startEvent.seq })
+  })
+
+  it('republishes one node when the step text budget truncates the same rows again', async () => {
+    const definitions = await registeredDefinitions()
+    const codeMode = definitions[3] as ConversationNodeDefinition<StatsStepState>
+    // Three results fit the 48,000-character budget; the fourth exceeds it and is
+    // republished as a truncated copy, so the prefix arrives as fresh objects.
+    const settledAt = (index: number) => [
+      event('tool/ptc-dispatch-start', {
+        rootCallId: 'root-6', parentCallId: 'root-6', subCallId: `sub-6-${String(index)}`,
+        name: 'read', arguments: '{}',
+      }, 10_000 + index * 2),
+      event('tool/ptc-dispatch', {
+        rootCallId: 'root-6', parentCallId: 'root-6', subCallId: `sub-6-${String(index)}`,
+        name: 'read', arguments: '{}', isError: false,
+        content: [{ type: 'text', text: 'x'.repeat(16_000) }],
+      }, 10_001 + index * 2),
+    ] as const
+    const [startEvent] = settledAt(0)
+    const start = locatedStart(startEvent, stepAt(8, 1))
+    let state = codeMode.start(contextOf(codeMode, undefined), start, reader)
+    const matches: ConversationMatch[] = [start]
+    for (const index of [0, 1, 2, 3]) {
+      const [, settle] = settledAt(index)
+      const update = locatedUpdate(settle, stepAt(8, 1))
+      state = codeMode.update({ ...contextOf(codeMode, state, matches, start), state }, update)
+      matches.push(update)
+    }
+    const publish = publisher(codeMode, start)
+    const first = publish(state, matches)
+    const data = first?.data
+    if (data?.kind !== 'inner') throw new Error('expected an inner contribution')
+    expect(data.calls.map(call => call.truncated)).toEqual([false, false, false, true])
+    expect(publish(state, matches)).toBe(first)
+    // A retained dispatch that settles again keeps the prefix the same length but
+    // changes one row, so the Context must publish a new node.
+    const resettledMatch = locatedUpdate(event('tool/ptc-dispatch', {
+      rootCallId: 'root-6', parentCallId: 'root-6', subCallId: 'sub-6-0',
+      name: 'read', arguments: '{}', isError: false,
+      content: [{ type: 'text', text: 'y'.repeat(16_000) }],
+    }, 10_020), stepAt(8, 1))
+    state = codeMode.update({ ...contextOf(codeMode, state, matches, start), state }, resettledMatch)
+    matches.push(resettledMatch)
+    expect(publish(state, matches)).not.toBe(first)
   })
 
   it('publishes an inner node only when the window still knows its step', async () => {
@@ -1152,7 +1258,10 @@ describe('conversation Definitions', () => {
     })).toBeNull()
     expect(codeMode.buildViewNode!({ ...contextOf(codeMode, folded) })).toBeNull()
     // The node still merges even when the dispatch lost its own start.
-    const lostStart = { ...folded, calls: { 'sub-2': { ...folded.calls!['sub-2']!, ms: null, startedAt: null } } }
+    const lostStart = {
+      ...folded,
+      calls: new Map([['sub-2', { ...folded.calls.get('sub-2')!, ms: null, startedAt: null }]]),
+    }
     const node = codeMode.buildViewNode!({
       ...contextOf(codeMode, lostStart, [update]),
     }) as StatsViewNode
@@ -1216,7 +1325,10 @@ describe('conversation Definitions', () => {
     expect(prompt.publication!(startMatch(event('user/message', {
       role: 'user', id: 'u', content: [], source: { kind: 'user' },
     })))).toBe('immediate')
-    expect(Object.hasOwn(definitions[3]!, 'publication')).toBe(false)
+    const codeMode = definitions[3] as ConversationNodeDefinition<StatsStepState>
+    expect(codeMode.publication!(updateMatch(event('tool/ptc-dispatch', {
+      rootCallId: 'r', parentCallId: 'r', subCallId: 's', name: 'read', arguments: '{}', isError: false, content: [],
+    })))).toBe('animation-frame')
   })
 
   it('anchors and locates a step node from its folded state', async () => {

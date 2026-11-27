@@ -79,6 +79,7 @@ describe('web perf inventory', () => {
     expect(webPerfConfig.test?.include).toEqual([
       'apps/web/tests/**/*.perf.ts',
       'packages/client/ui-conversation/tests/**/*.perf.client.ts',
+      'packages/experimental/client-ui-stats/tests/**/*.perf.client.ts',
     ])
   })
 })

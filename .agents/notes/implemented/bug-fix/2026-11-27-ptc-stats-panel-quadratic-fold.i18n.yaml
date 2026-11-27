@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-27-ptc-stats-panel-quadratic-fold.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-27-ptc-stats-panel-quadratic-fold.md
+/agent-note-linear-statistics-folding-for-a-wide-ptc-run:
+  en: 8013f61fd139db69
+  zh: 7368732b7ca44f9d
+/agent-note-linear-statistics-folding-for-a-wide-ptc-run/problem:
+  en: 9ddd5d233e7cff65
+  zh: 0971749020a0d530
+/agent-note-linear-statistics-folding-for-a-wide-ptc-run/decision:
+  en: 3fdc9dd28386b6ea
+  zh: 0bf4b62585893ed6
+/agent-note-linear-statistics-folding-for-a-wide-ptc-run/calibration:
+  en: 16ba97762214aabb
+  zh: 00483c7fbdf61f55
+/agent-note-linear-statistics-folding-for-a-wide-ptc-run/alternatives-considered:
+  en: 7f701cfb6668ca8e
+  zh: 0de0b999444a72a7
+/agent-note-linear-statistics-folding-for-a-wide-ptc-run/consequences:
+  en: 9cc968e3114e20f4
+  zh: b8c662994aae78d2

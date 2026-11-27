@@ -17,6 +17,7 @@ export default defineConfig({
     include: [
       'apps/web/tests/**/*.perf.ts',
       'packages/client/ui-conversation/tests/**/*.perf.client.ts',
+      'packages/experimental/client-ui-stats/tests/**/*.perf.client.ts',
     ],
     disableConsoleIntercept: true,
     hookTimeout: 180_000,

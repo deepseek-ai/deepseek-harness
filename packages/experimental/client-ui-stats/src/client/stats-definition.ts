@@ -14,10 +14,11 @@ import type {
   ConversationLocation, ConversationNodeContext, ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
+  StatsCall,
   StatsCompactionState, StatsEventMetrics, StatsStepState, StatsViewNode,
 } from './stats-contract.ts'
 import {
-  CALL_LIMIT, fallbackState, foldEvent, isCodeMode, newState, promptOf, stepMetrics, triggerSenderOf,
+  fallbackState, foldEvent, innerCalls, newState, promptOf, stepMetrics, triggerSenderOf,
 } from './stats-fold.ts'
 import {
   compactionEventId, compactionMetrics, foldCompaction, newCompactionState,
@@ -191,6 +192,42 @@ const endDefinition: ConversationNodeDefinition<StatsStepState> = {
 }
 
 /**
+ * Whether two call records display the same values.
+ * @param left - previously published record.
+ * @param right - currently visible record.
+ * @returns true when every field of both records is equal.
+ */
+function sameCall(left: StatsCall, right: StatsCall): boolean {
+  if (left === right) return true
+  for (const field of Object.keys(left) as (keyof StatsCall)[]) {
+    if (left[field] !== right[field]) return false
+  }
+  return true
+}
+
+/**
+ * Whether two published prefixes display the same calls.
+ *
+ * The rows are compared field by field, not by reference: `callList` replaces a
+ * record that exceeds the text budget with a truncated copy, so an unchanged
+ * prefix can otherwise arrive as a fresh array of fresh objects.
+ * @param left - previously published calls.
+ * @param right - currently visible calls.
+ * @returns true when both list the same values in the same order.
+ */
+function sameCalls(left: readonly StatsCall[], right: readonly StatsCall[]): boolean {
+  if (left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    const published = left[index]
+    const visible = right[index]
+    /* v8 ignore next -- equal lengths and dense arrays leave both slots present. */
+    if (published === undefined || visible === undefined) return false
+    if (!sameCall(published, visible)) return false
+  }
+  return true
+}
+
+/**
  * One Context per Code-Mode root call folds its inner dispatches; the builder
  * merges them into the owning step by the root call id. The events carry no
  * turn or step, so the Context takes both from the engine's match location.
@@ -218,14 +255,30 @@ const codeModeDefinition: ConversationNodeDefinition<StatsStepState> = {
   },
   /* v8 ignore next -- the engine calls update only after start adopted a state, so folding never returns undefined here. */
   update: (context, match) => foldEvent(context.state, match.event) ?? context.state,
+  // Dispatches arrive per subcall. Requesting `animation-frame` keeps the table
+  // live without rebuilding it for every settle of a wide run; the assembler
+  // materializes such a publication after three browser animation frames, so the
+  // table trails the log by up to three frames rather than one.
+  publication: () => 'animation-frame',
   buildViewNode: (context) => {
     const state = stepState(context)
-    const located = locationTurnStep(nodeLocation(context))
+    const location = nodeLocation(context)
+    const located = locationTurnStep(location)
     if (state === undefined || located?.step === null || located === null) return null
-    const calls = stepMetrics(state).calls
-      .filter(call => !isCodeMode(call.name))
-      .slice(0, CALL_LIMIT)
-    return statsNode(context, context.start?.event.seq ?? 0, {
+    const anchorSeq = context.start?.event.seq ?? 0
+    // The step row only renders the bounded prefix, so publication never walks
+    // the whole index or derives the metrics this contribution does not carry.
+    const calls = innerCalls(state.calls)
+    // The assembler keeps this Context's last published node, so an unchanged
+    // prefix republishes that node and the view skips its snapshot rebuild.
+    const previous = context.current.get(TARGET) as StatsViewNode | null | undefined
+    if (previous?.data.kind === 'inner'
+      && previous.anchorSeq === anchorSeq
+      && previous.location === location
+      && sameCalls(previous.data.calls, calls)) {
+      return previous
+    }
+    return statsNode(context, anchorSeq, {
       kind: 'inner',
       turn: located.turn,
       step: located.step,

@@ -27,8 +27,14 @@ class StatsSnapshotBuilder implements ConversationViewBuilder<StatsViewNode, Sta
 
   apply(input: { readonly upserts: readonly StatsViewNode[] }): StatsSnapshot {
     if (input.upserts.length === 0) return this.current
-    for (const node of input.upserts) this.nodes.set(node.key, node)
-    return this.snapshot()
+    let changed = false
+    for (const node of input.upserts) {
+      if (this.nodes.get(node.key) === node) continue
+      this.nodes.set(node.key, node)
+      changed = true
+    }
+    // A Definition that republishes the node it published before changed nothing here.
+    return changed ? this.snapshot() : this.current
   }
 
   private snapshot(): StatsSnapshot {

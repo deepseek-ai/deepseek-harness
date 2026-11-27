@@ -91,11 +91,6 @@ function countLines(text: string): number {
   return text.charCodeAt(text.length - 1) === 10 ? lines - 1 : lines
 }
 
-/** Read a record entry only when the record owns it, so model ids never resolve inherited members. */
-function ownValue<T>(record: Readonly<Record<string, T>> | null, key: string): T | undefined {
-  return record !== null && Object.hasOwn(record, key) ? record[key] : undefined
-}
-
 /** In-bounds typed-array read: the surrounding loops own the index bound. */
 function cell(values: Uint16Array, index: number): number {
   return values[index] as number
@@ -325,10 +320,10 @@ export function newState(
     toolMs: 0,
     toolOpen: 0,
     toolMissing: 0,
-    pending: null,
-    tools: null,
-    calls: null,
-    starts: null,
+    pending: new Map(),
+    tools: new Map(),
+    calls: new Map(),
+    starts: new Map(),
     retries: 0,
     toolErrors: 0,
     mark,
@@ -387,10 +382,8 @@ export function promptOf(message: UserMessage): { text: string | null; images: r
 }
 
 /** Add one call of `name` to the tally, preserving first-call order for ties. */
-function bumpTool(tools: Readonly<Record<string, number>> | null, name: string): Record<string, number> {
-  const next: Record<string, number> = { ...(tools ?? {}) }
-  next[name] = (next[name] ?? 0) + 1
-  return next
+function bumpTool(tools: Map<string, number>, name: string): void {
+  tools.set(name, (tools.get(name) ?? 0) + 1)
 }
 
 /**
@@ -444,13 +437,11 @@ export function foldEvent(
     case 'tool/call': {
       const next = state ?? newState(event.data.turn, event.data.step)
       const callId = event.data.callId
-      const pending: Record<string, number> = { ...(next.pending ?? {}) }
-      const known = Object.hasOwn(pending, callId)
-      pending[callId] = event.time
+      const known = next.pending.has(callId)
+      next.pending.set(callId, event.time)
       const name = event.data.name
-      const calls: Record<string, StatsCall> = { ...(next.calls ?? {}) }
-      if (!Object.hasOwn(calls, callId)) {
-        calls[callId] = {
+      if (!next.calls.has(callId)) {
+        next.calls.set(callId, {
           callId,
           seq: event.seq,
           name,
@@ -464,15 +455,10 @@ export function foldEvent(
           ms: null,
           startedAt: event.time,
           endedAt: null,
-        }
+        })
       }
-      return {
-        ...next,
-        pending,
-        toolOpen: known ? next.toolOpen : next.toolOpen + 1,
-        tools: bumpTool(next.tools, name),
-        calls,
-      }
+      bumpTool(next.tools, name)
+      return known ? next : { ...next, toolOpen: next.toolOpen + 1 }
     }
 
     case 'llm/retry':
@@ -485,8 +471,8 @@ export function foldEvent(
      */
     case 'tool/ptc-dispatch-start': {
       if (state === undefined) return state
-      const subCallId = event.data.subCallId
-      return { ...state, starts: { ...(state.starts ?? {}), [subCallId]: event.time } }
+      state.starts.set(event.data.subCallId, event.time)
+      return state
     }
 
     case 'tool/ptc-dispatch': {
@@ -495,29 +481,31 @@ export function foldEvent(
       const name = event.data.name
       const info = resultInfo(event.data.content)
       const callKey = event.data.subCallId
-      const startedAt = ownValue(next.starts, callKey)
-      const calls: Record<string, StatsCall> = { ...(next.calls ?? {}) }
-      calls[callKey] = {
-        callId: callKey,
-        seq: event.seq,
-        name,
-        ...callArguments(name, event.data.arguments),
-        chars: info.chars,
-        lines: info.lines,
-        text: info.text,
-        truncated: info.truncated,
-        error: event.data.isError,
-        inner: true,
-        ms: isNumber(startedAt) ? Math.max(0, event.time - startedAt) : null,
-        startedAt: isNumber(startedAt) ? startedAt : null,
-        endedAt: event.time,
+      const startedAt = next.starts.get(callKey)
+      // The paired start time has no use past the settle that consumes it.
+      next.starts.delete(callKey)
+      // A dispatch is recorded only when it can reach the published prefix: the
+      // step row lists the first CALL_LIMIT dispatches, so a wider run keeps no
+      // records past that boundary and its memory stops tracking the run length.
+      if (next.calls.has(callKey) || (!isCodeMode(name) && next.calls.size < CALL_LIMIT)) {
+        next.calls.set(callKey, {
+          callId: callKey,
+          seq: event.seq,
+          name,
+          ...callArguments(name, event.data.arguments),
+          chars: info.chars,
+          lines: info.lines,
+          text: info.text,
+          truncated: info.truncated,
+          error: event.data.isError,
+          inner: true,
+          ms: isNumber(startedAt) ? Math.max(0, event.time - startedAt) : null,
+          startedAt: isNumber(startedAt) ? startedAt : null,
+          endedAt: event.time,
+        })
       }
-      return {
-        ...next,
-        calls,
-        tools: bumpTool(next.tools, name),
-        toolErrors: event.data.isError ? next.toolErrors + 1 : next.toolErrors,
-      }
+      bumpTool(next.tools, name)
+      return event.data.isError ? { ...next, toolErrors: next.toolErrors + 1 } : next
     }
 
     case 'tool/result': {
@@ -525,32 +513,23 @@ export function foldEvent(
       const message = event.data.message
       const callId: string = message.source.callId
       const failed = message.isError === true
-      const before = ownValue(next.calls, callId)
-      const calls: Record<string, StatsCall> = { ...(next.calls ?? {}) }
+      const before = next.calls.get(callId)
       if (before !== undefined) {
-        calls[callId] = {
+        next.calls.set(callId, {
           ...before,
           ...resultInfo(message.content),
           error: failed || before.error,
           /* v8 ignore next -- a native call record always carries the start time tool/call recorded. */
           ms: isNumber(before.startedAt) ? Math.max(0, event.time - before.startedAt) : before.ms,
           endedAt: event.time,
-        }
+        })
       }
       const withError = failed ? { ...next, toolErrors: next.toolErrors + 1 } : next
-      const dispatched = ownValue(next.pending, callId)
-      if (!isNumber(dispatched)) {
-        return { ...withError, calls, toolMissing: next.toolMissing + 1 }
-      }
-      const pending: Record<string, number> = {}
-      /* v8 ignore next -- a numeric pending start implies pending exists; the empty fallback is unreachable. */
-      for (const [key, value] of Object.entries(next.pending ?? {})) {
-        if (key !== callId) pending[key] = value
-      }
+      const dispatched = next.pending.get(callId)
+      if (!isNumber(dispatched)) return { ...withError, toolMissing: next.toolMissing + 1 }
+      next.pending.delete(callId)
       return {
         ...withError,
-        calls,
-        pending,
         toolOpen: Math.max(0, next.toolOpen - 1),
         toolPairs: next.toolPairs + 1,
         toolMs: next.toolMs + Math.max(0, event.time - dispatched),
@@ -565,28 +544,48 @@ export function foldEvent(
   }
 }
 
-/** Calls of one step in call order, bounded per call and per step. */
-function callList(calls: Readonly<Record<string, StatsCall>> | null): StatsCall[] {
-  if (calls === null) return []
-  const list = Object.values(calls)
-    .sort((left, right) => left.seq - right.seq)
-    .slice(0, CALL_LIMIT)
+/**
+ * Calls of one step in call order, bounded per call and per step.
+ *
+ * A Context receives its matches in ascending `seq`, and one call id is created
+ * once by the event that first records it, so the index's insertion order is the
+ * order the table lists and no sort over the whole index is needed.
+ * @param calls - the step's call index.
+ * @returns a new array of at most {@link CALL_LIMIT} calls, clipped to the step's text budget.
+ */
+function callList(calls: ReadonlyMap<string, StatsCall>): StatsCall[] {
+  const list: StatsCall[] = []
   let used = 0
-  return list.map((call) => {
+  for (const call of calls.values()) {
+    if (list.length === CALL_LIMIT) break
     const size = call.text === null ? 0 : call.text.length
-    if (size === 0) return call
+    if (size === 0) {
+      list.push(call)
+      continue
+    }
     if (used + size <= STEP_TEXT_BUDGET) {
       used += size
-      return call
+      list.push(call)
+      continue
     }
-    return { ...call, text: null, truncated: true }
-  })
+    list.push({ ...call, text: null, truncated: true })
+  }
+  return list
+}
+
+/**
+ * Visible calls of one Code-Mode root call: the bounded prefix the step row
+ * renders, without the nested `run_code` calls those dispatches run under.
+ * @param calls - the root call's call index.
+ * @returns a new array of the displayed rows, materialized from the index.
+ */
+export function innerCalls(calls: ReadonlyMap<string, StatsCall>): StatsCall[] {
+  return callList(calls).filter(call => !isCodeMode(call.name))
 }
 
 /** Tool tallies by descending count; ties keep first-call order. */
-function sortedTools(tools: Readonly<Record<string, number>> | null): StatsToolCount[] {
-  if (tools === null) return []
-  return Object.entries(tools)
+function sortedTools(tools: ReadonlyMap<string, number>): StatsToolCount[] {
+  return [...tools.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((left, right) => right.count - left.count)
 }
@@ -646,7 +645,7 @@ export function stepMetrics(state: StatsStepState): StatsStepMetrics {
   const settled = isNumber(message)
   const calls = callList(state.calls)
   // The union spans every paired call, not just the row's displayed prefix.
-  const allCalls = state.calls === null ? [] : Object.values(state.calls)
+  const allCalls = [...state.calls.values()]
   return {
     turn: state.turn,
     step: state.step,

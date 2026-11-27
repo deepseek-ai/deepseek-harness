@@ -234,7 +234,7 @@ function listedCall(metrics: StatsStepMetrics, at = 0): StatsCall {
 }
 
 function recordedCall(state: StatsStepState, callId: string): StatsCall {
-  const call = state.calls?.[callId]
+  const call = state.calls.get(callId)
   if (call === undefined) throw new Error(`expected call ${callId}`)
   return call
 }
@@ -267,8 +267,8 @@ function statsCall(callId: string, seqAt: number, overrides: Partial<StatsCall> 
   }
 }
 
-function callsRecord(calls: readonly StatsCall[]): Record<string, StatsCall> {
-  return Object.fromEntries(calls.map(call => [call.callId, call]))
+function callsIndex(calls: readonly StatsCall[]): Map<string, StatsCall> {
+  return new Map(calls.map(call => [call.callId, call]))
 }
 
 /** Lines joined by newlines, for edit and write fixtures. */
@@ -755,7 +755,7 @@ describe('tool call folding', () => {
     const state = defined(foldEvent(undefined, toolCall(5, 2, 'c1', 'grep', '{"pattern":"x"}', 1_000)))
     expect(state.turn).toBe(5)
     expect(state.step).toBe(2)
-    expect(state.tools).toEqual({ grep: 1 })
+    expect(state.tools).toEqual(new Map([['grep', 1]]))
     expect(state.toolOpen).toBe(1)
   })
 
@@ -766,8 +766,8 @@ describe('tool call folding', () => {
     state = foldEvent(state, toolCall(1, 1, 'c2', 'read', '{"file_path":"/a/c"}', 1_030))
     const foldedState = defined(state)
     expect(foldedState.toolOpen).toBe(2)
-    expect(foldedState.pending).toEqual({ c1: 1_020, c2: 1_030 })
-    expect(foldedState.tools).toEqual({ read: 2, grep: 1 })
+    expect(foldedState.pending).toEqual(new Map([['c1', 1_020], ['c2', 1_030]]))
+    expect(foldedState.tools).toEqual(new Map([['read', 2], ['grep', 1]]))
     expect(recordedCall(foldedState, 'c1').name).toBe('read')
     expect(recordedCall(foldedState, 'c1').seq).toBe(2)
     expect(stepMetrics(foldedState).tools).toEqual([{ name: 'read', count: 2 }, { name: 'grep', count: 1 }])
@@ -931,13 +931,13 @@ describe('tool result pairing', () => {
     let state = foldEvent(undefined, stepStart(1, 1, 1_000))
     state = foldEvent(state, toolCall(1, 1, 'c1', 'read', '{}', 2_000))
     state = foldEvent(state, toolCall(1, 1, 'c2', 'grep', '{}', 2_010))
-    expect(defined(state).pending).toEqual({ c1: 2_000, c2: 2_010 })
+    expect(defined(state).pending).toEqual(new Map([['c1', 2_000], ['c2', 2_010]]))
     state = foldEvent(state, toolResult(1, 1, 'c1', [textBlock('one')], 1_500))
-    expect(defined(state).pending).toEqual({ c2: 2_010 })
+    expect(defined(state).pending).toEqual(new Map([['c2', 2_010]]))
     expect(defined(state).toolPairs).toBe(1)
     expect(defined(state).toolMs).toBe(0)
     state = foldEvent(state, toolResult(1, 1, 'c2', [textBlock('two')], 2_110))
-    expect(defined(state).pending).toEqual({})
+    expect(defined(state).pending).toEqual(new Map())
     expect(defined(state).toolPairs).toBe(2)
     expect(defined(state).toolMs).toBe(100)
     expect(stepMetrics(defined(state)).toolPending).toBe(0)
@@ -991,7 +991,7 @@ describe('Code-Mode dispatch', () => {
       ptcDispatch('root', 'sub-1', 'grep', '{"pattern":"x"}', [textBlock('hit')], 5_040),
     ])
     expect(recordedCall(state, 'sub-1').inner).toBe(true)
-    expect(state.tools).toEqual({ grep: 1 })
+    expect(state.tools).toEqual(new Map([['grep', 1]]))
   })
 
   it('leaves the duration unmeasured without a dispatch start', () => {
@@ -1091,6 +1091,37 @@ describe('Code-Mode dispatch', () => {
       ptcDispatch('root', 'sub-2', 'read', '{}', [], 5_040),
     ])
     expect(stepMetrics(state).calls.map(call => call.callId)).toEqual(['root', 'sub-1', 'sub-2'])
+  })
+
+  it('keeps only the dispatches the step row can list and still counts the rest', () => {
+    const events: SessionEventLike[] = [stepStart(2, 1, 5_000), toolCall(2, 1, 'root', 'run_code', '{}', 5_010)]
+    for (let index = 0; index < CALL_LIMIT + 4; index += 1) {
+      events.push(ptcDispatch('root', `sub-${index}`, 'read', '{}', [textBlock('hit')], 5_100 + index, index === 15))
+    }
+    const state = folded(events)
+    // The root record shares the index, so the fold keeps CALL_LIMIT - 1 dispatches.
+    expect(state.calls.size).toBe(CALL_LIMIT)
+    expect(state.calls.has('sub-15')).toBe(false)
+    expect(stepMetrics(state).calls.map(call => call.callId)).toEqual([
+      'root', ...Array.from({ length: CALL_LIMIT - 1 }, (_, index) => `sub-${index}`),
+    ])
+    // Scalar totals cover every dispatch, retained or not.
+    expect(state.tools.get('read')).toBe(CALL_LIMIT + 4)
+    expect(state.toolErrors).toBe(1)
+  })
+
+  it('replaces a retained dispatch and never retains a nested runner', () => {
+    const events: SessionEventLike[] = [stepStart(2, 1, 5_000), toolCall(2, 1, 'root', 'run_code', '{}', 5_010)]
+    for (let index = 0; index < CALL_LIMIT; index += 1) {
+      events.push(ptcDispatch('root', `sub-${index}`, 'read', '{}', [], 5_100 + index))
+    }
+    events.push(ptcDispatch('root', 'sub-0', 'read', {}, [textBlock('again')], 5_300, true))
+    events.push(ptcDispatch('root', 'nested', 'run_code', '{}', [], 5_310))
+    const state = folded(events)
+    expect(state.calls.size).toBe(CALL_LIMIT)
+    expect(state.calls.has('nested')).toBe(false)
+    expect(state.calls.get('sub-0')?.error).toBe(true)
+    expect(state.tools.get('run_code')).toBe(2)
   })
 })
 
@@ -1316,21 +1347,19 @@ describe('step metric derivation', () => {
   })
 
   it('lists calls in call order and caps the list', () => {
-    const calls = Array.from({ length: CALL_LIMIT + 2 }, (_, index) => statsCall(
-      `call-${index}`,
-      CALL_LIMIT + 2 - index,
-    ))
-    const metrics = stepMetrics(stateOf({ calls: callsRecord(calls) }))
+    // The fold records each call once, in ascending seq, so the index order is the call order.
+    const calls = Array.from({ length: CALL_LIMIT + 2 }, (_, index) => statsCall(`call-${index}`, index))
+    const metrics = stepMetrics(stateOf({ calls: callsIndex(calls) }))
     expect(metrics.calls).toHaveLength(CALL_LIMIT)
-    expect(metrics.calls[0]?.callId).toBe('call-13')
-    expect(metrics.calls.at(-1)?.callId).toBe('call-2')
+    expect(metrics.calls[0]?.callId).toBe('call-0')
+    expect(metrics.calls.at(-1)?.callId).toBe(`call-${CALL_LIMIT - 1}`)
   })
 
   it('bounds result text across the listed calls of one step', () => {
     const calls = Array.from({ length: 5 }, (_, index) => statsCall(`call-${index}`, index, {
       text: 'x'.repeat(16_000),
     }))
-    const metrics = stepMetrics(stateOf({ calls: callsRecord(calls) }))
+    const metrics = stepMetrics(stateOf({ calls: callsIndex(calls) }))
     expect(metrics.calls.slice(0, 3).every(call => call.text?.length === 16_000)).toBe(true)
     expect(metrics.calls.slice(3).every(call => call.text === null && call.truncated)).toBe(true)
   })
@@ -1340,32 +1369,32 @@ describe('step metric derivation', () => {
       statsCall('pending', 1),
       statsCall('long', 2, { text: 'x'.repeat(16_000) }),
     ]
-    const metrics = stepMetrics(stateOf({ calls: callsRecord(calls) }))
+    const metrics = stepMetrics(stateOf({ calls: callsIndex(calls) }))
     expect(metrics.calls[0]?.text).toBeNull()
     expect(metrics.calls[0]?.truncated).toBe(false)
     expect(metrics.calls[1]?.text).toHaveLength(16_000)
   })
 
   it('sorts tools by descending count and keeps first-call order for ties', () => {
-    const metrics = stepMetrics(stateOf({ tools: { grep: 1, read: 3, edit: 2 } }))
+    const metrics = stepMetrics(stateOf({ tools: new Map([['grep', 1], ['read', 3], ['edit', 2]]) }))
     expect(metrics.tools).toEqual([
       { name: 'read', count: 3 },
       { name: 'edit', count: 2 },
       { name: 'grep', count: 1 },
     ])
-    const tied = stepMetrics(stateOf({ tools: { read: 1, grep: 1 } }))
+    const tied = stepMetrics(stateOf({ tools: new Map([['read', 1], ['grep', 1]]) }))
     expect(tied.tools).toEqual([{ name: 'read', count: 1 }, { name: 'grep', count: 1 }])
   })
 
   it('keeps the Code-Mode runner until the builder merges inner dispatches', () => {
-    const calls = callsRecord([
+    const calls = callsIndex([
       statsCall('run', 1, { name: 'run_code', chars: 1_000 }),
       statsCall('inner', 2, { name: 'read', chars: 5, inner: true }),
       statsCall('plain', 3, { name: 'write', chars: 20 }),
     ])
     const metrics = stepMetrics(stateOf({
       calls,
-      tools: { run_code: 1, read: 1, write: 1 },
+      tools: new Map([['run_code', 1], ['read', 1], ['write', 1]]),
     }))
     expect(metrics.calls.map(call => call.callId)).toEqual(['run', 'inner', 'plain'])
     expect(metrics.tools).toEqual([
@@ -1377,17 +1406,17 @@ describe('step metric derivation', () => {
   })
 
   it('counts every result when no inner call is present', () => {
-    const calls = callsRecord([
+    const calls = callsIndex([
       statsCall('read', 1, { name: 'read', chars: 12 }),
       statsCall('pending', 2, { name: 'grep' }),
     ])
-    const metrics = stepMetrics(stateOf({ calls, tools: { read: 1, grep: 1 } }))
+    const metrics = stepMetrics(stateOf({ calls, tools: new Map([['read', 1], ['grep', 1]]) }))
     expect(metrics.toolOutput).toBe(12)
     expect(metrics.tools).toHaveLength(2)
   })
 
   it('measures tool wall time as the union of overlapping call spans', () => {
-    const calls = callsRecord([
+    const calls = callsIndex([
       statsCall('c1', 1, { startedAt: 1_000, endedAt: 1_200 }),
       statsCall('c2', 2, { startedAt: 1_100, endedAt: 1_300 }),
     ])
