@@ -115,3 +115,38 @@ export declare function upload(data: Uint8Array): AsyncIterable<UploadEvent>
 ### 检查方式
 
 审查：在新增或修改的公共接口中，标记任何不属于例外的函数类型参数，或选项参数中的函数类型字段。
+
+<a id="g3"></a>
+## G.3：脚本能检测新规则的违规时，为它加上门禁
+
+### 原因
+
+仅靠审查会漏掉反复出现的违规：不了解该规则的审查者会让同样的违规再次进入代码。门禁阻止新的违规。门禁记录的列表让已有违规可见。在删除已修复代码对应的条目之前，门禁一直失败，且没有任何操作会添加条目，因此列表只会缩短。记录已有违规后，规则无需先修复它们即可生效。
+
+### 反例
+
+```md
+### Enforcement
+
+Review: flag a direct assertion to `unknown`.
+```
+
+语法检查能找出每一处这样的断言，而这条规则却依赖每个审查者都记得它。
+
+### 示例
+
+```md
+### Enforcement
+
+`verify-no-unknown-casts` rejects a direct assertion to `unknown` that `scripts/no-unknown-casts.baseline.json` does not record.
+```
+
+### 注解
+
+无需审查者判断就能识别的违规，脚本即可检测，例如某种语法形式、某个导入或某个文本模式。需要判断的违规仍由审查检查，例如某个回调是否属于 [G.2](#g2) 的例外。
+
+在新增规则的同一变更中加入门禁。门禁记录已有违规，并拒绝未记录的违规。对于 TypeScript 或 JavaScript 语法形式，基于 `scripts/baseline-inventory.ts` 构建门禁：它按文件和语法指纹记录违规，在某个条目不再匹配任何代码时失败，并通过 `--prune` 删除这类条目。在 `scripts/run-gates.ts` 中注册门禁，并在规则的 `检查方式` 中写明它。
+
+### 检查方式
+
+审查：标记违规可由脚本检测、但其变更未加入门禁的新增规则。

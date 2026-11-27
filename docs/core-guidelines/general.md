@@ -115,3 +115,38 @@ A public interface is a package entry-point export, a Cordis service method, a `
 ### Enforcement
 
 Review: flag a function-typed parameter, or a function-typed field of an options parameter, in a new or changed public interface that no exception covers.
+
+<a id="g3"></a>
+## G.3: Add a gate when a script can detect a new rule's violations
+
+### Reason
+
+Review alone misses repeated violations: a reviewer who does not know the rule lets the same violation in again. A gate stops new violations. Its recorded list makes the existing violations visible. The gate fails until the entries for fixed code are removed, and nothing adds entries, so the list only shrinks. Recording existing violations lets the rule take effect without fixing them first.
+
+### Example, bad
+
+```md
+### Enforcement
+
+Review: flag a direct assertion to `unknown`.
+```
+
+A syntax check finds every such assertion, so this rule depends on each reviewer remembering it.
+
+### Example
+
+```md
+### Enforcement
+
+`verify-no-unknown-casts` rejects a direct assertion to `unknown` that `scripts/no-unknown-casts.baseline.json` does not record.
+```
+
+### Note
+
+A script can detect a violation when it identifies the violation without a reviewer's judgment, for example a syntax form, an import, or a text pattern. A violation that needs judgment, such as whether a callback matches a [G.2](#g2) exception, stays a review check.
+
+Add the gate in the same change as the rule. The gate records the existing violations and rejects a violation it does not record. For a TypeScript or JavaScript syntax form, build it on `scripts/baseline-inventory.ts`, which records violations by file and syntax fingerprint, fails while an entry matches no code, and removes such entries with `--prune`. Register the gate in `scripts/run-gates.ts` and name it in the rule's `Enforcement`.
+
+### Enforcement
+
+Review: flag a new rule whose violations a script can detect, but whose change adds no gate.
