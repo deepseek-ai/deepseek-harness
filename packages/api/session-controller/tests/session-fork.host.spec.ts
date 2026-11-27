@@ -380,14 +380,19 @@ describe('sessions.fork', () => {
     await ctx.fiber.dispose()
   })
 
-  it('attaches a subagent fork to its nearest workspace-owning ancestor', async () => {
-    const accounted: SessionId[] = []
-    const attachSession = vi.fn<(sessionId: SessionId) => Promise<void>>()
-      .mockResolvedValue(undefined)
+  /** A Workspace stub that records attachments; `accounted` lists the Sessions it already owns. */
+  function attachingWorkspace(accounted: SessionId[]) {
+    const attachSession = vi.fn<(sessionId: SessionId) => Promise<void>>().mockResolvedValue(undefined)
     const workspace = {
       sessionIds: accounted,
       attachSession,
     } as unknown as Workspace
+    return { attachSession, workspace }
+  }
+
+  it('attaches a subagent fork to its nearest workspace-owning ancestor', async () => {
+    const accounted: SessionId[] = []
+    const { attachSession, workspace } = attachingWorkspace(accounted)
     const ctx = await composed([workspace])
     const owner = await liveAgent(ctx, 'session-owner', 1)
     accounted.push(owner.id)
@@ -425,8 +430,7 @@ describe('sessions.fork', () => {
 
   it('attaches a fork of an unattached side conversation to its source workspace', async () => {
     const accounted: SessionId[] = []
-    const attachSession = vi.fn<(sessionId: SessionId) => Promise<void>>().mockResolvedValue(undefined)
-    const workspace = { sessionIds: accounted, attachSession } as unknown as Workspace
+    const { attachSession, workspace } = attachingWorkspace(accounted)
     const ctx = await composed([workspace])
     const owner = await liveAgent(ctx, 'session-owner', 1)
     accounted.push(owner.id)
