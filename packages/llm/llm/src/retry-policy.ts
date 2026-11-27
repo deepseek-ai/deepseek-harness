@@ -18,6 +18,7 @@ const DEFAULT_MAX_DELAY_MS = 10_000
 const DEFAULT_JITTER_RATIO = 0.1
 const DEFAULT_RETRYABLE_CODES: readonly BuiltinLlmFailureCode[] = Object.freeze([
   EMPTY_RESPONSE_CODE,
+  'INVALID_TOOL_ARGUMENTS',
   'RATE_LIMIT',
   'SERVER',
   'TIMEOUT',

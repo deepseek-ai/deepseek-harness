@@ -17,7 +17,7 @@ function fold(events: readonly SessionEvent[]) {
 }
 const events = (reason: TurnEndReason) => turn(reason).map(entry => entry.event)
 
-it.each(['RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'EMPTY_RESPONSE', 'STREAM_CLOSED'])(
+it.each(['RATE_LIMIT', 'SERVER', 'TIMEOUT', 'TRANSPORT', 'EMPTY_RESPONSE', 'STREAM_CLOSED', 'INVALID_TOOL_ARGUMENTS'])(
   'offers a manual new turn after %s independently of automatic retries', (code) => {
     expect(definition.wire.view(fold(events(failed(code))))).toBe(5)
   },

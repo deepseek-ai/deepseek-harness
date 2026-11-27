@@ -45,6 +45,9 @@ export const LLM_FAILURE_CODES = {
   INVALID_REPLAY_STATE: {},
   INVALID_REQUEST: {},
   INVALID_RESPONSE: {},
+  // Completed tool-call arguments are invalid JSON or not an object. The attempt fails before
+  // any tool runs; a new request samples fresh output. Protocol violations stay MALFORMED_RESPONSE.
+  INVALID_TOOL_ARGUMENTS: { retryChoice: true },
   MALFORMED_RESPONSE: { retryChoice: true },
   MISSING_CREDENTIAL: {},
   MODEL_SWITCH_COMPACTION_FAILED: {},

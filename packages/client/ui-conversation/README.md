@@ -82,7 +82,7 @@ The composer measures its expanded control groups after size, content, visibilit
 
 The context meter follows the [statistics-control radius](../../../docs/ui-radius.md#radius-scale).
 
-An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, or `STREAM_CLOSED` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history and records an empty `user/message` with `source.kind: 'retry'`. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
+An empty, idle ordinary Session composer offers a play action after `RATE_LIMIT`, `SERVER`, `TIMEOUT`, `TRANSPORT`, `EMPTY_RESPONSE`, `STREAM_CLOSED`, or `INVALID_TOOL_ARGUMENTS` ends its latest turn. The failed turn must include admitted ordinary user input and a settled failed model attempt. Clicking submits `content: []` through the existing Session prompt API; drafts and attachments keep the Send action. A new balanced turn uses committed history and records an empty `user/message` with `source.kind: 'retry'`. Refusal or transport failure leaves the draft empty and reports the error through the ordinary submission lifecycle.
 
 The Session API owns `conversationContinuation`, shared by Host admission and browser presentation. It restores eligibility from complete Session history and preserves it across repeated failed empty continuations, independently of loaded browser pages.
 

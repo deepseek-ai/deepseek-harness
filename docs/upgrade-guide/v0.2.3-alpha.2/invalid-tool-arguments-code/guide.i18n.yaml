@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.3-alpha.2/invalid-tool-arguments-code/guide.md
+/:
+  en: 45f2a02e1bdbebab
+  zh: 4c716dd8ef660ce1
+/invalid-tool-arguments-error-code:
+  en: f0580295fcfc8674
+  zh: 809160612258f344
+/invalid-tool-arguments-error-code/change:
+  en: c184658bcbc9e704
+  zh: bf457e42e8b6b457
+/invalid-tool-arguments-error-code/migration:
+  en: 5af83a9aaa75376e
+  zh: 39ef4670e0b92216

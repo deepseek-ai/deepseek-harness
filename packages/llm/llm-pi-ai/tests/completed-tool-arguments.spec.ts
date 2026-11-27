@@ -5,6 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
+import * as Retry from '@deepseek-ai/dsh-llm-retry'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -65,7 +66,10 @@ function responsesEvents(raw: string, prefix?: string, priorValid = false, prior
 
 function registerAdapter(ctx: Context, api: Api, baseURL: string): void {
   ctx.effect(() => ctx.llm.registerAdapter(['fixture'], new PiAiAdapter({
-    profiles: () => resolveProfiles({ fixture: { api, baseURL, models: [{ id: 'm' }], transport: 'sse' } }),
+    profiles: () => resolveProfiles({ fixture: {
+      api, baseURL, models: [{ id: 'm' }], transport: 'sse',
+      retryPolicy: { mode: 'normal', backoff: { initialDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 } },
+    } }),
     resolveApiKey: () => Promise.resolve('fixture-key'),
     auth: memoryAuth(),
   })))
@@ -91,10 +95,10 @@ describe('completed tool-call arguments through the public runtime', () => {
     ['anthropic-messages', anthropicEvents],
     ['openai-completions', completionsEvents],
     ['openai-responses', responsesEvents],
-  ] as const)('%s rejects malformed completed arguments without successful replay', async (api, events) => {
+  ] as const)('%s fails malformed completed arguments as INVALID_TOOL_ARGUMENTS without successful replay', async (api, events) => {
     const raw = '{"value":"unfinished'
     const { chunks, assembler, server } = await collect(api, events(raw))
-    expect(assembler.finish).toMatchObject({ kind: 'error', failure: { code: 'MALFORMED_RESPONSE' } })
+    expect(assembler.finish).toMatchObject({ kind: 'error', failure: { code: 'INVALID_TOOL_ARGUMENTS' } })
     expect(assembler.finish).toHaveProperty('failure.message', expect.stringContaining(raw))
     expect(assembler.replayState).toBeUndefined()
     expect(chunks.filter(chunk => chunk.type === 'finish')).toHaveLength(1)
@@ -104,7 +108,7 @@ describe('completed tool-call arguments through the public runtime', () => {
 
   it.each(['null', '[]', '42'])('rejects non-object completed arguments %s', async (raw) => {
     const { assembler } = await collect('openai-completions', completionsEvents(raw))
-    expect(assembler.finish).toMatchObject({ kind: 'error', failure: { code: 'MALFORMED_RESPONSE' } })
+    expect(assembler.finish).toMatchObject({ kind: 'error', failure: { code: 'INVALID_TOOL_ARGUMENTS' } })
     expect(assembler.replayState).toBeUndefined()
   })
 
@@ -112,7 +116,7 @@ describe('completed tool-call arguments through the public runtime', () => {
     const raw = '{"value":"final-invalid'
     const { chunks, assembler } = await collect('openai-responses', responsesEvents(raw, '{"value":"valid-prefix"}'))
     expect(chunks).toContainEqual(expect.objectContaining({ type: 'tool-call-delta', argumentsDelta: '{"value":"valid-prefix"}' }))
-    expect(assembler.finish).toMatchObject({ kind: 'error', failure: { code: 'MALFORMED_RESPONSE' } })
+    expect(assembler.finish).toMatchObject({ kind: 'error', failure: { code: 'INVALID_TOOL_ARGUMENTS' } })
     expect(assembler.finish).toHaveProperty('failure.message', expect.stringContaining(raw))
     expect(assembler.replayState).toBeUndefined()
   })
@@ -120,7 +124,7 @@ describe('completed tool-call arguments through the public runtime', () => {
   it('retains the first completed-argument failure when several calls are invalid', async () => {
     const { assembler } = await collect('openai-responses', responsesEvents('[]', undefined, true, '[1]'))
     expect(assembler.finish).toEqual({ kind: 'error', failure: {
-      code: 'MALFORMED_RESPONSE', message: 'Tool call "count": Tool arguments must be a JSON object\n\nReceived arguments:\n[1]',
+      code: 'INVALID_TOOL_ARGUMENTS', message: 'Tool call "count": Tool arguments must be a JSON object\n\nReceived arguments:\n[1]',
     } })
     expect(assembler.replayState).toBeUndefined()
   })
@@ -133,7 +137,7 @@ describe('completed tool-call arguments through the public runtime', () => {
     const { assembler } = await collect('openai-responses', events)
     expect(assembler.finish).toMatchObject({ kind: 'error' })
     expect(assembler.finish).toHaveProperty('failure.message', expect.stringContaining('upstream failure'))
-    expect(assembler.finish).not.toMatchObject({ failure: { code: 'MALFORMED_RESPONSE' } })
+    expect(assembler.finish).not.toMatchObject({ failure: { code: 'INVALID_TOOL_ARGUMENTS' } })
     expect(assembler.replayState).toBeUndefined()
   })
 
@@ -190,11 +194,46 @@ describe('completed tool-call arguments through the public runtime', () => {
     const attempts = events.filter(event => event.type === 'assistant/attempt')
     expect(attempts).toHaveLength(1)
     expect(JSON.stringify(attempts)).toContain('call_valid|item_valid')
-    expect(JSON.stringify(attempts)).toContain('MALFORMED_RESPONSE')
+    expect(JSON.stringify(attempts)).toContain('INVALID_TOOL_ARGUMENTS')
     expect(JSON.stringify(attempts)).not.toContain('replayState')
     expect(events.find(event => event.type === 'turn/end')).toMatchObject({
-      data: { reason: { kind: 'error', error: { code: 'MALFORMED_RESPONSE' } } },
+      data: { reason: { kind: 'error', error: { code: 'INVALID_TOOL_ARGUMENTS' } } },
     })
     expect(server.requests).toHaveLength(1)
+  })
+
+  it('retries malformed completed arguments under the default retry codes and completes the turn', async () => {
+    const server = await mockServer([
+      { events: completionsEvents('{"tasks": [{"id": "probe"') },
+      { events: completionsEvents('{}') },
+      { events: [
+        JSON.stringify({ choices: [{ index: 0, delta: { role: 'assistant', content: 'counted once' }, finish_reason: null }] }),
+        JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 2 } }),
+        '[DONE]',
+      ] },
+    ])
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(Retry)
+    registerAdapter(ctx, 'openai-completions', server.url)
+    const loop = await mountAgentLoopTestHarness(ctx)
+    let executions = 0
+    ctx.effect(() => ctx.tools.register(defineContentToolFixture({
+      name: 'count', description: 'Count executions', parameters: {},
+      async execute() { executions++; return [{ type: 'text', text: 'counted' }] },
+    })))
+    const agent = await loop.create(brandString<SessionId>('malformed-retry'), { provider: 'fixture', model: 'm' })
+    agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'count once' }] }))
+    await agent.whenIdle()
+    const events = agent.session.snapshotEvents()
+    expect(executions).toBe(1)
+    expect(server.requests).toHaveLength(3)
+    const attempts = events.filter(event => event.type === 'assistant/attempt')
+    expect(attempts).toHaveLength(1)
+    expect(JSON.stringify(attempts)).toContain('INVALID_TOOL_ARGUMENTS')
+    expect(events.find(event => event.type === 'llm/retry')).toMatchObject({ data: { failure: { code: 'INVALID_TOOL_ARGUMENTS' } } })
+    expect(events.filter(event => event.type === 'tool/result')).toHaveLength(1)
+    expect(events.find(event => event.type === 'turn/end')).toMatchObject({ data: { reason: { kind: 'completed' } } })
   })
 })

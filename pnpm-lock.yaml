@@ -16332,6 +16332,9 @@ importers:
       '@deepseek-ai/dsh-llm-deepseek-api-key':
         specifier: workspace:*
         version: link:../llm-deepseek-api-key
+      '@deepseek-ai/dsh-llm-retry':
+        specifier: workspace:*
+        version: link:../llm-retry
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../../core/session

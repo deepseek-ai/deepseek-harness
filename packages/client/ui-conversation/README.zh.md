@@ -82,7 +82,7 @@ root 作用域的 hoc Slot `conversation.hero.frame` 在所有阶段都包裹滚
 
 上下文占用率入口遵循[统计控件圆角规则](../../../docs/ui-radius.zh.md#radius-scale)。
 
-空闲且草稿为空的普通 Session，在最新轮次以 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE` 或 `STREAM_CLOSED` 结束后显示播放按钮。失败工作必须有已准入的普通用户输入和失败请求尝试。点击通过现有 Session prompt API 提交 `content: []`；已有草稿或附件仍使用发送按钮。新轮次正常闭合，使用已提交历史，并记录 `source.kind: 'retry'` 的空 `user/message`。请求被拒绝或传输失败时，草稿保持为空，错误沿用普通提交流程展示。
+空闲且草稿为空的普通 Session，在最新轮次以 `RATE_LIMIT`、`SERVER`、`TIMEOUT`、`TRANSPORT`、`EMPTY_RESPONSE`、`STREAM_CLOSED` 或 `INVALID_TOOL_ARGUMENTS` 结束后显示播放按钮。失败工作必须有已准入的普通用户输入和失败请求尝试。点击通过现有 Session prompt API 提交 `content: []`；已有草稿或附件仍使用发送按钮。新轮次正常闭合，使用已提交历史，并记录 `source.kind: 'retry'` 的空 `user/message`。请求被拒绝或传输失败时，草稿保持为空，错误沿用普通提交流程展示。
 
 Session API 拥有 `conversationContinuation`，Host 准入和浏览器展示共用该投影。它从完整 Session 历史恢复资格，并在空输入继续再次失败时保留资格，不依赖浏览器已加载的历史分页。
 
