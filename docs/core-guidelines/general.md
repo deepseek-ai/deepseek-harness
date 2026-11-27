@@ -117,11 +117,11 @@ A public interface is a package entry-point export, a Cordis service method, a `
 Review: flag a function-typed parameter, or a function-typed field of an options parameter, in a new or changed public interface that no exception covers.
 
 <a id="g3"></a>
-## G.3: Add a gate when a script can detect a new rule's violations
+## G.3: Add a gate with every new rule that a script can check
 
 ### Reason
 
-Review alone misses repeated violations: a reviewer who does not know the rule lets the same violation in again. A gate stops new violations. Its recorded list makes the existing violations visible. The gate fails until the entries for fixed code are removed, and review rejects a list edit that adds an entry, so the list only shrinks. Recording existing violations lets the rule take effect without fixing them first.
+Reviewers forget rules, so the same violation comes back. A gate rejects new violations automatically. It records existing violations in a list, so the rule takes effect now and the existing code can be fixed later.
 
 ### Example, bad
 
@@ -131,7 +131,7 @@ Review alone misses repeated violations: a reviewer who does not know the rule l
 Review: flag a direct assertion to `unknown`.
 ```
 
-A syntax check finds every such assertion, so this rule depends on each reviewer remembering it.
+A script can find every direct assertion to `unknown`, yet this rule relies on each reviewer remembering it.
 
 ### Example
 
@@ -143,10 +143,19 @@ A syntax check finds every such assertion, so this rule depends on each reviewer
 
 ### Note
 
-A script can detect a violation when it identifies the violation without a reviewer's judgment, for example a syntax form, an import, or a text pattern. A violation that needs judgment, such as whether a callback matches a [G.2](#g2) exception, stays a review check.
+A script can check a rule when it finds violations without human judgment, such as a syntax form, an import, or a text pattern. A rule that needs judgment stays review-only, such as whether a callback falls under a [G.2](#g2) exception.
 
-Add the gate in the same change as the rule. The gate rejects a violation that its list does not record. The same change writes the initial list from the gate's findings; no command writes it. For a TypeScript or JavaScript syntax form, build it on `scripts/baseline-inventory.ts`, which records violations by file and syntax fingerprint, fails while an entry matches no code, and removes such entries with `--prune`. Register the gate in `scripts/run-gates.ts` and name it in the rule's `Enforcement`.
+In the same change as the rule:
+
+- Add the gate. It fails on any violation that its list does not record.
+- Write the list of existing violations. No command generates it.
+- Register the gate in `scripts/run-gates.ts`.
+- Name the gate in the rule's `Enforcement` section.
+
+The gate also fails when a list entry no longer matches any code. Reviewers reject changes that add entries to the list, so the list only shrinks.
+
+For a TypeScript or JavaScript syntax form, build the gate on `scripts/baseline-inventory.ts`. It records each violation by file and syntax fingerprint, and `--prune` removes entries that no longer match code.
 
 ### Enforcement
 
-Review: flag a new rule whose violations a script can detect, but whose change adds no gate. Flag a change that adds an entry to a gate's list.
+Review: flag a new rule that a script can check but that has no gate. Flag a change that adds an entry to a gate's list.
