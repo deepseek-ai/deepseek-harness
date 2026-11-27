@@ -6,8 +6,8 @@ import Testing
 @testable import CuaNative
 
 
-private func pointer(_ type: CGEventType) throws -> CGEvent {
-    let event = try #require(CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: .zero, mouseButton: .left))
+private func pointer(_ type: CGEventType, button: CGMouseButton = .left) throws -> CGEvent {
+    let event = try #require(CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: .zero, mouseButton: button))
     event.flags = .maskAlternate
     return event
 }
@@ -110,4 +110,31 @@ func pointerReleaseUsesSavedRouteAfterWindowAndProcessChanges(_ system: Bool) th
     try held.requirePointerAvailable(route: route, button: .right, system: false)
     try held.release(connection: owner.connection)
     try held.requirePointerAvailable(route: route, button: .left, system: false)
+}
+
+@Test func systemButtonHoldsCanOverlapOnlyForTheSameOwnerAndWindow() throws {
+    let held = HeldInputs()
+    let target = try NativePlatform.identity(getpid())
+    let owner = HeldInputs.Owner(connection: UUID(), app: "editor")
+    let route = WindowRoute(owner: target, windowID: 7, bounds: .init(x: 0, y: 0, width: 100, height: 100))
+    var events: [CGEventType] = []
+    func down(_ button: CGMouseButton, by caller: HeldInputs.Owner, in window: WindowRoute) throws {
+        try held.pointerDown(owner: caller, route: window, button: button, system: true,
+                             down: pointer(WindowPointerInput.down(button), button: button),
+                             up: pointer(WindowPointerInput.up(button), button: button), post: { events.append($0.type) })
+    }
+    try down(.left, by: owner, in: route)
+    let peer = HeldInputs.Owner(connection: UUID(), app: owner.app)
+    let otherWindow = WindowRoute(owner: target, windowID: 8, bounds: route.bounds)
+    #expect(held.systemButtonsHeld(by: owner, in: route) == [.left])
+    #expect(held.systemButtonsHeld(by: peer, in: route).isEmpty)
+    #expect(held.systemButtonsHeld(by: owner, in: otherWindow).isEmpty)
+    #expect(throws: NativeFailure.self) { try down(.right, by: peer, in: route) }
+    #expect(throws: NativeFailure.self) { try down(.right, by: owner, in: otherWindow) }
+    #expect(throws: NativeFailure.self) { try down(.left, by: owner, in: route) }
+    #expect(throws: NativeFailure.self) { try held.requirePointerAvailable(route: route, button: .right, system: true) }
+    try down(.right, by: owner, in: route)
+    #expect(try held.pointerUp(owner: owner, window: route.windowID, button: .left))
+    try held.release(connection: owner.connection)
+    #expect(events == [.leftMouseDown, .rightMouseDown, .leftMouseUp, .rightMouseUp])
 }

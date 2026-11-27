@@ -86,7 +86,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 每个面向应用的操作都要求使用同一 helper 的 `getApp` 返回的 `appHandle`。helper 固定 PID 和内核进程启动时间，进程退出或 PID 被复用后使句柄及其全部快照失效。再次调用 `getApp` 可取得替代进程，不会重新激活旧句柄。随机的 helper 命名空间防止已终止 helper 的句柄与替代实例重合。只有进程仍存活且授权身份相同时才复用句柄；授权身份变化会使旧句柄失效并创建新句柄。完成待启动选择时，如果授权后当前连接已经持有同一进程、同一授权身份的句柄，`launchApp` 返回 `STALE_APP`，只有待启动句柄失效。启动后检查失败会使待启动句柄失效，并保留原错误；已经启动的进程不会被终止，launchApp 也不能复用失败的待启动句柄。
 
-稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`BACKGROUND_RESTORE_UNAVAILABLE`（无法在保留键盘焦点的前提下恢复窗口）、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（按下鼠标键或移动系统指针要求命中前台目标窗口）、`INPUT_BUSY`（有鼠标键按下，等松开后再请求系统按下或拖动）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
+稳定错误码包括 `INVALID_REQUEST`（信封无效）、`INVALID_ARGUMENT`（参数无效）、`UNSUPPORTED`（操作未知）、`APP_UNAVAILABLE`、`APP_PATH_UNAVAILABLE`、`PROCESS_INSPECTION_FAILED`、`AMBIGUOUS_APP`、`STALE_APP`、`STALE_SNAPSHOT`、`AX_OBSERVATION_UNAVAILABLE`（观察准备阶段 AX 对象失效或 AX 观察通信失败）、`WINDOW_UNAVAILABLE`、`WINDOW_CHANGED`、`PERMISSION_DENIED`、`BACKGROUND_RESTORE_UNAVAILABLE`（无法在保留键盘焦点的前提下恢复窗口）、`HOVER_UNAVAILABLE`、`FOREGROUND_REQUIRED`（按下鼠标键或移动系统指针要求命中前台目标窗口）、`INPUT_BUSY`（已按住的键与请求的操作冲突）、`PANEL_NOT_READY`（输入前系统面板接收方尚不可用）及 `NATIVE_ERROR`（其余操作系统失败）。错误不保证已分派的部分输入被回滚，Host 不得自动重试输入。
 
 应用选择向 Host 返回授权记录：区分大小写的 Bundle ID 加上 `macos:bundle-id:` 前缀后计算的 SHA-256 摘要、显示名称、可选的可执行路径和可持久化标记。相同标识的所有安装副本共用授权，包括未签名和临时签名的应用。缺少非空 Bundle ID 时，运行中和未启动应用都对 `macos:executable-path:` 与解析符号链接后的可执行路径计算 SHA-256，仍可保存长期授权。进程路径查询失败时，运行中的有效 Bundle ID 仍可用于授权，记录省略 executablePath；路径可取得时仍须与所选目标一致。两种身份均不可用时，在执行目标操作前返回 APP_PATH_UNAVAILABLE，保留路径查询原因和 errno。PROCESS_INSPECTION_FAILED 表示无法验证进程实例，只有进程检查返回 ESRCH 时才报告进程不存在；两种失败都不触发自动重试。进程号和启动时间只校验存活句柄，不进入已保存身份。Host 从模型结果中移除此记录，并在启动、观察和输入前取得用户许可。此管道协议用于可信 Host 传输，无法隔离另一个已获授权的 shell 进程。
 
@@ -104,7 +104,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 窗口隐藏本身不会使 AX 快照失效。刷新清单时，只有同一窗口 ID 仍存在且观察到的尺寸未变，才能继续使用此前截图的像素坐标。观察到尺寸变化后需要重新截图；窗口销毁后不能继续操作。清单中省略窗口不会阻止按已知 ID 发起输入。窗口归属、尺寸和输入检查仍然生效，成功分派不代表应用已接收。
 
-窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemInput` 后，helper 通过 HID 发送系统按键事件。只有按下该键的连接能通过原窗口显式松开。在同一窗口请求系统指针移动会发送该按键的拖动事件。
+窗口模式的 `toggleMouse` 向目标进程发送一次按下或松开。按下时使用当前指针位置，松开时允许指针移出。显式开启 `useSystemInput` 后，helper 通过 HID 发送系统按键事件。同一连接可以在同一窗口按住多个鼠标键，并通过原窗口按任意顺序松开。如果左、中、右键中有键由用户、其他连接或其他窗口按住，新的系统按下请求会返回 `INPUT_BUSY`。在该窗口调用系统 `mouseMove` 时，拖动事件使用仍按住的键中最先按下的一个。
 
 点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和默认拖动核实窗口归属和边界后，向目标进程和窗口投递事件。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。显式传入 `useSystemInput: true` 的拖动通过 HID 投递，起点及每段移动都要命中目标前台窗口。手势共用事件号，每段携带位移。取消时在最后投递的位置松开鼠标键。
 

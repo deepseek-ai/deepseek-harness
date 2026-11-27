@@ -30,7 +30,7 @@ import Foundation
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not read the current pointer position")
         }
         try WindowPointerInput.checkSystemHit(route, at: point)
-        try WindowPointerInput.requireReleasedButtons()
+        try WindowPointerInput.requireReleasedButtons(except: held.systemButtonsHeld(by: owner, in: route))
         let group = Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)
         let down = try Self.event(WindowPointerInput.down(button), source: nil, at: point, button: button, group: group)
         let up = try Self.event(WindowPointerInput.up(button), source: nil, at: point, button: button, group: group)

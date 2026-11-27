@@ -141,6 +141,19 @@ def check_toggle_mouse(helper, owner, state_file, executable):
             events = wait_owned(lambda s: len(s["events"]) >= count + 3)["events"][count:]
             assert [e["type"] for e in events] == [down, moved, up], events
             assert len({e["eventNumber"] for e in events}) == 1 and not events[-1]["pressedButtons"] & (1 << index), events
+        assert cursor(*inside) == inside
+        for releases in [(("right", 4, 1), ("left", 2, 0)), (("left", 2, 2), ("right", 4, 0))]:
+            count = len(read_owned()["events"])
+            try:
+                for button, event_type, mask in (("left", 1, 1), ("right", 3, 3), *releases):
+                    direction = "down" if event_type in (1, 3) else "up"
+                    call("toggleMouse", {**window, "mouseButton": button, "direction": direction, "useSystemInput": True})
+                    count += 1
+                    event = wait_owned(lambda s: len(s["events"]) >= count)["events"][count - 1]
+                    assert (event["type"], event["pressedButtons"] & 3) == (event_type, mask), event
+            finally:
+                call("releaseHeldInputs", {})
+
         def wait_button(pressed):
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline:
