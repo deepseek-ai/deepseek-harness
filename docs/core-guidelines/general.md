@@ -121,7 +121,7 @@ Review: flag a function-typed parameter, or a function-typed field of an options
 
 ### Reason
 
-Review alone misses repeated violations: a reviewer who does not know the rule lets the same violation in again. A gate stops new violations. Its recorded list makes the existing violations visible. The gate fails until the entries for fixed code are removed, and nothing adds entries, so the list only shrinks. Recording existing violations lets the rule take effect without fixing them first.
+Review alone misses repeated violations: a reviewer who does not know the rule lets the same violation in again. A gate stops new violations. Its recorded list makes the existing violations visible. The gate fails until the entries for fixed code are removed, and review rejects a list edit that adds an entry, so the list only shrinks. Recording existing violations lets the rule take effect without fixing them first.
 
 ### Example, bad
 
@@ -145,8 +145,8 @@ A syntax check finds every such assertion, so this rule depends on each reviewer
 
 A script can detect a violation when it identifies the violation without a reviewer's judgment, for example a syntax form, an import, or a text pattern. A violation that needs judgment, such as whether a callback matches a [G.2](#g2) exception, stays a review check.
 
-Add the gate in the same change as the rule. The gate records the existing violations and rejects a violation it does not record. For a TypeScript or JavaScript syntax form, build it on `scripts/baseline-inventory.ts`, which records violations by file and syntax fingerprint, fails while an entry matches no code, and removes such entries with `--prune`. Register the gate in `scripts/run-gates.ts` and name it in the rule's `Enforcement`.
+Add the gate in the same change as the rule. The gate rejects a violation that its list does not record. The same change writes the initial list from the gate's findings; no command writes it. For a TypeScript or JavaScript syntax form, build it on `scripts/baseline-inventory.ts`, which records violations by file and syntax fingerprint, fails while an entry matches no code, and removes such entries with `--prune`. Register the gate in `scripts/run-gates.ts` and name it in the rule's `Enforcement`.
 
 ### Enforcement
 
-Review: flag a new rule whose violations a script can detect, but whose change adds no gate.
+Review: flag a new rule whose violations a script can detect, but whose change adds no gate. Flag a change that adds an entry to a gate's list.
