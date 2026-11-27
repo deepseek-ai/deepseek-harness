@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { identitySubjectLabel } from '../owner-identity.ts'
 import type { NS } from './locales.ts'
 import { readOwnerIdentity, UNKNOWN_OWNER_IDENTITY, type OwnerIdentityStatus } from './owner-identity.ts'

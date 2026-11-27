@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for 2026-11-27-client-packages-as-immediately-dynamic-plugins.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-27-client-packages-as-immediately-dynamic-plugins.md
+/agent-note-three-client-packages-as-immediately-dynamic-plugins:
+  en: b34766020b1e727a
+  zh: 9c8562d7f7507247
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/problem:
+  en: b11e91ee567e7aff
+  zh: e816110f3790a233
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision/immediately-dynamic-plugin-packages:
+  en: 7a34195d528c191b
+  zh: 75979f76214888a9
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision/client-store-is-a-statically-linked-library:
+  en: b9737ccd537fa2ee
+  zh: 1b57fb604301b1a5
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision/the-package-root-a-host-entry-with-the-client-types:
+  en: f31140235b594234
+  zh: f7e20b1c99cbf20e
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision/x-and-x-client-name-one-module:
+  en: 02a7d2643cbe549e
+  zh: f0894d118b5a09d3
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision/the-repository-names-the-packages-through-client:
+  en: 1a74ea871fd9782d
+  zh: 68fddb7b3fdca13e
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/decision/compatibility-commitments:
+  en: 377f185528c7f125
+  zh: 3d2b9662dd247792
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/alternatives-considered:
+  en: e655be0fac71c29f
+  zh: 3968d36b340cf2ab
+/agent-note-three-client-packages-as-immediately-dynamic-plugins/consequences:
+  en: 14d8f4d89f940069
+  zh: c11f24c898072c1f

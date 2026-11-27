@@ -1,8 +1,8 @@
 /** Native permission status and revocable application consent on the existing plugin page. */
 import { useEffect, type ReactNode } from 'react'
-import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconLayersOutlineRegular, IconSettingsOutlineRegular, IconWarningOutlineRegular, Modal, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { CuaApplicationGrant, CuaSystemPermissionState } from '../access-types.ts'
 import type { PermissionFace } from './controller.ts'

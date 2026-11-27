@@ -9,7 +9,7 @@
 
 import { useId } from 'react'
 import type { ReactNode } from 'react'
-import { IconChevronDownOutlineRegular, IconChevronRightOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineRegular, IconChevronRightOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import styles from './ModelsSection.module.css'
 
 /** Props of {@link FoldSection}. */

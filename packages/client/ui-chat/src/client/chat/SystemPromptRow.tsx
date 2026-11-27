@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import type { ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
-import { DisclosureRow, IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconBrowseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { SystemMessageSections } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { OpaqueBody, SystemSectionsBody } from './ContextBody.tsx'
 import css from './ContextInjectionRow.module.css'

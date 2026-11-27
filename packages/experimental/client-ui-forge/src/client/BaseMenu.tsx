@@ -1,7 +1,7 @@
 /** Base branch picker of the local changes view's `branch` scope: the automatic fork point, then remote-tracking and local branches. */
 
 import type { ReactNode } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeBaseBranch, ForgeBaseBranches } from '../types.ts'
 import { branchSearchStatus } from './branch-search.tsx'

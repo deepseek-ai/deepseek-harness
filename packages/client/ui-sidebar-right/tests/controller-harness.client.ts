@@ -2,7 +2,7 @@
 import { vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { LayoutState, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { LayoutState, TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { createSidebarRightController } from '../src/client/service.ts'
 import { SidebarRightTabRegistry } from '../src/client/tab-registry.ts'
 import { createSidebarRightStore } from '../src/client/stores.ts'

@@ -8,9 +8,9 @@
 import { selectSessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
 import { useCallback } from 'react'
 import type { ReactNode } from 'react'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { IconFolderCloseRegular, IconFolderOpenRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconFolderCloseRegular, IconFolderOpenRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { FilesInjected } from './face.ts'
 import type { createFilesStore } from './store.ts'
 import type {} from './locales.ts'
@@ -21,7 +21,7 @@ export interface NavigatorToggleInput {
   readonly useTabInfo: UseSidebarRightTabInfo
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /** Show or hide the pane's workspace tree; absent without a working directory. */
     'sidebar.files.navigator.toggle': {

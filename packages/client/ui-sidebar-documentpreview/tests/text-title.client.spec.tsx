@@ -2,7 +2,7 @@
 /** The chip title: the file type's sheet, then the name the registry captured. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { TextTitle } from '../src/client/TextTitle.tsx'
 
 afterEach(cleanup)

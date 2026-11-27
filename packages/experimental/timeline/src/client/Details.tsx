@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Button, IconQuestionOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconQuestionOutlineRegular, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ProgressPrecision } from '../policy.ts'
 import type { TimelineView } from '../records.ts'
 import { measureAll } from '../tasks.ts'

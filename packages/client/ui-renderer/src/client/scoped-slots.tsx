@@ -13,7 +13,7 @@ import {
   type ScopedStandardSourceBinding, type SessionAreaProps, type SessionProviderComponent, type SlotRenderer,
   type SlotEntryDef, type SlotRendererHost, type SlotScope, type SlotScopeAdapter, type SlotSpec, type StandardSourceBinding,
   type StoredEntry, type StoredFactory, type Translate,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import {
   HostContext, RootStandardProvider, ScopeBindingProvider, ScopeProvider,
   keyedObservableHook, maybeObservableHook, observableHook, useHost, useRootBinding,

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Button, IconChevronLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconChevronLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** A compact back control sits beside the detail title in both task and report views. */
 export function DetailHeader({

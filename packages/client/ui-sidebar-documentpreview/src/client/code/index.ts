@@ -1,6 +1,6 @@
 /** Code preview metadata and body registered through the public document extension points. */
 import type { Context } from '@deepseek-ai/cordis'
-import { CODE_HIGHLIGHT_EXTENSIONS } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CODE_HIGHLIGHT_EXTENSIONS } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {} from '../index.ts'
 import { CodeBody } from './CodeBody.tsx'
 import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'

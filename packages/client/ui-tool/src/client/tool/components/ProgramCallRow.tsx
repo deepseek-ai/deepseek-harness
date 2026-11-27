@@ -1,7 +1,7 @@
 /** Header row of a program call: its description and sub-call count above the rows it discloses. */
 import { useMemo, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { DisclosureRow, IconHubOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconHubOutlineRegular, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { localizeAutoReviewDenial } from '../models/auto-review-denial.ts'
 import { toolRowModel } from '../models/tool-call-model.ts'

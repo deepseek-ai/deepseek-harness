@@ -13,7 +13,7 @@ import { WorkflowRunPanel, type WorkflowRunInjected } from './WorkflowRunPanel.t
 import { en, ja, es, fr, de, ru, pt, NS, type WorkflowRunKey, zh } from './locales.ts'
 import { workflowRunDefinition } from './workflow-definition.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Durable workflow-run node copy. */
     workflowRun: WorkflowRunKey

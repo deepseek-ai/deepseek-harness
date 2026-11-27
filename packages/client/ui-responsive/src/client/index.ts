@@ -3,8 +3,8 @@
  * @module @deepseek-ai/dsh-client-ui-responsive/client
  */
 import { Service, type Context } from '@deepseek-ai/cordis'
-import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots'
+import { isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { HostObservable, RootStandardSourceContribution } from '@deepseek-ai/dsh-client-ui-slots/client'
 // Type-only: the SlotRegistry (`ctx.slots`) merge.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 
@@ -19,7 +19,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     /**
      * Whether a CSS media query currently matches in the page window; the component rerenders when the answer

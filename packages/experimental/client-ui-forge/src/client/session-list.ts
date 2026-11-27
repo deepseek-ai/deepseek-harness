@@ -1,7 +1,7 @@
 /** The forge facts a Session row shows, from the Session list and the change request states every row shares. */
 
 import { useMemo } from 'react'
-import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { UseSessions } from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-experimental-forge-session/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'

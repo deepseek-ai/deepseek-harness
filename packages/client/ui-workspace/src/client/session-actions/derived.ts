@@ -1,5 +1,5 @@
 /** Derived observable sources for the row actions' injected hooks. */
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /**
  * Project one observable into another, recomputing only when the source

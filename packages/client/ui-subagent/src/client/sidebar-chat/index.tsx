@@ -8,7 +8,7 @@ import type { ConversationViewsProps, WorkspaceSelectedHandler } from '@deepseek
 import type { PaneId, SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
   HostObservable, PropsRenderFactories, PropsRenderSlots, PropsRuntime, TranslateNS,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { NS } from '../locales.ts'
@@ -35,7 +35,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap {
     subagentchat: SubagentChatResource
   }

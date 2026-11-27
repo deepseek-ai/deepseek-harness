@@ -20,7 +20,7 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 
 | 包 | 形态 | 所有物 |
 |---|---|---|
-| `packages/client/ui-dockkit` | 静态链接库，零 DSH 依赖 | 布局引擎与渲染/驱动它的 React 组件；消费方编译其源码，且它只保留一张样式表，因为消费方按文件名去重注入的样式表 |
+| `packages/client/ui-dockkit` | 带 `immediately: true` 的动态插件包，零 DSH 依赖 | 布局引擎与渲染/驱动它的 React 组件；消费方通过它的 `/client` 导出 require 它，且它只保留一张样式表，因为消费方按文件名去重注入的样式表 |
 | `packages/client/ui-sidebar-right` | 动态插件 | 共用一个 store 的 `rightbar` 面板坑位与 `conversation.session.header.corner` 展开按钮、每会话一份 surface、两种呈现模式、浮层宿主、`ctx.sidebarRight`、`ctx.sidebarRightTabs`、tab 域（每条 tab 记录一个 occurrence）、三个扩展坑位、引导 tab 类型与 `sidebarRight` 文案命名空间 |
 
 该库的第一个嵌入方就是本产品，而库对此一无所知：所有字符串经 `DockLabels` 传入，所有 tab 正文经按不透明 `kind` 分派的 `TabRenderer` 传入，所有手势经 `DockIntents` 传出。集成包提供库拒绝知晓的一切。

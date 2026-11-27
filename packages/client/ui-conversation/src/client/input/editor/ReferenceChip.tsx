@@ -5,8 +5,8 @@
  */
 import clsx from 'clsx'
 import type { ReactNode } from 'react'
-import { ReferenceIconRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ReferenceIconKind } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ReferenceIconRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { ReferenceIconKind } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './ReferenceChip.module.css'
 import referenceCss from './composer-editor.module.css'
 

@@ -2,7 +2,7 @@
 /** The segmented control is a tablist whose selection the owner holds. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
+import { SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 afterEach(cleanup)
 

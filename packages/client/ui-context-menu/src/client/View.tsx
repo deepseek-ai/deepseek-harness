@@ -1,7 +1,7 @@
 /** Shared Web renderer for Client menu contributions. */
-import { Menu, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsStore, PropsRenderSlots, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Menu, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsStore, PropsRenderSlots, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { Shortcuts, ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { createMenuStore } from './store.ts'
 import type { MenuActionView } from './types.ts'

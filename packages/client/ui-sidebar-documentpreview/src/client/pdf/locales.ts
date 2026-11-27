@@ -31,7 +31,7 @@ export const en = {
   retry: 'Retry',
 } satisfies Record<PdfLocaleKey, string>
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** PDF page, loading, and failure messages. */
     sidebarPdf: PdfLocaleKey

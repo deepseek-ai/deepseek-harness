@@ -2,7 +2,7 @@
 import type { MouseEvent, RefObject } from 'react'
 import type { LexicalEditor } from 'lexical'
 import { $getRoot } from 'lexical'
-import { focusWithoutRing, isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives'
+import { focusWithoutRing, isMobileDevice } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ComposerKeyboard } from '../../contract/draft-editor.ts'
 import type { BusyEnterBehavior } from '../../contract/composer-submission.ts'
 import { resolveSubmitMode } from '../submission-policy.ts'

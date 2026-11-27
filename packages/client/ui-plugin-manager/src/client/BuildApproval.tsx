@@ -1,7 +1,7 @@
 /** The request to allow the build scripts pnpm blocked, shown by a failed installation or update. */
 
 import { useId, type ReactNode } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { Translate } from './presentation.ts'
 import css from './PluginManagerPage.module.css'
 

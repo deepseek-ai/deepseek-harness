@@ -14,8 +14,8 @@ import {
   Menu,
   Tag,
   Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { Task, Tree, TimelineView } from '../records.ts'
 import { measureAll, prioritiesOf } from '../tasks.ts'
 import type { ViewState } from './store.ts'

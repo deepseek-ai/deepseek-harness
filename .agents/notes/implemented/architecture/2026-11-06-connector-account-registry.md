@@ -31,7 +31,7 @@ The page registers one title tag entry and one notice entry. It also registers a
 
 **One browser half per connector kind.** Rejected: client plugins cannot import each other's values, so the shared surfaces would be written twice and diverge.
 
-**Share the browser half through `PLATFORM_MODULES` or a browser-side service.** Rejected: the module table is reserved for shell-seeded and static infrastructure libraries, and a browser-side service would keep the registrations in the browser, which only repeat what the Host knows.
+**Share the browser half through `PLATFORM_MODULES` or a browser-side service.** Rejected: new shared runtime code does not enter the module table's baseline, and a browser-side service would keep the registrations in the browser, which only repeat what the Host knows.
 
 **Let the browser derive an account's phase and actions from the registrant's raw state.** Rejected: the rules for which actions apply would live where the Host cannot test or run them, and the browser would need the registrant's own Remote.
 

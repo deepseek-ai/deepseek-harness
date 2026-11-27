@@ -68,7 +68,7 @@ Each installed `<style>` carries `data-plugin` (package) and `data-path` (that s
 
 ### Identity
 
-React, React DOM, Cordis, ui-slots, and ui-primitives retain one browser identity through the web shell's static module table; this package arrives as a dynamic client bundle.
+React, React DOM, and Cordis retain one browser identity through the web shell's static module table, and ui-slots and ui-primitives through their `immediately` rows; this package arrives as a dynamic client bundle.
 
 </details>
 

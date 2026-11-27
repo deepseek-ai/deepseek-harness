@@ -4,7 +4,7 @@
  */
 import type { MessageId } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ReadAloudStatus } from '@deepseek-ai/dsh-read-aloud/types'
 import type {} from '@deepseek-ai/dsh-read-aloud/remote'
 import type { NS } from './locales.ts'

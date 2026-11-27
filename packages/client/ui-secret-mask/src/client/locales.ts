@@ -1,6 +1,6 @@
 /** `secretMask` dictionaries for the per-credential reveal control. */
 
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'secretMask'
@@ -14,7 +14,7 @@ export const zh = {
 /** The secretMask namespace key union. */
 export type SecretMaskKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Accessible names of the control that reveals one masked credential. */
     secretMask: SecretMaskKey

@@ -1,5 +1,5 @@
 /** Adapt authorized delivery and changed-file routes to the shared opening control. */
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-deliverables/client'
 import { parseNativeFileApplications } from '@deepseek-ai/dsh-native-command/types'
 import type { SessionWorkspacePathApplication } from '@deepseek-ai/dsh-api-session-controller/types'

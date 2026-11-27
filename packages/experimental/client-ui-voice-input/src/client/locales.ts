@@ -1,5 +1,5 @@
 /** Locale-owned copy for experimental voice input. */
-import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-slots/client'
 /** Dictionary namespace for every voice control. */
 export const NS = 'voice-input'
 
@@ -264,7 +264,7 @@ export const en: Record<VoiceKey, string> = {
   'cloudGuideUrl': 'https://api-docs.deepseek.com/guides/asr',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Experimental microphone and transcription controls. */
     'voice-input': VoiceKey

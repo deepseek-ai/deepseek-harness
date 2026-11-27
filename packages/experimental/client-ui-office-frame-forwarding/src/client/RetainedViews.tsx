@@ -2,7 +2,7 @@
 import { useCallback, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { FrameForwardingAttempt } from './Preview.tsx'
 import type { RetainedOfficeView } from './retained-views.ts'
 

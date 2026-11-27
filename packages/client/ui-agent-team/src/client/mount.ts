@@ -17,7 +17,7 @@ import { createTeamBoardStore } from './team-board-store.ts'
 import { TeamCommandRow } from './TeamCommandRow.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type TeamKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Shared task-board copy. */
     'agent-team': TeamKey

@@ -11,7 +11,7 @@ import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { protocolOf, RESOURCE_SCHEME, ResourceRegistry } from '../src/client/resources.ts'
 import type { ResourceOpenContext, ResourceProvider } from '../src/client/contract.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap {
     feed: string
     counter: number

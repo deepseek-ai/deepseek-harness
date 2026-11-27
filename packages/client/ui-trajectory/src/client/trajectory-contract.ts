@@ -3,7 +3,7 @@ import type {
   ConversationViewNode, MessageImagesOwnerProps, PartialAssistant, RequestPromptChange,
   RequestView, RunningToolCall, SystemPromptNode, ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Request-header facts retained by the Trajectory target. */
 export interface TrajectoryRequestHeaderState {
@@ -87,7 +87,7 @@ declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SessionStandardProps {
     /** Selector hook over the current Conversation binding's Trajectory target. */
     useTrajectory: UseTrajectory

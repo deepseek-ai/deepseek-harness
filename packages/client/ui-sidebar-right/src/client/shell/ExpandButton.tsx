@@ -15,11 +15,11 @@
  * on the other edge.
  */
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
-import type { InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { Button, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconPanelLeftOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: the `useMobile` standard prop merge.
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'

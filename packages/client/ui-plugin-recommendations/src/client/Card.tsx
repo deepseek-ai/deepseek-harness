@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useId, useState, useSyncExternalStore } from 'react'
 import { z } from 'zod'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'

@@ -1,7 +1,7 @@
 /** A bundle's long description on its page: the Markdown document the Host reads for it. */
 import { useEffect, useMemo, type ReactNode } from 'react'
-import { DetailDocument, detailDocumentState, useDetailDocumentLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { DetailDocument, detailDocumentState, useDetailDocumentLabels, type MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { bundleDetailKey, type BundleDetailFailure, type BundleDetailsState } from './detail-store.ts'
 
 type Translate = PropsLocale<'pluginManager'>['t']

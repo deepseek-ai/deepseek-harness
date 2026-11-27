@@ -189,7 +189,7 @@ A business package may install one entry only while a Remote waterfall request i
 
 ```tsx
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChainSelect, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ChainSelect, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 interface Request {

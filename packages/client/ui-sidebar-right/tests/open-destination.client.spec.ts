@@ -6,8 +6,8 @@
  * Tab domain must keep a moved tab's occurrence across that commit.
  */
 import { describe, expect, it, vi } from 'vitest'
-import type { PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { PaneId, TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
+import { dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { controllerHarness, SESSION } from './controller-harness.client.ts'
 
 const A = 'dsh-resource://file/session/s-test/a.txt'

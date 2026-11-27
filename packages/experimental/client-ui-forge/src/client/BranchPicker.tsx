@@ -8,7 +8,7 @@ import clsx from 'clsx'
 import {
   IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronDownOutlineRegular,
   IconWarningTriangleOutlineRegular, Menu, MenuItemButton, Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { useBranchSearch, type BranchSearch } from './branch-search.tsx'
 import css from './BaseMenu.module.css'

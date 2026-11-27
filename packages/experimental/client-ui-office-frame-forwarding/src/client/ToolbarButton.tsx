@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import {
   Button, IconChevronLeftOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular, IconPauseOutlineRegular,
   IconPlayOutlineRegular, IconRefreshOutlineRegular, Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { OfficeKey } from './locales.ts'
 import css from './Editor.module.css'
 

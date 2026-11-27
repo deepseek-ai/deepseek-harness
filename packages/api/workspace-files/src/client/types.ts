@@ -7,7 +7,7 @@
 import type {} from '@deepseek-ai/dsh-client-resources/client'
 import type { WorkspaceFileStat } from '../types.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap {
     /**
      * One workspace file's metadata, addressed as

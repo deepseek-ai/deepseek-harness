@@ -41,7 +41,7 @@ Every slot component receives `useResource` in its props. `useResource<P>(addres
 The protocol's owning client package declares its value type in `ResourceProtocolMap` and registers one provider as an owned effect. `open` yields `RemoteResult` frames: the current content first and one frame per later change, with a failure as an `ok: false` frame rather than a throw; it must stop when `signal` aborts:
 
 ```ts ignore-check
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap { note: NoteView }
 }
 

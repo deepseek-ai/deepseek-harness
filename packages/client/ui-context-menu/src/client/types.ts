@@ -2,7 +2,7 @@
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { PaneId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { PaneId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import type { HTMLAttributes } from 'react'
 
 /** DOM handlers bound to an explicit object; existing handlers can prevent menu activation. */

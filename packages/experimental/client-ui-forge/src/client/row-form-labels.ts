@@ -1,6 +1,6 @@
 /** Copy of the Plugins form that the row pages of the Forge bundle share. */
-import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ForgePanelKey, NS } from './locales.ts'
 
 /**

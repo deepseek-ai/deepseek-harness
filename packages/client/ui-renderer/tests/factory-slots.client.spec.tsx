@@ -8,8 +8,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ActionsDecl, FactoryComponentPropsOf, FactoryLocalComponentPropsOf, HostObservable,
   PropsRenderFactories, PropsRuntime, StoreHandle, StoreInstanceLike,
-} from '@deepseek-ai/dsh-client-ui-slots'
-import { StaleAuthorizationError } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
+import { StaleAuthorizationError } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 interface CounterState { count: number }
 interface CounterActions extends ActionsDecl<CounterState> {
@@ -17,7 +17,7 @@ interface CounterActions extends ActionsDecl<CounterState> {
 }
 type CounterStore = StoreHandle<CounterState, CounterActions>
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'renderer.factory.child': { kind: 'list'; scope: 'root' }
     'renderer.factory.chain': { kind: 'chain'; scope: 'root'; owner: { enabled: boolean } }

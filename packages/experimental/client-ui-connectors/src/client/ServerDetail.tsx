@@ -3,8 +3,8 @@
  * confirmation of a local command the save starts.
  */
 import { useState, type ReactNode } from 'react'
-import { Button, Checkbox, IconPlusOutlineRegular, Input, Modal, RiskConfirmation, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { Translate } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, Checkbox, IconPlusOutlineRegular, Input, Modal, RiskConfirmation, SegmentedControl } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { Translate } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { ProbeState } from './custom-servers-store.ts'
 import type { ConnectorsLocaleKey } from './locales.ts'

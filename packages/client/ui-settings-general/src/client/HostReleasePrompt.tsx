@@ -1,8 +1,8 @@
 /** Confirmation shown when this page reconnects to a Host running another release. */
 import clsx from 'clsx'
-import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ClientReleaseChange, WebBootRelease } from '@deepseek-ai/dsh-client-modules/client'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 // Type-only: pulls ui-layout's SlotMap merge (the 'shell.overlay' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import css from './HostReleasePrompt.module.css'

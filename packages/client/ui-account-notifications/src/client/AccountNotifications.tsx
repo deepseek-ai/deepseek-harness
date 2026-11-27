@@ -1,7 +1,7 @@
 /** Notification extension rendered in the sidebar row above the account menu. */
 import { useEffect, useRef, type CSSProperties } from 'react'
-import { Button, IconCloseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, IconCloseOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-account/client'
 import type { AccountNotice } from './notification-controller.ts'
 import type { NotificationKey } from './locales.ts'
@@ -30,7 +30,7 @@ export function AccountNotifications({ active, openAccount, useNotices, shown, c
     onOpenAccount={openAccount} onShown={shown} onCtaClicked={ctaClicked} onDismiss={dismiss} />
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap { 'account.notifications': NotificationKey }
 }
 

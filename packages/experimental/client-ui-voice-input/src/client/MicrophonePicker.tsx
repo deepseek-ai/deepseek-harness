@@ -1,6 +1,6 @@
 /** Device selection owns microphone previews while its page is active. */
 import { useEffect, useRef, useState } from 'react'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { VoiceInputInjected } from './VoiceInput.tsx'
 import { RecordingError, type Recording } from './audio.ts'
 import type { MicrophoneDevice } from './microphone-device.ts'

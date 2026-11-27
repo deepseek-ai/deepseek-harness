@@ -1,9 +1,9 @@
 /** Create a plugin through the existing Creator flow from the Add plugin menu. */
 import { useEffect } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { IconAgentPresetOutlineRegular, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconAgentPresetOutlineRegular, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { AgentPresetSettingsState } from './settings-store.ts'
 import css from './CreatePluginMenuItem.module.css'
 

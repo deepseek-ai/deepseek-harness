@@ -22,7 +22,7 @@ export type { AgentLoopCardProps } from './AgentLoopCard.tsx'
 export type { AgentLoopCardFace, AgentLoopCardState, AgentLoopSettings } from './agent-loop-card-controller.ts'
 export type { AgentLoopSettingsLocaleKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Agent loop settings page copy. */
     'settings.agentLoop': AgentLoopSettingsLocaleKey

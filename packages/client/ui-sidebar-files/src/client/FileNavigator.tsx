@@ -14,11 +14,11 @@ import clsx from 'clsx'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { TreeEntry } from './FileTree.tsx'
-import type { FactoryComponentPropsOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import {
   Button, IconCloseOutlineRegular, IconEyeOffOutlineRegular, IconEyeOutlineRegular, IconInfoOutlineRegular, IconSearchOutlineRegular,
   StateDot, Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { FilesInjected } from './face.ts'
 import type { SidebarFilesKey } from './locales.ts'
@@ -40,7 +40,7 @@ export interface FileNavigatorInput {
   readonly onOpen: (address: string) => void
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotFactoryMap {
     /**
      * One pane's workspace tree with its width and show/hide state. The host renders it as a direct child of

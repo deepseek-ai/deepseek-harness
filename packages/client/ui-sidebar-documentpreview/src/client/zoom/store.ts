@@ -1,6 +1,6 @@
 /** Tab-local zoom preferences for renderers without additional view state. */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { FIT_WIDTH, type ZoomPreference } from './types.ts'
 
 /** Tab-lifetime callback supplied by a zoomable renderer registration. */

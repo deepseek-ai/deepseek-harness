@@ -1,6 +1,6 @@
 /** Load the spreadsheet renderer only when a supported workbook is opened. */
 import { lazy, Suspense, type ReactNode } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { DocumentPreviewProps } from '../document/contract.ts'
 import { excelFormat, type ExcelFormat } from './format.ts'
 import type { ExcelLimits } from './model.ts'

@@ -10,8 +10,8 @@ import {
   IconQueueOutlineRegular,
   Menu,
   Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { priorities } from '../records.ts'
 import type { Annotation, Priority, Task, Tree } from '../records.ts'
 import { CONTROL_WAIT_MS, latestControl, pendingControl } from '../controls.ts'

@@ -1,6 +1,6 @@
 /** Session header entry that shows or hides the Session panel. */
 import { useId, type ReactNode } from 'react'
-import { Button, IconFlatListOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconFlatListOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelToggleProps } from './slots.ts'
 import { presentationOf } from './visibility.ts'

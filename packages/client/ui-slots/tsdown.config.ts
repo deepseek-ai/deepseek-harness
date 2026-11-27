@@ -1,6 +1,7 @@
-import { staticLinked } from '../tsdown.client.ts'
+import { clientBundle } from '../tsdown.client.ts'
 
-export default staticLinked(
+// The Host entry is hand-written JavaScript, so tsc emits nothing for it under lib/types.
+export default clientBundle(
   import.meta.dirname,
-  ['lib/types/index.js'],
+  ['src/index.js'],
 )

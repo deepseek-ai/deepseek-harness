@@ -5,8 +5,8 @@ import {
   IconCompactOutlineRegular, IconDownloadOutlineRegular,
   IconGoalOutlineRegular, IconPaperPlaneOutlineRegular, IconPlanOutlineRegular,
   PermissionIconFullAccessRegular,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import type { CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
 import type { CommandKey } from './locales.ts'

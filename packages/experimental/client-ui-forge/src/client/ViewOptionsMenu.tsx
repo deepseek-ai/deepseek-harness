@@ -2,8 +2,8 @@
 
 import { useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconEllipsisOutlineRegular, Menu, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconEllipsisOutlineRegular, Menu, Tooltip, type MenuEntry } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 import { foldOf } from './toolbar-fold.ts'
 import { lensEntries, lensOfRow, NO_LENS, type LensChoice } from './LensFilter.tsx'

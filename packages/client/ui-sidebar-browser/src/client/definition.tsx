@@ -1,7 +1,7 @@
 /** Static Browser tab type and guide declaration. */
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
-import { GuideArtworkBrowser } from '@deepseek-ai/dsh-client-ui-primitives'
+import { GuideArtworkBrowser } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from './locales.ts'
 

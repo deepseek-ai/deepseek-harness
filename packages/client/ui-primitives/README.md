@@ -1,6 +1,6 @@
 ---
 description: "Shared React UI atoms for the dsh web client: controls, icons, markdown and math rendering, and the terminal/read/diff/search/web output cards (zero Cordis)."
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-client-ui-primitives
@@ -33,7 +33,7 @@ Checkboxes retain native input semantics with shared corner geometry and check a
 
 Automatic modal entry and modal/menu return focus, including after Escape and application close shortcuts, use `focusWithoutRing(element, options?)` to suppress the outline until Tab or directional navigation resumes normal focus styling. Dialog containers keep their outline-free styling. Existing borders, shadows, and error states remain intact. Mark a dialog's initial control with `data-modal-autofocus` so the modal captures its invoking control before moving focus. Controls mounted with the dialog must not use React `autoFocus`, which runs before that capture. Tab and Shift+Tab from the dialog container enter its first and last focusable controls.
 
-This package is a Web-shell build input. Its static ESM retains third-party imports, including third-party stylesheets such as KaTeX's, for Vite; its own stylesheets are compiled into the `__$dsh_client_module_manifest` export for the renderer to install; independent consumers supply its development dependencies ([dependency rules](../AGENTS.md#dependency-declaration)).
+This package is a dynamic plugin package with `immediately: true`, and its code runs only in the browser. Its `/client` entry, `lib/client.js`, built from `src/client/index.ts`, still exports values that other bundles require, a historical exception that will be reduced over time ([export discipline](../AGENTS.md#export-discipline-client-plugin-packages)); browser bundles reach those exports by package name or by the `/client` subpath, which name one module-table row. For compatibility with code outside the repository, the package root's types reuse the `./client` declarations, and its runtime, `lib/index.js` built from `src/index.js`, is the Host entry with an empty `apply` ([package roots](../AGENTS.md#hand-written-package-roots)). In Node the package root therefore provides no values: code imports them from the `/client` subpath, and tests that run them outside the browser resolve that subpath to source ([Client test runtime](../../test-support/client-runtime/README.md#module-resolution)); repository code names the package only through `/client`. Independent consumers supply its development dependencies ([dependency rules](../AGENTS.md#dependency-declaration)). Its Client build bundles KaTeX, Shiki, and the Markdown parser into `lib/client.js` and its chunks. The TypeScript, shell, and JSON grammars register with the entry; every other Shiki language downloads on first use with the chunks it requires. KaTeX's fonts are package assets under `lib/assets/vendor/katex/dist/fonts/`, one file per face.
 
 Compose feature UI from these atoms whenever the web client needs a standard control or an agent-output renderer. They render through React only and take `--dsw-*` design tokens from the theme, so they fit any plugin without importing the theme or the slot system.
 

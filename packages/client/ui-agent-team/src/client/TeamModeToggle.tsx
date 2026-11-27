@@ -1,8 +1,8 @@
 /** Session-owned Agent Teams summary and settings inside the model menu. */
 
 import { useId, useState } from 'react'
-import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import type {} from '@deepseek-ai/dsh-agent-team/client'
 import type {} from '@deepseek-ai/dsh-agent'

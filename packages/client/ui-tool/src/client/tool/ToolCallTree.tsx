@@ -2,7 +2,7 @@
 import { memo, useCallback, useMemo, useState, type ComponentProps, type KeyboardEvent, type ReactNode } from 'react'
 import clsx from 'clsx'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { DisclosureRow, IconEllipsisOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconEllipsisOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ToolCallOwnerProps, ToolCallPhaseProps, ToolTreeProps } from '../contract/slots.ts'
 import { ProgramCallRow } from './components/ProgramCallRow.tsx'
 import { classifyTool, toolRowModel } from './models/tool-call-model.ts'

@@ -12,7 +12,7 @@ import { mountConnectors } from './mount.ts'
 
 export { inject } from './mount.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Connectors tab copy. */
     connectors: ConnectorsLocaleKey

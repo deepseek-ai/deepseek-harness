@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { TagTone } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 afterEach(cleanup)
 

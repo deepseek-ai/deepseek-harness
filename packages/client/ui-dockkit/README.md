@@ -11,7 +11,7 @@ English | [中文](README.zh.md)
 
 A docking layout kit: a split tree of tabbed panes with invertible operations, and the components that render and drive it. The Harness Web client is its first embedder; nothing in here knows that.
 
-> **Internal engine.** This package is published because the Sidebar links it statically, not as a stable API: its exports — `LayoutState`, `LayoutOp`, the planners, `DockIntents`, `DockLabels`, `DockMode` — may change in any release, and none of them appears in a service interface (`ctx.sidebarRight` exposes operations, never layout snapshots or operation logs).
+> **Internal engine.** This package is published because the Sidebar requires it at runtime, not as a stable API: its exports — `LayoutState`, `LayoutOp`, the planners, `DockIntents`, `DockLabels`, `DockMode` — may change in any release, and none of them appears in a service interface (`ctx.sidebarRight` exposes operations, never layout snapshots or operation logs).
 
 ## Table of Contents
 
@@ -90,7 +90,7 @@ These are not stylistic; each one fixes a defect found in a real browser.
 <a id="build-shape"></a>
 ## Build shape
 
-The package is statically linked: tsdown's `staticLinked` preset emits one browser ESM bundle at `lib/index.js` (every bare specifier stays an import, sourcemaps chain to the sources), and the Web shell resolves the package name and bundles that artifact itself. The preset compiles `dockkit.module.css` with class names of the form `<hash>_<local>` and carries its text in the bundle's `__$dsh_client_module_manifest` export; the renderer installs it as one style element with `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` and `data-path="src/client/components/dockkit.module.css"`.
+The package is a dynamic plugin package with `immediately: true`, and its code runs only in the browser. Its `/client` entry, `lib/client.js`, built from `src/client/index.ts`, still exports values that other bundles require, a historical exception that will be reduced over time ([export discipline](../AGENTS.md#export-discipline-client-plugin-packages)); browser bundles reach those exports by package name or by the `/client` subpath, which name one module-table row. For compatibility with code outside the repository, the package root's types reuse the `./client` declarations, and its runtime, `lib/index.js` built from `src/index.js`, is the Host entry with an empty `apply` ([package roots](../AGENTS.md#hand-written-package-roots)). In Node the package root therefore provides no values: code imports them from the `/client` subpath, and tests that run them outside the browser resolve that subpath to source ([Client test runtime](../../test-support/client-runtime/README.md#module-resolution)); repository code names the package only through `/client`. Independent consumers supply its development dependencies ([dependency rules](../AGENTS.md#dependency-declaration)). The shared Client preset compiles `dockkit.module.css` with class names of the form `<hash>_<local>` and carries its text in the registration metadata of `lib/client.js`; the renderer installs it as one style element with `data-plugin="@deepseek-ai/dsh-client-ui-dockkit"` and `data-path="src/client/components/dockkit.module.css"`.
 
 <a id="model-experience"></a>
 ## Model Experience

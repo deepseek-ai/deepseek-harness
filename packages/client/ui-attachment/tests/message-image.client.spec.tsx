@@ -2,7 +2,7 @@
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 
 import { useState } from 'react'
-import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'

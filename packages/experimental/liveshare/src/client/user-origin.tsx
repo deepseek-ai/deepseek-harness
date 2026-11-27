@@ -17,7 +17,7 @@
  */
 
 import type { ReactNode } from 'react'
-import type { MatchedShare, PropsLocale, PropsRuntime, SlotMap } from '@deepseek-ai/dsh-client-ui-slots'
+import type { MatchedShare, PropsLocale, PropsRuntime, SlotMap } from '@deepseek-ai/dsh-client-ui-slots/client'
 // Type-only: merges Chat's SlotMap and standard declarations into this program.
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { NS } from './locales.ts'

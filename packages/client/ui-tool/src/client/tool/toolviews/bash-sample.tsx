@@ -4,8 +4,8 @@ import clsx from 'clsx'
 import {
   IconApiOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, InspectButton,
   CommandText, TerminalBlock, TextShimmer,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import {
   isBackgroundShellCall,

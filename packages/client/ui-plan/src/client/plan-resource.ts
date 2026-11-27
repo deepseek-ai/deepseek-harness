@@ -16,7 +16,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface ResourceProtocolMap {
     /** Immutable Markdown from a logged exit_plan_mode invocation. */
     plan: SubmittedPlan

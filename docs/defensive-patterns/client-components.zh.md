@@ -487,7 +487,7 @@ export function TurnList({ turns }: Props) {
 | `ui-primitives`，目录中的控件 | 消费目录中的控件。新控件先在功能包内落地，只有出现第二个使用方时才提升进共享目录。 |
 | `ui-layout` 与 shell 布局 | 消费它；在功能包内通过 wrapper、覆盖样式或加一层来适配。 |
 | `ui-renderer` 及其他渲染机制 | 业务代码不产生值依赖；只经文档化的注册面扩展——slots、provide/inject 绑定的 hooks、声明的 store。 |
-| 另一个功能插件 | 不运行时导入、也不重新导出它的值。UI 经 slots 跨越，行为经注入的服务跨越；共享运行时代码住在窄的静态正家，如 `client/store`、`ui-primitives` 或浏览器安全的工具包。 |
+| 另一个功能插件 | 不运行时导入、也不重新导出它的值。UI 经 slots 跨越，行为经注入的服务跨越；共享运行时代码住在窄的静态正家，如 `client/store` 或浏览器安全的工具包，不放进 `ui-slots`、`ui-primitives` 或 `ui-dockkit` 的实体导出；这些导出是会逐步缩减的历史例外。 |
 | 数据对象层（`client/connection`、`session-controller/client`、`client/store`） | 经文档化接口读取；功能自己的概念不进入这些对象及其 store。 |
 | 功能自己的包 | 不受限——诉求在这里被吸收，包括它自己的行、排序与呈现。 |
 

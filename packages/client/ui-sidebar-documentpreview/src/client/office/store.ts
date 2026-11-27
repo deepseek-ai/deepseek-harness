@@ -1,6 +1,6 @@
 /** Loaded Office previews and native-rendering outcomes survive body remounts until reload or tab closure. */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import type { OfficeFileBytes } from './cache.ts'
 import type { DocumentFileBytes } from '../rpc.ts'
 

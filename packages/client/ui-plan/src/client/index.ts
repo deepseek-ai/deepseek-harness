@@ -15,7 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-resources/client'
-import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { PlanCards, PlanReviewOpen, type PlanCardsInjected, type PlanOpenInjected, type PlanReviewOpenInjected } from './PlanCard.tsx'
 import { PlanPreview, PlanTitle } from './PlanPreview.tsx'
@@ -29,7 +29,7 @@ import { en, ja, es, fr, de, ru, pt, zh, type PlanKey } from './locales.ts'
 
 export type { PlanKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** The composer plan chip's copy. */
     plan: PlanKey

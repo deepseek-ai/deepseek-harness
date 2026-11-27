@@ -1,7 +1,7 @@
 /** Authoritative Schedule queries and deletion for Session and Host catalogs. */
 
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ScheduleDeleteResult, ScheduleId, ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 
 /** How one deletion settled; the wiring reports it as a transient notice. */

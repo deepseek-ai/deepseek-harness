@@ -1,6 +1,6 @@
 /** A failure this page retries in place: the failure sentence, its retry, and any failure rows under them. */
 import type { ReactNode } from 'react'
-import { Button, IconWarningOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconWarningOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './PluginManagerPage.module.css'
 
 /**

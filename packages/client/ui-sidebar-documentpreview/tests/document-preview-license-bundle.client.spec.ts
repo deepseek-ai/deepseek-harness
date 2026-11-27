@@ -96,7 +96,7 @@ describe('published document preview licenses', () => {
         factory: (resolve: (specifier: string) => unknown) => { ExcelBody: unknown }
       }) => {
         const loaded = registration.factory((specifier) => {
-          if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {}
+          if (specifier === '@deepseek-ai/dsh-client-ui-primitives/client') return {}
           if (specifier === 'react' || specifier === 'react/jsx-runtime' || specifier === 'react-dom') return require(specifier)
           throw new Error(`Unexpected browser dependency: ${specifier}`)
         })

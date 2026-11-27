@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, within } from '@testing-library/react'
-import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { createReasoningRenderFixture } from './reasoning-render-fixture.tsx'
 
 const CODE = '```text\nfirst line\nsecond line\n```'

@@ -1,5 +1,5 @@
 /** Account notification row above the sidebar account launcher. */
-import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { AccountSectionInjected } from './AccountSection.tsx'
 import type {} from './account-ui.ts'
 import css from './AccountNotices.module.css'

@@ -1,7 +1,7 @@
 /** Localized durations and relative times shown on change request cards. */
 
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 
 type Translate = PropsLocale<typeof NS>['t']

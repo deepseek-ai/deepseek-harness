@@ -10,7 +10,7 @@ import type {
   ChatConversationViewNode, ChatSnapshot,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { createUserTextFixture } from '../../ui-conversation/tests/user-text-component-fixture.client.tsx'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'

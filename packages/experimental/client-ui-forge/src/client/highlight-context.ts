@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import type { CodeHighlighter, HighlightSpan } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { CodeHighlighter, HighlightSpan } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ForgeDiffHunk } from '../types.ts'
 import type { DiffRow } from './diff-rows.ts'
 

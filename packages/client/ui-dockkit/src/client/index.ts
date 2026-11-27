@@ -68,3 +68,6 @@ export { FloatLayer } from './components/FloatLayer.tsx'
 export type { FloatLayerProps } from './components/FloatLayer.tsx'
 export { DockLayout } from './components/DockSurface.tsx'
 export type { DockLayoutProps } from './components/DockSurface.tsx'
+
+/** Browser plugin body of the `immediately` row, which registers nothing; other bundles require the exports of this module. */
+export function apply(): void {}

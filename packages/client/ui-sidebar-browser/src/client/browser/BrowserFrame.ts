@@ -1,5 +1,5 @@
 /** Carrier-neutral page navigation and observable state. */
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { BrowserTarget } from './url.ts'
 
 /** A loading failure, optionally carrying the underlying browser's diagnostic. */

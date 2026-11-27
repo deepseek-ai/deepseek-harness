@@ -3,8 +3,8 @@ import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'reac
 import clsx from 'clsx'
 import {
   FileTypeIcon, IconChevronDownOutlineRegular, IconFolderCloseRegular, Input, MarqueeText, Menu, Tooltip, useHoverMarquee,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ForgeDiffFile } from '../types.ts'
 import { Counts } from './DiffFile.tsx'
 import { changedFileTree, filesInTreeOrder, filterFileTree, viewedNodes, type ChangedFileNode } from './file-tree.ts'

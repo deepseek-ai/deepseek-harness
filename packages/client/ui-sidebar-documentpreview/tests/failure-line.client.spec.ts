@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 // The namespace declaration `TranslateNS<'sidebarDocumentPreview'>` resolves against.
 import type {} from '../src/client/index.ts'
 import { emptyFailureRecourse, failureLine } from '../src/client/failure-line.ts'

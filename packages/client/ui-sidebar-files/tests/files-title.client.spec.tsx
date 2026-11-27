@@ -2,7 +2,7 @@
 /** The chip title: the folder sheet, then the type's label. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { FilesTitle } from '../src/client/FilesTitle.tsx'
 
 afterEach(cleanup)

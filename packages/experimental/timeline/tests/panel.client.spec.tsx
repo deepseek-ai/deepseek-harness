@@ -21,7 +21,7 @@ import type { TreeTransferActions } from '../src/client/TreeTransfer.tsx'
 import checkpoint from './checkpoint.timeline.json' with { type: 'json' }
 import { treeId } from '../src/records.ts'
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives/client', () => ({
   MarkdownText: ({ text }: { text: string }) => <div>{text}</div>,
   Button: forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => (
     <button {...props} ref={ref} />

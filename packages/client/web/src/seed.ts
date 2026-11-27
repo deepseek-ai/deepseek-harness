@@ -7,9 +7,6 @@ import * as Cordis from '@deepseek-ai/cordis'
 import * as Zod from 'zod'
 import * as ReactVirtual from '@tanstack/react-virtual'
 import * as ClientStore from '@deepseek-ai/dsh-client-store'
-import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots'
-import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
-import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { DshClientModuleManifest } from '@deepseek-ai/dsh-package-manifest'
 import { STATIC_MODULE_MANIFEST_EXPORT, type PlatformModule } from './platform.ts'
 
@@ -43,8 +40,5 @@ export function getStaticModules(): readonly DshClientModuleManifest[] {
     'zod': platform('zod', Zod),
     '@tanstack/react-virtual': platform('@tanstack/react-virtual', ReactVirtual),
     '@deepseek-ai/dsh-client-store': compiledModule('@deepseek-ai/dsh-client-store', ClientStore),
-    '@deepseek-ai/dsh-client-ui-slots': compiledModule('@deepseek-ai/dsh-client-ui-slots', UiSlots),
-    '@deepseek-ai/dsh-client-ui-primitives': compiledModule('@deepseek-ai/dsh-client-ui-primitives', UiPrimitives),
-    '@deepseek-ai/dsh-client-ui-dockkit': compiledModule('@deepseek-ai/dsh-client-ui-dockkit', UiDockkit),
-  } satisfies Record<PlatformModule, DshClientModuleManifest>)
+  } satisfies Partial<Record<PlatformModule, DshClientModuleManifest>>)
 }

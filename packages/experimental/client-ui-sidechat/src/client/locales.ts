@@ -97,7 +97,7 @@ export const pt: Record<keyof typeof zh, string> = {
   'subagentSource': 'Uma conversa de subagente não pode iniciar uma conversa lateral.',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     [NS]: keyof typeof zh
   }

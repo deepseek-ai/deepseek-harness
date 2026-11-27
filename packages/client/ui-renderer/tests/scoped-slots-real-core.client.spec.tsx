@@ -13,10 +13,10 @@ import { act, fireEvent, render } from '@testing-library/react'
 import {
   SlotCore, StaleAuthorizationError, type PropsRenderSlots, type SlotRendererHost,
   type SlotScopeAdapter, type StandardSourceBinding,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     // No 'root' merge: the aggregate client program already carries runtime's
     // authoritative 'root' declaration (a private merge would TS2717-collide);

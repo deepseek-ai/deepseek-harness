@@ -1,8 +1,8 @@
 /** File navigation feedback belongs to the individual inline reference that requested it. */
 import { useState } from 'react'
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { Button, Modal, ReferenceChip, UserTextRun } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
+import { Button, Modal, ReferenceChip, UserTextRun } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { NS } from './locales.ts'
 import type { PathPresence } from './path-presence.ts'
 import type {} from './user-text-rules.ts'

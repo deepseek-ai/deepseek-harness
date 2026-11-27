@@ -76,6 +76,11 @@ remote.goals.create.mockResolvedValue({
 expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 ```
 
+<a id="module-resolution"></a>
+### Module resolution
+
+The runtime and the suites it serves import DSH Client packages from source, so their Vitest configuration resolves `@deepseek-ai/dsh-client-*` names and their `/client` subpaths to package sources, as the repository's tsconfig paths do. Code names `ui-slots`, `ui-primitives`, and `ui-dockkit` through their `/client` subpaths, which the tsconfig paths map to `src/client/index.ts`: their package root maps to `src`, where Vite finds the Host-only `index.js` with its empty `apply`, and their built `/client` entry is a module-loader registration script that plain Node cannot run. The runtime and a spec therefore share one module instance, including the `SlotMap` that `declare module '@deepseek-ai/dsh-client-ui-slots/client'` augments.
+
 ### Whole-client tier
 
 The slot tier above mounts one feature against doubles. The whole-client tier boots the real assembly: `TestClient.start(plan, mock, options)` imports every roster row's `/client` module in-process (or takes the plan's `provide` replacement), binds `{ rpc: mock.rpc }` to that client's Connection module, synthesizes the boot graph with `graphFromRoster` and hands the loaded modules to the production module system, boots through the production `bootClient`, optionally mounts `uiRenderer`, and waits for `ctx.connection.state === 'connected'`. It lives behind a deep import so slot-tier specs never load it:

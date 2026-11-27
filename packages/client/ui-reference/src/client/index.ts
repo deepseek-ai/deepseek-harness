@@ -27,7 +27,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { sessionDirectory } from '@deepseek-ai/dsh-api-session-controller/client/directories'
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
+import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   FileReference, FolderReference, type FileReferenceInjected, type PathPresenceInjected,

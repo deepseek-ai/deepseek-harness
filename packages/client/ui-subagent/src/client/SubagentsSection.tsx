@@ -1,7 +1,7 @@
 /** Session panel section listing the current Session's subagents. */
 import { useCallback, useMemo } from 'react'
-import { HoverCardGroup } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import { HoverCardGroup } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import {

@@ -1,6 +1,6 @@
 /** Running Turn clock isolated from the transcript's render cycle. */
 import { memo, useEffect, useState } from 'react'
-import { TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatRunDuration, LIVE_RUN_CLOCK_INTERVAL_MS } from './message-chrome.ts'
 import { RunningWhaleTail } from './RunningWhaleTail.tsx'

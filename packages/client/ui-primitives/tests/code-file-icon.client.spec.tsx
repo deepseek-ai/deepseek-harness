@@ -5,7 +5,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   classifyFileType, FileTypeIcon, type CodeFileType, type FileTypeProjectContext,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { CODE_FILE_ARTWORK, CODE_FILE_ICON_ID_TOKEN } from '../src/client/code-file-icon-artwork.ts'
 import { CODE_FILE_TYPES } from '../src/client/code-file-types.ts'
 

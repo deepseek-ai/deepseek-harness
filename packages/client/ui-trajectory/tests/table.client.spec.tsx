@@ -14,7 +14,7 @@ import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type {
   ConversationPromptSnapshot, MessageImageLoader, MessageImagesOwnerProps,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
 import { trajectoryRecordId, type TrajectoryCellProps } from '../src/client/trajectory-record.ts'

@@ -3,7 +3,7 @@ import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-c
 /** FontFamilyRow behavior: the field shows the persisted list, blur and Enter
  * commit the normalized input, and the field follows store changes. Also
  * covers the font-list normalization it relies on. */
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'

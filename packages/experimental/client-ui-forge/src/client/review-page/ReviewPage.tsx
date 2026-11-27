@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import clsx from 'clsx'
 import type {
   GlobalStandardProps, HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsStore,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 // Type-only: the `useMediaQuery` standard prop merge.
 import type {} from '@deepseek-ai/dsh-client-ui-responsive/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'

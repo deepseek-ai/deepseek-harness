@@ -1,7 +1,7 @@
 /** The tabs other plugins contribute to the Plugins page through `plugins.tab`, in the active locale. */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import { resolveSlotLabel, type HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import { resolveSlotLabel, type HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from './slot-contract.ts'
 
 /** One contributed tab: its registration id and its label in the active locale. */

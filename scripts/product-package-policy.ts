@@ -57,7 +57,7 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/test-support/remote-mock': { category: 'test', reason: 'Published typed Remote test proxies.' },
   'packages/test-support/session-snapshot': { category: 'test', reason: 'Published Session snapshot replay harness.' },
   'packages/client/web': { category: 'web-distribution', reason: 'Browser boot kernel bundled into the Web distribution.' },
-  'packages/client/ui-dockkit': { category: 'web-distribution', reason: 'Layout library bundled into the Web distribution.' },
+  'packages/client/ui-dockkit': { category: 'web-distribution', reason: 'Dock layout package composed into the Web distribution.' },
   'packages/util/package-manifest': { category: 'declarations', reason: 'Shared package metadata declarations have no runtime mount.' },
   'packages/client/config': { category: 'declarations', reason: 'Types of browser-synced plugin configuration; Client Modules implements them and plugins import them type-only.' },
 }

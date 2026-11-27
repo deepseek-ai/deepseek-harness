@@ -1,5 +1,5 @@
 /** Group bodies render their declared preferences without duplicating card chrome. */
-import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SettingsGeneralGroupItemSlot } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 type GroupProps<K extends 'settings.general.item' | SettingsGeneralGroupItemSlot> = PropsRuntime<'settings.general.group'> & PropsRenderSlots<K>

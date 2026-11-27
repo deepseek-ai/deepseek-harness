@@ -22,7 +22,7 @@ export const ru = { failed: 'Перетащить не удалось. Попр�
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = { failed: 'Falha ao arrastar. Tente novamente.' } satisfies Record<keyof typeof en, string>
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** File transfer failure feedback. */
     fileDrag: keyof typeof zh

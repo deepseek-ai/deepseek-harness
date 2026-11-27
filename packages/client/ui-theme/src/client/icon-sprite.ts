@@ -4,7 +4,7 @@
  * inherit `currentColor` and CSS variables at each use site.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { ICON_SYMBOLS, type IconSymbolId } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ICON_SYMBOLS, type IconSymbolId } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 

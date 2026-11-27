@@ -1,5 +1,5 @@
 /** Observable layout viewport of the document that contains the application root. */
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { bindSnapshotSelector } from './bind.ts'
 
 /** Layout viewport dimensions in CSS pixels, excluding scrollbars. */

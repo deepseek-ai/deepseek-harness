@@ -1,8 +1,8 @@
 /** Present call status and expandable durable result text. */
 import { useState } from 'react'
-import { DisclosureRow, IconDeliverDocRegular, InspectButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconDeliverDocRegular, InspectButton } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 import css from './PresentRow.module.css'
 

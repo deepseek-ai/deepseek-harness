@@ -14,7 +14,7 @@ import { EXCEL_DEFAULTS, OFFICE_DEFAULTS } from '../src/defaults.ts'
 import type { OfficeLimits } from '../src/types.ts'
 import { OfficeBody, type OfficeBodyInjected } from '../src/client/office/OfficeBody.tsx'
 import type { OfficeStore } from '../src/client/office/store.ts'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { en, ja, zh, es, fr, de, ru, pt } from '../src/client/office/locales.ts'
 import { en as documentEn } from '../src/client/locales.ts'
 

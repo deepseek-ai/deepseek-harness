@@ -1,6 +1,6 @@
 /** A retired Office view cannot remove the replacement header command or another tab's action. */
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { expect, test } from 'vitest'
 import { createPresentationStore } from '../src/client/presentation-store.ts'
 

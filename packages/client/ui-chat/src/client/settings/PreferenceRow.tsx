@@ -1,6 +1,6 @@
 /** Localized two-column selector shared by Chat preference rows. */
 import { useRef, useState } from 'react'
-import { IconChevronDownOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './PreferenceRow.module.css'
 
 /**

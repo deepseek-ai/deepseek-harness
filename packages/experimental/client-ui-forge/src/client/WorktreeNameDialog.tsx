@@ -2,8 +2,8 @@
 
 import { useId, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
-import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { Button, Input, Modal } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { branchLabel, branchNameProblem } from '../branch-name.ts'
 import type { NS } from './locales.ts'
 import css from './WorktreeNameDialog.module.css'

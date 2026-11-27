@@ -190,7 +190,7 @@ export const zh = {
 /** The performance dictionary key union. */
 export type StatsKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Turn and step Statistics table copy. */
     stats: StatsKey
@@ -198,7 +198,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Namespace-bound translator threaded through the Statistics table. */
-export type StatsTranslate = import('@deepseek-ai/dsh-client-ui-slots').TranslateNS<typeof NS>
+export type StatsTranslate = import('@deepseek-ai/dsh-client-ui-slots/client').TranslateNS<typeof NS>
 
 /** English dictionary, checked complete against the Chinese source of truth. */
 export const en: Record<StatsKey, string> = {

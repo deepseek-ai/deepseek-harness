@@ -1,6 +1,6 @@
 /** Quote draft persistence and prompt serialization remain composer-owned. */
 import { describe, expect, it, vi } from 'vitest'
-import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { formatQuoteText } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { parseStoredDraft } from '../src/client/draft.ts'
 import { serializeDraftPrompt } from '../src/client/input/prompt.ts'
 

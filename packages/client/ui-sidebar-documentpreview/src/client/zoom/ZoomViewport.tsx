@@ -1,7 +1,7 @@
 /** Shared zoom viewport, gesture handling, anchoring, and fit-width measurement. */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent,
   type ReactNode, type RefCallback } from 'react'
-import { DOCUMENT_ZOOM, ZoomControls, type ZoomControlsHandle } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DOCUMENT_ZOOM, ZoomControls, type ZoomControlsHandle } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { FIT_WIDTH, type ZoomLabels, type ZoomPreference } from './types.ts'
 import css from './ZoomViewport.module.css'
 

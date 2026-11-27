@@ -33,7 +33,7 @@ export type {
 } from './subagent-model-selection-card-controller.ts'
 export type { SubagentSettingsLocaleKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Subagent settings page copy. */
     'settings.subagent': SubagentSettingsLocaleKey

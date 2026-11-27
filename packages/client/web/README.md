@@ -31,7 +31,7 @@ Static application pages install `__DSH_BOOT_READY__` before the entry runs. The
 
 The shell base styles preserve authored text sizes when mobile browsers rotate or unfold. Browser zoom and the appearance font-size setting remain available. They also apply automatic CJK/Latin spacing to ordinary content in supporting browsers. Semantic code and terminal, diff, read, and search output containers retain literal source spacing and column alignment; browsers without `text-autospace` support ignore both declarations.
 
-Static Client libraries preserve third-party ESM imports and dynamic imports for the final Web build. Their stylesheet metadata refers to third-party font assets through normal URL imports; the package build does not copy those fonts or emit language-library chunks.
+The shell bundles React, Cordis, Zod, TanStack Virtual, its own boot code, and the static Client library `client-store`, whose ESM keeps its Zustand and Immer imports for the final Web build. `ui-slots`, `ui-primitives`, and `ui-dockkit`, including Markdown, KaTeX, and Shiki in `ui-primitives`, arrive as `immediately` dynamic plugin rows, and their fonts and language chunks are package assets and chunks of those rows.
 
 ### What boot looks like
 
@@ -44,11 +44,11 @@ The boot page uses plain DOM and local CSS, so bundle and plugin-activation fail
 <a id="the-shared-module-table"></a>
 ### The shared module table
 
-`PLATFORM_MODULES` (in `src/platform.ts`) names the shell-seeded shared modules — React, Cordis, Zod (`zod`), TanStack Virtual (`@tanstack/react-virtual`), and static UI libraries — and together with `PRELOADED_CLIENT_EXTERNALS` (the parser-preloaded runtime row) defines the implicit external baseline every dynamic bundle resolves against. `dsh.client.external` adds only exact non-baseline requests; see [shared modules and the module graph](../AGENTS.md#shared-modules-and-the-module-graph).
+`PLATFORM_MODULES` (in `src/platform.ts`) lists the specifiers every dynamic bundle leaves to the module table by default — the shell-seeded React, Cordis, Zod (`zod`), TanStack Virtual (`@tanstack/react-virtual`), and the static Client library `client/store`, and `ui-slots`, `ui-primitives`, and `ui-dockkit`, whose `immediately` rows answer their names — and together with `PRELOADED_CLIENT_EXTERNALS` (the parser-preloaded runtime row) defines the implicit external baseline every dynamic bundle resolves against. `dsh.client.external` adds only exact non-baseline requests; see [shared modules and the module graph](../AGENTS.md#shared-modules-and-the-module-graph).
 
 Built-in and installed browser plugins in the same page receive the same module instances. The shell supplies the dependency versions declared in this package's `package.json`; the module table does not negotiate versions per plugin. External plugins that use these modules must target a host that provides the required specifiers and APIs, and keep those imports external when building their client bundle. Inlined dependencies remain private to their bundle; Host code and Workers resolve their dependencies separately.
 
-Workspace static libraries deliver `lib/index.js` as ordinary ESM with one more export, `__$dsh_client_module_manifest`. The shell registers that manifest; its factory returns the library's own exports without the manifest, so business imports through the module loader and native imports see the same values. `clientShell()` builds this boot package as ordinary ESM so its startup code and loading-page CSS do not depend on the module renderer.
+The workspace static library `client-store` delivers `lib/index.js` as ordinary ESM with one more export, `__$dsh_client_module_manifest`. The shell registers that manifest; its factory returns the library's own exports without the manifest, so business imports through the module loader and native imports see the same values. `ui-slots`, `ui-primitives`, and `ui-dockkit` are `immediately` rows of the Web composition whose `lib/client.js` registers the module under its package name, so a bundle that requires the name receives that row's exports; `seed.ts` registers only the shell-seeded modules. `clientShell()` builds this boot package as ordinary ESM so its startup code and loading-page CSS do not depend on the module renderer.
 
 ### Configuration
 
@@ -92,7 +92,7 @@ The boot kernel delegates manifest entry creation to Client Modules so live grap
 | [`src/mount.ts`](src/mount.ts) | `mountClient`: renderer handoff through a `uiRenderer` dependency fiber |
 | [`src/boot-page.ts`](src/boot-page.ts) | Framework-free boot page: spinner, per-entry status, failure rendering |
 | [`src/platform.ts`](src/platform.ts) | `PLATFORM_MODULES` / `PRELOADED_CLIENT_EXTERNALS`: the implicit external baseline |
-| [`src/seed.ts`](src/seed.ts) | Static module table handed to the loader at boot |
+| [`src/seed.ts`](src/seed.ts) | Static module table handed to the loader at boot: the shell-seeded `PLATFORM_MODULES` entries |
 | [`src/window-drag/regions.ts`](src/window-drag/regions.ts) | The darwin app-region composition model, and the interactive selector `base.css` subtracts |
 | [`src/base.css`](src/base.css) | Page defaults and native drag regions; inert subtrees neither add nor subtract drag rectangles |
 | [`src/window-drag/recall.ts`](src/window-drag/recall.ts) | The shell's one window drag-rect watcher (electron/electron#32341): measure the marked rows per frame and pulse the recall mark while they move |

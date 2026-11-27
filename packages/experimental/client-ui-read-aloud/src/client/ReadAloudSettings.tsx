@@ -3,9 +3,9 @@
  * billed, which languages are read, and where the service is documented.
  */
 import { useEffect, useId, useState } from 'react'
-import { Button, IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconWarningOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ReadAloudStatus } from '@deepseek-ai/dsh-read-aloud/types'
 import type { NS, ReadAloudKey } from './locales.ts'
 import { ReadControl } from './ReadControl.tsx'

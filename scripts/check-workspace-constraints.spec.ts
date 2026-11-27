@@ -587,6 +587,34 @@ describe('package payload constraints', () => {
   )
 })
 
+describe('package root declarations', () => {
+  const dir = 'packages/client/ui-slots'
+  const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  const withRootTypes = (types: string, exports = manifest.exports): WorkspaceManifest['manifest'] =>
+    ({ ...manifest, types, exports: { ...exports, '.': { types: `./${types}`, default: './lib/index.js' } } })
+
+  it('accepts a package root that reuses the declarations of its ./client entry', () => {
+    expect(manifest.types).toBe('lib/types/client/index.d.ts')
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    expect(checkWorkspaceManifest({ dir, manifest: withRootTypes('lib/types/index.d.ts') })).toEqual([])
+  })
+
+  it('rejects package root declarations that are neither lib/types/index.d.ts nor the ./client declarations', () => {
+    expect(checkWorkspaceManifest({ dir, manifest: withRootTypes('lib/types/other.d.ts') })).toEqual([
+      expect.stringContaining('package.json must set "types": "lib/types/index.d.ts" or "lib/types/client/index.d.ts"'),
+      expect.stringContaining('package.json exports["."].types must be "./lib/types/index.d.ts" or "./lib/types/client/index.d.ts"'),
+    ])
+  })
+
+  it('rejects the ./client declarations at the root when the ./client entry declares other types', () => {
+    const exports = { ...manifest.exports, './client': { types: './lib/types/browser.d.ts', default: './lib/client.js' } }
+    expect(checkWorkspaceManifest({ dir, manifest: withRootTypes('lib/types/client/index.d.ts', exports) })).toEqual([
+      expect.stringContaining('package.json must set "types": "lib/types/index.d.ts" or "lib/types/browser.d.ts"'),
+      expect.stringContaining('package.json exports["."].types must be "./lib/types/index.d.ts" or "./lib/types/browser.d.ts"'),
+    ])
+  })
+})
+
 it('publishes CLI runtime declarations and rejects a payload that omits them', () => {
   const manifest = JSON.parse(readFileSync(new URL('../apps/cli/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
   expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest })).toEqual([])

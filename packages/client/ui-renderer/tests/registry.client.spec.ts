@@ -8,12 +8,12 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import type { FC } from 'react'
-import { StaleAuthorizationError } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ScopedStandardSourceBinding, SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
+import { StaleAuthorizationError } from '@deepseek-ai/dsh-client-ui-slots/client'
+import type { ScopedStandardSourceBinding, SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SlotRegistry } from '../src/client/registry.ts'
 
 // Test-only slot keys (merged so the typed entries/spec faces accept them).
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     't.host': { kind: 'single'; scope: 'root' }
     't.maybe': { kind: 'single'; scope: 'session-maybe' }

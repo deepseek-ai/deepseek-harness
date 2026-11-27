@@ -1,7 +1,7 @@
 import type { ToolFileInjected } from '../file-menu.ts'
 import { toolFileInject } from '../file-menu.ts'
 import type { Context } from '@deepseek-ai/cordis'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import { readCallLine, readCardModel } from '../models/read-card-model.ts'
 import { readFamilyRow } from './read-family-row.tsx'

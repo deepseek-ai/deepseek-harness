@@ -1,5 +1,7 @@
 /**
- * Source-only platform registrations for in-process browser assembly tests.
+ * Source-only platform registrations for in-process browser assembly tests: the modules the shell seeds. Dynamic
+ * Client packages are absent: a page that resolves them through the module table registers their rows, as production
+ * does.
  *
  * `packages/client/web/tests/source-static-modules.client.ts` holds an identical copy:
  * a TypeScript test project cannot include a file outside its `rootDir`, so the `apps/web` project and
@@ -13,9 +15,6 @@ import * as Cordis from '@deepseek-ai/cordis'
 import * as Zod from 'zod'
 import * as ReactVirtual from '@tanstack/react-virtual'
 import * as ClientStore from '@deepseek-ai/dsh-client-store'
-import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots'
-import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
-import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { ClientModuleCreateOptions } from '@deepseek-ai/dsh-client-modules/client'
 import type { PlatformModule } from '@deepseek-ai/dsh-client-web/src/platform.ts'
 
@@ -33,9 +32,6 @@ export function getStaticModules(): ClientModuleCreateOptions['staticModules'] {
     'zod': Zod,
     '@tanstack/react-virtual': ReactVirtual,
     '@deepseek-ai/dsh-client-store': ClientStore,
-    '@deepseek-ai/dsh-client-ui-slots': UiSlots,
-    '@deepseek-ai/dsh-client-ui-primitives': UiPrimitives,
-    '@deepseek-ai/dsh-client-ui-dockkit': UiDockkit,
-  } satisfies Record<PlatformModule, Record<string, unknown>>
+  } satisfies Partial<Record<PlatformModule, Record<string, unknown>>>
   return Object.entries(sources).map(([id, exports]) => ({ id, factory: () => exports }))
 }

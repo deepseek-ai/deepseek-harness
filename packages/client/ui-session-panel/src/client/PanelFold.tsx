@@ -5,8 +5,8 @@
  * every section fold through one control.
  */
 import type { ReactNode } from 'react'
-import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from './slots.ts'
 import css from './SessionPanel.module.css'
 

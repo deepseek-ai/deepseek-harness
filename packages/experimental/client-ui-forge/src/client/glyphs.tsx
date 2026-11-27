@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import clsx from 'clsx'
-import { IconCheckCircleFillRegular, IconRightUpOutlineRegular, LinkIconRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCheckCircleFillRegular, IconRightUpOutlineRegular, LinkIconRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { CheckState, ChecksRollup } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ChangeRequestTone } from './status.ts'
 import css from './Forge.module.css'

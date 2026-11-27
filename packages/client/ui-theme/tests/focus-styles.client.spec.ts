@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { focusWithoutRing } from '@deepseek-ai/dsh-client-ui-primitives'
+import { focusWithoutRing } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 const base = readFileSync(resolve(import.meta.dirname, '../src/styles/base.css'), 'utf8')
 const outline = '2px solid rgb(200, 100, 0)'

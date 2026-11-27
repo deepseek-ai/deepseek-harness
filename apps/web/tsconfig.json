@@ -49,6 +49,7 @@
     "tests/chat-fold-opened-group.e2e.ts",
     "tests/chat-flow-layout.e2e.ts",
     "tests/layout-bottom.e2e.ts",
+    "tests/client-package-specifiers.e2e.ts",
     "tests/shortcuts-desktop.e2e.ts",
     "tests/shortcuts-workspace.e2e.ts",
     "tests/shortcuts-panels.e2e.ts",

@@ -18,8 +18,8 @@
  */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
-import type { LayoutState, PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
-import { findTabPane } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { LayoutState, PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit/client'
+import { findTabPane } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SidebarRightNavigationParams } from './contract/params.ts'

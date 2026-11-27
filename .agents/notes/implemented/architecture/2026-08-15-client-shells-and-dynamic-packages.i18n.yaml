@@ -12,11 +12,11 @@
   en: a15c7c13f167e5ac
   zh: a15c7c13f167e5ac
 /agent-note-client-shell-layering-and-dynamic-package-boundaries/decision/layers-and-build-forms:
-  en: e0d6260cc782acb9
-  zh: 2ca2418d2b97bc03
+  en: 4357a7d881fdcb99
+  zh: d90fd396f9dd6c2c
 /agent-note-client-shell-layering-and-dynamic-package-boundaries/decision/shared-module-requests:
-  en: 96661da17622132a
-  zh: dab3424093130c2f
+  en: d2531750bbe81189
+  zh: 130a16eca6e07c14
 /agent-note-client-shell-layering-and-dynamic-package-boundaries/decision/parser-preloading-and-react-handoff:
   en: 4b503618b271fc28
   zh: e2148f44efa769d2
@@ -24,8 +24,8 @@
   en: 47c332b836c2933b
   zh: ed190dbb14b98911
 /agent-note-client-shell-layering-and-dynamic-package-boundaries/alternatives-considered:
-  en: 2257178f8f474757
-  zh: 7da85b5899b91520
+  en: 265c8e910d525077
+  zh: 55ff5170dcc1c07c
 /agent-note-client-shell-layering-and-dynamic-package-boundaries/consequences:
-  en: c7653b12059aebd7
-  zh: a79b63f28d18f8c4
+  en: c3237ed7ae58fc48
+  zh: e9c6095705490622

@@ -1,11 +1,11 @@
 /** Replaceable and additive settings content sharing plugin-owned login state. */
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SettingsSectionOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { RemoteConnectionFace } from './remote-connection-controller.ts'
 import type { LoginLinkFace } from './login-link-controller.ts'
 import type { PairingInjected } from './PairingRequests.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /**
      * Complete Remote connection panel with QR, login-link, and pairing approval state.

@@ -5,8 +5,8 @@
  * hero draw, and the cube the body's icon-less capsules fall back to.
  */
 import type { ReactNode } from 'react'
-import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './GuideBody.module.css'
 
 /**

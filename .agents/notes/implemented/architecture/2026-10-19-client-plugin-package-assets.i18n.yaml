@@ -12,11 +12,11 @@
   en: 8ffcd355ec5e8271
   zh: 2932530bf783e3f7
 /agent-note-client-plugin-package-assets-served-by-url/decision/references-and-file-names:
-  en: 704267953c123629
-  zh: 860997024ad7825e
+  en: a97bfcd05c710f0f
+  zh: 3679312c92bf39ee
 /agent-note-client-plugin-package-assets-served-by-url/decision/build:
-  en: 485013b2b6778fa2
-  zh: 7e5cb238bb2b8585
+  en: e1f52e41d5207cae
+  zh: a378ce36e9e4c17c
 /agent-note-client-plugin-package-assets-served-by-url/decision/host-route:
   en: 151b7300f5b27a9f
   zh: fae9adff942c2ce8
@@ -27,8 +27,8 @@
   en: eedff52d04763c50
   zh: 203bfcf81242b8fe
 /agent-note-client-plugin-package-assets-served-by-url/decision/gates-and-migration:
-  en: 1e4d83d0de2d47c9
-  zh: dc2c2876c73d3b1c
+  en: c3a4201627d742bb
+  zh: 03fa25c637a2a803
 /agent-note-client-plugin-package-assets-served-by-url/alternatives-considered:
   en: 98960e10634ee536
   zh: f0fdb0b0cdf9511c

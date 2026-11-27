@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { makeTranslate, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-client-test-runtime'
-import type { FactoryComponentPropsOf, FactoryLocalComponent } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf, FactoryLocalComponent } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { FileTree } from '../src/client/FileTree.tsx'
 import type { FileTreeInput, TreeEntry } from '../src/client/FileTree.tsx'
 import { en } from '../src/client/locales.ts'

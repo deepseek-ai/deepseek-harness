@@ -10,7 +10,7 @@ import { contextMenuHook, responsiveHooks, themeHooks } from '@deepseek-ai/dsh-c
  * decision-table contract at the `InputTriggerSource` boundary.
  */
 import './control-row-dom.ts'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import {

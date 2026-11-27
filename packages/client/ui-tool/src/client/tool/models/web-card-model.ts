@@ -1,5 +1,5 @@
 /** Pure web-card derivation from raw web result metadata. @module */
-import type { WebBlockProps } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { WebBlockProps } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ToolCallBlock } from './tool-call-model.ts'
 import { parsedToolCall } from './raw-tool-call.ts'
 

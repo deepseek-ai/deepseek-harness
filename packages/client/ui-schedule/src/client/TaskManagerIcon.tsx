@@ -1,6 +1,6 @@
 /** Decorative occupant for the task-manager sidebar entry. */
-import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconClockOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 
 /**

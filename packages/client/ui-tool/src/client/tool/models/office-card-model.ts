@@ -1,5 +1,5 @@
 /** Pure Office row derivation from the tool name, frozen call slice, and settled result. @module */
-import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { abbreviateHomePath, isAbsoluteWorkspacePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 import { recordedAbsolutePath } from './recorded-path.ts'
 import type { ToolCallBlock } from './tool-call-model.ts'

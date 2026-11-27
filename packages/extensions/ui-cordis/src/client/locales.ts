@@ -60,7 +60,7 @@ export const zh = {
 /** Translation keys owned by the Cordis UI namespace. */
 export type CordisKey = keyof typeof zh
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Dynamic Cordis UI copy. */
     cordis: CordisKey

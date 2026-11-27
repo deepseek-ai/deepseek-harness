@@ -7,8 +7,8 @@
 import { useState, type ReactNode } from 'react'
 import {
   Button, IconBranchOutlineRegular, IconCheckOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular, StateDot,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { branchLabel } from '../branch-name.ts'

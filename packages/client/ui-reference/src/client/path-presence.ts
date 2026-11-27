@@ -11,7 +11,7 @@
  */
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { WorkspaceFileStat } from '@deepseek-ai/dsh-api-remotes/client'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 
 /** Session whose filesystem resolves a mention. */

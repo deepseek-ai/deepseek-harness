@@ -12,7 +12,7 @@ import type {
 import {
   Button, Checkbox, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseOutlineRegular,
   IconDownloadOutlineRegular, IconRefreshOutlineRegular, IconWarningOutlineRegular, Modal, StateDot, Tag, Tooltip,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { failedChange, installable, pendingUpdateBuilds, updateCandidate, type PackageView, type UpdateSource, type UpdateState, type VersionCheck } from './manager-store.ts'
 import { managementText, registryText, restartText, type Translate } from './presentation.ts'
 import { BuildApproval } from './BuildApproval.tsx'

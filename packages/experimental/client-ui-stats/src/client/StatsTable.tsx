@@ -9,10 +9,10 @@ import {
 } from 'react'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { HoverCard, ImageLightbox, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import { HoverCard, ImageLightbox, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {
   StatsCall, StatsCompactionMetrics, StatsEventKind, StatsEventMetrics, StatsSnapshot, StatsStepMetrics,
   LoadOlderResult, StatsToolCount, StatsTurnMetrics,

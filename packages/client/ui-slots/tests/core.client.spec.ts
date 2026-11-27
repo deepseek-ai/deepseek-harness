@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SlotComponent, StoreHandle } from '@deepseek-ai/dsh-client-ui-slots'
-import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SlotComponent, StoreHandle } from '@deepseek-ai/dsh-client-ui-slots/client'
+import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 // 'root' is NOT merged here: ui-renderer owns the built-in row, and
 // the client aggregate program would see both merges collide.
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'test.single': { kind: 'single'; scope: 'root' }
     'test.session': { kind: 'single'; scope: 'session' }

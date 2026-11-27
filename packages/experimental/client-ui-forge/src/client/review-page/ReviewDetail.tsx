@@ -10,8 +10,8 @@ import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronLeftOutlineRegular, IconCopyOutlineRegular, IconEllipsisOutlineRegular,
   IconPanelLeftOutlineRegular, MarkdownText, Menu, Tooltip, type MenuEntry,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {
   ChangeRequestActivity, ChangeRequestDescription, ChangeRequestSnapshot, ForgeDescription, ForgeFailure,
 } from '@deepseek-ai/dsh-experimental-forge/types'

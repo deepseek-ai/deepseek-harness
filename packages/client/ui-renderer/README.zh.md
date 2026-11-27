@@ -68,7 +68,7 @@ kind: "package-reference"
 
 ### 身份
 
-React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静态模块表保持同一浏览器身份；本包则以动态客户端 bundle 的形式加载。
+React、React DOM 与 Cordis 通过 Web 外壳的静态模块表保持同一浏览器身份，ui-slots 与 ui-primitives 则通过各自的 `immediately` row 保持；本包以动态客户端 bundle 的形式加载。
 
 </details>
 

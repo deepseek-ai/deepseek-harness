@@ -1,6 +1,6 @@
 /** Browser title selection follows the active main panel without subscribing the frame. */
 import { useEffect } from 'react'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 /** Props for the browser title projection. */
 export type DocumentTitleProps = Pick<PropsRuntime<'root'>, 'useSessions' | 'usePanelInfo'> & {

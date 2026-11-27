@@ -30,12 +30,12 @@ import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-sto
 import { clearSidebarLayout, readSidebarLayout, writeSidebarLayout } from './persistence.ts'
 import type {
   DockMode, DockZone, FloatRect, History, LayoutOp, LayoutState, Mint, PaneId, PlannedTab, SplitId, TabId, TabRecord,
-} from '@deepseek-ai/dsh-client-ui-dockkit'
+} from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import {
   activeDockPaneId, createInitialState, dockPaneIds, EMPTY_HISTORY, findContentTab, findPaneContentTab, findTabPane, getPane,
   planDropTab, planDuplicateTab, planFloatTab, planOpenContent, planPlaceTab, planResizeSplit, planSetExpanded,
   planSetMode, planSettle, planSplitPane, planUnfloatPane, record, replay, stepBack, stepForward,
-} from '@deepseek-ai/dsh-client-ui-dockkit'
+} from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { GUIDE_KIND, pageAddress, type SidebarRightSeed } from './contract/seed.ts'
 import type { SidebarRightDestination } from './contract/slots.ts'
 

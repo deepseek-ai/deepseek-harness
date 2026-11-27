@@ -1,6 +1,6 @@
 /** Skill-reference presentation with activation owned by this keyed entry's Session injection. */
 import type { UserTextNodeProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { ReferenceChip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { ReferenceChip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 /** Session-bound preview action; accepting a preview is not a completion promise. */
 export interface SkillReferenceInjected {

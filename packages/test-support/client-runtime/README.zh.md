@@ -76,6 +76,11 @@ remote.goals.create.mockResolvedValue({
 expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 ```
 
+<a id="module-resolution"></a>
+### 模块解析
+
+本运行时及其服务的测试从源码导入 DSH Client 包，因此它们的 Vitest 配置要像仓库的 tsconfig paths 一样，把 `@deepseek-ai/dsh-client-*` 包名及其 `/client` 子路径解析到包源码。代码通过 `/client` 子路径引用 `ui-slots`、`ui-primitives`、`ui-dockkit`，tsconfig paths 把这些子路径映射到 `src/client/index.ts`：它们的包根映射到 `src`，Vite 会在那里找到只给 Host 用、只有空 `apply` 的 `index.js`，而构建后的 `/client` 入口是普通 Node 无法运行的模块加载器登记脚本。因此运行时与测试共享同一个模块实例，包括 `declare module '@deepseek-ai/dsh-client-ui-slots/client'` 扩展的 `SlotMap`。
+
 ### 整体档
 
 上面的 slot 档把一个功能挂在替身上。整体档起真实装配：`TestClient.start(plan, mock, options)` 进程内 import 每个 roster 行的 `/client` 模块（或取计划里的 `provide` 替换），把 `{ rpc: mock.rpc }` 绑定到该客户端的 Connection 模块，用 `graphFromRoster` 合成启动图并把已加载模块交给生产模块系统，经生产 `bootClient` 启动，按需挂载 `uiRenderer`，再等 `ctx.connection.state === 'connected'`。它藏在深 import 后面，slot 档测试永不加载它：

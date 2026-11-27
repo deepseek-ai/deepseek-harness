@@ -8,7 +8,7 @@ import { act, render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import {
   StaleAuthorizationError, type SlotEntryDef, type SlotSpec, type StoredEntry,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {
   RenderOpts, SlotRendererHost, SlotScopeAdapter, StandardSourceBinding,
 } from '@deepseek-ai/dsh-client-ui-renderer/client'

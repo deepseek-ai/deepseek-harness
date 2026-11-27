@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import { SidebarSessionView } from '../src/client/session-view.ts'
 import { SidebarSessionViews } from '../src/client/session-views.ts'
 

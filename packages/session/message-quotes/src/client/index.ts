@@ -12,7 +12,7 @@ import { en, ja, es, fr, de, ru, pt, NS, zh, type MessageQuotesKey } from './loc
 
 export type {} from './quote-rule.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Quote selection action copy. */
     messageQuotes: MessageQuotesKey

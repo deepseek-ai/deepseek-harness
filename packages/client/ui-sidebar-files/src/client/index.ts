@@ -14,7 +14,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { FILES_ID, FILES_KIND, filesDefinition } from './definition.tsx'
 import { canOpenOf, createList, createWatch, filesFace, type FilesInjected } from './face.ts'
@@ -40,7 +40,7 @@ export type { TreeEntry, TreeEntryMeta, TreeEntryKind, TreeDirectoryState, FileT
 export type { FileNavigatorInput } from './FileNavigator.tsx'
 export type { NavigatorToggleInput } from './NavigatorToggle.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** Workspace directory actions after the `files` page's reload control. */
     'sidebar.right.tab.files.actions': {

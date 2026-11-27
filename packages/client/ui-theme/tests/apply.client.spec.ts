@@ -9,7 +9,7 @@ import { TestRemote, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, SETTINGS_NS, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { AppearanceRowInjected, FontSettingsInjected, ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
-import type { SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { THEME_SETTINGS_NAMESPACE, ThemeSettingsSchema, type ThemeSettings } from '../src/theme-settings.ts'
 import { AppearanceRow } from '../src/client/AppearanceRow.tsx'
 import type { createAppearanceRowStore, createFontRowStore } from '../src/client/settings-store.ts'

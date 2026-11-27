@@ -1,6 +1,6 @@
 /** Restorable PDF viewing preferences; document objects and canvases remain component-local. */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import type { ZoomPreference } from '../zoom/types.ts'
 
 /** One tab's last visible page and optional PDF zoom preference. */

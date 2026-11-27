@@ -6,7 +6,7 @@ import { createClientModuleSystem, type ClientModuleLoaderTarget } from '@deepse
 import { act, fireEvent, render, type RenderResult } from '@testing-library/react'
 import { useState, type ReactNode } from 'react'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { FactoryLocalComponentPropsOf, StandardSourceBinding } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryLocalComponentPropsOf, StandardSourceBinding } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { SlotRegistry } from '../src/client/registry.ts'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'
 
@@ -24,7 +24,7 @@ const panelChildren = { 'module-test.keyed': keyed }
 interface Route { enabled: boolean }
 type LayerMode = 'forward' | 'drop' | 'crash'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'module-test.single': typeof single
     'module-test.keyed': typeof keyed

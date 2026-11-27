@@ -1,5 +1,5 @@
 /** Shared rendering of plugin-owned panel icons in navigation rows and menus. */
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from './contract/slots.ts'
 
 /**

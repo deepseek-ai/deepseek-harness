@@ -6,7 +6,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { AnimatedRows, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { AnimatedRows, IconPlusOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { FoldSection } from './FoldSection.tsx'
 import type { en } from './locales.ts'
 import { ModelRow } from './ModelRow.tsx'

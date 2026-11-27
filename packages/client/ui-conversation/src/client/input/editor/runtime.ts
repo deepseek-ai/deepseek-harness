@@ -1,7 +1,7 @@
 /** The Composer model's private Lexical editor, projections, and node operations. */
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { LexicalEditor, NodeKey } from 'lexical'
-import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import {
   $addUpdateTag, $createParagraphNode, $createTextNode, $getAdjacentNode, $isTextNode,
   $getRoot, $getSelection, $getNodeByKey, $isRangeSelection,

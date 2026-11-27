@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
-import type { HostObservable, KeyedStandardSource } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, KeyedStandardSource } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { keyedObservableHook } from '../src/client/bindings.tsx'
 
 function observable<T>(initial: T): HostObservable<T> & { set(next: T): void } {

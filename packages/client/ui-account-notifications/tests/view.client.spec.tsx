@@ -2,7 +2,7 @@
 /** The menu extension preserves notifications while onboarding hides their presentation. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { AccountNotifications, type AccountNotificationsProps } from '../src/client/AccountNotifications.tsx'
 import { notification } from './notification-fixture.ts'
 

@@ -1,5 +1,5 @@
 /** Recorded-value formatting shared by entity lists and inspection results. */
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ToolDetailItem, ToolDetailsModel } from '../components/ToolDetails.tsx'
 
 /** Translator supplied by the conversation slot. */

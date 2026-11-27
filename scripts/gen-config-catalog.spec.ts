@@ -86,6 +86,25 @@ export function apply(ctx: unknown, config: Config): void {}
       .toEqual(new Set(['enabled', 'nested', 'nested.current']))
   })
 
+  it('classifies a package by its hand-written src/index.js Host entry', () => {
+    const { root, write } = fixture()
+    write('packages/test/library/package.json', JSON.stringify({
+      name: '@test/library', exports: { '.': { types: './lib/types/client/index.d.ts', default: './lib/index.js' } },
+    }))
+    write('packages/test/library/src/client/index.ts', 'export const value = 1\n')
+    write('packages/test/library/src/index.js', 'export function apply() {}\n')
+
+    const entry = collectConfigCatalog(root).find(candidate => candidate.pkg === '@test/library')
+    expect(entry).toMatchObject({ entry: 'packages/test/library/src/index.js', kind: 'no-config' })
+  })
+
+  it('rejects a package whose ./src/index.js resolves to no source module', () => {
+    const { root, write } = fixture()
+    write('packages/test/empty/package.json', JSON.stringify({ name: '@test/empty' }))
+
+    expect(() => collectConfigCatalog(root)).toThrow('@test/empty: entry packages/test/empty/src/index.js has no source module.')
+  })
+
   it('rejects recursive field spreads and dynamic object factories', () => {
     const { root, write } = fixture()
     const source = (fields: string) => `

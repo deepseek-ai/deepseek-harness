@@ -3,10 +3,10 @@
 import { useCallback, useRef, type ReactNode } from 'react'
 import {
   Button, HoverCardGroup, IconWarningTriangleOutlineRegular, MarqueeText, useHoverMarquee,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { PanelDetailsProps } from '@deepseek-ai/dsh-client-ui-session-panel/client'
 // Type-only: the `useMediaQuery` standard prop merge.

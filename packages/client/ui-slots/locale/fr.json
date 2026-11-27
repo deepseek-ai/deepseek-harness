@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "emplacements d'interface",
+    "description": "Fournissez le registre d'emplacements avec lequel les plug-ins du navigateur composent l'interface."
+  }
+}

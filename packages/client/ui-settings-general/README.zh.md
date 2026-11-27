@@ -70,10 +70,10 @@ Web 与桌面端的通用设置底部显示当前发布版本，使用构建注�
 自定义分组通过声明合并把确切的设置行 key 加入 `SlotMap`，注册自己的组件，并在 `children` 中声明该设置行 slot 的运行时类型。组件通过 `PropsRenderSlots` 渲染子 outlet；页面提供外层标题和卡片。已有插件 `apply` 中的 `ctx`、绑定命名空间的 `t` 和模块级 `AcmeRow` 组件时，可这样注册：
 
 ```tsx ignore-check
-import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SettingsGeneralItemOwnerProps } from '@deepseek-ai/dsh-client-ui-settings/client'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'settings.general.group.acme.item': {
       kind: 'list'; scope: 'root'; owner: SettingsGeneralItemOwnerProps

@@ -10,10 +10,10 @@ import { Component, useEffect, useState, type ReactNode } from 'react'
 import {
   SlotCore, type PropsRenderSlots, type ScopedStandardSourceBinding, type SlotRendererHost,
   type SlotScopeAdapter, type StandardSourceBinding,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'spec.hoc': { kind: 'hoc'; scope: 'root'; owner: { tone: string } }
     'spec.hoc.maybe': { kind: 'hoc'; scope: 'session-maybe' }

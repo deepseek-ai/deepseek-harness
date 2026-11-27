@@ -1,7 +1,7 @@
 /** Recording guidance derived from one complete Host readiness snapshot; pure, shared by every voice surface. */
 import type { SpeechCatalog } from '@deepseek-ai/dsh-experimental-api-speech-to-text/types'
 import type { SpeechProviderView } from '@deepseek-ai/dsh-experimental-speech-to-text/types'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 
 /**

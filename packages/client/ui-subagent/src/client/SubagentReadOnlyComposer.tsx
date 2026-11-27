@@ -1,4 +1,4 @@
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { NS } from './locales.ts'
 import css from './SubagentReadOnlyComposer.module.css'
 

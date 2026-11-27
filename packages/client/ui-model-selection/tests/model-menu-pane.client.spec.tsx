@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
-import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots'
+import type { OwnerOf } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { makeTranslate, responsiveHooks } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelDirectoryState } from '../src/client/directory.ts'

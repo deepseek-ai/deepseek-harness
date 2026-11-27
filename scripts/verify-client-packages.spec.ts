@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   collectClientPackageViolations,
+  collectModuleReferences,
   collectLocalSourceSpecifiers,
   collectRuntimeLocalSourceSpecifiers,
   collectRuntimeSourcePackageUses,
@@ -16,9 +17,11 @@ import {
   fixClientPackageManifests,
   readClientDeclarations,
   readStylesheetAssetReferences,
+  reusesClientTypes,
   type ClientDeclaration,
   type ClientPackage,
   type ClientPackageFacts,
+  type ModuleReference,
 } from './verify-client-packages.ts'
 
 const CORDIS = '@deepseek-ai/cordis'
@@ -37,6 +40,7 @@ function declaration(
     manifest: 'packages/client/' + short.replace(/^.*\//, '') + '/package.json',
     dynamic: true,
     platform: 'web',
+    immediately: false,
     external: [],
     inject: [],
     runtimeSourceUses: {},
@@ -77,6 +81,8 @@ function facts(
     preloadedExternals: options.preloadedExternals ?? [],
     parserPreloadIds: options.parserPreloadIds
       ?? (options.preloadedExternals ?? []).map(value => value.replace(/\/client$/, '')),
+    clientTypedRoots: options.clientTypedRoots ?? new Set(),
+    clientTypedRootReferences: options.clientTypedRootReferences ?? [],
     malformed: options.malformed ?? [],
   }
 }
@@ -164,17 +170,42 @@ describe('package modes', () => {
     expect(found.join('\n')).toContain('has no supported client package mode')
   })
 
-  it('requires seeded workspace packages to use staticLinked and preloads to name dynamic rows', () => {
+  it('accepts a workspace platform module supplied by an immediately row of the same name', () => {
+    const slots = declaration('ui-slots', { immediately: true })
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [slots, declaration(CORDIS, { dynamic: false })],
+      platformModules: ['react', CORDIS, slots.name],
+    }))).toEqual([])
+  })
+
+  it('accepts a workspace platform module that a statically linked package supplies', () => {
+    const store = declaration('store', { dynamic: false })
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [store],
+      staticLinkedPackages: new Set([store.name]),
+      platformModules: [store.name],
+    }))).toEqual([])
+  })
+
+  it('requires seeded workspace modules to be statically linked or immediately rows, and preloads to name dynamic rows', () => {
     const slots = declaration('ui-slots', { dynamic: false })
+    const store = declaration('store')
     const bootstrap = declaration('bootstrap', { dynamic: false })
     const found = collectClientPackageViolations(facts([], {
-      declarations: [slots, bootstrap],
-      platformModules: [slots.name],
+      declarations: [slots, store, bootstrap],
+      platformModules: [slots.name, store.name],
       preloadedExternals: [bootstrap.name + '/client'],
     }))
-    expect(found).toHaveLength(2)
-    expect(found.join('\n')).toContain('does not use the staticLinked preset')
-    expect(found.join('\n')).toContain('has no dynamic dsh.client row')
+    expect(found).toEqual([
+      'packages/client/web/src/platform.ts: parser-preloaded external "@deepseek-ai/dsh-client-bootstrap/client"'
+      + ' has no dynamic dsh.client row',
+      'packages/client/web/src/platform.ts: workspace platform module "@deepseek-ai/dsh-client-store"'
+      + ' belongs to @deepseek-ai/dsh-client-store, whose build does not use the staticLinked preset,'
+      + ' and has no dsh.client row of the same package name with immediately: true',
+      'packages/client/web/src/platform.ts: workspace platform module "@deepseek-ai/dsh-client-ui-slots"'
+      + ' belongs to @deepseek-ai/dsh-client-ui-slots, whose build does not use the staticLinked preset,'
+      + ' and has no dsh.client row of the same package name with immediately: true',
+    ])
   })
 
   it('requires every preloaded external to have a parser preload row', () => {
@@ -308,6 +339,32 @@ describe('module requests', () => {
     ])
   })
 
+  it('rejects the /client subpath of a baseline module as a repeated baseline request', () => {
+    const store = declaration('store', { dynamic: false })
+    const ui = declaration('ui', { external: [store.name + '/client'] })
+    expect(collectClientPackageViolations(facts([], {
+      declarations: [store, ui],
+      staticLinkedPackages: new Set([store.name]),
+      platformModules: [store.name],
+    }))).toEqual([
+      ui.manifest + ': dsh.client.external repeats baseline module "' + store.name
+      + '/client"; remove the explicit declaration',
+    ])
+  })
+
+  it('accepts a request for a package root that production source imports through its /client subpath', () => {
+    const gateway = {
+      ...declaration('@deepseek-ai/dsh-api-gateway'), manifest: 'packages/api/gateway/package.json',
+    }
+    const subject = { ...declaration('@deepseek-ai/dsh-api-session-controller', {
+      external: ['@deepseek-ai/dsh-api-gateway'],
+      runtimeSourceSpecifiers: {
+        '@deepseek-ai/dsh-api-gateway/client': ['packages/api/session-controller/src/client/index.ts'],
+      },
+    }), manifest: 'packages/api/session-controller/package.json' }
+    expect(collectClientPackageViolations(facts([], { declarations: [gateway, subject] }))).toEqual([])
+  })
+
   it('rejects duplicates, empty values, self-requests, and missing suppliers', () => {
     const ui = declaration('ui', {
       external: ['', '@deepseek-ai/dsh-client-ui', '@deepseek-ai/dsh-missing', '@deepseek-ai/dsh-missing'],
@@ -354,7 +411,7 @@ describe('package assets', () => {
       "const legacy = require('./assets/legacy.svg')",
       "import type Art from './assets/type-only.webp'",
       "import styles from './View.module.css'",
-      "import font from './assets/font.woff2'",
+      "import font from './assets/font.eot'",
       "import raw from './assets/raw.svg?raw'",
       "import shared from '@deepseek-ai/dsh-client-other/assets/shared.svg'",
       "import rooted from '/assets/rooted.svg'",
@@ -389,7 +446,7 @@ describe('package assets', () => {
       .toThrow('verify-client-packages: cannot parse stylesheet src/View.module.css: The `composes` property')
   })
 
-  it('reads url() references only from package stylesheets that Client sources import', () => {
+  it('reads url() references only from package and dependency stylesheets that Client sources import', () => {
     const root = mkdtempSync(join(tmpdir(), 'client-package-assets-'))
     roots.push(root)
     const files: Record<string, string> = {
@@ -398,6 +455,9 @@ describe('package assets', () => {
       'packages/client/ui/src/client/text.css': '.text { background: url("./assets/text.webp"); }',
       'packages/client/ui/src/styles/static.css': '@font-face { src: url(./static.woff2); }',
       'packages/client/ui/styles/outside.css': '.outside { background: url(./outside.png); }',
+      'packages/client/ui/package.json': '{"name":"@f/ui"}',
+      'node_modules/katex/package.json': '{"name":"katex"}',
+      'node_modules/katex/dist/katex.css': '@font-face { src: url(fonts/a.woff2) format("woff2"), url(fonts/a.woff) format("woff"); }',
     }
     for (const [path, value] of Object.entries(files)) {
       mkdirSync(dirname(join(root, path)), { recursive: true })
@@ -418,8 +478,21 @@ describe('package assets', () => {
         { file: 'packages/client/ui/src/client/View.module.css', reference: 'url("../assets/mask.png")' },
         { file: 'packages/client/ui/src/client/global.css', reference: 'url("./assets/global.svg")' },
         { file: 'packages/client/ui/src/client/text.css', reference: 'url("./assets/text.webp")' },
+        { file: 'node_modules/katex/dist/katex.css', reference: 'url("fonts/a.woff2")' },
+        { file: 'node_modules/katex/dist/katex.css', reference: 'url("fonts/a.woff")' },
       ],
     })
+  })
+
+  it('rejects a bare stylesheet import that does not resolve from the package', () => {
+    const root = mkdtempSync(join(tmpdir(), 'client-package-missing-stylesheet-'))
+    roots.push(root)
+    mkdirSync(join(root, 'packages/client/ui'), { recursive: true })
+    writeFileSync(join(root, 'packages/client/ui/package.json'), '{"name":"@f/ui"}')
+    expect(() => readStylesheetAssetReferences(root, 'packages/client/ui', new Map([
+      ['packages/client/ui/src/client/View.tsx', ['missing-package/style.css?inline']],
+    ]))).toThrow('verify-client-packages: packages/client/ui/src/client/View.tsx imports stylesheet '
+      + '"missing-package/style.css?inline", which does not resolve from packages/client/ui')
   })
 
   it('reads the Web platform and the raw asset export from manifests', () => {
@@ -525,7 +598,7 @@ describe('manifest declarations', () => {
     const root = mkdtempSync(join(tmpdir(), 'client-packages-fix-'))
     roots.push(root)
     const subject = pkg('feature', {
-      external: ['', 'react', '@deepseek-ai/dsh-client-feature', '@deepseek-ai/dsh-missing'],
+      external: ['', 'react', '@deepseek-ai/dsh-client-ui-slots/client', '@deepseek-ai/dsh-client-feature', '@deepseek-ai/dsh-missing'],
       inject: ['', '@deepseek-ai/dsh-agent', '@deepseek-ai/dsh-agent'],
       sourceUses: {
         '@deepseek-ai/dsh-agent': ['packages/client/feature/src/index.ts'],
@@ -572,5 +645,73 @@ describe('manifest declarations', () => {
     expect(fixed.dependencies).toEqual(subject.dependencies)
     expect(fixed.peerDependencies).toEqual(subject.peerDependencies)
     expect(fixed.devDependencies).toEqual(subject.devDependencies)
+  })
+})
+
+describe('client-typed package root spelling', () => {
+  const slots = declaration('ui-slots', { immediately: true })
+  const settings = declaration('ui-settings')
+  const roots = { declarations: [slots, settings], clientTypedRoots: new Set([slots.name]) }
+  const reference = (module: string, kind: ModuleReference['kind'] = 'import'): ModuleReference =>
+    ({ file: 'packages/client/ui-x/src/client/index.ts', line: 3, module, kind })
+
+  it('reads every module-specifier position and no other string', () => {
+    const source = [
+      "import { a } from 'x/import'",
+      "import type { B } from 'x/type-import'",
+      "export * from 'x/export'",
+      "import legacy = require('x/import-equals')",
+      "type Q = typeof import('x/type-query')",
+      "const lazy = () => import('x/dynamic')",
+      "const loaded = require('x/require')",
+      "vi.mock('x/mock', () => ({}))",
+      "declare module 'x/augmented' { interface M { k: 1 } }",
+      "declare global { namespace N { const s: 'x/not-a-reference' } }",
+      "// import { c } from 'x/comment'",
+      "const text = \"from 'x/string'\"",
+    ].join('\n')
+    expect(collectModuleReferences('fixture.ts', source).map(found => [found.line, found.module, found.kind])).toEqual([
+      [1, 'x/import', 'import'], [2, 'x/type-import', 'import'], [3, 'x/export', 'import'],
+      [4, 'x/import-equals', 'import'], [5, 'x/type-query', 'import'], [6, 'x/dynamic', 'import'],
+      [7, 'x/require', 'import'], [8, 'x/mock', 'import'], [9, 'x/augmented', 'augmentation'],
+    ])
+  })
+
+  it('selects a package whose root types are its ./client declarations', () => {
+    const client = { types: './lib/types/client/index.d.ts', default: './lib/client.js' }
+    expect(reusesClientTypes({ exports: { '.': { types: client.types, default: './lib/index.js' }, './client': client } }))
+      .toBe(true)
+    expect(reusesClientTypes({ exports: { '.': { types: './lib/types/index.d.ts', default: './lib/index.js' }, './client': client } }))
+      .toBe(false)
+    expect(reusesClientTypes({ exports: { '.': { types: client.types } } })).toBe(false)
+    expect(reusesClientTypes({})).toBe(false)
+  })
+
+  it('accepts /client references to a client-typed root and root references to other packages', () => {
+    expect(collectClientPackageViolations(facts([], {
+      ...roots,
+      clientTypedRootReferences: [
+        reference(slots.name + '/client'), reference(slots.name + '/client', 'augmentation'),
+        reference(settings.name), reference('react'),
+      ],
+    }))).toEqual([])
+  })
+
+  it('rejects package-root imports and augmentations of a client-typed root', () => {
+    const references = [reference(slots.name), reference(slots.name, 'augmentation')]
+    const found = collectClientPackageViolations(facts([], { ...roots, clientTypedRootReferences: references }))
+    expect(found).toHaveLength(2)
+    expect(found[0]).toBe(
+      'packages/client/ui-x/src/client/index.ts:3: declare module "@deepseek-ai/dsh-client-ui-slots" names the package root;'
+      + ' repository code names "@deepseek-ai/dsh-client-ui-slots/client" for values, types, and augmentations. The package'
+      + ' publishes its ./client declarations as the root types for code outside the repository, but in this repository'
+      + ' the package root resolves to the Host entry under src/, which carries neither the /client exports nor their'
+      + ' declarations.',
+    )
+    expect(found[1]).toMatch(/: module reference "@deepseek-ai\/dsh-client-ui-slots" names the package root;/u)
+    // Negative control: the same references pass when the package root carries its own declarations.
+    expect(collectClientPackageViolations(facts([], {
+      ...roots, clientTypedRoots: new Set(), clientTypedRootReferences: references,
+    }))).toEqual([])
   })
 })

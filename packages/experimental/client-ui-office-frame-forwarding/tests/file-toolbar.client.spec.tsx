@@ -2,7 +2,7 @@
 /** Office controls preserve the document's keyboard focus while invoking actions. */
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { IconPlayOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconPlayOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { FileToolbarButton } from '../src/client/primitives/FileToolbar.tsx'
 import { ToolbarButton } from '../src/client/ToolbarButton.tsx'
 

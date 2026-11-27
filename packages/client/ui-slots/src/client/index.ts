@@ -1749,3 +1749,6 @@ export class SlotCore {
     }
   }
 }
+
+/** Browser plugin body of the `immediately` row, which registers nothing; other bundles require the exports of this module. */
+export function apply(): void {}

@@ -1,5 +1,5 @@
 /** Pure search-card derivation from raw grep/glob result metadata. @module */
-import type { SearchBlockProps, SearchFileGroup } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { SearchBlockProps, SearchFileGroup } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ToolCallBlock } from './tool-call-model.ts'
 import { parsedToolCall } from './raw-tool-call.ts'
 

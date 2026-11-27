@@ -1,4 +1,4 @@
-import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { AutoReviewDenial } from './tool-call-model.ts'
 
 /** Localized copy that replaces ordinary failed-call output for an Auto denial. */

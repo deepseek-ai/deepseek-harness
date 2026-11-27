@@ -15,7 +15,33 @@ import {
   metadataExpressionErrors,
   packageTestFixtureDependencyErrors,
   packageTestPluginDependencyErrors,
+  resolvesToPackageSource,
 } from './verify-cordis-config.ts'
+
+describe('source-plane resolution of configured packages', () => {
+  const pkg = join(tmpdir(), 'packages', 'client', 'ui-slots')
+
+  it.each([
+    ['a TypeScript source under src', 'src/index.ts'],
+    ['the host runtime under src', 'src/index.js'],
+    ['a TypeScript source outside src', 'examples/demo/index.ts'],
+  ])('accepts %s', (_label, path) => {
+    expect(resolvesToPackageSource(pkg, join(pkg, path))).toBe(true)
+  })
+
+  it.each([
+    ['built declarations', 'lib/types/index.d.ts'],
+    ['a built runtime entry', 'lib/index.js'],
+    ['a declaration file outside src', 'types/index.d.ts'],
+  ])('rejects %s', (_label, path) => {
+    expect(resolvesToPackageSource(pkg, join(pkg, path))).toBe(false)
+  })
+
+  it('rejects another package and an unresolved specifier', () => {
+    expect(resolvesToPackageSource(pkg, join(tmpdir(), 'packages', 'client', 'other', 'src', 'index.ts'))).toBe(false)
+    expect(resolvesToPackageSource(pkg, undefined)).toBe(false)
+  })
+})
 
 describe('verify-cordis-config metadata expressions', () => {
   it('accepts a disabled !!js expression', () => {

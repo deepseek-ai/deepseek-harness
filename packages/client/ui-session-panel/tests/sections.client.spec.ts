@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { orderSections, projectSections } from '../src/client/sections.ts'
 
 function entry(id: string, order: number | undefined, label: StoredEntry['options']['label'], registrant?: string): StoredEntry {

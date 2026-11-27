@@ -298,6 +298,15 @@
     - id: ui-responsive
       name: '@deepseek-ai/dsh-client-ui-responsive'
 
+    - id: ui-slots
+      name: '@deepseek-ai/dsh-client-ui-slots'
+
+    - id: ui-primitives
+      name: '@deepseek-ai/dsh-client-ui-primitives'
+
+    - id: ui-dockkit
+      name: '@deepseek-ai/dsh-client-ui-dockkit'
+
     - id: ui-renderer
       name: '@deepseek-ai/dsh-client-ui-renderer'
 

@@ -13,7 +13,7 @@ import type { TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { Band, type BandInjected } from './Band.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type ModsBandKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Chrome copy around a mod's band. */
     'claude-code-mods': ModsBandKey

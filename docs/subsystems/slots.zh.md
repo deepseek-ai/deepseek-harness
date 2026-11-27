@@ -34,7 +34,7 @@ root 作用域的 list `sidebar.panellist.actions`、`conversation.session.heade
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 
 type HeaderActionProps = PropsRuntime<'conversation.session.header.actions'>
 

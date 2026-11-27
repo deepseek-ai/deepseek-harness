@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { RemoteConnectionController } from './remote-connection-controller.ts'
 import { LoginLinkController } from './login-link-controller.ts'
 import { LoginLinkToast } from './LoginLinkToast.tsx'
@@ -21,7 +21,7 @@ import { en, zh, ja, es, fr, de, ru, pt, type RemoteConnectionLocaleKey } from '
 export type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from './slots.ts'
 export type { RemoteConnectionState } from './remote-connection-controller.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Remote connection settings copy. */
     remoteConnection: RemoteConnectionLocaleKey

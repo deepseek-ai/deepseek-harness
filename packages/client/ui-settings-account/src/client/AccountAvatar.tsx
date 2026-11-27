@@ -1,5 +1,5 @@
 /** Shared account picture with an icon fallback for missing or unavailable images. */
-import { IconUserOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconUserOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { AccountAvatarSnapshot } from './account-avatar.ts'
 import css from './AccountAvatar.module.css'
 

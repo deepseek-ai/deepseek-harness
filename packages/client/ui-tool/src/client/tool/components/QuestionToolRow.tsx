@@ -1,5 +1,5 @@
 /** Question-owned summary action and transcript disclosure. */
-import { DisclosureRow, IconQuestionOutlineRegular, InspectButton, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { DisclosureRow, IconQuestionOutlineRegular, InspectButton, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ToolRowProps } from './ToolRow.tsx'
 import { formatToolBody } from '../models/tool-call-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'

@@ -6,13 +6,15 @@
  * lightningcss inside the bundle: `x.module.css` yields its hashed class map
  * while each output chunk exposes deferred stylesheet text through its metadata
  * factory. `x.css?inline` exports compiled text without registering a resource. The virtual
- * loaders register each real stylesheet as a watch dependency. Images under
+ * loaders register each real stylesheet as a watch dependency. Images and fonts under
  * `src/client/assets/`, imported from Client code or referenced by relative
  * `url()` in the package's own stylesheets, are emitted under `lib/assets/`
  * with their content revision in the file name and become document-relative
- * URLs served by the
- * client-modules asset route; such a package exports `./assets/*` as
- * `./lib/assets/*`, and its Node Client face rejects asset imports.
+ * URLs served by the client-modules asset route. The files that an imported
+ * dependency stylesheet references are emitted under
+ * `lib/assets/vendor/<dependency>/`, keeping only the first `url()` source of
+ * each `@font-face`. Such a package exports `./assets/*` as `./lib/assets/*`,
+ * and its Node Client face rejects asset imports.
  * Non-experimental client outputs reject experimental module and stylesheet
  * inputs, including origins recorded by chained source maps.
  * A source `import()` of a package module becomes `require.async` on a split
@@ -30,7 +32,7 @@ import { createRequire, isBuiltin } from 'node:module'
 import { basename, dirname, isAbsolute, join, posix, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Rolldown, type TsdownPlugin, type UserConfig } from 'tsdown'
-import { transform, type CustomAtRules, type Url, type Visitor } from 'lightningcss'
+import { transform, type CSSModuleExports, type CustomAtRules, type Url, type Visitor } from 'lightningcss'
 import {
   PACKAGE_ASSET_EXPORT,
   PACKAGE_ASSET_EXPORT_TARGET,
@@ -42,7 +44,7 @@ import {
   packageAssetRevisionedPath,
 } from './modules/src/assets.ts'
 import { CLIENT_CHUNK_FILE } from './modules/src/chunks.ts'
-import { optionalStringArray } from './modules/src/client/manifest.ts'
+import { optionalStringArray, stripClientSuffix } from './modules/src/client/manifest.ts'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS, STATIC_MODULE_MANIFEST_EXPORT } from './web/src/platform.ts'
 import { clientBuildEnvironmentDefines, clientBuildValueDefines } from '../../scripts/client-build-environment.ts'
 import { isExperimentalPackageName } from '../../scripts/experimental-package-policy.ts'
@@ -105,7 +107,7 @@ function compiledClientStyle(
  * Everything else under @deepseek-ai/* is either a module-table entry
  * (external) or a leak the purity gate rejects.
  */
-export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|error|official-bundles|deque|output-retention|typert-protocol|util-crypto|util-text-search|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/(?:grammar|registry)$|@deepseek-ai\/dsh-plugin-market-index\/source$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-api-session-controller\/client\/directories$|@deepseek-ai\/dsh-spill-policy\/notice$)/
+export const INLINE_SAFE = /^(?:@deepseek-ai\/dsh-(?:file-reference|fs-patch|session|llm|tools|brand|error|official-bundles|deque|output-retention|typert-protocol|util-code-language|util-crypto|util-text-search|util-time|util-values|util-workspace-path)(?:\/|$)|@deepseek-ai\/dsh-util-file-drag$|@deepseek-ai\/dsh-token-meter\/client$|@deepseek-ai\/dsh-commands\/builtin$|@deepseek-ai\/dsh-native-command\/types$|@deepseek-ai\/dsh-host-open-in-app\/shared$|@deepseek-ai\/dsh-plugin-manager\/(?:grammar|registry)$|@deepseek-ai\/dsh-plugin-market-index\/source$|@deepseek-ai\/dsh-agent-preset-registry\/display$|@deepseek-ai\/dsh-api-workspace-controller\/default-workspace$|@deepseek-ai\/dsh-api-session-controller\/client\/directories$|@deepseek-ai\/dsh-spill-policy\/notice$)/
 
 /**
  * Vendored framework libraries: rescoped into @deepseek-ai, so the gate below
@@ -125,6 +127,9 @@ const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 const SKIP_WORKSPACE_BUILD: UserConfig = { entry: '' }
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
+/** The baseline module-table requests of a static library's manifest factory. */
+const PLATFORM_REQUESTS: ReadonlySet<string> = new Set(PLATFORM_MODULES)
 
 /** Rebase a physical lib-relative source onto a browser URL that mirrors the repository directories. */
 function browserSourcePath(source: string, sourcemapPath: string): string {
@@ -147,7 +152,8 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * `import.meta.dirname`. Its `package.json` name is the plugin id stamped into
  * the __ModuleLoader__.load handoff and onto the injected style tags, and the
  * owner segment of its asset URLs; its `src/client/assets/` holds the only
- * images the browser bundle may reference.
+ * own images and fonts the browser bundle may reference, beside the files its
+ * imported dependency stylesheets reference.
  * @param libEntry - node-half entries.
  * @param options - phase placement, lib overrides, optional independently bundled Node Client, companion configs, and per-file Client banner.
  * @returns ENV-selected tsdown config for the current build face.
@@ -487,7 +493,7 @@ function staticManifestConfig(id: string, packageDir: string, entry: string): Us
       // Each module-table import also leaves a require in the factory, so Modules records the dependency.
       const required = new Set<string>()
       const table = (specifier: string): void => {
-        if ((PLATFORM_MODULES as readonly string[]).includes(specifier)) required.add(specifier)
+        if (coversRequest(PLATFORM_REQUESTS, specifier)) required.add(specifier)
       }
       let exportObject = '__dshModuleExports'
       while (code.includes(exportObject)) exportObject += '_'
@@ -611,9 +617,8 @@ function productionExternals(manifest: PackageManifest): readonly RegExp[] {
 }
 
 /**
- * Module-table specifiers one `dsh.client` declaration requests. Matching is
- * exact, never normalized: a package declares the specifier its own code
- * imports, and the loader keys static entries the same way.
+ * Module-table specifiers one `dsh.client` declaration requests, as declared.
+ * {@link coversRequest} decides which import specifiers a request covers.
  * @param subject - package name, used in diagnostics.
  * @param declaration - the package's `dsh.client` object.
  * @returns the requested specifiers, empty when the package declares none.
@@ -624,6 +629,19 @@ export function requestedExternals(
   declaration: { readonly external?: unknown },
 ): ReadonlySet<string> {
   return new Set(optionalStringArray(subject, 'dsh.client.external', declaration.external) ?? [])
+}
+
+/**
+ * Whether module-table requests cover one import specifier: the specifier itself is requested, or it ends in
+ * `/client` and the specifier without that suffix is requested. The module table resolves a `<specifier>/client` it
+ * does not hold exactly through {@link stripClientSuffix}, so a bundle that imports either spelling of a requested
+ * row leaves both to the same module-table entry and never inlines a private copy.
+ * @param requested - the baseline plus the package's explicit requests.
+ * @param specifier - import specifier as the bundled code writes it.
+ * @returns true when the specifier stays a module-table `require`.
+ */
+export function coversRequest(requested: ReadonlySet<string>, specifier: string): boolean {
+  return requested.has(specifier) || requested.has(stripClientSuffix(specifier))
 }
 
 /**
@@ -824,10 +842,73 @@ function stylesheetSource(css: string, references: ReadonlyMap<string, string>, 
 
 /** One stylesheet's `url()` rewrite: the lightningcss options and the references they insert while transforming. */
 interface StylesheetAssets {
-  /** lightningcss options; empty when the stylesheet lies outside the package's own `src`. */
+  /** lightningcss options; empty when the stylesheet belongs neither to the package's own `src` nor to a dependency package. */
   readonly options: { readonly visitor?: Visitor<CustomAtRules> }
   /** Reference of each placeholder inserted during the transform that uses {@link options}. */
   readonly references: ReadonlyMap<string, string>
+  /** Rewrite the stylesheet source before the transform that uses {@link options}. */
+  readonly prepare: (code: Uint8Array) => Uint8Array
+}
+
+/** Directory whose files one stylesheet may publish as package assets, and their path prefix below `lib/assets/`. */
+interface AssetBase {
+  /** Real directory path, or undefined when it does not exist. */
+  readonly dir: string | undefined
+  /** Prefix of the emitted asset path below `lib/assets/`. */
+  readonly prefix: string
+  /** Allowed location named in the diagnostic for a file outside {@link dir}. */
+  readonly label: string
+}
+
+/**
+ * Find the dependency package that owns a file outside the package's own sources.
+ * @param ownDir - Real directory of the package being built.
+ * @param file - Real file path.
+ * @returns The nearest package directory above the file that declares a name, with that name; undefined when it is
+ *   the package being built or no named package owns the file.
+ */
+function dependencyPackageOf(ownDir: string, file: string): { readonly dir: string, readonly name: string } | undefined {
+  let directory = dirname(file)
+  while (dirname(directory) !== directory) {
+    const manifestPath = join(directory, 'package.json')
+    if (existsSync(manifestPath)) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string }
+      if (typeof manifest.name === 'string') return directory === ownDir ? undefined : { dir: directory, name: manifest.name }
+    }
+    directory = dirname(directory)
+  }
+  return undefined
+}
+
+/**
+ * Keep only the first `url()` source of every `@font-face` rule, the source a browser that supports it loads, so a
+ * dependency stylesheet publishes one font file per face. Other sources, such as `local()`, stay.
+ * @param filename - Stylesheet path, used in diagnostics.
+ * @param code - Stylesheet source.
+ * @returns The stylesheet with at most one `url()` source per font face.
+ */
+function firstFontSources(filename: string, code: Uint8Array): Uint8Array {
+  return transform({
+    filename,
+    code,
+    visitor: { Rule: { 'font-face'(rule) {
+      let changed = false
+      for (const property of rule.value.properties) {
+        if (property.type !== 'source') continue
+        const first = property.value.find(source => source.type === 'url')
+        const kept = property.value.filter(source => source.type !== 'url' || source === first)
+        if (kept.length === property.value.length) continue
+        changed = true
+        // lightningcss reports a source without format() as `format: null` but accepts it back only without the field.
+        property.value = kept.map((source) => {
+          if (source.type !== 'url' || source.value.format !== null) return source
+          const { format: _absent, ...value } = source.value
+          return { ...source, value }
+        })
+      }
+      return changed ? rule : undefined
+    } } },
+  }).code
 }
 
 /** Browser-face package assets: the import plugin and the stylesheet `url()` rewrite share one per-build emission record. */
@@ -838,19 +919,23 @@ interface PackageAssets {
    * Select the lightningcss options that rewrite one stylesheet's relative `url()` values.
    * @param context - plugin context of the stylesheet loader, which emits each referenced asset.
    * @param stylesheet - physical stylesheet path.
-   * @returns a `url()` visitor when the stylesheet lies inside the package's own `src`, otherwise no options,
-   *   and the references the visitor inserts.
+   * @returns a `url()` visitor when the stylesheet lies inside the package's own `src` or inside a dependency
+   *   package, otherwise no options; the references the visitor inserts; and the source rewrite, which keeps the
+   *   first font source of a dependency stylesheet and leaves other stylesheets unchanged.
    * @throws {Error} from the visitor when a relative `url()` does not name a publishable package asset.
    */
   urlRewrite(context: AssetContext, stylesheet: string): StylesheetAssets
 }
 
 /**
- * Build the package-asset rules of one dynamic browser bundle. A referenced
- * file must lie under the package's own `src/client/assets/`, have a supported
- * extension, and be published by the `./assets/*` export; it is emitted once
- * per build under `lib/assets/` at its relative path with the content revision
- * inserted before the extension, and the reference compiles to the module loader's
+ * Build the package-asset rules of one dynamic browser bundle. A file that the
+ * package's own sources reference must lie under its `src/client/assets/`; a
+ * file that a dependency package's stylesheet references must lie inside that
+ * dependency package and is emitted under `vendor/<dependency name>/` at its
+ * path within the dependency. Either file must have a supported extension, and
+ * the package must publish the `./assets/*` export; it is emitted once per build
+ * under `lib/assets/` at its relative path with the content revision inserted
+ * before the extension, and the reference compiles to the module loader's
  * synchronous resolver call on its document-relative URL.
  * A one-shot build deletes files under `lib/assets/` that it did not emit; a
  * watch build keeps them for pages still running an earlier generation.
@@ -864,8 +949,9 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
   const assetsDir = resolvePath(sourceDir, 'client', 'assets')
   /** Reference of every asset emitted in the current build, keyed by its real path. */
   const references = new Map<string, string>()
+  const ownAssets = (): AssetBase => ({ dir: realDirectory(assetsDir), prefix: '', label: 'src/client/assets; move the asset there' })
 
-  const reference = (context: AssetContext, file: string): string => {
+  const reference = (context: AssetContext, file: string, base: AssetBase = ownAssets()): string => {
     let realPath: string
     try {
       realPath = realpathSync(file)
@@ -874,9 +960,9 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
     }
     const emitted = references.get(realPath)
     if (emitted !== undefined) return emitted
-    const below = pathBelow(realDirectory(assetsDir), realPath)
-    if (below === undefined) throw new Error(`tsdown: ${name}: ${file} is outside src/client/assets; move the asset there`)
-    const assetPath = below.split(sep).join('/')
+    const below = pathBelow(base.dir, realPath)
+    if (below === undefined) throw new Error(`tsdown: ${name}: ${file} is outside ${base.label}`)
+    const assetPath = base.prefix + below.split(sep).join('/')
     if (assetPath.split('/').some(segment => UNSERVABLE_ASSET_SEGMENT.test(segment) || segment.toLowerCase() === 'node_modules')) {
       throw new Error(`tsdown: ${name}: ${file} has a node_modules path segment or one containing %, #, ?, \\ or NUL, which the asset route cannot serve; rename it`)
     }
@@ -935,7 +1021,17 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
     urlRewrite(context, stylesheet) {
       const inserted = new Map<string, string>()
       const nonce = randomBytes(6).toString('hex')
-      if (pathBelow(realDirectory(sourceDir), realpathSync(stylesheet)) === undefined) return { options: {}, references: inserted }
+      const realStylesheet = realpathSync(stylesheet)
+      let assetBase: AssetBase
+      let prepare = (code: Uint8Array): Uint8Array => code
+      if (pathBelow(realDirectory(sourceDir), realStylesheet) !== undefined) {
+        assetBase = ownAssets()
+      } else {
+        const dependency = dependencyPackageOf(realpathSync(packageDir), realStylesheet)
+        if (dependency === undefined) return { options: {}, references: inserted, prepare }
+        assetBase = { dir: dependency.dir, prefix: `vendor/${dependency.name}/`, label: `dependency ${dependency.name}` }
+        prepare = code => firstFontSources(stylesheet, code)
+      }
       const base = dirname(stylesheet)
       const rewrite = (url: Url): Url | undefined => {
         // Empty values, fragments, root-relative paths, schemes such as `data:`, and placeholders name no package file.
@@ -945,7 +1041,7 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
           throw new Error(`tsdown: ${name}: ${stylesheet} references ${JSON.stringify(url.url)}; a package asset url() takes no fragment or query`)
         }
         const placeholder = `__dshPackageAsset_${nonce}_${String(inserted.size)}__`
-        inserted.set(placeholder, reference(context, resolvePath(base, url.url)))
+        inserted.set(placeholder, reference(context, resolvePath(base, url.url), assetBase))
         return { ...url, url: placeholder }
       }
       return {
@@ -964,6 +1060,7 @@ function packageAssets(manifest: PackageManifest, packageDir: string): PackageAs
           },
         },
         references: inserted,
+        prepare,
       }
     },
   }
@@ -1051,7 +1148,7 @@ function clientConfig(
 ): UserConfig {
   const id = manifest.name
   let requested: ReadonlySet<string> | undefined
-  const isRequested = (specifier: string): boolean => (requested ??= clientExternals(manifest)).has(specifier)
+  const isRequested = (specifier: string): boolean => coversRequest(requested ??= clientExternals(manifest), specifier)
   const isolation = clientInputIsolation(id)
   const assets = packageAssets(manifest, packageDir)
   const styles = new Map<string, CompiledClientStyle>()
@@ -1060,6 +1157,27 @@ function clientConfig(
     ? packageRequire.resolve(source)
     : importer === undefined ? source : sourceAssetPath(source, importer)
   const styleMarker = `/*__dshChunkStyles_${randomBytes(16).toString('hex')}__*/`
+  /**
+   * Compile one physical stylesheet with its package-asset `url()` rewrite and register it as a watch dependency,
+   * which its virtual module id otherwise hides from Rolldown's watch graph.
+   */
+  const compileStylesheet = async (context: AssetContext, fileId: string, cssModules: boolean): Promise<{
+    readonly code: string
+    readonly exports: CSSModuleExports | void
+    readonly references: ReadonlyMap<string, string>
+  }> => {
+    context.addWatchFile(fileId)
+    const source = await readFile(fileId)
+    const stylesheetAssets = assets.urlRewrite(context, fileId)
+    const { code, exports } = transform({
+      filename: fileId,
+      code: stylesheetAssets.prepare(source),
+      ...cssModules ? { cssModules: { pattern: '[hash]_[local]' } } : {},
+      minify: true,
+      ...stylesheetAssets.options,
+    })
+    return { code: code.toString(), exports, references: stylesheetAssets.references }
+  }
   const entryFileName = dualClient ? 'client.browser.js' : 'client.js'
   return {
     name: `${id}/client`,
@@ -1166,23 +1284,13 @@ function clientConfig(
       async load(virtualId: string) {
         if (!virtualId.startsWith(CSS_VIRTUAL_PREFIX)) return null
         const fileId = virtualId.slice(CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
-        // The virtual id otherwise hides the physical stylesheet from Rolldown's watch graph.
-        this.addWatchFile(fileId)
-        const source = await readFile(fileId)
-        const stylesheetAssets = assets.urlRewrite(this, fileId)
-        const { code, exports: cssExports } = transform({
-          filename: fileId,
-          code: source,
-          cssModules: { pattern: '[hash]_[local]' },
-          minify: true,
-          ...stylesheetAssets.options,
-        })
+        const compiled = await compileStylesheet(this, fileId, true)
         const classMap: Record<string, string> = {}
-        const exportEntries = Object.entries(cssExports ?? {})
+        const exportEntries = Object.entries(compiled.exports ?? {})
           .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
         for (const [local, exp] of exportEntries) classMap[local] = exp.name
         styles.set(virtualId, compiledClientStyle(id, packageDir, fileId,
-          stylesheetSource(code.toString(), stylesheetAssets.references, 'context.asset')))
+          stylesheetSource(compiled.code, compiled.references, 'context.asset')))
         return { code: `export default ${JSON.stringify(classMap)};`, moduleSideEffects: 'no-treeshake' }
       },
     }, {
@@ -1196,16 +1304,8 @@ function clientConfig(
       async load(virtualId: string) {
         if (!virtualId.startsWith(INLINE_CSS_VIRTUAL_PREFIX)) return null
         const fileId = virtualId.slice(INLINE_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
-        this.addWatchFile(fileId)
-        const source = await readFile(fileId)
-        const stylesheetAssets = assets.urlRewrite(this, fileId)
-        const { code } = transform({
-          filename: fileId,
-          code: source,
-          minify: true,
-          ...stylesheetAssets.options,
-        })
-        return `export default ${stylesheetSource(code.toString(), stylesheetAssets.references)};`
+        const compiled = await compileStylesheet(this, fileId, false)
+        return `export default ${stylesheetSource(compiled.code, compiled.references)};`
       },
     }, {
       name: 'dsh-css-global-inline',
@@ -1217,12 +1317,9 @@ function clientConfig(
       async load(virtualId: string) {
         if (!virtualId.startsWith(GLOBAL_CSS_VIRTUAL_PREFIX)) return null
         const fileId = virtualId.slice(GLOBAL_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
-        this.addWatchFile(fileId)
-        const source = await readFile(fileId)
-        const stylesheetAssets = assets.urlRewrite(this, fileId)
-        const { code } = transform({ filename: fileId, code: source, minify: true, ...stylesheetAssets.options })
+        const compiled = await compileStylesheet(this, fileId, false)
         styles.set(virtualId, compiledClientStyle(id, packageDir, fileId,
-          stylesheetSource(code.toString(), stylesheetAssets.references, 'context.asset')))
+          stylesheetSource(compiled.code, compiled.references, 'context.asset')))
         return { code: 'export {};', moduleSideEffects: 'no-treeshake' }
       },
     }, assets.plugin],

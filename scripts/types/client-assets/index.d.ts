@@ -1,6 +1,6 @@
 /**
- * Package images under `src/client/assets/`: the client build preset replaces
- * each import with the asset's document-relative, content-revisioned URL.
+ * Package images and fonts under `src/client/assets/`: the client build preset
+ * replaces each import with the asset's document-relative, content-revisioned URL.
  * The module names mirror the supported extensions of the client-modules
  * asset format.
  */
@@ -25,6 +25,26 @@ declare module '*.jpg' {
 }
 
 declare module '*.jpeg' {
+  const url: string
+  export default url
+}
+
+declare module '*.woff2' {
+  const url: string
+  export default url
+}
+
+declare module '*.woff' {
+  const url: string
+  export default url
+}
+
+declare module '*.ttf' {
+  const url: string
+  export default url
+}
+
+declare module '*.otf' {
   const url: string
   export default url
 }

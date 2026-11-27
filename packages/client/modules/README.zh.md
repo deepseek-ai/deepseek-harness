@@ -36,7 +36,7 @@ kind: "package-reference"
 <a id="package-assets"></a>
 ### 包资源
 
-同一个 `/plugins` 路由也提供客户端包通过其 `"./assets/*": "./lib/assets/*"` 导出发布的图片。构建会产出每个被引用的资源，在扩展名之前插入其内容 revision（资源字节 SHA-1 摘要的前 12 位十六进制数字），并把 import 或样式表 `url()` 编译成同步资源解析调用（JavaScript 使用 `require.asset`，样式表 `text` 使用 `context.asset`），因此一个 URL 始终对应一份内容。每个路径段先用 `encodeURIComponent` 编码，再编码 `!`、`'`、`(`、`)` 和 `*`，因此引用本身也是合法的无引号 CSS `url()`；仓库外构建的包必须输出同样的形式。除非页面的载体提供了 `resolveAsset`，这个调用都返回文档相对引用；WebWorker 预览的页面无法请求该引用，它把引用映射为 Worker 镜像中对应字节的 Blob URL。任何 `/plugins/<package>/assets/` 路径都只由资源路由响应：对于活动的客户端 row，Host 对路径做一次百分号解码，并从该包自身的 manifest（元数据清单）出发，用 Node 的 `require.resolve` 解析 `<package>/assets/<path>`，因此由包的导出决定哪些文件存在。无法解析的路径、扩展名不是 `.svg`、`.png`、`.webp`、`.jpg` 或 `.jpeg` 的已解析文件、格式错误的转义以及未激活的包都返回 404；查询串不参与选择。提供的资源每次请求都从磁盘流式读取且不缓存，并携带其媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、`etag: "<requested path>"` 和 `x-content-type-options: nosniff`；SVG 还额外携带 `content-security-policy: script-src 'none'`，因此直接打开的 SVG 不会运行脚本。`If-None-Match` 等于该 etag 时返回 304 且不打开文件，`HEAD` 的响应不带 body。`fetchBundle()` 返回相同的响应，其流式 body 在取消时关闭文件。
+同一个 `/plugins` 路由也提供客户端包通过其 `"./assets/*": "./lib/assets/*"` 导出发布的图片和字体。构建会产出每个被引用的资源，在扩展名之前插入其内容 revision（资源字节 SHA-1 摘要的前 12 位十六进制数字），并把 import 或样式表 `url()` 编译成同步资源解析调用（JavaScript 使用 `require.asset`，样式表 `text` 使用 `context.asset`），因此一个 URL 始终对应一份内容。每个路径段先用 `encodeURIComponent` 编码，再编码 `!`、`'`、`(`、`)` 和 `*`，因此引用本身也是合法的无引号 CSS `url()`；仓库外构建的包必须输出同样的形式。除非页面的载体提供了 `resolveAsset`，这个调用都返回文档相对引用；WebWorker 预览的页面无法请求该引用，它把引用映射为 Worker 镜像中对应字节的 Blob URL。任何 `/plugins/<package>/assets/` 路径都只由资源路由响应：对于活动的客户端 row，Host 对路径做一次百分号解码，并从该包自身的 manifest（元数据清单）出发，用 Node 的 `require.resolve` 解析 `<package>/assets/<path>`，因此由包的导出决定哪些文件存在。无法解析的路径、扩展名不是 `.svg`、`.png`、`.webp`、`.jpg`、`.jpeg`、`.woff2`、`.woff`、`.ttf` 或 `.otf` 的已解析文件、格式错误的转义以及未激活的包都返回 404；查询串不参与选择。提供的资源每次请求都从磁盘流式读取且不缓存，并携带其媒体类型、与 bundle 相同的 `cache-control: public, max-age=31536000, immutable`、`etag: "<requested path>"` 和 `x-content-type-options: nosniff`；SVG 还额外携带 `content-security-policy: script-src 'none'`，因此直接打开的 SVG 不会运行脚本。`If-None-Match` 等于该 etag 时返回 304 且不打开文件，`HEAD` 的响应不带 body。`fetchBundle()` 返回相同的响应，其流式 body 在取消时关闭文件。
 
 ### 浏览器加载什么
 
@@ -60,7 +60,7 @@ application combo 脚本只携带每个插件的 `client.js` 入口，并在启�
 
 ### 共享模块
 
-外壳初始化一张冻结的模块表（[`PLATFORM_MODULES`](../web/README.zh.md#the-shared-module-table)）；每个动态 bundle 都精确针对该基座解析其 external。`dsh.client.external` 只添加基座之外的精确请求；系统会将每个请求解析到其指定的动态包 row 或完全匹配的静态表键。纯类型 import 会被擦除，不产生请求。组合阶段会拒绝畸形请求、缺失提供方、自请求与同步请求环。
+每个动态 bundle 都精确针对[共享基座](../web/README.zh.md#the-shared-module-table)解析其 external，该基座由外壳的冻结模块表以及 `ui-slots`、`ui-primitives`、`ui-dockkit` 的 `immediately` row 应答。`dsh.client.external` 只添加基座之外的精确请求；系统会将每个请求解析到其指定的动态包 row 或完全匹配的静态表键。纯类型 import 会被擦除，不产生请求。组合阶段会拒绝畸形请求、缺失提供方、自请求与同步请求环。
 
 ### 构建要求
 

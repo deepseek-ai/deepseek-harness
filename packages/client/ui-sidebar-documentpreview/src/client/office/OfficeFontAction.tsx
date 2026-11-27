@@ -1,6 +1,6 @@
 /** Native controls and font warnings in the owning document toolbar. */
 import type { ReactNode } from 'react'
-import type { PropsLocale, PropsRuntime, PropsStore, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime, PropsStore, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { OfficeStore } from './store.ts'
 import { FontNotice } from './FontNotice.tsx'
 

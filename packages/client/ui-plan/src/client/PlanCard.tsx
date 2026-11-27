@@ -1,10 +1,10 @@
 /** Persistent transcript cards and pending-review sidebar navigation. */
 import { useEffect } from 'react'
-import { FileTypeIcon, IconChevronRightOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { FileTypeIcon, IconChevronRightOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SubmittedPlan } from './plan.ts'
 import type {} from './plan-definition.ts'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'

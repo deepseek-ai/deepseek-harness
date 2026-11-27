@@ -1,6 +1,6 @@
 /** Mounted presentation controls shared with the owning document header. */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
-import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 
 /** One mounted presentation's playback command and availability. */
 export interface PresentationAction {

@@ -6,8 +6,8 @@
  */
 
 import type { ReactNode } from 'react'
-import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { SegmentedControl, Switch } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { NS } from './locales.ts'
 import { ShareCapabilitiesPicker, type PluginAccess } from './ShareCapabilitiesPicker.tsx'
 import { sessionModeOptions } from './share-options.ts'

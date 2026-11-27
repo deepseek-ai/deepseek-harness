@@ -6,7 +6,7 @@
  * call gets its expanded body from `terminalCardModel` instead.
  */
 import type { ToolArgs, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { LocaleKeysOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
+import type { LocaleKeysOf, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { parsePatch, PatchParseError, type PatchOperation } from '@deepseek-ai/dsh-fs-patch'
 import { abbreviateHomePath, isAbsoluteWorkspacePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 import { recordedAbsolutePath } from './recorded-path.ts'

@@ -6,8 +6,8 @@
  * list and resets whenever that list changes.
  */
 import clsx from 'clsx'
-import { Input } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import { Input } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { normalizeFontFamily, type FontRole } from '../theme-settings.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { createFontRowStore } from './settings-store.ts'

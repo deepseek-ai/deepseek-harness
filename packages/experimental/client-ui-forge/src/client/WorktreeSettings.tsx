@@ -1,7 +1,7 @@
 /** The worktree service's row page on the Plugins page: the archive cleanup switch. */
 import { useId } from 'react'
-import { SettingsForm, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { SettingsForm, Switch } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type { NS } from './locales.ts'
 import { rowFormLabels } from './row-form-labels.ts'

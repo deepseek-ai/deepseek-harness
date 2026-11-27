@@ -16,7 +16,7 @@ export const en: Record<keyof typeof zh, string> = {
   frameTitle: 'NodeJS inspector',
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** Shared Inspector frontend copy. */
     inspectorPanel: keyof typeof zh

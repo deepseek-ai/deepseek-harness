@@ -1,8 +1,8 @@
 /** Playback contribution inside the existing document toolbar. */
 import type { ReactNode } from 'react'
-import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { PresentationStore } from './presentation-store.ts'
-import { IconPlayOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconPlayOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { FileToolbarButton } from './primitives/FileToolbar.tsx'
 
 /** Document header props and its native view's shared controls. */

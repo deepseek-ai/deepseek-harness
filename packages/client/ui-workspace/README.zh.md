@@ -138,7 +138,7 @@ Session 行可通过 Tab 聚焦，使用不带修饰键的 Enter 或空格打开
 ```tsx
 import { useRef, useState } from 'react'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 
 function WorkspaceField({ label, renderFactorySlot }: PropsRenderFactories & { label: string }) {
@@ -182,15 +182,15 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
-import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {
   InjectFace, LocaleDictOf, PropsLocale, PropsRuntime,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import { exportSession } from './export-session.ts'
 
 const NS = 'acme.sessionActions'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     'acme.sessionActions': 'export'
   }

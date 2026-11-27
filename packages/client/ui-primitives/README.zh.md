@@ -1,6 +1,6 @@
 ---
 description: "dsh Web 客户端共享的 React UI 原子组件：控件、图标、Markdown 与数学公式渲染，以及终端/读取/差异/搜索/网页输出卡片（零 Cordis）。"
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-client-ui-primitives
@@ -33,7 +33,7 @@ kind: "package-library"
 
 弹窗自动进入及弹窗、菜单回焦，包括通过 Esc 和应用关闭快捷键触发的回焦，均使用 `focusWithoutRing(element, options?)`，在 Tab 或方向键导航恢复正常焦点样式前抑制外轮廓线。弹窗容器仍不绘制焦点外框。原有边框、阴影和错误状态保持不变。用 `data-modal-autofocus` 标记弹窗的初始控件，让模态层先保存触发控件，再移动焦点。随弹窗挂载的控件不得使用 React `autoFocus`，因为它会在保存触发控件前执行。弹窗容器获得焦点时，Tab 和 Shift+Tab 分别进入第一个和最后一个可聚焦控件。
 
-本包是 Web 壳的构建输入。静态 ESM 为 Vite 保留第三方导入，包括 KaTeX 等第三方样式表；本包自身的样式表编译进 `__$dsh_client_module_manifest` 导出，由 renderer 安装；独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。
+本包是带 `immediately: true` 的动态插件包，其代码只在浏览器中运行。它的 `/client` 入口 `lib/client.js`（由 `src/client/index.ts` 构建）目前仍导出供其他 bundle require 的实体值，这是会逐步缩减的历史例外（[导出规则](../AGENTS.md#export-discipline-client-plugin-packages)）；浏览器中的 bundle 按包名或 `/client` 子路径取得这些导出，两者指向模块表中的同一行。为兼容仓库外的代码，包根的类型复用 `./client` 的声明，包根运行时 `lib/index.js`（由 `src/index.js` 构建）是只有空 `apply` 的 Host 入口（[包根](../AGENTS.md#hand-written-package-roots)）。因此在 Node 中包根不提供实体值：代码从 `/client` 子路径 import，在浏览器外运行这些值的测试把该子路径解析到源码（[Client 测试运行时](../../test-support/client-runtime/README.zh.md#module-resolution)）；仓库代码只通过 `/client` 引用本包。独立消费方自行提供开发依赖（[依赖规则](../AGENTS.md#dependency-declaration)）。Client 构建把 KaTeX、Shiki 和 Markdown 解析器打包进 `lib/client.js` 及其 chunk。TypeScript、shell 和 JSON 语法随入口登记；其余 Shiki 语言在首次使用时连同它需要的 chunk 一起下载。KaTeX 的字体作为包资源位于 `lib/assets/vendor/katex/dist/fonts/`，每种字形一个文件。
 
 只要 Web 客户端需要标准控件或 agent 输出渲染器，就用这些原子组件拼装功能 UI。它们只经 React 渲染，并从主题取得 `--dsw-*` 设计 token，因此无需导入主题或 slot 系统即可适配任意插件。
 

@@ -1,7 +1,7 @@
 /** User-text presentation delegates evaluation to its data-layer document and renders JSON business nodes. */
 import { Fragment, useEffect, useMemo } from 'react'
-import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
-import { HoverCardGroup, ReferenceChip, UserTextRun } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots/client'
+import { HoverCardGroup, ReferenceChip, UserTextRun } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { UserTextNodeProps } from '../contract/slots.ts'
 import type { UserTextNode } from '../contract/user-text.ts'
 import css from './UserText.module.css'

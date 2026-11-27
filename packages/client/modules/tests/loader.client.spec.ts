@@ -628,6 +628,24 @@ describe('require resolution', () => {
     expect(b.loader.loadCache.get('react')?.exports).toBe(react)
   })
 
+  // Compatibility commitment: a bundle built outside this repository may require a dynamic Client package by its root.
+  it('returns one exports object for require(<package>) and require(<package>/client) of a dynamic row', async () => {
+    const id = '@deepseek-ai/dsh-client-ui-slots'
+    const packageExports = { resolveSlotLabel: () => undefined }
+    let built = 0
+    const b = bench([row(id), row('consumer')], {
+      [id]: () => { built += 1; return packageExports },
+      consumer: req => ({ root: req(id), client: req(`${id}/client`) }),
+    })
+    await b.loader.prefetch(id)
+    const exports = await b.loader.import('consumer', '', {}) as { root: unknown; client: unknown }
+    expect(exports.root).toBe(packageExports)
+    expect(exports.client).toBe(exports.root)
+    expect(await b.loader.import(`${id}/client`, '', {})).toBe(packageExports)
+    expect(built).toBe(1)
+    expect([...b.loader.loadCache.keys()].filter(key => key.startsWith(id))).toEqual([id])
+  })
+
   it('require answers an already-materialized module from the cache', async () => {
     let built = 0
     const b = bench([row('a'), row('c')], {

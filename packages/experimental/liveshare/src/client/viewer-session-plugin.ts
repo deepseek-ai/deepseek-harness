@@ -11,7 +11,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ComposerBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls the `remoteAccess` Client service merge.
 import type {} from '@deepseek-ai/dsh-api-remote-access/client'

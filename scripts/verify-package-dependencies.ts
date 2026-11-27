@@ -323,7 +323,15 @@ export function collectRuntimeSourceExportUses(path: string, source: string): Ru
     || left.column - right.column)
 }
 
-function resolveLocal(importer: string, specifier: string): string | undefined {
+/**
+ * Resolve a relative module specifier to the source file it names: a specifier with an extension names that file, or
+ * else its TypeScript source (`.js` to `.ts` or `.tsx`, `.mjs` to `.mts`, `.cjs` to `.cts`); an extensionless specifier
+ * tries the TypeScript extensions and then the directory's `index.ts` or `index.tsx`.
+ * @param importer - Absolute path of the importing file; the specifier resolves from its directory.
+ * @param specifier - Relative module specifier.
+ * @returns Absolute path of the first existing candidate, or undefined when none exists.
+ */
+export function resolveLocal(importer: string, specifier: string): string | undefined {
   const raw = resolve(dirname(importer), specifier)
   const candidates = extname(raw) === ''
     ? [`${raw}.ts`, `${raw}.tsx`, `${raw}.mts`, `${raw}.cts`, join(raw, 'index.ts'), join(raw, 'index.tsx')]
@@ -367,9 +375,9 @@ function generatedHostSources(root: string, packages: readonly WorkspacePackageM
  * package-asset subpaths publish no Host code.
  */
 function hostSourceEntries(root: string, pkg: WorkspacePackageManifest): string[] {
-  const entry = resolve(root, pkg.dir, 'src/index.ts')
-  if (!existsSync(entry)) {
-    throw new Error(`${pkg.manifestPath}: Host runtime entry ${normalizePath(relative(root, entry))} does not exist`)
+  const entry = resolveLocal(resolve(root, pkg.manifestPath), './src/index.js')
+  if (entry === undefined) {
+    throw new Error(`${pkg.manifestPath}: Host runtime entry ./src/index.js has no source module`)
   }
   const entries = new Set([entry])
   const exports = pkg.manifest.exports

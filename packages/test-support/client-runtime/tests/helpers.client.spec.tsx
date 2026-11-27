@@ -7,7 +7,7 @@ import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversa
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { MainPanelId, PanelInfo } from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import {
   allowAllAccess,
@@ -22,7 +22,7 @@ import {
 const originalLanguages = [...navigator.languages]
 const originalLanguage = navigator.language
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     'trt.panel-info': { kind: 'keyed'; scope: 'root'; owner: { label: string } }
   }

@@ -1,7 +1,7 @@
 /** The side tab: retained child reference, embedded Chat content, live title and the creation notice. */
-import { IconCompareSplitOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconCompareSplitOutlineRegular, Toast } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ConversationViewsProps, WorkspaceSelectedHandler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { SidechatNotice } from './control.ts'
@@ -15,7 +15,7 @@ export interface SidechatNoticeInjected {
   readonly dismiss: () => void
 }
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface SlotMap {
     /** Replace the embedded child Conversation; receives its Session scope and no owner data. Absence leaves the tab body empty. */
     'sidechat.conversation': { kind: 'single'; scope: 'session' }

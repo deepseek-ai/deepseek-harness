@@ -61,8 +61,6 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/boot/cmdline': 'Command-line library the app bins import; plain module exports.',
   'packages/util/official-bundles': 'Bundle-list data library the launcher and plugin manager import; plain constant exports.',
   'packages/client/store': 'Browser-side state primitives; plain function/type exports.',
-  'packages/client/ui-primitives': 'Browser-side UI component library; plain component exports.',
-  'packages/client/ui-slots': 'Browser-side slot-map declarations; plain type exports.',
   'packages/client/web': 'Browser application boot library; exports the app entry and static module table.',
   'packages/core/scope': 'Scoped-context primitives; exports functions and types without a plugin entry.',
   'packages/experimental/webworker-packer': 'Build-time VFS image packer and command library.',

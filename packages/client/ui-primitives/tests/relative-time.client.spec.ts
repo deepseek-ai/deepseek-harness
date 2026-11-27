@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives'
+import { relativeTime } from '@deepseek-ai/dsh-client-ui-primitives/client'
 
 const MIN = 60_000
 const HOUR = 3_600_000

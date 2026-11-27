@@ -31,7 +31,7 @@ kind: "package-library"
 
 外壳基础样式会在移动浏览器旋转或展开屏幕时保持页面设定的字号，浏览器缩放和外观字号设置仍可使用。它还会在支持的浏览器中为普通内容自动添加中西文间距。语义化代码以及终端、diff、读取和搜索输出容器会保留源码中的原始间距和列对齐；不支持 `text-autospace` 的浏览器会忽略这两项声明。
 
-静态 Client 库保留第三方 ESM import 和动态 import，交给最终 Web 构建。其样式元信息通过普通 URL import 引用第三方字体资源；包级构建不复制这些字体，也不生成语言库 chunk。
+外壳打包 React、Cordis、Zod、TanStack Virtual、自身的启动代码，以及静态客户端库 `client-store`，后者的 ESM 为最终 Web 构建保留其 Zustand 和 Immer import。`ui-slots`、`ui-primitives`、`ui-dockkit`（包括 `ui-primitives` 中的 Markdown、KaTeX 和 Shiki）以 `immediately` 动态插件 row 加载，它们的字体和语言 chunk 是这些 row 的包资源与 chunk。
 
 ### 启动过程是怎样的
 
@@ -44,11 +44,11 @@ kind: "package-library"
 <a id="the-shared-module-table"></a>
 ### 共享模块表
 
-`PLATFORM_MODULES`（位于 `src/platform.ts`）列出外壳预置的共享模块——React、Cordis、Zod（`zod`）、TanStack Virtual（`@tanstack/react-virtual`）与静态 UI 库——并与 `PRELOADED_CLIENT_EXTERNALS`（parser 预载的运行时行）一起定义每个动态 bundle 解析所依据的隐式 external 基座。`dsh.client.external` 只添加基座之外的精确请求；参见[共享模块与模块图](../AGENTS.md#shared-modules-and-the-module-graph)。
+`PLATFORM_MODULES`（位于 `src/platform.ts`）列出每个动态 bundle 默认留给模块表的说明符——外壳预置的 React、Cordis、Zod（`zod`）、TanStack Virtual（`@tanstack/react-virtual`）和静态客户端库 `client/store`，以及由各自 `immediately` row 应答其名字的 `ui-slots`、`ui-primitives`、`ui-dockkit`——并与 `PRELOADED_CLIENT_EXTERNALS`（parser 预载的运行时行）一起定义每个动态 bundle 解析所依据的隐式 external 基座。`dsh.client.external` 只添加基座之外的精确请求；参见[共享模块与模块图](../AGENTS.md#shared-modules-and-the-module-graph)。
 
 同一页面中的内置浏览器插件和已安装的浏览器插件获得相同的模块实例。外壳提供本包 `package.json` 声明的依赖版本，模块表不会为每个插件协商版本。使用这些模块的外部插件必须以提供所需模块标识符和 API 的宿主为目标，并在构建客户端 bundle 时将相应导入保留为 external。内联依赖仍归各自 bundle 私有；Host 代码与 Worker 单独解析其依赖。
 
-工作区静态库交付普通 ESM 的 `lib/index.js`，只多一个导出 `__$dsh_client_module_manifest`。外壳登记这份 manifest；其 factory 返回库自身的导出，不含 manifest，因此经模块加载器的业务 import 与原生 import 取得相同的值。`clientShell()` 将本启动包构建为普通 ESM，因此启动代码与加载页 CSS 不依赖模块 renderer。
+工作区静态库 `client-store` 交付普通 ESM 的 `lib/index.js`，只多一个导出 `__$dsh_client_module_manifest`。外壳登记这份 manifest；其 factory 返回库自身的导出，不含 manifest，因此经模块加载器的业务 import 与原生 import 取得相同的值。`ui-slots`、`ui-primitives`、`ui-dockkit` 各是 Web 组合中的 `immediately` row，其 `lib/client.js` 以包名登记模块，因此按这个名字 require 的 bundle 取得该 row 的导出；`seed.ts` 只登记外壳预置的模块。`clientShell()` 将本启动包构建为普通 ESM，因此启动代码与加载页 CSS 不依赖模块 renderer。
 
 ### 配置
 
@@ -92,7 +92,7 @@ kind: "package-library"
 | [`src/mount.ts`](src/mount.ts) | `mountClient`：经 `uiRenderer` 依赖 fiber 完成渲染器交接 |
 | [`src/boot-page.ts`](src/boot-page.ts) | 无框架启动页：spinner、逐 entry 状态、失败渲染 |
 | [`src/platform.ts`](src/platform.ts) | `PLATFORM_MODULES` / `PRELOADED_CLIENT_EXTERNALS`：隐式 external 基座 |
-| [`src/seed.ts`](src/seed.ts) | 启动时交给 loader 的静态模块表 |
+| [`src/seed.ts`](src/seed.ts) | 启动时交给 loader 的静态模块表：外壳预置的 `PLATFORM_MODULES` 条目 |
 | [`src/window-drag/regions.ts`](src/window-drag/regions.ts) | darwin app-region 组合模型，以及 `base.css` 减除的交互元素选择器 |
 | [`src/base.css`](src/base.css) | 页面基础样式与原生窗口拖拽区域；inert 子树不参与拖拽区域计算 |
 | [`src/window-drag/recall.ts`](src/window-drag/recall.ts) | 外壳唯一的窗口拖拽矩形 watcher（electron/electron#32341）：逐帧测量被打标行，并在它们移动期间脉冲 recall 标记 |

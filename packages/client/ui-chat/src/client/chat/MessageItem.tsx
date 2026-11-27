@@ -1,12 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { InjectFace, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   DisclosureRow, IconBranchOutlineRegular, IconWarningOutlineRegular, IconWifiOffOutlineRegular, IconWifiOutlineRegular,
   InspectButton, JsonBlock, StateDot,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
 import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
 } from '../contract/slots.ts'

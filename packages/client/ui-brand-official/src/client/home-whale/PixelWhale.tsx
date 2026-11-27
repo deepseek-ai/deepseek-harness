@@ -1,6 +1,6 @@
 /** Home frame layer: a decorative canvas below the Conversation content, played by clicks on blank home space. */
 import { useCallback, useEffect, useRef, type MouseEvent, type ReactNode } from 'react'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { HeroFrameOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: the `useTheme` standard prop merge.
 import type {} from '@deepseek-ai/dsh-client-ui-theme/client'

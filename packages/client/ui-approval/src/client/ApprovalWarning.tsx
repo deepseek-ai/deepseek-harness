@@ -3,8 +3,8 @@ import { useEffect, useId, useRef, useState, type FocusEvent, type PointerEvent 
 import {
   Button, IconWarningOutlineRegular, MenuSurface, Tag,
   isBehindModal, observeComposition, useDismissOnOutsidePointer, usePointerGrace,
-} from '@deepseek-ai/dsh-client-ui-primitives'
-import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { ApprovalCardInput } from './contract/slots.ts'
 import css from './ApprovalPanel.module.css'
 

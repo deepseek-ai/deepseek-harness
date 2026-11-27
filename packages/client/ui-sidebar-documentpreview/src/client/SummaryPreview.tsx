@@ -1,6 +1,6 @@
 /** Transient Markdown read from a compaction event by its Chat row. */
-import { FileTypeIcon, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { FileTypeIcon, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives/client'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import css from './TextPreview.module.css'
 import markdown from './markdown/MarkdownBody.module.css'
 

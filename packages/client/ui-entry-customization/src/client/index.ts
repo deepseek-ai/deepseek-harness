@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { EntryMenuContent, type EntryMenuInjected, type EntryRegion } from './EntryMenuContent.tsx'
 import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** More menu rows: navigation actions, and Creator draft prompts. */
     entryCustomization: keyof typeof en

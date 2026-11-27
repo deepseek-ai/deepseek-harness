@@ -1,9 +1,9 @@
 /** One settings card for Subagent delegation limits and model authorization. */
 
 import { useId } from 'react'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { SettingsForm } from '@deepseek-ai/dsh-client-ui-primitives'
+import { SettingsForm } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import { formLabels } from './locales.ts'
 import { SubagentLimitsFields } from './SubagentLimitsFields.tsx'
 import { SubagentModelSelectionFields } from './SubagentModelSelectionFields.tsx'

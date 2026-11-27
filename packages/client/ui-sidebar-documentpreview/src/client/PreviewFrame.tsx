@@ -11,10 +11,10 @@
  */
 import { memo, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-files/client'
 import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import { PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
+import { PathLabel } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './TextPreview.module.css'
 
 /** The inputs both navigator Factory positions render from. */

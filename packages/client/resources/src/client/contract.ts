@@ -16,9 +16,9 @@
  */
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { ResourceProtocolMap } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ResourceProtocolMap } from '@deepseek-ai/dsh-client-ui-slots/client'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface GlobalStandardProps {
     /** Live value of one address, resolved through the provider registered for its protocol. */
     useResource: UseResource

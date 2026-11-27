@@ -1,7 +1,7 @@
 /** The info button of a status row that failed, whose tooltip gives the failure's reason. */
 
 import type { ReactNode } from 'react'
-import { IconInfoOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconInfoOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives/client'
 import css from './Forge.module.css'
 
 /**

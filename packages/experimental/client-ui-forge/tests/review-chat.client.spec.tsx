@@ -13,7 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, conversationSnapshot, makeTranslate, sessionSnapshot } from '@deepseek-ai/dsh-client-test-runtime'
-import type { RenderFactorySlot, SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
+import type { RenderFactorySlot, SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { en } from '../src/client/locales.ts'

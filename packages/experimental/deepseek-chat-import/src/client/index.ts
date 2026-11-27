@@ -8,7 +8,7 @@ export { inject } from './mount.ts'
 export type { DeepseekChatImportInjected, DeepseekChatImportOutcome, ImportSessionsActionProps } from './ImportSessions.tsx'
 export type { DeepseekChatImportKey } from './locales.ts'
 
-declare module '@deepseek-ai/dsh-client-ui-slots' {
+declare module '@deepseek-ai/dsh-client-ui-slots/client' {
   interface LocaleNamespaceMap {
     /** DeepSeek chat export import action and dialog copy. */
     deepseekChatImport: DeepseekChatImportKey

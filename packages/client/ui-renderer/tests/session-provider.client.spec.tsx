@@ -8,7 +8,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   SessionProviderComponent, StoredEntry, ScopedStandardSourceBinding,
   SlotRendererHost, SlotScopeAdapter, StandardSourceBinding,
-} from '@deepseek-ai/dsh-client-ui-slots'
+} from '@deepseek-ai/dsh-client-ui-slots/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { renderSessionArea } from '../../ui-session/src/client/session-provider.tsx'
 import { createSlotRenderer } from '../src/client/scoped-slots.tsx'

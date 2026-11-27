@@ -10,7 +10,7 @@
  * type would use — the guide is not special in the machinery, only in being
  * always available.
  */
-import type { TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
+import type { TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit/client'
 import type { SidebarRightTabRegistry } from '../tab-registry.ts'
 
 /** One pane's initial page, resolved from the current registered guide entries. */
