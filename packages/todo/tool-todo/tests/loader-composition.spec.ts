@@ -15,10 +15,12 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import * as ToolTodo from '@deepseek-ai/dsh-tool-todo'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
@@ -147,5 +149,50 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
     // The policy is self-contained, so misconfiguration fails at load: the
     // entry's apply rejects and boot never reaches a running tool.
     await expect(boot(configLines)).rejects.toThrow(failure)
+  }, 30_000)
+
+  it('activates stale-list reminders when reminder.enabled is true', async () => {
+    const ctx = await boot([
+      '    allowParallelInProgress: true',
+      '    reminder:',
+      '      enabled: true',
+      '      intervalSteps: 1',
+    ])
+    const owner = await agent(ctx)
+    owner.session.append('todo/write', { todos: [{ content: 'Follow up', status: 'in_progress' }] })
+    owner.session.append('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: 'working' }],
+        source: { provider: 'mock', model: 'mock' },
+      }),
+      stream: [],
+    }, { surfaceOp: 'append' })
+
+    const decision = await agentEvents(ctx, owner).waterfall(
+      'agent/pre-step',
+      {
+        modelSelection: { provider: 'mock', model: 'mock' },
+        messages: [],
+        turn: 1,
+        step: 2,
+        signal: new AbortController().signal,
+      },
+      () => Promise.resolve({ kind: 'enter' as const, messages: [] }),
+    )
+    expect(decision.kind).toBe('enter')
+    if (decision.kind !== 'enter') throw new Error('expected an entered step')
+    expect(decision.messages).toHaveLength(1)
+    expect(decision.messages[0]?.source.kind).toBe('todo-reminder')
+  }, 30_000)
+
+  it('rejects a zero reminder interval when loading tool-todo', async () => {
+    await expect(boot([
+      '    allowParallelInProgress: true',
+      '    reminder:',
+      '      enabled: true',
+      '      intervalSteps: 0',
+    ])).rejects.toThrow('$.reminder.intervalSteps')
   }, 30_000)
 })

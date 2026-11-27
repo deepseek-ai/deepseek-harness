@@ -9,10 +9,25 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { z as zod } from 'zod'
 import type { ZodType } from 'zod'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'todo-reminder': { kind: 'todo-reminder' } & ContextFormed
+  }
+}
+
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { TodoItem } from './types.ts'
 // Type-only: resolves the required ctx.sessionProjections service declaration.
 import type {} from '@deepseek-ai/dsh-session-projection'
+import {
+  DEFAULT_MAX_REMINDER_CHARS,
+  DEFAULT_REMINDER_INTERVAL_STEPS,
+  installTodoReminder,
+  MIN_REMINDER_CHARS,
+  TODO_WRITE_TOOL_NAME,
+  todoItemSchema,
+} from './reminder.ts'
 // The `todos` projection-key declaration lives in src/types.ts (its one home);
 // this re-export projects the type face onto the package root AND keeps the
 // module edge in the emitted index.d.ts, so aggregate programs consuming the
@@ -25,6 +40,16 @@ export const inject = ['tools', 'sessionProjections']
 /** The valid {@link TodoItem} statuses, as a runtime set for input narrowing. */
 const STATUSES = ['pending', 'in_progress', 'completed'] as const
 
+/** Advisory stale-list reminder configuration. */
+export interface ReminderConfig {
+  /** Whether to inject stale-list update reminders on accepted steps; defaults to false. */
+  enabled?: boolean
+  /** Completed model steps (`assistant/message` events) between reminders; defaults to 64. */
+  intervalSteps?: number
+  /** Maximum characters in one complete model-visible reminder; defaults to 16384. */
+  maxReminderChars?: number
+}
+
 /** Model-facing todo tool configuration. */
 export interface Config {
   /**
@@ -35,11 +60,26 @@ export interface Config {
    * rejected.
    */
   allowParallelInProgress: boolean
+  /** Optional stale-list update reminder policy; disabled by default until opted in. */
+  reminder?: ReminderConfig
 }
 
 /** Schemastery configuration for the todo tool consumer. */
 export const Config: z<Config> = z.object({
   allowParallelInProgress: z.boolean().required(),
+  reminder: z.object({
+    enabled: z.boolean().default(false),
+    intervalSteps: z.number()
+      .step(1)
+      .min(1)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(DEFAULT_REMINDER_INTERVAL_STEPS),
+    maxReminderChars: z.number()
+      .step(1)
+      .min(MIN_REMINDER_CHARS)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(DEFAULT_MAX_REMINDER_CHARS),
+  }).default({}),
 })
 
 const DESCRIPTION_HEAD =
@@ -101,10 +141,7 @@ function toTodoList(raw: { content: string; status: string }[], allowParallel: b
 
 /** Wire payload schema of the `todos` projection (whole list or pre-first-write null). */
 const todosProjectionSchema: ZodType<TodoItem[] | null> = zod.union([
-  zod.array(zod.object({
-    content: zod.string(),
-    status: zod.union([zod.literal('pending'), zod.literal('in_progress'), zod.literal('completed')]),
-  })),
+  zod.array(todoItemSchema),
   zod.null(),
 ])
 
@@ -134,7 +171,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     stateVersion: 2,
   })
   ctx.tools.register(defineTool({
-    name: 'todo_write',
+    name: TODO_WRITE_TOOL_NAME,
     description: describe(allowParallel),
     parameters: {
       todos: {
@@ -210,4 +247,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     presentCall: args => ({ card: 'generic', title: 'Update todo list', kind: 'other', rawInput: args.todos }),
   }))
+
+  const reminder = config.reminder as Required<ReminderConfig>
+  if (reminder.enabled) {
+    await installTodoReminder(ctx, reminder)
+  }
 }

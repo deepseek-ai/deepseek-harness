@@ -27,6 +27,9 @@
       "path": "../../core/session"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../session/session-projection"
     }
   ]

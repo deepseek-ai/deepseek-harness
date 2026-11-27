@@ -1,0 +1,31 @@
+# Bilingual-pair consistency record for 2026-08-27-todo-update-reminder.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-27-todo-update-reminder.md
+/agent-note-todo-update-reminders-from-durable-session-history:
+  en: 4d90257e24062c7b
+  zh: 9e1e38106d63fbd6
+/agent-note-todo-update-reminders-from-durable-session-history/problem:
+  en: dd60edf7a13da77a
+  zh: 3004e0f59d21c643
+/agent-note-todo-update-reminders-from-durable-session-history/decision:
+  en: 5416a2a55bfcd5f7
+  zh: fd7ac1ba349ae65d
+/agent-note-todo-update-reminders-from-durable-session-history/scheduling-authority:
+  en: d6687f0e401a0d6d
+  zh: 0d2fba053a3ca48a
+/agent-note-todo-update-reminders-from-durable-session-history/model-context:
+  en: fcc138d67da7d857
+  zh: 4ff7bf8d85debbd5
+/agent-note-todo-update-reminders-from-durable-session-history/package-ownership:
+  en: ebf2e12e57585bf2
+  zh: f4eb625b98e2cc4c
+/agent-note-todo-update-reminders-from-durable-session-history/verification:
+  en: 451a228b5ad26d04
+  zh: de41b368ef25130f
+/agent-note-todo-update-reminders-from-durable-session-history/alternatives-considered:
+  en: c9d8be10ba933ddb
+  zh: b6f2c0a79108f7b0
+/agent-note-todo-update-reminders-from-durable-session-history/consequences:
+  en: 8c7e42284bf8e0c6
+  zh: 012bdb69248c27ee

@@ -5655,7 +5655,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-todo`
 
 - `inject`: `tools` · `sessionProjections`
-- `source`: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
+- `source`: [`packages/todo/tool-todo/src/index.ts:54`](../packages/todo/tool-todo/src/index.ts)
 
 ```ts config-catalog
 /** Model-facing todo tool configuration. */
@@ -5668,6 +5668,18 @@ export interface Config {
    * rejected.
    */
   allowParallelInProgress: boolean
+  /** Optional stale-list update reminder policy; disabled by default until opted in. */
+  reminder?: ReminderConfig
+}
+
+/** Advisory stale-list reminder configuration. */
+export interface ReminderConfig {
+  /** Whether to inject stale-list update reminders on accepted steps; defaults to false. */
+  enabled?: boolean
+  /** Completed model steps (`assistant/message` events) between reminders; defaults to 64. */
+  intervalSteps?: number
+  /** Maximum characters in one complete model-visible reminder; defaults to 16384. */
+  maxReminderChars?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-todo -->

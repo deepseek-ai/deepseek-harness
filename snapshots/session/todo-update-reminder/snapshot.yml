@@ -1,0 +1,10 @@
+version: 1
+scenario: todo-update-reminder
+profile: headless
+composition: todo-update-reminder
+recording: authored
+header:
+  class: todo-update-reminder
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

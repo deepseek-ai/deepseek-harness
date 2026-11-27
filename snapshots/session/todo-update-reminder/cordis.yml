@@ -1,0 +1,10 @@
+# Live-recording patch for the Todo update-reminder scenario.
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+    reminder:
+      enabled: true
+      intervalSteps: 1
+      maxReminderChars: 702
