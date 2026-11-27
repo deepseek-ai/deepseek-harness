@@ -126,7 +126,7 @@
 | `id` | 必需 | 确切的会话 id |
 | `createdAt` | 必需 | 非负安全整数 Unix epoch 毫秒数 |
 | `cwd` | 可选 | 创建会话时记录的绝对工作目录 |
-| `parentSession` | 可选 | fork 的父会话 id |
+| `parentSession` | 可选 | subagent Session 的创建者或侧栏对话的来源 |
 | `seedLength` | 仅 seeded Session | 确切的继承事件数量；空的继承前缀使用零 |
 | `origin` | 可选 | subagent 子项使用的字面值 `subagent`，侧边对话使用 `side` |
 | `delegationDepth` | 可选 | 持久化的非负 subagent 委派深度 |

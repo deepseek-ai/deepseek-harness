@@ -149,6 +149,7 @@ export type SessionOrigin = 'subagent' | 'side'
  */
 export interface SessionHeaderMeta {
   readonly cwd?: string
+  /** Direct creator of a subagent Session or source of a side conversation; see {@link SessionHeader.parentSession}. */
   readonly parentSession?: SessionId
   readonly createdAt?: number
   readonly isSeeded?: boolean

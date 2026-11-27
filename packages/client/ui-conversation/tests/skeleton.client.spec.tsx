@@ -140,8 +140,8 @@ function mount(
     summaryBlank?: boolean
     /** Drop the session's summary row entirely (a session the list has not caught up with). */
     omitSummaryRow?: boolean
-    /** Classify the selected child as a subagent instead of an ordinary fork. */
-    summaryOrigin?: 'subagent'
+    /** Classify the selected child as a subagent or side conversation instead of an ordinary fork. */
+    summaryOrigin?: 'subagent' | 'side'
     /** Insert a first-level subagent between the root and selected child. */
     nestedSubagent?: boolean
     /** A composer block another plugin raised for this session. */
@@ -541,6 +541,14 @@ describe('ConversationRoot resident composer', () => {
     expect(b.view.getByText('Child').tagName).toBe('SPAN')
     fireEvent.click(root)
     expect(b.open).toHaveBeenCalledWith(sid('root'))
+  })
+
+  it('leads a side conversation back to its source without the subagent lineage', () => {
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { summaryOrigin: 'side' })
+    fireEvent.click(b.view.getByRole('button', { name: 'Root' }))
+    expect(b.open).toHaveBeenCalledWith(sid('root'))
+    expect(b.view.getByText('Child').tagName).toBe('SPAN')
+    expect(b.lineageOwners.map(owner => owner.lineageSessionId)).toEqual([SID])
   })
 
   it('keeps intermediate subagent breadcrumbs navigable and the current crumb read-only', () => {

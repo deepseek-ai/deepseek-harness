@@ -86,7 +86,8 @@ function deriveAncestry(list: SessionListState, id: SessionId): readonly Breadcr
       displayTitle: summary.displayTitle,
       subagent: summary.origin === 'subagent',
     })
-    if (summary.origin !== 'subagent') break
+    // Subagents and side conversations are not listed in the sidebar; their crumbs lead back to a listed ancestor.
+    if (summary.origin !== 'subagent' && summary.origin !== 'side') break
     cursor = summary.parentId
   }
   return chain

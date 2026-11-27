@@ -66,7 +66,7 @@ async function liveAgent(
   id: string,
   turns: number,
   tail: Tail = 'none',
-  lineage: { parentSession?: SessionId; origin?: 'subagent' } = {},
+  lineage: { parentSession?: SessionId; origin?: 'subagent' | 'side' } = {},
 ): Promise<Session> {
   const session = ctx.sessions.create(sid(id), { meta: { cwd: '/proj', ...lineage } })
   for (let turn = 1; turn <= turns; turn++) {
@@ -420,6 +420,31 @@ describe('sessions.fork', () => {
     })
     expect(ctx.sessions.get(response.value.sessionId)?.header.origin).toBeUndefined()
     expect(ctx.sessions.get(response.value.sessionId)?.header.parentSession).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it('attaches a fork of an unattached side conversation to its source workspace', async () => {
+    const accounted: SessionId[] = []
+    const attachSession = vi.fn<(sessionId: SessionId) => Promise<void>>().mockResolvedValue(undefined)
+    const workspace = { sessionIds: accounted, attachSession } as unknown as Workspace
+    const ctx = await composed([workspace])
+    const owner = await liveAgent(ctx, 'session-owner', 1)
+    accounted.push(owner.id)
+    // A side conversation whose own Workspace attachment did not happen still forks into its source's Workspace.
+    const side = await liveAgent(ctx, 'session-side', 1, 'none', { parentSession: owner.id, origin: 'side' })
+    vi.spyOn(ctx.sessionQuery, 'traceSession').mockResolvedValue({
+      target: { header: side.header, live: true, persisted: false },
+      ancestors: [{ header: owner.header, live: true, persisted: false }],
+      descendants: [],
+      complete: true,
+      root: { header: owner.header, live: true, persisted: false },
+    })
+
+    const response = await (await remote(ctx)).fork(request({ sessionId: side.id }))
+
+    expect(response.ok ? undefined : response.error).toBeUndefined()
+    if (!response.ok) return
+    expect(attachSession).toHaveBeenCalledWith(response.value.sessionId)
     await ctx.fiber.dispose()
   })
 
