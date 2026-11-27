@@ -1,5 +1,5 @@
 /**
- * Package assets for the preview page. A Client bundle names each image as a
+ * Package assets for the preview page. A Client bundle names each image or font as a
  * document-relative reference, `plugins/<package>/assets/<path>`, and resolves
  * it through the module loader's synchronous `require.asset`. The page of the
  * Worker preview cannot request such a URL itself, so the Worker hands it every
@@ -12,6 +12,8 @@ import type { MemoryVfs } from './storage/memory.ts'
 import { packTar, parseTar } from './storage/tar.ts'
 import type { VfsDirent } from './storage/types.ts'
 
+/* jscpd:ignore-start -- the Worker cannot import client-modules' assets.ts, which loads node:crypto;
+ * package-assets.spec pins this copy to PACKAGE_ASSET_MEDIA_TYPES. */
 /** Media type of each asset extension the Client build emits. */
 const ASSET_MEDIA_TYPES: ReadonlyMap<string, string> = new Map([
   ['.svg', 'image/svg+xml'],
@@ -19,7 +21,12 @@ const ASSET_MEDIA_TYPES: ReadonlyMap<string, string> = new Map([
   ['.webp', 'image/webp'],
   ['.jpg', 'image/jpeg'],
   ['.jpeg', 'image/jpeg'],
+  ['.woff2', 'font/woff2'],
+  ['.woff', 'font/woff'],
+  ['.ttf', 'font/ttf'],
+  ['.otf', 'font/otf'],
 ])
+/* jscpd:ignore-end */
 
 /** Entries of one directory. */
 function entriesOf(vfs: MemoryVfs, directory: string): VfsDirent[] {

@@ -354,7 +354,7 @@ describe('package assets', () => {
       "const legacy = require('./assets/legacy.svg')",
       "import type Art from './assets/type-only.webp'",
       "import styles from './View.module.css'",
-      "import font from './assets/font.woff2'",
+      "import font from './assets/font.eot'",
       "import raw from './assets/raw.svg?raw'",
       "import shared from '@deepseek-ai/dsh-client-other/assets/shared.svg'",
       "import rooted from '/assets/rooted.svg'",
@@ -389,7 +389,7 @@ describe('package assets', () => {
       .toThrow('verify-client-packages: cannot parse stylesheet src/View.module.css: The `composes` property')
   })
 
-  it('reads url() references only from package stylesheets that Client sources import', () => {
+  it('reads url() references only from package and dependency stylesheets that Client sources import', () => {
     const root = mkdtempSync(join(tmpdir(), 'client-package-assets-'))
     roots.push(root)
     const files: Record<string, string> = {
@@ -398,6 +398,9 @@ describe('package assets', () => {
       'packages/client/ui/src/client/text.css': '.text { background: url("./assets/text.webp"); }',
       'packages/client/ui/src/styles/static.css': '@font-face { src: url(./static.woff2); }',
       'packages/client/ui/styles/outside.css': '.outside { background: url(./outside.png); }',
+      'packages/client/ui/package.json': '{"name":"@f/ui"}',
+      'node_modules/katex/package.json': '{"name":"katex"}',
+      'node_modules/katex/dist/katex.css': '@font-face { src: url(fonts/a.woff2) format("woff2"), url(fonts/a.woff) format("woff"); }',
     }
     for (const [path, value] of Object.entries(files)) {
       mkdirSync(dirname(join(root, path)), { recursive: true })
@@ -418,8 +421,21 @@ describe('package assets', () => {
         { file: 'packages/client/ui/src/client/View.module.css', reference: 'url("../assets/mask.png")' },
         { file: 'packages/client/ui/src/client/global.css', reference: 'url("./assets/global.svg")' },
         { file: 'packages/client/ui/src/client/text.css', reference: 'url("./assets/text.webp")' },
+        { file: 'node_modules/katex/dist/katex.css', reference: 'url("fonts/a.woff2")' },
+        { file: 'node_modules/katex/dist/katex.css', reference: 'url("fonts/a.woff")' },
       ],
     })
+  })
+
+  it('rejects a bare stylesheet import that does not resolve from the package', () => {
+    const root = mkdtempSync(join(tmpdir(), 'client-package-missing-stylesheet-'))
+    roots.push(root)
+    mkdirSync(join(root, 'packages/client/ui'), { recursive: true })
+    writeFileSync(join(root, 'packages/client/ui/package.json'), '{"name":"@f/ui"}')
+    expect(() => readStylesheetAssetReferences(root, 'packages/client/ui', new Map([
+      ['packages/client/ui/src/client/View.tsx', ['missing-package/style.css?inline']],
+    ]))).toThrow('verify-client-packages: packages/client/ui/src/client/View.tsx imports stylesheet '
+      + '"missing-package/style.css?inline", which does not resolve from packages/client/ui')
   })
 
   it('reads the Web platform and the raw asset export from manifests', () => {

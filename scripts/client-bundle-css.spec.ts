@@ -319,13 +319,13 @@ describe('client bundle package asset imports', () => {
   })
 
   it('ignores imports and modules that are not supported assets', async () => {
-    const root = await assetPackage({ 'src/client/index.ts': '', 'src/client/assets/font.woff2': 'font' })
+    const root = await assetPackage({ 'src/client/index.ts': '', 'src/client/assets/font.eot': 'font' })
     const { resolveId, load } = hooks(browserPlugins(root)('dsh-package-asset'))
     const importer = join(root, 'src/client/index.ts')
     const context = recordingContext()
 
     expect(resolveId('./index.ts', importer)).toBeNull()
-    expect(resolveId('./assets/font.woff2', importer)).toBeNull()
+    expect(resolveId('./assets/font.eot', importer)).toBeNull()
     expect(resolveId('./assets/whale.png', undefined)).toBeNull()
     expect(await load.call(context, importer)).toBeNull()
     expect(await load.call(context, 'whale.png')).toBeNull()
@@ -516,7 +516,7 @@ describe('client bundle stylesheet url()', () => {
     expect(context.emitted.map(file => file.fileName)).toEqual([`assets/whale-${WHALE_REV}.png`])
   })
 
-  it('leaves stylesheets outside the package src untouched', async () => {
+  it('leaves package stylesheets outside src untouched', async () => {
     const root = await assetPackage({
       'node_modules/@fortune-sheet/react/dist/index.css': '.sheet { background: url("EwaAntH.gif"); }',
     })
@@ -534,18 +534,149 @@ describe('client bundle stylesheet url()', () => {
   })
 
   it.each([
-    ['./assets/font.woff2', 'is not a supported asset; supported extensions: .svg, .png, .webp, .jpg, .jpeg'],
+    ['./assets/font.eot', 'is not a supported asset; supported extensions: .svg, .png, .webp, .jpg, .jpeg, .woff2, .woff, .ttf, .otf'],
     ['./whale.png', 'is outside src/client/assets; move the asset there'],
     ['./assets/missing.png', 'cannot resolve asset'],
   ])('rejects url(%s)', async (url, message) => {
     const root = await assetPackage({
       'src/client/whale.png': WHALE,
-      'src/client/assets/font.woff2': 'font',
+      'src/client/assets/font.eot': 'font',
       'src/client/View.module.css': `.x { background: url(${url}); }`,
     })
 
     await expect(loadImport(browserPlugins(root)('dsh-css-modules-inline'), recordingContext(), './View.module.css', join(root, 'src/client/index.ts')))
       .rejects.toThrow(message)
+  })
+})
+
+const WOFF2 = Uint8Array.from([0x77, 0x4f, 0x46, 0x32, 1])
+const TTF = Uint8Array.from([0, 1, 0, 0, 2])
+
+describe('client bundle dependency stylesheets', () => {
+  /** A package fixture that depends on a `katex` package holding the given files. */
+  async function dependencyPackage(files: Readonly<Record<string, string | Uint8Array>>): Promise<string> {
+    return await assetPackage({
+      'node_modules/katex/package.json': JSON.stringify({ name: 'katex' }),
+      ...Object.fromEntries(Object.entries(files).map(([path, content]) => [`node_modules/katex/${path}`, content])),
+    })
+  }
+
+  it.each([
+    ['dsh-css-global-inline', 'katex/dist/katex.css'],
+    ['dsh-css-text-inline', 'katex/dist/katex.css?inline'],
+  ] as const)('publishes the first url() source of each font face under lib/assets/vendor through %s', async (name, source) => {
+    const root = await dependencyPackage({
+      'dist/fonts/A.woff2': WOFF2,
+      'dist/fonts/A.woff': 'woff',
+      'dist/fonts/B.ttf': TTF,
+      'dist/fonts/B.woff2': 'unused woff2',
+      'dist/katex.css': [
+        '@font-face { font-family: A; src: local("A"), url(fonts/A.woff2) format("woff2"), url(fonts/A.woff) format("woff"); }',
+        '@font-face { font-family: B; src: url(fonts/B.ttf) format("truetype"), url(fonts/B.woff2) format("woff2"); }',
+        '.katex { font-family: A, B; }',
+      ].join('\n'),
+    })
+    const context = recordingContext()
+
+    const output = await loadImport(browserPlugins(root)(name), context, source, join(root, 'src/client/index.ts'))
+
+    const owner = 'plugins/@deepseek-ai/dsh-client-asset-fixture/assets'
+    const first = `${owner}/vendor/katex/dist/fonts/A-${packageAssetRevision(WOFF2)}.woff2`
+    const ttf = `${owner}/vendor/katex/dist/fonts/B-${packageAssetRevision(TTF)}.ttf`
+    if (name === 'dsh-css-global-inline') expect(output).toContain(`context.asset(${JSON.stringify(first)})`)
+    const css = stylesheetText(output, reference => `resolved:${reference}`)
+    expect(css).toContain(`src:local(A),url(resolved:${first})format("woff2")}`)
+    expect(css).toContain(`src:url(resolved:${ttf})format("truetype")}`)
+    expect(css).not.toMatch(/\.woff\)|B\.woff2|B-[0-9a-f]{12}\.woff2/u)
+    expect(emittedFiles(context)).toEqual([
+      {
+        type: 'asset',
+        fileName: `assets/vendor/katex/dist/fonts/A-${packageAssetRevision(WOFF2)}.woff2`,
+        source: Buffer.from(WOFF2).toString('hex'),
+        originalFileName: join(root, 'node_modules/katex/dist/fonts/A.woff2'),
+      },
+      {
+        type: 'asset',
+        fileName: `assets/vendor/katex/dist/fonts/B-${packageAssetRevision(TTF)}.ttf`,
+        source: Buffer.from(TTF).toString('hex'),
+        originalFileName: join(root, 'node_modules/katex/dist/fonts/B.ttf'),
+      },
+    ])
+  })
+
+  it('rewrites a dependency CSS Module with the dependency rules', async () => {
+    const root = await dependencyPackage({
+      'dist/fonts/A.woff2': WOFF2,
+      'dist/fonts/A.woff': 'woff',
+      'dist/view.module.css': '@font-face { font-family: A; src: url(fonts/A.woff2), url(fonts/A.woff); } .view { font-family: A; }',
+    })
+    const context = recordingContext()
+
+    const output = await loadImport(
+      browserPlugins(root)('dsh-css-modules-inline'), context, 'katex/dist/view.module.css', join(root, 'src/client/index.ts'),
+    )
+
+    const first = `plugins/@deepseek-ai/dsh-client-asset-fixture/assets/vendor/katex/dist/fonts/A-${packageAssetRevision(WOFF2)}.woff2`
+    const css = stylesheetText(output, reference => `resolved:${reference}`)
+    expect(css).toContain(`src:url(resolved:${first})}`)
+    expect(css).not.toContain('A.woff)')
+    expect(emittedFiles(context)).toEqual([{
+      type: 'asset',
+      fileName: `assets/vendor/katex/dist/fonts/A-${packageAssetRevision(WOFF2)}.woff2`,
+      source: Buffer.from(WOFF2).toString('hex'),
+      originalFileName: join(root, 'node_modules/katex/dist/fonts/A.woff2'),
+    }])
+  })
+
+  it('keeps every font source of the package\'s own stylesheet', async () => {
+    const root = await assetPackage({
+      'src/client/assets/A.woff2': WOFF2,
+      'src/client/assets/A.ttf': TTF,
+      'src/client/fonts.css': '@font-face { font-family: A; src: url(./assets/A.woff2) format("woff2"), url(./assets/A.ttf) format("truetype"); }',
+    })
+    const context = recordingContext()
+
+    const output = await loadImport(browserPlugins(root)('dsh-css-text-inline'), context, './fonts.css?inline', join(root, 'src/client/index.ts'))
+
+    const owner = 'plugins/@deepseek-ai/dsh-client-asset-fixture/assets'
+    expect(stylesheetText(output, reference => `resolved:${reference}`)).toContain(
+      `src:url(resolved:${owner}/A-${packageAssetRevision(WOFF2)}.woff2)format("woff2"),`
+      + `url(resolved:${owner}/A-${packageAssetRevision(TTF)}.ttf)format("truetype")`,
+    )
+    expect(emittedFiles(context).map(file => (file as { fileName: string }).fileName)).toEqual([
+      `assets/A-${packageAssetRevision(WOFF2)}.woff2`,
+      `assets/A-${packageAssetRevision(TTF)}.ttf`,
+    ])
+  })
+
+  it('leaves a stylesheet that no package owns untouched', async () => {
+    const base = await temporaryDirectory('dsh-client-unowned-stylesheet-')
+    await writeFiles(base, {
+      'package/package.json': JSON.stringify({ name: PACKAGE_NAME, type: 'module', exports: ASSET_EXPORTS }),
+      'shared/theme.css': '@font-face { font-family: S; src: url(s.woff2), url(s.woff); }',
+    })
+    const context = recordingContext()
+
+    const output = await loadImport(
+      browserPlugins(join(base, 'package'))('dsh-css-text-inline'),
+      context,
+      '../../../shared/theme.css?inline',
+      join(base, 'package/src/client/index.ts'),
+    )
+
+    expect(stylesheetText(output, reference => `resolved:${reference}`)).toContain('src:url(s.woff2),url(s.woff)')
+    expect(context.emitted).toEqual([])
+  })
+
+  it('rejects a dependency stylesheet url() outside the dependency package', async () => {
+    const root = await dependencyPackage({
+      'dist/katex.css': '@font-face { font-family: A; src: url(../../outside.woff2); }',
+    })
+    await writeFiles(root, { 'node_modules/outside.woff2': WOFF2 })
+
+    await expect(loadImport(
+      browserPlugins(root)('dsh-css-global-inline'), recordingContext(), 'katex/dist/katex.css', join(root, 'src/client/index.ts'),
+    )).rejects.toThrow(`${join(root, 'node_modules/outside.woff2')} is outside dependency katex`)
   })
 })
 

@@ -2,8 +2,9 @@
  * Verify client package modes, the synchronous browser module-request graph, and package-asset publication.
  */
 
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, posix, resolve, sep } from 'node:path'
+import { globSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, posix, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { transform } from 'lightningcss'
 import ts from 'typescript'
@@ -152,13 +153,18 @@ function isRelativeStylesheetUrl(url: string): boolean {
 }
 
 /**
- * Read package-asset references from the package stylesheets that Client sources import. The dynamic build preset
- * compiles exactly these stylesheets; a stylesheet no Client source imports, such as a copied static payload, keeps
- * its `url()` values unchanged.
+ * Read package-asset references from the stylesheets that Client sources import. The dynamic build preset
+ * compiles exactly these stylesheets: the package's own stylesheets under `src/`, whose relative `url()` values name
+ * package assets, and dependency stylesheets imported by bare specifier, whose relative `url()` values it publishes
+ * under `lib/assets/vendor/`. A stylesheet no Client source imports, such as a copied static payload, keeps its
+ * `url()` values unchanged.
  * @param root - Absolute repository root.
  * @param packageDirectory - Repository-relative, `/`-separated package directory.
- * @param importers - Repository-relative, `/`-separated Client source paths and their runtime local module specifiers.
- * @returns Imported `.css` and `.css?inline` stylesheets under the package's `src/`, in path order, and their references.
+ * @param importers - Repository-relative, `/`-separated Client source paths and their runtime local module specifiers
+ *   and bare stylesheet specifiers.
+ * @returns Imported `.css` and `.css?inline` stylesheets under the package's `src/`, in path order, and the references
+ *   of those and of the imported dependency stylesheets, which are named by their repository-relative real path.
+ * @throws when a bare stylesheet specifier does not resolve from the package directory.
  */
 export function readStylesheetAssetReferences(
   root: string,
@@ -167,20 +173,35 @@ export function readStylesheetAssetReferences(
 ): { readonly stylesheets: readonly string[]; readonly references: readonly AssetReference[] } {
   const sourcePrefix = packageDirectory + '/src/'
   const imported = new Set<string>()
+  const dependencies = new Set<string>()
+  const packageRequire = createRequire(resolve(root, packageDirectory, 'package.json'))
   for (const [file, specifiers] of importers) {
     for (const specifier of specifiers) {
-      if (!specifier.startsWith('.') || !STYLESHEET_REQUEST.test(specifier)) continue
-      const stylesheet = posix.join(posix.dirname(file), specifier.replace(INLINE_STYLESHEET_QUERY, ''))
-      if (stylesheet.startsWith(sourcePrefix)) imported.add(stylesheet)
+      if (!STYLESHEET_REQUEST.test(specifier)) continue
+      const request = specifier.replace(INLINE_STYLESHEET_QUERY, '')
+      if (specifier.startsWith('.')) {
+        const stylesheet = posix.join(posix.dirname(file), request)
+        if (stylesheet.startsWith(sourcePrefix)) imported.add(stylesheet)
+        continue
+      }
+      let resolved: string
+      try {
+        resolved = realpathSync(packageRequire.resolve(request))
+      } catch (error) {
+        throw new Error(
+          GATE + ': ' + file + ' imports stylesheet ' + JSON.stringify(specifier) + ', which does not resolve from '
+          + packageDirectory,
+          { cause: error },
+        )
+      }
+      dependencies.add(normalizePath(relative(realpathSync(root), resolved)))
     }
   }
   const stylesheets = [...imported].sort()
-  return {
-    stylesheets,
-    references: stylesheets.flatMap(file =>
-      collectStylesheetAssetUrls(file, readFileSync(resolve(root, file), 'utf8'))
-        .map(url => ({ file, reference: 'url(' + JSON.stringify(url) + ')' }))),
-  }
+  const references = (files: readonly string[]): AssetReference[] => files.flatMap(file =>
+    collectStylesheetAssetUrls(file, readFileSync(resolve(root, file), 'utf8'))
+      .map(url => ({ file, reference: 'url(' + JSON.stringify(url) + ')' })))
+  return { stylesheets, references: [...references(stylesheets), ...references([...dependencies].sort())] }
 }
 
 export function readClientDeclarations(root: string): ClientDeclarations {
@@ -647,7 +668,9 @@ async function readFacts(root: string): Promise<ClientPackageFacts> {
       }
       if (!scansAssets) continue
       const localSpecifiers = collectSourceFileUses(sourceFile, true, 'local')
-      importers.set(file, localSpecifiers)
+      const bareStylesheets = [...collectSourceFileUses(sourceFile, true, 'specifier')]
+        .filter(specifier => STYLESHEET_REQUEST.test(specifier))
+      importers.set(file, new Set([...localSpecifiers, ...bareStylesheets]))
       for (const specifier of localSpecifiers) {
         if (isAssetSpecifier(specifier)) assetReferences.push({ file, reference: JSON.stringify(specifier) })
       }
